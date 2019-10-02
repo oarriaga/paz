@@ -1,0 +1,517 @@
+from __future__ import division
+import numpy as np
+
+
+def compute_iou(box, boxes):
+    """Calculates the intersection over union between 'box' and all 'boxes'
+
+    The variables 'box' and 'boxes' contain the corner coordinates
+    of the left-top corner (x_min, y_min) and the right-bottom (x_max, y_max)
+    corner.
+
+    # Arguments
+        box: Numpy array with length at least of 4.
+        box_B: Numpy array with shape (num_boxes, 4)
+
+    # Returns
+        Numpy array of shape (num_boxes, 1)
+    """
+
+    x_min_A, y_min_A, x_max_A, y_max_A = box[:4]
+    x_min_B, y_min_B = boxes[:, 0], boxes[:, 1]
+    x_max_B, y_max_B = boxes[:, 2], boxes[:, 3]
+    # calculating the intersection
+    inner_x_min = np.maximum(x_min_B, x_min_A)
+    inner_y_min = np.maximum(y_min_B, y_min_A)
+    inner_x_max = np.minimum(x_max_B, x_max_A)
+    inner_y_max = np.minimum(y_max_B, y_max_A)
+    inner_w = np.maximum((inner_x_max - inner_x_min), 0)
+    inner_h = np.maximum((inner_y_max - inner_y_min), 0)
+    intersection_area = inner_w * inner_h
+    # calculating the union
+    box_area_B = (x_max_B - x_min_B) * (y_max_B - y_min_B)
+    box_area_A = (x_max_A - x_min_A) * (y_max_A - y_min_A)
+    union_area = box_area_A + box_area_B - intersection_area
+    intersection_over_union = intersection_area / union_area
+    return intersection_over_union
+
+
+def compute_ious(boxes_A, boxes_B):
+    """Calculates the intersection over union between 'boxes_A' and 'boxes_B'
+
+    For each box present in the rows of 'boxes_A' it calculates
+    the intersection over union with respect to all boxes in 'boxes_B'.
+
+    The variables 'boxes_A' and 'boxes_B' contain the corner coordinates
+    of the left-top corner (x_min, y_min) and the right-bottom (x_max, y_max)
+    corner.
+
+    # Arguments
+        boxes_A: Numpy array with shape (num_boxes_A, 4)
+        boxes_B: Numpy array with shape (num_boxes_B, 4)
+
+    # Returns
+        Numpy array of shape (num_boxes_A, num_boxes_B)
+    """
+    return np.apply_along_axis(compute_iou, 1, boxes_A, boxes_B)
+
+
+def to_point_form(boxes):
+    """Transform from center coordinates to corner coordinates.
+
+    # Arguments
+        boxes: Numpy array with shape (num_boxes, 4)
+
+    # Returns
+        Numpy array with shape (num_boxes, 4).
+    """
+    center_x, center_y = boxes[:, 0], boxes[:, 1]
+    width, height = boxes[:, 2], boxes[:, 3]
+    x_min = center_x - (width / 2.)
+    x_max = center_x + (width / 2.)
+    y_min = center_y - (height / 2.)
+    y_max = center_y + (height / 2.)
+    return np.concatenate([x_min[:, None], y_min[:, None],
+                           x_max[:, None], y_max[:, None]], axis=1)
+
+
+def to_center_form(boxes):
+    """Transform from corner coordinates to center coordinates.
+
+    # Arguments
+        boxes: Numpy array with shape (num_boxes, 4)
+
+    # Returns
+        Numpy array with shape (num_boxes, 4).
+    """
+    x_min, y_min = boxes[:, 0], boxes[:, 1]
+    x_max, y_max = boxes[:, 2], boxes[:, 3]
+    center_x = (x_max + x_min) / 2.
+    center_y = (y_max + y_min) / 2.
+    width = x_max - x_min
+    height = y_max - y_min
+    return np.concatenate([center_x[:, None], center_y[:, None],
+                           width[:, None], height[:, None]], axis=1)
+
+
+def denormalize_box(box, image_shape):
+    """Scales corner box coordinates from normalized values to image dimensions.
+
+    # Arguments
+        box: Numpy array containing corner box coordinates.
+        image_shape: List of integers with (height, width).
+
+    # Returns
+        returns: box corner coordinates in image dimensions
+    """
+    x_min, y_min, x_max, y_max = box[:4]
+    height, width = image_shape
+    x_min = int(x_min * width)
+    y_min = int(y_min * height)
+    x_max = int(x_max * width)
+    y_max = int(y_max * height)
+    return (x_min, y_min, x_max, y_max)
+
+
+def encode(matched, priors, variances):
+    """Encode the variances from the priorbox layers into the ground truth boxes
+    we have matched (based on jaccard overlap) with the prior boxes.
+
+    # Arguments
+        matched: Numpy array of shape (num_priors, 4) with boxes in point-form
+        priors: Numpy array of shape (num_priors, 4) with boxes in center-form
+        variances: (list[float]) Variances of priorboxes
+
+    # Returns
+        encoded boxes: Numpy array of shape (num_priors, 4)
+    """
+
+    # dist b/t match center and prior's center
+    g_cxcy = (matched[:, :2] + matched[:, 2:4]) / 2 - priors[:, :2]
+    # encode variance
+    g_cxcy /= (variances[0] * priors[:, 2:4])
+    # match wh / prior wh
+    g_wh = (matched[:, 2:4] - matched[:, :2]) / priors[:, 2:4]
+    g_wh = np.log(np.abs(g_wh) + 1e-4) / variances[1]
+    # return target for smooth_l1_loss
+    return np.concatenate([g_cxcy, g_wh, matched[:, 4:]], 1)  # [num_priors,4]
+
+
+def decode(loc, priors, variances):
+    """Decode default boxes into the ground truth boxes
+
+    # Arguments
+        loc: Numpy array of shape (num_priors, 4)
+        priors: Numpy array of shape (num_priors, 4)
+        variances: (list[float]) Variances of priorboxes
+
+    # Returns
+        decoded boxes: Numpy array of shape (num_priors, 4)
+    """
+
+    boxes = np.concatenate((
+        priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
+        priors[:, 2:] * np.exp(loc[:, 2:] * variances[1])), 1)
+    boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:] / 2)
+    boxes[:, 2:] = boxes[:, 2:] + boxes[:, :2]
+    return boxes
+
+
+def match(ground_truth_data, prior_boxes, iou_threshold, box_scale_factors):
+    """Match ground truth boxes with prior boxes whenever they have
+    an intersection over union of 0.5 or higher.
+
+    # Arguments
+        ground_truth_data: Numpy array of shape ???.
+            Ground truth boxes in point-form.
+        prior_boxes: Numpy array of shape (num_prior_boxes, 4).
+            Boxes should be in center-form.
+        iou_threshold: Float. Intersection over union to match 'prior_boxes'
+            with 'ground_truth_data'.
+        box_scale_factors: List of floats with length 2.
+
+    # Returns
+        encoded_matches: Numpy array of shape ???.
+    """
+    ious = compute_ious(ground_truth_data, to_point_form(prior_boxes))
+    best_truth_overlap = np.max(ious, axis=0, keepdims=False)
+    best_truth_idx = np.argmax(ious, axis=0)
+    best_prior_idx = np.squeeze(np.argmax(ious, axis=1))
+    best_truth_overlap[best_prior_idx] = 2
+    if best_prior_idx.ndim == 0:
+        best_prior_idx = np.expand_dims(best_prior_idx, 0)
+    for j in range(len(best_prior_idx)):
+        best_truth_idx[best_prior_idx[j]] = j
+    matches = ground_truth_data[best_truth_idx]
+    matches[best_truth_overlap < iou_threshold, -1] = 0
+    encoded_matches = encode(matches, prior_boxes, [.1, .2])
+    return encoded_matches
+
+
+def make_box_square(box, offset_scale=0.05):
+    """Makes box coordinates square.
+
+    # Arguments
+        box: Numpy array with shape (4) with point corner coordinates.
+        offset_scale: Float, scale of the addition applied box sizes.
+
+    # Returns
+        returns: Numpy array with shape (4).
+    """
+
+    x_min, y_min, x_max, y_max = box[:4]
+    center_x = (x_max + x_min) / 2.
+    center_y = (y_max + y_min) / 2.
+    width = x_max - x_min
+    height = y_max - y_min
+
+    if height >= width:
+        half_box = height / 2.
+        x_min = center_x - half_box
+        x_max = center_x + half_box
+    if width > height:
+        half_box = width / 2.
+        y_min = center_y - half_box
+        y_max = center_y + half_box
+
+    box_side_lenght = (x_max + x_min) / 2.
+    offset = offset_scale * box_side_lenght
+    x_min = x_min - offset
+    x_max = x_max + offset
+    y_min = y_min - offset
+    y_max = y_max + offset
+    return (int(x_min), int(y_min), int(x_max), int(y_max))
+
+
+def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
+    """Apply non maximum suppression.
+
+    # Arguments
+        boxes: Numpy array, box coordinates of shape (num_boxes, 4)
+            where each columns corresponds to x_min, y_min, x_max, y_max
+        scores: Numpy array, of scores given for each box in 'boxes'
+        iou_thresh : float, intersection over union threshold
+            for removing boxes.
+        top_k: int, number of maximum objects per class
+
+    # Returns
+        selected_indices: Numpy array, selected indices of kept boxes.
+        num_selected_boxes: int, number of selected boxes.
+    """
+
+    selected_indices = np.zeros(shape=len(scores))
+    if boxes is None or len(boxes) == 0:
+        return selected_indices
+    x_min = boxes[:, 0]
+    y_min = boxes[:, 1]
+    x_max = boxes[:, 2]
+    y_max = boxes[:, 3]
+    areas = (x_max - x_min) * (y_max - y_min)
+    remaining_sorted_box_indices = np.argsort(scores)
+    remaining_sorted_box_indices = remaining_sorted_box_indices[-top_k:]
+
+    num_selected_boxes = 0
+    while len(remaining_sorted_box_indices) > 0:
+        best_score_index = remaining_sorted_box_indices[-1]
+        selected_indices[num_selected_boxes] = best_score_index
+        num_selected_boxes = num_selected_boxes + 1
+        if len(remaining_sorted_box_indices) == 1:
+            break
+
+        remaining_sorted_box_indices = remaining_sorted_box_indices[:-1]
+
+        best_x_min = x_min[best_score_index]
+        best_y_min = y_min[best_score_index]
+        best_x_max = x_max[best_score_index]
+        best_y_max = y_max[best_score_index]
+
+        remaining_x_min = x_min[remaining_sorted_box_indices]
+        remaining_y_min = y_min[remaining_sorted_box_indices]
+        remaining_x_max = x_max[remaining_sorted_box_indices]
+        remaining_y_max = y_max[remaining_sorted_box_indices]
+
+        inner_x_min = np.maximum(remaining_x_min, best_x_min)
+        inner_y_min = np.maximum(remaining_y_min, best_y_min)
+        inner_x_max = np.minimum(remaining_x_max, best_x_max)
+        inner_y_max = np.minimum(remaining_y_max, best_y_max)
+
+        inner_box_widths = inner_x_max - inner_x_min
+        inner_box_heights = inner_y_max - inner_y_min
+
+        inner_box_widths = np.maximum(inner_box_widths, 0.0)
+        inner_box_heights = np.maximum(inner_box_heights, 0.0)
+
+        intersections = inner_box_widths * inner_box_heights
+        remaining_box_areas = areas[remaining_sorted_box_indices]
+        best_area = areas[best_score_index]
+        unions = remaining_box_areas + best_area - intersections
+        intersec_over_union = intersections / unions
+        intersec_over_union_mask = intersec_over_union <= iou_thresh
+        remaining_sorted_box_indices = remaining_sorted_box_indices[
+            intersec_over_union_mask]
+
+    return selected_indices.astype(int), num_selected_boxes
+
+
+def detect(box_data, prior_boxes, conf_thresh=0.01, nms_thresh=.45,
+           top_k=200, variances=[.1, .2]):
+    """Post-processing of model predictions by decoding them and applying
+    per-class non-maximum suppression.
+
+    # Arguments
+        box_data: Numpy array of shape (num_prior_boxes, 4 + num_classes)
+        prior_boxes: Numpy array of shape (num_prior_boxes, 4)
+        conf_thresh: Float. Filter scores with a lower confidence value before
+            performing non-maximum supression.
+        nsm_thresh: Float. Non-maximum suppression threshold.
+        top_k: Integer. Maximum number of boxes per class outputted by nms.
+        variances: List of floats with length 2.
+
+    Returns
+        Numpy array of shape (num_classes, top_k, 5)
+    """
+
+    box_data = np.squeeze(box_data)
+    regressed_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
+    decoded_boxes = decode(regressed_boxes, prior_boxes, variances)
+    num_classes = class_predictions.shape[1]
+    output = np.zeros((num_classes, top_k, 5))
+
+    # skip the background class (start counter in 1)
+    for class_arg in range(1, num_classes):
+        conf_mask = class_predictions[:, class_arg] >= conf_thresh
+        scores = class_predictions[:, class_arg][conf_mask]
+        if len(scores) == 0:
+            continue
+        boxes = decoded_boxes[conf_mask]
+        indices, count = apply_non_max_suppression(
+            boxes, scores, nms_thresh, top_k)
+        scores = np.expand_dims(scores, -1)
+        selected_indices = indices[:count]
+        selections = np.concatenate(
+            (boxes[selected_indices], scores[selected_indices]), axis=1)
+        output[class_arg, :count, :] = selections
+    return output
+
+
+def to_one_hot(class_indices, num_classes):
+    """ Transform from class index to one-hot encoded vector.
+
+    # Arguments
+        class_indices: Numpy array. One dimensional array specifying
+            the index argument of the class for each sample.
+        num_classes: Integer. Total number of classes.
+
+    # Returns
+        Numpy array with shape (num_samples, num_classes).
+    """
+    one_hot_vectors = np.zeros((len(class_indices), num_classes))
+    for vector_arg, class_index in enumerate(class_indices):
+        one_hot_vectors[vector_arg, class_index] = 1.0
+    return one_hot_vectors
+
+
+def quaternion_to_rotation_matrix(quaternion):
+    """Transforms quaternion to rotation matrix
+
+    # Arguments
+        quaternion: Numpy array of shape (4)
+
+    # Returns
+        rotation_matrix: Numpy array of shape (3, 3)
+    """
+
+    q_w, q_x, q_y, q_z = quaternion
+    sqw, sqx, sqy, sqz = np.square(quaternion)
+    norm = (sqx + sqy + sqz + sqw)
+    rotation_matrix = np.zeros((3, 3))
+
+    # division of square length if quaternion is not already normalized
+    rotation_matrix[0, 0] = (+sqx - sqy - sqz + sqw) / norm
+    rotation_matrix[1, 1] = (-sqx + sqy - sqz + sqw) / norm
+    rotation_matrix[2, 2] = (-sqx - sqy + sqz + sqw) / norm
+
+    tmp1 = q_x * q_y
+    tmp2 = q_z * q_w
+    rotation_matrix[1, 0] = 2.0 * (tmp1 + tmp2) / norm
+    rotation_matrix[0, 1] = 2.0 * (tmp1 - tmp2) / norm
+
+    tmp1 = q_x * q_z
+    tmp2 = q_y * q_w
+    rotation_matrix[2, 0] = 2.0 * (tmp1 - tmp2) / norm
+    rotation_matrix[0, 2] = 2.0 * (tmp1 + tmp2) / norm
+    tmp1 = q_y * q_z
+    tmp2 = q_x * q_w
+    rotation_matrix[2, 1] = 2.0 * (tmp1 + tmp2) / norm
+    rotation_matrix[1, 2] = 2.0 * (tmp1 - tmp2) / norm
+    return rotation_matrix
+
+
+def rotation_matrix_to_quaternion(rotation_matrix):
+    """Calculates normalized quaternion from rotation matrix
+
+    If w is negative the quaternion gets flipped, so that all w are >= 0
+
+    # Arguments
+        rotation_matrix: Numpy array with shape (3, 3)
+
+    # Returns
+        quaternion: Numpy array of shape (4)
+    """
+    trace = np.trace(rotation_matrix)
+
+    if trace > 0:
+        S = np.sqrt(trace + 1) * 2
+        q_w = 0.25 * S
+        q_x = (rotation_matrix[2, 1] - rotation_matrix[1, 2]) / S
+        q_y = (rotation_matrix[0, 2] - rotation_matrix[2, 0]) / S
+        q_z = (rotation_matrix[1, 0] - rotation_matrix[0, 1]) / S
+        return np.asarray([q_w, q_x, q_y, q_z])
+
+    elif ((rotation_matrix[0, 0] > rotation_matrix[1, 1]) and
+          (rotation_matrix[0, 0] > rotation_matrix[2, 2])):
+
+        S = np.sqrt(1.0 + rotation_matrix[0, 0] - rotation_matrix[1, 1] -
+                    rotation_matrix[2, 2]) * 2
+        q_w = (rotation_matrix[2, 1] - rotation_matrix[1, 2]) / S
+        q_x = 0.25 * S
+        q_y = (rotation_matrix[0, 1] + rotation_matrix[1, 0]) / S
+        q_z = (rotation_matrix[0, 2] + rotation_matrix[2, 0]) / S
+
+    elif rotation_matrix[1, 1] > rotation_matrix[2, 2]:
+
+        S = np.sqrt(1.0 + rotation_matrix[1, 1] - rotation_matrix[0, 0] -
+                    rotation_matrix[2, 2]) * 2
+        q_w = (rotation_matrix[0, 2] - rotation_matrix[2, 0]) / S
+        q_x = (rotation_matrix[0, 1] + rotation_matrix[1, 0]) / S
+        q_y = 0.25 * S
+        q_z = (rotation_matrix[1, 2] + rotation_matrix[2, 1]) / S
+
+    else:
+        S = np.sqrt(1.0 + rotation_matrix[2, 2] - rotation_matrix[0, 0] -
+                    rotation_matrix[1, 1]) * 2
+        q_w = (rotation_matrix[1, 0] - rotation_matrix[0, 1]) / S
+        q_x = (rotation_matrix[0, 2] + rotation_matrix[2, 0]) / S
+        q_y = (rotation_matrix[1, 2] + rotation_matrix[2, 1]) / S
+        q_z = 0.25 * S
+
+    if q_w >= 0:
+        return np.asarray([q_w, q_x, q_y, q_z])
+    else:
+        return -1 * np.asarray([q_w, q_x, q_y, q_z])
+
+
+def multiply_quaternions(quaternion1, quaternion0):
+    """Performs quaternion multiplication.
+    # Arguments:
+        quaternion1: Numpy array of shape (4)
+        quaternion0: Numpy array of shape (4)
+
+    # Returns:
+        Numpy array of shape (4)
+    """
+    w0, x0, y0, z0 = quaternion0
+    w1, x1, y1, z1 = quaternion1
+    return np.array(
+        [-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
+         x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+         -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+         x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
+
+
+def invert_quaternion(quaternion):
+    """Takes the inverse of a non-normalized quaternion.
+    # Arguments:
+        quaternion: Numpy array of shape (4)
+
+    # Returns:
+        Numpy array of shape (4)
+    """
+    norm = np.linalg.norm(quaternion)
+    quaternion[1:] = -1.0 * quaternion[1:]
+    return quaternion / norm
+
+
+def substract_mean(image_array, mean):
+    """ Subtracts image with channel-wise values.
+    # Arguments
+        image_array: Numpy array with shape (height, width, 3)
+        mean: Numpy array of 3 floats containing the values to be subtracted
+            to the image on each corresponding channel.
+    """
+    image_array = image_array.astype(np.float32)
+    image_array[:, :, 0] -= mean[0]
+    image_array[:, :, 1] -= mean[1]
+    image_array[:, :, 2] -= mean[2]
+    return image_array
+
+
+def make_mosaic(images, shape, border=0):
+    """ Creates an image mosaic.
+    # Arguments
+        images: Numpy array of shape (num_images, height, width, 3)
+        shape: List of two integers indicating the mosaic shape.
+            Shape must satisfy: shape[0] * shape[1] == len(images).
+        border: Integer indicating the border per image.
+    # Returns
+        A numpy array containing all images.
+    """
+    num_images = len(images)
+    num_rows, num_cols = shape
+    image_shape = images.shape[1:]
+    num_channels = images.shape[-1]
+    mosaic = np.ma.masked_all(
+        (num_rows * image_shape[0] + (num_rows - 1) * border,
+         num_cols * image_shape[1] + (num_cols - 1) * border, num_channels),
+        dtype=np.float32)
+    paddedh = image_shape[0] + border
+    paddedw = image_shape[1] + border
+    for image_arg in range(num_images):
+        row = int(np.floor(image_arg / num_cols))
+        col = image_arg % num_cols
+        # image = np.squeeze(images[image_arg])
+        image = images[image_arg]
+        image_shape = image.shape
+        mosaic[row * paddedh:row * paddedh + image_shape[0],
+               col * paddedw:col * paddedw + image_shape[1], :] = image
+    return mosaic
