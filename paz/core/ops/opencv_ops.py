@@ -53,6 +53,14 @@ class VideoPlayer(object):
         cv2.destroyAllWindows()
 
 
+def cascade_classifier(path):
+    """Cascade classifier with detectMultiScale() method for inference.
+    # Arguments
+        path: String. Path to default openCV XML format.
+    """
+    return cv2.CascadeClassifier(path)
+
+
 def load_image(filepath, flags=cv2.IMREAD_COLOR):
     """Loads an image.
     # Arguments
