@@ -9,6 +9,7 @@ from tensorflow.keras.utils import get_file
 
 from ..layers import Conv2DNormalization
 from .utils import create_multibox_head
+from .utils import create_prior_boxes
 
 
 BASE_WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/'
@@ -207,4 +208,5 @@ def SSD512(num_classes=81, weights='COCO', input_shape=(512, 512, 3),
                                 cache_subdir='altamira/models')
         model.load_weights(weights_path)
 
+    model.prior_boxes = create_prior_boxes('COCO')
     return model
