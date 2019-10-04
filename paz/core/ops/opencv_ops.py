@@ -4,6 +4,7 @@ import cv2
 
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
+LINE = cv2.LINE_AA
 BGR2RGB = cv2.COLOR_BGR2RGB
 RGB2BGR = cv2.COLOR_RGB2BGR
 BGR2HSV = cv2.COLOR_BGR2HSV
@@ -83,6 +84,7 @@ def save_image(filepath, image, *args):
     """
     return cv2.imwrite(filepath, image, *args)
 
+
 def convert_image(image, flag):
     """Converts image to a different color space
     # Arguments
@@ -116,6 +118,19 @@ def draw_circle(image, point, color=GREEN, radius=5):
     cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
 
 
+def put_text(image, text, point, scale, color, thickness):
+    """Draws text in image.
+    # Arguments
+        image: Numpy array.
+        text: String. Text to be drawn.
+        point: Tuple of coordinates indicating the top corner of the text.
+        scale: Float. Scale of text.
+        color: Tuple of integers. BGR color coordinates.
+        thickness: Integer. Thickness of the lines used for drawing text.
+    """
+    return cv2.putText(image, text, point, FONT, scale, color, thickness, LINE)
+
+
 def draw_line(image, point_A, point_B, color=GREEN, thickness=5):
     """ Draws a line in image from point_A to point_B.
     # Arguments
@@ -128,17 +143,18 @@ def draw_line(image, point_A, point_B, color=GREEN, thickness=5):
     cv2.line(image, tuple(point_A), tuple(point_B), tuple(color), thickness)
 
 
-def draw_rectangle(image, corner_A, corner_B, color=GREEN, filled=True):
-    """ Draws a rectangle from corner_A to corner_B.
+def draw_rectangle(image, corner_A, corner_B, color, thickness):
+    """ Draws a filled rectangle from corner_A to corner_B.
     # Arguments
         image: Numpy array of shape [H, W, 3].
         corner_A: List/tuple of length two indicating (y,x) openCV coordinates.
         corner_B: List/tuple of length two indicating (y,x) openCV coordinates.
         color: List of length three indicating BGR color of point.
-        filled: Boolean. If `True` rectangle is filled with `color`.
+        thickness: Integer/openCV Flag. Thickness of rectangle line.
+            or for filled use cv2.FILLED flag.
     """
-    thick = cv2.FILLED if filled else 5
-    cv2.rectangle(image, tuple(corner_A), tuple(corner_B), tuple(color), thick)
+    return cv2.rectangle(
+        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
 
 
 def draw_dot(image, point, color=GREEN, radius=5, filled=True):
