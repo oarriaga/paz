@@ -17,3 +17,5 @@ docs/site/*
 docs/sources/*
 docs/theme/fonts/*
 docs/theme/img/*
+
+install.sh
