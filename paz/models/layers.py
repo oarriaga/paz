@@ -21,7 +21,6 @@ class Conv2DNormalization(Layer):
         super(Conv2DNormalization, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        print('input_shape', input_shape)
         self.gamma = self.add_weight(
             name='gamma', shape=(input_shape[self.axis]),
             initializer=Constant(self.scale), trainable=True)
