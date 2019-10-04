@@ -67,9 +67,12 @@ def create_multibox_head(
 
     if hasattr(regressions, '_keras_shape'):
         num_boxes = regressions._keras_shape[-1] // num_regressions
+        print('_kersa_shape', num_boxes)
     elif hasattr(regressions, 'int_shape'):
         num_boxes = K.int_shape(regressions)[-1] // num_regressions
-
+        print('_int_shape', num_boxes)
+    num_boxes = K.int_shape(regressions)[-1] // num_regressions
+    print(num_boxes)
     classifications = Reshape(
         (num_boxes, num_classes),
         name=base_name + 'reshape_classification' + str_arg)(classifications)
