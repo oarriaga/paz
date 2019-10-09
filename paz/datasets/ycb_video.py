@@ -57,7 +57,7 @@ class YCBVideo(Loader):
         input_values = [sample_id + postfix for postfix in postfixes]
         inputs = dict(zip(['image', 'depth', 'segmentation'], input_values))
         targets = {'box_data': box_data, 'poses': pose_data}
-        return {'inputs': inputs, 'targets': targets}
+        return inputs.update(targets)
 
     def _load_box_data(self, sample_id):
         box_data = np.genfromtxt(sample_id + '-box.txt', dtype=str)

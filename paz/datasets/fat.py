@@ -58,8 +58,7 @@ class FAT(Loader):
             boxes = self._extract_boxes(label_path)
             if boxes is None:
                 continue
-            self.data.append({'inputs': {'image': image_path},
-                              'targets': {'box_data': boxes}})
+            self.data.append({'image': image_path, 'boxes': boxes})
             progress_bar.update(sample_arg + 1)
         return self.data
 

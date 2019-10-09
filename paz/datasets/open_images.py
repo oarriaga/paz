@@ -116,9 +116,7 @@ class OpenImages(Loader):
 
         formatted_data = []
         for image_path, ground_truth in data.items():
-            sample = {image_path: ground_truth}
-            sample['inputs'] = {'image': image_path}
-            sample['targets'] = {'box_data': ground_truth}
+            sample = {'image': image_path, 'boxes': ground_truth}
             formatted_data.append(sample)
 
         msg = '{} split: loaded {} images with {} bounding box annotations'

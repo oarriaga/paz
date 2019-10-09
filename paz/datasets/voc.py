@@ -133,16 +133,9 @@ class VOCParser(object):
                 continue
 
             # self.data[self.images_path + image_name] = label_data
-            inputs = {'image': self.images_path + image_name}
-            targets = {'box_data': box_data}
-            sample = {'inputs': inputs, 'targets': targets}
-            self.data.append(sample)
+            image_path = self.images_path + image_name
+            box_data = np.asarray(box_data)
+            self.data.append({'image': image_path, 'boxes': box_data})
 
     def load_data(self):
         return self.data
-
-
-def merge_two_dictionaries(dict_1, dict_2):
-    merged_dict = dict_1.copy()
-    merged_dict.update(dict_2)
-    return merged_dict
