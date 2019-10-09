@@ -58,7 +58,7 @@ class Loader(object):
 
     @class_names.setter
     def class_names(self, class_names):
-        assert type(class_names) == list
+        # assert type(class_names) == list
         self._class_names = class_names
 
     @property
