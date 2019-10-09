@@ -1,43 +1,7 @@
 import numpy as np
 
+from ..core import Processor, SequentialProcessor, Box2D, ops
 from .image import BGR_IMAGENET_MEAN
-from ..core import Processor, SequentialProcessor, Box2D
-from ..core.ops import resize_image
-from ..core.ops import detect, substract_mean, denormalize_box, make_box_square
-
-
-class ToAbsoluteCoords(Processor):
-    """Convert normalized box coordinates to image box coordinates.
-    """
-    def __init__(self):
-        super(ToAbsoluteCoords, self).__init__()
-
-    def call(self, kwargs):
-        height, width, channels = kwargs['image'].shape
-        boxes = kwargs['boxes']
-        boxes[:, 0] *= width
-        boxes[:, 2] *= width
-        boxes[:, 1] *= height
-        boxes[:, 3] *= height
-        kwargs['boxes'] = boxes
-        return kwargs
-
-
-class ToPercentCoords(Processor):
-    """Convert image box coordinates to normalized box coordinates.
-    """
-    def __init__(self):
-        super(ToPercentCoords, self).__init__()
-
-    def call(self, kwargs):
-        height, width, channels = kwargs['image'].shape
-        boxes = kwargs['boxes']
-        boxes[:, 0] /= width
-        boxes[:, 2] /= width
-        boxes[:, 1] /= height
-        boxes[:, 3] /= height
-        kwargs['boxes'] = boxes
-        return kwargs
 
 
 class SquareBoxes2D(Processor):
@@ -55,7 +19,7 @@ class SquareBoxes2D(Processor):
     def call(self, kwargs):
         for box_arg in range(len(kwargs['boxes2D'])):
             coordinates = kwargs['boxes2D'][box_arg].coordinates
-            coordinates = make_box_square(coordinates, self.offset_scale)
+            coordinates = ops.make_box_square(coordinates, self.offset_scale)
             kwargs['boxes2D'][box_arg].coordinates = coordinates
         return kwargs
 
@@ -67,11 +31,10 @@ class DenormalizeBoxes2D(Processor):
         super(DenormalizeBoxes2D, self).__init__()
 
     def call(self, kwargs):
-        image_size, boxes2D = kwargs['image'].shape[:2], []
+        image_size = kwargs['image'].shape[:2]
         for box2D in kwargs['boxes2D']:
-            box2D.coordinates = denormalize_box(box2D.coordinates, image_size)
-            boxes2D.append(box2D)
-        kwargs['boxes2D'] = boxes2D
+            box2D.coordinates = ops.denormalize_box(
+                box2D.coordinates, image_size)
         return kwargs
 
 
@@ -151,25 +114,6 @@ class CropBoxes2D(Processor):
         return kwargs
 
 
-class ResizeImages(Processor):
-    """ Resize cropped images
-    # Arguments
-        shape: List of two integers indicating the new shape of `topic`.
-        topic: String indicating the key in the dictionary that contains
-            the list of images to be resized.
-    """
-    def __init__(self, shape, topic='cropped_images'):
-        self.topic = topic
-        self.shape = shape
-        super(ResizeImages, self).__init__()
-
-    def call(self, kwargs):
-        images = kwargs[self.topic]
-        images = [resize_image(image, self.shape) for image in images]
-        kwargs[self.topic] = images
-        return kwargs
-
-
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
     # Arguments
@@ -186,6 +130,27 @@ class ToBoxes2D(Processor):
             class_name = self.arg_to_class[numpy_box2D[-1]]
             boxes2D.append(Box2D(numpy_box2D[:4], 1.0, class_name))
         kwargs['boxes2D'] = boxes2D
+        return kwargs
+
+
+class MatchBoxes(Processor):
+    """Match prior boxes with ground truth boxes.
+    #Arguments
+        prior_boxes: Numpy array of shape (num_boxes, 4).
+        iou: Float in [0, 1]. Intersection over union in which prior boxes
+        will be considered positive. A positive box is box with a class
+        different than `background`.
+        variance: List of two floats.
+    """
+    def __init__(self, prior_boxes, iou=.5, variances=[.1, .2]):
+        self.prior_boxes = prior_boxes
+        self.iou = iou
+        self.variances = variances
+        super(MatchBoxes, self).__init__()
+
+    def call(self, kwargs):
+        kwargs['boxes'] = ops.match(
+            kwargs['boxes'], self.prior_boxes, self.iou, self.variances)
         return kwargs
 
 
@@ -220,12 +185,13 @@ class DetectBoxes2D(Processor):
 
     def detect_from_image(self, image, model, nms_thresh, mean):
         input_shape = model.input_shape[1:3]
-        image_array = resize_image(image, input_shape)
-        image_array = substract_mean(image_array, mean)
+        image_array = ops.resize_image(image, input_shape)
+        image_array = ops.substract_mean(image_array, mean)
         image_array = np.expand_dims(image_array, 0)
         predictions = model.predict(image_array)
         prior_boxes = model.prior_boxes
-        detections = detect(predictions, prior_boxes, nms_thresh=nms_thresh)
+        detections = ops.detect(
+            predictions, prior_boxes, nms_thresh=nms_thresh)
         return detections
 
     def filter_detections(self, detections, arg_to_class, conf_thresh=0.5):
