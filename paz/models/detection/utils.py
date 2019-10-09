@@ -61,7 +61,7 @@ def create_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
     classifications = Activation('softmax')(classifications)
     regressions = Reshape((num_boxes, num_regressions))(regressions)
     outputs = Concatenate(
-        axis=2, name='predictions')([regressions, classifications])
+        axis=2, name='boxes')([regressions, classifications])
     return outputs
 
 
