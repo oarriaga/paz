@@ -32,8 +32,8 @@ class MultiboxLoss(object):
         cross_entropy_loss = - K.sum(y_true * K.log(y_pred), axis=-1)
         return cross_entropy_loss
 
-    def localization_loss(self, y_true, y_pred):
-        batch_size = tf.to_float(tf.shape(y_pred)[0])
+    def localization_loss(self, y_true, y_pred, sample_weight=None):
+        batch_size = tf.cast(tf.shape(y_pred)[0], dtype=tf.float32)
         local_loss = self.smooth_L1(y_true[:, :, :4], y_pred[:, :, :4])
         negative_mask = y_true[:, :, 4]
         positive_mask = 1.0 - negative_mask
@@ -43,8 +43,8 @@ class MultiboxLoss(object):
         return ((self.alpha * positive_local_loss * batch_size) /
                 tf.maximum(1.0, num_positives))
 
-    def positive_crossentropy(self, y_true, y_pred):
-        batch_size = tf.to_float(tf.shape(y_pred)[0])
+    def positive_crossentropy(self, y_true, y_pred, sample_weight=None):
+        batch_size = tf.cast(tf.shape(y_pred)[0], dtype=tf.float32)
         class_loss = self.cross_entropy(y_true[:, :, 4:], y_pred[:, :, 4:])
         negative_mask = y_true[:, :, 4]
         positive_mask = 1 - negative_mask
@@ -54,8 +54,8 @@ class MultiboxLoss(object):
         return ((positive_class_loss * batch_size) /
                 tf.maximum(1.0, num_positives))
 
-    def negative_crossentropy(self, y_true, y_pred):
-        batch_size = tf.to_float(tf.shape(y_pred)[0])
+    def negative_crossentropy(self, y_true, y_pred, sample_weight=None):
+        batch_size = tf.cast(tf.shape(y_pred)[0], dtype=tf.float32)
         class_loss = self.cross_entropy(y_true[:, :, 4:], y_pred[:, :, 4:])
         negative_mask = y_true[:, :, 4]
         positive_mask = 1 - negative_mask
@@ -73,7 +73,7 @@ class MultiboxLoss(object):
         return ((negative_class_loss * batch_size) /
                 tf.maximum(1.0, num_positives))
 
-    def __call__(self, y_true, y_pred):
+    def __call__(self, y_true, y_pred, sample_weight=None):
         smooth_L1_loss = self.localization_loss(y_true, y_pred)
         positive_crossentropy = self.positive_crossentropy(y_true, y_pred)
         negative_crossentropy = self.negative_crossentropy(y_true, y_pred)
