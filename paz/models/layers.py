@@ -24,7 +24,10 @@ class Conv2DNormalization(Layer):
         self.gamma = self.add_weight(
             name='gamma', shape=(input_shape[self.axis]),
             initializer=Constant(self.scale), trainable=True)
-        super(Conv2DNormalization, self).build(input_shape)
+        # super(Conv2DNormalization, self).build(input_shape)
+
+    def output_shape(self, input_shape):
+        return input_shape
 
     def call(self, x, mask=None):
         return self.gamma * K.l2_normalize(x, self.axis)
