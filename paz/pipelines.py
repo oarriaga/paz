@@ -3,37 +3,50 @@ from . import processors as pr
 
 
 class DetectionAugmentation(SequentialProcessor):
-    def __init__(self, split='train', size=300, mean=pr.BGR_IMAGENET_MEAN):
+    def __init__(self, prior_boxes, num_classes, split='train', size=300,
+                 iou=.5, variances=[.1, .2], mean=pr.BGR_IMAGENET_MEAN):
+
         super(DetectionAugmentation, self).__init__()
         if split not in ['train', 'val', 'test']:
             raise ValueError('Invalid split mode')
-
         self.mean, self.size, self.split = mean, size, split
+        self.prior_boxes, self.num_classes = prior_boxes, num_classes
+
         if self.split == 'train':
+            self.add(pr.LoadImage())
             self.add(pr.CastImageToFloat())
             self.add(pr.RandomContrast())
             self.add(pr.RandomBrightness())
             self.add(pr.CastImageToInts())
-            self.add(pr.ConvertColor(transform='HSV'))
+            self.add(pr.ConvertColor('BGR', to='HSV'))
             self.add(pr.CastImageToFloat())
-            self.add(pr.ToAbsoluteCoords())
+            self.add(pr.ToAbsoluteCoordinates())
             self.add(pr.RandomSaturation())
             self.add(pr.RandomHue())
             self.add(pr.CastImageToInts())
-            self.add(pr.ConvertColor('HSV', transform='BGR'))
-            self.add(pr.Expand(self.mean))
+            self.add(pr.ConvertColor('HSV', to='BGR'))
+            self.add(pr.RandomLightingNoise())
+            self.add(pr.Expand(mean=self.mean))
             self.add(pr.RandomSampleCrop())
             self.add(pr.HorizontalFlip())
-            self.add(pr.ToPercentCoords())
-            self.add(pr.RandomLightingNoise())
-            self.add(pr.Resize(self.size))
+            self.add(pr.ToPercentCoordinates())
+            self.add(pr.Resize(shape=(self.size, self.size)))
             self.add(pr.CastImageToFloat())
             self.add(pr.SubtractMeans(self.mean))
+            self.add(pr.MatchBoxes(prior_boxes, iou, variances))
+            self.add(pr.ToOneHotVector(num_classes))
+            self.add(pr.OutputSelector(['image', 'boxes']))
 
         elif ((self.split == 'val') or (self.split == 'test')):
+            self.add(pr.LoadImage())
             self.add(pr.CastImageToFloat())
             self.add(pr.Resize(self.size))
             self.add(pr.SubtractMeans(self.mean))
+
+    @property
+    def output_shapes(self):
+        return [(self.size, self.size, 3),
+                (len(self.prior_boxes), 4 + self.num_classes)]
 
 
 class SingleShotInference(SequentialProcessor):
