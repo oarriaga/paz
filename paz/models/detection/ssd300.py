@@ -58,7 +58,7 @@ def SSD300(num_classes=21, base_weights='VOC', head_weights='VOC',
     if ((num_classes != 22) and (head_weights == 'FAT')):
         raise ValueError('Invalid `head_weights` with given `num_classes`')
 
-    image = Input(shape=input_shape)
+    image = Input(shape=input_shape, name='image')
 
     # Block 1 -----------------------------------------------------------------
     conv1_1 = Conv2D(64, (3, 3), padding='same', activation='relu',
