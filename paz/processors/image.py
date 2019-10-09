@@ -7,6 +7,7 @@ from ..core import Processor
 from ..core.ops import draw_filled_polygon, load_image, show_image
 from ..core.ops import median_blur, gaussian_blur, resize_image, convert_image
 from ..core.ops import BGR2RGB, RGB2BGR, BGR2HSV, RGB2HSV, HSV2RGB, HSV2BGR
+from ..core.ops import IMREAD_COLOR
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
@@ -69,6 +70,22 @@ class DenormalizeImage(Processor):
 
     def call(self, kwargs):
         kwargs['image'] = (kwargs['image'] * 255).astype('uint8')
+        return kwargs
+
+
+class LoadImage(Processor):
+    """Load image as numpy array.
+    """
+    def __init__(self, topic='image', flags=IMREAD_COLOR):
+        self.topic = topic
+        self.flags = flags
+        super(LoadImage, self).__init__()
+
+    def call(self, kwargs):
+        image = load_image(kwargs[self.topic], self.flags)
+        if image is None:
+            raise ValueError('Image not found in:', kwargs[self.topic])
+        kwargs['image'] = image
         return kwargs
 
 
@@ -235,6 +252,25 @@ class Resize(Processor):
         return kwargs
 
 
+class ResizeImages(Processor):
+    """ Resize cropped images
+    # Arguments
+        shape: List of two integers indicating the new shape of `topic`.
+        topic: String indicating the key in the dictionary that contains
+            the list of images to be resized.
+    """
+    def __init__(self, shape, topic='cropped_images'):
+        self.topic = topic
+        self.shape = shape
+        super(ResizeImages, self).__init__()
+
+    def call(self, kwargs):
+        images = kwargs[self.topic]
+        images = [resize_image(image, self.shape) for image in images]
+        kwargs[self.topic] = images
+        return kwargs
+
+
 class RandomSaturation(Processor):
     """Applies random saturation to an image in HSV space.
     # Arguments
@@ -300,24 +336,24 @@ class ConvertColor(Processor):
         transform: String, indicating the color space to which the image
             will get transformed.
     """
-    def __init__(self, current='BGR', transform='HSV'):
-        self.transform = transform
+    def __init__(self, current='BGR', to='HSV'):
         self.current = current
+        self.to = to
         super(ConvertColor, self).__init__()
 
     def call(self, kwargs):
         image = kwargs['image']
-        if self.current == 'BGR' and self.transform == 'HSV':
+        if self.current == 'BGR' and self.to == 'HSV':
             image = convert_image(image, BGR2HSV)
-        elif self.current == 'RGB' and self.transform == 'HSV':
+        elif self.current == 'RGB' and self.to == 'HSV':
             image = convert_image(image, RGB2HSV)
-        elif self.current == 'HSV' and self.transform == 'BGR':
+        elif self.current == 'HSV' and self.to == 'BGR':
             image = convert_image(image, HSV2BGR)
-        elif self.current == 'HSV' and self.transform == 'RGB':
+        elif self.current == 'HSV' and self.to == 'RGB':
             image = convert_image(image, HSV2RGB)
-        elif self.current == 'RGB' and self.transform == 'BGR':
+        elif self.current == 'RGB' and self.to == 'BGR':
             image = convert_image(image, RGB2BGR)
-        elif self.current == 'BGR' and self.transform == 'RGB':
+        elif self.current == 'BGR' and self.to == 'RGB':
             image = convert_image(image, BGR2RGB)
         else:
             raise NotImplementedError
