@@ -16,7 +16,6 @@ class DrawBoxes2D(Processor):
 
     def call(self, kwargs):
         image, boxes2D = kwargs['image'], kwargs['boxes2D']
-        # image_with_bounding_boxes = image.copy()
         for box2D in boxes2D:
             class_name = box2D.class_name
             text = '{:0.2f}, {}'.format(box2D.score, box2D.class_name)
@@ -24,5 +23,4 @@ class DrawBoxes2D(Processor):
             color = self.class_to_color[class_name]
             ops.put_text(image, text, (x_min, y_min - 10), .7, color, 1)
             ops.draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
-        # kwargs['image'] = image
         return kwargs
