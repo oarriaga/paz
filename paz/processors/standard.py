@@ -16,10 +16,11 @@ class ToOneHotVector(Processor):
 
     def call(self, kwargs):
         if self.topic == 'boxes':
-            class_indices = kwargs[self.topic][:, -1].astype('int')
+            boxes = kwargs[self.topic]
+            class_indices = boxes[:, 4].astype('int')
             one_hot_vectors = ops.to_one_hot(class_indices, self.num_classes)
             one_hot_vectors = one_hot_vectors.reshape(-1, self.num_classes)
-            boxes = np.hstack([kwargs[self.topic][:, :4], one_hot_vectors])
+            boxes = np.hstack([boxes[:, :4], one_hot_vectors.astype('float')])
             kwargs[self.topic] = boxes
         return kwargs
 
