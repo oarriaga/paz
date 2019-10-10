@@ -1,5 +1,8 @@
 from __future__ import division
+
 import numpy as np
+
+from ..messages import Box2D
 
 
 def compute_iou(box, boxes):
@@ -137,7 +140,7 @@ def encode(matched, priors, variances):
     return np.concatenate([g_cxcy, g_wh, matched[:, 4:]], 1)  # [num_priors,4]
 
 
-def decode(loc, priors, variances):
+def decode(predictions, priors, variances):
     """Decode default boxes into the ground truth boxes
 
     # Arguments
@@ -150,14 +153,15 @@ def decode(loc, priors, variances):
     """
 
     boxes = np.concatenate((
-        priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
-        priors[:, 2:] * np.exp(loc[:, 2:] * variances[1])), 1)
-    boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:] / 2)
-    boxes[:, 2:] = boxes[:, 2:] + boxes[:, :2]
+        priors[:, :2] + predictions[:, :2] * variances[0] * priors[:, 2:4],
+        priors[:, 2:4] * np.exp(predictions[:, 2:4] * variances[1])), 1)
+    boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:4] / 2)
+    boxes[:, 2:4] = boxes[:, 2:4] + boxes[:, :2]
+    return np.concatenate([boxes, predictions[:, 4:]], 1)
     return boxes
 
 
-def match(ground_truth_data, prior_boxes, iou_threshold, box_scale_factors):
+def match(boxes, prior_boxes, iou_threshold):
     """Match ground truth boxes with prior boxes whenever they have
     an intersection over union of 0.5 or higher.
 
@@ -168,24 +172,41 @@ def match(ground_truth_data, prior_boxes, iou_threshold, box_scale_factors):
             Boxes should be in center-form.
         iou_threshold: Float. Intersection over union to match 'prior_boxes'
             with 'ground_truth_data'.
-        box_scale_factors: List of floats with length 2.
-
     # Returns
         encoded_matches: Numpy array of shape ???.
     """
-    ious = compute_ious(ground_truth_data, to_point_form(prior_boxes))
-    best_truth_overlap = np.max(ious, axis=0, keepdims=False)
-    best_truth_idx = np.argmax(ious, axis=0)
-    best_prior_idx = np.squeeze(np.argmax(ious, axis=1))
-    best_truth_overlap[best_prior_idx] = 2
-    if best_prior_idx.ndim == 0:
-        best_prior_idx = np.expand_dims(best_prior_idx, 0)
-    for j in range(len(best_prior_idx)):
-        best_truth_idx[best_prior_idx[j]] = j
-    matches = ground_truth_data[best_truth_idx]
-    matches[best_truth_overlap < iou_threshold, -1] = 0
-    encoded_matches = encode(matches, prior_boxes, [.1, .2])
-    return encoded_matches
+    matched_boxes = to_point_form(prior_boxes).copy()
+    # matched_boxes = np.clip(matched_boxes, 0, 1.0)
+    matched_boxes = np.hstack(
+        [matched_boxes, np.zeros((len(matched_boxes), 1))])
+    for box in boxes:
+        ious = compute_iou(box, to_point_form(prior_boxes))
+        positive_mask = ious > iou_threshold
+        if not np.any(positive_mask):
+            best_positive_mask = np.argmax(ious)
+            matched_boxes[best_positive_mask, 4] = box[4]
+        else:
+            # print('box4', box[4], box)
+            matched_boxes[positive_mask, 4] = box[4]
+    return matched_boxes
+    """
+    ious = compute_ious(boxes, to_point_form(prior_boxes))
+    best_iou = np.max(ious, axis=0, keepdims=False)
+    best_iou_index = np.argmax(ious, axis=0)
+    best_prior_index = np.squeeze(np.argmax(ious, axis=1))
+    best_iou[best_prior_index] = 2
+    if best_prior_index.ndim == 0:
+        best_prior_index = np.expand_dims(best_prior_index, 0)
+    for j in range(len(best_prior_index)):
+        best_iou_index[best_prior_index[j]] = j
+    matches = boxes[best_iou_index]
+    # matches[best_truth_overlap < iou_threshold, -1] = 0
+    matches[best_iou < iou_threshold, 4] = 0
+    # print('before_encode', matches)
+    # encoded_matches = encode(matches, prior_boxes, [.1, .2])
+    # print('after_encode', encoded_matches)
+    return matches
+    """
 
 
 def make_box_square(box, offset_scale=0.05):
@@ -221,6 +242,30 @@ def make_box_square(box, offset_scale=0.05):
     y_min = y_min - offset
     y_max = y_max + offset
     return (int(x_min), int(y_min), int(x_max), int(y_max))
+
+
+def filter_detections(detections, arg_to_class, conf_thresh=0.5):
+    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages
+    # Arguments
+        detections. Numpy array of shape (num_classes, num_boxes, 5)
+    """
+    num_classes = detections.shape[0]
+    filtered_detections = []
+    for class_arg in range(1, num_classes):
+        class_detections = detections[class_arg, :]
+        confidence_mask = np.squeeze(class_detections[:, -1] > conf_thresh)
+        confident_class_detections = class_detections[confidence_mask]
+
+        if len(confident_class_detections) == 0:
+            continue
+
+        class_name = arg_to_class[class_arg]
+        for confident_class_detection in confident_class_detections:
+            coordinates = confident_class_detection[:4]
+            score = confident_class_detection[4]
+            detection = Box2D(coordinates, score, class_name)
+            filtered_detections.append(detection)
+    return filtered_detections
 
 
 def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
@@ -293,17 +338,16 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def detect(box_data, prior_boxes, conf_thresh=0.01, nms_thresh=.45,
-           top_k=200, variances=[.1, .2]):
+def detect(box_data, prior_boxes, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """Post-processing of model predictions by decoding them and applying
     per-class non-maximum suppression.
 
     # Arguments
         box_data: Numpy array of shape (num_prior_boxes, 4 + num_classes)
         prior_boxes: Numpy array of shape (num_prior_boxes, 4)
+        nsm_thresh: Float. Non-maximum suppression threshold.
         conf_thresh: Float. Filter scores with a lower confidence value before
             performing non-maximum supression.
-        nsm_thresh: Float. Non-maximum suppression threshold.
         top_k: Integer. Maximum number of boxes per class outputted by nms.
         variances: List of floats with length 2.
 
@@ -311,9 +355,11 @@ def detect(box_data, prior_boxes, conf_thresh=0.01, nms_thresh=.45,
         Numpy array of shape (num_classes, top_k, 5)
     """
 
-    box_data = np.squeeze(box_data)
-    regressed_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
-    decoded_boxes = decode(regressed_boxes, prior_boxes, variances)
+    # TODO modify this with a predict processor
+    # box_data = np.squeeze(box_data)
+
+    # decoded_boxes = decode(box_data, prior_boxes, variances)
+    decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
     output = np.zeros((num_classes, top_k, 5))
 
