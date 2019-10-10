@@ -32,8 +32,9 @@ class DetectionAugmentation(SequentialProcessor):
             self.add(pr.ToPercentCoordinates())
             self.add(pr.Resize(shape=(self.size, self.size)))
             self.add(pr.CastImageToFloat())
-            self.add(pr.SubtractMeans(self.mean))
-            self.add(pr.MatchBoxes(prior_boxes, iou, variances))
+            self.add(pr.SubtractMeanImage(self.mean))
+            self.add(pr.MatchBoxes(prior_boxes, iou))
+            self.add(pr.EncodeBoxes(prior_boxes, variances))
             self.add(pr.ToOneHotVector(num_classes))
             self.add(pr.OutputSelector(['image', 'boxes']))
 
@@ -41,7 +42,7 @@ class DetectionAugmentation(SequentialProcessor):
             self.add(pr.LoadImage())
             self.add(pr.CastImageToFloat())
             self.add(pr.Resize(self.size))
-            self.add(pr.SubtractMeans(self.mean))
+            self.add(pr.SubtractMeanImage(self.mean))
 
     @property
     def output_shapes(self):
@@ -50,9 +51,14 @@ class DetectionAugmentation(SequentialProcessor):
 
 
 class SingleShotInference(SequentialProcessor):
-    def __init__(self, model, class_names, score_thresh, nms_thresh):
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 mean=pr.BGR_IMAGENET_MEAN):
         super(SingleShotInference, self).__init__()
-        args = (model, class_names, score_thresh, nms_thresh)
-        self.add(pr.DetectBoxes2D(*args))
+
+        self.add(pr.PredictBoxes(model, mean))
+        self.add(pr.DecodeBoxes(model.prior_boxes, variances=[.1, .2]))
+        self.add(pr.DetectBoxes(model.prior_boxes, nms_thresh=nms_thresh))
+        self.add(pr.FilterBoxes(class_names, score_thresh))
         self.add(pr.DenormalizeBoxes2D())
         self.add(pr.DrawBoxes2D(class_names))
+        self.add(pr.CastImageToInts())
