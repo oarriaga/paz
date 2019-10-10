@@ -37,17 +37,31 @@ class CastImageToInts(Processor):
         return kwargs
 
 
-class SubtractMeans(Processor):
+class SubtractMeanImage(Processor):
     """Subtract channel-wise mean to image.
     # Arguments
         mean. List of length 3, containing the channel-wise mean.
     """
     def __init__(self, mean):
         self.mean = np.array(mean, dtype=np.float32)
-        super(SubtractMeans, self).__init__()
+        super(SubtractMeanImage, self).__init__()
 
     def call(self, kwargs):
         kwargs['image'] = kwargs['image'].astype(np.float32) - self.mean
+        return kwargs
+
+
+class AddMeanImage(Processor):
+    """Subtract channel-wise mean to image.
+    # Arguments
+        mean. List of length 3, containing the channel-wise mean.
+    """
+    def __init__(self, mean):
+        self.mean = np.array(mean, dtype=np.float32)
+        super(AddMeanImage, self).__init__()
+
+    def call(self, kwargs):
+        kwargs['image'] = kwargs['image'].astype(np.float32) + self.mean
         return kwargs
 
 
