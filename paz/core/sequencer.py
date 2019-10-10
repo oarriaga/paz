@@ -45,7 +45,7 @@ class Sequencer(Sequence):
         batch_samples = self.data[batch_arg_A:batch_arg_B]
         batches = [np.zeros((self.batch_size, *size)) for size in self.shapes]
         for sample_arg, unprocessed_sample in enumerate(batch_samples):
-            sample = self.processor(**unprocessed_sample)
+            sample = self.processor(**unprocessed_sample.copy())
             for data_arg, data in enumerate(sample):
                 batches[data_arg][sample_arg] = data
         # return dict(zip(self.tensor_names, batches))
