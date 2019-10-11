@@ -1,12 +1,12 @@
 import numpy as np
 
-from paz.core.boxes_ops import compute_iou
-from paz.core.boxes_ops import compute_ious
-from paz.core.boxes_ops import denormalize_box
-from paz.core.boxes_ops import to_point_form
-from paz.core.boxes_ops import to_center_form
-from paz.core.boxes_ops import rotation_matrix_to_quaternion
-from paz.core.boxes_ops import quaternion_to_rotation_matrix
+from paz.core.ops import compute_iou
+from paz.core.ops import compute_ious
+from paz.core.ops import denormalize_box
+from paz.core.ops import to_point_form
+from paz.core.ops import to_center_form
+from paz.core.ops import rotation_matrix_to_quaternion
+from paz.core.ops import quaternion_to_rotation_matrix
 
 
 boxes_B = np.array([[39, 63, 203, 112],
