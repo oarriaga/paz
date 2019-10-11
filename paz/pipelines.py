@@ -41,7 +41,7 @@ class DetectionAugmentation(SequentialProcessor):
         elif ((self.split == 'val') or (self.split == 'test')):
             self.add(pr.LoadImage())
             self.add(pr.CastImageToFloat())
-            self.add(pr.Resize(self.size, self.size))
+            self.add(pr.Resize((self.size, self.size)))
             self.add(pr.SubtractMeanImage(self.mean))
             self.add(pr.MatchBoxes(prior_boxes, iou))
             self.add(pr.EncodeBoxes(prior_boxes, variances))
