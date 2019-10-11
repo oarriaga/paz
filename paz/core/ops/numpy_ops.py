@@ -161,52 +161,39 @@ def decode(predictions, priors, variances):
     return boxes
 
 
-def match(boxes, prior_boxes, iou_threshold):
-    """Match ground truth boxes with prior boxes whenever they have
-    an intersection over union of 0.5 or higher.
-
+def match(boxes, prior_boxes, iou_threshold=0.5):
+    """Matches each prior box with a ground truth box (box from ``boxes``).
+    It then selects which matched box will be considered positive e.g. iou > .5
+    and returns for each prior box a ground truth box that is either positive
+    (with a class argument different than 0) or negative.
     # Arguments
-        ground_truth_data: Numpy array of shape ???.
-            Ground truth boxes in point-form.
+        boxes: Numpy array of shape (num_ground_truh_boxes, 4 + 1),
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument. This boxes should be the ground truth boxes.
         prior_boxes: Numpy array of shape (num_prior_boxes, 4).
-            Boxes should be in center-form.
-        iou_threshold: Float. Intersection over union to match 'prior_boxes'
-            with 'ground_truth_data'.
+            where the four coordinates are in center form coordinates.
+        iou_threshold: Float between [0, 1]. Intersection over union
+            used to determine which box is considered a positive box.
     # Returns
-        encoded_matches: Numpy array of shape ???.
-    """
-    matched_boxes = to_point_form(prior_boxes).copy()
-    # matched_boxes = np.clip(matched_boxes, 0, 1.0)
-    matched_boxes = np.hstack(
-        [matched_boxes, np.zeros((len(matched_boxes), 1))])
-    for box in boxes:
-        ious = compute_iou(box, to_point_form(prior_boxes))
-        positive_mask = ious > iou_threshold
-        if not np.any(positive_mask):
-            best_positive_mask = np.argmax(ious)
-            matched_boxes[best_positive_mask, 4] = box[4]
-        else:
-            # print('box4', box[4], box)
-            matched_boxes[positive_mask, 4] = box[4]
-    return matched_boxes
+        numpy array of shape (num_prior_boxes, 4 + 1).
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument.
     """
     ious = compute_ious(boxes, to_point_form(prior_boxes))
-    best_iou = np.max(ious, axis=0, keepdims=False)
-    best_iou_index = np.argmax(ious, axis=0)
-    best_prior_index = np.squeeze(np.argmax(ious, axis=1))
-    best_iou[best_prior_index] = 2
-    if best_prior_index.ndim == 0:
-        best_prior_index = np.expand_dims(best_prior_index, 0)
-    for j in range(len(best_prior_index)):
-        best_iou_index[best_prior_index[j]] = j
-    matches = boxes[best_iou_index]
-    # matches[best_truth_overlap < iou_threshold, -1] = 0
-    matches[best_iou < iou_threshold, 4] = 0
-    # print('before_encode', matches)
-    # encoded_matches = encode(matches, prior_boxes, [.1, .2])
-    # print('after_encode', encoded_matches)
+    best_box_iou_per_prior_box = np.max(ious, axis=0)
+    best_box_arg_per_prior_box = np.argmax(ious, axis=0)
+    best_prior_box_arg_per_box = np.argmax(ious, axis=1)
+    best_box_iou_per_prior_box[best_prior_box_arg_per_box] = 2
+    # overwriting best_box_arg_per_prior_box if they are the best prior box
+    for box_arg in range(len(best_prior_box_arg_per_box)):
+        best_prior_box_arg = best_prior_box_arg_per_box[box_arg]
+        best_box_arg_per_prior_box[best_prior_box_arg] = box_arg
+    matches = boxes[best_box_arg_per_prior_box]
+    # setting class value to 0 (background argument)
+    matches[best_box_iou_per_prior_box < iou_threshold, 4] = 0
     return matches
-    """
 
 
 def make_box_square(box, offset_scale=0.05):
@@ -245,7 +232,8 @@ def make_box_square(box, offset_scale=0.05):
 
 
 def filter_detections(detections, arg_to_class, conf_thresh=0.5):
-    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages
+    """Filters boxes outputted from function ``nms_per_class`` as ``Box2D``
+        messages depending on their confidence threshold.
     # Arguments
         detections. Numpy array of shape (num_classes, num_boxes, 5)
     """
@@ -255,10 +243,8 @@ def filter_detections(detections, arg_to_class, conf_thresh=0.5):
         class_detections = detections[class_arg, :]
         confidence_mask = np.squeeze(class_detections[:, -1] > conf_thresh)
         confident_class_detections = class_detections[confidence_mask]
-
         if len(confident_class_detections) == 0:
             continue
-
         class_name = arg_to_class[class_arg]
         for confident_class_detection in confident_class_detections:
             coordinates = confident_class_detection[:4]
@@ -338,27 +324,18 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def detect(box_data, prior_boxes, nms_thresh=.45, conf_thresh=0.01, top_k=200):
-    """Post-processing of model predictions by decoding them and applying
-    per-class non-maximum suppression.
-
+def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
+    """Applies non-maximum-suppression per class.
     # Arguments
         box_data: Numpy array of shape (num_prior_boxes, 4 + num_classes)
-        prior_boxes: Numpy array of shape (num_prior_boxes, 4)
         nsm_thresh: Float. Non-maximum suppression threshold.
         conf_thresh: Float. Filter scores with a lower confidence value before
             performing non-maximum supression.
         top_k: Integer. Maximum number of boxes per class outputted by nms.
-        variances: List of floats with length 2.
 
     Returns
         Numpy array of shape (num_classes, top_k, 5)
     """
-
-    # TODO modify this with a predict processor
-    # box_data = np.squeeze(box_data)
-
-    # decoded_boxes = decode(box_data, prior_boxes, variances)
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
     output = np.zeros((num_classes, top_k, 5))
