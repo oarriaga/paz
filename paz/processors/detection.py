@@ -158,7 +158,7 @@ class MatchBoxes(Processor):
 
 
 class EncodeBoxes(Processor):
-    """Encodes bounding boxes TODO:
+    """TODO: Encodes bounding boxes.
     """
     def __init__(self, prior_boxes, variances=[.1, .2]):
         self.prior_boxes = prior_boxes
@@ -173,7 +173,7 @@ class EncodeBoxes(Processor):
 
 
 class DecodeBoxes(Processor):
-    """Decodes bounding boxes TODO:
+    """TODO: Decodes boxes.
     """
     def __init__(self, prior_boxes, variances=[.1, .2]):
         self.prior_boxes = prior_boxes
@@ -187,21 +187,18 @@ class DecodeBoxes(Processor):
         return kwargs
 
 
-class DetectBoxes(Processor):
-    """Applies detect function TODO:
+class NonMaximumSuppressionPerClass(Processor):
+    """Applies non maximum suppression per class.
     """
-    def __init__(self, prior_boxes, nms_thresh=.45, conf_thresh=0.01):
-        self.prior_boxes = prior_boxes
+    def __init__(self, nms_thresh=.45, conf_thresh=0.01):
         self.nms_thresh = nms_thresh
         self.conf_thresh = conf_thresh
-        super(DetectBoxes, self).__init__()
+        super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, kwargs):
         boxes = kwargs['boxes']
-        # print(boxes.shape)
-        detections = ops.detect(
-            boxes, self.prior_boxes, self.conf_thresh, self.nms_thresh)
-        kwargs['boxes'] = detections
+        kwargs['boxes'] = ops.nms_per_class(
+            boxes, self.conf_thresh, self.nms_thresh)
         return kwargs
 
 
@@ -226,6 +223,8 @@ class FilterBoxes(Processor):
 
 
 class PredictBoxes(Processor):
+    """TODO: Extend to have pre-processing pipeline.
+    """
     def __init__(self, model, mean=BGR_IMAGENET_MEAN):
         self.model = model
         super(PredictBoxes, self).__init__()
