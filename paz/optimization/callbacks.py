@@ -26,18 +26,15 @@ class LearningRateScheduler(Callback):
     def on_epoch_begin(self, epoch, logs=None):
         if not hasattr(self.model.optimizer, 'lr'):
             raise ValueError('Optimizer must have a "lr" attribute.')
-        lr = float(K.get_value(self.model.optimizer.lr))
-        try:  # new API
-            lr = self.schedule(epoch, lr)
-        except TypeError:  # old API for backward compatibility
-            lr = self.schedule(epoch)
-        if not isinstance(lr, (float, np.float32, np.float64)):
-            raise ValueError('The output of the "schedule" function '
-                             'should be float.')
-        K.set_value(self.model.optimizer.lr, lr)
+
+        learning_rate = float(K.get_value(self.model.optimizer.lr))
+        learning_rate = self.schedule(epoch)
+        if not isinstance(learning_rate, (float, np.float32, np.float64)):
+            raise ValueError('Learning rate should be float.')
+        K.set_value(self.model.optimizer.lr, learning_rate)
         if self.verbose > 0:
             print('\nEpoch %05d: LearningRateScheduler reducing learning '
-                  'rate to %s.' % (epoch + 1, lr))
+                  'rate to %s.' % (epoch + 1, learning_rate))
 
     def schedule(self, epoch):
         if epoch in self.scheduled_epochs:
