@@ -66,8 +66,8 @@ class VOCParser(object):
         if dataset_name not in ['VOC2007', 'VOC2012']:
             raise Exception('Invalid dataset name.')
 
-        if split not in ['train', 'val', 'trainval', 'test', 'all']:
-            raise Exception('Invalid split name.')
+        # if split not in ['train', 'val', 'trainval', 'test', 'all']:
+        #     raise Exception('Invalid split name.')
 
         # creating data set prefix paths variables
         self.dataset_name = dataset_name
