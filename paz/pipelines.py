@@ -57,7 +57,7 @@ class SingleShotInference(SequentialProcessor):
 
         self.add(pr.PredictBoxes(model, mean))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances=[.1, .2]))
-        self.add(pr.DetectBoxes(model.prior_boxes, nms_thresh=nms_thresh))
+        self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
         self.add(pr.FilterBoxes(class_names, score_thresh))
         self.add(pr.DenormalizeBoxes2D())
         self.add(pr.DrawBoxes2D(class_names))
