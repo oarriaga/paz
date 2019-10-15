@@ -3,15 +3,16 @@ import json
 import argparse
 from datetime import datetime
 
-from keras.callbacks import CSVLogger
-from keras.callbacks import ModelCheckpoint
-from keras.callbacks import EarlyStopping
-from keras.callbacks import ReduceLROnPlateau
-from keras.optimizers import Nadam
-from keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import ReduceLROnPlateau
+from tensorflow.keras.optimizers import Nadam
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-from datasets import FERPlus, FER
-from models import build_xception, build_densenet, build_vgg
+# from paz.datasets import FERPlus, FER
+from paz.datasets import FER
+from paz.models import build_xception
 
 
 description = 'Training real-time CNNs for emotion and sex classification'
@@ -51,12 +52,13 @@ parser.add_argument('-s', '--save_path', default='../trained_models/',
                     type=str, help='Path for writing model weights and logs')
 args = parser.parse_args()
 
-if args.dataset == 'FERPlus':
-    DataManager = FERPlus
-elif args.dataset == 'FER':
+# if args.dataset == 'FERPlus':
+#     DataManager = FERPlus
+
+if args.dataset == 'FER':
     DataManager = FER
 else:
-    raise NotImplementedError('IMDB dataset not implemented')
+    raise NotImplementedError('FERPlus, IMDB dataset not implemented')
 
 # loading datasets
 data_managers, datasets = [], []
@@ -76,8 +78,10 @@ data_augmentator = ImageDataGenerator(
     horizontal_flip=True)
 
 # instantiating model
-model_builder = {
-    'xception': build_xception, 'densenet': build_densenet, 'vgg': build_vgg}
+# model_builder = {
+#     'xception': build_xception, 'densenet': build_densenet, 'vgg': build_vgg}
+
+model_builder = {'xception': build_xception}
 optimizer = Nadam(args.learning_rate)
 num_classes = data_managers[0].num_classes
 model_builder = model_builder[args.model_name]
