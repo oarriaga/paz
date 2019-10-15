@@ -60,6 +60,18 @@ def get_class_names(dataset_name='VOC2007'):
                        '040_large_marker', '003_cracker_box',
                        '025_mug', '052_extra_large_clamp',
                        '021_bleach_cleanser', '002_master_chef_can']
+
+    elif dataset_name == 'FERPlus':
+        return ['neutral', 'happiness', 'surprise', 'sadness',
+                'anger', 'disgust', 'fear', 'contempt']
+
+    elif dataset_name == 'FER':
+        return ['angry', 'disgust', 'fear', 'happy',
+                'sad', 'surprise', 'neutral']
+
+    elif dataset_name == 'IMDB':
+        return ['man', 'woman']
+
     else:
         raise ValueError('Invalid dataset', dataset_name)
 
