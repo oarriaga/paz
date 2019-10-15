@@ -1,6 +1,7 @@
+import os
+import json
 import argparse
 from datetime import datetime
-import json
 
 from keras.callbacks import CSVLogger
 from keras.callbacks import ModelCheckpoint
