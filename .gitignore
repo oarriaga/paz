@@ -7,6 +7,7 @@
 *.txt
 *.png
 *.jpg
+*.xml
 
 dist/*
 build/*
@@ -19,4 +20,3 @@ docs/theme/fonts/*
 docs/theme/img/*
 
 install.sh
-examples
