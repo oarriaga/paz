@@ -2,6 +2,45 @@ from .core import SequentialProcessor
 from . import processors as pr
 
 
+class KeypointAugmentation(SequentialProcessor):
+    def __init__(self, renderer, projector, keypoints,
+                 image_paths, max_radius_scale, num_occlusions, size, color):
+
+        self.renderer = renderer
+        self.projector = projector
+        self.keypoints = keypoints
+
+        self.add(pr.RenderSample(self.renderer))
+        self.add(pr.ProjectKeypoints(self.projector, self.keypoints))
+        self.add(pr.CastImageToFloat())
+        if image_paths is not None:
+            self.add(pr.AddCroppedBackground(image_paths, size, color))
+            self.add(pr.ConcatenateAlphaMask())
+        for occlusion_arg in range(self.num_occlusions):
+            self.add(pr.AddOcclusion(self.max_radius_scale))
+        self.add(pr.RandomBlur())
+        self.add(pr.RandomContrast())
+        self.add(pr.RandomBrightness())
+        self.add(pr.CastImageToInts())
+        self.add(pr.ConvertColor('BGR', to='HSV'))
+        self.add(pr.CastImageToFloat())
+        self.add(pr.RandomSaturation())
+        self.add(pr.RandomHue())
+        self.add(pr.CastImageToInts())
+        self.add(pr.ConvertColor('HSV', to='BGR'))
+        self.add(pr.RandomLightingNoise())
+        # self.add(pr.Expand(mean=self.mean)) # which position?
+        # self.add(pr.RandomSampleCrop()) # why not use?
+        # self.add(pr.DenormalizeKeypoints()) # TODO
+        # self.add(pr.ApplyRandomTranslation()) # TODO
+        # self.add(pr.ApplyRandomTranslation()) # TODO
+        # self.add(pr.NormalizeKeypoints()) # TODO
+        self.add(pr.Resize(shape=(self.size, self.size)))
+        self.add(pr.CastImageToFloat())
+        self.add(pr.NormalizeImage())
+        self.add(pr.OutputSelector(['image', 'keypoints']))
+
+
 class DetectionAugmentation(SequentialProcessor):
     def __init__(self, prior_boxes, num_classes, split='train', size=300,
                  iou=.5, variances=[.1, .2], mean=pr.BGR_IMAGENET_MEAN):
