@@ -197,8 +197,8 @@ class PixelBlur(Processor):
         w, h = image.shape[:2]
         reduced_w = int(.25 * w)
         reduced_h = int(.25 * h)
-        image = resize_image(image, (reduced_w, reduced_h), 0)
-        kwargs['image'] = resize_image(image, (w, h), 0)
+        image = resize_image(image, (reduced_w, reduced_h))
+        kwargs['image'] = resize_image(image, (w, h))
         return kwargs
 
 
@@ -228,9 +228,7 @@ class MedianBlur(Processor):
         super(MedianBlur, self).__init__(probability)
 
     def call(self, kwargs):
-        image = kwargs['image']
-        w, h = image.shape[:2]
-        kwargs['image'] = median_blur(image, 5)
+        kwargs['image'] = median_blur(kwargs['image'], 5)
         return kwargs
 
 
