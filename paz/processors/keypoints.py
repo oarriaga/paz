@@ -57,3 +57,53 @@ class ProjectKeypoints(Processor):
         keypoints = self.projector.project(keypoints)[0]
         kwargs['keypoints'] = keypoints
         return kwargs
+
+
+class DenormalizeKeypoints(Processor):
+    """Transform normalized keypoint coordinates into image coordinates
+    """
+    def __init__(self):
+        super(DenormalizeKeypoints, self).__init__()
+
+    def call(self, kwargs):
+        keypoints, image = kwargs['keypoints'], kwargs['image']
+        height, width = image.shape[0:2]
+        for keypoint_arg, keypoint in enumerate(keypoints):
+            x, y = keypoint[:2]
+            # transform key-point coordinates to image coordinates
+            x = (min(max(x, -1), 1) * width / 2 + width / 2) - 0.5
+            # flip since the image coordinates for y are flipped
+            y = height - 0.5 - (min(max(y, -1), 1) * height / 2 + height / 2)
+            x, y = int(round(x)), int(round(y))
+            keypoints[keypoint_arg][:2] = [x, y]
+        kwargs['keypoints'] = keypoints
+        return kwargs
+
+
+class NormalizeKeypoints(Processor):
+    """Transform keypoints in image coordinates to normalized coordinates
+    """
+    def __init__(self):
+        super(NormalizeKeypoints, self).__init__()
+
+    def call(self, kwargs):
+        image, keypoints = kwargs['image'], kwargs['keypoints']
+        height, width = image.shape[0:2]
+        for keypoint_arg, keypoint in enumerate(keypoints):
+            x, y = keypoint[:2]
+            # transform key-point coordinates to image coordinates
+            x = (((x + 0.5) - (width / 2.0)) / (width / 2))
+            y = (((height - 0.5 - y) - (height / 2.0)) / (height / 2))
+            keypoints[keypoint_arg][:2] = [x, y]
+        kwargs['keypoints'] = keypoints
+        return kwargs
+
+
+class RemoveKeypointsDepth(Processor):
+    """Removes Z component from keypoints.
+    """
+    def __init__(self):
+        super(RemoveKeypointsDepth, self).__init__()
+
+    def call(self, kwargs):
+        kwargs['keypoints'] = kwargs['keypoints'][:, :2]
