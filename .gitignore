@@ -20,3 +20,4 @@ docs/theme/fonts/*
 docs/theme/img/*
 
 install.sh
+examples/keypoint_estimation/
