@@ -1,4 +1,4 @@
-from core import Processor
+from ..core import Processor
 import numpy as np
 
 
