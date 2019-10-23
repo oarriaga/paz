@@ -13,11 +13,9 @@ class RenderSample(Processor):
             following order
                 (matrices, alpha_channel, depth_image)
             Renderers are available in poseur.
-        batch_size: Integer. Number of images to be rendered
     """
-    def __init__(self, renderer, batch_size):
+    def __init__(self, renderer):
         self.renderer = renderer
-        self.batch_size = batch_size
         super(RenderSample, self).__init__()
 
     def call(self, kwargs):
@@ -35,6 +33,7 @@ class ConcatenateAlphaMask(Processor):
     """
     def call(self, kwargs):
         image, alpha_mask = kwargs['image'], kwargs['alpha_mask']
+        alpha_mask = np.expand_dims(alpha_mask, axis=-1)
         kwargs['image'] = np.concatenate([image, alpha_mask], axis=2)
         return kwargs
 
@@ -107,3 +106,4 @@ class RemoveKeypointsDepth(Processor):
 
     def call(self, kwargs):
         kwargs['keypoints'] = kwargs['keypoints'][:, :2]
+        return kwargs
