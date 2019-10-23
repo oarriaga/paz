@@ -261,7 +261,7 @@ def gaussian_blur(image, kernel_size):
         image: Numpy array.
         kernel_size: List of two elements. Describes the gaussian kernel shape.
     """
-    return cv2.GaussianBlur(image, kernel_size)
+    return cv2.GaussianBlur(image, kernel_size, 0)
 
 
 def lincolor(num_colors, saturation=1, value=1, normalized=False):
