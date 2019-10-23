@@ -67,10 +67,8 @@ class Expand(Processor):
 
         if 'keypoints' in kwargs:
             keypoints = kwargs['keypoints']
-            keypoints[:, :2] += (int(left), int(top))
-            # there was a BUG when ran with complete pipeline
-            # if [:, :2] was not there the KP were not showing
-            kwargs['keypoints'][:, :2] = keypoints[:, :2]
+            keypoints[:, :2] = keypoints[:, :2] + (int(left), int(top))
+            kwargs['keypoints'] = keypoints
         return kwargs
 
 
@@ -210,3 +208,87 @@ class RandomSampleCrop(Processor):
                 kwargs['image'] = current_image
                 kwargs['boxes'] = np.hstack([current_boxes, current_labels])
                 return kwargs
+
+
+class ApplyTranslation(Processor):
+    """Applies a translation of image and labels
+    # Arguments
+        translation: A list of length two indicating the x,y translation values
+        fill_color: List of three integers indicating the
+            color values e.g. [0,0,0]
+    # TODO:
+        Implement function for ``boxes`` labels
+    """
+    def __init__(self, translation, fill_color=None):
+        super(ApplyTranslation, self).__init__()
+        self._matrix = np.zeros((2, 3), dtype=np.float32)
+        self._matrix[0, 0], self._matrix[1, 1] = 1.0, 1.0
+        self.fill_color = fill_color
+        self.translation = translation
+
+    @property
+    def translation(self):
+        return self._translation
+
+    @translation.setter
+    def translation(self, translation):
+        if translation is None:
+            self._translation = None
+        elif len(translation) == 2:
+            self._translation = translation
+            self._matrix[0, 2], self._matrix[1, 2] = translation
+        else:
+            raise ValueError('Translation should be `None` or have length two')
+
+    def call(self, kwargs):
+        if 'image' in kwargs:
+            image = kwargs['image']
+            height, width = image.shape[:2]
+            if self.fill_color is None:
+                fill_color = np.mean(image, axis=(0, 1))
+            image = ops.warp_affine(image, self._matrix, fill_color)
+            kwargs['image'] = image
+        if 'keypoints' in kwargs:
+            keypoints = kwargs['keypoints']
+            keypoints[:, 0] = keypoints[:, 0] + self.translation[0]
+            keypoints[:, 1] = keypoints[:, 1] + self.translation[1]
+            kwargs['keypoints'] = keypoints
+        if 'boxes' in kwargs:
+            raise NotImplementedError
+        return kwargs
+
+
+class ApplyRandomTranslation(Processor):
+    """Applies a random translation to image and labels
+    #Arguments
+        delta_scale: List with two elements having the normalized deltas.
+            e.g. [.25, .25]
+        fill_color: List of three integers indicating the
+            color values e.g. [0,0,0]
+        probability: Float between [0, 1]
+    """
+    def __init__(
+            self, delta_scale=[.25, .25], fill_color=None, probability=0.5):
+        super(ApplyRandomTranslation, self).__init__(probability)
+        self.delta_scale = delta_scale
+        self.apply_translation = ApplyTranslation(None, fill_color)
+
+    @property
+    def delta_scale(self):
+        return self._delta_scale
+
+    @delta_scale.setter
+    def delta_scale(self, delta_scale):
+        x_delta_scale, y_delta_scale = delta_scale
+        if (x_delta_scale < 0) or (y_delta_scale < 0):
+            raise ValueError('Delta scale values should be a positive scalar')
+        self._delta_scale = delta_scale
+
+    def call(self, kwargs):
+        image = kwargs['image']
+        height, width = image.shape[:2]
+        x_delta_scale, y_delta_scale = self.delta_scale
+        x = image.shape[1] * np.random.uniform(-x_delta_scale, x_delta_scale)
+        y = image.shape[0] * np.random.uniform(-y_delta_scale, y_delta_scale)
+        self.apply_translation.translation = [x, y]
+        return self.apply_translation(kwargs)
