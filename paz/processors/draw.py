@@ -24,3 +24,22 @@ class DrawBoxes2D(Processor):
             ops.put_text(image, text, (x_min, y_min - 10), .7, color, 1)
             ops.draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return kwargs
+
+
+class DrawKeypoints2D(Processor):
+    """Draws keypoints into image.
+    #Arguments
+        num_keypoints: Int. Used initialize colors for each keypoint
+        radius: Float. Approximate radius of the circle in pixel coordinates.
+    """
+    def __init__(self, num_keypoints, radius=3, normalized=True):
+        super(DrawKeypoints2D, self).__init__()
+        self.colors = ops.lincolor(num_keypoints, normalized=normalized)
+        self.radius = radius
+
+    def call(self, kwargs):
+        image, keypoints = kwargs['image'], kwargs['keypoints']
+        for keypoint_arg, keypoint in enumerate(keypoints):
+            color = self.colors[keypoint_arg]
+            ops.draw_circle(image, keypoint.astype('int'), color, self.radius)
+        return kwargs
