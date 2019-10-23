@@ -71,8 +71,10 @@ class SingleShotInference(SequentialProcessor):
 class KeypointAugmentation(SequentialProcessor):
     def __init__(self, renderer, projector, keypoints, split='train',
                  image_paths=None, size=128, num_occlusions=0,
-                 max_radius_scale=0.5, plain_color=[0, 0, 0]):
+                 max_radius_scale=0.5, plain_color=[0, 0, 0],
+                 with_geometric_transforms=False):
 
+        super(KeypointAugmentation, self).__init__()
         if split not in ['train', 'val', 'test']:
             raise ValueError('Invalid split mode')
 
@@ -81,10 +83,11 @@ class KeypointAugmentation(SequentialProcessor):
         self.keypoints = keypoints
         self.image_paths = image_paths
         self.split = split
-        self.size = self.size
+        self.size = size
         self.num_occlusions = num_occlusions
         self.max_radius_scale = max_radius_scale
         self.plain_color = plain_color
+        self.with_geometric_transforms = with_geometric_transforms
 
         self.add(pr.RenderSample(self.renderer))
         self.add(pr.ConvertColor('RGB', to='BGR'))
@@ -92,15 +95,15 @@ class KeypointAugmentation(SequentialProcessor):
 
         if split == 'train':
             self.add(pr.CastImageToFloat())
+            self.add(pr.ConcatenateAlphaMask())
             if image_paths is not None:
                 self.add(pr.AddCroppedBackground(image_paths, size))
-                self.add(pr.ConcatenateAlphaMask())
             else:
                 self.add(pr.AddPlainBackground(self.plain_color))
 
             for occlusion_arg in range(self.num_occlusions):
                 self.add(pr.AddOcclusion(self.max_radius_scale))
-
+            self.add(pr.CastImageToFloat())
             self.add(pr.RandomBlur())
             self.add(pr.RandomContrast())
             self.add(pr.RandomBrightness())
@@ -111,11 +114,12 @@ class KeypointAugmentation(SequentialProcessor):
             self.add(pr.RandomHue())
             self.add(pr.CastImageToInts())
             self.add(pr.ConvertColor('HSV', to='BGR'))
-            self.add(pr.RandomLightingNoise())
-            self.add(pr.DenormalizeKeypoints())
-            self.add(pr.ApplyRandomTranslation())
-            self.add(pr.Expand(mean=self.mean))
-            self.add(pr.NormalizeKeypoints())
+            # self.add(pr.RandomLightingNoise())
+            if with_geometric_transforms:
+                self.add(pr.DenormalizeKeypoints())
+                self.add(pr.ApplyRandomTranslation())
+                self.add(pr.Expand())
+                self.add(pr.NormalizeKeypoints())
 
         self.add(pr.RemoveKeypointsDepth())
         self.add(pr.Resize(shape=(self.size, self.size)))
