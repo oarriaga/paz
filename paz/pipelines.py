@@ -11,7 +11,6 @@ class DetectionAugmentation(SequentialProcessor):
             raise ValueError('Invalid split mode')
         self.mean, self.size, self.split = mean, size, split
         self.prior_boxes, self.num_classes = prior_boxes, num_classes
-
         if self.split == 'train':
             self.add(pr.LoadImage())
             self.add(pr.CastImageToFloat())
@@ -36,7 +35,7 @@ class DetectionAugmentation(SequentialProcessor):
             self.add(pr.MatchBoxes(prior_boxes, iou))
             self.add(pr.EncodeBoxes(prior_boxes, variances))
             self.add(pr.ToOneHotVector(num_classes))
-            self.add(pr.OutputSelector(['image', 'boxes']))
+            self.add(pr.OutputSelector(['image'], ['boxes']))
 
         elif ((self.split == 'val') or (self.split == 'test')):
             self.add(pr.LoadImage())
@@ -46,12 +45,15 @@ class DetectionAugmentation(SequentialProcessor):
             self.add(pr.MatchBoxes(prior_boxes, iou))
             self.add(pr.EncodeBoxes(prior_boxes, variances))
             self.add(pr.ToOneHotVector(num_classes))
-            self.add(pr.OutputSelector(['image', 'boxes']))
+            self.add(pr.OutputSelector(['image'], ['boxes']))
 
     @property
-    def output_shapes(self):
-        return [(self.size, self.size, 3),
-                (len(self.prior_boxes), 4 + self.num_classes)]
+    def input_shapes(self):
+        return [(self.size, self.size, 3)]
+
+    @property
+    def label_shapes(self):
+        return [(len(self.prior_boxes), 4 + self.num_classes)]
 
 
 class SingleShotInference(SequentialProcessor):
@@ -70,9 +72,9 @@ class SingleShotInference(SequentialProcessor):
 
 class KeypointAugmentation(SequentialProcessor):
     def __init__(self, renderer, projector, keypoints, split='train',
-                 image_paths=None, size=128, num_occlusions=0,
-                 max_radius_scale=0.5, plain_color=[0, 0, 0],
-                 with_geometric_transforms=False):
+                 image_paths=None, size=128, with_partition=False,
+                 num_occlusions=0, max_radius_scale=0.5,
+                 plain_color=[0, 0, 0], with_geometric_transforms=False):
 
         super(KeypointAugmentation, self).__init__()
         if split not in ['train', 'val', 'test']:
@@ -84,6 +86,7 @@ class KeypointAugmentation(SequentialProcessor):
         self.image_paths = image_paths
         self.split = split
         self.size = size
+        self.with_partition = with_partition
         self.num_occlusions = num_occlusions
         self.max_radius_scale = max_radius_scale
         self.plain_color = plain_color
@@ -125,8 +128,21 @@ class KeypointAugmentation(SequentialProcessor):
         self.add(pr.Resize(shape=(self.size, self.size)))
         self.add(pr.CastImageToFloat())
         self.add(pr.NormalizeImage())
-        self.add(pr.OutputSelector(['image', 'keypoints']))
+        if self.with_partition:
+            self.add(pr.PartitionKeypoints())
+            num_keypoints = len(self.keypoints)
+            label_topics = ['keypoint_%s' % i for i in range(num_keypoints)]
+        else:
+            label_topics = ['keypoints']
+        self.add(pr.OutputSelector(['image'], label_topics))
 
     @property
-    def output_shapes(self):
-        return [(self.size, self.size, 3), (self.keypoints.shape[:2])]
+    def input_shapes(self):
+        return [(self.size, self.size, 3)]
+
+    @property
+    def label_shapes(self):
+        if self.with_partition:
+            return [(2,) for _ in range(len(self.keypoints))]
+        else:
+            return [(len(self.keypoints), 2)]
