@@ -7,7 +7,7 @@ from paz.pipelines import DetectionAugmentation
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiboxLoss
-from paz.core import Sequencer
+from paz.core.sequencer import ProcessingSequencer
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
@@ -63,7 +63,7 @@ for split in ['train', 'val']:
 # setting sequencers
 sequencers = []
 for data, augmentator in zip(datasets, augmentators):
-    sequencer = Sequencer(data, augmentator, args.batch_size)
+    sequencer = ProcessingSequencer(augmentator, args.batch_size, data)
     sequencers.append(sequencer)
 
 # setting callbacks
@@ -77,6 +77,7 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 callbacks = [checkpoint, log, schedule]
 
+
 # training
 model.fit_generator(
     sequencers[0],
@@ -86,4 +87,4 @@ model.fit_generator(
     callbacks=callbacks,
     validation_data=sequencers[1],
     use_multiprocessing=True,
-    workers=6)
+    workers=4)
