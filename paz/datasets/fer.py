@@ -3,7 +3,7 @@ import numpy as np
 
 from .utils import get_class_names
 from ..core import Loader
-from ..core.ops import resize_image
+from ..core import ops
 
 
 class FER(Loader):
@@ -38,6 +38,7 @@ class FER(Loader):
         faces = np.zeros((len(data), *self.image_size, 1))
         for sample_arg, sample in enumerate(data):
             face = np.array(sample[1].split(' '), dtype=int).reshape(48, 48)
-            faces[sample_arg, :, :, 0] = resize_image(face, self.image_size)
+            face = ops.resize_image(face, self.image_size)
+            faces[sample_arg, :, :, 0] = face
         emotions = to_categorical(data[:, 0].astype(int), self.num_classes)
         return faces, emotions
