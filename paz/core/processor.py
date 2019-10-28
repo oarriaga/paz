@@ -1,5 +1,4 @@
 import numpy as np
-import types
 
 
 class Processor(object):
@@ -84,7 +83,7 @@ class SequentialProcessor(object):
     def __init__(self, processors=None):
         self.processors = [InputProcessor()]
         if processors is not None:
-            [self.add(processor for processor in processors)]
+            [self.add(processor) for processor in processors]
 
     def add(self, processor):
         """ Adds a process to the sequence of processes to be applied to input.
@@ -98,16 +97,3 @@ class SequentialProcessor(object):
         for processor in self.processors[1:]:
             kwargs = processor(kwargs)
         return kwargs
-
-
-class Lambda(object):
-    """Applies a lambda function as a processor transformation.
-    # Arguments
-        lambda_function: A lambda function.
-    """
-
-    def __init__(self, function):
-        self.function = function
-
-    def __call__(self, kwargs):
-        return self.function(kwargs)
