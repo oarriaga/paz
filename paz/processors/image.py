@@ -7,7 +7,7 @@ from ..core import Processor
 from ..core.ops import draw_filled_polygon, load_image, show_image
 from ..core.ops import median_blur, gaussian_blur, resize_image, convert_image
 from ..core.ops import BGR2RGB, RGB2BGR, BGR2HSV, RGB2HSV, HSV2RGB, HSV2BGR
-from ..core.ops import IMREAD_COLOR
+from ..core.ops import IMREAD_COLOR, BGR2GRAY
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
@@ -68,11 +68,12 @@ class AddMeanImage(Processor):
 class NormalizeImage(Processor):
     """Normalize image by diving its values by 255.0.
     """
-    def __init__(self):
+    def __init__(self, topic='image'):
         super(NormalizeImage, self).__init__()
+        self.topic = topic
 
     def call(self, kwargs):
-        kwargs['image'] = kwargs['image'].astype(np.float32) / 255.0
+        kwargs[self.topic] = kwargs[self.topic].astype(np.float32) / 255.0
         return kwargs
 
 
@@ -367,6 +368,8 @@ class ConvertColor(Processor):
             image = convert_image(image, RGB2BGR)
         elif self.current == 'BGR' and self.to == 'RGB':
             image = convert_image(image, BGR2RGB)
+        elif self.current == 'BGR' and self.to == 'GRAY':
+            image = convert_image(image, BGR2GRAY)
         else:
             raise NotImplementedError
         kwargs['image'] = image
