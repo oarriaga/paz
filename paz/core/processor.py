@@ -81,8 +81,10 @@ class SequentialProcessor(object):
     # Methods:
         add()
     """
-    def __init__(self):
+    def __init__(self, processors=None):
         self.processors = [InputProcessor()]
+        if processors is not None:
+            [self.add(processor for processor in processors)]
 
     def add(self, processor):
         """ Adds a process to the sequence of processes to be applied to input.
@@ -98,15 +100,14 @@ class SequentialProcessor(object):
         return kwargs
 
 
-class LambdaProcessor(object):
+class Lambda(object):
     """Applies a lambda function as a processor transformation.
     # Arguments
         lambda_function: A lambda function.
     """
 
-    def __init__(self, lambda_function):
-        assert isinstance(lambda_function, types.LambdaType)
-        self.lambda_function = lambda_function
+    def __init__(self, function):
+        self.function = function
 
     def __call__(self, kwargs):
-        return self.lambda_function(kwargs)
+        return self.function(kwargs)
