@@ -42,6 +42,10 @@ class Box2D(object):
     def class_name(self):
         return self._class_name
 
+    @class_name.setter
+    def class_name(self, class_name):
+        self._class_name = class_name
+
     @property
     def score(self):
         return self._score
