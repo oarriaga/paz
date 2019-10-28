@@ -572,3 +572,22 @@ def normalize_keypoints(keypoints, height, width):
         y = (((height - 0.5 - y) - (height / 2.0)) / (height / 2))
         normalized_keypoints[keypoint_arg][:2] = [x, y]
     return normalized_keypoints
+
+
+def apply_offsets(coordinates, offset_scales):
+    """Apply offsets to coordinates
+    #Arguments
+        coordinates: List of floats containing coordinates in point form.
+        offset_scales: List of floats having x and y scales respectively.
+    #Returns
+        coordinates: List of floats containing coordinates in point form.
+    """
+    x_min, y_min, x_max, y_max = coordinates
+    x_offset_scale, y_offset_scale = offset_scales
+    x_offset = (x_max - x_min) * x_offset_scale
+    y_offset = (y_max - y_min) * y_offset_scale
+    x_min = x_min - x_offset
+    y_max = y_max + x_offset
+    y_min = y_min - y_offset
+    x_max = x_max + y_offset
+    return (x_min, y_min, x_max, y_max)
