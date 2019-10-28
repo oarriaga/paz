@@ -1,3 +1,4 @@
+from ..core import SequentialProcessor
 from ..core import Processor
 from ..core import ops
 import numpy as np
@@ -49,3 +50,55 @@ class OutputSelector(Processor):
         for topic in self.label_topics:
             labels[topic] = kwargs[topic]
         return {'inputs': inputs, 'labels': labels}
+
+
+class Predict(Processor):
+    def __init__(self, model, input_topic, label_topic='predictions',
+                 processors=None):
+
+        super(Predict, self).__init__()
+        self.model = model
+        self.processors = processors
+        if self.processors is not None:
+            self.process = SequentialProcessor(processors)
+        self.input_topic = input_topic
+        self.label_topic = label_topic
+
+    def call(self, kwargs):
+        input_topic = kwargs[self.input_topic]
+        if self.processors is not None:
+            processing_kwargs = {self.input_topic: input_topic}
+            input_topic = self.process(**processing_kwargs)[self.input_topic]
+        label_topic = self.model.predict(input_topic)
+        kwargs[self.label_topic] = label_topic
+        return kwargs
+
+
+class ToLabel(Processor):
+    def __init__(self, class_names, topic='predictions'):
+        super(ToLabel, self).__init__()
+        self.class_names = class_names
+        self.topic = topic
+
+    def call(self, kwargs):
+        kwargs[self.topic] = self.class_names[np.argmax(kwargs[self.topic])]
+        return kwargs
+
+
+class Lambda(object):
+    """Applies a lambda function as a processor transformation.
+    # Arguments
+        function: Function.
+        parameters: Dictionary.
+        topic: String
+    """
+
+    def __init__(self, function, parameters, topic):
+        self.function = function
+        self.parameters = parameters
+        self.topic = topic
+
+    def __call__(self, kwargs):
+        data = self.function(kwargs[self.topic], **self.parameters)
+        kwargs[self.topic] = data
+        return kwargs
