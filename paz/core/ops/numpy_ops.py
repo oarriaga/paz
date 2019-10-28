@@ -586,8 +586,8 @@ def apply_offsets(coordinates, offset_scales):
     x_offset_scale, y_offset_scale = offset_scales
     x_offset = (x_max - x_min) * x_offset_scale
     y_offset = (y_max - y_min) * y_offset_scale
-    x_min = x_min - x_offset
-    y_max = y_max + x_offset
-    y_min = y_min - y_offset
-    x_max = x_max + y_offset
+    x_min = int(x_min - x_offset)
+    y_max = int(y_max + x_offset)
+    y_min = int(y_min - y_offset)
+    x_max = int(x_max + y_offset)
     return (x_min, y_min, x_max, y_max)
