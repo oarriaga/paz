@@ -10,8 +10,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# from paz.datasets import FERPlus, FER
-from paz.datasets import FER
+from paz.datasets import FER, FERPlus
 from paz.models import build_xception
 
 
@@ -48,17 +47,16 @@ parser.add_argument('-cw', '--class_weight', nargs='+', type=int,
 parser.add_argument('-m', '--model_name', default='xception',
                     choices=['xception', 'densenet', 'vgg'], type=str,
                     help='CNN model structure')
-parser.add_argument('-s', '--save_path', default='../trained_models/',
+parser.add_argument('-s', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
 args = parser.parse_args()
 
-# if args.dataset == 'FERPlus':
-#     DataManager = FERPlus
-
 if args.dataset == 'FER':
     DataManager = FER
+elif args.dataset == 'FERPlus':
+    DataManager = FERPlus
 else:
-    raise NotImplementedError('FERPlus, IMDB dataset not implemented')
+    raise NotImplementedError('IMDB dataset not implemented')
 
 # loading datasets
 data_managers, datasets = [], []
@@ -76,10 +74,6 @@ data_augmentator = ImageDataGenerator(
     height_shift_range=0.1,
     zoom_range=.1,
     horizontal_flip=True)
-
-# instantiating model
-# model_builder = {
-#     'xception': build_xception, 'densenet': build_densenet, 'vgg': build_vgg}
 
 model_builder = {'xception': build_xception}
 optimizer = Nadam(args.learning_rate)
