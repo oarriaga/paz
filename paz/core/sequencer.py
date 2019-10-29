@@ -88,7 +88,7 @@ class GeneratingSequencer(Sequence):
         labels_batch = self.get_empty_batch(
             self.label_topics, self.processor.label_shapes)
         for sample_arg in range(self.batch_size):
-            sample = self.processor()
+            sample = self.processor({'image': None})
             for topic, data in sample['inputs'].items():
                 inputs_batch[topic][sample_arg] = data
             for topic, data in sample['labels'].items():
