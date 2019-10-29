@@ -19,7 +19,7 @@ class RenderSample(Processor):
         self.renderer = renderer
         super(RenderSample, self).__init__()
 
-    def call(self, kwargs):
+    def call(self, kwargs=None):
         image, (matrices, alpha_channel, depth) = self.renderer.render_sample()
         world_to_camera = matrices[0].reshape(4, 4)
         kwargs['image'] = image
