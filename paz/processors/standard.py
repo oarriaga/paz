@@ -68,7 +68,7 @@ class Predict(Processor):
         input_topic = kwargs[self.input_topic]
         if self.processors is not None:
             processing_kwargs = {self.input_topic: input_topic}
-            input_topic = self.process(**processing_kwargs)[self.input_topic]
+            input_topic = self.process(processing_kwargs)[self.input_topic]
         label_topic = self.model.predict(input_topic)
         kwargs[self.label_topic] = label_topic
         return kwargs
