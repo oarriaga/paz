@@ -46,7 +46,7 @@ class VideoPlayer(object):
                 print('Frame: None')
                 continue
 
-            results = self.pipeline(image=frame)
+            results = self.pipeline({'image': frame})
             image = cv2.resize(results['image'], tuple(self.image_size))
             cv2.imshow('webcam', image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
