@@ -81,7 +81,7 @@ class SequentialProcessor(object):
         add()
     """
     def __init__(self, processors=None):
-        self.processors = [InputProcessor()]
+        self.processors = []
         if processors is not None:
             [self.add(processor) for processor in processors]
 
@@ -92,8 +92,7 @@ class SequentialProcessor(object):
         """
         self.processors.append(processor)
 
-    def __call__(self, **kwargs):
-        kwargs = self.processors[0](**kwargs)
-        for processor in self.processors[1:]:
+    def __call__(self, kwargs):
+        for processor in self.processors:
             kwargs = processor(kwargs)
         return kwargs
