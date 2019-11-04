@@ -24,7 +24,6 @@ for class_arg, model_name in enumerate(args.models):
     detector.add(ToBoxes2D(args.models))
     detectors.append(detector)
 pipeline = SequentialProcessor(detectors)
-pipeline.add(PrintTopics(['boxes', 'boxes2D']))
 pipeline.add(DrawBoxes2D(args.models))
 pipeline.add(CastImageToInts())
 VideoPlayer((1280, 960), pipeline).start()
