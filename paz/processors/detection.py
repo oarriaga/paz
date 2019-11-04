@@ -138,7 +138,12 @@ class ToBoxes2D(Processor):
             elif numpy_box2D.shape[-1] == 4:
                 class_name = None
             boxes2D.append(Box2D(numpy_box2D[:4], 1.0, class_name))
-        kwargs['boxes2D'] = boxes2D
+
+        # check if there are already boxes inside the `Boxes2D` topic
+        if 'boxes2D' in kwargs:
+            kwargs['boxes2D'].extend(boxes2D)
+        else:
+            kwargs['boxes2D'] = boxes2D
         return kwargs
 
 
