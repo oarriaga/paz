@@ -52,6 +52,17 @@ class OutputSelector(Processor):
         return {'inputs': inputs, 'labels': labels}
 
 
+class PrintTopics(Processor):
+    def __init__(self, topics):
+        self.topics = topics
+        super(PrintTopics, self).__init__()
+
+    def call(self, kwargs):
+        for topic in self.topics:
+            print(topic, kwargs[topic])
+        return kwargs
+
+
 class Predict(Processor):
     def __init__(self, model, input_topic, label_topic='predictions',
                  processors=None):
