@@ -23,7 +23,7 @@ class HaarCascadeDetector(object):
         [1] https://github.com/opencv/opencv/tree/master/data/haarcascades
     """
 
-    def __init__(self, weights='frontalface_default', class_arg=1,
+    def __init__(self, weights='frontalface_default', class_arg=None,
                  scale=1.3, neighbors=5):
         self.weights = weights
         self.name = 'haarcascade_' + weights + '.xml'
@@ -47,6 +47,8 @@ class HaarCascadeDetector(object):
             boxes_point_form[:, 1] = boxes[:, 1]
             boxes_point_form[:, 2] = boxes[:, 0] + boxes[:, 2]
             boxes_point_form[:, 3] = boxes[:, 1] + boxes[:, 3]
-            class_args = np.ones((len(boxes_point_form), 1)) * self.class_arg
-            boxes_point_form = np.hstack((boxes_point_form, class_args))
+            if self.class_arg is not None:
+                class_args = np.ones((len(boxes_point_form), 1))
+                class_args = class_args * self.class_arg
+                boxes_point_form = np.hstack((boxes_point_form, class_args))
         return boxes_point_form.astype('int')
