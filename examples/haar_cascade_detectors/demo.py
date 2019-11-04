@@ -1,5 +1,6 @@
 import argparse
 
+from paz.processors import PrintTopics
 from paz.processors import Predict
 from paz.processors import ToBoxes2D
 from paz.processors import DrawBoxes2D
@@ -11,18 +12,19 @@ from paz.core import SequentialProcessor, VideoPlayer
 parser = argparse.ArgumentParser(description='Haarcascade detectors example')
 parser.add_argument('-m', '--models', nargs='+', type=str,
                     default=['frontalface_default', 'eye'],
-                    help='Model name postfix of openCV')
+                    help='Model name postfix of openCV xml file')
 args = parser.parse_args()
 
-processors = []
-for model_name in args.models:
-    detector = HaarCascadeDetector(model_name)
-    processor = SequentialProcessor()
+detectors = []
+for class_arg, model_name in enumerate(args.models):
+    model = HaarCascadeDetector(model_name, class_arg)
+    detector = SequentialProcessor()
     preprocessing = [ConvertColor('BGR', 'GRAY')]
-    processor.add(Predict(detector, 'image', 'boxes', preprocessing))
-    processor.add(ToBoxes2D())
-    processor.add(DrawBoxes2D(colors=[0, 255, 0]))
-    processor.add(CastImageToInts())
-    processors.append(processor)
-
-VideoPlayer((1280, 960), SequentialProcessor(processors)).start()
+    detector.add(Predict(model, 'image', 'boxes', preprocessing))
+    detector.add(ToBoxes2D(args.models))
+    detectors.append(detector)
+pipeline = SequentialProcessor(detectors)
+pipeline.add(PrintTopics(['boxes', 'boxes2D']))
+pipeline.add(DrawBoxes2D(args.models))
+pipeline.add(CastImageToInts())
+VideoPlayer((1280, 960), pipeline).start()
