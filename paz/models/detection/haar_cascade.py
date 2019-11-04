@@ -12,6 +12,7 @@ class HaarCascadeDetector(object):
     # Arguments
         path: String. Postfix to default openCV haarcascades XML files, see [1]
             e.g. `eye`, `frontalface_alt2`, `fullbody`
+        class_arg: Int. Class label argument.
         scale = Float. Scale for image reduction
         neighbors: Int. Minimum neighbors
 
@@ -22,12 +23,14 @@ class HaarCascadeDetector(object):
         [1] https://github.com/opencv/opencv/tree/master/data/haarcascades
     """
 
-    def __init__(self, weights='frontalface_default', scale=1.3, neighbors=5):
+    def __init__(self, weights='frontalface_default', class_arg=1,
+                 scale=1.3, neighbors=5):
         self.weights = weights
         self.name = 'haarcascade_' + weights + '.xml'
         self.url = WEIGHT_PATH + self.name
         self.path = get_file(self.name, self.url, cache_subdir='paz/models')
         self.model = ops.cascade_classifier(self.path)
+        self.class_arg = class_arg
         self.scale = scale
         self.neighbors = neighbors
 
@@ -44,4 +47,6 @@ class HaarCascadeDetector(object):
             boxes_point_form[:, 1] = boxes[:, 1]
             boxes_point_form[:, 2] = boxes[:, 0] + boxes[:, 2]
             boxes_point_form[:, 3] = boxes[:, 1] + boxes[:, 3]
-        return boxes_point_form
+            class_args = np.ones((len(boxes_point_form), 1)) * self.class_arg
+            boxes_point_form = np.hstack((boxes_point_form, class_args))
+        return boxes_point_form.astype('int')
