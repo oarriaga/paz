@@ -146,3 +146,40 @@ class KeypointAugmentation(SequentialProcessor):
             return [(2,) for _ in range(len(self.keypoints))]
         else:
             return [(len(self.keypoints), 2)]
+
+
+class KeypointInference(SequentialProcessor):
+    """Keypoint inference pipeline.
+    # Arguments
+        model: Keras model.
+        num_keypoints: Int.
+        radius: Int.
+    # Returns
+        Function for outputting keypoints from image
+    """
+    def __init__(self, model, num_keypoints=None, radius=5, to_BGR=True):
+        super(KeypointInference, self).__init__()
+        self.num_keypoints, self.radius = self.num_keypoints, radius
+        if self.num_keypoints is None:
+            self.num_keypoints = model.output_shape[-1]
+        if to_BGR:
+            self.add(pr.ConvertColor('RGB', 'BGR'))
+        self.add(pr.NormalizeImage())
+        processors = [pr.ExpandDims(axis=0, topic='image')]
+        self.add(pr.Predict(model, 'image', 'keypoints', processors))
+        self.add(pr.Squeeze(axis=0, topic='keypoints'))
+        self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius))
+        self.add(pr.CastImageToInts())
+
+
+class DrawMosaic(SequentialProcessor):
+    def __init__(self, inferencer, shape, topic='images'):
+        self.inferencer = inferencer
+        self.draw_mosaic = pr.MakeMosaic(shape, topic)
+
+    def call(self, kwargs):
+        for arg, topic in enumerate(kwargs[self.topic]):
+            inferences = self.inferencer({'image': topic})
+            kwargs[self.topic][arg] = inferences[self.topic][arg]
+        self.draw_mosaic(kwargs)
+        return kwargs
