@@ -38,7 +38,7 @@ def KeypointNet(input_shape, num_keypoints, depth=.2, filters=64, alpha=0.1):
         [1] Discovery of Latent 3D Keypoints via End-to-end Geometric Reasoning
     """
     width, height = input_shape[:2]
-    base = input_tensor = Input(input_shape, name='images')
+    base = input_tensor = Input(input_shape, name='image')
     for base_arg, rate in enumerate([1, 1, 2, 4, 8, 16, 1, 2, 4, 8, 16, 1]):
         name = 'conv2D_base-%s' % base_arg
         base = block(base, filters, (rate, rate), alpha, name)
@@ -84,8 +84,8 @@ def KeypointNetShared(input_shape, num_keypoints, depth, filters, alpha):
 
     model_args = (input_shape, num_keypoints, depth, filters, alpha)
     keypointnet = KeypointNet(*model_args)
-    image_A = Input(input_shape, name='images_A')
-    image_B = Input(input_shape, name='images_B')
+    image_A = Input(input_shape, name='image_A')
+    image_B = Input(input_shape, name='image_B')
     uvz_A, uv_volume_A = keypointnet(image_A)
     uvz_B, uv_volume_B = keypointnet(image_B)
     uvz_points = Concatenate(axis=1, name='uvz_points-shared')([uvz_A, uvz_B])
