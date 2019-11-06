@@ -1,6 +1,5 @@
 import argparse
 
-from paz.processors import PrintTopics
 from paz.processors import Predict
 from paz.processors import ToBoxes2D
 from paz.processors import DrawBoxes2D
