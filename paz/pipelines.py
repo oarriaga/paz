@@ -70,6 +70,25 @@ class SingleShotInference(SequentialProcessor):
         self.add(pr.CastImageToInts())
 
 
+class KeypointSharedAugmentation(SequentialProcessor):
+    def __init__(self, renderer, projector, size):
+        super(KeypointSharedAugmentation, self).__init__()
+        self.renderer = renderer
+        self.size = size
+        self.add(pr.RenderMultiViewSample(self.renderer))
+        self.add(pr.OutputSelector(
+            ['image_A', 'image_B'], ['matrices', 'alpha_channels']))
+
+    @property
+    def input_shapes(self):
+        return [(self.size, self.size, 3),
+                (self.size, self.size, 3)]
+
+    @property
+    def label_shapes(self):
+        return [(4, 4 * 4), (self.size, self.size, 2)]
+
+
 class KeypointAugmentation(SequentialProcessor):
     def __init__(self, renderer, projector, keypoints, split='train',
                  image_paths=None, size=128, with_partition=False,
@@ -92,7 +111,7 @@ class KeypointAugmentation(SequentialProcessor):
         self.plain_color = plain_color
         self.with_geometric_transforms = with_geometric_transforms
 
-        self.add(pr.RenderSample(self.renderer))
+        self.add(pr.RenderSingleViewSample(self.renderer))
         self.add(pr.ConvertColor('RGB', to='BGR'))
         self.add(pr.ProjectKeypoints(self.projector, self.keypoints))
 
@@ -159,9 +178,9 @@ class KeypointInference(SequentialProcessor):
     """
     def __init__(self, model, num_keypoints=None, radius=5, to_BGR=True):
         super(KeypointInference, self).__init__()
-        self.num_keypoints, self.radius = self.num_keypoints, radius
+        self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
-            self.num_keypoints = model.output_shape[-1]
+            self.num_keypoints = model.output_shape[1]
         if to_BGR:
             self.add(pr.ConvertColor('RGB', 'BGR'))
         self.add(pr.NormalizeImage())
@@ -173,7 +192,7 @@ class KeypointInference(SequentialProcessor):
 
 
 class DrawMosaic(SequentialProcessor):
-    def __init__(self, inferencer, shape, topic='images'):
+    def __init__(self, inferencer, shape, topic='image'):
         self.inferencer = inferencer
         self.draw_mosaic = pr.MakeMosaic(shape, topic)
 
