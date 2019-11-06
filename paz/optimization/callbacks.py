@@ -1,6 +1,40 @@
+import os
+import numpy as np
+
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
-import numpy as np
+
+from ...core import ops
+
+
+class DrawInferences(Callback):
+    """Saves an image with its corresponding inferences
+
+    # Arguments
+        save_path: String. Path in which the images will be saved.
+        sequencer: Sequencer with __getitem__ function for calling a batch.
+        inferencer: Paz Processor for performing inference.
+        verbose: Integer. If is bigger than 1 a message with the learning
+            rate decay will be displayed during optimization.
+    """
+    def __init__(self, save_path, sequencer, inferencer, topic, verbose=1):
+        super(DrawInferences, self).__init__()
+        self.save_path = os.path.join(save_path, 'images')
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path)
+        self.sequencer = sequencer
+        self.inferencer = inferencer
+        self.topic = topic
+        self.verbose = verbose
+
+    def on_epoch_end(self, epoch, logs=None):
+        image = self.sequencer.__getitem__(epoch)[0][0]
+        inferences = self.inferencer({self.topic: image})
+        image_name = 'image_batch_%03d.jpg' % epoch
+        image_path = os.path.join(self.save_path, image_name)
+        if self.verbose:
+            print('Saving predicted images ', image_path)
+        ops.save_image(image_path, inferences[self.topic])
 
 
 class LearningRateScheduler(Callback):
