@@ -205,7 +205,7 @@ def SSD512(num_classes=81, weights='COCO', input_shape=(512, 512, 3),
     if weights is not None:
         weights_url = BASE_WEIGHT_PATH + model_name + '_weights.hdf5'
         weights_path = get_file(os.path.basename(weights_url), weights_url,
-                                cache_subdir='altamira/models')
+                                cache_subdir='paz/models')
         model.load_weights(weights_path)
 
     model.prior_boxes = create_prior_boxes('COCO')
