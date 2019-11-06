@@ -191,7 +191,7 @@ def SSD300(num_classes=21, base_weights='VOC', head_weights='VOC',
         model_filename = ['SSD300', str(base_weights), str(head_weights)]
         model_filename = '_'.join(['-'.join(model_filename), 'weights.hdf5'])
         weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
-                                cache_subdir='altamira/models')
+                                cache_subdir='paz/models')
         print('Loading %s model weights' % weights_path)
         finetunning_model_names = ['SSD300-VGG-None_weights.hdf5',
                                    'SSD300-VOC-None_weights.hdf5']
