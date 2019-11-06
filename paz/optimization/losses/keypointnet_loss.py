@@ -3,16 +3,17 @@ import tensorflow as tf
 import keras.backend as K
 import numpy as np
 
-from ...models.keypoint.keypointnet import Projector
+from ...models.keypoint.projector import Projector
 
 
 class KeypointNetLoss(object):
-    def __init__(self, num_keypoints, focal_length=22.903766, size=128):
-        self.projector = Projector((size, size), focal_length)
+    def __init__(self, num_keypoints, focal_length):
         self.num_keypoints = int(num_keypoints)
+        self.focal_length = focal_length
+        self.projector = Projector(focal_length)
         self.rotation_noise = 0.1
         self.separation_delta = 0.05
-        self.feature_map_size = size
+        self.feature_map_size = 128
 
     def _reshape_matrix(self, matrix):
         matrix = K.reshape(matrix, [-1, 4, 4])
@@ -105,7 +106,7 @@ class KeypointNetLoss(object):
         alpha_channel = tf.cast(alpha_channel, dtype=tf.float32)
         alpha_channel = tf.expand_dims(alpha_channel, 1)
         silhouette_loss = tf.reduce_sum(uv_volume * alpha_channel, axis=[2, 3])
-        silhouette_loss = -tf.log(silhouette_loss + 1e-12)
+        silhouette_loss = -tf.math.log(silhouette_loss + 1e-12)
         silhouette_loss = tf.reduce_mean(silhouette_loss, axis=-1)
         return silhouette_loss
 
@@ -142,7 +143,8 @@ class KeypointNetLoss(object):
         arange = np.arange(0.5, self.feature_map_size, 1)
         arange = arange / (self.feature_map_size / 2) - 1
         range_u, range_v = tf.meshgrid(arange, -arange)
-        range_u, range_v = tf.to_float(range_u), tf.to_float(range_v)
+        range_u = tf.cast(range_u, dtype=tf.float32)
+        range_v = tf.cast(range_v, dtype=tf.float32)
 
         variance_loss_A = self._variance(uv_volume_A, range_u, range_v)
         variance_loss_B = self._variance(uv_volume_B, range_u, range_v)
@@ -178,8 +180,8 @@ class KeypointNetLoss(object):
              tf.shape(keypoints_A)[1]],
             dtype=tf.float32) / self.num_keypoints
 
-        noise_A = tf.random_normal(tf.shape(keypoints_A), mean=0, stddev=noise)
-        noise_B = tf.random_normal(tf.shape(keypoints_B), mean=0, stddev=noise)
+        noise_A = tf.random.normal(tf.shape(keypoints_A), mean=0, stddev=noise)
+        noise_B = tf.random.normal(tf.shape(keypoints_B), mean=0, stddev=noise)
         keypoints_A = keypoints_A + noise_A
         keypoints_B = keypoints_B + noise_B
         pconf2 = tf.expand_dims(pconf, 2)
@@ -188,10 +190,10 @@ class KeypointNetLoss(object):
         x = keypoints_A - center_A
         y = keypoints_B - center_B
         weighted_x = tf.matmul(
-            x, tf.matrix_diag(pconf), transpose_a=True)
+            x, tf.linalg.diag(pconf), transpose_a=True)
         covariance = tf.matmul(weighted_x, y)
-        _, u, v = tf.svd(covariance, full_matrices=True)
-        d = tf.matrix_determinant(tf.matmul(v, u, transpose_b=True))
+        _, u, v = tf.linalg.svd(covariance, full_matrices=True)
+        d = tf.linalg.det(tf.matmul(v, u, transpose_b=True))
         ud = tf.concat(
             [u[:, :, :-1],
              u[:, :, -1:] * tf.expand_dims(tf.expand_dims(d, 1), 1)],
