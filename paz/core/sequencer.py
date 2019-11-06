@@ -71,12 +71,12 @@ class GeneratingSequencer(Sequence):
             e.g. ``image``, ``depth``, ``boxes`` and as `values` of these
             `keys` the corresponding data e.g. strings, numpy arrays, etc.
     """
-    def __init__(self, processor, batch_size=32, data=None):
+    def __init__(self, processor, batch_size=32, as_list=False):
         self.processor = processor
         self.input_topics = self.processor.processors[-1].input_topics
         self.label_topics = self.processor.processors[-1].label_topics
         self.batch_size = batch_size
-        self.data = data
+        self.as_list = as_list
 
     def __len__(self):
         # fix this horrendous hack
@@ -93,6 +93,9 @@ class GeneratingSequencer(Sequence):
                 inputs_batch[topic][sample_arg] = data
             for topic, data in sample['labels'].items():
                 labels_batch[topic][sample_arg] = data
+        if self.as_list:
+            inputs_batch = self.to_list(inputs_batch, self.input_topics)
+            labels_batch = self.to_list(labels_batch, self.label_topics)
         return inputs_batch, labels_batch
 
     def get_empty_batch(self, topics, shapes):
@@ -100,3 +103,6 @@ class GeneratingSequencer(Sequence):
         for topic, shape in zip(topics, shapes):
             batch[topic] = np.zeros((self.batch_size, *shape))
         return batch
+
+    def to_list(self, batch, topics):
+        return [batch[topic] for topic in topics]
