@@ -1,15 +1,16 @@
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ["PYOPENGL_PLATFORM"] = "egl"
+# os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+# os.environ["PYOPENGL_PLATFORM"] = 'egl'
 
 import json
 import argparse
 from paz.models import KeypointNetShared
-from paz.models import KeypointNetSharedSceneSequencer
 from paz.models import Projector
-from paz.processing.pipelines import KeypointInference
-from paz.processors.pipelines import DrawMosaic
+from paz.pipelines import DrawMosaic
+from paz.pipelines import KeypointInference
+from paz.pipelines import KeypointSharedAugmentation
+from paz.core.sequencer import GeneratingSequencer
 from paz.optimization.callbacks import DrawInferences
 from paz.optimization import KeypointNetLoss
 
@@ -29,7 +30,7 @@ parser.add_argument('-nk', '--num_keypoints', default=20, type=int,
                     help='Number of keypoints to be learned')
 parser.add_argument('-f', '--filters', default=64, type=int,
                     help='Number of filters in convolutional blocks')
-parser.add_argument('-bs', '--batch_size', default=32, type=int,
+parser.add_argument('-bs', '--batch_size', default=3, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
@@ -62,6 +63,8 @@ parser.add_argument('-l', '--light', default=5.0, type=float,
                     help='Light intensity from poseur')
 parser.add_argument('-bk', '--background', default=0, type=int,
                     help='Background color')
+parser.add_argument('-ap', '--alpha', default=0.1, type=float,
+                    help='Alpha leaky-relu parameter')
 args = parser.parse_args()
 
 
@@ -74,17 +77,20 @@ save_path = os.path.join(os.path.expanduser('~'), '.keras/altamira/models/')
 scene = MultiView(OBJ_filepath, (args.image_size, args.image_size),
                   args.y_fov, args.depth, args.sphere, args.roll,
                   args.translation, args.shift, args.light, args.background)
-sequencer = KeypointNetSharedSceneSequencer(
-    scene, args.batch_size, args.steps_per_epoch)
 focal_length = scene.camera.get_projection_matrix()[0, 0]
 
-# model instantiation
+# setting sequencer
 input_shape = (args.image_size, args.image_size, 3)
+projector = Projector(focal_length, True)
+processor = KeypointSharedAugmentation(scene, projector, args.image_size)
+sequencer = GeneratingSequencer(processor, args.batch_size, as_list=True)
+
+# model instantiation
 model = KeypointNetShared(input_shape, args.num_keypoints,
-                          args.depth * 10, args.filters)
+                          args.depth * 10, args.filters, args.alpha)
 
 # loss instantiation
-loss = KeypointNetLoss(args.num_keypoints, focal_length, args.image_size)
+loss = KeypointNetLoss(args.num_keypoints, focal_length)
 losses = {'uvz_points-shared': loss.uvz_points,
           'uv_volumes-shared': loss.uv_volumes}
 uvz_point_losses = [loss.consistency, loss.separation, loss.relative_pose]
@@ -96,24 +102,25 @@ metrics = {'uvz_points-shared': uvz_point_losses,
 # model compilation
 optimizer = Adam(args.learning_rate, amsgrad=True)
 model.compile(optimizer, losses, metrics)
-metrics_names = ['loss', 'uvz', 'uv', 'cons', 'sep', 'rel_pose', 'sil', 'var']
-model.metrics_names = metrics_names
-model.name = '_'.join([model.name, str(args.num_keypoints), class_name])
+# metrics_names = ['loss', 'uvz', 'uv', 'cons', 'sep', 'rel_pose', 'sil', 'var']
+# model.metrics_names = metrics_names
+model_name = '_'.join([model.name, str(args.num_keypoints), class_name])
 model.summary()
 
 # making directory for saving model weights and logs
-save_path = os.path.join(save_path, model.name)
+save_path = os.path.join(save_path, model_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
 # callbacks
-log = CSVLogger(os.path.join(save_path, '%s.log' % model.name))
+log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
 stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
 plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
-inferencer = KeypointInference(save_path, model.get_layer('keypointnet'))
+inferencer = KeypointInference(
+    model.get_layer('keypointnet'), args.num_keypoints)
 drawer = DrawMosaic(inferencer, (5, 5))
 draw = DrawInferences(save_path, sequencer, drawer, 'images')
-model_path = os.path.join(save_path, '%s_weights.hdf5' % model.name)
+model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 save = ModelCheckpoint(model_path, 'loss', verbose=1, save_best_only=True)
 with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
     json.dump(args.__dict__, filer, indent=4)
