@@ -118,7 +118,7 @@ class Squeeze(Processor):
         topic: String.
     """
     def __init__(self, axis, topic):
-        super(ExpandDims, self).__init__()
+        super(Squeeze, self).__init__()
         self.axis, self.topic = axis, topic
 
     def call(self, kwargs):
