@@ -3,7 +3,7 @@ from ..core import ops
 import numpy as np
 
 
-class RenderSample(Processor):
+class RenderSingleViewSample(Processor):
     """Renders a batch of images and puts them in the selected topic
     # Arguments
         renderer: Python object with ``render_sample'' method. This method
@@ -17,7 +17,7 @@ class RenderSample(Processor):
     """
     def __init__(self, renderer):
         self.renderer = renderer
-        super(RenderSample, self).__init__()
+        super(RenderSingleViewSample, self).__init__()
 
     def call(self, kwargs=None):
         image, (matrices, alpha_channel, depth) = self.renderer.render_sample()
@@ -26,6 +26,37 @@ class RenderSample(Processor):
         kwargs['world_to_camera'] = world_to_camera
         kwargs['alpha_mask'] = alpha_channel
         kwargs['depth'] = depth
+        return kwargs
+
+
+class RenderMultiViewSample(Processor):
+    """Renders a batch of images and puts them in the selected topic
+    # Arguments
+        renderer: Python object with ``render_sample'' method. This method
+            should render images and some labels of the image e.g.
+                matrices, depth, alpha_channel
+            It should output a list of length two containing a numpy
+            array of the image and a list having the labels in the
+            following order
+                (matrices, alpha_channel, depth_image)
+            Renderers are available in poseur.
+    """
+    def __init__(self, renderer):
+        self.renderer = renderer
+        super(RenderMultiViewSample, self).__init__()
+
+    def call(self, kwargs=None):
+        [image_A, image_B], labels = self.renderer.render_sample()
+        [matrices, alpha_A, alpha_B] = labels
+        image_A, image_B = image_A / 255.0, image_B / 255.0
+        alpha_A, alpha_B = alpha_A / 255.0, alpha_B / 255.0
+        alpha_A = np.expand_dims(alpha_A, -1)
+        alpha_B = np.expand_dims(alpha_B, -1)
+        alpha_masks = np.concatenate([alpha_A, alpha_B], -1)
+        kwargs['matrices'] = matrices
+        kwargs['image_A'] = image_A
+        kwargs['image_B'] = image_B
+        kwargs['alpha_channels'] = alpha_masks
         return kwargs
 
 
