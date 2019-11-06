@@ -48,3 +48,18 @@ class DrawKeypoints2D(Processor):
             color = self.colors[keypoint_arg]
             ops.draw_circle(image, keypoint.astype('int'), color, self.radius)
         return kwargs
+
+
+class MakeMosaic(Processor):
+    """Draws multiple images as a single mosaic image
+    """
+    def __init__(self, shape, topic='images', output_topic='images'):
+        super(MakeMosaic, self).__init__()
+        self.shape = shape
+        self.topic = topic
+        self.output_topic = output_topic
+
+    def call(self, kwargs):
+        image = kwargs[self.topic]
+        kwargs[self.output_topic] = ops.make_mosaic(image, self.shape)
+        return kwargs
