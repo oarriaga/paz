@@ -21,3 +21,5 @@ docs/theme/img/*
 
 install.sh
 examples/keypoint_estimation/
+examples/bayesian_face_classification/
+examples/bayesian_face_generation/
