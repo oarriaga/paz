@@ -4,7 +4,7 @@ import numpy as np
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
 
-from ...core import ops
+from ..core import ops
 
 
 class DrawInferences(Callback):
