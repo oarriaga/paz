@@ -96,6 +96,36 @@ class ToLabel(Processor):
         return kwargs
 
 
+class ExpandDims(Processor):
+    """Wrap around numpy `expand_dims` due to common use before model predict.
+    # Arguments
+        expand_dims: Int or list of Ints.
+        topic: String.
+    """
+    def __init__(self, axis, topic):
+        super(ExpandDims, self).__init__()
+        self.axis, self.topic = axis, topic
+
+    def call(self, kwargs):
+        kwargs[self.topic] = np.expand_dims(kwargs[self.topic], self.axis)
+        return kwargs
+
+
+class Squeeze(Processor):
+    """Wrap around numpy `squeeze` due to common use before model predict.
+    # Arguments
+        expand_dims: Int or list of Ints.
+        topic: String.
+    """
+    def __init__(self, axis, topic):
+        super(ExpandDims, self).__init__()
+        self.axis, self.topic = axis, topic
+
+    def call(self, kwargs):
+        kwargs[self.topic] = np.squeeze(kwargs[self.topic], self.axis)
+        return kwargs
+
+
 class Lambda(object):
     """Applies a lambda function as a processor transformation.
     # Arguments
