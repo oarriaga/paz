@@ -85,6 +85,17 @@ class Predict(Processor):
         return kwargs
 
 
+class SelectElement(Processor):
+    def __init__(self, topic, argument):
+        super(SelectElement, self).__init__()
+        self.topic = topic
+        self.argument = argument
+
+    def call(self, kwargs):
+        kwargs[self.topic] = kwargs[self.topic][self.argument]
+        return kwargs
+
+
 class ToLabel(Processor):
     def __init__(self, class_names, topic='predictions'):
         super(ToLabel, self).__init__()
@@ -122,7 +133,7 @@ class Squeeze(Processor):
         self.axis, self.topic = axis, topic
 
     def call(self, kwargs):
-        kwargs[self.topic] = np.squeeze(kwargs[self.topic], self.axis)
+        kwargs[self.topic] = np.squeeze(kwargs[self.topic], axis=self.axis)
         return kwargs
 
 
