@@ -17,24 +17,28 @@ class DrawInferences(Callback):
         verbose: Integer. If is bigger than 1 a message with the learning
             rate decay will be displayed during optimization.
     """
-    def __init__(self, save_path, sequencer, inferencer, topic, verbose=1):
+    def __init__(self, save_path, images, pipeline, topic='image', verbose=1):
         super(DrawInferences, self).__init__()
         self.save_path = os.path.join(save_path, 'images')
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
-        self.sequencer = sequencer
-        self.inferencer = inferencer
+        self.pipeline = pipeline
+        self.images = images
         self.topic = topic
         self.verbose = verbose
 
     def on_epoch_end(self, epoch, logs=None):
-        image = self.sequencer.__getitem__(epoch)[0][0]
-        inferences = self.inferencer({self.topic: image})
-        image_name = 'image_batch_%03d.jpg' % epoch
-        image_path = os.path.join(self.save_path, image_name)
+        for image_arg, image in enumerate(self.images.copy()):
+            inferences = self.pipeline({self.topic: image})
+            epoch_name = 'epoch_%03d' % epoch
+            save_path = os.path.join(self.save_path, epoch_name)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            image_name = 'image_%03d.png' % image_arg
+            image_name = os.path.join(save_path, image_name)
+            ops.save_image(image_name, inferences[self.topic])
         if self.verbose:
-            print('Saving predicted images ', image_path)
-        ops.save_image(image_path, inferences[self.topic])
+            print('Saving predicted images in:', self.save_path)
 
 
 class LearningRateScheduler(Callback):
