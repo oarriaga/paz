@@ -176,29 +176,19 @@ class KeypointInference(SequentialProcessor):
     # Returns
         Function for outputting keypoints from image
     """
-    def __init__(self, model, num_keypoints=None, radius=5, to_BGR=True):
+    def __init__(self, model, num_keypoints=None, radius=5, to_BGR=False):
+
         super(KeypointInference, self).__init__()
         self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
             self.num_keypoints = model.output_shape[1]
         if to_BGR:
             self.add(pr.ConvertColor('RGB', 'BGR'))
-        self.add(pr.NormalizeImage())
-        processors = [pr.ExpandDims(axis=0, topic='image')]
-        self.add(pr.Predict(model, 'image', 'keypoints', processors))
+        pipeline = [pr.NormalizeImage(), pr.ExpandDims(axis=0, topic='image')]
+        self.add(pr.Predict(model, 'image', 'keypoints', pipeline))
+        self.add(pr.SelectElement('keypoints', 0))
         self.add(pr.Squeeze(axis=0, topic='keypoints'))
-        self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius))
+        self.add(pr.DenormalizeKeypoints())
+        self.add(pr.RemoveKeypointsDepth())
+        self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
         self.add(pr.CastImageToInts())
-
-
-class DrawMosaic(SequentialProcessor):
-    def __init__(self, inferencer, shape, topic='image'):
-        self.inferencer = inferencer
-        self.draw_mosaic = pr.MakeMosaic(shape, topic)
-
-    def call(self, kwargs):
-        for arg, topic in enumerate(kwargs[self.topic]):
-            inferences = self.inferencer({'image': topic})
-            kwargs[self.topic][arg] = inferences[self.topic][arg]
-        self.draw_mosaic(kwargs)
-        return kwargs
