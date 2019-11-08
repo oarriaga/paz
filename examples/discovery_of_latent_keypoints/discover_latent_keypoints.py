@@ -119,7 +119,8 @@ if not os.path.exists(save_path):
 log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
 stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
 plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
-inferencer = KeypointInference(model.get_layer('keypointnet'))
+inferencer = KeypointInference(
+    model.get_layer('keypointnet'), args.num_keypoints)
 images = (sequencer.__getitem__(0)[0][0] * 255).astype('uint8')
 draw = DrawInferences(save_path, images, inferencer)
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
