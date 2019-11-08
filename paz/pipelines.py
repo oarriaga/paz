@@ -181,14 +181,12 @@ class KeypointInference(SequentialProcessor):
     # Returns
         Function for outputting keypoints from image
     """
-    def __init__(self, model, num_keypoints=None, radius=5, to_BGR=False):
+    def __init__(self, model, num_keypoints=None, radius=5):
 
         super(KeypointInference, self).__init__()
         self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
             self.num_keypoints = model.output_shape[1]
-        if to_BGR:
-            self.add(pr.ConvertColor('RGB', 'BGR'))
         pipeline = [pr.NormalizeImage(), pr.ExpandDims(axis=0, topic='image')]
         self.add(pr.Predict(model, 'image', 'keypoints', pipeline))
         self.add(pr.SelectElement('keypoints', 0))
