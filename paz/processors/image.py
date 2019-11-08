@@ -349,13 +349,14 @@ class ConvertColor(Processor):
         transform: String, indicating the color space to which the image
             will get transformed.
     """
-    def __init__(self, current='BGR', to='HSV'):
+    def __init__(self, current='BGR', to='HSV', topic='image'):
         self.current = current
         self.to = to
+        self.topic = topic
         super(ConvertColor, self).__init__()
 
     def call(self, kwargs):
-        image = kwargs['image']
+        image = kwargs[self.topic]
         if self.current == 'BGR' and self.to == 'HSV':
             image = convert_image(image, BGR2HSV)
         elif self.current == 'RGB' and self.to == 'HSV':
@@ -372,7 +373,7 @@ class ConvertColor(Processor):
             image = convert_image(image, BGR2GRAY)
         else:
             raise NotImplementedError
-        kwargs['image'] = image
+        kwargs[self.topic] = image
         return kwargs
 
 

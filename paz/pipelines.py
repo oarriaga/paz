@@ -76,6 +76,11 @@ class KeypointSharedAugmentation(SequentialProcessor):
         self.renderer = renderer
         self.size = size
         self.add(pr.RenderMultiViewSample(self.renderer))
+        self.add(pr.ConvertColor('RGB', to='BGR', topic='image_A'))
+        self.add(pr.ConvertColor('RGB', to='BGR', topic='image_B'))
+        self.add(pr.NormalizeImage('image_A'))
+        self.add(pr.NormalizeImage('image_B'))
+        self.add(pr.NormalizeImage('alpha_channels'))
         self.add(pr.OutputSelector(
             ['image_A', 'image_B'], ['matrices', 'alpha_channels']))
 

@@ -48,8 +48,8 @@ class RenderMultiViewSample(Processor):
     def call(self, kwargs=None):
         [image_A, image_B], labels = self.renderer.render_sample()
         [matrices, alpha_A, alpha_B] = labels
-        image_A, image_B = image_A / 255.0, image_B / 255.0
-        alpha_A, alpha_B = alpha_A / 255.0, alpha_B / 255.0
+        # image_A, image_B = image_A / 255.0, image_B / 255.0
+        # alpha_A, alpha_B = alpha_A / 255.0, alpha_B / 255.0
         alpha_A = np.expand_dims(alpha_A, -1)
         alpha_B = np.expand_dims(alpha_B, -1)
         alpha_masks = np.concatenate([alpha_A, alpha_B], -1)
