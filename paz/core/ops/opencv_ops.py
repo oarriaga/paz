@@ -13,6 +13,7 @@ HSV2RGB = cv2.COLOR_HSV2RGB
 HSV2BGR = cv2.COLOR_HSV2BGR
 BGR2GRAY = cv2.COLOR_BGR2GRAY
 IMREAD_COLOR = cv2.IMREAD_COLOR
+UPNP = cv2.SOLVEPNP_UPNP
 
 
 class VideoPlayer(object):
@@ -297,3 +298,27 @@ def lincolor(num_colors, saturation=1, value=1, normalized=False):
             RGB_color = [int(color * 255) for color in RGB_color]
         RGB_colors.append(RGB_color)
     return RGB_colors
+
+
+def solve_PNP(points, keypoints, camera_intrinsics, solver, distortion=None):
+    """Calculates 6D pose from 3D points and 2D keypoints correspondences.
+    # Arguments
+        points: Numpy array of shape (num_points, 3).
+            Model 3D points known in advance.
+        keypoints: Numpy array of shape (num_points, 2).
+            Predicted 2D keypoints of object
+        camera intrinsics: Numpy array of shape (3, 3) calculated from
+        the openCV calibrateCamera function
+        solver: Flag from e.g openCV.SOLVEPNP_UPNP
+        distortion: Numpy array of shape of 5 elements calculated from
+        the openCV calibrateCamera function
+
+    # Returns
+        A list containing success flag, rotation and translation components
+        of the 6D pose.
+
+    # References
+        https://docs.opencv.org/2.4/modules/calib3d/doc/calib3d.html
+    """
+    return cv2.solvePnP(points, keypoints, camera_intrinsics, distortion,
+                        None, None, False, solver)
