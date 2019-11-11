@@ -65,16 +65,6 @@ class Processor(object):
         return self._process(kwargs)
 
 
-class InputProcessor(Processor):
-    """ Input processor used as first process to any SequentialProcessor.
-    """
-    def __init__(self):
-        super(InputProcessor, self).__init__()
-
-    def __call__(self, **kwargs):
-        return kwargs
-
-
 class SequentialProcessor(object):
     """ Abstract class for creating a sequential pipeline of processors.
     # Methods:
@@ -96,3 +86,12 @@ class SequentialProcessor(object):
         for processor in self.processors:
             kwargs = processor(kwargs)
         return kwargs
+
+    def remove(self, name):
+        """Removes processor from sequence
+        # Arguments
+            name: String indicating the process name
+        """
+        for processor in self.processors:
+            if processor.name == name:
+                self.processors.remove(processor)
