@@ -143,3 +143,20 @@ class PartitionKeypoints(Processor):
         for keypoint_arg, keypoint in enumerate(keypoints):
             kwargs['keypoint_%s' % keypoint_arg] = keypoint
         return kwargs
+
+
+class ChangeKeypointsCoordinateSystem(Processor):
+    """Changes ``keypoints`` 2D coordinate system using ``box2D`` coordinates
+        to locate the new origin at the openCV image origin (top-left).
+    """
+    def __init__(self):
+        super(ChangeKeypointsCoordinateSystem, self).__init__()
+
+    def call(self, kwargs):
+        box2D = kwargs['box2D']
+        x_min, y_min, x_max, y_max = box2D.coordinates
+        keypoints = kwargs['keypoints']
+        keypoints[:, 0] = keypoints[:, 0] + x_min
+        keypoints[:, 1] = keypoints[:, 1] + y_min
+        kwargs['keypoints'] = keypoints
+        return kwargs
