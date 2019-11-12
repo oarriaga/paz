@@ -39,7 +39,7 @@ class ProcessingSequencer(Sequence):
         labels_batch = self.get_empty_batch(
             self.label_topics, self.processor.label_shapes)
         for sample_arg, unprocessed_sample in enumerate(batch):
-            sample = self.processor(**unprocessed_sample.copy())
+            sample = self.processor(unprocessed_sample.copy())
             for topic, data in sample['inputs'].items():
                 inputs_batch[topic][sample_arg] = data
             for topic, data in sample['labels'].items():
