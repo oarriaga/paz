@@ -9,7 +9,7 @@ from tensorflow.keras.layers import Permute
 from tensorflow.keras.layers import Reshape
 from tensorflow.keras.layers import Add
 from tensorflow.keras.models import Model
-from paz.models.layers import ExpectedValue2D
+from ..layers import ExpectedValue2D
 
 
 def dense_block(x, blocks, growth_rate):
