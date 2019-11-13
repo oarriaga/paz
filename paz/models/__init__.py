@@ -4,3 +4,6 @@ from .detection import HaarCascadeDetector
 from .keypoint.projector import Projector
 from .keypoint.keypointnet import KeypointNet
 from .keypoint.keypointnet import KeypointNetShared
+from .keypoint.keypointnet import KeypointNet2D
+from .keypoint.hrnet import HRNetResidual
+from .keypoint.hrnet import HRNetDense
