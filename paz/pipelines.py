@@ -172,8 +172,8 @@ class KeypointAugmentation(SequentialProcessor):
             return [(len(self.keypoints), 2)]
 
 
-class KeypointInference(SequentialProcessor):
-    """Keypoint inference pipeline.
+class KeypointNetInference(SequentialProcessor):
+    """KeypointNet inference pipeline.
     # Arguments
         model: Keras model.
         num_keypoints: Int.
@@ -183,7 +183,7 @@ class KeypointInference(SequentialProcessor):
     """
     def __init__(self, model, num_keypoints=None, radius=5):
 
-        super(KeypointInference, self).__init__()
+        super(KeypointNetInference, self).__init__()
         self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
             self.num_keypoints = model.output_shape[1]
@@ -193,5 +193,27 @@ class KeypointInference(SequentialProcessor):
         self.add(pr.Squeeze(axis=0, topic='keypoints'))
         self.add(pr.DenormalizeKeypoints())
         self.add(pr.RemoveKeypointsDepth())
+        self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
+        self.add(pr.CastImageToInts())
+
+
+class KeypointInference(SequentialProcessor):
+    """General keypoint inference pipeline.
+    # Arguments
+        model: Keras model.
+        num_keypoints: Int.
+        radius: Int.
+    # Returns
+        Function for outputting keypoints from image
+    """
+    def __init__(self, model, num_keypoints=None, radius=5):
+        super(KeypointNetInference, self).__init__()
+        self.num_keypoints, self.radius = num_keypoints, radius
+        if self.num_keypoints is None:
+            self.num_keypoints = model.output_shape[1]
+        pipeline = [pr.NormalizeImage(), pr.ExpandDims(axis=0, topic='image')]
+        self.add(pr.Predict(model, 'image', 'keypoints', pipeline))
+        self.add(pr.Squeeze(axis=0, topic='keypoints'))
+        self.add(pr.DenormalizeKeypoints())
         self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
         self.add(pr.CastImageToInts())
