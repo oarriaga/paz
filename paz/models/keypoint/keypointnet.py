@@ -21,6 +21,41 @@ def block(x, num_filters, dilation_rate, alpha, name, kernel_size=(3, 3)):
     return x
 
 
+def KeypointNet2D(input_shape, num_keypoints, filters=64, alpha=0.1):
+    """Model for discovering keypoint locations in 2D space, modified from [1]
+
+    # Arguments
+        input_shape: List of integers indicating (height, width, num_channels)
+        num_keypoints: Int. Number of keypoints to discover.
+        filters: Int. Number of filters used in convolutional layers.
+        alpha: Float. Alpha parameter of leaky relu.
+
+    # Returns
+        Keras/tensorflow model
+
+    # References
+        [1] Discovery of Latent 3D Keypoints via End-to-end Geometric Reasoning
+    """
+    width, height = input_shape[:2]
+    base = input_tensor = Input(input_shape, name='image')
+    for base_arg, rate in enumerate([1, 1, 2, 4, 8, 16, 1, 2, 4, 8, 16, 1]):
+        name = 'conv2D_base-%s' % base_arg
+        base = block(base, filters, (rate, rate), alpha, name)
+
+    name = 'uv_volume_features-%s'
+    uv_volume = Conv2D(num_keypoints, (3, 3),
+                       padding='same', name=name % 0)(base)
+    uv_volume = Permute([3, 1, 2], name=name % 1)(uv_volume)
+    volume_shape = [num_keypoints, width * height]
+    uv_volume = Reshape(volume_shape, name=name % 2)(uv_volume)
+    uv_volume = Activation('softmax', name=name % 3)(uv_volume)
+    volume_shape = [num_keypoints, width, height]
+    uv_volume = Reshape(volume_shape, name='uv_volume')(uv_volume)
+    uv = ExpectedValue2D(name='expected_uv')(uv_volume)
+    model = Model(input_tensor, uv, name='keypointnet2D')
+    return model
+
+
 def KeypointNet(input_shape, num_keypoints, depth=.2, filters=64, alpha=0.1):
     """Keypointnet model for discovering keypoint locations in 3D space [1]
 
