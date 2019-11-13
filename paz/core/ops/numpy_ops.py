@@ -241,7 +241,7 @@ def filter_detections(detections, arg_to_class, conf_thresh=0.5):
     filtered_detections = []
     for class_arg in range(1, num_classes):
         class_detections = detections[class_arg, :]
-        confidence_mask = np.squeeze(class_detections[:, -1] > conf_thresh)
+        confidence_mask = np.squeeze(class_detections[:, -1] >= conf_thresh)
         confident_class_detections = class_detections[confidence_mask]
         if len(confident_class_detections) == 0:
             continue
