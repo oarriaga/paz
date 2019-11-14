@@ -207,7 +207,7 @@ class KeypointInference(SequentialProcessor):
         Function for outputting keypoints from image
     """
     def __init__(self, model, num_keypoints=None, radius=5):
-        super(KeypointNetInference, self).__init__()
+        super(KeypointInference, self).__init__()
         self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
             self.num_keypoints = model.output_shape[1]
