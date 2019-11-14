@@ -183,7 +183,7 @@ def HRNetDense(input_shape=(128, 128, 3), num_keypoints=20, growth_rate=4):
 
 def HRNetResidual(input_shape=(128, 128, 3), num_keypoints=20):
     # stem
-    inputs = Input(shape=input_shape)
+    inputs = Input(shape=input_shape, name='image')
     x1 = stem(inputs, 64)
     x1 = Conv2D(64 * 4, 1, padding='same', use_bias=False)(x1)
     x1 = BatchNormalization()(x1)
@@ -239,6 +239,6 @@ def HRNetResidual(input_shape=(128, 128, 3), num_keypoints=20):
     x = Reshape([num_keypoints, input_shape[0] * input_shape[1]])(x)
     x = Activation('softmax')(x)
     x = Reshape([num_keypoints, input_shape[0], input_shape[1]])(x)
-    outputs = ExpectedValue2D(name='expected_uv')(x)
+    outputs = ExpectedValue2D(name='keypoints')(x)
     model = Model(inputs, outputs, name='hrnet-residual')
     return model

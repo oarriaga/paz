@@ -51,7 +51,7 @@ def KeypointNet2D(input_shape, num_keypoints, filters=64, alpha=0.1):
     uv_volume = Activation('softmax', name=name % 3)(uv_volume)
     volume_shape = [num_keypoints, width, height]
     uv_volume = Reshape(volume_shape, name='uv_volume')(uv_volume)
-    uv = ExpectedValue2D(name='expected_uv')(uv_volume)
+    uv = ExpectedValue2D(name='keypoints')(uv_volume)
     model = Model(input_tensor, uv, name='keypointnet2D')
     return model
 
