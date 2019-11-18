@@ -23,7 +23,7 @@ def SSD300(num_classes=21, base_weights='VOC', head_weights='VOC',
     # Arguments
         num_classes: Integer. Specifies the number of class labels.
         base_weights: String or None. If string should be a valid dataset name.
-            Current valid datasets include `VOC` and `VGG`.
+            Current valid datasets include `VOC` `FAT` and `VGG`.
         head_weights: String or None. If string should be a valid dataset name.
             Current valid datasets include `VOC` and `FAT`.
         input_shape: List of integers. Input shape to the model including only
