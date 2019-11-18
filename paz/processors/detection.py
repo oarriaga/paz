@@ -97,6 +97,7 @@ class FilterClassBoxes2D(Processor):
 class CropBoxes2D(Processor):
     """Creates a list of images cropped from the bounding boxes.
     # Arguments
+        offset_scales: List of floats having x and y scales respectively.
         topic: String indicating the new key in the data dictionary that
             will contain the list of cropped images.
     """
