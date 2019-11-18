@@ -60,6 +60,9 @@ class SingleShotInference(SequentialProcessor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.BGR_IMAGENET_MEAN):
         super(SingleShotInference, self).__init__()
+        self.model, self.class_names = model, class_names
+        self.score_thresh, self.nms_thresh = score_thresh, nms_thresh
+        self.mean = mean
 
         self.add(pr.PredictBoxes(model, mean))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances=[.1, .2]))
@@ -211,7 +214,11 @@ class KeypointInference(SequentialProcessor):
         self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
             self.num_keypoints = model.output_shape[1]
-        pipeline = [pr.NormalizeImage(), pr.ExpandDims(axis=0, topic='image')]
+
+        pipeline = [pr.Resize(model.input_shape[1:3]),
+                    pr.NormalizeImage(),
+                    pr.ExpandDims(axis=0, topic='image')]
+
         self.add(pr.Predict(model, 'image', 'keypoints', pipeline))
         self.add(pr.Squeeze(axis=0, topic='keypoints'))
         self.add(pr.DenormalizeKeypoints())
