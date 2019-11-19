@@ -2,7 +2,6 @@ from __future__ import division
 
 import numpy as np
 from collections import defaultdict
-
 from ..messages import Box2D
 
 
@@ -593,13 +592,13 @@ def apply_offsets(coordinates, offset_scales):
     x_max = int(x_max + y_offset)
     return (x_min, y_min, x_max, y_max)
 
-def eval_detection_voc(
+def evaluate_VOC(
         pred_bboxes,
         pred_labels,
         pred_scores,
-        gt_bboxes,
-        gt_labels,
-        gt_difficults=None,
+        ground_truth_boxes,
+        ground_truth_labels,
+        ground_truth_difficulties=None,
         iou_thresh=0.5,
         use_07_metric=False):
     """Calculate average precisions based on evaluation code of PASCAL VOC.
@@ -625,16 +624,16 @@ def eval_detection_voc(
             scores for predicted bounding boxes. Similar to :obj:`pred_bboxes`,
             its index corresponds to an index for the base dataset.
             Its length is :math:`N`.
-        gt_bboxes (iterable of numpy.ndarray): An iterable of ground truth
+        ground_truth_boxes (iterable of numpy.ndarray): An iterable of ground truth
             bounding boxes
-            whose length is :math:`N`. An element of :obj:`gt_bboxes` is a
+            whose length is :math:`N`. An element of :obj:`ground_truth_boxes` is a
             bounding box whose shape is :math:`(R, 4)`. Note that the number of
             bounding boxes in each image does not need to be same as the number
             of corresponding predicted boxes.
-        gt_labels (iterable of numpy.ndarray): An iterable of ground truth
-            labels which are organized similarly to :obj:`gt_bboxes`.
-        gt_difficults (iterable of numpy.ndarray): An iterable of boolean
-            arrays which is organized similarly to :obj:`gt_bboxes`.
+        ground_truth_labels (iterable of numpy.ndarray): An iterable of ground truth
+            labels which are organized similarly to :obj:`ground_truth_boxes`.
+        ground_truth_difficulties (iterable of numpy.ndarray): An iterable of boolean
+            arrays which is organized similarly to :obj:`ground_truth_boxes`.
             This tells whether the
             corresponding ground truth bounding box is difficult or not.
             By default, this is :obj:`None`. In that case, this function
@@ -654,18 +653,18 @@ def eval_detection_voc(
         * **ap** (*numpy.ndarray*): An array of average precisions. \
             The :math:`l`-th value corresponds to the average precision \
             for class :math:`l`. If class :math:`l` does not exist in \
-            either :obj:`pred_labels` or :obj:`gt_labels`, the corresponding \
+            either :obj:`pred_labels` or :obj:`ground_truth_labels`, the corresponding \
             value is set to :obj:`numpy.nan`.
         * **map** (*float*): The average of Average Precisions over classes.
 
     """
 
-    prec, rec = calc_detection_voc_prec_rec(pred_bboxes,
+    prec, rec = calculate_precision_and_recall(pred_bboxes,
                                             pred_labels,
                                             pred_scores,
-                                            gt_bboxes,
-                                            gt_labels,
-                                            gt_difficults,
+                                            ground_truth_boxes,
+                                            ground_truth_labels,
+                                            ground_truth_difficulties,
                                             iou_thresh=iou_thresh)
 
     ap = calc_detection_voc_ap(prec, rec, use_07_metric=use_07_metric)
@@ -673,9 +672,9 @@ def eval_detection_voc(
     return {'ap': ap, 'map': np.nanmean(ap)}
 
 
-def calc_detection_voc_prec_rec(
-        pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels,
-        gt_difficults=None,
+def calculate_precision_and_recall(
+        pred_bboxes, pred_labels, pred_scores, ground_truth_boxes, ground_truth_labels,
+        ground_truth_difficulties=None,
         iou_thresh=0.5):
     """Calculate precision and recall based on evaluation code of PASCAL VOC.
 
@@ -701,16 +700,16 @@ def calc_detection_voc_prec_rec(
             scores for predicted bounding boxes. Similar to :obj:`pred_bboxes`,
             its index corresponds to an index for the base dataset.
             Its length is :math:`N`.
-        gt_bboxes (iterable of numpy.ndarray): An iterable of ground truth
+        ground_truth_boxes (iterable of numpy.ndarray): An iterable of ground truth
             bounding boxes
-            whose length is :math:`N`. An element of :obj:`gt_bboxes` is a
+            whose length is :math:`N`. An element of :obj:`ground_truth_boxes` is a
             bounding box whose shape is :math:`(R, 4)`. Note that the number of
             bounding boxes in each image does not need to be same as the number
             of corresponding predicted boxes.
-        gt_labels (iterable of numpy.ndarray): An iterable of ground truth
-            labels which are organized similarly to :obj:`gt_bboxes`.
-        gt_difficults (iterable of numpy.ndarray): An iterable of boolean
-            arrays which is organized similarly to :obj:`gt_bboxes`.
+        ground_truth_labels (iterable of numpy.ndarray): An iterable of ground truth
+            labels which are organized similarly to :obj:`ground_truth_boxes`.
+        ground_truth_difficulties (iterable of numpy.ndarray): An iterable of boolean
+            arrays which is organized similarly to :obj:`ground_truth_boxes`.
             This tells whether the
             corresponding ground truth bounding box is difficult or not.
             By default, this is :obj:`None`. In that case, this function
@@ -724,40 +723,30 @@ def calc_detection_voc_prec_rec(
 
         * :obj:`prec`: A list of arrays. :obj:`prec[l]` is precision \
             for class :math:`l`. If class :math:`l` does not exist in \
-            either :obj:`pred_labels` or :obj:`gt_labels`, :obj:`prec[l]` is \
+            either :obj:`pred_labels` or :obj:`ground_truth_labels`, :obj:`prec[l]` is \
             set to :obj:`None`.
         * :obj:`rec`: A list of arrays. :obj:`rec[l]` is recall \
             for class :math:`l`. If class :math:`l` that is not marked as \
             difficult does not exist in \
-            :obj:`gt_labels`, :obj:`rec[l]` is \
+            :obj:`ground_truth_labels`, :obj:`rec[l]` is \
             set to :obj:`None`.
 
     """
 
-    pred_bboxes = iter(pred_bboxes)
-    pred_labels = iter(pred_labels)
-    pred_scores = iter(pred_scores)
-    gt_bboxes = iter(gt_bboxes)
-    gt_labels = iter(gt_labels)
-    if gt_difficults is None:
-        gt_difficults = itertools.repeat(None)
-    else:
-        gt_difficults = iter(gt_difficults)
-
-    n_pos = defaultdict(int)
+    num_positives = defaultdict(int)
     score = defaultdict(list)
     match = defaultdict(list)
 
-    for pred_bbox, pred_label, pred_score, gt_bbox, gt_label, gt_difficult in \
+    for pred_bbox, pred_label, pred_score, ground_truth_bbox, ground_truth_label, ground_truth_difficult in \
             zip(
                 pred_bboxes, pred_labels, pred_scores,
-                gt_bboxes, gt_labels, gt_difficults):
+                ground_truth_boxes, ground_truth_labels, ground_truth_difficulties):
 
-        if gt_difficult is None:
-            gt_difficult = np.zeros(gt_bbox.shape[0], dtype=bool)
+        if ground_truth_difficult is None:
+            ground_truth_difficult = np.zeros(ground_truth_bbox.shape[0], dtype=bool)
 
-        for l in np.unique(np.concatenate((pred_label, gt_label)).astype(int)):
-            pred_mask_l = pred_label == l
+        for class_name_arg in np.unique(np.concatenate((pred_label, ground_truth_label)).astype(int)):
+            pred_mask_l = pred_label == class_name_arg
             pred_bbox_l = pred_bbox[pred_mask_l]
             pred_score_l = pred_score[pred_mask_l]
             # sort by score
@@ -765,71 +754,72 @@ def calc_detection_voc_prec_rec(
             pred_bbox_l = pred_bbox_l[order]
             pred_score_l = pred_score_l[order]
 
-            gt_mask_l = gt_label == l
-            gt_bbox_l = gt_bbox[gt_mask_l]
-            gt_difficult_l = gt_difficult[gt_mask_l]
+            ground_truth_mask_l = ground_truth_label == class_name_arg
+            ground_truth_bbox_l = ground_truth_bbox[ground_truth_mask_l]
+            ground_truth_difficult_l = ground_truth_difficult[ground_truth_mask_l]
 
-            n_pos[l] += np.logical_not(gt_difficult_l).sum()
-            score[l].extend(pred_score_l)
+            num_positives[class_name_arg] = num_positives[class_name_arg] + np.logical_not(ground_truth_difficult_l).sum()
+            score[class_name_arg].extend(pred_score_l)
+
 
             if len(pred_bbox_l) == 0:
                 continue
-            if len(gt_bbox_l) == 0:
-                match[l].extend((0,) * pred_bbox_l.shape[0])
+            if len(ground_truth_bbox_l) == 0:
+                match[class_name_arg].extend((0,) * pred_bbox_l.shape[0])
                 continue
 
             # VOC evaluation follows integer typed bounding boxes.
             pred_bbox_l = pred_bbox_l.copy()
-            pred_bbox_l[:, 2:] += 1
-            gt_bbox_l = gt_bbox_l.copy()
-            gt_bbox_l[:, 2:] += 1
+            pred_bbox_l[:, 2:] = pred_bbox_l[:, 2:] + 1
+            ground_truth_bbox_l = ground_truth_bbox_l.copy()
+            ground_truth_bbox_l[:, 2:] = ground_truth_bbox_l[:, 2:] + 1
 
-            iou = compute_ious(pred_bbox_l, gt_bbox_l)
-            gt_index = iou.argmax(axis=1)
+            iou = compute_ious(pred_bbox_l, ground_truth_bbox_l)
+            ground_truth_index = iou.argmax(axis=1)
             # set -1 if there is no matching ground truth
-            gt_index[iou.max(axis=1) < iou_thresh] = -1
+            ground_truth_index[iou.max(axis=1) < iou_thresh] = -1
             del iou
 
-            selec = np.zeros(gt_bbox_l.shape[0], dtype=bool)
-            for gt_idx in gt_index:
-                if gt_idx >= 0:
-                    if gt_difficult_l[gt_idx]:
-                        match[l].append(-1)
+            selec = np.zeros(ground_truth_bbox_l.shape[0], dtype=bool)
+            for ground_truth_arg in ground_truth_index:
+                if ground_truth_arg >= 0:
+                    if ground_truth_difficult_l[ground_truth_arg]:
+                        match[class_name_arg].append(-1)
                     else:
-                        if not selec[gt_idx]:
-                            match[l].append(1)
+                        if not selec[ground_truth_arg]:
+                            match[class_name_arg].append(1)
                         else:
-                            match[l].append(0)
-                    selec[gt_idx] = True
+                            match[class_name_arg].append(0)
+                    selec[ground_truth_arg] = True
                 else:
-                    match[l].append(0)
+                    match[class_name_arg].append(0)
 
-    for iter_ in (
-            pred_bboxes, pred_labels, pred_scores,
-            gt_bboxes, gt_labels, gt_difficults):
-        if next(iter_, None) is not None:
-            raise ValueError('Length of input iterables need to be same.')
+    # Checking if all the lists containing the same length
+    lists = [pred_bboxes, pred_labels, pred_scores,
+             ground_truth_boxes, ground_truth_labels, ground_truth_difficulties]
+    if len(set(map(len, lists))) not in (0, 1):
+        raise ValueErrorr('Length of input iterables need to be same')
 
-    n_fg_class = max(n_pos.keys()) + 1
-    prec = [None] * n_fg_class
-    rec = [None] * n_fg_class
+    num_foreground_class = max(num_positives.keys()) + 1
+    prec = [None] * num_foreground_class
+    rec = [None] * num_foreground_class
 
-    for l in n_pos.keys():
+    for l in num_positives.keys():
         score_l = np.array(score[l])
         match_l = np.array(match[l], dtype=np.int8)
 
         order = score_l.argsort()[::-1]
         match_l = match_l[order]
 
-        tp = np.cumsum(match_l == 1)
-        fp = np.cumsum(match_l == 0)
+        true_positives = np.cumsum(match_l == 1)
+        false_positives = np.cumsum(match_l == 0)
 
-        # If an element of fp + tp is 0,
+        # If an element of false_positives + true_positives is 0,
         # the corresponding element of prec[l] is nan.
-        prec[l] = tp / (fp + tp)
-        # If n_pos[l] is 0, rec[l] is None.
-        if n_pos[l] > 0:
-            rec[l] = tp / n_pos[l]
+        prec[l] = true_positives / (false_positives + true_positives)
+        # If num_positives[l] is 0, rec[l] is None.
+        if num_positives[l] > 0:
+            rec[l] = true_positives / num_positives[l]
 
     return prec, rec
 
@@ -863,9 +853,9 @@ def calc_detection_voc_ap(prec, rec, use_07_metric=False):
 
     """
 
-    n_fg_class = len(prec)
-    ap = np.empty(n_fg_class)
-    for l in range(n_fg_class):
+    num_foreground_class = len(prec)
+    ap = np.empty(num_foreground_class)
+    for l in range(num_foreground_class):
         if prec[l] is None or rec[l] is None:
             ap[l] = np.nan
             continue
@@ -878,7 +868,7 @@ def calc_detection_voc_ap(prec, rec, use_07_metric=False):
                     p = 0
                 else:
                     p = np.max(np.nan_to_num(prec[l])[rec[l] >= t])
-                ap[l] += p / 11
+                ap[l] = ap[l] + p / 11
         else:
             # correct AP calculation
             # first append sentinel values at the end

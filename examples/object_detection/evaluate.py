@@ -7,7 +7,6 @@ from collections import defaultdict
 
 import cv2
 import numpy as np
-from paz.core import VideoPlayer
 from paz.core import ops
 from paz.datasets import VOC
 from paz.datasets import get_class_names
@@ -66,9 +65,9 @@ def get_predicition_groud_truths(dataset, detector):
         pred_boxes_list: List containing prediction boxes
         pred_labels_list: List containing corresponding prediction labels
         pred_scores_list: List containing corresponding prediction scores
-        gt_boxes_list: List containing ground truth boxes
-        gt_labels_list: List containing corresponding ground truth labels
-        gt_difficults: List containing corresponding ground truth difficults
+        groudtruth_boxes_list: List containing ground truth boxes
+        groudtruth_labels_list: List containing corresponding ground truth labels
+        groudtruth_difficults: List containing corresponding ground truth difficults
 
 
     """
@@ -76,9 +75,9 @@ def get_predicition_groud_truths(dataset, detector):
     pred_boxes_list = []
     pred_labels_list = []
     pred_scores_list = []
-    gt_boxes_list = []
-    gt_labels_list = []
-    gt_difficults = []
+    groudtruth_boxes_list = []
+    groudtruth_labels_list = []
+    groudtruth_difficults = []
 
     for image in dataset:
         print(image['image'])
@@ -97,13 +96,13 @@ def get_predicition_groud_truths(dataset, detector):
         pred_scores_list.append(np.array(pred_score,dtype=np.float32))
 
         image_id = image['image'].split('/')[-1].split('.')[0]
-        gt_box, gt_label, gt_diff = get_annotation(image_id)
-        gt_boxes_list.append(gt_box)
-        gt_labels_list.append(gt_label)
-        gt_difficults.append(gt_diff)
+        groudtruth_box, groudtruth_label, groudtruth_diff = get_annotation(image_id)
+        groudtruth_boxes_list.append(groudtruth_box)
+        groudtruth_labels_list.append(groudtruth_label)
+        groudtruth_difficults.append(groudtruth_diff)
 
     return pred_boxes_list, pred_labels_list , pred_scores_list , \
-           gt_boxes_list, gt_labels_list , gt_difficults
+           groudtruth_boxes_list, groudtruth_labels_list , groudtruth_difficults
 
 
 score_thresh, nms_thresh, labels = 0.01, .45, get_class_names('VOC')
@@ -122,24 +121,24 @@ for data_name, data_split in zip(data_names, data_splits):
 
 
 pred_boxes_list, pred_labels_list , pred_scores_list , \
-gt_boxes_list, gt_labels_list , gt_difficults \
-    = get_predicition_groud_truths(datasets[1], detector)
+groudtruth_boxes_list, groudtruth_labels_list , groudtruth_difficults \
+    = get_predicition_groud_truths((datasets[1])[:], detector)
 
-result = ops.eval_detection_voc(
+result = ops.evaluate_VOC(
             pred_boxes_list,
             pred_labels_list,
             pred_scores_list,
-            gt_boxes_list,
-            gt_labels_list,
-            gt_difficults,
+            groudtruth_boxes_list,
+            groudtruth_labels_list,
+            groudtruth_difficults,
             iou_thresh=0.5,
             use_07_metric=True)
 
 result_str = "mAP: {:.4f}\n".format(result["map"])
 metrics = {'mAP': result["map"]}
-for i, ap in enumerate(result["ap"]):
-    if i == 0:  # skip background
+for arg, ap in enumerate(result["ap"]):
+    if arg == 0:  # skip background
         continue
-    metrics[class_names[i]] = ap
-    result_str += "{:<16}: {:.4f}\n".format(class_names[i], ap)
+    metrics[class_names[arg]] = ap
+    result_str += "{:<16}: {:.4f}\n".format(class_names[arg], ap)
 print(result_str)
