@@ -23,5 +23,4 @@ install.sh
 examples/keypoint_estimation/
 examples/bayesian_face_classification/
 examples/bayesian_face_generation/
-examples/probablistic_pose_estimation/
 examples/unsupervised_difficulty_score/
