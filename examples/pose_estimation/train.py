@@ -21,7 +21,7 @@ from paz.optimization.callbacks import DrawInferences
 
 from poseur.scenes import SingleView
 
-from model import GaussianMixture
+from models import GaussianMixture
 
 description = 'Training script for learning 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
