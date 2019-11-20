@@ -14,7 +14,7 @@ from paz.models import SSD300
 from paz.pipelines import SingleShotInference
 
 class_names = get_class_names()
-class_dict = {class_name: i for i, class_name in enumerate(class_names)}
+class_dict = {class_name: class_arg for class_arg, class_name in enumerate(class_names)}
 voc_root = './examples/object_detection/VOCdevkit'
 
 
@@ -23,7 +23,7 @@ def get_annotation(image_id):
     """
 
     Args:
-        image_id: int,image_id of the image for which groud truth is needed
+        image_id: int,image_id of the image for which ground truth is needed
 
     Returns:
         boxes: numpy array, bounding boxes of the image
@@ -53,7 +53,7 @@ def get_annotation(image_id):
             np.array(labels, dtype=np.int64),
             np.array(is_difficult, dtype='bool'))
 
-def get_predicition_groud_truths(dataset, detector):
+def get_predicition_ground_truths(dataset, detector):
     """
 
     Args:
@@ -62,47 +62,47 @@ def get_predicition_groud_truths(dataset, detector):
         detector : Object for inference
 
     Returns:
-        pred_boxes_list: List containing prediction boxes
-        pred_labels_list: List containing corresponding prediction labels
-        pred_scores_list: List containing corresponding prediction scores
-        groudtruth_boxes_list: List containing ground truth boxes
-        groudtruth_labels_list: List containing corresponding ground truth labels
-        groudtruth_difficults: List containing corresponding ground truth difficults
+        predictions_boxes: List containing prediction boxes
+        predictions_labels: List containing corresponding prediction labels
+        predictions_scores: List containing corresponding prediction scores
+        ground_truth_boxes: List containing ground truth boxes
+        ground_truth_labels: List containing corresponding ground truth labels
+        ground_truth_difficults: List containing corresponding ground truth difficults
 
 
     """
 
-    pred_boxes_list = []
-    pred_labels_list = []
-    pred_scores_list = []
-    groudtruth_boxes_list = []
-    groudtruth_labels_list = []
-    groudtruth_difficults = []
+    predictions_boxes = []
+    predictions_labels = []
+    predictions_scores = []
+    ground_truth_boxes = []
+    ground_truth_labels = []
+    ground_truth_difficults = []
 
     for image in dataset:
         print(image['image'])
         frame = ops.load_image(image['image'])
         results = detector({'image': frame})
-        pred_box = []
-        pred_label = []
-        pred_score = []
+        predictions_box = []
+        predictions_label = []
+        predictions_score = []
 
         for result in results['boxes2D']:
-            pred_box.append(list(result.coordinates))
-            pred_label.append(class_dict[result.class_name])
-            pred_score.append(result.score)
-        pred_boxes_list.append(np.array(pred_box,dtype=np.float32))
-        pred_labels_list.append(np.array(pred_label))
-        pred_scores_list.append(np.array(pred_score,dtype=np.float32))
+            predictions_box.append(list(result.coordinates))
+            predictions_label.append(class_dict[result.class_name])
+            predictions_score.append(result.score)
+        predictions_boxes.append(np.array(predictions_box,dtype=np.float32))
+        predictions_labels.append(np.array(predictions_label))
+        predictions_scores.append(np.array(predictions_score,dtype=np.float32))
 
         image_id = image['image'].split('/')[-1].split('.')[0]
-        groudtruth_box, groudtruth_label, groudtruth_diff = get_annotation(image_id)
-        groudtruth_boxes_list.append(groudtruth_box)
-        groudtruth_labels_list.append(groudtruth_label)
-        groudtruth_difficults.append(groudtruth_diff)
+        ground_truth_box, ground_truth_label, ground_truth_difficult = get_annotation(image_id)
+        ground_truth_boxes.append(ground_truth_box)
+        ground_truth_labels.append(ground_truth_label)
+        ground_truth_difficults.append(ground_truth_difficult )
 
-    return pred_boxes_list, pred_labels_list , pred_scores_list , \
-           groudtruth_boxes_list, groudtruth_labels_list , groudtruth_difficults
+    return predictions_boxes, predictions_labels , predictions_scores , \
+           ground_truth_boxes, ground_truth_labels , ground_truth_difficults
 
 
 score_thresh, nms_thresh, labels = 0.01, .45, get_class_names('VOC')
@@ -120,17 +120,17 @@ for data_name, data_split in zip(data_names, data_splits):
     datasets.append(data_manager.load_data())
 
 
-pred_boxes_list, pred_labels_list , pred_scores_list , \
-groudtruth_boxes_list, groudtruth_labels_list , groudtruth_difficults \
-    = get_predicition_groud_truths((datasets[1])[:], detector)
+predictions_boxes, predictions_labels , predictions_scores , \
+ground_truth_boxes, ground_truth_labels , ground_truth_difficults \
+    = get_predicition_ground_truths(datasets[1], detector)
 
 result = ops.evaluate_VOC(
-            pred_boxes_list,
-            pred_labels_list,
-            pred_scores_list,
-            groudtruth_boxes_list,
-            groudtruth_labels_list,
-            groudtruth_difficults,
+            predictions_boxes,
+            predictions_labels,
+            predictions_scores,
+            ground_truth_boxes,
+            ground_truth_labels,
+            ground_truth_difficults,
             iou_thresh=0.5,
             use_07_metric=True)
 
