@@ -1,11 +1,8 @@
 from __future__ import division
 
-import itertools
 import os
 import xml.etree.ElementTree as ET
-from collections import defaultdict
 
-import cv2
 import numpy as np
 from paz.core import ops
 from paz.datasets import VOC
@@ -14,9 +11,10 @@ from paz.models import SSD300
 from paz.pipelines import SingleShotInference
 
 class_names = get_class_names()
-class_dict = {class_name: class_arg for class_arg, class_name in enumerate(class_names)}
+class_dict = {
+    class_name: class_arg for class_arg, class_name in enumerate(class_names)
+}
 voc_root = './examples/object_detection/VOCdevkit'
-
 
 
 def get_annotation(image_id):
@@ -28,10 +26,13 @@ def get_annotation(image_id):
     Returns:
         boxes: numpy array, bounding boxes of the image
         labels: numpy array, labels corresponding the bounding box
-        is_difficults: numpy array, Contains information whether the bounding box is difficult or not
+        is_difficults: numpy array, Contains information whether the
+        bounding box is difficult or not
 
     """
-    annotation_file = os.path.join(voc_root, 'VOC2007', "Annotations", "%s.xml" % image_id)
+    annotation_file = os.path.join(
+        voc_root, 'VOC2007', "Annotations", "%s.xml" % image_id
+    )
     objects = ET.parse(annotation_file).findall("object")
     boxes = []
     labels = []
@@ -53,6 +54,7 @@ def get_annotation(image_id):
             np.array(labels, dtype=np.int64),
             np.array(is_difficult, dtype='bool'))
 
+
 def get_predicition_ground_truths(dataset, detector):
     """
 
@@ -67,7 +69,8 @@ def get_predicition_ground_truths(dataset, detector):
         predictions_scores: List containing corresponding prediction scores
         ground_truth_boxes: List containing ground truth boxes
         ground_truth_labels: List containing corresponding ground truth labels
-        ground_truth_difficults: List containing corresponding ground truth difficults
+        ground_truth_difficults: List containing corresponding
+        ground truth difficults
 
 
     """
@@ -91,18 +94,21 @@ def get_predicition_ground_truths(dataset, detector):
             predictions_box.append(list(result.coordinates))
             predictions_label.append(class_dict[result.class_name])
             predictions_score.append(result.score)
-        predictions_boxes.append(np.array(predictions_box,dtype=np.float32))
+        predictions_boxes.append(np.array(predictions_box, dtype=np.float32))
         predictions_labels.append(np.array(predictions_label))
-        predictions_scores.append(np.array(predictions_score,dtype=np.float32))
+        predictions_scores.append(
+            np.array(predictions_score, dtype=np.float32)
+        )
 
         image_id = image['image'].split('/')[-1].split('.')[0]
-        ground_truth_box, ground_truth_label, ground_truth_difficult = get_annotation(image_id)
+        ground_truth_box, ground_truth_label, ground_truth_difficult = \
+            get_annotation(image_id)
         ground_truth_boxes.append(ground_truth_box)
         ground_truth_labels.append(ground_truth_label)
-        ground_truth_difficults.append(ground_truth_difficult )
+        ground_truth_difficults.append(ground_truth_difficult)
 
-    return predictions_boxes, predictions_labels , predictions_scores , \
-           ground_truth_boxes, ground_truth_labels , ground_truth_difficults
+    return predictions_boxes, predictions_labels, predictions_scores, \
+           ground_truth_boxes, ground_truth_labels, ground_truth_difficults
 
 
 score_thresh, nms_thresh, labels = 0.01, .45, get_class_names('VOC')
@@ -120,8 +126,8 @@ for data_name, data_split in zip(data_names, data_splits):
     datasets.append(data_manager.load_data())
 
 
-predictions_boxes, predictions_labels , predictions_scores , \
-ground_truth_boxes, ground_truth_labels , ground_truth_difficults \
+predictions_boxes, predictions_labels, predictions_scores, \
+ground_truth_boxes, ground_truth_labels, ground_truth_difficults \
     = get_predicition_ground_truths(datasets[1], detector)
 
 result = ops.evaluate_VOC(
