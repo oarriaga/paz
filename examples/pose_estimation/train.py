@@ -61,20 +61,24 @@ parser.add_argument('-sh', '--sphere', default='full',
                     help='Flag for full sphere or top half for rendering')
 parser.add_argument('-r', '--roll', default=3.14159, type=float,
                     help='Threshold for camera roll in radians')
-parser.add_argument('-t', '--translation', default=None, type=float,
+parser.add_argument('-t', '--translation', default=0.05, type=float,
                     help='Threshold for translation')
-parser.add_argument('-d', '--depth', default=0.30, type=float,
-                    help='Distance from camera to origin in meters')
 parser.add_argument('-s', '--shift', default=0.05, type=float,
                     help='Threshold of random shift of camera')
+parser.add_argument('-d', '--depth', nargs='+', type=float,
+                    default=[0.3, 0.5],
+                    help='Distance from camera to origin in meters')
 parser.add_argument('-fv', '--y_fov', default=3.14159 / 4.0, type=float,
                     help='Field of view angle in radians')
-parser.add_argument('-l', '--light', default=5.0, type=float,
+parser.add_argument('-l', '--light', nargs='+', type=float,
+                    default=[.5, 30],
                     help='Light intensity from poseur')
 parser.add_argument('-sa', '--save_path',
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/models'),
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-oc', '--num_occlusions', default=2, type=int,
+                    help='Number of occlusions')
 args = parser.parse_args()
 
 
@@ -132,7 +136,8 @@ renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
 focal_length = renderer.camera.get_projection_matrix()[0, 0]
 projector = Projector(focal_length, use_numpy=True)
 processor = KeypointAugmentation(renderer, projector, keypoints, 'train',
-                                 image_paths, args.image_size, with_partition)
+                                 image_paths, args.image_size, with_partition,
+                                 args.num_occlusions)
 
 
 # creating sequencer
