@@ -38,7 +38,7 @@ class VideoPlayer(object):
         self.camera = camera
 
     def start(self):
-        """ Opens camera and starts inference using the provided `pipeline`.
+        """Opens camera and starts inference using the provided `pipeline`.
         """
         camera = cv2.VideoCapture(self.camera)
         while True:
@@ -53,6 +53,33 @@ class VideoPlayer(object):
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         camera.release()
+        cv2.destroyAllWindows()
+
+    def record(self, name='video.avi', fps=20, fourCC='XVID'):
+        """Opens camera and records inferences from the provided ``pipeline``.
+        # Arguments
+            name: String. Video name. Must include the postfix .avi
+            fps: Int. Frames per second
+            fourCC: String. Indicates the four character code of the video.
+            e.g. XVID, MJPG, X264
+        """
+        camera = cv2.VideoCapture(self.camera)
+        fourCC = cv2.VideoWriter_fourcc(*fourCC)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+        while True:
+            frame = camera.read()[1]
+            if frame is None:
+                print('Frame: None')
+                continue
+
+            results = self.pipeline({'image': frame})
+            image = cv2.resize(results['image'], tuple(self.image_size))
+            writer.write(image)
+            cv2.imshow('webcam', image)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        camera.release()
+        writer.release()
         cv2.destroyAllWindows()
 
 
