@@ -17,6 +17,7 @@ from poseur.scenes import SingleView
 
 
 keypoints_path='/home/octavio/.keras/paz/models/keypointnet-shared_10_035_power_drill/keypoints_mean.txt'
+# keypoints_path='/home/octavio/Downloads/keypoints_mean.txt'
 
 description = 'Training script for learning 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
@@ -49,7 +50,7 @@ parser.add_argument('-d', '--depth', nargs='+', type=float,
                     default=[0.3, 0.5],
                     help='Distance from camera to origin in meters')
 parser.add_argument('-l', '--light', nargs='+', type=float,
-                    default=[.3, 30],
+                    default=[0.3, 30.0],
                     help='Light intensity from poseur')
 parser.add_argument('-s', '--shift', default=0.05, type=float,
                     help='Threshold of random shift of camera')
