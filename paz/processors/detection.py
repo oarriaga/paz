@@ -209,7 +209,7 @@ class NonMaximumSuppressionPerClass(Processor):
     def call(self, kwargs):
         boxes = kwargs['boxes']
         kwargs['boxes'] = ops.nms_per_class(
-            boxes, self.conf_thresh, self.nms_thresh)
+            boxes, self.nms_thresh, self.conf_thresh)
         return kwargs
 
 
