@@ -75,6 +75,10 @@ parser.add_argument('-l', '--light', default=5.0, type=float,
                     help='Light intensity from poseur')
 parser.add_argument('-bk', '--background', default=0, type=int,
                     help='Background color')
+parser.add_argument('-rn', '--rotation_noise', default=0.1, type=float,
+                    help='Sigma of noise added to relative pose estimation')
+parser.add_argument('-sd', '--separation_delta', default=0.05, type=float,
+                    help='Sigma of noise added to relative pose estimation')
 parser.add_argument('-ap', '--alpha', default=0.1, type=float,
                     help='Alpha leaky-relu parameter')
 parser.add_argument('-nm', '--num_mean_samples', default=1000, type=int,
@@ -105,8 +109,9 @@ model = KeypointNetShared(input_shape, args.num_keypoints,
 
 # loss instantiation
 name = ['consistency', 'silhouette', 'separation', 'relative_pose', 'variance']
-weights = dict(zip(name, args.loss_weights))
-loss = KeypointNetLoss(args.num_keypoints, focal_length, loss_weights=weights)
+loss_weights = dict(zip(name, args.loss_weights))
+loss = KeypointNetLoss(args.num_keypoints, focal_length, args.rotation_noise,
+                       args.separation_delta, loss_weights)
 losses = {'uvz_points-shared': loss.uvz_points,
           'uv_volumes-shared': loss.uv_volumes}
 
