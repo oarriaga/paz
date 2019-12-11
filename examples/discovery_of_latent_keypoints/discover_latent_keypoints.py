@@ -38,6 +38,10 @@ parser.add_argument('-f', '--filters', default=64, type=int,
                     help='Number of filters in convolutional blocks')
 parser.add_argument('-bs', '--batch_size', default=20, type=int,
                     help='Batch size for training')
+parser.add_argument('-lw', '--loss_weights', nargs='+', type=float,
+                    default=[1.0, 1.0, 1.0, 0.2, 0.5],
+                    help='Loss weights in the following order:'
+                    '[consistency, silhouette, separation, pose, variance]')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
 parser.add_argument('-is', '--image_size', default=128, type=int,
@@ -95,13 +99,15 @@ model = KeypointNetShared(input_shape, args.num_keypoints,
                           args.depth * 10, args.filters, args.alpha)
 
 # loss instantiation
-loss = KeypointNetLoss(args.num_keypoints, focal_length)
+name = ['consistency', 'silhouette', 'separation', 'relative_pose', 'variance']
+weights = dict(zip(name, args.loss_weights))
+loss = KeypointNetLoss(args.num_keypoints, focal_length, loss_weights=weights)
 losses = {'uvz_points-shared': loss.uvz_points,
           'uv_volumes-shared': loss.uv_volumes}
-uvz_point_losses = [loss.consistency, loss.separation, loss.relative_pose]
 
 # metrics
-metrics = {'uvz_points-shared': uvz_point_losses,
+uvz_point_metrics = [loss.consistency, loss.separation, loss.relative_pose]
+metrics = {'uvz_points-shared': uvz_point_metrics,
            'uv_volumes-shared': [loss.silhouette, loss.variance]}
 
 # model compilation
