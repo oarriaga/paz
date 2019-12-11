@@ -1,22 +1,25 @@
 import math
 import tensorflow as tf
-import keras.backend as K
 import numpy as np
 
 from ...models.keypoint.projector import Projector
 
 
 class KeypointNetLoss(object):
-    def __init__(self, num_keypoints, focal_length):
+    def __init__(self, num_keypoints, focal_length, rotation_noise=0.1,
+                 separation_delta=0.05, loss_weights={
+                     'consistency': 1.0, 'silhouette': 1.0, 'separation': 1.0,
+                     'relative_pose': 0.2, 'variance': 0.5}):
+
         self.num_keypoints = int(num_keypoints)
         self.focal_length = focal_length
         self.projector = Projector(focal_length)
-        self.rotation_noise = 0.1
-        self.separation_delta = 0.05
-        self.feature_map_size = 128
+        self.rotation_noise = rotation_noise
+        self.separation_delta = separation_delta
+        self.loss_weights = loss_weights
 
     def _reshape_matrix(self, matrix):
-        matrix = K.reshape(matrix, [-1, 4, 4])
+        matrix = tf.reshape(matrix, [-1, 4, 4])
         # transpose is for multiplying points with matrices from the left.
         matrix = tf.transpose(matrix, [0, 2, 1])
         return matrix
@@ -38,8 +41,8 @@ class KeypointNetLoss(object):
         world_coordinates = tf.matmul(keypoints_M, M_to_world)
         keypoints_M_in_N = tf.matmul(world_coordinates, world_to_N)
         uvz_M_in_N = self.projector.project(keypoints_M_in_N)
-        squared_difference = K.square(uvz_M_in_N - uvz_N)
-        l2_distance = K.sum(squared_difference, axis=[1, 2])
+        squared_difference = tf.square(uvz_M_in_N - uvz_N)
+        l2_distance = tf.reduce_sum(squared_difference, axis=[1, 2])
         consistency_loss = l2_distance / self.num_keypoints
         return consistency_loss
 
@@ -50,10 +53,10 @@ class KeypointNetLoss(object):
         consistency_A = self._consistency(uvz_A, A_to_world, world_to_B, uvz_B)
         consistency_B = self._consistency(uvz_B, B_to_world, world_to_A, uvz_A)
         consistency_loss = (consistency_A + consistency_B) / 2.0
+        consistency_loss = self.loss_weights['consistency'] * consistency_loss
         return consistency_loss
 
     def _separation(self, uvz):
-        # keypoints = self.projector.unproject(uvz)[:, :, :3]
         keypoints = self.projector.unproject(uvz)
         keypoints_i = tf.tile(keypoints, [1, self.num_keypoints, 1])
         keypoints_j = tf.tile(keypoints, [1, 1, self.num_keypoints])
@@ -73,6 +76,7 @@ class KeypointNetLoss(object):
         separation_loss_A = self._separation(uvz_A)
         separation_loss_B = self._separation(uvz_B)
         separation_loss = (separation_loss_A + separation_loss_B) / 2.0
+        separation_loss = self.loss_weights['separation'] * separation_loss
         return separation_loss
 
     def relative_pose(self, matrices, uvz_coordinates):
@@ -92,7 +96,8 @@ class KeypointNetLoss(object):
         frobenius = tf.sqrt(squared_frobenius)
         arcsin_arg = tf.minimum(1.0, frobenius / (2 * math.sqrt(2)))
         angular_loss = 2.0 * tf.asin(arcsin_arg)
-        return 0.2 * angular_loss
+        angular_loss = self.loss_weights['relative_pose'] * angular_loss
+        return angular_loss
 
     def uvz_points(self, matrices, uvz_coordinates):
         consistency_loss = self.consistency(matrices, uvz_coordinates)
@@ -118,6 +123,7 @@ class KeypointNetLoss(object):
         silhouette_loss_A = self._silhouette(alpha_channel_A, uv_volume_A)
         silhouette_loss_B = self._silhouette(alpha_channel_B, uv_volume_B)
         silhouette_loss = (silhouette_loss_A + silhouette_loss_B) / 2.0
+        silhouette_loss = self.loss_weights['silhouette'] * silhouette_loss
         return silhouette_loss
 
     def _variance(self, uv_volume, range_u, range_v):
@@ -139,9 +145,10 @@ class KeypointNetLoss(object):
     def variance(self, alpha_channels, uv_volumes):
         uv_volume_A = uv_volumes[:, :self.num_keypoints, :, :]
         uv_volume_B = uv_volumes[:, self.num_keypoints:, :, :]
+        feature_map_size = uv_volumes.shape[-1]
 
-        arange = np.arange(0.5, self.feature_map_size, 1)
-        arange = arange / (self.feature_map_size / 2) - 1
+        arange = np.arange(0.5, feature_map_size, 1)
+        arange = arange / (feature_map_size / 2) - 1
         range_u, range_v = tf.meshgrid(arange, -arange)
         range_u = tf.cast(range_u, dtype=tf.float32)
         range_v = tf.cast(range_v, dtype=tf.float32)
@@ -149,7 +156,8 @@ class KeypointNetLoss(object):
         variance_loss_A = self._variance(uv_volume_A, range_u, range_v)
         variance_loss_B = self._variance(uv_volume_B, range_u, range_v)
         variance_loss = (variance_loss_A + variance_loss_B) / 2.0
-        return 0.5 * variance_loss
+        variance_loss = self.loss_weights['variance'] * variance_loss
+        return variance_loss
 
     def uv_volumes(self, alpha_channels, uv_volumes):
         variance_loss = self.variance(alpha_channels, uv_volumes)
