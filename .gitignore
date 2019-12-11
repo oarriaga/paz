@@ -8,6 +8,8 @@
 *.png
 *.jpg
 *.xml
+*.avi
+*.mp4
 
 dist/*
 build/*
