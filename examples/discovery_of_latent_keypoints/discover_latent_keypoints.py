@@ -2,6 +2,7 @@ import os
 # os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
 # os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 # os.environ["PYOPENGL_PLATFORM"] = 'egl'
+from distutils.util import strtobool
 
 import json
 import argparse
@@ -57,6 +58,9 @@ parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
 parser.add_argument('-sh', '--sphere', default='full',
                     choices=['full', 'half'], type=str,
                     help='Flag for full sphere or top half for rendering')
+parser.add_argument('-sm', '--smooth', type=strtobool, nargs='?',
+                    const=True, default=True,
+                    help='Activate smoothness trimesh flag for loading object')
 parser.add_argument('-r', '--roll', default=3.14159, type=float,
                     help='Threshold for camera roll in radians')
 parser.add_argument('-t', '--translation', default=None, type=float,
@@ -83,9 +87,11 @@ args = parser.parse_args()
 
 
 # setting scene
+print('smoothness_flag', bool(args.smooth))
 scene = MultiView(args.obj_path, (args.image_size, args.image_size),
                   args.y_fov, args.depth, args.sphere, args.roll,
-                  args.translation, args.shift, args.light, args.background)
+                  args.translation, args.shift, args.light,
+                  args.background, bool(args.smooth))
 focal_length = scene.camera.get_projection_matrix()[0, 0]
 
 # setting sequencer
