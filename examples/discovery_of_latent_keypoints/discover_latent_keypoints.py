@@ -87,7 +87,6 @@ args = parser.parse_args()
 
 
 # setting scene
-print('smoothness_flag', bool(args.smooth))
 scene = MultiView(args.obj_path, (args.image_size, args.image_size),
                   args.y_fov, args.depth, args.sphere, args.roll,
                   args.translation, args.shift, args.light,
