@@ -137,6 +137,21 @@ class Squeeze(Processor):
         return kwargs
 
 
+class Copy(Processor):
+    """Copy values from ``input_topic`` to a new ``label_topic``
+    # Arguments
+        input_topic: String. Topic to copy from.
+        label_topic: String. Topic to copy to.
+    """
+    def __init__(self, input_topic, label_topic):
+        super(Squeeze, self).__init__()
+        self.input_topic, self.label_topic = input_topic, label_topic
+
+    def call(self, kwargs):
+        kwargs[self.label_topic] = kwargs[self.input_topic].copy()
+        return kwargs
+
+
 class Lambda(object):
     """Applies a lambda function as a processor transformation.
     # Arguments
