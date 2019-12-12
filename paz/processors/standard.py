@@ -144,7 +144,7 @@ class Copy(Processor):
         label_topic: String. Topic to copy to.
     """
     def __init__(self, input_topic, label_topic):
-        super(Squeeze, self).__init__()
+        super(Copy, self).__init__()
         self.input_topic, self.label_topic = input_topic, label_topic
 
     def call(self, kwargs):
