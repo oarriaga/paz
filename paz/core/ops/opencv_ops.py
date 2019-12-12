@@ -1,6 +1,7 @@
 import colorsys
 import random
 import cv2
+import os
 
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
@@ -121,6 +122,19 @@ def save_image(filepath, image, *args):
         image: Numpy array.
     """
     return cv2.imwrite(filepath, image, *args)
+
+
+def save_images(save_path, images):
+    """Saves multiple images in a directory
+    # Arguments
+        save_path: String. Path to directory. If path does not exist it will
+        be created.
+        images: List of numpy arrays.
+    """
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    for arg, image in enumerate(images):
+        save_image(os.path.join(save_path, 'image_%03d.png' % arg), image)
 
 
 def convert_image(image, flag):
