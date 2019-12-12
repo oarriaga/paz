@@ -2,6 +2,7 @@
 
 import numpy as np
 from numpy import random
+from ..core import ops
 
 from ..core import Processor
 from ..core.ops import draw_filled_polygon, load_image, show_image
@@ -258,10 +259,25 @@ class Resize(Processor):
     """
     def __init__(self, shape=(300, 300)):
         self.shape = shape
+        print('DEPRACTED: Use ResizeImage')
         super(Resize, self).__init__()
 
     def call(self, kwargs):
         kwargs['image'] = resize_image(kwargs['image'], self.shape)
+        return kwargs
+
+
+class ResizeImage(Processor):
+    """Resize image.
+    # Arguments
+        size: Integer indicating the new shape (size, size) of the image.
+    """
+    def __init__(self, shape, topic='image'):
+        self.shape, self.topic = shape, topic
+        super(ResizeImage, self).__init__()
+
+    def call(self, kwargs):
+        kwargs[self.topic] = ops.resize_image(kwargs[self.topic], self.shape)
         return kwargs
 
 
