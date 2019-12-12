@@ -109,15 +109,6 @@ save = ModelCheckpoint(model_path, 'loss', verbose=1,
 images = (sequencer.__getitem__(0)[0]['image'] * 255).astype('uint8')
 
 ops.save_images(os.path.join(save_path, 'original_images/'), images)
-"""
-if not os.path.exists(save_images_path):
-    os.makedirs(save_images_path)
-for image_arg, image in enumerate(images):
-    image_name = 'image_%03d.png' % image_arg
-    image_path = os.path.join(save_images_path, image_name)
-    print(image_path)
-    ops.save_image(image_path, image)
-"""
 inferencer = AutoEncoderInference(model)
 draw = DrawInferences(save_path, images, inferencer,
                       label_topic='reconstruction')
