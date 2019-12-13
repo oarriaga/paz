@@ -5,7 +5,7 @@ from numpy import random
 from ..core import ops
 
 from ..core import Processor
-from ..core.ops import draw_filled_polygon, load_image, show_image
+from ..core.ops import draw_filled_polygon, load_image
 from ..core.ops import median_blur, gaussian_blur, resize_image, convert_image
 from ..core.ops import BGR2RGB, RGB2BGR, BGR2HSV, RGB2HSV, HSV2RGB, HSV2BGR
 from ..core.ops import IMREAD_COLOR, BGR2GRAY
@@ -572,10 +572,10 @@ class ShowImage(Processor):
     # Arguments
         image_name: String. Window name.
     """
-    def __init__(self, image_name='image'):
-        self.image_name = image_name
+    def __init__(self, topic, window_name='image', wait=True):
+        self.topic, self.window_name, self.wait = topic, window_name, wait
         super(ShowImage, self).__init__()
 
     def call(self, kwargs):
-        show_image(kwargs['image'], self.image_name)
+        ops.show_image(kwargs[self.topic], self.window_name, self.wait)
         return kwargs
