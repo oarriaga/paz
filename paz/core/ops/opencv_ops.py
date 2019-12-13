@@ -146,15 +146,16 @@ def convert_image(image, flag):
     return cv2.cvtColor(image, flag)
 
 
-def show_image(image, name='image'):
+def show_image(image, name='image', wait=True):
     """ Shows image in an external window.
     # Arguments
         image: Numpy array
         name: String indicating the window name.
     """
     cv2.imshow(name, image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    if wait:
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 def draw_circle(image, point, color=GREEN, radius=5):
