@@ -61,15 +61,18 @@ class AutoEncoderInference(SequentialProcessor):
     """AutoEncoder inference pipeline
     # Arguments
         model: Keras model.
+        topic: String. Name of the topic to be outputted.
     # Returns
         Function for outputting reconstructed images
     """
-    def __init__(self, model):
+    def __init__(self, model, topic='reconstruction'):
         super(AutoEncoderInference, self).__init__()
+        self.topic = topic
         pipeline = [pr.ResizeImage(model.input_shape[1:3]),
                     pr.NormalizeImage(),
                     pr.ExpandDims(axis=0, topic='image')]
-
-        self.add(pr.Predict(model, 'image', 'reconstruction', pipeline))
-        self.add(pr.Squeeze(axis=0, topic='reconstruction'))
-        self.add(pr.CastImageToInts())
+        self.add(pr.Predict(model, 'image', self.topic, pipeline))
+        self.add(pr.Squeeze(0, self.topic))
+        self.add(pr.DenormalizeImage(self.topic))
+        self.add(pr.CastImageToInts(self.topic))
+        # self.add(pr.ShowImage(self.topic, 'dummy_image', False))
