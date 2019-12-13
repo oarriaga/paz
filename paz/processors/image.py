@@ -28,13 +28,16 @@ class CastImageToFloat(Processor):
 
 class CastImageToInts(Processor):
     """Cast image to uint8
+    # Arguments:
+        topic: String. Image topic to be cast to integers.
     """
-    def __init__(self):
+    def __init__(self, topic='image'):
+        self.topic = topic
         super(CastImageToInts, self).__init__()
 
     def call(self, kwargs):
-        image = kwargs['image']
-        kwargs['image'] = np.round(image, decimals=0).astype(np.uint8)
+        image = kwargs[self.topic]
+        kwargs[self.topic] = np.round(image, decimals=0).astype(np.uint8)
         return kwargs
 
 
@@ -79,13 +82,16 @@ class NormalizeImage(Processor):
 
 
 class DenormalizeImage(Processor):
-    """Normalize image by diving its values by 255.0.
+    """Denormalize image by diving its values by 255.0.
+    Arguments:
+        topic: String. Image topic to be normalized.
     """
-    def __init__(self):
+    def __init__(self, topic='image'):
+        self.topic = topic
         super(DenormalizeImage, self).__init__()
 
     def call(self, kwargs):
-        kwargs['image'] = (kwargs['image'] * 255).astype('uint8')
+        kwargs[self.topic] = (kwargs[self.topic] * 255)
         return kwargs
 
 
