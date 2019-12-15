@@ -17,12 +17,11 @@ class SolvePNP(Processor):
     # Returns
         Creates a new topic ``pose6D`` with a Pose6D message.
     """
-    def __init__(self, model_points, camera_intrinsics, distortion):
+    def __init__(self, points3D, camera):
         super(SolvePNP, self).__init__()
-        self.model_points = model_points
-        self.camera_intrinsics = camera_intrinsics
-        self.distortion = distortion
-        self.num_keypoints = len(model_points)
+        self.points3D = points3D
+        self.camera = camera
+        self.num_keypoints = len(points3D)
 
     def call(self, kwargs):
         keypoints = kwargs['keypoints'][:, :2]
@@ -30,8 +29,7 @@ class SolvePNP(Processor):
         keypoints = keypoints.reshape((self.num_keypoints, 1, 2))
 
         (success, rotation, translation) = ops.solve_PNP(
-            self.model_points, keypoints, self.camera_intrinsics,
-            ops.UPNP, self.distortion)
+            self.points3D, keypoints, self.camera, ops.UPNP)
 
         if 'box2D' in kwargs:
             class_name = kwargs['box2D'].class_name
