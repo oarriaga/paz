@@ -84,6 +84,28 @@ class VideoPlayer(object):
         cv2.destroyAllWindows()
 
 
+class Camera(object):
+    """Camera abstract class.
+    """
+    def __init__(self, intrinsics, distortion):
+        self.intrinsics = intrinsics
+        self.distortion = distortion
+
+    @property
+    def intrinsics(self):
+        return self._intrinsics
+
+    @intrinsics.setter
+    def intrinsics(self, intrinsics):
+        self._intrinsics = intrinsics
+
+    def calibrate(self):
+        raise NotImplementedError
+
+    def save(self, name):
+        raise NotImplementedError
+
+
 def cascade_classifier(path):
     """Cascade classifier with detectMultiScale() method for inference.
     # Arguments
@@ -241,26 +263,26 @@ def draw_cube(image, points, color=GREEN, thickness=2):
         thickness: Integer indicating the thickness of the line to be drawn.
     """
     # draw bottom
-    draw_line(image, points[0], points[1], color, thickness)
-    draw_line(image, points[1], points[2], color, thickness)
-    draw_line(image, points[3], points[2], color, thickness)
-    draw_line(image, points[3], points[0], color, thickness)
+    draw_line(image, points[0][0], points[1][0], color, thickness)
+    draw_line(image, points[1][0], points[2][0], color, thickness)
+    draw_line(image, points[3][0], points[2][0], color, thickness)
+    draw_line(image, points[3][0], points[0][0], color, thickness)
 
     # draw top
-    draw_line(image, points[4], points[5], color, thickness)
-    draw_line(image, points[6], points[5], color, thickness)
-    draw_line(image, points[6], points[7], color, thickness)
-    draw_line(image, points[4], points[7], color, thickness)
+    draw_line(image, points[4][0], points[5][0], color, thickness)
+    draw_line(image, points[6][0], points[5][0], color, thickness)
+    draw_line(image, points[6][0], points[7][0], color, thickness)
+    draw_line(image, points[4][0], points[7][0], color, thickness)
 
     # draw sides
-    draw_line(image, points[0], points[4], color, thickness)
-    draw_line(image, points[7], points[3], color, thickness)
-    draw_line(image, points[5], points[1], color, thickness)
-    draw_line(image, points[2], points[6], color, thickness)
+    draw_line(image, points[0][0], points[4][0], color, thickness)
+    draw_line(image, points[7][0], points[3][0], color, thickness)
+    draw_line(image, points[5][0], points[1][0], color, thickness)
+    draw_line(image, points[2][0], points[6][0], color, thickness)
 
     # draw X mark on top
-    draw_line(image, points[4], points[6], color, thickness)
-    draw_line(image, points[5], points[7], color, thickness)
+    draw_line(image, points[4][0], points[6][0], color, thickness)
+    draw_line(image, points[5][0], points[7][0], color, thickness)
 
     # draw dots
     # [draw_dot(image, point, color, point_radii) for point in points]
@@ -342,7 +364,7 @@ def lincolor(num_colors, saturation=1, value=1, normalized=False):
     return RGB_colors
 
 
-def solve_PNP(points, keypoints, camera_intrinsics, solver, distortion=None):
+def solve_PNP(points3D, points2D, camera, solver):
     """Calculates 6D pose from 3D points and 2D keypoints correspondences.
     # Arguments
         points: Numpy array of shape (num_points, 3).
@@ -362,5 +384,12 @@ def solve_PNP(points, keypoints, camera_intrinsics, solver, distortion=None):
     # References
         https://docs.opencv.org/2.4/modules/calib3d/doc/calib3d.html
     """
-    return cv2.solvePnP(points, keypoints, camera_intrinsics, distortion,
-                        None, None, False, solver)
+    return cv2.solvePnP(points3D, points2D, camera.intrinsics,
+                        camera.distortion, None, None, False, solver)
+
+
+def project_points3D(points3D, pose6D, camera):
+    point2D, jacobian = cv2.projectPoints(
+        points3D, pose6D.rotation_vector, pose6D.translation,
+        camera.intrinsics, camera.distortion)
+    return point2D
