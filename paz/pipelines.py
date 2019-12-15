@@ -224,3 +224,31 @@ class KeypointInference(SequentialProcessor):
         self.add(pr.DenormalizeKeypoints())
         self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
         self.add(pr.CastImageToInts())
+
+
+class KeypointToPoseInference(SequentialProcessor):
+    """General keypoint inference pipeline.
+    # Arguments
+        model: Keras model.
+        num_keypoints: Int.
+        radius: Int.
+    # Returns
+        Function for outputting pose from image
+    """
+    def __init__(self, model, points3D, camera, class_to_dimensions, radius=5):
+
+        super(KeypointToPoseInference, self).__init__()
+        self.num_keypoints = model.output_shape[1]
+        self.radius = radius
+
+        pipeline = [pr.Resize(model.input_shape[1:3]),
+                    pr.NormalizeImage(),
+                    pr.ExpandDims(axis=0, topic='image')]
+
+        self.add(pr.Predict(model, 'image', 'keypoints', pipeline))
+        self.add(pr.Squeeze(axis=0, topic='keypoints'))
+        self.add(pr.DenormalizeKeypoints())
+        self.add(pr.SolvePNP(points3D, camera))
+        self.add(pr.DrawBoxes3D(camera, class_to_dimensions))
+        self.add(pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
+        self.add(pr.CastImageToInts())
