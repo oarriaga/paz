@@ -5,7 +5,7 @@ from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.utils import Progbar
 
 
-class DifficultyCallback(Callback):
+class DifficultyTracker(Callback):
     def __init__(self, dataset, metrics_names, save_path, verbose=1):
         self.dataset = dataset
         self.save_path = save_path
