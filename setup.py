@@ -8,7 +8,8 @@ setup(name='Paz',
       author_email='octavio.arriaga@dfki.de',
       license='MIT',
       install_requires=[
-          'opencv-python',
           'tensorflow'],
       packages=find_packages()
       )
+
+
