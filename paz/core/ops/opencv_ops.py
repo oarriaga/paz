@@ -38,12 +38,12 @@ class VideoPlayer(object):
         self.pipeline = pipeline
         self.camera = camera
 
-    def start(self):
+    def run(self):
         """Opens camera and starts inference using the provided `pipeline`.
         """
-        camera = cv2.VideoCapture(self.camera)
+        self.start()
         while True:
-            frame = camera.read()[1]
+            frame = self.camera_.read()[1]
             if frame is None:
                 print('Frame: None')
                 continue
@@ -53,8 +53,33 @@ class VideoPlayer(object):
             cv2.imshow('webcam', image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        camera.release()
+        self.stop()
+    
+    def start(self):
+        self.camera_ = cv2.VideoCapture(self.camera)    
+
+    def stop(self):
+        self.camera_.release()
         cv2.destroyAllWindows()
+
+    def step(self):
+        """In comparison to the start function which runs continiously,
+        the step function run the whole process from acquiring the image to get pipeline results
+        only once
+        it returns 
+        """
+        if self.camera_.isOpened() is False:
+            raise "The camera was not started. Call start function before processing"
+
+        frame = self.camera_.read()[1]
+        if frame is None:
+            print('Frame: None')
+            return none
+
+        results = self.pipeline({'image': frame})
+        image = cv2.resize(results['image'], tuple(self.image_size))
+        cv2.imshow('webcam', image)    
+        return results    
 
     def record(self, name='video.avi', fps=20, fourCC='XVID'):
         """Opens camera and records inferences from the provided ``pipeline``.
