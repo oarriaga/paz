@@ -12,6 +12,5 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local ..
 make -j8
 sudo make install
 
-pkg-config --modversion opencv4
-
+cd ../../../
 rm -rf opencv/
