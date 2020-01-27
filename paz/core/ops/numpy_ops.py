@@ -180,10 +180,12 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
             form box coordinates and the last coordinates is the class
             argument.
     """
-    ious = compute_ious(boxes, to_point_form(prior_boxes))
+    ious = compute_ious(boxes, to_point_form(np.float32(prior_boxes)))
     best_box_iou_per_prior_box = np.max(ious, axis=0)
-    best_box_arg_per_prior_box = np.argmax(ious, axis=0)
-    best_prior_box_arg_per_box = np.argmax(ious, axis=1)
+    # best_box_arg_per_prior_box = np.argmax(ious, axis=0)
+    best_box_arg_per_prior_box = ious.shape[0] - np.argmax(np.flip(ious, axis=0), axis=0) - 1
+    # best_prior_box_arg_per_box = np.argmax(ious, axis=1)
+    best_prior_box_arg_per_box = ious.shape[1] - np.argmax(np.flip(ious, axis=1), axis=1) - 1
     best_box_iou_per_prior_box[best_prior_box_arg_per_box] = 2
     # overwriting best_box_arg_per_prior_box if they are the best prior box
     for box_arg in range(len(best_prior_box_arg_per_box)):
