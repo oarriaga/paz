@@ -7,6 +7,10 @@ from paz.core.ops import to_point_form
 from paz.core.ops import to_center_form
 from paz.core.ops import rotation_matrix_to_quaternion
 from paz.core.ops import quaternion_to_rotation_matrix
+from paz.core.ops import encode
+from paz.core.ops import match
+from paz.core.ops import decode
+from paz.models.detection.utils import create_prior_boxes
 
 
 boxes_B = np.array([[39, 63, 203, 112],
@@ -33,6 +37,26 @@ affine_matrix = np.array(
 
 
 quaternion_target = np.array([0.525483, -0.473147, 0.525483, 0.473147])
+
+target_unique_matches = np.array([[238., 155., 306., 204.]])
+
+target_prior_boxes = np.array([[0.013333334, 0.013333334, 0.1, 0.1],
+                               [0.013333334, 0.013333334, 0.14142136, 0.14142136],
+                               [0.013333334, 0.013333334, 0.14142136, 0.07071068],
+                               [0.013333334, 0.013333334, 0.07071068, 0.14142136],
+                               [0.04, 0.013333334, 0.1, 0.1],
+                               [0.04, 0.013333334, 0.14142136, 0.14142136],
+                               [0.04, 0.013333334, 0.14142136, 0.07071068],
+                               [0.04, 0.013333334, 0.07071068, 0.14142136],
+                               [0.06666667, 0.013333334, 0.1, 0.1],
+                               [0.06666667, 0.013333334, 0.14142136, 0.14142136]],
+                              dtype=np.float32)
+
+boxes_with_label = np.array([[47., 239., 194., 370.,  12.],
+                            [7.,  11., 351., 497.,  15.],
+                            [138., 199., 206., 300.,  19.],
+                            [122., 154., 214., 194.,  18.],
+                            [238., 155., 306., 204.,   9.]])
 
 
 def test_compute_iou():
@@ -83,6 +107,37 @@ def test_rotation_matrix_to_quaternion_inverse():
     assert np.allclose(rotation_matrix, affine_matrix[:3, :3])
 
 
+def test_match_box():
+    matched_boxes = match(boxes_with_label, create_prior_boxes('VOC'))
+    assert np.array_equal(target_unique_matches,
+                          np.unique(matched_boxes[:, :-1], axis=0))
+
+
+def test_to_encode():
+    priors = create_prior_boxes('VOC')
+    matches = match(boxes_with_label, priors)
+    variances = [.1, .2]
+    assert np.all(
+        np.round(decode(
+            encode(matches, priors, variances), priors, variances)
+        ) == matches)
+
+
+def test_to_decode():
+    priors = create_prior_boxes('VOC')
+    matches = match(boxes_with_label, priors)
+    variances = [.1, .2]
+    assert np.all(
+        np.round(decode(
+            encode(matches, priors, variances), priors, variances)
+        ) == matches)
+
+
+def test_prior_boxes():
+    prior_boxes = create_prior_boxes('VOC')
+    assert np.all(prior_boxes[:10].astype('float32') == target_prior_boxes)
+
+
 test_compute_iou()
 test_compute_ious()
 test_compute_ious_shape()
@@ -91,3 +146,7 @@ test_to_center_form_inverse()
 test_to_point_form_inverse()
 test_rotation_matrix_to_quaternion()
 test_rotation_matrix_to_quaternion_inverse()
+test_prior_boxes()
+test_match_box()
+test_to_encode()
+test_to_decode()
