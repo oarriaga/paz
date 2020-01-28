@@ -35,13 +35,12 @@ model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=keras.optimizers.Adam(),
               metrics=['accuracy'])
 
-evaluators = [keras.losses.MeanSquaredError('none')]
+evaluators = [keras.losses.CategoricalCrossentropy('none')]
 evaluate = Evaluator(sequencers['test'], 'label', evaluators,
                      epochs, evaluations_filename)
 
 model.fit_generator(
     sequencers['train'],
-    steps_per_epoch=100,
     epochs=epochs,
     callbacks=[evaluate],
     verbose=1,
