@@ -1,41 +1,48 @@
 from tensorflow import keras
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Flatten
-from tensorflow.keras.layers import Conv2D, MaxPooling2D
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dropout, Flatten, Input
+from tensorflow.keras.layers import Dense, Conv2D, MaxPooling2D
 
-from callbacks import DifficultyTracker
-from mnist import MNIST
+from paz.core import ProcessingSequencer
 
-batch_size, epochs, save_path = 128, 20, 'data'
 
-x_train, y_train = MNIST('train').load()
-x_test, y_test = MNIST('test').load()
-input_shape = (x_test.shape[1], x_test.shape[2], 1)
-num_classes = y_train.shape[1]
+from callbacks import Evaluator
+from mnist import MNIST, ImageAugmentation
 
-model = Sequential()
-model.add(Conv2D(32, kernel_size=(3, 3),
-                 activation='relu',
-                 input_shape=input_shape))
-model.add(Conv2D(64, (3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(128, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(num_classes, activation='softmax'))
+size, num_classes, batch_size, epochs, save_path = 28, 10, 32, 10, 'data'
+splits, evaluations_filename = ['train', 'test'], 'evaluations.hdf5'
+
+sequencers = {}
+for split in splits:
+    processor = ImageAugmentation(size, num_classes)
+    sequencer = ProcessingSequencer(processor, batch_size, MNIST(split).load())
+    sequencers[split] = sequencer
+input_shape = sequencers['train'].processor.input_shapes[0]
+
+
+inputs = Input(input_shape, name='image')
+x = Conv2D(32, (3, 3), activation='relu')(inputs)
+x = Conv2D(64, (3, 3), activation='relu')(x)
+x = MaxPooling2D(pool_size=(2, 2))(x)
+x = Dropout(0.25)(x)
+x = Flatten()(x)
+x = Dense(128, activation='relu')(x)
+x = Dropout(0.5)(x)
+outputs = Dense(num_classes, activation='softmax', name='label')(x)
+model = Model(inputs, outputs, name='CNN')
+
 model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=keras.optimizers.Adam(),
               metrics=['accuracy'])
 
-metrics = model.metrics_names
-difficulty = DifficultyTracker((x_test, y_test), metrics, save_path)
-model.fit(x_train, y_train,
-          batch_size=batch_size,
-          epochs=epochs,
-          verbose=1,
-          callbacks=[difficulty],
-          validation_data=(x_test, y_test))
-score = model.evaluate(x_test, y_test, verbose=0)
-print('Test loss:', score[0])
-print('Test accuracy:', score[1])
+evaluators = [keras.losses.MeanSquaredError('none')]
+evaluate = Evaluator(sequencers['test'], 'label', evaluators,
+                     epochs, evaluations_filename)
+
+model.fit_generator(
+    sequencers['train'],
+    steps_per_epoch=100,
+    epochs=epochs,
+    callbacks=[evaluate],
+    verbose=1,
+    validation_data=sequencers['test'])
