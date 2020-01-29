@@ -16,7 +16,7 @@ class CIFAR10(Loader):
     def load(self):
         images, labels = cifar10.load_data()[self.split_to_arg[self.split]]
         images = images.reshape(
-            len(images), self.image_size[0], self.image_size[1])
+            len(images), self.image_size[0], self.image_size[1], 3)
         labels = keras.utils.to_categorical(labels, self.num_classes)
         data = []
         for image, label in zip(images, labels):
