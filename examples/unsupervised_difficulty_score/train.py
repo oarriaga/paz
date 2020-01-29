@@ -72,7 +72,6 @@ for split in args.evaluation_splits:
 
 model.fit_generator(
     sequencers['train'],
-    steps_per_epoch=10,
     epochs=args.epochs,
     callbacks=callbacks,
     verbose=1)
