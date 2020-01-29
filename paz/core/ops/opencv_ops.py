@@ -64,9 +64,8 @@ class VideoPlayer(object):
         return results
 
     def run(self):
-        """Opens camera and starts inference using the provided `pipeline`.
-        Run the processing pipeline continuously. Until the process will
-        be not interapt by pressing a key.
+        """Opens camera and starts a continuous inference
+        using the provided pipeline until the user presses q.
         """
         self.start()
         while True:
