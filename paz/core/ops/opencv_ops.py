@@ -40,46 +40,41 @@ class VideoPlayer(object):
 
     def run(self):
         """Opens camera and starts inference using the provided `pipeline`.
+        Run the processing pipeline continuously. Until the process will
+        be not interapt by pressing a key.
         """
         self.start()
         while True:
-            frame = self.camera_.read()[1]
-            if frame is None:
-                print('Frame: None')
-                continue
-
-            results = self.pipeline({'image': frame})
-            image = cv2.resize(results['image'], tuple(self.image_size))
-            cv2.imshow('webcam', image)
+            self.step(False)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         self.stop()
     
     def start(self):
-        self.camera_ = cv2.VideoCapture(self.camera)    
+        self._camera = cv2.VideoCapture(self.camera)    
 
     def stop(self):
-        self.camera_.release()
+        self._camera.release()
         cv2.destroyAllWindows()
 
-    def step(self):
-        """In comparison to the start function which runs continiously,
-        the step function run the whole process from acquiring the image to get pipeline results
-        only once
-        it returns 
+    def step(self, return_result = True):
+        """ The step function runs the pipeline process 
+        from acquiring the image to get pipeline results
+        only once and return the pipeline results. 
         """
-        if self.camera_.isOpened() is False:
+        if self._camera.isOpened() is False:
             raise "The camera was not started. Call start function before processing"
 
-        frame = self.camera_.read()[1]
+        frame = self._camera.read()[1]
         if frame is None:
             print('Frame: None')
-            return none
+            return None
 
         results = self.pipeline({'image': frame})
         image = cv2.resize(results['image'], tuple(self.image_size))
-        cv2.imshow('webcam', image)    
-        return results    
+        cv2.imshow('webcam', image)  
+        if return_result is True: 
+            return results    
 
     def record(self, name='video.avi', fps=20, fourCC='XVID'):
         """Opens camera and records inferences from the provided ``pipeline``.
@@ -89,22 +84,15 @@ class VideoPlayer(object):
             fourCC: String. Indicates the four character code of the video.
             e.g. XVID, MJPG, X264
         """
-        camera = cv2.VideoCapture(self.camera)
+        self.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
-            frame = camera.read()[1]
-            if frame is None:
-                print('Frame: None')
-                continue
-
-            results = self.pipeline({'image': frame})
-            image = cv2.resize(results['image'], tuple(self.image_size))
-            writer.write(image)
-            cv2.imshow('webcam', image)
+            self.step(False)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        camera.release()
+
+        self.stop()
         writer.release()
         cv2.destroyAllWindows()
 

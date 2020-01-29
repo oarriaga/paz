@@ -91,4 +91,4 @@ pose_pipeline = PoseInference(
     detector, keypointer, points3D, camera_intrinsics, distortions)
 
 video_player = VideoPlayer((1280, 960), pose_pipeline, 2)
-video_player.start()
+video_player.run()

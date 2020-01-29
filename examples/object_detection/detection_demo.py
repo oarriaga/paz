@@ -15,7 +15,7 @@ model = SSD300(len(labels))
 # model.load_weights('weights.77-4.48.hdf5')
 detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
 video_player = VideoPlayer((1280, 960), detector, 0)
-video_player.start()
+video_player.run()
 
 """
 from paz.processors import ShowImage

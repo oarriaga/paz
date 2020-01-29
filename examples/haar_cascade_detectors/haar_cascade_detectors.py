@@ -25,4 +25,4 @@ for class_arg, model_name in enumerate(args.models):
 pipeline = SequentialProcessor(detectors)
 pipeline.add(DrawBoxes2D(args.models))
 pipeline.add(CastImageToInts())
-VideoPlayer((1280, 960), pipeline).start()
+VideoPlayer((1280, 960), pipeline).run()
