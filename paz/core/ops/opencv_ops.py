@@ -38,29 +38,17 @@ class VideoPlayer(object):
         self.pipeline = pipeline
         self.camera = camera
 
-    def run(self):
-        """Opens camera and starts inference using the provided `pipeline`.
-        Run the processing pipeline continuously. Until the process will
-        be not interapt by pressing a key.
-        """
-        self.start()
-        while True:
-            self.step(False)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        self.stop()
-    
     def start(self):
-        self._camera = cv2.VideoCapture(self.camera)    
+        self._camera = cv2.VideoCapture(self.camera)
 
     def stop(self):
         self._camera.release()
         cv2.destroyAllWindows()
 
-    def step(self, return_result = True):
-        """ The step function runs the pipeline process 
+    def step(self):
+        """ The step function runs the pipeline process
         from acquiring the image to get pipeline results
-        only once and return the pipeline results. 
+        only once and return the pipeline results.
         """
         if self._camera.isOpened() is False:
             raise "The camera was not started. Call start function before processing"
@@ -72,9 +60,20 @@ class VideoPlayer(object):
 
         results = self.pipeline({'image': frame})
         image = cv2.resize(results['image'], tuple(self.image_size))
-        cv2.imshow('webcam', image)  
-        if return_result is True: 
-            return results    
+        cv2.imshow('webcam', image)
+        return results
+
+    def run(self):
+        """Opens camera and starts inference using the provided `pipeline`.
+        Run the processing pipeline continuously. Until the process will
+        be not interapt by pressing a key.
+        """
+        self.start()
+        while True:
+            self.step()
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        self.stop()
 
     def record(self, name='video.avi', fps=20, fourCC='XVID'):
         """Opens camera and records inferences from the provided ``pipeline``.
@@ -88,7 +87,7 @@ class VideoPlayer(object):
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
-            self.step(False)
+            self.step()
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
