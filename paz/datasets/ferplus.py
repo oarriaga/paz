@@ -38,7 +38,7 @@ class FERPlus(Loader):
         self.split_to_filter = {
             'train': 'Training', 'val': 'PublicTest', 'test': 'PrivateTest'}
 
-    def load_data(self):
+    def load(self):
         data = np.genfromtxt(self.images_path, str, '#', ',', 1)
         data = data[data[:, -1] == self.split_to_filter[self.split]]
         faces = np.zeros((len(data), *self.image_size, 1))
