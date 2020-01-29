@@ -54,4 +54,9 @@ class FERPlus(Loader):
         mask = N != 0
         N, faces, emotions = N[mask], faces[mask], emotions[mask]
         emotions = emotions / np.expand_dims(N, 1)
-        return faces, emotions
+
+        data = []
+        for face, emotion in zip(faces, emotions):
+            sample = {'image': face, 'label': emotion}
+            data.append(sample)
+        return data
