@@ -1,32 +1,36 @@
 import os
+import json
 import argparse
-from tensorflow import keras
+from datetime import datetime
 
+from tensorflow import keras
 from paz.core import ProcessingSequencer
 from paz.datasets import FERPlus
 
 from datasets import MNIST, CIFAR10
-from models import CNN
+from models import CNN_KERAS_A, CNN_KERAS_B
 from pipelines import ImageAugmentation
 from callbacks import Evaluator
 
 
 description = 'Unsupervised difficulty estimation for classification'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-p', '--save_path', default='evaluations', type=str,
+parser.add_argument('-p', '--save_path', default='experiments', type=str,
                     help='Path for saving evaluations')
-parser.add_argument('-m', '--model', default='CNN', type=str,
-                    choices=['CNN'])
+parser.add_argument('-m', '--model', default='CNN-KERAS-A', type=str,
+                    choices=['CNN-KERAS-A', 'CNN-KERAS-B'])
 parser.add_argument('-d', '--dataset', default='MNIST', type=str,
                     choices=['MNIST', 'CIFAR10', 'FERPlus'])
 parser.add_argument('-b', '--batch_size', default=32, type=int,
                     help='Batch size used during optimization')
 parser.add_argument('-e', '--epochs', default=20, type=int,
                     help='Number of epochs before finishing')
-parser.add_argument('-l', '--experiment_label', default='00', type=str,
+parser.add_argument('-l', '--run_label', default='RUN_00', type=str,
                     help='Label used to distinguish between different runs')
 parser.add_argument('-s', '--evaluation_splits', nargs='+', type=str,
                     default=['test'], help='Splits used for evaluation')
+parser.add_argument('-t', '--time', type=str,
+                    default=datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
 parser.add_argument('-r', '--data_path', type=str,
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/datasets/'),
@@ -40,7 +44,6 @@ data_managers, datasets = {}, {}
 for split in splits:
     data_path = os.path.join(args.data_path, args.dataset)
     kwargs = {'path': data_path} if args.dataset in ['FERPlus'] else {}
-    print(kwargs)
     data_manager = name_to_manager[args.dataset](split=split, **kwargs)
     data = data_manager.load()
     data_managers[split], datasets[split] = data_manager, data
@@ -54,7 +57,7 @@ for split in splits:
     sequencer = ProcessingSequencer(processor, args.batch_size, data)
     sequencers[split] = sequencer
 
-name_to_model = {'CNN': CNN}
+name_to_model = {'CNN-KERAS-A': CNN_KERAS_A, 'CNN-KERAS-B': CNN_KERAS_B}
 Model = name_to_model[args.model]
 model = Model(sequencers['train'].processor.input_shapes[0],
               data_managers['train'].num_classes)
@@ -62,16 +65,29 @@ model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=keras.optimizers.Adam(),
               metrics=['accuracy'])
 
+experiment_label = '_'.join([args.dataset, model.name, args.run_label])
+experiment_path = os.path.join(args.save_path, experiment_label)
 callbacks = []
 for split in args.evaluation_splits:
-    filename = '_'.join([args.dataset, split, args.experiment_label])
-    evaluations_filepath = os.path.join(args.save_path, filename + '.hdf5')
-    evaluators = [keras.losses.CategoricalCrossentropy(reduction='none')]
-    callbacks.append(Evaluator(sequencers[split], 'label',
-                     evaluators, args.epochs, evaluations_filepath))
+    for evaluator in [keras.losses.CategoricalCrossentropy(reduction='none')]:
+        filename = '_'.join([evaluator.name, split + '.hdf5'])
+        evaluations_filepath = os.path.join(experiment_path, filename)
+        evaluators = [keras.losses.CategoricalCrossentropy(reduction='none')]
+        callbacks.append(Evaluator(sequencers[split], 'label',
+                         evaluators, args.epochs, evaluations_filepath))
+
+log_filename = os.path.join(experiment_path, 'optimization.log')
+log = keras.callbacks.CSVLogger(log_filename)
+callbacks.append(log)
+
+with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
+    json.dump(args.__dict__, filer, indent=4)
+with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
+    model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
 model.fit_generator(
     sequencers['train'],
+    steps_per_epoch=10,
     epochs=args.epochs,
     callbacks=callbacks,
     verbose=1)
