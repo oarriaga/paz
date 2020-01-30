@@ -2,7 +2,7 @@ from tensorflow.keras.layers import Conv2D, BatchNormalization, SeparableConv2D
 from tensorflow.keras.layers import Activation, MaxPooling2D, Add, Input
 from tensorflow.keras.layers import GlobalAveragePooling2D
 from tensorflow.keras import Model
-from tensorflow.reguralizers import l2
+from tensorflow.keras.regularizers import l2
 
 
 def xception_block(input_tensor, num_kernels, l2_reg=0.01):
@@ -48,7 +48,7 @@ def build_xception(
         https://arxiv.org/abs/1610.02357
     """
 
-    x = inputs = Input(input_shape, name='inputs')
+    x = inputs = Input(input_shape, name='image')
     for num_kernels in stem_kernels:
         x = Conv2D(num_kernels, 3, kernel_regularizer=l2(l2_reg),
                    use_bias=False, padding='same')(x)
@@ -62,7 +62,7 @@ def build_xception(
                padding='same')(x)
     # x = BatchNormalization()(x)
     x = GlobalAveragePooling2D()(x)
-    output = Activation('softmax', name='predictions')(x)
+    output = Activation('softmax', name='label')(x)
 
     model_name = '-'.join(['XCEPTION',
                            str(input_shape[0]),
