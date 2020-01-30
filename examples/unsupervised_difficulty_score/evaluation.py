@@ -61,8 +61,6 @@ split = args.evaluation_splits[0]
 experiment_label = '_'.join([args.dataset, args.model, args.run_label])
 evaluation_label = '_'.join([args.evaluation, split + '.hdf5'])
 filename = os.path.join(args.save_path, experiment_label, evaluation_label)
-print(filename)
-
 
 evaluations = h5py.File(filename, 'r')
 evaluations = np.asarray(evaluations['evaluations'])
