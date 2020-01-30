@@ -8,7 +8,7 @@ from paz.core import ProcessingSequencer
 from paz.datasets import FERPlus
 
 from datasets import MNIST, CIFAR10
-from models import CNN_KERAS_A, CNN_KERAS_B
+from models import CNN_KERAS_A, CNN_KERAS_B, XCEPTION_MINI, RESNET_V2
 from pipelines import ImageAugmentation
 from callbacks import Evaluator
 
@@ -18,17 +18,24 @@ parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-p', '--save_path', default='experiments', type=str,
                     help='Path for saving evaluations')
 parser.add_argument('-m', '--model', default='CNN-KERAS-A', type=str,
-                    choices=['CNN-KERAS-A', 'CNN-KERAS-B'])
+                    choices=['CNN-KERAS-A', 'CNN-KERAS-B',
+                             'XCEPTION-MINI', 'RESNET-V2'])
 parser.add_argument('-d', '--dataset', default='MNIST', type=str,
                     choices=['MNIST', 'CIFAR10', 'FERPlus'])
 parser.add_argument('-b', '--batch_size', default=32, type=int,
                     help='Batch size used during optimization')
-parser.add_argument('-e', '--epochs', default=20, type=int,
+parser.add_argument('-e', '--epochs', default=100, type=int,
                     help='Number of epochs before finishing')
+parser.add_argument('-o', '--stop_patience', default=5, type=int,
+                    help='Early stop patience')
+parser.add_argument('-u', '--reduce_patience', default=2, type=int,
+                    help='Reduce learning rate patience')
 parser.add_argument('-l', '--run_label', default='RUN_00', type=str,
                     help='Label used to distinguish between different runs')
 parser.add_argument('-s', '--evaluation_splits', nargs='+', type=str,
                     default=['test'], help='Splits used for evaluation')
+parser.add_argument('-v', '--validation_split', default='test', type=str,
+                    help='Split used for validation')
 parser.add_argument('-t', '--time', type=str,
                     default=datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
 parser.add_argument('-r', '--data_path', type=str,
@@ -38,9 +45,12 @@ parser.add_argument('-r', '--data_path', type=str,
 args = parser.parse_args()
 
 splits = ['train'] + args.evaluation_splits
+if args.validation_split not in splits:
+    splits = splits + [args.validation_split]
+
+# loading data and instantiating data managers
 name_to_manager = {'MNIST': MNIST, 'CIFAR10': CIFAR10, 'FERPlus': FERPlus}
 data_managers, datasets = {}, {}
-
 for split in splits:
     data_path = os.path.join(args.data_path, args.dataset)
     kwargs = {'path': data_path} if args.dataset in ['FERPlus'] else {}
@@ -48,6 +58,7 @@ for split in splits:
     data = data_manager.load()
     data_managers[split], datasets[split] = data_manager, data
 
+# instantiating sequencers
 sequencers = {}
 for split in splits:
     data_manager = data_managers[split]
@@ -57,7 +68,9 @@ for split in splits:
     sequencer = ProcessingSequencer(processor, args.batch_size, data)
     sequencers[split] = sequencer
 
-name_to_model = {'CNN-KERAS-A': CNN_KERAS_A, 'CNN-KERAS-B': CNN_KERAS_B}
+# instantiating model
+name_to_model = {'CNN-KERAS-A': CNN_KERAS_A, 'CNN-KERAS-B': CNN_KERAS_B,
+                 'XCEPTION-MINI': XCEPTION_MINI, 'RESNET-V2': RESNET_V2}
 Model = name_to_model[args.model]
 model = Model(sequencers['train'].processor.input_shapes[0],
               data_managers['train'].num_classes)
@@ -65,6 +78,7 @@ model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=keras.optimizers.Adam(),
               metrics=['accuracy'])
 
+# setting difficulty score callback
 experiment_label = '_'.join([args.dataset, model.name, args.run_label])
 experiment_path = os.path.join(args.save_path, experiment_label)
 callbacks = []
@@ -76,18 +90,25 @@ for split in args.evaluation_splits:
         callbacks.append(Evaluator(sequencers[split], 'label',
                          evaluators, args.epochs, evaluations_filepath))
 
+# setting additional callbacks
 log_filename = os.path.join(experiment_path, 'optimization.log')
 log = keras.callbacks.CSVLogger(log_filename)
-callbacks.append(log)
+stop = keras.callbacks.EarlyStopping(patience=args.stop_patience)
+save_filename = os.path.join(experiment_path, 'model.hdf5')
+save = keras.callbacks.ModelCheckpoint(save_filename, save_best_only=True)
+plateau = keras.callbacks.ReduceLROnPlateau(patience=args.reduce_patience)
+callbacks.extend([log, stop, save, plateau])
 
+# saving hyper-parameters and model summary
 with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
     json.dump(args.__dict__, filer, indent=4)
 with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
+# starting optimization
 model.fit_generator(
     sequencers['train'],
-    steps_per_epoch=10,
     epochs=args.epochs,
+    validation_data=sequencers[args.validation_split],
     callbacks=callbacks,
     verbose=1)
