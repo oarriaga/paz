@@ -45,7 +45,7 @@ class FERPlus(Loader):
         for sample_arg, sample in enumerate(data):
             face = np.array(sample[1].split(' '), dtype=int).reshape(48, 48)
             face = ops.resize_image(face, self.image_size)
-            faces[sample_arg, :, :, 0] = face
+            faces[sample_arg, :, :] = face
 
         emotions = np.genfromtxt(self.labels_path, str, '#', ',', 1)
         emotions = emotions[emotions[:, 0] == self.split_to_filter[self.split]]
