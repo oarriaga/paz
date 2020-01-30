@@ -41,7 +41,7 @@ class FERPlus(Loader):
     def load(self):
         data = np.genfromtxt(self.images_path, str, '#', ',', 1)
         data = data[data[:, -1] == self.split_to_filter[self.split]]
-        faces = np.zeros((len(data), *self.image_size, 1))
+        faces = np.zeros((len(data), *self.image_size))
         for sample_arg, sample in enumerate(data):
             face = np.array(sample[1].split(' '), dtype=int).reshape(48, 48)
             face = ops.resize_image(face, self.image_size)
