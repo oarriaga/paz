@@ -18,7 +18,8 @@ parser.add_argument('-d', '--dataset', default='MNIST', type=str,
 parser.add_argument('-e', '--evaluation', default='categorical_crossentropy',
                     type=str, choices=['categorical_crossentropy'])
 parser.add_argument('-m', '--model', default='CNN-KERAS-A',
-                    type=str, choices=['CNN-KERAS-A', 'CNN-KERAS-B'])
+                    type=str, choices=['CNN-KERAS-A', 'CNN-KERAS-B',
+                                       'RESNET-V2', 'XCEPTION-MINI'])
 parser.add_argument('-k', '--top_k', default=10, type=int,
                     help='top K values to be plotted')
 parser.add_argument('-l', '--run_label', default='RUN_00', type=str,
