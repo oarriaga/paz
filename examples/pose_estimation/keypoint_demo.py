@@ -1,8 +1,8 @@
 import os
 # import numpy as np
 from paz.pipelines import KeypointInference
-# from paz.models import KeypointNet2D
-from paz.models import HRNetResidual
+from paz.models import KeypointNet2D
+# from paz.models import HRNetResidual
 from paz.core import VideoPlayer
 from tensorflow.keras.utils import get_file
 
@@ -20,8 +20,8 @@ num_keypoints, class_name, input_shape = 10, '035_power_drill', (128, 128, 3)
 # distortions = np.loadtxt(filename)
 
 
-# model = KeypointNet2D(input_shape, num_keypoints)
-model = HRNetResidual(input_shape, num_keypoints)
+model = KeypointNet2D(input_shape, num_keypoints)
+# model = HRNetResidual(input_shape, num_keypoints)
 model_name = '_'.join([model.name, str(num_keypoints), class_name])
 filename = os.path.join(model_name, '_'.join([model_name, 'weights.hdf5']))
 filename = get_file(filename, None, cache_subdir='paz/models')
