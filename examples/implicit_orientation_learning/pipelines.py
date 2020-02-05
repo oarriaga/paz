@@ -1,5 +1,7 @@
 from paz.core import SequentialProcessor
 from paz import processors as pr
+from processors import MeasureSimilarity
+from processors import Normalize
 
 
 class SelfSupervisedAugmentation(SequentialProcessor):
@@ -75,4 +77,29 @@ class AutoEncoderInference(SequentialProcessor):
         self.add(pr.Squeeze(0, self.topic))
         self.add(pr.DenormalizeImage(self.topic))
         self.add(pr.CastImageToInts(self.topic))
-        # self.add(pr.ShowImage(self.topic, 'dummy_image', False))
+        self.add(pr.ShowImage(self.topic, self.topic, False))
+
+
+class ImplicitRotationInference(SequentialProcessor):
+    def __init__(self, encoder, decoder, measure, dictionary):
+        super(ImplicitRotationInference, self).__init__()
+        decoder_topic, encoder_topic = 'reconstruction', 'latent_vector'
+        image_topic, dictionary_topic = 'image', 'dictionary_image'
+
+        # encoder pipeline
+        pipeline = [pr.ResizeImage(encoder.input_shape[1:3]),
+                    pr.NormalizeImage(),
+                    pr.ExpandDims(0, image_topic)]
+        self.add(pr.Predict(encoder, image_topic, encoder_topic, pipeline))
+        # self.add(pr.Squeeze(0, encoder_topic))
+        # self.add(Normalize(encoder_topic))
+        self.add(MeasureSimilarity(
+            dictionary, measure, encoder_topic, dictionary_topic))
+        self.add(pr.ShowImage(dictionary_topic, dictionary_topic, False))
+
+        # decoder pipeline
+        self.add(pr.Predict(decoder, encoder_topic, decoder_topic))
+        self.add(pr.Squeeze(0, decoder_topic))
+        self.add(pr.DenormalizeImage(decoder_topic))
+        self.add(pr.CastImageToInts(decoder_topic))
+        self.add(pr.ShowImage(decoder_topic, decoder_topic, False))
