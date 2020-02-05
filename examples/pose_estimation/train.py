@@ -42,7 +42,7 @@ parser.add_argument('-m', '--model', default='KeypointNet', type=str,
                     help='Fullpath to file containing model 3D keypoints')
 parser.add_argument('-f', '--filters', default=64, type=int,
                     help='Number of filters in convolutional blocks')
-parser.add_argument('-bs', '--batch_size', default=20, type=int,
+parser.add_argument('-bs', '--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
