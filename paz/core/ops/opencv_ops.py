@@ -39,22 +39,40 @@ class VideoPlayer(object):
         self.camera = camera
 
     def start(self):
-        """Opens camera and starts inference using the provided `pipeline`.
-        """
-        camera = cv2.VideoCapture(self.camera)
-        while True:
-            frame = camera.read()[1]
-            if frame is None:
-                print('Frame: None')
-                continue
+        self._camera = cv2.VideoCapture(self.camera)
 
-            results = self.pipeline({'image': frame})
-            image = cv2.resize(results['image'], tuple(self.image_size))
-            cv2.imshow('webcam', image)
+    def stop(self):
+        self._camera.release()
+        cv2.destroyAllWindows()
+
+    def step(self):
+        """ The step function runs the pipeline process
+        from acquiring the image to get pipeline results
+        only once and return the pipeline results.
+        """
+        if self._camera.isOpened() is False:
+            raise "The camera was not started. Call start function before processing"
+
+        frame = self._camera.read()[1]
+        if frame is None:
+            print('Frame: None')
+            return None
+
+        results = self.pipeline({'image': frame})
+        image = cv2.resize(results['image'], tuple(self.image_size))
+        cv2.imshow('webcam', image)
+        return results
+
+    def run(self):
+        """Opens camera and starts a continuous inference
+        using the provided pipeline until the user presses q.
+        """
+        self.start()
+        while True:
+            self.step()
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        camera.release()
-        cv2.destroyAllWindows()
+        self.stop()
 
     def record(self, name='video.avi', fps=20, fourCC='XVID'):
         """Opens camera and records inferences from the provided ``pipeline``.
@@ -64,22 +82,15 @@ class VideoPlayer(object):
             fourCC: String. Indicates the four character code of the video.
             e.g. XVID, MJPG, X264
         """
-        camera = cv2.VideoCapture(self.camera)
+        self.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
-            frame = camera.read()[1]
-            if frame is None:
-                print('Frame: None')
-                continue
-
-            results = self.pipeline({'image': frame})
-            image = cv2.resize(results['image'], tuple(self.image_size))
-            writer.write(image)
-            cv2.imshow('webcam', image)
+            self.step()
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        camera.release()
+
+        self.stop()
         writer.release()
         cv2.destroyAllWindows()
 

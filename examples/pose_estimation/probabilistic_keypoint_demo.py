@@ -82,4 +82,4 @@ ProbabilisticKeypointInferencer(model, num_keypoints)
 pipeline = ProbabilisticKeypointInferencer(model, num_keypoints, 5)
 
 video_player = VideoPlayer((1280, 960), pipeline, 2)
-video_player.start()
+video_player.run()

@@ -46,4 +46,4 @@ offsets = (0, 0)
 
 pipeline = FaceClassifier(detector, classifier, offsets, class_names)
 video_player = VideoPlayer((1280, 960), pipeline)
-video_player.start()
+video_player.run()
