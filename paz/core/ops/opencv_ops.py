@@ -51,7 +51,7 @@ class VideoPlayer(object):
         only once and return the pipeline results.
         """
         if self._camera.isOpened() is False:
-            raise "The camera was not started. Call start function before processing"
+            raise "The camera has not started. Call `start` method."
 
         frame = self._camera.read()[1]
         if frame is None:
