@@ -182,12 +182,17 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
     """
     ious = compute_ious(boxes, to_point_form(np.float32(prior_boxes)))
     best_box_iou_per_prior_box = np.max(ious, axis=0)
-    # best_box_arg_per_prior_box = np.argmax(ious, axis=0)
-    best_box_arg_per_prior_box = ious.shape[0] - np.argmax(
-        np.flip(ious, axis=0), axis=0) - 1
-    # best_prior_box_arg_per_box = np.argmax(ious, axis=1)
-    best_prior_box_arg_per_box = ious.shape[1] - np.argmax(
-        np.flip(ious, axis=1), axis=1) - 1
+
+    # Flip for np.argmax to get the last occurence when elements are same
+    box_flip = np.flip(ious, axis=0)
+    prior_box_flip = np.flip(ious, axis=1)
+
+    # np.argmax return the last occurence when elements are same
+    best_box_arg_per_prior_box = ious.shape[0] - \
+                                 np.argmax(box_flip, axis=0) - 1
+    best_prior_box_arg_per_box = ious.shape[1] - \
+                                 np.argmax(prior_box_flip, axis=1) - 1
+
     best_box_iou_per_prior_box[best_prior_box_arg_per_box] = 2
     # overwriting best_box_arg_per_prior_box if they are the best prior box
     for box_arg in range(len(best_prior_box_arg_per_box)):
@@ -539,7 +544,7 @@ def make_mosaic(images, shape, border=0):
         image = images[image_arg]
         image_shape = image.shape
         mosaic[row * paddedh:row * paddedh + image_shape[0],
-               col * paddedw:col * paddedw + image_shape[1], :] = image
+        col * paddedw:col * paddedw + image_shape[1], :] = image
     return mosaic
 
 
@@ -911,7 +916,7 @@ def calculate_precision_and_recall(num_positives, scores, matches):
         # If num_positives[positive_key_arg] is 0,
         # recall[positive_key_arg] is None.
         if num_positives[positive_key_arg] > 0:
-            recall[positive_key_arg] =\
+            recall[positive_key_arg] = \
                 true_positives / num_positives[positive_key_arg]
 
     return precision, recall
