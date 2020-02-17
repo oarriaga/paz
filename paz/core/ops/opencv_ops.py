@@ -17,6 +17,54 @@ IMREAD_COLOR = cv2.IMREAD_COLOR
 UPNP = cv2.SOLVEPNP_UPNP
 
 
+class Camera(object):
+    """Camera abstract class.
+    By default this camera uses the openCV functionality.
+    It can be inherited to overwrite methods in case another camera API exists.
+    """
+    def __init__(self, device_id=0, name='Camera'):
+        # TODO load parameters from camera name. Use ``load`` method.
+        # self.intrinsics = intrinsics
+        # self.distortion = distortion
+        self.device_id = device_id
+        self.camera = None
+
+    def start(self):
+        """ Starts capturing device
+        """
+        self.camera = cv2.VideoCapture(self.device_id)
+        return self.camera
+
+    def stop(self):
+        """ Stops capturing device.
+        """
+        return self.camera.release()
+
+    def read(self):
+        """Reads camera input and returns a frame
+        # Returns
+            Array of camera
+        """
+        frame = self.camera.read()[1]
+        return frame
+
+    def is_open(self):
+        """Checks if camera is open
+        # Returns
+            Boolean
+        """
+        return self.camera.isOpened()
+
+    def calibrate(self):
+        raise NotImplementedError
+
+    def save(self, filepath):
+        raise NotImplementedError
+
+    def load(self, filepath):
+        raise NotImplementedError
+
+
 class VideoPlayer(object):
     """Performs visualization inferences in a real-time video.
 
@@ -27,55 +75,43 @@ class VideoPlayer(object):
             of the inferences.
             Built-in pipelines can be found in paz/processing/pipelines.py
     # Methods
-        start()
-
-    # TODO:
-        add method record()
+        run()
+        record()
     """
 
-    def __init__(self, image_size, pipeline, camera=0):
+    def __init__(self, image_size, pipeline, camera):
         self.image_size = image_size
         self.pipeline = pipeline
         self.camera = camera
 
-    def start(self):
-        self._camera = cv2.VideoCapture(self.camera)
-
-    def stop(self):
-        self._camera.release()
-        cv2.destroyAllWindows()
-
     def step(self):
-        """ The step function runs the pipeline process
-        from acquiring the image to get pipeline results
-        only once and return the pipeline results.
+        """ Runs the pipeline process once
         """
-        if self._camera.isOpened() is False:
-            raise "The camera has not started. Call `start` method."
+        if self.camera.is_open() is False:
+            raise 'Camera has not started. Call ``start`` method.'
 
-        frame = self._camera.read()[1]
+        frame = self.camera.read()
         if frame is None:
             print('Frame: None')
             return None
-
-        results = self.pipeline({'image': frame})
-        image = cv2.resize(results['image'], tuple(self.image_size))
-        cv2.imshow('webcam', image)
-        return results
+        return self.pipeline({'image': frame})
 
     def run(self):
-        """Opens camera and starts a continuous inference
-        using the provided pipeline until the user presses q.
+        """Opens camera and starts continuous inference using ``pipeline``,
+        until the user presses `q` inside the opened window.
         """
-        self.start()
+        self.camera.start()
         while True:
-            self.step()
+            results = self.step()
+            image = cv2.resize(results['image'], tuple(self.image_size))
+            cv2.imshow('webcam', image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        self.stop()
+        self.camera.stop()
+        cv2.destroyAllWindows()
 
     def record(self, name='video.avi', fps=20, fourCC='XVID'):
-        """Opens camera and records inferences from the provided ``pipeline``.
+        """Opens camera and records continuous inference using ``pipeline``.
         # Arguments
             name: String. Video name. Must include the postfix .avi
             fps: Int. Frames per second
@@ -86,35 +122,16 @@ class VideoPlayer(object):
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
-            self.step()
+            results = self.step()
+            image = cv2.resize(results['image'], tuple(self.image_size))
+            cv2.imshow('webcam', image)
+            writer.write(image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
         self.stop()
         writer.release()
         cv2.destroyAllWindows()
-
-
-class Camera(object):
-    """Camera abstract class.
-    """
-    def __init__(self, intrinsics, distortion):
-        self.intrinsics = intrinsics
-        self.distortion = distortion
-
-    @property
-    def intrinsics(self):
-        return self._intrinsics
-
-    @intrinsics.setter
-    def intrinsics(self, intrinsics):
-        self._intrinsics = intrinsics
-
-    def calibrate(self):
-        raise NotImplementedError
-
-    def save(self, name):
-        raise NotImplementedError
 
 
 def cascade_classifier(path):
