@@ -776,8 +776,8 @@ def calculate_scores_and_matches(
 
         for class_name_arg in np.unique(
                 np.concatenate((
-                        prediction_label,
-                        ground_truth_label)).astype(int)
+                    prediction_label,
+                    ground_truth_label)).astype(int)
         ):
             prediction_mask_class_arg = prediction_label == class_name_arg
             prediction_box_class_arg = prediction_box[
@@ -968,7 +968,8 @@ def calc_detection_voc_ap(precision, recall, use_07_metric=False):
                         )[recall[foreground_class_arg] >= t]
                     )
                 average_precision_class = ap[foreground_class_arg]
-                average_precision_class = average_precision_class + p_interpolation / 11
+                average_precision_class = (average_precision_class +
+                                           (p_interpolation / 11))
                 ap[foreground_class_arg] = average_precision_class
         else:
             # correct AP calculation
@@ -979,11 +980,13 @@ def calc_detection_voc_ap(precision, recall, use_07_metric=False):
                 ([0], recall[foreground_class_arg], [1])
             )
 
-            average_precision = np.maximum.accumulate(average_precision[::-1])[::-1]
+            average_precision = np.maximum.accumulate(
+                average_precision[::-1])[::-1]
 
             # to calculate area under PR curve, look for points
             # where X axis (recall) changes value
-            recall_change_arg = np.where(average_recall[1:] != average_recall[:-1])[0]
+            recall_change_arg = np.where(
+                average_recall[1:] != average_recall[:-1])[0]
 
             # and sum (\Delta recall) * precision
             ap[foreground_class_arg] = np.sum(
