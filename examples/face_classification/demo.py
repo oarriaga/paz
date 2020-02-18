@@ -1,9 +1,10 @@
+from tensorflow.keras.models import load_model
 from paz.models import HaarCascadeDetector
 from paz.core import Processor
 from paz import processors as pr
 from paz.datasets import get_class_names
 from paz.core import VideoPlayer
-from tensorflow.keras.models import load_model
+from paz.core import Camera
 import numpy as np
 
 
@@ -45,5 +46,6 @@ classifier = load_model('fer2013_mini_XCEPTION.119-0.65.hdf5')
 offsets = (0, 0)
 
 pipeline = FaceClassifier(detector, classifier, offsets, class_names)
-video_player = VideoPlayer((1280, 960), pipeline)
+camera = Camera(device_id=0)
+video_player = VideoPlayer((1280, 960), pipeline, camera)
 video_player.run()
