@@ -71,16 +71,16 @@ class GeneratingSequencer(Sequence):
             e.g. ``image``, ``depth``, ``boxes`` and as `values` of these
             `keys` the corresponding data e.g. strings, numpy arrays, etc.
     """
-    def __init__(self, processor, batch_size=32, as_list=False):
+    def __init__(self, processor, batch_size=32, as_list=False, num_steps=100):
         self.processor = processor
         self.input_topics = self.processor.processors[-1].input_topics
         self.label_topics = self.processor.processors[-1].label_topics
         self.batch_size = batch_size
         self.as_list = as_list
+        self.num_steps = num_steps
 
     def __len__(self):
-        # fix this horrendous hack
-        return 1000
+        return self.num_steps
 
     def __getitem__(self, batch_index):
         inputs_batch = self.get_empty_batch(

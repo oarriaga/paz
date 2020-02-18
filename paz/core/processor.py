@@ -95,3 +95,12 @@ class SequentialProcessor(object):
         for processor in self.processors:
             if processor.name == name:
                 self.processors.remove(processor)
+
+    def get_processor(self, name):
+        """Gets processor from sequencer
+        # Arguments
+            name: String indicating the process name
+        """
+        for processor in self.processors:
+            if processor.name == name:
+                return processor
