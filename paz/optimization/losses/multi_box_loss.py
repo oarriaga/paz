@@ -24,7 +24,7 @@ class MultiboxLoss(object):
 
     def compute_loss(self, y_true, y_pred):
 
-        # batch_size = tf.cast(tf.shape(y_pred)[0], tf.float32)
+        batch_size = tf.cast(tf.shape(y_pred)[0], tf.float32)
         class_loss = self.cross_entropy(y_true[:, :, 4:], y_pred[:, :, 4:])
         local_loss = self.smooth_l1(y_true[:, :, :4], y_pred[:, :, :4])
         negative_mask = y_true[:, :, 4]
@@ -44,25 +44,11 @@ class MultiboxLoss(object):
         num_negatives_per_sample = K.minimum(num_hard_negatives,
                                              self.max_num_negatives)
         negative_class_losses = class_loss * negative_mask
-
-        num_negatives = K.sum(num_negatives_per_sample)
-        negative_class_losses = K.flatten(negative_class_losses)
-        negative_class_loss = tf.nn.top_k(
-            negative_class_losses, num_negatives)[0]
-        positive_class_loss = tf.sum(positive_class_loss)
+        elements = (negative_class_losses, num_negatives_per_sample)
+        negative_class_loss = tf.map_fn(
+            lambda x: K.sum(tf.nn.top_k(x[0], x[1])[0]),
+            elements, dtype=tf.float32)
         class_loss = positive_class_loss + negative_class_loss
-        positive_class_loss = K.sum(positive_class_loss)
-        num_positives = K.sum(K.cast(positive_mask, 'float32'))
         total_loss = class_loss + (self.alpha * positive_local_loss)
-
-        num_positives = tf.maximum(1.0, num_positives)
-        total_loss = total_loss / num_positives
-        return total_loss
-        # elements = (negative_class_losses, num_negatives_per_sample)
-        # negative_class_loss = tf.map_fn(
-        #     lambda x: K.sum(tf.nn.top_k(x[0], x[1])[0]),
-        #     elements, dtype=tf.float32)
-        # class_loss = positive_class_loss + negative_class_loss
-        # total_loss = class_loss + (self.alpha * positive_local_loss)
-        # num_positives = K.sum(K.cast(positive_mask, 'float32'))
-        # return (total_loss * batch_size) / tf.maximum(1.0, num_positives)
+        num_positives = K.sum(K.cast(positive_mask, 'float32'))
+        return (total_loss * batch_size) / tf.maximum(1.0, num_positives)
