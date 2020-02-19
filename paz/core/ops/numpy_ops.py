@@ -160,20 +160,18 @@ def decode(predictions, priors, variances):
     return boxes
 
 
-def reversed_argmax(arr, axis):
+def reversed_argmax(array, axis):
     """Performs the function of torch.max().
     In case of multiple occurrences of the maximum values, the indices
     corresponding to the last occurrence are returned.
 
     # Arguments:
-        arr : Numpy array
+        array : Numpy array
         axis : int, argmax operation along this specified axis
     # Returns: index_array : Numpy array of ints
     """
-
-    # Flip for np.argmax to get the last occurence when elements are same
-    array_flip = np.flip(arr, axis=axis)
-    return arr.shape[axis] - np.argmax(array_flip, axis=axis) - 1
+    array_flip = np.flip(array, axis=axis)
+    return array.shape[axis] - np.argmax(array_flip, axis=axis) - 1
 
 
 def match(boxes, prior_boxes, iou_threshold=0.5):
@@ -553,7 +551,7 @@ def make_mosaic(images, shape, border=0):
         image = images[image_arg]
         image_shape = image.shape
         mosaic[row * paddedh:row * paddedh + image_shape[0],
-        col * paddedw:col * paddedw + image_shape[1], :] = image
+               col * paddedw:col * paddedw + image_shape[1], :] = image
     return mosaic
 
 
