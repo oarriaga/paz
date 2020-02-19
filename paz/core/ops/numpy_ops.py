@@ -160,6 +160,22 @@ def decode(predictions, priors, variances):
     return boxes
 
 
+def reversed_argmax(arr, axis):
+    """Performs the function of torch.max().
+    In case of multiple occurrences of the maximum values, the indices
+    corresponding to the last occurrence are returned.
+
+    # Arguments:
+        arr : Numpy array
+        axis : int, argmax operation along this specified axis
+    # Returns: index_array : Numpy array of ints
+    """
+
+    # Flip for np.argmax to get the last occurence when elements are same
+    array_flip = np.flip(arr, axis=axis)
+    return arr.shape[axis] - np.argmax(array_flip, axis=axis) - 1
+
+
 def match(boxes, prior_boxes, iou_threshold=0.5):
     """Matches each prior box with a ground truth box (box from ``boxes``).
     It then selects which matched box will be considered positive e.g. iou > .5
@@ -180,10 +196,12 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
             form box coordinates and the last coordinates is the class
             argument.
     """
-    ious = compute_ious(boxes, to_point_form(prior_boxes))
+    ious = compute_ious(boxes, to_point_form(np.float32(prior_boxes)))
     best_box_iou_per_prior_box = np.max(ious, axis=0)
-    best_box_arg_per_prior_box = np.argmax(ious, axis=0)
-    best_prior_box_arg_per_box = np.argmax(ious, axis=1)
+
+    best_box_arg_per_prior_box = reversed_argmax(ious, 0)
+    best_prior_box_arg_per_box = reversed_argmax(ious, 1)
+
     best_box_iou_per_prior_box[best_prior_box_arg_per_box] = 2
     # overwriting best_box_arg_per_prior_box if they are the best prior box
     for box_arg in range(len(best_prior_box_arg_per_box)):
@@ -535,7 +553,7 @@ def make_mosaic(images, shape, border=0):
         image = images[image_arg]
         image_shape = image.shape
         mosaic[row * paddedh:row * paddedh + image_shape[0],
-               col * paddedw:col * paddedw + image_shape[1], :] = image
+        col * paddedw:col * paddedw + image_shape[1], :] = image
     return mosaic
 
 
@@ -907,7 +925,7 @@ def calculate_precision_and_recall(num_positives, scores, matches):
         # If num_positives[positive_key_arg] is 0,
         # recall[positive_key_arg] is None.
         if num_positives[positive_key_arg] > 0:
-            recall[positive_key_arg] =\
+            recall[positive_key_arg] = \
                 true_positives / num_positives[positive_key_arg]
 
     return precision, recall
