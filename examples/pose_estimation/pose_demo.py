@@ -24,17 +24,19 @@ intrinsics = np.loadtxt(filename)
 filename = os.path.join('logitech_c270', 'distortions.txt')
 filename = get_file(filename, None, cache_subdir='paz/cameras')
 distortion = np.loadtxt(filename)
-camera = Camera(intrinsics, distortion)
 
+camera = Camera(device_id=0)
+camera.intrinsics = intrinsics
+camera.distortion = distortion
 
 model = KeypointNet2D(input_shape, num_keypoints)
 model_name = '_'.join([model.name, str(num_keypoints), class_name])
 filename = os.path.join(model_name, '_'.join([model_name, 'weights.hdf5']))
+print(filename)
 filename = get_file(filename, None, cache_subdir='paz/models')
 model.load_weights(filename)
 
 dimensions = {None: [.1, 0.08]}
 pipeline = KeypointToPoseInference(model, points3D, camera, dimensions)
-# video_player = VideoPlayer((1280, 960), pipeline, 0)
-video_player = VideoPlayer((640, 480), pipeline, 0)
+video_player = VideoPlayer((640, 480), pipeline, camera)
 video_player.run()
