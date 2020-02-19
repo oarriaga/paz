@@ -160,6 +160,22 @@ def decode(predictions, priors, variances):
     return boxes
 
 
+def reversed_argmax(arr, axis):
+    """Performs the function of torch.max().
+    In case of multiple occurrences of the maximum values, the indices
+    corresponding to the last occurrence are returned.
+
+    # Arguments:
+        arr : Numpy array
+        axis : int, argmax operation along this specified axis
+    # Returns: index_array : Numpy array of ints
+    """
+
+    # Flip for np.argmax to get the last occurence when elements are same
+    array_flip = np.flip(arr, axis=axis)
+    return arr.shape[axis] - np.argmax(array_flip, axis=axis) - 1
+
+
 def match(boxes, prior_boxes, iou_threshold=0.5):
     """Matches each prior box with a ground truth box (box from ``boxes``).
     It then selects which matched box will be considered positive e.g. iou > .5
@@ -183,15 +199,8 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
     ious = compute_ious(boxes, to_point_form(np.float32(prior_boxes)))
     best_box_iou_per_prior_box = np.max(ious, axis=0)
 
-    # Flip for np.argmax to get the last occurence when elements are same
-    box_flip = np.flip(ious, axis=0)
-    prior_box_flip = np.flip(ious, axis=1)
-
-    # np.argmax return the last occurence when elements are same
-    best_box_arg_per_prior_box = ious.shape[0] - \
-                                 np.argmax(box_flip, axis=0) - 1
-    best_prior_box_arg_per_box = ious.shape[1] - \
-                                 np.argmax(prior_box_flip, axis=1) - 1
+    best_box_arg_per_prior_box = reversed_argmax(ious, 0)
+    best_prior_box_arg_per_box = reversed_argmax(ious, 1)
 
     best_box_iou_per_prior_box[best_prior_box_arg_per_box] = 2
     # overwriting best_box_arg_per_prior_box if they are the best prior box
