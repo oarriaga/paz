@@ -24,10 +24,26 @@ class Camera(object):
     """
     def __init__(self, device_id=0, name='Camera'):
         # TODO load parameters from camera name. Use ``load`` method.
-        # self.intrinsics = intrinsics
-        # self.distortion = distortion
         self.device_id = device_id
         self.camera = None
+        self.intrinsics = None
+        self.distortion = None
+
+    @property
+    def intrinsics(self):
+        return self._intrinsics
+
+    @intrinsics.setter
+    def intrinsics(self, intrinsics):
+        self._intrinsics = intrinsics
+
+    @property
+    def distortion(self):
+        return self._distortion
+
+    @distortion.setter
+    def distortion(self, distortion):
+        self._distortion = distortion
 
     def start(self):
         """ Starts capturing device
