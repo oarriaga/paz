@@ -9,6 +9,7 @@ setup(name='Paz',
       license='MIT',
       install_requires=[
           'opencv-python',
-          'tensorflow'],
+          'tensorflow',
+          'numpy'],
       packages=find_packages()
       )
