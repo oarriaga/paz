@@ -96,6 +96,13 @@ class SequentialProcessor(object):
             if processor.name == name:
                 self.processors.remove(processor)
 
+    def pop(self, index=-1):
+        """Pops processor in given index from sequence
+        # Arguments
+            index: Int.
+        """
+        return self.processors.pop(index)
+
     def get_processor(self, name):
         """Gets processor from sequencer
         # Arguments
