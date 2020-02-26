@@ -1,4 +1,3 @@
-from paz.pipelines import DetectionAugmentation
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.core import SequentialProcessor
@@ -47,15 +46,9 @@ testor.add(pr.DenormalizeBoxes2D())
 testor.add(pr.FilterClassBoxes2D(class_names[1:]))
 testor.add(pr.CastImageToInts())
 testor.add(pr.DrawBoxes2D(class_names))
-testor.add(pr.ShowImage())
+testor.add(pr.ShowImage('image'))
 
 
-sample_arg = 2
-sample = data[sample_arg]
-boxes = testor(image=sample['image'], boxes=sample['boxes'].copy())
-
-
-def go_batch():
-    for sample_arg in range(batch_size):
-        sample = data[sample_arg]
-        testor(image=sample['image'], boxes=sample['boxes'].copy())
+for sample_arg in range(batch_size):
+    sample = data[sample_arg]
+    testor(sample)
