@@ -19,9 +19,8 @@ voc_root = './examples/object_detection/VOCdevkit'
 
 def get_annotation(image_id):
     """
-
-    Args:
-        image_id: int,image_id of the image for which ground truth is needed
+    Arguments:
+        image_id: Int. ID of the image for which ground truth is needed
 
     Returns:
         boxes: numpy array, bounding boxes of the image
@@ -31,12 +30,9 @@ def get_annotation(image_id):
 
     """
     annotation_file = os.path.join(
-        voc_root, 'VOC2007', "Annotations", "%s.xml" % image_id
-    )
-    objects = ET.parse(annotation_file).findall("object")
-    boxes = []
-    labels = []
-    is_difficult = []
+        voc_root, 'VOC2007', 'Annotations', '%s.xml' % image_id)
+    objects = ET.parse(annotation_file).findall('object')
+    boxes, labels, is_difficult = [], [], []
     for obj in objects:
         class_name = obj.find('name').text.lower().strip()
         bbox = obj.find('bndbox')
@@ -55,10 +51,9 @@ def get_annotation(image_id):
             np.array(is_difficult, dtype='bool'))
 
 
-def get_predicition_ground_truths(dataset, detector):
+def get_predictions(dataset, detector):
     """
-
-    Args:
+    Arguments:
         dataset: List containing information of the images from the
         Test dataset
         detector : Object for inference
@@ -67,48 +62,42 @@ def get_predicition_ground_truths(dataset, detector):
         predictions_boxes: List containing prediction boxes
         predictions_labels: List containing corresponding prediction labels
         predictions_scores: List containing corresponding prediction scores
+    """
+    boxes, labels, scores = [], [], []
+    for image in dataset:
+        frame = ops.load_image(image['image'])
+        results = detector({'image': frame})
+        box, label, score = [], [], []
+        for box2D in results['boxes2D']:
+            score.append(box2D.score)
+            box.append(list(box2D.coordinates))
+            label.append(class_dict[box2D.class_name])
+        boxes.append(np.array(box, dtype=np.float32))
+        labels.append(np.array(label))
+        scores.append(np.array(score, dtype=np.float32))
+    return boxes, labels, scores
+
+
+def get_ground_truths(dataset):
+    """
+    Arguments:
+        dataset: List containing information of the images from the
+        Test dataset
+
+    Returns:
         ground_truth_boxes: List containing ground truth boxes
         ground_truth_labels: List containing corresponding ground truth labels
         ground_truth_difficults: List containing corresponding
         ground truth difficults
-
-
     """
-
-    predictions_boxes = []
-    predictions_labels = []
-    predictions_scores = []
-    ground_truth_boxes = []
-    ground_truth_labels = []
-    ground_truth_difficults = []
-
+    boxes, labels, difficults = [], [], []
     for image in dataset:
-        print(image['image'])
-        frame = ops.load_image(image['image'])
-        results = detector({'image': frame})
-        predictions_box = []
-        predictions_label = []
-        predictions_score = []
-
-        for result in results['boxes2D']:
-            predictions_box.append(list(result.coordinates))
-            predictions_label.append(class_dict[result.class_name])
-            predictions_score.append(result.score)
-        predictions_boxes.append(np.array(predictions_box, dtype=np.float32))
-        predictions_labels.append(np.array(predictions_label))
-        predictions_scores.append(
-            np.array(predictions_score, dtype=np.float32)
-        )
-
         image_id = image['image'].split('/')[-1].split('.')[0]
-        ground_truth_box, ground_truth_label, ground_truth_difficult = \
-            get_annotation(image_id)
-        ground_truth_boxes.append(ground_truth_box)
-        ground_truth_labels.append(ground_truth_label)
-        ground_truth_difficults.append(ground_truth_difficult)
-
-    return predictions_boxes, predictions_labels, predictions_scores, \
-           ground_truth_boxes, ground_truth_labels, ground_truth_difficults
+        box, label, difficult = get_annotation(image_id)
+        boxes.append(box)
+        labels.append(label)
+        difficults.append(difficult)
+    return boxes, labels, difficults
 
 
 score_thresh, nms_thresh, labels = 0.01, .45, get_class_names('VOC')
@@ -126,17 +115,18 @@ for data_name, data_split in zip(data_names, data_splits):
     datasets.append(data_manager.load_data())
 
 
-predictions_boxes, predictions_labels, predictions_scores, \
-ground_truth_boxes, ground_truth_labels, ground_truth_difficults \
-    = get_predicition_ground_truths(datasets[1], detector)
+predictions_boxes, predictions_labels, predictions_scores = get_predictions(datasets[1], detector)
+ground_truth_boxes, ground_truth_labels, ground_truth_difficults = get_ground_truths(datasets[1])
 
 result = ops.evaluate_VOC(
-            predictions_boxes,
-            predictions_labels,
-            predictions_scores,
-            ground_truth_boxes,
-            ground_truth_labels,
-            ground_truth_difficults,
+            detector,
+            dataset,
+            # predictions_boxes,
+            # predictions_labels,
+            # predictions_scores,
+            # ground_truth_boxes,
+            # ground_truth_labels,
+            # ground_truth_difficults,
             iou_thresh=0.5,
             use_07_metric=True)
 
