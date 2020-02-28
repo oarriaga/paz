@@ -2,7 +2,7 @@ from __future__ import division
 
 import numpy as np
 
-from .opencv_ops import *
+from .opencv_ops import load_image
 from ..messages import Box2D
 
 
@@ -624,7 +624,7 @@ def evaluate_VOC(
 
     Args:
         dataset: List containing information of the images and their data
-        from the Test dataset
+                from the Test dataset
         detector : Object for inference
         class_dict: Dictionary of class names and their id
         iou_thresh (float): A prediction is correct if its
@@ -986,7 +986,7 @@ def get_predictions(dataset, detector, class_dict):
     """
     Arguments:
         dataset: List containing information of the images from the
-        Test dataset
+                Test dataset
         detector : Object for inference
         class_dict: Dictionary of class names and their id
 
@@ -1014,7 +1014,7 @@ def get_ground_truths(dataset):
     """
     Arguments:
         dataset: List containing information of the images from the
-        Test dataset
+                Test dataset
 
     Returns:
         ground_truth_boxes: List containing ground truth boxes
