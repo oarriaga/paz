@@ -8,11 +8,13 @@ from ..core import Loader
 
 class VOC(Loader):
     def __init__(self, path=None, split='train', class_names='all',
-                 name='VOC2007', with_difficult_objects=True):
+                 name='VOC2007', with_difficult_objects=True,
+                 evaluate=False):
 
         super(VOC, self).__init__(path, split, class_names, name)
 
         self.with_difficult_objects = with_difficult_objects
+        self.evaluate = evaluate
         self._class_names = class_names
         if class_names == 'all':
             self._class_names = get_class_names('VOC')
@@ -38,7 +40,8 @@ class VOC(Loader):
                                 split,
                                 self._class_names,
                                 self.with_difficult_objects,
-                                self.path)
+                                self.path,
+                                self.evaluate)
         self.images_path = self.parser.images_path
         self.arg_to_class = self.parser.arg_to_class
         ground_truth_data = self.parser.load_data()
@@ -61,7 +64,8 @@ class VOCParser(object):
 
     def __init__(self, dataset_name='VOC2007', split='train',
                  class_names='all', with_difficult_objects=True,
-                 dataset_path='../datasets/VOCdevkit/'):
+                 dataset_path='../datasets/VOCdevkit/',
+                 evaluate=False):
 
         if dataset_name not in ['VOC2007', 'VOC2012']:
             raise Exception('Invalid dataset name.')
@@ -77,6 +81,7 @@ class VOCParser(object):
         self.annotations_path = os.path.join(self.dataset_path, 'Annotations/')
         self.images_path = os.path.join(self.dataset_path, 'JPEGImages/')
         self.with_difficult_objects = with_difficult_objects
+        self.evaluate = evaluate
 
         self.class_names = class_names
         if self.class_names == 'all':
@@ -111,6 +116,9 @@ class VOCParser(object):
             size_tree = root.find('size')
             width = float(size_tree.find('width').text)
             height = float(size_tree.find('height').text)
+            if self.evaluate:
+                width = 1
+                height = 1
             for object_tree in root.findall('object'):
                 difficulty = int(object_tree.find('difficult').text)
 
@@ -135,7 +143,13 @@ class VOCParser(object):
             # self.data[self.images_path + image_name] = label_data
             image_path = self.images_path + image_name
             box_data = np.asarray(box_data)
-            self.data.append({'image': image_path, 'boxes': box_data})
+            difficulties = np.asarray(difficulties, dtype=bool)
+            if self.evaluate:
+                self.data.append({'image': image_path,
+                                  'boxes': box_data,
+                                  'difficulties': difficulties})
+            else:
+                self.data.append({'image': image_path, 'boxes': box_data})
 
     def load_data(self):
         return self.data
