@@ -1,6 +1,8 @@
 from __future__ import division
 
 import numpy as np
+
+from .opencv_ops import *
 from ..messages import Box2D
 
 
@@ -609,12 +611,9 @@ def apply_offsets(coordinates, offset_scales):
 
 
 def evaluate_VOC(
-        prediction_boxes,
-        prediction_labels,
-        prediction_scores,
-        ground_truth_boxes,
-        ground_truth_labels,
-        ground_truth_difficulties=None,
+        detector,
+        dataset,
+        class_dict,
         iou_thresh=0.5,
         use_07_metric=False):
     """Calculate average precisions based on evaluation code of PASCAL VOC.
@@ -624,44 +623,10 @@ def evaluate_VOC(
     The code is based on the evaluation code used in PASCAL VOC Challenge.
 
     Args:
-        prediction_boxes (iterable of numpy.ndarray): An iterable of :math:`N`
-            sets of bounding boxes.
-            Its index corresponds to an index for the base dataset.
-            Each element of :obj:`prediction_boxes` is a set of coordinates
-            of bounding boxes. This is an array whose shape is :math:`(R, 4)`,
-            where :math:`R` corresponds
-            to the number of bounding boxes, which may vary among boxes.
-            The second axis corresponds to
-            :math:`y_{min}, x_{min}, y_{max}, x_{max}` of a bounding box.
-        prediction_labels (iterable of numpy.ndarray): An iterable of labels.
-            Similar to :obj:`prediction_boxes`, its index corresponds to an
-            index for the base dataset. Its length is :math:`N`.
-        prediction_scores (iterable of numpy.ndarray):
-            An iterable of confidence
-            scores for predicted bounding boxes.
-            Similar to :obj:`prediction_boxes`,
-            its index corresponds to an index for the base dataset.
-            Its length is :math:`N`.
-        ground_truth_boxes (iterable of numpy.ndarray):
-            An iterable of ground truth
-            bounding boxes
-            whose length is :math:`N`.
-            An element of :obj:`ground_truth_boxes` is a
-            bounding box whose shape is :math:`(R, 4)`.
-             Note that the number of
-            bounding boxes in each image does not need to be
-            same as the number
-            of corresponding predicted boxes.
-        ground_truth_labels (iterable of numpy.ndarray):
-            An iterable of ground truth
-            labels which are organized similarly to :obj:`ground_truth_boxes`.
-        ground_truth_difficulties (iterable of numpy.ndarray):
-            An iterable of boolean
-            arrays which is organized similarly to :obj:`ground_truth_boxes`.
-            This tells whether the
-            corresponding ground truth bounding box is difficult or not.
-            By default, this is :obj:`None`. In that case, this function
-            considers all bounding boxes to be not difficult.
+        dataset: List containing information of the images and their data
+        from the Test dataset
+        detector : Object for inference
+        class_dict: Dictionary of class names and their id
         iou_thresh (float): A prediction is correct if its
             Intersection over
             Union with the ground truth is above this value.
@@ -684,6 +649,9 @@ def evaluate_VOC(
         * **map** (*float*): The average of Average Precisions over classes.
 
     """
+
+    prediction_boxes, prediction_labels, prediction_scores = get_predictions(dataset, detector, class_dict)
+    ground_truth_boxes, ground_truth_labels, ground_truth_difficulties = get_ground_truths(dataset)
 
     num_positives, score, match = calculate_scores_and_matches(
         prediction_boxes,
@@ -1012,3 +980,52 @@ def calc_detection_voc_ap(precision, recall, use_07_metric=False):
             )
 
     return ap
+
+
+def get_predictions(dataset, detector, class_dict):
+    """
+    Arguments:
+        dataset: List containing information of the images from the
+        Test dataset
+        detector : Object for inference
+        class_dict: Dictionary of class names and their id
+
+    Returns:
+        predictions_boxes: List containing prediction boxes
+        predictions_labels: List containing corresponding prediction labels
+        predictions_scores: List containing corresponding prediction scores
+    """
+    boxes, labels, scores = [], [], []
+    for image in dataset:
+        frame = load_image(image['image'])
+        results = detector({'image': frame})
+        box, label, score = [], [], []
+        for box2D in results['boxes2D']:
+            score.append(box2D.score)
+            box.append(list(box2D.coordinates))
+            label.append(class_dict[box2D.class_name])
+        boxes.append(np.array(box, dtype=np.float32))
+        labels.append(np.array(label))
+        scores.append(np.array(score, dtype=np.float32))
+    return boxes, labels, scores
+
+
+def get_ground_truths(dataset):
+    """
+    Arguments:
+        dataset: List containing information of the images from the
+        Test dataset
+
+    Returns:
+        ground_truth_boxes: List containing ground truth boxes
+        ground_truth_labels: List containing corresponding ground truth labels
+        ground_truth_difficults: List containing corresponding
+        ground truth difficults
+    """
+
+    boxes, labels, difficults = [], [], []
+    for image in dataset:
+        boxes.append(np.array(image['boxes'][:, :4]))
+        labels.append(np.array(image['boxes'][:, 4]))
+        difficults.append(np.array(image['difficulties']))
+    return boxes, labels, difficults
