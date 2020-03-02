@@ -122,17 +122,18 @@ class VOCParser(object):
             for object_tree in root.findall('object'):
                 difficulty = int(object_tree.find('difficult').text)
 
-                if difficulty == 1 and not(self.with_difficult_objects):
+                if difficulty == 1 and not (self.with_difficult_objects):
                     continue
 
                 class_name = object_tree.find('name').text
                 if class_name in self.class_names:
                     class_arg = self.class_to_arg[class_name]
                     bounding_box = object_tree.find('bndbox')
-                    xmin = float(bounding_box.find('xmin').text) / width
-                    ymin = float(bounding_box.find('ymin').text) / height
-                    xmax = float(bounding_box.find('xmax').text) / width
-                    ymax = float(bounding_box.find('ymax').text) / height
+                    # VOC dataset format follows Matlab, in which indexes start from 0
+                    xmin = (float(bounding_box.find('xmin').text) - 1.0) / width
+                    ymin = (float(bounding_box.find('ymin').text) - 1.0) / height
+                    xmax = (float(bounding_box.find('xmax').text) - 1.0) / width
+                    ymax = (float(bounding_box.find('ymax').text) - 1.0) / height
 
                     box_data.append([xmin, ymin, xmax, ymax, class_arg])
                     difficulties.append(difficulty)

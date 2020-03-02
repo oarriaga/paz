@@ -10,7 +10,9 @@ from paz.core.ops import quaternion_to_rotation_matrix
 from paz.core.ops import encode
 from paz.core.ops import match
 from paz.core.ops import decode
+from paz.core.ops import get_ground_truths
 from paz.models.detection.utils import create_prior_boxes
+from paz.datasets import VOC
 
 
 boxes_B = np.array([[39, 63, 203, 112],
@@ -57,6 +59,10 @@ boxes_with_label = np.array([[47., 239., 194., 370.,  12.],
                             [138., 199., 206., 300.,  19.],
                             [122., 154., 214., 194.,  18.],
                             [238., 155., 306., 204.,   9.]])
+
+target_image_count = [16551, 4952]
+
+target_box_count = [47223, 14976]
 
 
 def test_compute_iou():
@@ -138,6 +144,27 @@ def test_prior_boxes():
     assert np.all(prior_boxes[:10].astype('float32') == target_prior_boxes)
 
 
+def test_data_loader_check():
+    voc_root = './examples/object_detection/data/VOCdevkit/'
+    data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
+    data_splits = [['trainval', 'trainval'], 'test']
+
+    data_managers, datasets = [], []
+    for data_name, data_split in zip(data_names, data_splits):
+        data_manager = VOC(voc_root, data_split, name=data_name, evaluate=True)
+        data_managers.append(data_manager)
+        datasets.append(data_manager.load_data())
+
+    image_count = []
+    boxes_count = []
+    for dataset in datasets:
+        boxes, labels, difficults = get_ground_truths(dataset)
+        boxes = np.concatenate(boxes, axis=0)
+        image_count.append(len(dataset))
+        boxes_count.append(len(boxes))
+    assert image_count == target_image_count
+    assert target_box_count == boxes_count
+
 test_compute_iou()
 test_compute_ious()
 test_compute_ious_shape()
@@ -150,3 +177,4 @@ test_prior_boxes()
 test_match_box()
 test_to_encode()
 test_to_decode()
+# test_data_loader_check()
