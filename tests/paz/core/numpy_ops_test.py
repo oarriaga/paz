@@ -144,26 +144,27 @@ def test_prior_boxes():
     assert np.all(prior_boxes[:10].astype('float32') == target_prior_boxes)
 
 
-def test_data_loader_check():
-    voc_root = './examples/object_detection/data/VOCdevkit/'
-    data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
-    data_splits = [['trainval', 'trainval'], 'test']
-
-    data_managers, datasets = [], []
-    for data_name, data_split in zip(data_names, data_splits):
-        data_manager = VOC(voc_root, data_split, name=data_name, evaluate=True)
-        data_managers.append(data_manager)
-        datasets.append(data_manager.load_data())
-
-    image_count = []
-    boxes_count = []
-    for dataset in datasets:
-        boxes, labels, difficults = get_ground_truths(dataset)
-        boxes = np.concatenate(boxes, axis=0)
-        image_count.append(len(dataset))
-        boxes_count.append(len(boxes))
-    assert image_count == target_image_count
-    assert target_box_count == boxes_count
+# def test_data_loader_check():
+#    voc_root = './examples/object_detection/data/VOCdevkit/'
+#    data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
+#    data_splits = [['trainval', 'trainval'], 'test']
+#
+#    data_managers, datasets = [], []
+#    for data_name, data_split in zip(data_names, data_splits):
+#        data_manager = VOC(voc_root, data_split, name=data_name, evaluate=True)
+#        data_managers.append(data_manager)
+#        datasets.append(data_manager.load_data())
+#
+#    image_count = []
+#    boxes_count = []
+#    for dataset in datasets:
+#        boxes, labels, difficults = get_ground_truths(dataset)
+#        boxes = np.concatenate(boxes, axis=0)
+#        image_count.append(len(dataset))
+#        boxes_count.append(len(boxes))
+#    assert image_count == target_image_count
+#    assert target_box_count == boxes_count
+#
 
 test_compute_iou()
 test_compute_ious()
