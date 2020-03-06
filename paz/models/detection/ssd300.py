@@ -17,7 +17,8 @@ WEIGHT_PATH = (
 
 def SSD300(num_classes=21, base_weights='VOC', head_weights='VOC',
            input_shape=(300, 300, 3), num_priors=[4, 6, 6, 6, 4, 4],
-           l2_loss=0.0005, return_base=False, trainable_base=True):
+           l2_loss=0.0005, return_base=False, trainable_base=True,
+           weights_path=None):
 
     """Single-shot-multibox detector for 300x300x3 BGR input images.
     # Arguments
@@ -187,7 +188,10 @@ def SSD300(num_classes=21, base_weights='VOC', head_weights='VOC',
 
     model = Model(inputs=image, outputs=outputs, name='SSD300')
 
-    if ((base_weights is not None) or (head_weights is not None)):
+    if weights_path:
+        model.load_weights(weights_path, by_name=False)
+
+    elif ((base_weights is not None) or (head_weights is not None)):
         model_filename = ['SSD300', str(base_weights), str(head_weights)]
         model_filename = '_'.join(['-'.join(model_filename), 'weights.hdf5'])
         weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,

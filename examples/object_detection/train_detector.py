@@ -8,6 +8,7 @@ from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiboxLoss
 from paz.core.sequencer import ProcessingSequencer
+from paz.optimization.callbacks import Evaluate
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
@@ -15,6 +16,8 @@ parser.add_argument('-bs', '--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
                     help='Batch size for training')
+parser.add_argument('-et', '--eval_per_epoch', default=10, type=int,
+                    help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for SGD')
 parser.add_argument('-m', '--momentum', default=0.9, type=float,
@@ -75,8 +78,9 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
-callbacks = [checkpoint, log, schedule]
-
+evaluate = Evaluate(save_path, class_names, data_splits[1],
+                    data_names[1], args.data_path, args.eval_per_epoch)
+callbacks = [checkpoint, log, schedule, evaluate]
 
 # training
 model.fit_generator(

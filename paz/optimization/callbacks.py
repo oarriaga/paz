@@ -6,6 +6,11 @@ import tensorflow.keras.backend as K
 
 from ..core import ops
 
+from paz.models import SSD300
+from paz.pipelines import SingleShotInference
+from paz.evaluation import evaluate
+from paz.datasets import VOC
+
 
 class DrawInferences(Callback):
     """Saves an image with its corresponding inferences
@@ -80,3 +85,48 @@ class LearningRateScheduler(Callback):
         if epoch in self.scheduled_epochs:
             self.learning_rate = self.learning_rate * self.gamma_decay
         return self.learning_rate
+
+
+class Evaluate(Callback):
+    def __init__(
+            self, file_path, class_names, data_split,
+            data_name, dataset_path, eval_per_epoch):
+        super(Evaluate, self).__init__()
+        self.file_path = file_path
+        self.class_names = class_names
+        self.data_split = data_split
+        self.data_name = data_name
+        self.dataset_path = dataset_path
+        self.eval_per_epoch = eval_per_epoch
+
+    def on_epoch_end(self, epoch, logs):
+        if (epoch+1) % self.eval_per_epoch == 0:
+            score_thresh, nms_thresh, labels = 0.01, .45, self.class_names
+            model = SSD300(
+                weights_path=self.file_path.format(
+                    epoch=epoch + 1,
+                    **logs)
+            )
+            detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
+            class_dict = {
+                class_name: class_arg for class_arg, class_name in enumerate(self.class_names)
+            }
+
+            data_manager = VOC(self.dataset_path, self.data_split, name=self.data_name, evaluate=True)
+            dataset = data_manager.load_data()
+
+            result = evaluate(
+                        detector,
+                        dataset,
+                        class_dict,
+                        iou_thresh=0.5,
+                        use_07_metric=True)
+
+            result_str = "mAP: {:.4f}\n".format(result["map"])
+            metrics = {'mAP': result["map"]}
+            for arg, ap in enumerate(result["ap"]):
+                if arg == 0 or np.isnan(ap):  # skip background
+                    continue
+                metrics[self.class_names[arg]] = ap
+                result_str += "{:<16}: {:.4f}\n".format(self.class_names[arg], ap)
+            print(result_str)
