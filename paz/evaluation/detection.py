@@ -126,7 +126,7 @@ def calculate_relevance_metrics(num_positives, scores, matches):
     return precision, recall
 
 
-def calculate_average_precisions(precision, recall):
+def calculate_average_precisions(precision, recall, use_07_metric=False):
     """Calculate average precisions based based on PASCAL VOC evaluation
     Arguments:
         num_positives: Dict. with number of positives for each class
@@ -141,28 +141,47 @@ def calculate_average_precisions(precision, recall):
         if precision[class_arg] is None or recall[class_arg] is None:
             average_precisions[class_arg] = np.nan
             continue
-        # first append sentinel values at the end
-        average_precision = np.concatenate(
-            ([0], np.nan_to_num(precision[class_arg]), [0]))
-        average_recall = np.concatenate(([0], recall[class_arg], [1]))
 
-        average_precision = np.maximum.accumulate(
-            average_precision[::-1])[::-1]
+        if use_07_metric:
+            # 11 point metric
+            average_precisions[class_arg] = 0
+            for t in np.arange(0., 1.1, 0.1):
+                if np.sum(recall[class_arg] >= t) == 0:
+                    p_interpolation = 0
+                else:
+                    p_interpolation = np.max(
+                        np.nan_to_num(
+                            precision[class_arg]
+                        )[recall[class_arg] >= t]
+                    )
+                average_precision_class = average_precisions[class_arg]
+                average_precision_class = (average_precision_class +
+                                           (p_interpolation / 11))
+                average_precisions[class_arg] = average_precision_class
 
-        # to calculate area under PR curve, look for points
-        # where X axis (recall) changes value
-        recall_change_arg = np.where(
-            average_recall[1:] != average_recall[:-1])[0]
+        else:
+            # first append sentinel values at the end
+            average_precision = np.concatenate(
+                ([0], np.nan_to_num(precision[class_arg]), [0]))
+            average_recall = np.concatenate(([0], recall[class_arg], [1]))
 
-        # and sum (\Delta recall) * precision
-        average_precisions[class_arg] = np.sum(
-            (average_recall[recall_change_arg + 1] -
-             average_recall[recall_change_arg]) *
-            average_precision[recall_change_arg + 1])
+            average_precision = np.maximum.accumulate(
+                average_precision[::-1])[::-1]
+
+            # to calculate area under PR curve, look for points
+            # where X axis (recall) changes value
+            recall_change_arg = np.where(
+                average_recall[1:] != average_recall[:-1])[0]
+
+            # and sum (\Delta recall) * precision
+            average_precisions[class_arg] = np.sum(
+                (average_recall[recall_change_arg + 1] -
+                 average_recall[recall_change_arg]) *
+                average_precision[recall_change_arg + 1])
     return average_precisions
 
 
-def evaluate(detector, dataset, class_to_arg, iou_thresh=0.5):
+def evaluate(detector, dataset, class_to_arg, iou_thresh=0.5, use_07_metric=False):
     """Calculate average precisions based on evaluation code of PASCAL VOC.
     Arguments:
         dataset: List of dictionaries containing 'image' as key and a
@@ -176,5 +195,5 @@ def evaluate(detector, dataset, class_to_arg, iou_thresh=0.5):
     positives, score, match = compute_matches(
         dataset, detector, class_to_arg, iou_thresh)
     precision, recall = calculate_relevance_metrics(positives, score, match)
-    average_precisions = calculate_average_precisions(precision, recall)
+    average_precisions = calculate_average_precisions(precision, recall, use_07_metric)
     return {'ap': average_precisions, 'map': np.nanmean(average_precisions)}
