@@ -86,12 +86,13 @@ class LearningRateScheduler(Callback):
 
 class EvaluateMAP(Callback):
     def __init__(
-            self, class_names, dataset, eval_per_epoch, detector):
+            self, class_names, dataset, eval_per_epoch, detector, save_path):
         super(EvaluateMAP, self).__init__()
         self.class_names = class_names
         self.dataset = dataset
         self.eval_per_epoch = eval_per_epoch
         self.detector = detector
+        self.save_path = save_path
 
     def on_epoch_end(self, epoch, logs):
         if (epoch+1) % self.eval_per_epoch == 0:
@@ -115,3 +116,7 @@ class EvaluateMAP(Callback):
                 metrics[self.class_names[arg]] = ap
                 result_str += "{:<16}: {:.4f}\n".format(self.class_names[arg], ap)
             print(result_str)
+
+            # Saving the evaluation results
+            with open(os.path.join(self.save_path,"MAP_Evaluation_Log.txt"), "a") as myfile:
+                myfile.write("Epoch: {}\n{}\n".format(str(epoch),result_str))

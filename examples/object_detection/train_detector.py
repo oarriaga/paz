@@ -92,7 +92,9 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
 detector = SingleShotInference(model, class_names, 0.01, 0.45)
-evaluate = EvaluateMAP(class_names, eval_datasets[0], args.eval_per_epoch, detector)
+evaluate = EvaluateMAP(class_names, eval_datasets[0],
+                       args.eval_per_epoch, detector,
+                       args.save_path)
 callbacks = [checkpoint, log, schedule, evaluate]
 
 # training
