@@ -6,8 +6,6 @@ import tensorflow.keras.backend as K
 
 from ..core import ops
 
-from paz.models import SSD300
-from paz.pipelines import SingleShotInference
 from paz.evaluation import evaluate
 
 
@@ -88,9 +86,8 @@ class LearningRateScheduler(Callback):
 
 class EvaluateMAP(Callback):
     def __init__(
-            self, file_path, class_names, dataset, eval_per_epoch, detector):
+            self, class_names, dataset, eval_per_epoch, detector):
         super(EvaluateMAP, self).__init__()
-        self.file_path = file_path
         self.class_names = class_names
         self.dataset = dataset
         self.eval_per_epoch = eval_per_epoch
@@ -98,14 +95,7 @@ class EvaluateMAP(Callback):
 
     def on_epoch_end(self, epoch, logs):
         if (epoch+1) % self.eval_per_epoch == 0:
-            # score_thresh, nms_thresh, labels = 0.01, .45, self.class_names
-            # model = SSD300(
-            #     weights_path=self.file_path.format(
-            #         epoch=epoch + 1,
-            #         **logs)
-            # )
-            #
-            # detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
+
             class_dict = {
                 class_name: class_arg for class_arg, class_name in enumerate(self.class_names)
             }

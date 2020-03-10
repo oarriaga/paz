@@ -60,8 +60,8 @@ model.summary()
 # compile model with loss and optimizer
 loss = MultiBoxLoss()
 
-losses = [loss._smooth_l1, loss._cross_entropy,
-          loss.localization, loss.positive_classification,
+losses = [loss.localization,
+          loss.positive_classification,
           loss.negative_classification]
 
 # metrics
@@ -92,8 +92,7 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
 detector = SingleShotInference(model, class_names, 0.01, 0.45)
-print(eval_datasets[0])
-evaluate = EvaluateMAP(save_path, class_names, eval_datasets[0], args.eval_per_epoch, detector)
+evaluate = EvaluateMAP(class_names, eval_datasets[0], args.eval_per_epoch, detector)
 callbacks = [checkpoint, log, schedule, evaluate]
 
 # training
