@@ -1,16 +1,15 @@
 from __future__ import division
 
-import os
 import argparse
-import xml.etree.ElementTree as ET
+import os
 
 import numpy as np
 from paz.core import ops
 from paz.datasets import VOC
 from paz.datasets import get_class_names
+from paz.evaluation import evaluate
 from paz.models import SSD300
 from paz.pipelines import SingleShotInference
-from paz.evaluation import evaluate
 
 class_names = get_class_names()
 class_dict = {
