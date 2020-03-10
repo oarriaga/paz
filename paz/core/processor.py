@@ -49,7 +49,7 @@ class Processor(object):
             self._probability = probability
             self._process = self.stochastic_process
         else:
-            raise ValueError('Probability has to be between [0, 1]')
+            raise ValueError('Probability has to be between [0, 1] or `None`')
 
     def stochastic_process(self, kwargs):
         if np.random.random() < self.probability:
