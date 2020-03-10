@@ -118,5 +118,5 @@ class EvaluateMAP(Callback):
             print(result_str)
 
             # Saving the evaluation results
-            with open(os.path.join(self.save_path,"MAP_Evaluation_Log.txt"), "a") as myfile:
-                myfile.write("Epoch: {}\n{}\n".format(str(epoch),result_str))
+            with open(os.path.join(self.save_path,"MAP_Evaluation_Log.txt"), "a") as eval_log_file:
+                eval_log_file.write("Epoch: {}\n{}\n".format(str(epoch), result_str))
