@@ -17,7 +17,7 @@ parser.add_argument('-bs', '--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
                     help='Batch size for training')
-parser.add_argument('-et', '--eval_per_epoch', default=10, type=int,
+parser.add_argument('-et', '--evaluation_period', default=5, type=int,
                     help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for SGD')
@@ -42,14 +42,14 @@ data_splits = [['trainval', 'trainval'], 'test']
 data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
 
 # loading datasets
-data_managers, datasets, eval_datasets = [], [], []
+data_managers, datasets, eval_data_managers = [], [], []
 for data_name, data_split in zip(data_names, data_splits):
     data_manager = VOC(args.data_path, data_split, name=data_name)
     data_managers.append(data_manager)
     datasets.append(data_manager.load_data())
     if data_split == 'test':
         eval_data_manager = VOC(args.data_path, data_split, name=data_name, evaluate=True)
-        eval_datasets.append(eval_data_manager.load_data())
+        eval_data_managers.append(eval_data_manager)
 
 # instantiating model
 num_classes = data_managers[0].num_classes
@@ -60,11 +60,11 @@ model.summary()
 # compile model with loss and optimizer
 loss = MultiBoxLoss()
 
+# Instantiating Metrics
 losses = [loss.localization,
           loss.positive_classification,
           loss.negative_classification]
 
-# metrics
 metrics = {'boxes': losses}
 
 model.compile(optimizer, loss.compute_loss, metrics)
@@ -92,8 +92,9 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
 detector = SingleShotInference(model, class_names, 0.01, 0.45)
-evaluate = EvaluateMAP(class_names, eval_datasets[0],
-                       args.eval_per_epoch, detector,
+evaluate = EvaluateMAP(eval_data_managers[0],
+                       detector,
+                       args.evaluation_period,
                        args.save_path)
 callbacks = [checkpoint, log, schedule, evaluate]
 

@@ -67,7 +67,8 @@ class SingleShotInference(SequentialProcessor):
                     pr.SubtractMeanImage(self.mean),
                     pr.CastImageToFloat(),
                     pr.ExpandDims(axis=0, topic='image')]
-        self.add(pr.PredictBoxes(model, 'image', pipeline))
+        self.add(pr.Predict(model, 'image', 'boxes', pipeline))
+        self.add(pr.Squeeze(axis=None, topic='boxes'))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances=[.1, .2]))
         self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
         self.add(pr.FilterBoxes(class_names, score_thresh))

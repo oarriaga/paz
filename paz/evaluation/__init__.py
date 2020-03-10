@@ -1,1 +1,1 @@
-from .detection import evaluate
+from .detection import evaluateMAP

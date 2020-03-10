@@ -6,7 +6,7 @@ import tensorflow.keras.backend as K
 
 from ..core import ops
 
-from paz.evaluation import evaluate
+from paz.evaluation import evaluateMAP
 
 
 class DrawInferences(Callback):
@@ -86,22 +86,23 @@ class LearningRateScheduler(Callback):
 
 class EvaluateMAP(Callback):
     def __init__(
-            self, class_names, dataset, eval_per_epoch, detector, save_path):
+            self, data_manager, detector, period, save_path):
         super(EvaluateMAP, self).__init__()
-        self.class_names = class_names
-        self.dataset = dataset
-        self.eval_per_epoch = eval_per_epoch
+        self.data_manager = data_manager
         self.detector = detector
+        self.period = period
         self.save_path = save_path
+        self.dataset = data_manager.load_data()
+        self.class_names = self.data_manager.class_names
 
     def on_epoch_end(self, epoch, logs):
-        if (epoch+1) % self.eval_per_epoch == 0:
+        if (epoch+1) % self.period == 0:
 
             class_dict = {
                 class_name: class_arg for class_arg, class_name in enumerate(self.class_names)
             }
 
-            result = evaluate(
+            result = evaluateMAP(
                         self.detector,
                         self.dataset,
                         class_dict,

@@ -234,26 +234,6 @@ class FilterBoxes(Processor):
         return kwargs
 
 
-class PredictBoxes(Processor):
-    """TODO: Extend to have pre-processing pipeline.
-    """
-    def __init__(self, model, input_topic, processors=None):
-        super(PredictBoxes, self).__init__()
-        self.model = model
-        self.processors = processors
-        if processors is not None:
-            self.process = SequentialProcessor(processors)
-        self.input_topic = input_topic
-
-    def call(self, kwargs):
-        input_topic = kwargs[self.input_topic ]
-        if self.processors is not None:
-            processing_kwargs = {self.input_topic: input_topic}
-            input_topic = self.process(processing_kwargs)[self.input_topic]
-        kwargs['boxes'] = np.squeeze(self.model.predict(input_topic))
-        return kwargs
-
-
 class ApplyOffsets(Processor):
     def __init__(self, offsets):
         super(ApplyOffsets, self).__init__()

@@ -181,7 +181,7 @@ def calculate_average_precisions(precision, recall, use_07_metric=False):
     return average_precisions
 
 
-def evaluate(detector, dataset, class_to_arg, iou_thresh=0.5, use_07_metric=False):
+def evaluateMAP(detector, dataset, class_to_arg, iou_thresh=0.5, use_07_metric=False):
     """Calculate average precisions based on evaluation code of PASCAL VOC.
     Arguments:
         dataset: List of dictionaries containing 'image' as key and a

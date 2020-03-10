@@ -7,7 +7,7 @@ import numpy as np
 from paz.core import ops
 from paz.datasets import VOC
 from paz.datasets import get_class_names
-from paz.evaluation import evaluate
+from paz.evaluation import evaluateMAP
 from paz.models import SSD300
 from paz.pipelines import SingleShotInference
 
@@ -28,7 +28,8 @@ def test(weights_path):
     """
     score_thresh, nms_thresh, labels = 0.01, .45, get_class_names('VOC')
 
-    model = SSD300(weights_path=weights_path)
+    model = SSD300()
+    model.load_weights(weights_path)
     detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
 
     data_name = 'VOC2007'
@@ -36,7 +37,7 @@ def test(weights_path):
     data_manager = VOC(voc_root, data_split, name=data_name, evaluate=True)
     dataset = data_manager.load_data()
 
-    result = evaluate(
+    result = evaluateMAP(
                 detector,
                 dataset,
                 class_dict,
