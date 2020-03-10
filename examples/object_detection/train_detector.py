@@ -6,9 +6,10 @@ from paz.optimization.callbacks import LearningRateScheduler
 from paz.pipelines import DetectionAugmentation
 from paz.models import SSD300
 from paz.datasets import VOC
-from paz.optimization import MultiboxLoss
+from paz.optimization import MultiBoxLoss
 from paz.core.sequencer import ProcessingSequencer
-from paz.optimization.callbacks import Evaluate
+from paz.optimization.callbacks import EvaluateMAP
+from paz.pipelines import SingleShotInference
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
@@ -41,11 +42,14 @@ data_splits = [['trainval', 'trainval'], 'test']
 data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
 
 # loading datasets
-data_managers, datasets = [], []
+data_managers, datasets, eval_datasets = [], [], []
 for data_name, data_split in zip(data_names, data_splits):
     data_manager = VOC(args.data_path, data_split, name=data_name)
     data_managers.append(data_manager)
     datasets.append(data_manager.load_data())
+    if data_split == 'test':
+        eval_data_manager = VOC(args.data_path, data_split, name=data_name, evaluate=True)
+        eval_datasets.append(eval_data_manager.load_data())
 
 # instantiating model
 num_classes = data_managers[0].num_classes
@@ -54,8 +58,16 @@ model = SSD300(num_classes, base_weights='VGG', head_weights=None)
 model.summary()
 
 # compile model with loss and optimizer
-loss = MultiboxLoss()
-model.compile(optimizer, loss.compute_loss)
+loss = MultiBoxLoss()
+
+losses = [loss._smooth_l1, loss._cross_entropy,
+          loss.localization, loss.positive_classification,
+          loss.negative_classification]
+
+# metrics
+metrics = {'boxes': losses}
+
+model.compile(optimizer, loss.compute_loss, metrics)
 
 # setting data augmentation pipeline
 augmentators = []
@@ -78,8 +90,10 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
-evaluate = Evaluate(save_path, class_names, data_splits[1],
-                    data_names[1], args.data_path, args.eval_per_epoch)
+
+detector = SingleShotInference(model, class_names, 0.01, 0.45)
+print(eval_datasets[0])
+evaluate = EvaluateMAP(save_path, class_names, eval_datasets[0], args.eval_per_epoch, detector)
 callbacks = [checkpoint, log, schedule, evaluate]
 
 # training

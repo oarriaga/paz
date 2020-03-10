@@ -9,7 +9,6 @@ from ..core import ops
 from paz.models import SSD300
 from paz.pipelines import SingleShotInference
 from paz.evaluation import evaluate
-from paz.datasets import VOC
 
 
 class DrawInferences(Callback):
@@ -87,37 +86,33 @@ class LearningRateScheduler(Callback):
         return self.learning_rate
 
 
-class Evaluate(Callback):
+class EvaluateMAP(Callback):
     def __init__(
-            self, file_path, class_names, data_split,
-            data_name, dataset_path, eval_per_epoch):
-        super(Evaluate, self).__init__()
+            self, file_path, class_names, dataset, eval_per_epoch, detector):
+        super(EvaluateMAP, self).__init__()
         self.file_path = file_path
         self.class_names = class_names
-        self.data_split = data_split
-        self.data_name = data_name
-        self.dataset_path = dataset_path
+        self.dataset = dataset
         self.eval_per_epoch = eval_per_epoch
+        self.detector = detector
 
     def on_epoch_end(self, epoch, logs):
         if (epoch+1) % self.eval_per_epoch == 0:
-            score_thresh, nms_thresh, labels = 0.01, .45, self.class_names
-            model = SSD300(
-                weights_path=self.file_path.format(
-                    epoch=epoch + 1,
-                    **logs)
-            )
-            detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
+            # score_thresh, nms_thresh, labels = 0.01, .45, self.class_names
+            # model = SSD300(
+            #     weights_path=self.file_path.format(
+            #         epoch=epoch + 1,
+            #         **logs)
+            # )
+            #
+            # detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
             class_dict = {
                 class_name: class_arg for class_arg, class_name in enumerate(self.class_names)
             }
 
-            data_manager = VOC(self.dataset_path, self.data_split, name=self.data_name, evaluate=True)
-            dataset = data_manager.load_data()
-
             result = evaluate(
-                        detector,
-                        dataset,
+                        self.detector,
+                        self.dataset,
                         class_dict,
                         iou_thresh=0.5,
                         use_07_metric=True)
