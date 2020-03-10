@@ -59,13 +59,13 @@ def translation_error(y_true, y_pred):
 
 
 class PoseEvaluation(object):
-    def __init__(self, processor):
+    def __init__(self, processor, topic='pose6D'):
         self.processor = processor
 
 
 class TranslationError(PoseEvaluation):
     def __init__(self, processor, topic='translation'):
-        super(TranslationError, self).__init__(processor)
+        super(TranslationError, self).__init__(processor, topic)
 
     def __call__(self, y_true, y_pred):
         for y_true_sample, y_pred_sample in zip(y_true, y_pred):
