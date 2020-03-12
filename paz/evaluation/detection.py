@@ -26,7 +26,10 @@ def compute_matches(dataset, detector, class_to_arg, iou_thresh=0.5):
         # obtaining ground truths
         ground_truth_boxes = np.array(sample['boxes'][:, :4])
         ground_truth_class_args = np.array(sample['boxes'][:, 4])
-        difficulties = np.array(sample['difficulties'])
+        if 'difficulties' in sample.keys():
+            difficulties = np.array(sample['difficulties'])
+        else:
+            difficulties = None
         # obtaining predictions
         image = load_image(sample['image'])
         results = detector({'image': image})
@@ -181,7 +184,8 @@ def calculate_average_precisions(precision, recall, use_07_metric=False):
     return average_precisions
 
 
-def evaluateMAP(detector, dataset, class_to_arg, iou_thresh=0.5, use_07_metric=False):
+def evaluateMAP(detector, dataset, class_to_arg, iou_thresh=0.5,
+                use_07_metric=False):
     """Calculate average precisions based on evaluation code of PASCAL VOC.
     Arguments:
         dataset: List of dictionaries containing 'image' as key and a
@@ -195,5 +199,6 @@ def evaluateMAP(detector, dataset, class_to_arg, iou_thresh=0.5, use_07_metric=F
     positives, score, match = compute_matches(
         dataset, detector, class_to_arg, iou_thresh)
     precision, recall = calculate_relevance_metrics(positives, score, match)
-    average_precisions = calculate_average_precisions(precision, recall, use_07_metric)
+    average_precisions = calculate_average_precisions(
+        precision, recall, use_07_metric)
     return {'ap': average_precisions, 'map': np.nanmean(average_precisions)}
