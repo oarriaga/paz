@@ -17,7 +17,7 @@ parser.add_argument('-bs', '--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
                     help='Batch size for training')
-parser.add_argument('-et', '--evaluation_period', default=5, type=int,
+parser.add_argument('-et', '--evaluation_period', default=1, type=int,
                     help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for SGD')
@@ -27,13 +27,14 @@ parser.add_argument('-g', '--gamma_decay', default=0.1, type=float,
                     help='Gamma decay for learning rate scheduler')
 parser.add_argument('-e', '--num_epochs', default=120, type=int,
                     help='Maximum number of epochs before finishing')
+parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
+                    help='Average precision IOU used for evaluation')
 parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
-parser.add_argument('-dp', '--data_path', default='/home/username/Vocdevkit/',
+parser.add_argument('-dp', '--data_path', default='VOCdevkit/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
-                    default=[55, 76],
-                    help='Kernels used in each block e.g. 128 256 512')
+                    default=[55, 76], help='Epochs for reducing learning rate')
 args = parser.parse_args()
 
 optimizer = SGD(args.learning_rate, args.momentum)
@@ -42,31 +43,26 @@ data_splits = [['trainval', 'trainval'], 'test']
 data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
 
 # loading datasets
-data_managers, datasets, eval_data_managers = [], [], []
+data_managers, datasets, evaluation_data_managers = [], [], []
 for data_name, data_split in zip(data_names, data_splits):
     data_manager = VOC(args.data_path, data_split, name=data_name)
     data_managers.append(data_manager)
     datasets.append(data_manager.load_data())
     if data_split == 'test':
-        eval_data_manager = VOC(args.data_path, data_split, name=data_name, evaluate=True)
-        eval_data_managers.append(eval_data_manager)
+        eval_data_manager = VOC(
+            args.data_path, data_split, name=data_name, evaluate=True)
+        evaluation_data_managers.append(eval_data_manager)
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-class_names = data_managers[0].class_names
 model = SSD300(num_classes, base_weights='VGG', head_weights=None)
 model.summary()
 
-# compile model with loss and optimizer
+# Instantiating loss and metrics
 loss = MultiBoxLoss()
-
-# Instantiating Metrics
-losses = [loss.localization,
-          loss.positive_classification,
-          loss.negative_classification]
-
-metrics = {'boxes': losses}
-
+metrics = {'boxes': [loss.localization,
+                     loss.positive_classification,
+                     loss.negative_classification]}
 model.compile(optimizer, loss.compute_loss, metrics)
 
 # setting data augmentation pipeline
@@ -90,13 +86,12 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
-
-detector = SingleShotInference(model, class_names, 0.01, 0.45)
-evaluate = EvaluateMAP(eval_data_managers[0],
-                       detector,
-                       args.evaluation_period,
-                       args.save_path)
-callbacks = [checkpoint, log, schedule, evaluate]
+evaluate = EvaluateMAP(
+    evaluation_data_managers[0],
+    SingleShotInference(model, data_managers[0].class_names),
+    args.evaluation_period,
+    args.save_path,
+    args.AP_IOU)
 
 # training
 model.fit_generator(
@@ -104,7 +99,7 @@ model.fit_generator(
     steps_per_epoch=args.steps_per_epoch,
     epochs=args.num_epochs,
     verbose=1,
-    callbacks=callbacks,
+    callbacks=[checkpoint, log, schedule, evaluate],
     validation_data=sequencers[1],
-    use_multiprocessing=True,
-    workers=4)
+    use_multiprocessing=False,
+    workers=1)
