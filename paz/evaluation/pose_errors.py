@@ -82,5 +82,5 @@ class ADI(PoseEvaluation):
 
         kd_tree = spatial.cKDTree(pred_transforms)
         kd_tree_distances, ids = kd_tree.query(true_transforms, k=1)
-        ADI_error = kd_tree_distances.mean()
-        return ADI_error
+        aDI_error = kd_tree_distances.mean()
+        return aDI_error
