@@ -6,6 +6,8 @@ import tensorflow.keras.backend as K
 
 from ..core import ops
 
+from paz.evaluation import evaluateMAP
+
 
 class DrawInferences(Callback):
     """Saves an image with its corresponding inferences
@@ -80,3 +82,42 @@ class LearningRateScheduler(Callback):
         if epoch in self.scheduled_epochs:
             self.learning_rate = self.learning_rate * self.gamma_decay
         return self.learning_rate
+
+
+class EvaluateMAP(Callback):
+    def __init__(
+            self, data_manager, detector, period, save_path):
+        super(EvaluateMAP, self).__init__()
+        self.data_manager = data_manager
+        self.detector = detector
+        self.period = period
+        self.save_path = save_path
+        self.dataset = data_manager.load_data()
+        self.class_names = self.data_manager.class_names
+
+    def on_epoch_end(self, epoch, logs):
+        if (epoch+1) % self.period == 0:
+
+            class_dict = {
+                class_name: class_arg for class_arg, class_name in enumerate(self.class_names)
+            }
+
+            result = evaluateMAP(
+                        self.detector,
+                        self.dataset,
+                        class_dict,
+                        iou_thresh=0.5,
+                        use_07_metric=True)
+
+            result_str = "mAP: {:.4f}\n".format(result["map"])
+            metrics = {'mAP': result["map"]}
+            for arg, ap in enumerate(result["ap"]):
+                if arg == 0 or np.isnan(ap):  # skip background
+                    continue
+                metrics[self.class_names[arg]] = ap
+                result_str += "{:<16}: {:.4f}\n".format(self.class_names[arg], ap)
+            print(result_str)
+
+            # Saving the evaluation results
+            with open(os.path.join(self.save_path,"MAP_Evaluation_Log.txt"), "a") as eval_log_file:
+                eval_log_file.write("Epoch: {}\n{}\n".format(str(epoch), result_str))

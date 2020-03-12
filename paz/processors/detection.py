@@ -1,6 +1,7 @@
 import numpy as np
 
 from ..core import Processor, Box2D, ops
+from ..core import SequentialProcessor
 from .image import BGR_IMAGENET_MEAN
 
 
@@ -230,21 +231,6 @@ class FilterBoxes(Processor):
         detections = kwargs['boxes']
         kwargs['boxes2D'] = ops.filter_detections(
             detections, self.arg_to_class, self.conf_thresh)
-        return kwargs
-
-
-class PredictBoxes(Processor):
-    """TODO: Extend to have pre-processing pipeline.
-    """
-    def __init__(self, model, mean=BGR_IMAGENET_MEAN):
-        self.model = model
-        super(PredictBoxes, self).__init__()
-
-    def call(self, kwargs):
-        image = ops.resize_image(kwargs['image'], self.model.input_shape[1:3])
-        image = image - BGR_IMAGENET_MEAN
-        image = np.expand_dims(image, 0)
-        kwargs['boxes'] = np.squeeze(self.model.predict(image))
         return kwargs
 
 
