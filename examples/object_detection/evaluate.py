@@ -1,10 +1,8 @@
 from __future__ import division
 
 import argparse
-import os
 
 import numpy as np
-from paz.core import ops
 from paz.datasets import VOC
 from paz.datasets import get_class_names
 from paz.evaluation import evaluateMAP
@@ -38,11 +36,11 @@ def test(weights_path):
     dataset = data_manager.load_data()
 
     result = evaluateMAP(
-                detector,
-                dataset,
-                class_dict,
-                iou_thresh=0.5,
-                use_07_metric=True)
+        detector,
+        dataset,
+        class_dict,
+        iou_thresh=0.5,
+        use_07_metric=True)
 
     result_str = "mAP: {:.4f}\n".format(result["map"])
     metrics = {'mAP': result["map"]}
