@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import spatial
-from scipy.spatial.transform import Rotation
+from ..core.ops import numpy_ops as ops
 
 
 class PoseEvaluation(object):
@@ -22,23 +22,26 @@ class TranslationError(PoseEvaluation):
 
     def __call__(self, y_true, y_pred):
         for true_sample, pred_sample in zip(y_true, y_pred):
-            true_translation = self.processor(true_sample)[self.topic][1]
-            pred_translation = self.processor(pred_sample)[self.topic][1]
+            pose6D_true = self.processor(true_sample)[self.topic]
+            true_translation = pose6D_true.translation
+            pose6D_pred = self.processor(pred_sample)[self.topic]
+            pred_translation = pose6D_pred.translation
         return np.linalg.norm(true_translation - pred_translation)
 
 
-class RotationalError(PoseEvaluation):
+class QuaternionError(PoseEvaluation):
     def __init__(self, processor, topic='pose6D'):
-        super(RotationalError, self).__init__(processor, topic)
+        super(QuaternionError, self).__init__(processor, topic)
 
     def __call__(self, y_true, y_pred):
-        true_quaternions = self.processor(y_true)[self.topic][0]
-        true_rotations = Rotation.as_matrix(true_quaternions)
-        pred_quaternions = self.processor(y_pred)[self.topic][0]
-        pred_rotations = Rotation.as_matrix(pred_quaternions)
-        distance_rotations = pred_rotations.dot(true_rotations.T)
-        rotational_error = np.arccos((np.trace(distance_rotations) - 1) / 2)
-        return np.rad2deg(rotational_error)
+        pose6D_true = self.processor(y_true)[self.topic]
+        true_quaternions = pose6D_true.quaternion
+
+        pose6D_pred = self.processor(y_pred)[self.topic]
+        pred_quaternions = pose6D_pred.quaternion
+        distance_quaternions = pred_quaternions.dot(true_quaternions.T)
+        quaternion_error = 2 * np.arccos(distance_quaternions.real)
+        return np.rad2deg(quaternion_error)
 
 
 class ADD(PoseEvaluation):
@@ -46,15 +49,17 @@ class ADD(PoseEvaluation):
         super(ADD, self).__init__(processor, topic)
 
     def __call__(self, points3D, y_true, y_pred):
-        ground_truth = self.processor(y_true)[self.topic]
-        true_quaternions, true_translations, _ = ground_truth
-        true_rotations = Rotation.as_matrix(true_quaternions)
+        pose6D_true = self.processor(y_true)[self.topic]
+        true_quaternions = pose6D_true.quaternion
+        true_translations = pose6D_true.translation
+        true_rotations = ops.quaternion_to_rotation_matrix(true_quaternions)
         true_translations = true_translations.reshape((3, 1))
         true_transforms = true_rotations.dot(points3D) + true_translations
 
-        predictions = self.processor(y_pred)[self.topic]
-        pred_quaternions, pred_translations, _ = predictions
-        pred_rotations = Rotation.as_matrix(pred_quaternions)
+        pose6D_pred = self.processor(y_pred)[self.topic]
+        pred_quaternions = pose6D_pred.quaternion
+        pred_translations = pose6D_pred.translation
+        pred_rotations = ops.quaternion_to_rotation_matrix(pred_quaternions)
         pred_translations = pred_translations.reshape((3, 1))
         pred_transforms = pred_rotations.dot(points3D) + pred_translations
 
@@ -68,15 +73,17 @@ class ADI(PoseEvaluation):
         super(ADI, self).__init__(processor, topic)
 
     def __call__(self, points3D, y_true, y_pred):
-        ground_truth = self.processor(y_true)[self.topic]
-        true_quaternions, true_translations, _ = ground_truth
-        true_rotations = Rotation.as_matrix(true_quaternions)
+        pose6D_true = self.processor(y_true)[self.topic]
+        true_quaternions = pose6D_true.quaternion
+        true_translations = pose6D_true.translation
+        true_rotations = ops.quaternion_to_rotation_matrix(true_quaternions)
         true_translations = true_translations.reshape((3, 1))
         true_transforms = true_rotations.dot(points3D) + true_translations
 
-        predictions = self.processor(y_pred)[self.topic]
-        pred_quaternions, pred_translations, _ = predictions
-        pred_rotations = Rotation.as_matrix(pred_quaternions)
+        pose6D_pred = self.processor(y_pred)[self.topic]
+        pred_quaternions = pose6D_pred.quaternion
+        pred_translations = pose6D_pred.translation
+        pred_rotations = ops.quaternion_to_rotation_matrix(pred_quaternions)
         pred_translations = pred_translations.reshape((3, 1))
         pred_transforms = pred_rotations.dot(points3D) + pred_translations
 
