@@ -10,6 +10,7 @@ from paz.core.ops import quaternion_to_rotation_matrix
 from paz.core.ops import encode
 from paz.core.ops import match
 from paz.core.ops import decode
+from paz.core.ops import numpy_ops
 from paz.core.ops import get_ground_truths
 from paz.models.detection.utils import create_prior_boxes
 from paz.datasets import VOC
@@ -39,6 +40,12 @@ affine_matrix = np.array(
 
 
 quaternion_target = np.array([0.525483, -0.473147, 0.525483, 0.473147])
+
+quaternion_input = np.array([0.8764, -0.3438, 0.8764, 0.3438])
+
+scipy_value = np.array([[-0., -0.6799, 0.7333],
+                        [0., -0.7333, -0.6799],
+                        [1., 0., -0.]])
 
 target_unique_matches = np.array([[238., 155., 306., 204.]])
 
@@ -144,6 +151,11 @@ def test_prior_boxes():
     assert np.all(prior_boxes[:10].astype('float32') == target_prior_boxes)
 
 
+def test_quaternion_to_rotation_matrix():
+    ops_value = numpy_ops.quaternion_to_rotation_matrix(quaternion_input)
+    assert(ops_value.all() == scipy_value.all())
+
+
 # def test_data_loader_check():
 #    voc_root = './examples/object_detection/data/VOCdevkit/'
 #    data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
@@ -178,4 +190,5 @@ test_prior_boxes()
 test_match_box()
 test_to_encode()
 test_to_decode()
+test_quaternion_to_rotation_matrix()
 # test_data_loader_check()
