@@ -1,5 +1,5 @@
 import numpy as np
-from paz.optimization.losses.multi_box_loss import MultiboxLoss
+from paz.optimization.losses.multi_box_loss import MultiBoxLoss
 
 y_true = np.array(
     [[38.38629, 48.666668, 10.362101, 11.512976, 0., 1.,
@@ -39,35 +39,64 @@ y_true = np.expand_dims(y_true, axis=0)
 y_pred = np.expand_dims(y_pred, axis=0)
 target_multibox_loss = 6.8489789962768555
 target_smooth_l1_loss = np.array(
-    [[3.5220287, 8.989226, 98.50799]], dtype='float32'
+    [[3.5220284, 8.989227, 98.507996]], dtype='float32'
 )
 target_cross_entropy_loss = np.array(
-    [[0.019584998, 3.161768, 0.18143864]], dtype='float32'
+    [[0.019584997, 3.161768, 0.18143862]], dtype='float32'
 )
+target_localization_loss = np.array(3.4861877, dtype='float32')
+target_positive_classification_loss = np.array(0.019584997, dtype='float32')
+target_negative_classification_loss = np.array(3.3432066, dtype='float32')
 
 
 def test_multiboxloss():
-    loss = MultiboxLoss()
     total_loss = loss.compute_loss(y_true, y_pred)
     assert (float(total_loss) == target_multibox_loss)
 
 
 def test_smooth_l1_loss():
-    loss = MultiboxLoss()
-    smooth_l1_loss = loss.smooth_l1(y_true, y_pred)
+    smooth_l1_loss = loss._smooth_l1(y_true, y_pred)
     assert np.all(
         np.array(smooth_l1_loss, dtype='float32') == target_smooth_l1_loss
     )
 
 
 def test_cross_entropy_loss():
-    loss = MultiboxLoss()
-    cross_entropy_loss = loss.cross_entropy(y_true, y_pred)
+    cross_entropy_loss = loss._cross_entropy(y_true, y_pred)
     assert np.all(
         np.array(cross_entropy_loss, dtype='float32') == target_cross_entropy_loss
     )
 
 
+def test_localization_loss():
+    assert np.all(
+        np.array(
+            loss.localization(y_true, y_pred), dtype='float32'
+        ) == target_localization_loss
+    )
+
+
+def test_positive_classification_loss():
+    assert np.all(
+        np.array(
+            loss.positive_classification(y_true, y_pred), dtype='float32'
+        ) == target_positive_classification_loss
+    )
+
+
+def test_negative_classification_loss():
+    assert np.all(
+        np.array(
+            loss.negative_classification(y_true, y_pred), dtype='float32'
+        ) == target_negative_classification_loss
+    )
+
+
+loss = MultiBoxLoss()
+
 test_multiboxloss()
 test_smooth_l1_loss()
 test_cross_entropy_loss()
+test_localization_loss()
+test_positive_classification_loss()
+test_negative_classification_loss()
