@@ -8,12 +8,11 @@ from ..core import Loader
 
 class VOC(Loader):
     def __init__(self, path=None, split='train', class_names='all',
-                 name='VOC2007', with_difficult_objects=True,
-                 evaluate=False):
+                 name='VOC2007', with_difficult_samples=True, evaluate=False):
 
         super(VOC, self).__init__(path, split, class_names, name)
 
-        self.with_difficult_objects = with_difficult_objects
+        self.with_difficult_samples = with_difficult_samples
         self.evaluate = evaluate
         self._class_names = class_names
         if class_names == 'all':
@@ -39,7 +38,7 @@ class VOC(Loader):
         self.parser = VOCParser(dataset_name,
                                 split,
                                 self._class_names,
-                                self.with_difficult_objects,
+                                self.with_difficult_samples,
                                 self.path,
                                 self.evaluate)
         self.images_path = self.parser.images_path
@@ -63,7 +62,7 @@ class VOCParser(object):
     """
 
     def __init__(self, dataset_name='VOC2007', split='train',
-                 class_names='all', with_difficult_objects=True,
+                 class_names='all', with_difficult_samples=True,
                  dataset_path='../datasets/VOCdevkit/',
                  evaluate=False):
 
@@ -80,7 +79,7 @@ class VOCParser(object):
         self.split_prefix = os.path.join(self.dataset_path, 'ImageSets/Main/')
         self.annotations_path = os.path.join(self.dataset_path, 'Annotations/')
         self.images_path = os.path.join(self.dataset_path, 'JPEGImages/')
-        self.with_difficult_objects = with_difficult_objects
+        self.with_difficult_samples = with_difficult_samples
         self.evaluate = evaluate
 
         self.class_names = class_names
@@ -122,7 +121,7 @@ class VOCParser(object):
             for object_tree in root.findall('object'):
                 difficulty = int(object_tree.find('difficult').text)
 
-                if difficulty == 1 and not (self.with_difficult_objects):
+                if difficulty == 1 and not (self.with_difficult_samples):
                     continue
 
                 class_name = object_tree.find('name').text
