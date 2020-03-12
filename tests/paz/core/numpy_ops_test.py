@@ -10,9 +10,9 @@ from paz.core.ops import quaternion_to_rotation_matrix
 from paz.core.ops import encode
 from paz.core.ops import match
 from paz.core.ops import decode
-from paz.core.ops import get_ground_truths
 from paz.models.detection.utils import create_prior_boxes
-from paz.datasets import VOC
+# from paz.datasets import VOC
+# from paz.core.ops import get_ground_truths
 
 
 boxes_B = np.array([[39, 63, 203, 112],
@@ -42,23 +42,24 @@ quaternion_target = np.array([0.525483, -0.473147, 0.525483, 0.473147])
 
 target_unique_matches = np.array([[238., 155., 306., 204.]])
 
-target_prior_boxes = np.array([[0.013333334, 0.013333334, 0.1, 0.1],
-                               [0.013333334, 0.013333334, 0.14142136, 0.14142136],
-                               [0.013333334, 0.013333334, 0.14142136, 0.07071068],
-                               [0.013333334, 0.013333334, 0.07071068, 0.14142136],
-                               [0.04, 0.013333334, 0.1, 0.1],
-                               [0.04, 0.013333334, 0.14142136, 0.14142136],
-                               [0.04, 0.013333334, 0.14142136, 0.07071068],
-                               [0.04, 0.013333334, 0.07071068, 0.14142136],
-                               [0.06666667, 0.013333334, 0.1, 0.1],
-                               [0.06666667, 0.013333334, 0.14142136, 0.14142136]],
-                              dtype=np.float32)
+target_prior_boxes = np.array(
+    [[0.013333334, 0.013333334, 0.1, 0.1],
+     [0.013333334, 0.013333334, 0.14142136, 0.14142136],
+     [0.013333334, 0.013333334, 0.14142136, 0.07071068],
+     [0.013333334, 0.013333334, 0.07071068, 0.14142136],
+     [0.04, 0.013333334, 0.1, 0.1],
+     [0.04, 0.013333334, 0.14142136, 0.14142136],
+     [0.04, 0.013333334, 0.14142136, 0.07071068],
+     [0.04, 0.013333334, 0.07071068, 0.14142136],
+     [0.06666667, 0.013333334, 0.1, 0.1],
+     [0.06666667, 0.013333334, 0.14142136, 0.14142136]],
+    dtype=np.float32)
 
-boxes_with_label = np.array([[47., 239., 194., 370.,  12.],
-                            [7.,  11., 351., 497.,  15.],
-                            [138., 199., 206., 300.,  19.],
-                            [122., 154., 214., 194.,  18.],
-                            [238., 155., 306., 204.,   9.]])
+boxes_with_label = np.array([[47., 239., 194., 370., 12.],
+                            [7., 11., 351., 497., 15.],
+                            [138., 199., 206., 300., 19.],
+                            [122., 154., 214., 194., 18.],
+                            [238., 155., 306., 204., 9.]])
 
 target_image_count = [16551, 4952]
 
@@ -151,7 +152,8 @@ def test_prior_boxes():
 #
 #    data_managers, datasets = [], []
 #    for data_name, data_split in zip(data_names, data_splits):
-#        data_manager = VOC(voc_root, data_split, name=data_name, evaluate=True)
+#        data_manager = VOC(
+#            voc_root, data_split, name=data_name, evaluate=True)
 #        data_managers.append(data_manager)
 #        datasets.append(data_manager.load_data())
 #

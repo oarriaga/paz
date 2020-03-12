@@ -56,40 +56,37 @@ def test_multiboxloss():
 
 def test_smooth_l1_loss():
     smooth_l1_loss = loss._smooth_l1(y_true, y_pred)
-    assert np.all(
-        np.array(smooth_l1_loss, dtype='float32') == target_smooth_l1_loss
-    )
+    smooth_l1_loss = np.asarray(smooth_l1_loss, dtype='float32')
+    print(smooth_l1_loss - target_smooth_l1_loss)
+    assert np.allclose(smooth_l1_loss, target_smooth_l1_loss)
 
 
 def test_cross_entropy_loss():
     cross_entropy_loss = loss._cross_entropy(y_true, y_pred)
-    assert np.all(
-        np.array(cross_entropy_loss, dtype='float32') == target_cross_entropy_loss
-    )
+    cross_entropy_loss = np.asarray(cross_entropy_loss, dtype='float32')
+    assert np.allclose(cross_entropy_loss, target_cross_entropy_loss)
 
 
 def test_localization_loss():
-    assert np.all(
-        np.array(
-            loss.localization(y_true, y_pred), dtype='float32'
-        ) == target_localization_loss
-    )
+    localization_loss = loss.localization(y_true, y_pred)
+    localization_loss = np.asarray(localization_loss, dtype='float32')
+    assert np.allclose(localization_loss, target_localization_loss)
 
 
 def test_positive_classification_loss():
-    assert np.all(
-        np.array(
-            loss.positive_classification(y_true, y_pred), dtype='float32'
-        ) == target_positive_classification_loss
-    )
+    positive_classification_loss = loss.positive_classification(y_true, y_pred)
+    positive_classification_loss = np.asarray(
+        positive_classification_loss, dtype='float32')
+    assert np.allclose(
+        positive_classification_loss, target_positive_classification_loss)
 
 
 def test_negative_classification_loss():
-    assert np.all(
-        np.array(
-            loss.negative_classification(y_true, y_pred), dtype='float32'
-        ) == target_negative_classification_loss
-    )
+    negative_classification_loss = loss.negative_classification(y_true, y_pred)
+    negative_classification_loss = np.asarray(
+        negative_classification_loss, dtype='float32')
+    assert np.allclose(
+        negative_classification_loss, target_negative_classification_loss)
 
 
 loss = MultiBoxLoss()
