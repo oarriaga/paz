@@ -88,7 +88,7 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 evaluate = EvaluateMAP(
     evaluation_data_managers[0],
-    SingleShotInference(model, data_managers[0].class_names),
+    SingleShotInference(model, data_managers[0].class_names, 0.01, 0.45),
     args.evaluation_period,
     args.save_path,
     args.AP_IOU)
