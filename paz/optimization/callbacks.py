@@ -86,38 +86,35 @@ class LearningRateScheduler(Callback):
 
 class EvaluateMAP(Callback):
     def __init__(
-            self, data_manager, detector, period, save_path):
+            self, data_manager, detector, period, save_path, iou_thresh=0.5):
         super(EvaluateMAP, self).__init__()
         self.data_manager = data_manager
         self.detector = detector
         self.period = period
         self.save_path = save_path
         self.dataset = data_manager.load_data()
+        self.iou_thresh = iou_thresh
         self.class_names = self.data_manager.class_names
+        self.class_dict = {class_name: class_arg for class_arg, class_name in enumerate(self.class_names)}
 
     def on_epoch_end(self, epoch, logs):
-        if (epoch+1) % self.period == 0:
-
-            class_dict = {
-                class_name: class_arg for class_arg, class_name in enumerate(self.class_names)
-            }
-
+        if (epoch + 1) % self.period == 0:
             result = evaluateMAP(
-                        self.detector,
-                        self.dataset,
-                        class_dict,
-                        iou_thresh=0.5,
-                        use_07_metric=True)
+                self.detector,
+                self.dataset,
+                self.class_dict,
+                iou_thresh=self.iou_thresh,
+                use_07_metric=True)
 
-            result_str = "mAP: {:.4f}\n".format(result["map"])
-            metrics = {'mAP': result["map"]}
-            for arg, ap in enumerate(result["ap"]):
+            result_str = 'mAP: {:.4f}\n'.format(result['map'])
+            metrics = {'mAP': result['map']}
+            for arg, ap in enumerate(result['ap']):
                 if arg == 0 or np.isnan(ap):  # skip background
                     continue
                 metrics[self.class_names[arg]] = ap
-                result_str += "{:<16}: {:.4f}\n".format(self.class_names[arg], ap)
+                result_str += '{:<16}: {:.4f}\n'.format(self.class_names[arg], ap)
             print(result_str)
 
             # Saving the evaluation results
-            with open(os.path.join(self.save_path,"MAP_Evaluation_Log.txt"), "a") as eval_log_file:
-                eval_log_file.write("Epoch: {}\n{}\n".format(str(epoch), result_str))
+            with open(os.path.join(self.save_path, 'MAP_Evaluation_Log.txt'), 'a') as eval_log_file:
+                eval_log_file.write('Epoch: {}\n{}\n'.format(str(epoch), result_str))
