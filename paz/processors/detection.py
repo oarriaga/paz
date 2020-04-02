@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 
 from ..core import Processor, Box2D, ops
@@ -208,8 +210,20 @@ class FilterBoxes(Processor):
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
-        boxes2D = ops.filter_detections(
-            boxes, self.arg_to_class, self.conf_thresh)
+        num_classes = boxes.shape[0]
+        boxes2D = []
+        for class_arg in range(1, num_classes):
+            class_detections = boxes[class_arg, :]
+            confidence_mask = np.squeeze(
+                class_detections[:, -1] >= self.conf_thresh)
+            confident_class_detections = class_detections[confidence_mask]
+            if len(confident_class_detections) == 0:
+                continue
+            class_name = self.arg_to_class[class_arg]
+            for confident_class_detection in confident_class_detections:
+                coordinates = confident_class_detection[:4]
+                score = confident_class_detection[4]
+                boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D
 
 
