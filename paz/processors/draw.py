@@ -20,8 +20,7 @@ class DrawBoxes2D(Processor):
             self.class_to_color = {None: self.colors, '': self.colors}
         super(DrawBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        image, boxes2D = kwargs['image'], kwargs['boxes2D']
+    def call(self, image, boxes2D):
         for box2D in boxes2D:
             x_min, y_min, x_max, y_max = box2D.coordinates
             class_name = box2D.class_name
@@ -29,7 +28,7 @@ class DrawBoxes2D(Processor):
             text = '{:0.2f}, {}'.format(box2D.score, class_name)
             ops.put_text(image, text, (x_min, y_min - 10), .7, color, 1)
             ops.draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
-        return kwargs
+        return image
 
 
 class DrawKeypoints2D(Processor):
@@ -43,12 +42,11 @@ class DrawKeypoints2D(Processor):
         self.colors = ops.lincolor(num_keypoints, normalized=normalized)
         self.radius = radius
 
-    def call(self, kwargs):
-        image, keypoints = kwargs['image'], kwargs['keypoints']
+    def call(self, image, keypoints):
         for keypoint_arg, keypoint in enumerate(keypoints):
             color = self.colors[keypoint_arg]
             ops.draw_circle(image, keypoint.astype('int'), color, self.radius)
-        return kwargs
+        return image
 
 
 class MakeMosaic(Processor):
@@ -60,10 +58,9 @@ class MakeMosaic(Processor):
         self.input_topic = input_topic
         self.output_topic = output_topic
 
-    def call(self, kwargs):
-        image = kwargs[self.input_topic]
-        kwargs[self.output_topic] = ops.make_mosaic(image, self.shape)
-        return kwargs
+    def call(self, image):
+        mosaic = ops.make_mosaic(image, self.shape)
+        return mosaic
 
 
 class DrawBoxes3D(Processor):
@@ -98,10 +95,9 @@ class DrawBoxes3D(Processor):
             class_to_points[class_name] = np.array(points)
         return class_to_points
 
-    def call(self, kwargs):
-        pose6D = kwargs['pose6D']
+    def call(self, image, pose6D):
         points3D = self.class_to_points[pose6D.class_name]
         args = (points3D, pose6D, self.camera)
         points2D = ops.project_points3D(*args).astype(np.int32)
-        ops.draw_cube(kwargs['image'], points2D, thickness=1)
-        return kwargs
+        ops.draw_cube(image, points2D, thickness=1)
+        return image
