@@ -10,21 +10,13 @@ class HorizontalFlip(Processor):
     def __init__(self, probability=0.5):
         super(HorizontalFlip, self).__init__(probability)
 
-    def call(self, kwargs):
-        if 'image' in kwargs:
-            image = kwargs['image']
-            width = image.shape[1]
-            image = image[:, ::-1]
-            kwargs['image'] = image
-
-        if 'boxes' in kwargs:
-            box_data = kwargs['boxes']
-            kwargs['boxes'][:, [0, 2]] = width - box_data[:, [2, 0]]
-
-        if 'keypoints' in kwargs:
-            raise NotImplementedError
-
-        return kwargs
+    def call(self, image, boxes=None):
+        width = image.shape[1]
+        image = image[:, ::-1]
+        if boxes is not None:
+            boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+            return image, boxes
+        return image
 
 
 class Expand(Processor):
@@ -40,8 +32,7 @@ class Expand(Processor):
         self.max_ratio = max_ratio
         self.mean = mean
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image, boxes=None, keypoints=None):
         height, width, num_channels = image.shape
         ratio = np.random.uniform(1, self.max_ratio)
         left = np.random.uniform(0, width * ratio - width)
@@ -57,19 +48,16 @@ class Expand(Processor):
 
         expanded_image[int(top):int(top + height),
                        int(left):int(left + width)] = image
-        kwargs['image'] = expanded_image
 
-        if 'boxes' in kwargs:
-            boxes = kwargs['boxes']
+        if boxes is not None:
             boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
             boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
-            kwargs['boxes'] = boxes
+            return expanded_image, boxes
 
-        if 'keypoints' in kwargs:
-            keypoints = kwargs['keypoints']
+        if keypoints is not None:
             keypoints[:, :2] = keypoints[:, :2] + (int(left), int(top))
-            kwargs['keypoints'] = keypoints
-        return kwargs
+            return expanded_image, keypoints
+        return expanded_image
 
 
 class ToAbsoluteCoordinates(Processor):
@@ -78,15 +66,13 @@ class ToAbsoluteCoordinates(Processor):
     def __init__(self):
         super(ToAbsoluteCoordinates, self).__init__()
 
-    def call(self, kwargs):
-        height, width, channels = kwargs['image'].shape
-        boxes = kwargs['boxes']
+    def call(self, image, boxes):
+        height, width = image.shape[:2]
         boxes[:, 0] *= width
         boxes[:, 2] *= width
         boxes[:, 1] *= height
         boxes[:, 3] *= height
-        kwargs['boxes'] = boxes
-        return kwargs
+        return boxes
 
 
 class ToPercentCoordinates(Processor):
@@ -96,15 +82,13 @@ class ToPercentCoordinates(Processor):
     def __init__(self):
         super(ToPercentCoordinates, self).__init__()
 
-    def call(self, kwargs):
-        height, width, channels = kwargs['image'].shape
-        boxes = kwargs['boxes']
+    def call(self, image, boxes):
+        height, width = image.shape[:2]
         boxes[:, 0] /= width
         boxes[:, 2] /= width
         boxes[:, 1] /= height
         boxes[:, 3] /= height
-        kwargs['boxes'] = boxes
-        return kwargs
+        return boxes
 
 
 class RandomSampleCrop(Processor):
@@ -125,18 +109,16 @@ class RandomSampleCrop(Processor):
         )
         super(RandomSampleCrop, self).__init__()
 
-    def call(self, kwargs):
-        image = kwargs['image']
-        boxes = kwargs['boxes'][:, :4]
-        labels = kwargs['boxes'][:, -1:]
+    def call(self, image, boxes=None):
+        boxes = boxes[:, :4]
+        labels = boxes[:, -1:]
         height, width, _ = image.shape
         while True:
             # randomly choose a mode
             mode = np.random.choice(self.sample_options)
             if mode is None:
-                kwargs['image'] = image
-                kwargs['boxes'] = np.hstack([boxes, labels])
-                return kwargs
+                boxes = np.hstack([boxes, labels])
+                return image, boxes
 
             min_iou, max_iou = mode
             if min_iou is None:
@@ -205,9 +187,8 @@ class RandomSampleCrop(Processor):
                                                   rect[2:])
                 # adjust to crop (by substracting crop's left,top)
                 current_boxes[:, 2:] -= rect[:2]
-                kwargs['image'] = current_image
-                kwargs['boxes'] = np.hstack([current_boxes, current_labels])
-                return kwargs
+                return current_image, np.hstack(
+                    [current_boxes, current_labels])
 
 
 class ApplyTranslation(Processor):
@@ -240,22 +221,16 @@ class ApplyTranslation(Processor):
         else:
             raise ValueError('Translation should be `None` or have length two')
 
-    def call(self, kwargs):
-        if 'image' in kwargs:
-            image = kwargs['image']
-            height, width = image.shape[:2]
-            if self.fill_color is None:
-                fill_color = np.mean(image, axis=(0, 1))
-            image = ops.warp_affine(image, self._matrix, fill_color)
-            kwargs['image'] = image
-        if 'keypoints' in kwargs:
-            keypoints = kwargs['keypoints']
+    def call(self, image, keypoints=None):
+        height, width = image.shape[:2]
+        if self.fill_color is None:
+            fill_color = np.mean(image, axis=(0, 1))
+        image = ops.warp_affine(image, self._matrix, fill_color)
+        if keypoints is not None:
             keypoints[:, 0] = keypoints[:, 0] + self.translation[0]
             keypoints[:, 1] = keypoints[:, 1] + self.translation[1]
-            kwargs['keypoints'] = keypoints
-        if 'boxes' in kwargs:
-            raise NotImplementedError
-        return kwargs
+            return image, keypoints
+        return image
 
 
 class ApplyRandomTranslation(Processor):
@@ -268,7 +243,7 @@ class ApplyRandomTranslation(Processor):
         probability: Float between [0, 1]
     """
     def __init__(
-            self, delta_scale=[.25, .25], fill_color=None, probability=0.5):
+            self, delta_scale=[0.25, 0.25], fill_color=None, probability=0.5):
         super(ApplyRandomTranslation, self).__init__(probability)
         self.delta_scale = delta_scale
         self.apply_translation = ApplyTranslation(None, fill_color)
@@ -284,11 +259,10 @@ class ApplyRandomTranslation(Processor):
             raise ValueError('Delta scale values should be a positive scalar')
         self._delta_scale = delta_scale
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         height, width = image.shape[:2]
         x_delta_scale, y_delta_scale = self.delta_scale
         x = image.shape[1] * np.random.uniform(-x_delta_scale, x_delta_scale)
         y = image.shape[0] * np.random.uniform(-y_delta_scale, y_delta_scale)
         self.apply_translation.translation = [x, y]
-        return self.apply_translation(kwargs)
+        return self.apply_translation(image)
