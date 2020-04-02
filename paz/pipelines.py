@@ -29,7 +29,7 @@ class DetectionAugmentation(SequentialProcessor):
             self.add(pr.RandomSampleCrop())
             self.add(pr.HorizontalFlip())
             self.add(pr.ToPercentCoordinates())
-            self.add(pr.Resize(shape=(self.size, self.size)))
+            self.add(pr.ResizeImage(shape=(self.size, self.size)))
             self.add(pr.CastImageToFloat())
             self.add(pr.SubtractMeanImage(self.mean))
             self.add(pr.MatchBoxes(prior_boxes, iou))
