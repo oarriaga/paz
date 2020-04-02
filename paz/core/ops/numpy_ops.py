@@ -2,7 +2,6 @@ from __future__ import division
 
 import numpy as np
 
-from .opencv_ops import load_image
 from ..messages import Box2D
 
 
