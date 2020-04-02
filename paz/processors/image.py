@@ -5,10 +5,6 @@ from numpy import random
 from ..core import ops
 
 from ..core import Processor
-from ..core.ops import draw_filled_polygon, load_image
-from ..core.ops import median_blur, gaussian_blur, resize_image, convert_image
-from ..core.ops import BGR2RGB, RGB2BGR, BGR2HSV, RGB2HSV, HSV2RGB, HSV2BGR
-from ..core.ops import IMREAD_COLOR, BGR2GRAY
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
@@ -21,24 +17,18 @@ class CastImageToFloat(Processor):
     def __init__(self):
         super(CastImageToFloat, self).__init__()
 
-    def call(self, kwargs):
-        kwargs['image'] = kwargs['image'].astype(np.float32)
-        return kwargs
+    def call(self, image):
+        return image.astype(np.float32)
 
 
 class CastImageToInts(Processor):
     """Cast image to uint8
-    # Arguments:
-        topic: String. Image topic to be cast to integers.
     """
-    def __init__(self, topic='image'):
-        self.topic = topic
+    def __init__(self):
         super(CastImageToInts, self).__init__()
 
-    def call(self, kwargs):
-        image = kwargs[self.topic]
-        kwargs[self.topic] = np.round(image, decimals=0).astype(np.uint8)
-        return kwargs
+    def call(self, image):
+        return np.round(image, decimals=0).astype(np.uint8)
 
 
 class SubtractMeanImage(Processor):
@@ -50,9 +40,8 @@ class SubtractMeanImage(Processor):
         self.mean = np.array(mean, dtype=np.float32)
         super(SubtractMeanImage, self).__init__()
 
-    def call(self, kwargs):
-        kwargs['image'] = kwargs['image'].astype(np.float32) - self.mean
-        return kwargs
+    def call(self, image):
+        return image.astype(np.float32) - self.mean
 
 
 class AddMeanImage(Processor):
@@ -64,51 +53,42 @@ class AddMeanImage(Processor):
         self.mean = np.array(mean, dtype=np.float32)
         super(AddMeanImage, self).__init__()
 
-    def call(self, kwargs):
-        kwargs['image'] = kwargs['image'].astype(np.float32) + self.mean
-        return kwargs
+    def call(self, image):
+        return image.astype(np.float32) + self.mean
 
 
 class NormalizeImage(Processor):
     """Normalize image by diving its values by 255.0.
     """
-    def __init__(self, topic='image'):
+    def __init__(self):
         super(NormalizeImage, self).__init__()
-        self.topic = topic
 
-    def call(self, kwargs):
-        kwargs[self.topic] = kwargs[self.topic].astype(np.float32) / 255.0
-        return kwargs
+    def call(self, image):
+        return image.astype(np.float32) / 255.0
 
 
 class DenormalizeImage(Processor):
     """Denormalize image by diving its values by 255.0.
-    Arguments:
-        topic: String. Image topic to be normalized.
     """
-    def __init__(self, topic='image'):
-        self.topic = topic
+    def __init__(self):
         super(DenormalizeImage, self).__init__()
 
-    def call(self, kwargs):
-        kwargs[self.topic] = (kwargs[self.topic] * 255)
-        return kwargs
+    def call(self, image):
+        return image * 255
 
 
 class LoadImage(Processor):
     """Load image as numpy array.
     """
-    def __init__(self, topic='image', flags=IMREAD_COLOR):
-        self.topic = topic
+    def __init__(self, flags=ops.IMREAD_COLOR):
         self.flags = flags
         super(LoadImage, self).__init__()
 
-    def call(self, kwargs):
-        image = load_image(kwargs[self.topic], self.flags)
+    def call(self, filepath):
+        image = ops.load_image(filepath, self.flags)
         if image is None:
-            raise ValueError('Image not found in:', kwargs[self.topic])
-        kwargs['image'] = image
-        return kwargs
+            raise ValueError('Image not found in:', filepath)
+        return image
 
 
 class AddPlainBackground(Processor):
@@ -122,12 +102,11 @@ class AddPlainBackground(Processor):
         self.background_color = background_color
         super(AddPlainBackground, self).__init__()
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         if image.shape[-1] != 4:
             raise ValueError('Provided image does not contain alpha mask.')
-        w, h = image.shape[:2]
-        image_shape = (w, h, 3)
+        H, W = image.shape[:2]
+        image_shape = (H, W, 3)
         foreground, alpha = np.split(image, [3], -1)
         alpha = alpha / 255
         if self.background_color is None:
@@ -137,8 +116,8 @@ class AddPlainBackground(Processor):
             background_color = np.asarray(self.background_color)
             background = np.ones((image_shape)) * background_color
         foreground = alpha * foreground
-        kwargs['image'] = foreground + background
-        return kwargs
+        image = foreground + background
+        return image
 
 
 class AddCroppedBackground(Processor):
@@ -157,11 +136,11 @@ class AddCroppedBackground(Processor):
         super(AddCroppedBackground, self).__init__()
 
     def _crop_image(self, background_image):
-        h, w = background_image.shape[:2]
-        if (self.box_size >= h) or (self.box_size >= w):
+        H, W = background_image.shape[:2]
+        if (self.box_size >= H) or (self.box_size >= W):
             return None
-        x_min = np.random.randint(0, w - self.box_size)
-        y_min = np.random.randint(0, h - self.box_size)
+        x_min = np.random.randint(0, W - self.box_size)
+        y_min = np.random.randint(0, H - self.box_size)
         x_max = int(x_min + self.box_size)
         y_max = int(y_min + self.box_size)
         if (y_min > y_max) or (x_min > x_max):
@@ -170,25 +149,24 @@ class AddCroppedBackground(Processor):
             cropped_image = background_image[y_min:y_max, x_min:x_max]
             return cropped_image
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         if image.shape[-1] != 4:
             raise ValueError('Provided image does not contain alpha mask.')
-        w, h = image.shape[:2]
-        image_shape = (w, h, 3)
+        H, W = image.shape[:2]
+        image_shape = (H, W, 3)
         foreground, alpha = np.split(image, [3], -1)
         alpha = alpha / 255
         random_arg = random.randint(0, len(self.image_filepaths))
-        background = load_image(self.image_filepaths[random_arg])
+        background = ops.load_image(self.image_filepaths[random_arg])
         if self.color_model == 'RGB':
-            background = convert_image(background, BGR2RGB)
+            background = ops.convert_image(background, ops.BGR2RGB)
         background = self._crop_image(background)
         if background is None:
             background = np.ones((image_shape)) * random.randint(0, 256, 3)
         background = (1.0 - alpha) * background.astype(float)
         foreground = alpha * foreground
-        kwargs['image'] = foreground + background
-        return kwargs
+        image = foreground + background
+        return image
 
 
 class PixelBlur(Processor):
@@ -197,17 +175,17 @@ class PixelBlur(Processor):
         probability: Float, indication the probability of successfully
             applying this transformation.
     """
-    def __init__(self, probability=.5):
+    def __init__(self, probability=.5, scale=0.25):
+        self.scale = scale
         super(PixelBlur, self).__init__(probability)
 
-    def call(self, kwargs):
-        image = kwargs['image']
-        w, h = image.shape[:2]
-        reduced_w = int(.25 * w)
-        reduced_h = int(.25 * h)
-        image = resize_image(image, (reduced_w, reduced_h))
-        kwargs['image'] = resize_image(image, (w, h))
-        return kwargs
+    def call(self, image):
+        H, W = image.shape[:2]
+        reduced_H = int(self.scale * H)
+        reduced_W = int(self.scale * W)
+        image = ops.resize_image(image, (reduced_H, reduced_W))
+        image = ops.resize_image(image, (H, W))
+        return image
 
 
 class GaussianBlur(Processor):
@@ -219,11 +197,10 @@ class GaussianBlur(Processor):
     def __init__(self, probability=.5):
         super(GaussianBlur, self).__init__(probability)
 
-    def call(self, kwargs):
-        image = kwargs['image']
-        w, h = image.shape[:2]
-        kwargs['image'] = gaussian_blur(image, (5, 5))
-        return kwargs
+    def call(self, image):
+        H, W = image.shape[:2]
+        image = ops.gaussian_blur(image, (5, 5))
+        return image
 
 
 class MedianBlur(Processor):
@@ -235,9 +212,9 @@ class MedianBlur(Processor):
     def __init__(self, probability=.5):
         super(MedianBlur, self).__init__(probability)
 
-    def call(self, kwargs):
-        kwargs['image'] = median_blur(kwargs['image'], 5)
-        return kwargs
+    def call(self, image):
+        image = ops.median_blur(image, 5)
+        return image
 
 
 class RandomBlur(Processor):
@@ -248,29 +225,15 @@ class RandomBlur(Processor):
             applying this transformation.
     """
     def __init__(self, probability=.5):
-        self.blurs = [PixelBlur(probability),
+        self.blurs = [GaussianBlur(probability),
                       MedianBlur(probability),
-                      GaussianBlur(probability)]
+                      PixelBlur(probability)]
         super(RandomBlur, self).__init__()
 
-    def call(self, kwargs):
+    def call(self, image):
         blur = np.random.choice(self.blurs)
-        return blur.call(kwargs)
-
-
-class Resize(Processor):
-    """Resize image.
-    # Arguments
-        size: Integer indicating the new shape (size, size) of the image.
-    """
-    def __init__(self, shape=(300, 300)):
-        self.shape = shape
-        print('DEPRACTED: Use ResizeImage')
-        super(Resize, self).__init__()
-
-    def call(self, kwargs):
-        kwargs['image'] = resize_image(kwargs['image'], self.shape)
-        return kwargs
+        image = blur(image)
+        return image
 
 
 class ResizeImage(Processor):
@@ -278,32 +241,27 @@ class ResizeImage(Processor):
     # Arguments
         size: Integer indicating the new shape (size, size) of the image.
     """
-    def __init__(self, shape, topic='image'):
-        self.shape, self.topic = shape, topic
+    def __init__(self, shape):
+        self.shape = shape
         super(ResizeImage, self).__init__()
 
-    def call(self, kwargs):
-        kwargs[self.topic] = ops.resize_image(kwargs[self.topic], self.shape)
-        return kwargs
+    def call(self, image):
+        image = ops.resize_image(image, self.shape)
+        return image
 
 
 class ResizeImages(Processor):
     """ Resize cropped images
     # Arguments
-        shape: List of two integers indicating the new shape of `topic`.
-        topic: String indicating the key in the dictionary that contains
-            the list of images to be resized.
+        shape: List of two integers indicating the new shape of the image.
     """
-    def __init__(self, shape, topic='cropped_images'):
-        self.topic = topic
+    def __init__(self, shape):
         self.shape = shape
         super(ResizeImages, self).__init__()
 
-    def call(self, kwargs):
-        images = kwargs[self.topic]
-        images = [resize_image(image, self.shape) for image in images]
-        kwargs[self.topic] = images
-        return kwargs
+    def call(self, images):
+        images = [ops.resize_image(image, self.shape) for image in images]
+        return images
 
 
 class RandomSaturation(Processor):
@@ -321,12 +279,10 @@ class RandomSaturation(Processor):
         assert self.lower >= 0, "contrast lower must be non-negative."
         super(RandomSaturation, self).__init__(probability)
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         image[:, :, 1] *= random.uniform(self.lower, self.upper)
         image[:, :, 1] = np.clip(image[:, :, 1], 0, 255)
-        kwargs['image'] = image
-        return kwargs
+        return image
 
 
 class RandomHue(Processor):
@@ -340,13 +296,11 @@ class RandomHue(Processor):
         self.delta = delta
         super(RandomHue, self).__init__(probability)
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         image[:, :, 0] += random.uniform(-self.delta, self.delta)
         image[:, :, 0][image[:, :, 0] > 179.0] -= 179.0
         image[:, :, 0][image[:, :, 0] < 0.0] += 179.0
-        kwargs['image'] = image
-        return kwargs
+        return image
 
 
 class RandomLightingNoise(Processor):
@@ -358,45 +312,24 @@ class RandomLightingNoise(Processor):
                              (2, 0, 1), (2, 1, 0))
         super(RandomLightingNoise, self).__init__(probability)
 
-    def call(self, kwargs):
+    def call(self, image):
         swap = self.permutations[random.randint(len(self.permutations))]
-        kwargs['image'] = kwargs['image'][:, :, swap]
-        return kwargs
+        image = image[:, :, swap]
+        return image
 
 
 class ConvertColor(Processor):
     """Converts image to a different color space.
     # Arguments
-        current: String, indicating the current color space.
-        transform: String, indicating the color space to which the image
-            will get transformed.
+        flag: Flag found in ``ops``indicating transform e.g. ops.BGR2RGB
     """
-    def __init__(self, current='BGR', to='HSV', topic='image'):
-        self.current = current
-        self.to = to
-        self.topic = topic
+    def __init__(self, flag):
+        self.flag = flag
         super(ConvertColor, self).__init__()
 
-    def call(self, kwargs):
-        image = kwargs[self.topic]
-        if self.current == 'BGR' and self.to == 'HSV':
-            image = convert_image(image, BGR2HSV)
-        elif self.current == 'RGB' and self.to == 'HSV':
-            image = convert_image(image, RGB2HSV)
-        elif self.current == 'HSV' and self.to == 'BGR':
-            image = convert_image(image, HSV2BGR)
-        elif self.current == 'HSV' and self.to == 'RGB':
-            image = convert_image(image, HSV2RGB)
-        elif self.current == 'RGB' and self.to == 'BGR':
-            image = convert_image(image, RGB2BGR)
-        elif self.current == 'BGR' and self.to == 'RGB':
-            image = convert_image(image, BGR2RGB)
-        elif self.current == 'BGR' and self.to == 'GRAY':
-            image = convert_image(image, BGR2GRAY)
-        else:
-            raise NotImplementedError
-        kwargs[self.topic] = image
-        return kwargs
+    def call(self, image):
+        image = ops.convert_image(image, self.flag)
+        return image
 
 
 class RandomBrightness(Processor):
@@ -418,12 +351,11 @@ class RandomBrightness(Processor):
         self.delta = delta
         super(RandomBrightness, self).__init__(probability)
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         random_brightness = np.random.uniform(-self.delta, self.delta)
         image = image + random_brightness
-        kwargs['image'] = np.clip(image, 0, 255)
-        return kwargs
+        image = np.clip(image, 0, 255)
+        return image
 
 
 class RandomContrast(Processor):
@@ -443,12 +375,11 @@ class RandomContrast(Processor):
         super(RandomContrast, self).__init__(probability)
 
     # expects float image
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         alpha = random.uniform(self.lower, self.upper)
         image = image * alpha
-        kwargs['image'] = np.clip(image, 0, 255)
-        return kwargs
+        image = np.clip(image, 0, 255)
+        return image
 
 
 class RandomImageCrop(Processor):
@@ -468,8 +399,7 @@ class RandomImageCrop(Processor):
         )
         super(RandomImageCrop, self).__init__()
 
-    def call(self, **kwargs):
-        image = kwargs['image']
+    def call(self, image):
         height, width = image.shape[:2]
         while True:
             # randomly choose a mode
@@ -504,8 +434,7 @@ class RandomImageCrop(Processor):
                 # cut the crop from the image
                 current_image = current_image[
                     rect[1]:rect[3], rect[0]:rect[2], :]
-                kwargs['image'] = image
-                return kwargs
+                return image
 
 
 class ExpandImage(Processor):
@@ -518,8 +447,7 @@ class ExpandImage(Processor):
         self.mean = mean
         super(ExpandImage, self).__init__(probability)
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         height, width, depth = image.shape
         ratio = random.uniform(1, 4)
         left = random.uniform(0, width * ratio - width)
@@ -531,8 +459,7 @@ class ExpandImage(Processor):
         expanded_image[:, :, :] = self.mean
         expanded_image[int(top):int(top + height),
                        int(left):int(left + width)] = image
-        kwargs['image'] = expanded_image
-        return kwargs
+        return expanded_image
 
 
 class AddOcclusion(Processor):
@@ -547,8 +474,7 @@ class AddOcclusion(Processor):
         super(AddOcclusion, self).__init__(probability)
         self.max_radius_scale = max_radius_scale
 
-    def call(self, kwargs):
-        image = kwargs['image']
+    def call(self, image):
         height, width = image.shape[:2]
         max_distance = np.max((height, width)) * self.max_radius_scale
         num_vertices = np.random.randint(3, 7)
@@ -562,20 +488,20 @@ class AddOcclusion(Processor):
             vertex = np.random.uniform(0, max_distance) * vertex
             vertices[vertex_arg] = (vertex + center).astype(np.int32)
         color = np.random.randint(0, 256, 3).tolist()
-        draw_filled_polygon(image, vertices, color)
-        kwargs['image'] = image
-        return kwargs
+        ops.draw_filled_polygon(image, vertices, color)
+        return image
 
 
 class ShowImage(Processor):
     """Shows image in a separate window.
     # Arguments
-        image_name: String. Window name.
+        window_name: String. Window name.
+        wait: Boolean
     """
-    def __init__(self, topic, window_name='image', wait=True):
-        self.topic, self.window_name, self.wait = topic, window_name, wait
+    def __init__(self, window_name='image', wait=True):
+        self.window_name = window_name,
+        self.wait
         super(ShowImage, self).__init__()
 
-    def call(self, kwargs):
-        ops.show_image(kwargs[self.topic], self.window_name, self.wait)
-        return kwargs
+    def call(self, image):
+        return ops.show_image(image, self.window_name, self.wait)
