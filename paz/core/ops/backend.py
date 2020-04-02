@@ -2,6 +2,16 @@ import tensorflow as tf
 import numpy as np
 
 
+float16 = tf.float16
+float32 = tf.float32
+int16 = tf.int16
+int32 = tf.int32
+
+
+def max(x, axis):
+    tf.reduce_max(x, axis)
+
+
 def maximum(x1, x2):
     return tf.maximum(x1, x2)
 
@@ -54,4 +64,11 @@ def expand_dims(x, axis):
     return tf.expand_dims(x, axis)
 
 
-def zeros_like()
+def trace(x):
+    return tf.linalg.trace(x)
+
+
+def zeros_like(x):
+    return tf.zeros_like(x)
+
+

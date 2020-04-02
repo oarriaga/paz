@@ -1,6 +1,7 @@
 from __future__ import division
 
 import numpy as np
+import backend as pz
 
 from ..messages import Box2D
 
@@ -24,12 +25,12 @@ def compute_iou(box, boxes):
     x_min_B, y_min_B = boxes[:, 0], boxes[:, 1]
     x_max_B, y_max_B = boxes[:, 2], boxes[:, 3]
     # calculating the intersection
-    inner_x_min = np.maximum(x_min_B, x_min_A)
-    inner_y_min = np.maximum(y_min_B, y_min_A)
-    inner_x_max = np.minimum(x_max_B, x_max_A)
-    inner_y_max = np.minimum(y_max_B, y_max_A)
-    inner_w = np.maximum((inner_x_max - inner_x_min), 0)
-    inner_h = np.maximum((inner_y_max - inner_y_min), 0)
+    inner_x_min = pz.maximum(x_min_B, x_min_A)
+    inner_y_min = pz.maximum(y_min_B, y_min_A)
+    inner_x_max = pz.minimum(x_max_B, x_max_A)
+    inner_y_max = pz.minimum(y_max_B, y_max_A)
+    inner_w = pz.maximum((inner_x_max - inner_x_min), 0)
+    inner_h = pz.maximum((inner_y_max - inner_y_min), 0)
     intersection_area = inner_w * inner_h
     # calculating the union
     box_area_B = (x_max_B - x_min_B) * (y_max_B - y_min_B)
@@ -74,7 +75,7 @@ def to_point_form(boxes):
     x_max = center_x + (width / 2.)
     y_min = center_y - (height / 2.)
     y_max = center_y + (height / 2.)
-    return np.concatenate([x_min[:, None], y_min[:, None],
+    return pz.concatenate([x_min[:, None], y_min[:, None],
                            x_max[:, None], y_max[:, None]], axis=1)
 
 
@@ -93,7 +94,7 @@ def to_center_form(boxes):
     center_y = (y_max + y_min) / 2.
     width = x_max - x_min
     height = y_max - y_min
-    return np.concatenate([center_x[:, None], center_y[:, None],
+    return pz.concatenate([center_x[:, None], center_y[:, None],
                            width[:, None], height[:, None]], axis=1)
 
 
@@ -135,9 +136,9 @@ def encode(matched, priors, variances):
     g_cxcy /= (variances[0] * priors[:, 2:4])
     # match wh / prior wh
     g_wh = (matched[:, 2:4] - matched[:, :2]) / priors[:, 2:4]
-    g_wh = np.log(np.abs(g_wh) + 1e-4) / variances[1]
+    g_wh = pz.log(pz.abs(g_wh) + 1e-4) / variances[1]
     # return target for smooth_l1_loss
-    return np.concatenate([g_cxcy, g_wh, matched[:, 4:]], 1)  # [num_priors,4]
+    return pz.concatenate([g_cxcy, g_wh, matched[:, 4:]], 1)  # [num_priors,4]
 
 
 def decode(predictions, priors, variances):
@@ -152,12 +153,12 @@ def decode(predictions, priors, variances):
         decoded boxes: Numpy array of shape (num_priors, 4)
     """
 
-    boxes = np.concatenate((
+    boxes = pz.concatenate((
         priors[:, :2] + predictions[:, :2] * variances[0] * priors[:, 2:4],
-        priors[:, 2:4] * np.exp(predictions[:, 2:4] * variances[1])), 1)
+        priors[:, 2:4] * pz.exp(predictions[:, 2:4] * variances[1])), 1)
     boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:4] / 2)
     boxes[:, 2:4] = boxes[:, 2:4] + boxes[:, :2]
-    return np.concatenate([boxes, predictions[:, 4:]], 1)
+    return pz.concatenate([boxes, predictions[:, 4:]], 1)
     return boxes
 
 
@@ -172,7 +173,7 @@ def reversed_argmax(array, axis):
     # Returns: index_array : Numpy array of ints
     """
     array_flip = np.flip(array, axis=axis)
-    return array.shape[axis] - np.argmax(array_flip, axis=axis) - 1
+    return array.shape[axis] - pz.argmax(array_flip, axis=axis) - 1
 
 
 def match(boxes, prior_boxes, iou_threshold=0.5):
@@ -195,8 +196,8 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
             form box coordinates and the last coordinates is the class
             argument.
     """
-    ious = compute_ious(boxes, to_point_form(np.float32(prior_boxes)))
-    best_box_iou_per_prior_box = np.max(ious, axis=0)
+    ious = compute_ious(boxes, to_point_form(pz.float32(prior_boxes)))
+    best_box_iou_per_prior_box = pz.max(ious, axis=0)
 
     best_box_arg_per_prior_box = reversed_argmax(ious, 0)
     best_prior_box_arg_per_box = reversed_argmax(ious, 1)
@@ -257,7 +258,7 @@ def filter_detections(detections, arg_to_class, conf_thresh=0.5):
     filtered_detections = []
     for class_arg in range(1, num_classes):
         class_detections = detections[class_arg, :]
-        confidence_mask = np.squeeze(class_detections[:, -1] >= conf_thresh)
+        confidence_mask = pz.squeeze(class_detections[:, -1] >= conf_thresh)
         confident_class_detections = class_detections[confidence_mask]
         if len(confident_class_detections) == 0:
             continue
@@ -286,7 +287,7 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
         num_selected_boxes: int, number of selected boxes.
     """
 
-    selected_indices = np.zeros(shape=len(scores))
+    selected_indices = pz.zeros(shape=len(scores))
     if boxes is None or len(boxes) == 0:
         return selected_indices
     x_min = boxes[:, 0]
@@ -294,7 +295,7 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     x_max = boxes[:, 2]
     y_max = boxes[:, 3]
     areas = (x_max - x_min) * (y_max - y_min)
-    remaining_sorted_box_indices = np.argsort(scores)
+    remaining_sorted_box_indices = pz.argsort(scores)
     remaining_sorted_box_indices = remaining_sorted_box_indices[-top_k:]
 
     num_selected_boxes = 0
@@ -317,16 +318,16 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
         remaining_x_max = x_max[remaining_sorted_box_indices]
         remaining_y_max = y_max[remaining_sorted_box_indices]
 
-        inner_x_min = np.maximum(remaining_x_min, best_x_min)
-        inner_y_min = np.maximum(remaining_y_min, best_y_min)
-        inner_x_max = np.minimum(remaining_x_max, best_x_max)
-        inner_y_max = np.minimum(remaining_y_max, best_y_max)
+        inner_x_min = pz.maximum(remaining_x_min, best_x_min)
+        inner_y_min = pz.maximum(remaining_y_min, best_y_min)
+        inner_x_max = pz.minimum(remaining_x_max, best_x_max)
+        inner_y_max = pz.minimum(remaining_y_max, best_y_max)
 
         inner_box_widths = inner_x_max - inner_x_min
         inner_box_heights = inner_y_max - inner_y_min
 
-        inner_box_widths = np.maximum(inner_box_widths, 0.0)
-        inner_box_heights = np.maximum(inner_box_heights, 0.0)
+        inner_box_widths = pz.maximum(inner_box_widths, 0.0)
+        inner_box_heights = pz.maximum(inner_box_heights, 0.0)
 
         intersections = inner_box_widths * inner_box_heights
         remaining_box_areas = areas[remaining_sorted_box_indices]
@@ -354,7 +355,7 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
-    output = np.zeros((num_classes, top_k, 5))
+    output = pz.zeros((num_classes, top_k, 5))
 
     # skip the background class (start counter in 1)
     for class_arg in range(1, num_classes):
@@ -365,9 +366,9 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
         boxes = decoded_boxes[conf_mask]
         indices, count = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
-        scores = np.expand_dims(scores, -1)
+        scores = pz.expand_dims(scores, -1)
         selected_indices = indices[:count]
-        selections = np.concatenate(
+        selections = pz.concatenate(
             (boxes[selected_indices], scores[selected_indices]), axis=1)
         output[class_arg, :count, :] = selections
     return output
@@ -384,7 +385,7 @@ def to_one_hot(class_indices, num_classes):
     # Returns
         Numpy array with shape (num_samples, num_classes).
     """
-    one_hot_vectors = np.zeros((len(class_indices), num_classes))
+    one_hot_vectors = pz.zeros((len(class_indices), num_classes))
     for vector_arg, class_args in enumerate(class_indices):
         one_hot_vectors[vector_arg, class_args] = 1.0
     return one_hot_vectors
@@ -401,9 +402,9 @@ def quaternion_to_rotation_matrix(quaternion):
     """
 
     q_w, q_x, q_y, q_z = quaternion
-    sqw, sqx, sqy, sqz = np.square(quaternion)
+    sqw, sqx, sqy, sqz = pz.square(quaternion)
     norm = (sqx + sqy + sqz + sqw)
-    rotation_matrix = np.zeros((3, 3))
+    rotation_matrix = pz.zeros((3, 3))
 
     # division of square length if quaternion is not already normalized
     rotation_matrix[0, 0] = (+sqx - sqy - sqz + sqw) / norm
@@ -437,7 +438,7 @@ def rotation_matrix_to_quaternion(rotation_matrix):
     # Returns
         quaternion: Numpy array of shape (4)
     """
-    trace = np.trace(rotation_matrix)
+    trace = pz.trace(rotation_matrix)
 
     if trace > 0:
         S = np.sqrt(trace + 1) * 2
@@ -580,7 +581,7 @@ def normalize_keypoints(keypoints, height, width):
         height: Int. Height of the image
         width: Int. Width of the image
     """
-    normalized_keypoints = np.zeros_like(keypoints, dtype=np.float32)
+    normalized_keypoints = pz.zeros_like(keypoints, dtype=pz.float32)
     for keypoint_arg, keypoint in enumerate(keypoints):
         x, y = keypoint[:2]
         # transform key-point coordinates to image coordinates
