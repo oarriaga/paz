@@ -398,42 +398,11 @@ def substract_mean(image_array, mean):
         mean: Numpy array of 3 floats containing the values to be subtracted
             to the image on each corresponding channel.
     """
-    image_array = image_array.astype(np.float32)
+    image_array = image_array.astype(pz.float32)
     image_array[:, :, 0] -= mean[0]
     image_array[:, :, 1] -= mean[1]
     image_array[:, :, 2] -= mean[2]
     return image_array
-
-
-def make_mosaic(images, shape, border=0):
-    """ Creates an image mosaic.
-    # Arguments
-        images: Numpy array of shape (num_images, height, width, 3)
-        shape: List of two integers indicating the mosaic shape.
-            Shape must satisfy: shape[0] * shape[1] == len(images).
-        border: Integer indicating the border per image.
-    # Returns
-        A numpy array containing all images.
-    """
-    num_images = len(images)
-    num_rows, num_cols = shape
-    image_shape = images.shape[1:]
-    num_channels = images.shape[-1]
-    mosaic = np.ma.masked_all(
-        (num_rows * image_shape[0] + (num_rows - 1) * border,
-         num_cols * image_shape[1] + (num_cols - 1) * border, num_channels),
-        dtype=np.float32)
-    paddedh = image_shape[0] + border
-    paddedw = image_shape[1] + border
-    for image_arg in range(num_images):
-        row = int(np.floor(image_arg / num_cols))
-        col = image_arg % num_cols
-        # image = np.squeeze(images[image_arg])
-        image = images[image_arg]
-        image_shape = image.shape
-        mosaic[row * paddedh:row * paddedh + image_shape[0],
-               col * paddedw:col * paddedw + image_shape[1], :] = image
-    return mosaic
 
 
 def denormalize_keypoints(keypoints, height, width):

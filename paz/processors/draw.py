@@ -49,20 +49,6 @@ class DrawKeypoints2D(Processor):
         return image
 
 
-class MakeMosaic(Processor):
-    """Draws multiple images as a single mosaic image
-    """
-    def __init__(self, shape, input_topic='image', output_topic='mosaic'):
-        super(MakeMosaic, self).__init__()
-        self.shape = shape
-        self.input_topic = input_topic
-        self.output_topic = output_topic
-
-    def call(self, image):
-        mosaic = ops.make_mosaic(image, self.shape)
-        return mosaic
-
-
 class DrawBoxes3D(Processor):
     def __init__(self, camera, class_to_dimensions):
         """Draw boxes 3D of multiple objects

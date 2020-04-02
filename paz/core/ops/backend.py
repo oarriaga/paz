@@ -1,6 +1,4 @@
 import tensorflow as tf
-import numpy as np
-
 
 float16 = tf.float16
 float32 = tf.float32
