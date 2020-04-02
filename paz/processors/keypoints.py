@@ -19,14 +19,10 @@ class RenderSingleViewSample(Processor):
         self.renderer = renderer
         super(RenderSingleViewSample, self).__init__()
 
-    def call(self, kwargs=None):
+    def call(self):
         image, (matrices, alpha_channel, depth) = self.renderer.render_sample()
         world_to_camera = matrices[0].reshape(4, 4)
-        kwargs['image'] = image
-        kwargs['world_to_camera'] = world_to_camera
-        kwargs['alpha_mask'] = alpha_channel
-        kwargs['depth'] = depth
-        return kwargs
+        return image, alpha_channel, depth, world_to_camera
 
 
 class RenderMultiViewSample(Processor):
@@ -45,29 +41,22 @@ class RenderMultiViewSample(Processor):
         self.renderer = renderer
         super(RenderMultiViewSample, self).__init__()
 
-    def call(self, kwargs=None):
+    def call(self):
         [image_A, image_B], labels = self.renderer.render_sample()
         [matrices, alpha_A, alpha_B] = labels
-        # image_A, image_B = image_A / 255.0, image_B / 255.0
-        # alpha_A, alpha_B = alpha_A / 255.0, alpha_B / 255.0
         alpha_A = np.expand_dims(alpha_A, -1)
         alpha_B = np.expand_dims(alpha_B, -1)
         alpha_masks = np.concatenate([alpha_A, alpha_B], -1)
-        kwargs['matrices'] = matrices
-        kwargs['image_A'] = image_A
-        kwargs['image_B'] = image_B
-        kwargs['alpha_channels'] = alpha_masks
-        return kwargs
+        return image_A, image_B, alpha_masks, matrices
 
 
 class ConcatenateAlphaMask(Processor):
     """Concatenate ``alpha_mask`` to ``image``. Useful for changing background.
     """
-    def call(self, kwargs):
-        image, alpha_mask = kwargs['image'], kwargs['alpha_mask']
+    def call(self, image, alpha_mask):
         alpha_mask = np.expand_dims(alpha_mask, axis=-1)
-        kwargs['image'] = np.concatenate([image, alpha_mask], axis=2)
-        return kwargs
+        image = np.concatenate([image, alpha_mask], axis=2)
+        return image
 
 
 class ProjectKeypoints(Processor):
@@ -81,40 +70,39 @@ class ProjectKeypoints(Processor):
         self.keypoints = keypoints
         super(ProjectKeypoints, self).__init__()
 
-    def call(self, kwargs):
-        world_to_camera = kwargs['world_to_camera']
+    def call(self, world_to_camera):
         keypoints = np.matmul(self.keypoints, world_to_camera.T)
         keypoints = np.expand_dims(keypoints, 0)
         keypoints = self.projector.project(keypoints)[0]
-        kwargs['keypoints'] = keypoints
-        return kwargs
+        return keypoints
 
 
 class DenormalizeKeypoints(Processor):
     """Transform normalized keypoint coordinates into image coordinates
+    # Arguments
+        image_size: List of two floats having height and width of image.
     """
-    def __init__(self):
+    def __init__(self, image_size):
+        self.image_size = image_size
         super(DenormalizeKeypoints, self).__init__()
 
-    def call(self, kwargs):
-        keypoints, image = kwargs['keypoints'], kwargs['image']
-        height, width = image.shape[0:2]
+    def call(self, keypoints, image):
+        height, width = self.image_size[0:2]
         keypoints = ops.denormalize_keypoints(keypoints, height, width)
-        kwargs['keypoints'] = keypoints
-        return kwargs
+        return keypoints
 
 
 class NormalizeKeypoints(Processor):
     """Transform keypoints in image coordinates to normalized coordinates
     """
-    def __init__(self):
+    def __init__(self, image_size):
+        self.image_size = image_size
         super(NormalizeKeypoints, self).__init__()
 
-    def call(self, kwargs):
-        image, keypoints = kwargs['image'], kwargs['keypoints']
-        height, width = image.shape[0:2]
-        kwargs['keypoints'] = ops.normalize_keypoints(keypoints, height, width)
-        return kwargs
+    def call(self, keypoints):
+        height, width = self.image_size[0:2]
+        keypoints = ops.normalize_keypoints(keypoints, height, width)
+        return keypoints
 
 
 class RemoveKeypointsDepth(Processor):
@@ -123,9 +111,8 @@ class RemoveKeypointsDepth(Processor):
     def __init__(self):
         super(RemoveKeypointsDepth, self).__init__()
 
-    def call(self, kwargs):
-        kwargs['keypoints'] = kwargs['keypoints'][:, :2]
-        return kwargs
+    def call(self, keypoints):
+        return keypoints[:, :2]
 
 
 class PartitionKeypoints(Processor):
@@ -136,13 +123,13 @@ class PartitionKeypoints(Processor):
     def __init__(self):
         super(PartitionKeypoints, self).__init__()
 
-    def call(self, kwargs):
-        keypoints = kwargs['keypoints']
+    def call(self, keypoints):
         keypoints = np.vsplit(keypoints, len(keypoints))
         keypoints = [np.squeeze(keypoint) for keypoint in keypoints]
+        partioned_keypoints = []
         for keypoint_arg, keypoint in enumerate(keypoints):
-            kwargs['keypoint_%s' % keypoint_arg] = keypoint
-        return kwargs
+            partioned_keypoints.append(keypoint)
+        return np.asarray(partioned_keypoints)
 
 
 class ChangeKeypointsCoordinateSystem(Processor):
@@ -152,11 +139,8 @@ class ChangeKeypointsCoordinateSystem(Processor):
     def __init__(self):
         super(ChangeKeypointsCoordinateSystem, self).__init__()
 
-    def call(self, kwargs):
-        box2D = kwargs['box2D']
+    def call(self, keypoints, box2D):
         x_min, y_min, x_max, y_max = box2D.coordinates
-        keypoints = kwargs['keypoints']
         keypoints[:, 0] = keypoints[:, 0] + x_min
         keypoints[:, 1] = keypoints[:, 1] + y_min
-        kwargs['keypoints'] = keypoints
-        return kwargs
+        return keypoints
