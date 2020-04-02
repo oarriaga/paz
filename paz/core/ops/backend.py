@@ -70,3 +70,5 @@ def zeros_like(x):
     return tf.zeros_like(x)
 
 
+def flip(x, axis):
+    return tf.reverse(x, axis)
