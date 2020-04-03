@@ -72,7 +72,3 @@ def zeros_like(x):
 
 def flip(x, axis):
     return tf.reverse(x, axis)
-
-
-def uniform(shape=[1], **kwargs):
-    return tf.random.random(shape, **kwargs)
