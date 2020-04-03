@@ -1,4 +1,4 @@
-import numpy as np
+from ..core.ops.backend import uniform
 
 
 class Processor(object):
@@ -52,7 +52,7 @@ class Processor(object):
             raise ValueError('Probability has to be between [0, 1] or `None`')
 
     def stochastic_process(self, kwargs):
-        if np.random.random() < self.probability:
+        if uniform() < self.probability:
             kwargs = self.call(kwargs)
         return kwargs
 
