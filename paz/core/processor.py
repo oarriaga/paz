@@ -1,30 +1,15 @@
-from ..core.ops.backend import uniform
-
-
 class Processor(object):
-    """ Abstract class for creating a new processor unit.
-    A processor unit logic lives in method `call` which is wrapped
-    to work in two different modes: stochastic and deterministic.
-    The stochastic mode is activated whenever a value different than
-    `None` is given to the variable `probability`.
-    If `None` is passed to `probability` the processor unit works
-    deterministically.
-    If the processor unit is working stochastically the logic in the
-    method `call` will be applied to the input with the
-    probability value given.
-    It the processor is working deterministically the logic of the
-    method `call` will be always applied.
+    """ Abstract class for creating a processor unit.
 
     # Arguments
-        probability: None or float between [0, 1]. See above for description.
         name: String indicating name of the processing unit.
 
     # Methods
         call()
     """
-    def __init__(self, probability=None, name=None):
-        self.probability = probability
+    def __init__(self, name=None):
         self.name = name
+        self._process = self.call
 
     @property
     def name(self):
@@ -36,33 +21,13 @@ class Processor(object):
             name = self.__class__.__name__
         self._name = name
 
-    @property
-    def probability(self):
-        return self._probability
-
-    @probability.setter
-    def probability(self, probability):
-        if probability is None:
-            self._probability = None
-            self._process = self.call
-        elif (0.0 <= probability <= 1.0):
-            self._probability = probability
-            self._process = self.stochastic_process
-        else:
-            raise ValueError('Probability has to be between [0, 1] or `None`')
-
-    def stochastic_process(self, kwargs):
-        if uniform() < self.probability:
-            kwargs = self.call(kwargs)
-        return kwargs
-
-    def call(self, kwargs):
-        """ Logic to be implemented to transform kwargs
+    def call(self, X):
+        """Custom user's logic should be implemented here.
         """
         raise NotImplementedError
 
-    def __call__(self, kwargs):
-        return self._process(kwargs)
+    def __call__(self, *args, **kwargs):
+        return self._process(*args, **kwargs)
 
 
 class SequentialProcessor(object):
@@ -82,10 +47,16 @@ class SequentialProcessor(object):
         """
         self.processors.append(processor)
 
-    def __call__(self, kwargs):
-        for processor in self.processors:
-            kwargs = processor(kwargs)
-        return kwargs
+    def __call__(self, *args, **kwargs):
+        # first call can take list or dictionary values.
+        args = self.processors[0](*args, **kwargs)
+        # further calls can be a tuple or single values.
+        for processor in self.processors[1:]:
+            if isinstance(args, tuple):
+                args = processor(*args)
+            else:
+                args = processor(args)
+        return args
 
     def remove(self, name):
         """Removes processor from sequence
