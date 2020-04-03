@@ -63,7 +63,7 @@ class SingleShotInference(SequentialProcessor):
         self.model, self.class_names = model, class_names
         self.score_thresh, self.nms_thresh = score_thresh, nms_thresh
         self.mean = mean
-        pipeline = [pr.Resize(model.input_shape[1:3]),
+        pipeline = [pr.ResizeImage(model.input_shape[1:3]),
                     pr.SubtractMeanImage(self.mean),
                     pr.CastImageToFloat(),
                     pr.ExpandDims(axis=0, topic='image')]
