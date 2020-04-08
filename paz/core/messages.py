@@ -141,3 +141,26 @@ class Pose6D(object):
         pose_message = ['Pose6D: ', quaternion_message, translation_message]
         pose_message = '\n \t'.join(pose_message)
         return pose_message
+
+
+class Keypoint3D(object):
+    def __init__(self, coordinates, class_name=None):
+        coordinates = coordinates
+        class_name = class_name
+
+    @property
+    def coordinates(self, coordinates):
+        return self._coordinates
+
+    @coordinates.setter
+    def coordinates(self, coordinates):
+        num_keypoints = len(coordinates)
+        if num_keypoints != 3:
+            raise ValueError('Invalid 3D Keypoint length:', num_keypoints)
+        self._coordinates = coordinates
+
+    def project():
+        raise NotImplementedError
+
+    def unproject():
+        raise NotImplementedError
