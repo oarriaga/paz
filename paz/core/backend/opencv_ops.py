@@ -1,5 +1,3 @@
-import colorsys
-import random
 import cv2
 import os
 
@@ -128,6 +126,8 @@ def solve_PNP(points3D, points2D, camera, solver):
 
 
 def project_points3D(points3D, pose6D, camera):
+    """Projects 3D points into a specific pose.
+    """
     point2D, jacobian = cv2.projectPoints(
         points3D, pose6D.rotation_vector, pose6D.translation,
         camera.intrinsics, camera.distortion)
