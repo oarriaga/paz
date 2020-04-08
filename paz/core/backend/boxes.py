@@ -223,40 +223,6 @@ def substract_mean(image_array, mean):
     return image_array
 
 
-def denormalize_keypoints(keypoints, height, width):
-    """Transform normalized keypoint coordinates into image coordinates
-    # Arguments
-        keypoints: Numpy array of shape (num_keypoints, 2)
-        height: Int. Height of the image
-        width: Int. Width of the image
-    """
-    for keypoint_arg, keypoint in enumerate(keypoints):
-        x, y = keypoint[:2]
-        # transform key-point coordinates to image coordinates
-        x = (min(max(x, -1), 1) * width / 2 + width / 2) - 0.5
-        # flip since the image coordinates for y are flipped
-        y = height - 0.5 - (min(max(y, -1), 1) * height / 2 + height / 2)
-        x, y = int(round(x)), int(round(y))
-        keypoints[keypoint_arg][:2] = [x, y]
-    return keypoints
-
-
-def normalize_keypoints(keypoints, height, width):
-    """Transform keypoints in image coordinates to normalized coordinates
-        keypoints: Numpy array of shape (num_keypoints, 2)
-        height: Int. Height of the image
-        width: Int. Width of the image
-    """
-    normalized_keypoints = pz.zeros_like(keypoints, dtype=pz.float32)
-    for keypoint_arg, keypoint in enumerate(keypoints):
-        x, y = keypoint[:2]
-        # transform key-point coordinates to image coordinates
-        x = (((x + 0.5) - (width / 2.0)) / (width / 2))
-        y = (((height - 0.5 - y) - (height / 2.0)) / (height / 2))
-        normalized_keypoints[keypoint_arg][:2] = [x, y]
-    return normalized_keypoints
-
-
 def make_box_square(box, offset_scale=0.05):
     """Makes box coordinates square.
 
@@ -311,3 +277,20 @@ def apply_offsets(coordinates, offset_scales):
     return (x_min, y_min, x_max, y_max)
 
 
+def denormalize_box(box, image_shape):
+    """Scales corner box coordinates from normalized values to image dimensions.
+
+    # Arguments
+        box: Numpy array containing corner box coordinates.
+        image_shape: List of integers with (height, width).
+
+    # Returns
+        returns: box corner coordinates in image dimensions
+    """
+    x_min, y_min, x_max, y_max = box[:4]
+    height, width = image_shape
+    x_min = int(x_min * width)
+    y_min = int(y_min * height)
+    x_max = int(x_max * width)
+    y_max = int(y_max * height)
+    return (x_min, y_min, x_max, y_max)
