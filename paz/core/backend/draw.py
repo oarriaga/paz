@@ -115,18 +115,6 @@ def draw_cube(image, points, color=GREEN, thickness=2):
     # [draw_dot(image, point, color, point_radii) for point in points]
 
 
-def warp_affine(image, matrix, fill_color=[0, 0, 0]):
-    """ Transforms `image` using an affine `matrix` transformation.
-    # Arguments
-        image: Numpy array.
-        matrix: Numpy array of shape (2,3) indicating affine transformation.
-        fill_color: List/tuple representing BGR use for filling empty space.
-    """
-    height, width = image.shape[:2]
-    return cv2.warpAffine(
-        image, matrix, (width, height), borderValue=fill_color)
-
-
 def draw_filled_polygon(image, vertices, color):
     """ Draws filled polygon
     # Arguments
