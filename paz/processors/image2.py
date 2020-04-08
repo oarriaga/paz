@@ -132,7 +132,7 @@ class RandomContrast(Processor):
 
 
 class RandomHue(Processor):
-    """Applies random hue to an image in HSV space.
+    """Applies random hue to an image in RGB space.
     # Arguments
         delta: Integer, indicating the range (-delta, delta ) of possible
             hue values.
@@ -183,6 +183,15 @@ class RandomImageQuality(Processor):
     def call(self, image):
         image = tf.image.random_jpeg_quality(image, self.lower, self.upper)
         return image
+
+
+class ConvertColorSpace(Processor):
+    def __init__(self, flag):
+        self.flag = flag
+        super(ConvertColorSpace, self).__init__()
+
+    def call(self, image):
+        return pz.convert_color_space(image, self.flag)
 
 
 class AddPlainBackground(Processor):
