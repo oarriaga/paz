@@ -1,4 +1,4 @@
-import numpy as np
+from backend import rotation_vector_to_quaternion
 
 
 class Box2D(object):
@@ -127,15 +127,7 @@ class Pose6D(object):
     @classmethod
     def from_rotation_vector(
             cls, rotation_vector, translation, class_name=None):
-        theta = np.linalg.norm(rotation_vector)
-        rotation_axis = rotation_vector / theta
-        half_theta = 0.5 * theta
-        norm = np.sin(half_theta)
-        quaternion = np.array([
-            norm * rotation_axis[0],
-            norm * rotation_axis[1],
-            norm * rotation_axis[2],
-            np.cos(half_theta)])
+        quaternion = rotation_vector_to_quaternion(rotation_vector)
         pose6D = cls(quaternion, translation, class_name)
         pose6D.rotation_vector = rotation_vector
         return pose6D
