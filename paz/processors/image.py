@@ -173,6 +173,14 @@ class RandomImageQuality(Processor):
         return pz.image.random_image_quality(image, self.lower, self.upper)
 
 
+class RandomFlipImageLeftRight(Processor):
+    def __init__(self):
+        super(RandomFlipImageLeftRight, self).__init__()
+
+    def call(self, image):
+        return pz.image.random_flip_left_right(image)
+
+
 class ConvertColorSpace(Processor):
     """Converts image to a different color space.
     # Arguments
