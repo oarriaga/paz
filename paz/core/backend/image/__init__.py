@@ -16,6 +16,7 @@ from .tensorflow_image import convert_color_space
 from .tensorflow_image import random_plain_background
 from .tensorflow_image import random_crop
 from .tensorflow_image import random_cropped_background
+from .tensorflow_image import random_flip_left_right
 
 from .opencv_image import show_image
 
