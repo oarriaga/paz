@@ -83,3 +83,39 @@ def convert_color_space(image, flag):
         raise ValueError('Invalid flag transformation:', flag)
 
     return image
+
+
+def random_crop(image, size):
+    return tf.image.random_crop(image, size)
+
+
+def split_alpha_channel(image):
+    if image.shape[-1] != 4:
+        raise ValueError('Provided image does not contain alpha mask.')
+    image, alpha_channel = tf.split(image, [3], -1)
+    alpha_channel = alpha_channel / 255.0
+    return image, alpha_channel
+
+
+def alpha_blend(foreground, background, alpha_channel):
+    return (alpha_channel * foreground) + ((1.0 - alpha_channel) * background)
+
+
+def random_plain_background(image):
+    """Adds random plain background to image using a normalized alpha channel
+    # Arguments
+        image: Float array-like with shape (H, W, 4).
+        alpha_channel: Float array-like. Normalized alpha channel for blending.
+    """
+    image, alpha_channel = split_alpha_channel(image)
+    random_color = tf.random.uniform([3], 0, 255)
+    random_color = tf.reshape(random_color, [1, 1, 3])
+    H, W = image.shape[:2]
+    background = tf.tile(random_color, [H, W, 1])
+    return alpha_blend(image, background, alpha_channel)
+
+
+def random_cropped_background(image, background):
+    image, alpha_channel = split_alpha_channel(image)
+    background = random_crop(background, size=image.shape)
+    return alpha_blend(image, background, alpha_channel)
