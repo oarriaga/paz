@@ -119,3 +119,13 @@ def random_cropped_background(image, background):
     image, alpha_channel = split_alpha_channel(image)
     background = random_crop(background, size=image.shape)
     return alpha_blend(image, background, alpha_channel)
+
+
+def flip_left_right(image):
+    return tf.image.flip_left_right(image)
+
+
+def random_flip_left_right(image):
+    if tf.random.uniform([1], 0, 2) == 1:
+        image = flip_left_right(image)
+    return image
