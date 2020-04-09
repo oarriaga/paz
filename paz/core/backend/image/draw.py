@@ -1,3 +1,4 @@
+import numpy as np
 import colorsys
 import random
 import cv2
@@ -126,6 +127,24 @@ def draw_filled_polygon(image, vertices, color):
     cv2.fillPoly(image, [vertices], color)
 
 
+def draw_random_polygon(image, max_radius_scale=.5):
+    height, width = image.shape[:2]
+    max_distance = np.max((height, width)) * max_radius_scale
+    num_vertices = np.random.randint(3, 7)
+    angle_between_vertices = 2 * np.pi / num_vertices
+    initial_angle = np.random.uniform(0, 2 * np.pi)
+    center = np.random.rand(2) * np.array([width, height])
+    vertices = np.zeros((num_vertices, 2), dtype=np.int32)
+    for vertex_arg in range(num_vertices):
+        angle = initial_angle + (vertex_arg * angle_between_vertices)
+        vertex = np.array([np.cos(angle), np.sin(angle)])
+        vertex = np.random.uniform(0, max_distance) * vertex
+        vertices[vertex_arg] = (vertex + center).astype(np.int32)
+    color = np.random.randint(0, 256, 3).tolist()
+    draw_filled_polygon(image, vertices, color)
+    return image
+
+
 def lincolor(num_colors, saturation=1, value=1, normalized=False):
     """Creates a list of RGB colors linearly sampled from HSV space with
     randomised Saturation and Value
@@ -160,3 +179,4 @@ def lincolor(num_colors, saturation=1, value=1, normalized=False):
             RGB_color = [int(color * 255) for color in RGB_color]
         RGB_colors.append(RGB_color)
     return RGB_colors
+
