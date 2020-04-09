@@ -1,63 +1,21 @@
 from ..core import Processor
-from ..core import ops
-import numpy as np
+from ..core import backend as pz
+
+import tensorflow as tf
 
 
-class HorizontalFlip(Processor):
+class RandomFlipBoxesLeftRight(Processor):
     """Flips image and implemented labels horizontally.
     Current implemented labels include ``boxes``.
     """
-    def __init__(self, probability=0.5):
-        super(HorizontalFlip, self).__init__(probability)
+    def __init__(self):
+        super(RandomFlipBoxesLeftRight, self).__init__()
 
-    def call(self, image, boxes=None):
-        width = image.shape[1]
-        image = image[:, ::-1]
-        if boxes is not None:
-            boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
-            return image, boxes
-        return image
-
-
-class Expand(Processor):
-    """Expand image size up to 2x, 3x, 4x and fill values with mean color.
-    This transformation is applied with a probability of 50%.
-    # Arguments
-        max_ratio: Float.
-        mean: None/List: If `None` expanded image is filled with
-            the image mean.
-    """
-    def __init__(self, max_ratio=2, probability=0.5, mean=None):
-        super(Expand, self).__init__(probability)
-        self.max_ratio = max_ratio
-        self.mean = mean
-
-    def call(self, image, boxes=None, keypoints=None):
-        height, width, num_channels = image.shape
-        ratio = np.random.uniform(1, self.max_ratio)
-        left = np.random.uniform(0, width * ratio - width)
-        top = np.random.uniform(0, height * ratio - height)
-        expanded_image = np.zeros((int(height * ratio),
-                                   int(width * ratio), num_channels),
-                                  dtype=image.dtype)
-
-        if self.mean is None:
-            expanded_image[:, :, :] = np.mean(image, axis=(0, 1))
-        else:
-            expanded_image[:, :, :] = self.mean
-
-        expanded_image[int(top):int(top + height),
-                       int(left):int(left + width)] = image
-
-        if boxes is not None:
-            boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
-            boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
-            return expanded_image, boxes
-
-        if keypoints is not None:
-            keypoints[:, :2] = keypoints[:, :2] + (int(left), int(top))
-            return expanded_image, keypoints
-        return expanded_image
+    def call(self, image, boxes):
+        if tf.random.uniform([1], 0, 2, tf.int32) == 1:
+            boxes = pz.boxes.flip_left_right(boxes, image.shape[1])
+            image = pz.image.flip_left_right(image)
+        return image, boxes
 
 
 class ToAbsoluteCoordinates(Processor):
@@ -67,28 +25,19 @@ class ToAbsoluteCoordinates(Processor):
         super(ToAbsoluteCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        height, width = image.shape[:2]
-        boxes[:, 0] *= width
-        boxes[:, 2] *= width
-        boxes[:, 1] *= height
-        boxes[:, 3] *= height
-        return boxes
+        boxes = pz.boxes.to_absolute_coordinates(image, boxes)
+        return image, boxes
 
 
 class ToPercentCoordinates(Processor):
     """Convert image box coordinates to normalized box coordinates.
     """
-
     def __init__(self):
         super(ToPercentCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        height, width = image.shape[:2]
-        boxes[:, 0] /= width
-        boxes[:, 2] /= width
-        boxes[:, 1] /= height
-        boxes[:, 3] /= height
-        return boxes
+        boxes = pz.boxes.to_percent_coordinates(image, boxes)
+        return image, boxes
 
 
 class RandomSampleCrop(Processor):
@@ -189,6 +138,47 @@ class RandomSampleCrop(Processor):
                 current_boxes[:, 2:] -= rect[:2]
                 return current_image, np.hstack(
                     [current_boxes, current_labels])
+
+
+class Expand(Processor):
+    """Expand image size up to 2x, 3x, 4x and fill values with mean color.
+    This transformation is applied with a probability of 50%.
+    # Arguments
+        max_ratio: Float.
+        mean: None/List: If `None` expanded image is filled with
+            the image mean.
+    """
+    def __init__(self, max_ratio=2, probability=0.5, mean=None):
+        super(Expand, self).__init__(probability)
+        self.max_ratio = max_ratio
+        self.mean = mean
+
+    def call(self, image, boxes=None, keypoints=None):
+        height, width, num_channels = image.shape
+        ratio = np.random.uniform(1, self.max_ratio)
+        left = np.random.uniform(0, width * ratio - width)
+        top = np.random.uniform(0, height * ratio - height)
+        expanded_image = np.zeros((int(height * ratio),
+                                   int(width * ratio), num_channels),
+                                  dtype=image.dtype)
+
+        if self.mean is None:
+            expanded_image[:, :, :] = np.mean(image, axis=(0, 1))
+        else:
+            expanded_image[:, :, :] = self.mean
+
+        expanded_image[int(top):int(top + height),
+                       int(left):int(left + width)] = image
+
+        if boxes is not None:
+            boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
+            boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
+            return expanded_image, boxes
+
+        if keypoints is not None:
+            keypoints[:, :2] = keypoints[:, :2] + (int(left), int(top))
+            return expanded_image, keypoints
+        return expanded_image
 
 
 class ApplyTranslation(Processor):
