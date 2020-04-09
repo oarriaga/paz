@@ -1,4 +1,7 @@
 import tensor as pz
+import cv2
+
+UPNP = cv2.SOLVEPNP_UPNP
 
 
 def normalize_keypoints(keypoints, height, width):
@@ -33,3 +36,44 @@ def denormalize_keypoints(keypoints, height, width):
         x, y = int(round(x)), int(round(y))
         keypoints[keypoint_arg][:2] = [x, y]
     return keypoints
+
+
+def cascade_classifier(path):
+    """Cascade classifier with detectMultiScale() method for inference.
+    # Arguments
+        path: String. Path to default openCV XML format.
+    """
+    return cv2.CascadeClassifier(path)
+
+
+def solve_PNP(points3D, points2D, camera, solver):
+    """Calculates 6D pose from 3D points and 2D keypoints correspondences.
+    # Arguments
+        points: Numpy array of shape (num_points, 3).
+            Model 3D points known in advance.
+        keypoints: Numpy array of shape (num_points, 2).
+            Predicted 2D keypoints of object
+        camera intrinsics: Numpy array of shape (3, 3) calculated from
+        the openCV calibrateCamera function
+        solver: Flag from e.g openCV.SOLVEPNP_UPNP
+        distortion: Numpy array of shape of 5 elements calculated from
+        the openCV calibrateCamera function
+
+    # Returns
+        A list containing success flag, rotation and translation components
+        of the 6D pose.
+
+    # References
+        https://docs.opencv.org/2.4/modules/calib3d/doc/calib3d.html
+    """
+    return cv2.solvePnP(points3D, points2D, camera.intrinsics,
+                        camera.distortion, None, None, False, solver)
+
+
+def project_points3D(points3D, pose6D, camera):
+    """Projects 3D points into a specific pose.
+    """
+    point2D, jacobian = cv2.projectPoints(
+        points3D, pose6D.rotation_vector, pose6D.translation,
+        camera.intrinsics, camera.distortion)
+    return point2D
