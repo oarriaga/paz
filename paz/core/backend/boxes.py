@@ -397,3 +397,26 @@ def denormalize_box(box, image_shape):
     x_max = int(x_max * width)
     y_max = int(y_max * height)
     return (x_min, y_min, x_max, y_max)
+
+
+def flip_left_right(boxes, width):
+    boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+    return boxes
+
+
+def to_absolute_coordinates(image, boxes):
+    height, width = image.shape[:2]
+    boxes[:, 0] = boxes[:, 0] * width
+    boxes[:, 2] = boxes[:, 2] * width
+    boxes[:, 1] = boxes[:, 1] * height
+    boxes[:, 3] = boxes[:, 3] * height
+    return boxes
+
+
+def to_percent_coordinates(image, boxes):
+    height, width = image.shape[:2]
+    boxes[:, 0] = boxes[:, 0] / width
+    boxes[:, 2] = boxes[:, 2] / width
+    boxes[:, 1] = boxes[:, 1] / height
+    boxes[:, 3] = boxes[:, 3] / height
+    return boxes
