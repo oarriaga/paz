@@ -72,3 +72,7 @@ def zeros_like(x):
 
 def flip(x, axis):
     return tf.reverse(x, axis)
+
+
+def split(x, num_splits, axis=0):
+    return tf.split(x, num_splits, axis=axis)
