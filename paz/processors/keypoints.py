@@ -1,6 +1,8 @@
-from ..core import Processor
-from ..core import ops
 import numpy as np
+
+from ..abstract import Processor
+from ..backend.keypoints import normalize_keypoints
+from ..backend.keypoints import denormalize_keypoints
 
 
 class RenderSingleViewSample(Processor):
@@ -88,7 +90,7 @@ class DenormalizeKeypoints(Processor):
 
     def call(self, keypoints, image):
         height, width = self.image_size[0:2]
-        keypoints = ops.denormalize_keypoints(keypoints, height, width)
+        keypoints = denormalize_keypoints(keypoints, height, width)
         return keypoints
 
 
@@ -101,7 +103,7 @@ class NormalizeKeypoints(Processor):
 
     def call(self, keypoints):
         height, width = self.image_size[0:2]
-        keypoints = ops.normalize_keypoints(keypoints, height, width)
+        keypoints = normalize_keypoints(keypoints, height, width)
         return keypoints
 
 
