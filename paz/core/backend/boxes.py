@@ -52,10 +52,7 @@ def compute_ious(boxes_A, boxes_B):
     # Returns
         Numpy array of shape (num_boxes_A, num_boxes_B)
     """
-    IOUs = np.zeros(len(boxes_A), len(boxes_B))
-    for box_A_arg, box_A in enumerate(boxes_A):
-        IOUs[box_A_arg, :] = compute_iou(box_A, boxes_B)
-    return IOUs
+    return np.apply_along_axis(compute_iou, 1, boxes_A, boxes_B)
 
 
 def to_point_form(boxes):
