@@ -1,7 +1,12 @@
-from ..core import Processor
-from ..core import backend as pz
+import numpy as np
 
-import tensorflow as tf
+from ..backend import Processor
+
+from ..backend.boxes import flip_left_right
+from ..backend.boxes import to_absolute_coordinates
+from ..backend.boxes import to_percent_coordinates
+from ..backend.boxes import compute_iou
+from ..backend.image import warp_affine
 
 
 class RandomFlipBoxesLeftRight(Processor):
@@ -12,9 +17,9 @@ class RandomFlipBoxesLeftRight(Processor):
         super(RandomFlipBoxesLeftRight, self).__init__()
 
     def call(self, image, boxes):
-        if tf.random.uniform([1], 0, 2, tf.int32) == 1:
-            boxes = pz.boxes.flip_left_right(boxes, image.shape[1])
-            image = pz.image.flip_left_right(image)
+        if np.random.randint(0, 2):
+            boxes = flip_left_right(boxes, image.shape[1])
+            image = image[:, ::-1]
         return image, boxes
 
 
@@ -25,7 +30,7 @@ class ToAbsoluteCoordinates(Processor):
         super(ToAbsoluteCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        boxes = pz.boxes.to_absolute_coordinates(image, boxes)
+        boxes = to_absolute_coordinates(image, boxes)
         return image, boxes
 
 
@@ -36,7 +41,7 @@ class ToPercentCoordinates(Processor):
         super(ToPercentCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        boxes = pz.boxes.to_percent_coordinates(image, boxes)
+        boxes = to_percent_coordinates(image, boxes)
         return image, boxes
 
 
@@ -94,7 +99,7 @@ class RandomSampleCrop(Processor):
                     [int(left), int(top), int(left + w), int(top + h)])
 
                 # calculate IoU (jaccard overlap) b/t the cropped and gt boxes
-                overlap = ops.compute_iou(rect, boxes)
+                overlap = compute_iou(rect, boxes)
 
                 # is min and max overlap constraint satisfied? if not try again
                 if overlap.max() < min_iou or overlap.min() > max_iou:
@@ -215,7 +220,7 @@ class ApplyTranslation(Processor):
         height, width = image.shape[:2]
         if self.fill_color is None:
             fill_color = np.mean(image, axis=(0, 1))
-        image = ops.warp_affine(image, self._matrix, fill_color)
+        image = warp_affine(image, self._matrix, fill_color)
         if keypoints is not None:
             keypoints[:, 0] = keypoints[:, 0] + self.translation[0]
             keypoints[:, 1] = keypoints[:, 1] + self.translation[1]
