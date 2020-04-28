@@ -1,15 +1,15 @@
 import numpy as np
 
-from paz.core.ops import compute_iou
-from paz.core.ops import compute_ious
-from paz.core.ops import denormalize_box
-from paz.core.ops import to_point_form
-from paz.core.ops import to_center_form
-from paz.core.ops import rotation_matrix_to_quaternion
-from paz.core.ops import quaternion_to_rotation_matrix
-from paz.core.ops import encode
-from paz.core.ops import match
-from paz.core.ops import decode
+from paz.backend.boxes import compute_iou
+from paz.backend.boxes import compute_ious
+from paz.backend.boxes import denormalize_box
+from paz.backend.boxes import to_point_form
+from paz.backend.boxes import to_center_form
+from paz.backend.boxes import rotation_matrix_to_quaternion
+from paz.backend.boxes import quaternion_to_rotation_matrix
+from paz.backend.boxes import encode
+from paz.backend.boxes import match
+from paz.backend.boxes import decode
 from paz.models.detection.utils import create_prior_boxes
 # from paz.datasets import VOC
 # from paz.core.ops import get_ground_truths
