@@ -1,5 +1,5 @@
-import tensor as pz
 import cv2
+import numpy as np
 
 UPNP = cv2.SOLVEPNP_UPNP
 
@@ -10,7 +10,7 @@ def normalize_keypoints(keypoints, height, width):
         height: Int. Height of the image
         width: Int. Width of the image
     """
-    normalized_keypoints = pz.zeros_like(keypoints, dtype=pz.float32)
+    normalized_keypoints = np.zeros_like(keypoints, dtype=np.float32)
     for keypoint_arg, keypoint in enumerate(keypoints):
         x, y = keypoint[:2]
         # transform key-point coordinates to image coordinates
