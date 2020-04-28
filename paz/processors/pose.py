@@ -1,7 +1,8 @@
 import numpy as np
 
-from ..core import Processor
-from ..core import Pose6D
+from ..abstract import Processor, Pose6D
+from ..backend.keyponts import solve_PNP
+
 from ..core import ops
 
 
@@ -29,7 +30,7 @@ class SolvePNP(Processor):
         keypoints = keypoints.astype(np.float64)
         keypoints = keypoints.reshape((self.num_keypoints, 1, 2))
 
-        (success, rotation, translation) = ops.solve_PNP(
+        (success, rotation, translation) = solve_PNP(
             self.points3D, keypoints, self.camera, ops.UPNP)
 
         pose6D = Pose6D.from_rotation_vector(
