@@ -19,5 +19,6 @@ from .tensorflow_image import random_cropped_background
 from .tensorflow_image import random_flip_left_right
 
 from .opencv_image import show_image
+from .opencv_image import save_image
 
 from .draw import draw_random_polygon
