@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..backend import Processor
+from ..abstract import Processor
 
 from ..backend.boxes import flip_left_right
 from ..backend.boxes import to_absolute_coordinates

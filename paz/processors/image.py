@@ -99,7 +99,7 @@ class RandomSaturation(Processor):
         lower: float. Lower bound for saturation factor.
         upper: float. Upper bound for saturation factor.
     """
-    def __init__(self, lower, upper):
+    def __init__(self, lower=0.3, upper=1.5):
         self.lower = lower
         self.upper = upper
         super(RandomSaturation, self).__init__()

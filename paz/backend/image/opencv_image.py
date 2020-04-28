@@ -55,6 +55,7 @@ def random_contrast(image, lower=0.5, upper=1.5):
     image = image * alpha
     image = np.clip(image, 0, 255)
     image = cast_image(image, np.uint8)
+    return image
 
 
 def random_hue(image, delta=18):
@@ -128,11 +129,13 @@ def random_cropped_background(image, background):
 
 
 def show_image(image, name='image', wait=True):
-    """ Shows image in an external window.
+    """Shows RGB image in an external window.
     # Arguments
         image: Numpy array
         name: String indicating the window name.
     """
+    # openCV default color space is BGR
+    image = convert_color_space(image, RGB2BGR)
     cv2.imshow(name, image)
     if wait:
         cv2.waitKey(0)

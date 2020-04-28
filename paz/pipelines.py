@@ -4,6 +4,7 @@ from . import processors as pr
 
 class AugmentImage(SequentialProcessor):
     def __init__(self):
+        super(AugmentImage, self).__init__()
         self.add(pr.RandomContrast())
         self.add(pr.RandomBrightness())
         self.add(pr.RandomSaturation())
