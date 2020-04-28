@@ -74,6 +74,11 @@ class SequentialProcessor(object):
         """
         return self.processors.pop(index)
 
+    def insert(self, processor, index):
+        """Inserts ``processor`` to self.processors queue at ``index``
+        """
+        return self.processors.insert(index)
+
     def get_processor(self, name):
         """Gets processor from sequencer
         # Arguments
