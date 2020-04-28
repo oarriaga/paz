@@ -85,7 +85,7 @@ class LoadImage(Processor):
     """Decodes image filepath and loads image as tensor.
     # TODO: Raise value error whenever the image was not found.
     """
-    def __init__(self, num_channels):
+    def __init__(self, num_channels=3):
         self.num_channels = num_channels
         super(LoadImage, self).__init__()
 
@@ -272,9 +272,9 @@ class ShowImage(Processor):
         wait: Boolean
     """
     def __init__(self, window_name='image', wait=True):
-        self.window_name = window_name,
-        self.wait
         super(ShowImage, self).__init__()
+        self.window_name = window_name
+        self.wait = wait
 
     def call(self, image):
         return show_image(image, self.window_name, self.wait)
