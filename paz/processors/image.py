@@ -1,7 +1,24 @@
 import numpy as np
 
-from ..core import backend as pz
-from ..core import Processor
+from ..abstract import Processor
+
+from ..backend.image import cast_image
+from ..backend.image import load_image
+from ..backend.image import random_saturation
+from ..backend.image import random_brightness
+from ..backend.image import random_contrast
+from ..backend.image import random_hue
+from ..backend.image import resize
+from ..backend.image import random_image_quality
+from ..backend.image import random_flip_left_right
+from ..backend.image import convert_color_space
+
+from ..backend.image import random_crop
+from ..backend.image import random_plain_background
+from ..backend.image import random_cropped_background
+from ..backend.image import draw_random_polygon
+from ..backend.image import show_image
+
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
@@ -15,7 +32,7 @@ class CastImage(Processor):
         self.dtype = self.dtype
 
     def call(self, image):
-        pz.image.cast_image(image, self.dtype)
+        cast_image(image, self.dtype)
 
 
 class SubtractMeanImage(Processor):
@@ -73,7 +90,7 @@ class LoadImage(Processor):
         super(LoadImage, self).__init__()
 
     def call(self, filepath):
-        return pz.image.load_image(filepath, self.num_channels)
+        return load_image(filepath, self.num_channels)
 
 
 class RandomSaturation(Processor):
@@ -88,7 +105,7 @@ class RandomSaturation(Processor):
         super(RandomSaturation, self).__init__()
 
     def call(self, image):
-        return pz.image.random_saturation(image, self.lower, self.upper)
+        return random_saturation(image, self.lower, self.upper)
 
 
 class RandomBrightness(Processor):
@@ -101,7 +118,7 @@ class RandomBrightness(Processor):
         super(RandomBrightness, self).__init__()
 
     def call(self, image):
-        return pz.image.random_brightness(image, self.max_delta)
+        return random_brightness(image, self.max_delta)
 
 
 class RandomContrast(Processor):
@@ -118,7 +135,7 @@ class RandomContrast(Processor):
         super(RandomContrast, self).__init__()
 
     def call(self, image):
-        return pz.image.random_contrast(image, self.lower, self.upper)
+        return random_contrast(image, self.lower, self.upper)
 
 
 class RandomHue(Processor):
@@ -132,7 +149,7 @@ class RandomHue(Processor):
         super(RandomHue, self).__init__()
 
     def call(self, image):
-        return pz.image.random_hue(image, self.max_delta)
+        return random_hue(image, self.max_delta)
 
 
 class ResizeImage(Processor):
@@ -145,7 +162,7 @@ class ResizeImage(Processor):
         super(ResizeImage, self).__init__()
 
     def call(self, image):
-        return pz.image.resize(image, self.size)
+        return resize(image, self.size)
 
 
 class ResizeImages(Processor):
@@ -158,7 +175,7 @@ class ResizeImages(Processor):
         super(ResizeImages, self).__init__()
 
     def call(self, images):
-        return [pz.image.resize(image, self.shape) for image in images]
+        return [resize(image, self.shape) for image in images]
 
 
 class RandomImageQuality(Processor):
@@ -170,7 +187,7 @@ class RandomImageQuality(Processor):
         super(RandomImageQuality, self).__init__()
 
     def call(self, image):
-        return pz.image.random_image_quality(image, self.lower, self.upper)
+        return random_image_quality(image, self.lower, self.upper)
 
 
 class RandomFlipImageLeftRight(Processor):
@@ -178,20 +195,20 @@ class RandomFlipImageLeftRight(Processor):
         super(RandomFlipImageLeftRight, self).__init__()
 
     def call(self, image):
-        return pz.image.random_flip_left_right(image)
+        return random_flip_left_right(image)
 
 
 class ConvertColorSpace(Processor):
     """Converts image to a different color space.
     # Arguments
-        flag: Flag found in ``ops``indicating transform e.g. pz.image.BGR2RGB
+        flag: Flag found in ``ops``indicating transform e.g. BGR2RGB
     """
     def __init__(self, flag):
         self.flag = flag
         super(ConvertColorSpace, self).__init__()
 
     def call(self, image):
-        return pz.convert_color_space(image, self.flag)
+        return convert_color_space(image, self.flag)
 
 
 class RandomPlainBackground(Processor):
@@ -201,7 +218,7 @@ class RandomPlainBackground(Processor):
         super(RandomPlainBackground, self).__init__()
 
     def call(self, image):
-        return pz.image.random_plain_background(image)
+        return random_plain_background(image)
 
 
 class RandomImageCrop(Processor):
@@ -212,7 +229,7 @@ class RandomImageCrop(Processor):
         super(RandomImageCrop, self).__init__()
 
     def call(self, image):
-        pz.image.random_crop(image, self.size)
+        random_crop(image, self.size)
 
 
 class RandomCroppedBackground(Processor):
@@ -228,8 +245,8 @@ class RandomCroppedBackground(Processor):
 
     def call(self, image):
         random_arg = np.random.randint(0, len(self.image_filepaths))
-        background = pz.load_image(self.image_filepaths[random_arg])
-        return pz.image.random_cropped_background(image, background)
+        background = load_image(self.image_filepaths[random_arg])
+        return random_cropped_background(image, background)
 
 
 class DrawRandomPolygon(Processor):
@@ -245,7 +262,7 @@ class DrawRandomPolygon(Processor):
         self.max_radius_scale = max_radius_scale
 
     def call(self, image):
-        return pz.image.draw_random_polygon(image)
+        return draw_random_polygon(image)
 
 
 class ShowImage(Processor):
@@ -260,4 +277,4 @@ class ShowImage(Processor):
         super(ShowImage, self).__init__()
 
     def call(self, image):
-        return pz.image.show_image(image, self.window_name, self.wait)
+        return show_image(image, self.window_name, self.wait)
