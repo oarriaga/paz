@@ -1,7 +1,8 @@
-from ..core import SequentialProcessor
-from ..core import Processor
-from ..core import ops
 import numpy as np
+
+from ..abstract import SequentialProcessor
+from ..abstract import Processor
+from ..backend.boxes import to_one_hot
 
 
 class BoxClassToOneHotVector(Processor):
@@ -16,7 +17,7 @@ class BoxClassToOneHotVector(Processor):
 
     def call(self, boxes):
         class_indices = boxes[:, 4].astype('int')
-        one_hot_vectors = ops.to_one_hot(class_indices, self.num_classes)
+        one_hot_vectors = to_one_hot(class_indices, self.num_classes)
         one_hot_vectors = one_hot_vectors.reshape(-1, self.num_classes)
         boxes = np.hstack([boxes[:, :4], one_hot_vectors.astype('float')])
         return boxes

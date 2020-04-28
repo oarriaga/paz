@@ -1,6 +1,12 @@
-from ..core import ops
-from ..core import Processor
 import numpy as np
+
+from ..abstract import Processor
+from ..backend.image import lincolor
+from ..backend.image import draw_rectangle
+from ..backend.image import put_text
+from ..backend.image import draw_circle
+from ..backend.image import draw_cube
+from ..backend.keypoints import project_points3D
 
 
 class DrawBoxes2D(Processor):
@@ -12,7 +18,7 @@ class DrawBoxes2D(Processor):
         self.class_names = class_names
         self.colors = colors
         if self.colors is None:
-            self.colors = ops.lincolor(len(self.class_names))
+            self.colors = lincolor(len(self.class_names))
         if class_names is not None:
             self.num_classes = len(self.class_names)
             self.class_to_color = dict(zip(self.class_names, self.colors))
@@ -26,8 +32,8 @@ class DrawBoxes2D(Processor):
             class_name = box2D.class_name
             color = self.class_to_color[class_name]
             text = '{:0.2f}, {}'.format(box2D.score, class_name)
-            ops.put_text(image, text, (x_min, y_min - 10), .7, color, 1)
-            ops.draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
+            put_text(image, text, (x_min, y_min - 10), .7, color, 1)
+            draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return image
 
 
@@ -39,13 +45,13 @@ class DrawKeypoints2D(Processor):
     """
     def __init__(self, num_keypoints, radius=3, normalized=True):
         super(DrawKeypoints2D, self).__init__()
-        self.colors = ops.lincolor(num_keypoints, normalized=normalized)
+        self.colors = lincolor(num_keypoints, normalized=normalized)
         self.radius = radius
 
     def call(self, image, keypoints):
         for keypoint_arg, keypoint in enumerate(keypoints):
             color = self.colors[keypoint_arg]
-            ops.draw_circle(image, keypoint.astype('int'), color, self.radius)
+            draw_circle(image, keypoint.astype('int'), color, self.radius)
         return image
 
 
@@ -84,6 +90,6 @@ class DrawBoxes3D(Processor):
     def call(self, image, pose6D):
         points3D = self.class_to_points[pose6D.class_name]
         args = (points3D, pose6D, self.camera)
-        points2D = ops.project_points3D(*args).astype(np.int32)
-        ops.draw_cube(image, points2D, thickness=1)
+        points2D = project_points3D(*args).astype(np.int32)
+        draw_cube(image, points2D, thickness=1)
         return image

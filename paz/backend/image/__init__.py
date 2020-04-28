@@ -22,3 +22,11 @@ from .opencv_image import show_image
 from .opencv_image import save_image
 
 from .draw import draw_random_polygon
+from .draw import draw_circle
+from .draw import put_text
+from .draw import draw_line
+from .draw import draw_rectangle
+from .draw import draw_dot
+from .draw import draw_cube
+from .draw import draw_random_polygon
+from .draw import draw_filled_polygon
