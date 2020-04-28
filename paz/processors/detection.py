@@ -2,7 +2,14 @@ from __future__ import division
 
 import numpy as np
 
-from ..core import Processor, Box2D, ops
+from ..abstract import Processor, Box2D
+from ..backend.boxes import match
+from ..backend.boxes import encode
+from ..backend.boxes import decode
+from ..backend.boxes import apply_offsets
+from ..backend.boxes import nms_per_class
+from ..backend.boxes import denormalize_box
+from ..backend.boxes import make_box_square
 
 
 class SquareBoxes2D(Processor):
@@ -19,7 +26,7 @@ class SquareBoxes2D(Processor):
 
     def call(self, boxes2D):
         for box2D in boxes2D:
-            box2D.coordinates = ops.make_box_square(
+            box2D.coordinates = make_box_square(
                 box2D.coordinates, self.offset_scale)
         return boxes2D
 
@@ -35,7 +42,7 @@ class DenormalizeBoxes2D(Processor):
 
     def call(self, boxes2D):
         for box2D in boxes2D:
-            box2D.coordinates = ops.denormalize_box(
+            box2D.coordinates = denormalize_box(
                 box2D.coordinates, self.image_size)
         return boxes2D
 
@@ -107,7 +114,7 @@ class CropBoxes2D(Processor):
         image_crops = []
         for box2D in boxes2D:
             coordinates = box2D.coordinates
-            coordinates = ops.apply_offsets(coordinates, self.offset_scales)
+            coordinates = apply_offsets(coordinates, self.offset_scales)
             x_min, y_min, x_max, y_max = coordinates
             image_crops.append(image[y_min:y_max, x_min:x_max])
         return image_crops
@@ -153,7 +160,7 @@ class MatchBoxes(Processor):
         super(MatchBoxes, self).__init__()
 
     def call(self, boxes):
-        boxes = ops.match(boxes, self.prior_boxes, self.iou)
+        boxes = match(boxes, self.prior_boxes, self.iou)
         return boxes
 
 
@@ -166,7 +173,7 @@ class EncodeBoxes(Processor):
         super(EncodeBoxes, self).__init__()
 
     def call(self, boxes):
-        encoded_boxes = ops.encode(boxes, self.prior_boxes, self.variances)
+        encoded_boxes = encode(boxes, self.prior_boxes, self.variances)
         return encoded_boxes
 
 
@@ -179,7 +186,7 @@ class DecodeBoxes(Processor):
         super(DecodeBoxes, self).__init__()
 
     def call(self, boxes):
-        decoded_boxes = ops.decode(boxes, self.prior_boxes, self.variances)
+        decoded_boxes = decode(boxes, self.prior_boxes, self.variances)
         return decoded_boxes
 
 
@@ -192,7 +199,7 @@ class NonMaximumSuppressionPerClass(Processor):
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes = ops.nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
+        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
         return boxes
 
 
@@ -233,7 +240,7 @@ class ApplyOffsets(Processor):
         self.offsets = offsets
 
     def call(self, box2D):
-        box2D.coordinates = ops.apply_offsets(box2D.coordinates, self.offsets)
+        box2D.coordinates = apply_offsets(box2D.coordinates, self.offsets)
         return box2D
 
 
