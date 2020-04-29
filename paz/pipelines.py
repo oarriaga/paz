@@ -59,3 +59,29 @@ class DetectionAugmentation(Processor):
         boxes = self.encode_boxes(boxes)
         boxes = self.to_one_hot_vector(boxes)
         return image, boxes
+
+
+class SingleShotInference(Processor):
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 mean=pr.BGR_IMAGENET_MEAN):
+        super(SingleShotInference, self).__init__()
+        preprocessing = SequentialProcessor(
+            [pr.ResizeImage(model.input_shape[1:3]),
+             pr.ConvertColorSpace(pr.RGB2BGR),
+             pr.SubtractMeanImage(mean),
+             pr.CastImage(float),
+             pr.ExpandDims(axis=0)])
+        postprocessing = SequentialProcessor(
+            [pr.Squeeze(axis=None),
+             pr.DecodeBoxes(model.prior_boxes, variances=[.1, .2]),
+             pr.NonMaximumSuppressionPerClass(nms_thresh),
+             pr.FilterBoxes(class_names, score_thresh)])
+        self.denormalize_boxes2D = pr.DenormalizeBoxes2D()
+        self.predict = pr.Predict(model, preprocessing, postprocessing)
+        self.draw_boxes2D = pr.DrawBoxes2D(class_names)
+
+    def call(self, image):
+        boxes2D = self.predict(image)
+        boxes2D = self.denormalize_boxes2D(image, boxes2D)
+        image = self.draw_boxes2D(image, boxes2D)
+        return image
