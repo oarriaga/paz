@@ -99,13 +99,12 @@ class Squeeze(Processor):
         expand_dims: Int or list of Ints.
         topic: String.
     """
-    def __init__(self, axis, topic):
+    def __init__(self, axis):
         super(Squeeze, self).__init__()
-        self.axis, self.topic = axis, topic
+        self.axis = axis
 
-    def call(self, kwargs):
-        kwargs[self.topic] = np.squeeze(kwargs[self.topic], axis=self.axis)
-        return kwargs
+    def call(self, x):
+        return np.squeeze(x, axis=self.axis)
 
 
 class Copy(Processor):
