@@ -36,14 +36,13 @@ class DenormalizeBoxes2D(Processor):
     # Arguments:
         image_size: List containing height and width of an image.
     """
-    def __init__(self, image_size):
-        self.image_size = image_size
+    def __init__(self):
         super(DenormalizeBoxes2D, self).__init__()
 
-    def call(self, boxes2D):
+    def call(self, image, boxes2D):
+        shape = image.shape[:2]
         for box2D in boxes2D:
-            box2D.coordinates = denormalize_box(
-                box2D.coordinates, self.image_size)
+            box2D.coordinates = denormalize_box(box2D.coordinates, shape)
         return boxes2D
 
 
