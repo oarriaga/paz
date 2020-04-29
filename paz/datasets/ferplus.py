@@ -2,8 +2,8 @@ import os
 import numpy as np
 
 from .utils import get_class_names
-from ..core import Loader
-from ..core import ops
+from ..abstract import Loader
+from ..backend.image import resize_image
 
 # IMAGES_PATH = '../datasets/fer2013/fer2013.csv'
 # LABELS_PATH = '../datasets/fer2013/fer2013new.csv'
@@ -44,7 +44,7 @@ class FERPlus(Loader):
         faces = np.zeros((len(data), *self.image_size))
         for sample_arg, sample in enumerate(data):
             face = np.array(sample[1].split(' '), dtype=int).reshape(48, 48)
-            face = ops.resize_image(face, self.image_size)
+            face = resize_image(face, self.image_size)
             faces[sample_arg, :, :] = face
 
         emotions = np.genfromtxt(self.labels_path, str, '#', ',', 1)

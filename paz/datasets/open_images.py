@@ -3,7 +3,7 @@ import mmap
 
 import numpy as np
 
-from ..core import Loader
+from ..abstract import Loader
 
 
 CLASS_DESCRIPTIONS_FILE = 'class-descriptions-boxable.csv'
