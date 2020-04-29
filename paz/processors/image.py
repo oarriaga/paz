@@ -8,7 +8,7 @@ from ..backend.image import random_saturation
 from ..backend.image import random_brightness
 from ..backend.image import random_contrast
 from ..backend.image import random_hue
-from ..backend.image import resize
+from ..backend.image import resize_image
 from ..backend.image import random_image_quality
 from ..backend.image import random_flip_left_right
 from ..backend.image import convert_color_space
@@ -29,10 +29,11 @@ class CastImage(Processor):
     """Cast image to given dtype.
     """
     def __init__(self, dtype):
-        self.dtype = self.dtype
+        self.dtype = dtype
+        super(CastImage, self).__init__()
 
     def call(self, image):
-        cast_image(image, self.dtype)
+        return cast_image(image, self.dtype)
 
 
 class SubtractMeanImage(Processor):
@@ -162,7 +163,7 @@ class ResizeImage(Processor):
         super(ResizeImage, self).__init__()
 
     def call(self, image):
-        return resize(image, self.size)
+        return resize_image(image, self.size)
 
 
 class ResizeImages(Processor):
@@ -175,7 +176,7 @@ class ResizeImages(Processor):
         super(ResizeImages, self).__init__()
 
     def call(self, images):
-        return [resize(image, self.shape) for image in images]
+        return [resize_image(image, self.shape) for image in images]
 
 
 class RandomImageQuality(Processor):
