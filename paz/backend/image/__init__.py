@@ -6,7 +6,7 @@ from .opencv_image import RGB2GRAY
 
 from .opencv_image import cast_image
 from .opencv_image import load_image
-from .opencv_image import resize
+from .opencv_image import resize_image
 from .opencv_image import convert_color_space
 from .opencv_image import random_saturation
 from .opencv_image import random_brightness

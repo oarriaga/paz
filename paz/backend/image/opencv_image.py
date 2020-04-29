@@ -16,7 +16,7 @@ def cast_image(image, dtype):
     return image.astype(dtype)
 
 
-def resize(image, size):
+def resize_image(image, size):
     return cv2.resize(image, size)
 
 
