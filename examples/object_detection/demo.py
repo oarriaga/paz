@@ -1,8 +1,8 @@
-from paz.core import VideoPlayer
-from paz.pipelines import SingleShotInference
+from paz.backend.camera import VideoPlayer, Camera
 from paz.models import SSD300
 from paz.datasets import get_class_names
-from paz.core import Camera
+from paz.pipelines import SingleShotInference
+
 
 score_thresh, nms_thresh, labels = .6, .45, get_class_names('VOC')
 model = SSD300(len(labels))
