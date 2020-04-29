@@ -1,5 +1,8 @@
 import cv2
 
+from ..backend.image import resize_image, convert_color_space, show_image
+from ..backend.image import BGR2RGB
+
 
 class Camera(object):
     """Camera abstract class.
@@ -94,7 +97,8 @@ class VideoPlayer(object):
         if frame is None:
             print('Frame: None')
             return None
-        return self.pipeline({'image': frame})
+        frame = convert_color_space(frame, BGR2RGB)
+        return self.pipeline(frame)
 
     def run(self):
         """Opens camera and starts continuous inference using ``pipeline``,
@@ -102,9 +106,9 @@ class VideoPlayer(object):
         """
         self.camera.start()
         while True:
-            results = self.step()
-            image = cv2.resize(results['image'], tuple(self.image_size))
-            cv2.imshow('webcam', image)
+            image = self.step()
+            image = resize_image(image, tuple(self.image_size))
+            show_image(image, 'inference', wait=False)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         self.camera.stop()
@@ -122,9 +126,9 @@ class VideoPlayer(object):
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
-            results = self.step()
-            image = cv2.resize(results['image'], tuple(self.image_size))
-            cv2.imshow('webcam', image)
+            image = self.step()
+            image = resize_image(image, tuple(self.image_size))
+            show_image(image, 'inference', wait=False)
             writer.write(image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
