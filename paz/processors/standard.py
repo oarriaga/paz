@@ -1,8 +1,41 @@
 import numpy as np
 
-from ..abstract import SequentialProcessor
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
+
+
+class Predict(Processor):
+    def __init__(self, model, preprocess=None, postprocess=None):
+        super(Predict, self).__init__()
+        self.model = model
+        self.preprocess = preprocess
+        self.postprocess = postprocess
+
+    def call(self, x):
+        if self.preprocess is not None:
+            x = self.preprocess(x)
+        y = self.model.predict(x)
+        if self.postprocess is not None:
+            y = self.postprocess(y)
+        return y
+
+
+class ToClassName(Processor):
+    def __init__(self, labels):
+        super(ToClassName, self).__init__()
+        self.labels = labels
+
+    def call(self, x):
+        return self.labels[np.argmax(x)]
+
+
+class ExpandDims(Processor):
+    def __init__(self, axis):
+        super(ExpandDims, self).__init__()
+        self.axis = axis
+
+    def call(self, x):
+        return np.expand_dims(x, self.axis)
 
 
 class BoxClassToOneHotVector(Processor):
@@ -49,28 +82,6 @@ class OutputSelector(Processor):
         return {'inputs': inputs, 'labels': labels}
 
 
-class Predict(Processor):
-    def __init__(self, model, input_topic, label_topic='predictions',
-                 processors=None):
-
-        super(Predict, self).__init__()
-        self.model = model
-        self.processors = processors
-        if self.processors is not None:
-            self.process = SequentialProcessor(processors)
-        self.input_topic = input_topic
-        self.label_topic = label_topic
-
-    def call(self, kwargs):
-        input_topic = kwargs[self.input_topic]
-        if self.processors is not None:
-            processing_kwargs = {self.input_topic: input_topic}
-            input_topic = self.process(processing_kwargs)[self.input_topic]
-        label_topic = self.model.predict(input_topic)
-        kwargs[self.label_topic] = label_topic
-        return kwargs
-
-
 class SelectElement(Processor):
     def __init__(self, topic, argument):
         super(SelectElement, self).__init__()
@@ -79,32 +90,6 @@ class SelectElement(Processor):
 
     def call(self, kwargs):
         kwargs[self.topic] = kwargs[self.topic][self.argument]
-        return kwargs
-
-
-class ToLabel(Processor):
-    def __init__(self, class_names, topic='predictions'):
-        super(ToLabel, self).__init__()
-        self.class_names = class_names
-        self.topic = topic
-
-    def call(self, kwargs):
-        kwargs[self.topic] = self.class_names[np.argmax(kwargs[self.topic])]
-        return kwargs
-
-
-class ExpandDims(Processor):
-    """Wrap around numpy `expand_dims` due to common use before model predict.
-    # Arguments
-        expand_dims: Int or list of Ints.
-        topic: String.
-    """
-    def __init__(self, axis, topic):
-        super(ExpandDims, self).__init__()
-        self.axis, self.topic = axis, topic
-
-    def call(self, kwargs):
-        kwargs[self.topic] = np.expand_dims(kwargs[self.topic], self.axis)
         return kwargs
 
 
