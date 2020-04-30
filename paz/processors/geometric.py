@@ -23,22 +23,22 @@ class RandomFlipBoxesLeftRight(Processor):
         return image, boxes
 
 
-class ToAbsoluteCoordinates(Processor):
+class ToAbsoluteBoxCoordinates(Processor):
     """Convert normalized box coordinates to image box coordinates.
     """
     def __init__(self):
-        super(ToAbsoluteCoordinates, self).__init__()
+        super(ToAbsoluteBoxCoordinates, self).__init__()
 
     def call(self, image, boxes):
         boxes = to_absolute_coordinates(image, boxes)
         return image, boxes
 
 
-class ToPercentCoordinates(Processor):
+class ToNormalizedBoxCoordinates(Processor):
     """Convert image box coordinates to normalized box coordinates.
     """
     def __init__(self):
-        super(ToPercentCoordinates, self).__init__()
+        super(ToNormalizedBoxCoordinates, self).__init__()
 
     def call(self, image, boxes):
         boxes = to_percent_coordinates(image, boxes)
@@ -63,9 +63,9 @@ class RandomSampleCrop(Processor):
         )
         super(RandomSampleCrop, self).__init__()
 
-    def call(self, image, boxes=None):
-        boxes = boxes[:, :4]
+    def call(self, image, boxes):
         labels = boxes[:, -1:]
+        boxes = boxes[:, :4]
         height, width, _ = image.shape
         while True:
             # randomly choose a mode
@@ -158,7 +158,7 @@ class Expand(Processor):
         self.max_ratio = max_ratio
         self.mean = mean
 
-    def call(self, image, boxes=None, keypoints=None):
+    def call(self, image, boxes):
         height, width, num_channels = image.shape
         ratio = np.random.uniform(1, self.max_ratio)
         left = np.random.uniform(0, width * ratio - width)
@@ -175,15 +175,9 @@ class Expand(Processor):
         expanded_image[int(top):int(top + height),
                        int(left):int(left + width)] = image
 
-        if boxes is not None:
-            boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
-            boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
-            return expanded_image, boxes
-
-        if keypoints is not None:
-            keypoints[:, :2] = keypoints[:, :2] + (int(left), int(top))
-            return expanded_image, keypoints
-        return expanded_image
+        boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
+        boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
+        return expanded_image, boxes
 
 
 class ApplyTranslation(Processor):
