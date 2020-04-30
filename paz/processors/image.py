@@ -114,12 +114,12 @@ class RandomBrightness(Processor):
     # Arguments:
         max_delta: float.
     """
-    def __init__(self, max_delta=32):
-        self.max_delta = max_delta
+    def __init__(self, delta=32):
+        self.delta = delta
         super(RandomBrightness, self).__init__()
 
     def call(self, image):
-        return random_brightness(image, self.max_delta)
+        return random_brightness(image, self.delta)
 
 
 class RandomContrast(Processor):
@@ -145,12 +145,12 @@ class RandomHue(Processor):
         delta: Integer, indicating the range (-delta, delta ) of possible
             hue values.
     """
-    def __init__(self, max_delta=18):
-        self.max_delta = max_delta
+    def __init__(self, delta=18):
+        self.delta = delta
         super(RandomHue, self).__init__()
 
     def call(self, image):
-        return random_hue(image, self.max_delta)
+        return random_hue(image, self.delta)
 
 
 class ResizeImage(Processor):
