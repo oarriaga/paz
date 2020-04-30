@@ -64,6 +64,8 @@ class RandomSampleCrop(Processor):
         super(RandomSampleCrop, self).__init__()
 
     def call(self, image, boxes):
+        if np.random.randint(0, 2):
+            return image, boxes
         labels = boxes[:, -1:]
         boxes = boxes[:, :4]
         height, width, _ = image.shape
@@ -153,12 +155,14 @@ class Expand(Processor):
         mean: None/List: If `None` expanded image is filled with
             the image mean.
     """
-    def __init__(self, max_ratio=2, probability=0.5, mean=None):
-        super(Expand, self).__init__(probability)
+    def __init__(self, max_ratio=2, mean=None):
+        super(Expand, self).__init__()
         self.max_ratio = max_ratio
         self.mean = mean
 
     def call(self, image, boxes):
+        if np.random.randint(0, 2):
+            return image, boxes
         height, width, num_channels = image.shape
         ratio = np.random.uniform(1, self.max_ratio)
         left = np.random.uniform(0, width * ratio - width)
@@ -229,11 +233,10 @@ class ApplyRandomTranslation(Processor):
             e.g. [.25, .25]
         fill_color: List of three integers indicating the
             color values e.g. [0,0,0]
-        probability: Float between [0, 1]
     """
     def __init__(
-            self, delta_scale=[0.25, 0.25], fill_color=None, probability=0.5):
-        super(ApplyRandomTranslation, self).__init__(probability)
+            self, delta_scale=[0.25, 0.25], fill_color=None):
+        super(ApplyRandomTranslation, self).__init__()
         self.delta_scale = delta_scale
         self.apply_translation = ApplyTranslation(None, fill_color)
 
