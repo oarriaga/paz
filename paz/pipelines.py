@@ -22,9 +22,9 @@ class AugmentBoxes(SequentialProcessor):
 
 
 class PreprocessImage(SequentialProcessor):
-    def __init__(self, size, mean=pr.BGR_IMAGENET_MEAN):
+    def __init__(self, shape, mean=pr.BGR_IMAGENET_MEAN):
         super(PreprocessImage, self).__init__()
-        self.add(pr.ResizeImage((size, size)))
+        self.add(pr.ResizeImage(shape)
         self.add(pr.CastImage(float))
         if mean is None:
             self.add(pr.NormalizeImage())
@@ -39,25 +39,47 @@ class PreprocessBoxes(SequentialProcessor):
         self.add(pr.BoxClassToOneHotVector(num_classes))
 
 
-class DetectionAugmentation(Processor):
-    def __init__(self, prior_boxes, num_classes, size=300,
+class AugmentDetection(Processor):
+    def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
-        super(DetectionAugmentation, self).__init__()
-
+        super(AugmentDetection, self).__init__()
+        self.prior_boxes = prior_boxes
+        self.split = split
+        self.num_classes = num_classes
+        self.size = size
         self.augment_image = AugmentImage()
         self.augment_image.insert(0, pr.LoadImage())
         self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
         self.augment_boxes = AugmentBoxes()
         self.preprocess_boxes = PreprocessBoxes(
             num_classes, prior_boxes, IOU, variances)
-        self.preprocess_image = PreprocessImage(size, mean)
+        self.preprocess_image = PreprocessImage((size, size), mean)
+        self.wrapper = pr.OutputWrapper(self.input_names, self.label_names)
 
     def call(self, image, boxes):
-        image = self.augment_image(image)
-        image, boxes = self.augment_boxes(image, boxes)
+        if self.split == pr.TRAIN:
+            image = self.augment_image(image)
+            image, boxes = self.augment_boxes(image, boxes)
         image = self.preprocess_image(image)
         boxes = self.preprocess_boxes(boxes)
-        return image, boxes
+        wrapped_outputs = self.wrapper([image], [boxes])
+        return wrapped_outputs
+
+    @property
+    def input_shapes(self):
+        return [(self.size, self.size, 3)]
+
+    @property
+    def label_shapes(self):
+        return [(len(self.prior_boxes), 4 + self.num_classes)]
+
+    @property
+    def input_names(self):
+        return ['image']
+
+    @property
+    def label_names(self):
+        return ['boxes']
 
 
 class SingleShotInference(Processor):
