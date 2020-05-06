@@ -4,6 +4,17 @@ from ..abstract import Processor
 from ..backend.boxes import to_one_hot
 
 
+class ExtendInputs(Processor):
+    def __init__(self, processor):
+        self.processor = processor
+        name = '-'.join([self.__class__.__name__, self.processor.name])
+        super(ExtendInputs, self).__init__(name)
+        print(self.processor)
+
+    def call(self, X, *args):
+        return self.processor(X), *args
+
+
 class Predict(Processor):
     def __init__(self, model, preprocess=None, postprocess=None):
         super(Predict, self).__init__()
@@ -56,29 +67,30 @@ class BoxClassToOneHotVector(Processor):
         return boxes
 
 
-class OutputSelector(Processor):
-    """Selects data types (topics) that will be outputted.
-    #Arguments
-        input_topics: List of strings indicating the keys of data
-            dictionary (data topics).
-        output_topics: List of strings indicating the keys of data
-            dictionary (data topics).
-        as_dict: Boolean. If ``True`` output will be a dictionary
-            of form {'inputs':list_of_input_arrays,
-                     'outputs': list_of_output_arrays}
-            If ``False'', output will be of the form
-                list_of_input_arrays + list_of_output_arrays
-    """
-    def __init__(self, input_topics, label_topics):
-        self.input_topics, self.label_topics = input_topics, label_topics
-        super(OutputSelector, self).__init__()
+class OutputWrapper(Processor):
+    def __init__(self, input_names, label_names):
+        self.input_names = input_names
+        self.label_names = label_names
+        super(OutputWrapper, self).__init__()
 
-    def call(self, kwargs):
-        inputs, labels = {}, {}
-        for topic in self.input_topics:
-            inputs[topic] = kwargs[topic]
-        for topic in self.label_topics:
-            labels[topic] = kwargs[topic]
+    def _wrap_samples(self, samples, names):
+        wrap = {}
+        for sample, name in zip(samples, names):
+            wrap[name] = sample
+        return wrap
+
+    def call(self, inputs, labels):
+        if isinstance(inputs, list):
+            inputs = self._wrap_samples(inputs, self.input_names)
+        else:
+            if len(self.input_names) != 1:
+                raise ValueError('Invalid number of ``input_names``')
+            inputs = {self.input_names[0]: inputs}
+        if isinstance(labels, list):
+            labels = self._wrap_samples(labels, self.label_names)
+            if len(self.label_names) != 1:
+                raise ValueError('Invalid number of ``label_names``')
+            labels = {self.label_names[0]: labels}
         return {'inputs': inputs, 'labels': labels}
 
 
