@@ -9,7 +9,6 @@ class Processor(object):
     """
     def __init__(self, name=None):
         self.name = name
-        self._process = self.call
 
     @property
     def name(self):
@@ -27,7 +26,7 @@ class Processor(object):
         raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
-        return self._process(*args, **kwargs)
+        return self.call(*args, **kwargs)
 
 
 class SequentialProcessor(object):
@@ -35,10 +34,21 @@ class SequentialProcessor(object):
     # Methods:
         add()
     """
-    def __init__(self, processors=None):
+    def __init__(self, processors=None, name=None):
         self.processors = []
         if processors is not None:
             [self.add(processor) for processor in processors]
+        self.name = name
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        if name is None:
+            name = self.__class__.__name__
+        self._name = name
 
     def add(self, processor):
         """ Adds a process to the sequence of processes to be applied to input.
