@@ -279,3 +279,15 @@ class ShowImage(Processor):
 
     def call(self, image):
         return show_image(image, self.window_name, self.wait)
+
+
+class ImageDataProcessor(Processor):
+    def __init__(self, generator):
+        super(ImageDataProcessor, self).__init__()
+        self.generator = generator
+
+    def call(self, image):
+        random_parameters = self.generator.get_random_transform(image.shape)
+        image = self.generator.apply_transform(image, random_parameters)
+        image = self.generator.standardize(image)
+        return image
