@@ -10,3 +10,7 @@ from ..backend.image.opencv_image import BGR2RGB
 from ..backend.image.opencv_image import RGB2GRAY
 from ..backend.image.opencv_image import RGB2HSV
 from ..backend.image.opencv_image import HSV2RGB
+
+TRAIN = 0
+VAL = 1
+TEST = 2
