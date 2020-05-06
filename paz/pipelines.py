@@ -24,7 +24,7 @@ class AugmentBoxes(SequentialProcessor):
 class PreprocessImage(SequentialProcessor):
     def __init__(self, shape, mean=pr.BGR_IMAGENET_MEAN):
         super(PreprocessImage, self).__init__()
-        self.add(pr.ResizeImage(shape)
+        self.add(pr.ResizeImage(shape))
         self.add(pr.CastImage(float))
         if mean is None:
             self.add(pr.NormalizeImage())
