@@ -103,9 +103,13 @@ class BoxClassToOneHotVector(Processor):
 
 
 class OutputWrapper(Processor):
-    def __init__(self, input_names, label_names):
-        self.input_names = input_names
-        self.label_names = label_names
+    def __init__(self, inputs_info, labels_info):
+        if not isinstance(inputs_info, dict):
+            raise ValueError('``inputs_info`` must be a dictionary')
+        if not isinstance(labels_info, dict):
+            raise ValueError('``inputs_info`` must be a dictionary')
+        self.inputs_info = inputs_info
+        self.labels_info = labels_info
         super(OutputWrapper, self).__init__()
 
     def _wrap_samples(self, samples, names):
