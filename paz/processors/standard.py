@@ -4,6 +4,41 @@ from ..abstract import Processor
 from ..backend.boxes import to_one_hot
 
 
+class ModifyFlow(Processor):
+    def __init__(self, processor, intro_indices=[0], outro_indices=[0]):
+        self.processor = processor
+        if not isinstance(intro_indices, list):
+            raise ValueError('``intro_indices`` must be a list')
+        if not isinstance(outro_indices, list):
+            raise ValueError('``outro_indices`` must be a list')
+        self.intro_indices = intro_indices
+        self.outro_indices = outro_indices
+        name = '-'.join([self.__class__.__name__, self.processor.name])
+        super(ModifyFlow, self).__init__(name)
+
+    def _select(self, inputs, indices):
+        return [inputs[index] for index in indices]
+
+    def _remove(self, inputs, indices):
+        return [inputs[i] for i in range(len(inputs)) if i not in indices]
+
+    def _split(self, inputs, indices):
+        return self._select(inputs, indices), self._remove(inputs, indices)
+
+    def _insert(self, args, axes, values):
+        [args.insert(axis, value) for axis, value in zip(axes, values)]
+        return args
+
+    def call(self, *args):
+        selections, args = self._split(args, self.intro_indices)
+        selections = self.processor(*selections)
+        if not isinstance(selections, tuple):
+            print(selections)
+            selections = [selections]
+        args = self._insert(args, self.outro_indices, selections)
+        return tuple(args)
+
+
 class ExtendInputs(Processor):
     def __init__(self, processor):
         self.processor = processor
