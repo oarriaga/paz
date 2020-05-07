@@ -38,6 +38,11 @@ class ControlFlow(Processor):
         return tuple(args)
 
 
+class ExpandFlow(ControlFlow):
+    def __init__(self, processor):
+        super(ExpandFlow, self).__init__(processor)
+
+
 class UnpackDictionary(Processor):
     def __init__(self, order):
         if not isinstance(order, list):

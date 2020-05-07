@@ -52,6 +52,7 @@ from .geometric import ApplyRandomTranslation
 # from .keypoints import *
 
 from .standard import ControlFlow
+from .standard import ExpandFlow
 from .standard import ExtendInputs
 from .standard import OutputWrapper
 from .standard import Predict
