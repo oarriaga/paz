@@ -16,7 +16,6 @@ from ..backend.image import convert_color_space
 from ..backend.image import random_crop
 from ..backend.image import random_plain_background
 from ..backend.image import random_cropped_background
-from ..backend.image import draw_random_polygon
 from ..backend.image import show_image
 
 
@@ -90,8 +89,8 @@ class LoadImage(Processor):
         self.num_channels = num_channels
         super(LoadImage, self).__init__()
 
-    def call(self, filepath):
-        return load_image(filepath, self.num_channels)
+    def call(self, image):
+        return load_image(image, self.num_channels)
 
 
 class RandomSaturation(Processor):
@@ -248,22 +247,6 @@ class RandomCroppedBackground(Processor):
         random_arg = np.random.randint(0, len(self.image_filepaths))
         background = load_image(self.image_filepaths[random_arg])
         return random_cropped_background(image, background)
-
-
-class DrawRandomPolygon(Processor):
-    """ Adds occlusion to image
-    # Arguments
-        max_radius_scale: Maximum radius in scale with respect to image i.e.
-            each vertex radius from the polygon is sampled
-            from [0, max_radius_scale]. This radius is later multiplied by
-            the image dimensions.
-    """
-    def __init__(self, max_radius_scale=.5):
-        super(DrawRandomPolygon, self).__init__()
-        self.max_radius_scale = max_radius_scale
-
-    def call(self, image):
-        return draw_random_polygon(image)
 
 
 class ShowImage(Processor):
