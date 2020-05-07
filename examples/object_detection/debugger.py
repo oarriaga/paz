@@ -3,7 +3,7 @@ from paz.models import SSD300
 from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
-from paz.pipelines import DetectionAugmentation
+from paz.pipelines import AugmentDetection
 
 
 class ShowBoxes(Processor):
@@ -35,16 +35,17 @@ batch_size = 30
 data_manager = VOC('VOCdevkit/')
 data = data_manager.load_data()
 
-num_classes = data_manager.num_classes
 class_names = data_manager.class_names
-model = SSD300(num_classes, base_weights='VGG', head_weights=None)
+model = SSD300(base_weights='VGG', head_weights=None)
 prior_boxes = model.prior_boxes
 
-testor_encoder = DetectionAugmentation(prior_boxes, num_classes)
+testor_encoder = AugmentDetection(prior_boxes)
 testor_decoder = ShowBoxes(class_names, prior_boxes)
 sample_arg = 0
 for sample_arg in range(1000):
-    print(sample_arg)
     sample = data[sample_arg]
-    image, boxes = testor_encoder(**sample)
+    wrapped_outputs = testor_encoder(sample)
+    print(wrapped_outputs['labels'])
+    image = wrapped_outputs['inputs']['image']
+    boxes = wrapped_outputs['labels']['boxes']
     image, boxes = testor_decoder(image, boxes)
