@@ -3,13 +3,14 @@ import argparse
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler
-from paz.pipelines import DetectionAugmentation
+from paz.pipelines import AugmentDetection
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
-from paz.core.sequencer import ProcessingSequencer
+from paz.abstract import ProcessingSequence
 from paz.optimization.callbacks import EvaluateMAP
 from paz.pipelines import SingleShotInference
+from paz.processors import TRAIN, VAL
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
@@ -35,6 +36,10 @@ parser.add_argument('-dp', '--data_path', default='VOCdevkit/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
                     default=[55, 76], help='Epochs for reducing learning rate')
+parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
+                    help='Select True for multiprocessing')
+parser.add_argument('-w', '--workers', default=1, type=int,
+                    help='Number of workers used for optimization')
 args = parser.parse_args()
 
 optimizer = SGD(args.learning_rate, args.momentum)
@@ -67,14 +72,14 @@ model.compile(optimizer, loss.compute_loss, metrics)
 
 # setting data augmentation pipeline
 augmentators = []
-for split in ['train', 'val']:
-    augmentator = DetectionAugmentation(model.prior_boxes, num_classes, split)
+for split in [TRAIN, VAL]:
+    augmentator = AugmentDetection(model.prior_boxes, split)
     augmentators.append(augmentator)
 
 # setting sequencers
 sequencers = []
 for data, augmentator in zip(datasets, augmentators):
-    sequencer = ProcessingSequencer(augmentator, args.batch_size, data)
+    sequencer = ProcessingSequence(augmentator, args.batch_size, data)
     sequencers.append(sequencer)
 
 # setting callbacks
@@ -101,5 +106,5 @@ model.fit_generator(
     verbose=1,
     callbacks=[checkpoint, log, schedule, evaluate],
     validation_data=sequencers[1],
-    use_multiprocessing=False,
-    workers=1)
+    use_multiprocessing=args.multiprocessing,
+    workers=args.workers)
