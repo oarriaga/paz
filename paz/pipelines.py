@@ -39,47 +39,29 @@ class PreprocessBoxes(SequentialProcessor):
         self.add(pr.BoxClassToOneHotVector(num_classes))
 
 
-class AugmentDetection(Processor):
+class AugmentDetection(SequentialProcessor):
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
         super(AugmentDetection, self).__init__()
-        self.prior_boxes = prior_boxes
-        self.split = split
-        self.num_classes = num_classes
-        self.size = size
+
         self.augment_image = AugmentImage()
         self.augment_image.insert(0, pr.LoadImage())
         self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
-        self.augment_boxes = AugmentBoxes()
-        self.preprocess_boxes = PreprocessBoxes(
-            num_classes, prior_boxes, IOU, variances)
         self.preprocess_image = PreprocessImage((size, size), mean)
-        self.wrapper = pr.OutputWrapper(self.input_names, self.label_names)
 
-    def call(self, image, boxes):
-        if self.split == pr.TRAIN:
-            image = self.augment_image(image)
-            image, boxes = self.augment_boxes(image, boxes)
-        image = self.preprocess_image(image)
-        boxes = self.preprocess_boxes(boxes)
-        wrapped_outputs = self.wrapper([image], [boxes])
-        return wrapped_outputs
+        self.augment_boxes = AugmentBoxes()
+        args = (num_classes, prior_boxes, IOU, variances)
+        self.preprocess_boxes = PreprocessBoxes(*args)
 
-    @property
-    def input_shapes(self):
-        return [(self.size, self.size, 3)]
-
-    @property
-    def label_shapes(self):
-        return [(len(self.prior_boxes), 4 + self.num_classes)]
-
-    @property
-    def input_names(self):
-        return ['image']
-
-    @property
-    def label_names(self):
-        return ['boxes']
+        self.add(pr.UnpackDictionary(['image', 'boxes']))
+        self.add(pr.ControlFlow(self.augment_image, [0], [0]))
+        self.add(pr.ControlFlow(self.augment_boxes, [0, 1], [0, 1]))
+        if split == pr.TRAIN:
+            self.add(pr.ControlFlow(self.preprocess_image, [0], [0]))
+            self.add(pr.ControlFlow(self.preprocess_boxes, [1], [1]))
+        self.add(pr.OutputWrapper(
+            {0: {'image': (size, size, 3)}},
+            {1: {'boxes': (len(prior_boxes), 4 + num_classes)}}))
 
 
 class SingleShotInference(Processor):
