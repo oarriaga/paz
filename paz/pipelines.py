@@ -28,7 +28,8 @@ class PreprocessImage(SequentialProcessor):
         self.add(pr.CastImage(float))
         if mean is None:
             self.add(pr.NormalizeImage())
-        self.add(pr.SubtractMeanImage(mean))
+        else:
+            self.add(pr.SubtractMeanImage(mean))
 
 
 class PreprocessBoxes(SequentialProcessor):
