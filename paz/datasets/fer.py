@@ -41,4 +41,9 @@ class FER(Loader):
             face = resize_image(face, self.image_size)
             faces[sample_arg, :, :, 0] = face
         emotions = to_categorical(data[:, 0].astype(int), self.num_classes)
-        return faces, emotions
+
+        data = []
+        for face, emotion in zip(faces, emotions):
+            sample = {'image': face, 'label': emotion}
+            data.append(sample)
+        return data
