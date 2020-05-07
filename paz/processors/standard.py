@@ -4,7 +4,7 @@ from ..abstract import Processor
 from ..backend.boxes import to_one_hot
 
 
-class ModifyFlow(Processor):
+class ControlFlow(Processor):
     def __init__(self, processor, intro_indices=[0], outro_indices=[0]):
         self.processor = processor
         if not isinstance(intro_indices, list):
@@ -14,7 +14,7 @@ class ModifyFlow(Processor):
         self.intro_indices = intro_indices
         self.outro_indices = outro_indices
         name = '-'.join([self.__class__.__name__, self.processor.name])
-        super(ModifyFlow, self).__init__(name)
+        super(ControlFlow, self).__init__(name)
 
     def _select(self, inputs, indices):
         return [inputs[index] for index in indices]
@@ -33,10 +33,21 @@ class ModifyFlow(Processor):
         selections, args = self._split(args, self.intro_indices)
         selections = self.processor(*selections)
         if not isinstance(selections, tuple):
-            print(selections)
             selections = [selections]
         args = self._insert(args, self.outro_indices, selections)
         return tuple(args)
+
+
+class UnpackDictionary(Processor):
+    def __init__(self, order):
+        if not isinstance(order, list):
+            raise ValueError('``order`` must be a list')
+        self.order = order
+        super(UnpackDictionary, self).__init__()
+
+    def call(self, kwargs):
+        args = tuple([kwargs[name] for name in self.order])
+        return args
 
 
 class ExtendInputs(Processor):
@@ -44,10 +55,40 @@ class ExtendInputs(Processor):
         self.processor = processor
         name = '-'.join([self.__class__.__name__, self.processor.name])
         super(ExtendInputs, self).__init__(name)
-        print(self.processor)
 
     def call(self, X, *args):
         return self.processor(X), *args
+
+
+class OutputWrapper(Processor):
+    def __init__(self, inputs_info, labels_info):
+        if not isinstance(inputs_info, dict):
+            raise ValueError('``inputs_info`` must be a dictionary')
+        self.inputs_info = inputs_info
+        if not isinstance(labels_info, dict):
+            raise ValueError('``inputs_info`` must be a dictionary')
+        self.labels_info = labels_info
+        self.inputs_name_to_shape = self._extract_name_to_shape(inputs_info)
+        self.labels_name_to_shape = self._extract_name_to_shape(labels_info)
+        super(OutputWrapper, self).__init__()
+
+    def _extract_name_to_shape(self, info):
+        name_to_shape = list(info.values())
+        if len(name_to_shape) != 1:
+            raise ValueError('``values`` of ``info`` must be a single dict')
+        return name_to_shape[0]
+
+    def _wrap(self, args, info):
+        wrap = {}
+        for arg, name_to_shape in info.items():
+            name = list(name_to_shape.keys())[0]
+            wrap[name] = args[arg]
+        return wrap
+
+    def call(self, *args):
+        inputs = self._wrap(args, self.inputs_info)
+        labels = self._wrap(args, self.labels_info)
+        return {'inputs': inputs, 'labels': labels}
 
 
 class Predict(Processor):
@@ -102,48 +143,6 @@ class BoxClassToOneHotVector(Processor):
         return boxes
 
 
-class OutputWrapper(Processor):
-    def __init__(self, inputs_info, labels_info):
-        if not isinstance(inputs_info, dict):
-            raise ValueError('``inputs_info`` must be a dictionary')
-        if not isinstance(labels_info, dict):
-            raise ValueError('``inputs_info`` must be a dictionary')
-        self.inputs_info = inputs_info
-        self.labels_info = labels_info
-        super(OutputWrapper, self).__init__()
-
-    def _wrap_samples(self, samples, names):
-        wrap = {}
-        for sample, name in zip(samples, names):
-            wrap[name] = sample
-        return wrap
-
-    def call(self, inputs, labels):
-        if isinstance(inputs, list):
-            inputs = self._wrap_samples(inputs, self.input_names)
-        else:
-            if len(self.input_names) != 1:
-                raise ValueError('Invalid number of ``input_names``')
-            inputs = {self.input_names[0]: inputs}
-        if isinstance(labels, list):
-            labels = self._wrap_samples(labels, self.label_names)
-            if len(self.label_names) != 1:
-                raise ValueError('Invalid number of ``label_names``')
-            labels = {self.label_names[0]: labels}
-        return {'inputs': inputs, 'labels': labels}
-
-
-class SelectElement(Processor):
-    def __init__(self, topic, argument):
-        super(SelectElement, self).__init__()
-        self.topic = topic
-        self.argument = argument
-
-    def call(self, kwargs):
-        kwargs[self.topic] = kwargs[self.topic][self.argument]
-        return kwargs
-
-
 class Squeeze(Processor):
     """Wrap around numpy `squeeze` due to common use before model predict.
     # Arguments
@@ -164,13 +163,11 @@ class Copy(Processor):
         input_topic: String. Topic to copy from.
         label_topic: String. Topic to copy to.
     """
-    def __init__(self, input_topic, label_topic):
+    def __init__(self):
         super(Copy, self).__init__()
-        self.input_topic, self.label_topic = input_topic, label_topic
 
-    def call(self, kwargs):
-        kwargs[self.label_topic] = kwargs[self.input_topic].copy()
-        return kwargs
+    def call(self, X):
+        return X.copy()
 
 
 class Lambda(object):
@@ -181,12 +178,8 @@ class Lambda(object):
         topic: String
     """
 
-    def __init__(self, function, parameters, topic):
+    def __init__(self, function):
         self.function = function
-        self.parameters = parameters
-        self.topic = topic
 
-    def __call__(self, kwargs):
-        data = self.function(kwargs[self.topic], **self.parameters)
-        kwargs[self.topic] = data
-        return kwargs
+    def __call__(self, X):
+        return self.function(X)
