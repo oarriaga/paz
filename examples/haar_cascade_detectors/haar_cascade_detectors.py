@@ -12,7 +12,6 @@ class HaarCascadeDetectors(Processor):
         self.model_names = model_names
         self.detectors = []
         for class_arg, model_name in enumerate(self.model_names):
-            print(model_name)
             detector = pr.Predict(
                 HaarCascadeDetector(model_name, class_arg),
                 pr.ConvertColorSpace(pr.RGB2GRAY),
@@ -33,11 +32,11 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--models', nargs='+', type=str,
                         default=['frontalface_default', 'eye'],
                         help='Model name postfix of openCV xml file')
-    parser.add_argument('-d', '--device_id', type=int, default=0,
+    parser.add_argument('-c', '--camera_id', type=int, default=0,
                         help='Camera device ID')
     args = parser.parse_args()
 
     pipeline = HaarCascadeDetectors(args.models)
-    camera = Camera(device_id=0)
+    camera = Camera(args.camera_id)
     player = VideoPlayer((1280, 960), pipeline, camera)
     player.run()
