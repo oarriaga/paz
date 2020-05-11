@@ -51,8 +51,9 @@ from .geometric import ApplyRandomTranslation
 
 # from .keypoints import *
 
-from .standard import ControlFlow
-from .standard import ExpandFlow
+from .standard import ControlMap
+from .standard import ExpandDomain
+from .standard import CopyDomain
 from .standard import ExtendInputs
 from .standard import OutputWrapper
 from .standard import Predict

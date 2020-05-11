@@ -4,7 +4,7 @@ from ..abstract import Processor
 from ..backend.boxes import to_one_hot
 
 
-class ControlFlow(Processor):
+class ControlMap(Processor):
     def __init__(self, processor, intro_indices=[0], outro_indices=[0]):
         self.processor = processor
         if not isinstance(intro_indices, list):
@@ -14,7 +14,7 @@ class ControlFlow(Processor):
         self.intro_indices = intro_indices
         self.outro_indices = outro_indices
         name = '-'.join([self.__class__.__name__, self.processor.name])
-        super(ControlFlow, self).__init__(name)
+        super(ControlMap, self).__init__(name)
 
     def _select(self, inputs, indices):
         return [inputs[index] for index in indices]
@@ -38,9 +38,32 @@ class ControlFlow(Processor):
         return tuple(args)
 
 
-class ExpandFlow(ControlFlow):
+class ExpandDomain(ControlMap):
     def __init__(self, processor):
-        super(ExpandFlow, self).__init__(processor)
+        super(ExpandDomain, self).__init__(processor)
+
+
+class CopyDomain(Processor):
+    def __init__(self, intro_indices, outro_indices):
+        super(CopyDomain, self).__init__()
+        if not isinstance(intro_indices, list):
+            raise ValueError('``intro_indices`` must be a list')
+        if not isinstance(outro_indices, list):
+            raise ValueError('``outro_indices`` must be a list')
+        self.intro_indices = intro_indices
+        self.outro_indices = outro_indices
+
+    def _select(self, inputs, indices):
+        return [inputs[index] for index in indices]
+
+    def _insert(self, args, axes, values):
+        [args.insert(axis, value) for axis, value in zip(axes, values)]
+        return args
+
+    def call(self, *args):
+        selections = self._select(args, self.intro_indices)
+        args = self._insert(list(args), self.outro_indices, selections)
+        return tuple(args)
 
 
 class UnpackDictionary(Processor):
