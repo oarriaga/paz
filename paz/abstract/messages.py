@@ -15,14 +15,9 @@ class Box2D(object):
     """
     def __init__(self, coordinates, score, class_name=None):
         x_min, y_min, x_max, y_max = coordinates
-        if x_min >= x_max:
-            raise ValueError('Invalid coordinate input x_min >= x_max')
-        if y_min >= y_max:
-            raise ValueError('Invalid coordinate input y_min >= y_max')
-
-        self._coordinates = coordinates
-        self._class_name = class_name
-        self._score = score
+        self.coordinates = coordinates
+        self.class_name = class_name
+        self.score = score
 
     @property
     def coordinates(self):
@@ -49,6 +44,10 @@ class Box2D(object):
     @property
     def score(self):
         return self._score
+
+    @score.setter
+    def score(self, score):
+        self._score = score
 
     @property
     def center(self):
