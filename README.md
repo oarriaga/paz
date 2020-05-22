@@ -19,3 +19,15 @@ PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [
 ### Common issues
 * OpenCV is automatically installed using [opencv-python](https://github.com/skvark/opencv-python) wheels.
 In case the pre-compiled versions are not working for you, try to compile OpenCV from scratch.
+
+### Motivation
+Even though there are multiple high-level computer vision libraries in different DL frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
+Why Keras over other frameworks/libraries? In simple terms I have always felt the API to be more mature.
+It allowed me to express my ideas at the level of complexity that was required. 
+Keras has often been misinterpreted as only a "beginners" framework; however, once you learn to abstract: Layer, Callbacks, Loss, Metrics, Model the API remained intact and helpful.
+It allowed me to automate and write down experiments with no no extra boiler plate code.
+Furthermore, if one wanted to abandon such comfort one could still go the beaten path and create a custom training loop.
+As final remark, I would like to mention that, I feel that we might tend to forget the great effort and emotional carriage behind every open-source project.
+I feel it's easy to blurry a company name with the individuals behind their project, and we forget that there is someone feeling our criticism and our praise.
+Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
+You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration before we lay our criticism.
