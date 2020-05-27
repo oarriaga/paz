@@ -1,7 +1,6 @@
+import cv2
 import numpy as np
 from tensorflow.keras.utils import get_file
-
-from ...core import ops
 
 WEIGHT_PATH = ('https://raw.githubusercontent.com/opencv/opencv/'
                'master/data/haarcascades/')
@@ -29,7 +28,7 @@ class HaarCascadeDetector(object):
         self.name = 'haarcascade_' + weights + '.xml'
         self.url = WEIGHT_PATH + self.name
         self.path = get_file(self.name, self.url, cache_subdir='paz/models')
-        self.model = ops.cascade_classifier(self.path)
+        self.model = cv2.CascadeClassifier(self.path)
         self.class_arg = class_arg
         self.scale = scale
         self.neighbors = neighbors

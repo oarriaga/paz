@@ -3,7 +3,7 @@ from xml.etree import ElementTree
 from .utils import get_class_names
 
 import numpy as np
-from ..core import Loader
+from ..abstract import Loader
 
 
 class VOC(Loader):
@@ -128,7 +128,8 @@ class VOCParser(object):
                 if class_name in self.class_names:
                     class_arg = self.class_to_arg[class_name]
                     bounding_box = object_tree.find('bndbox')
-                    # VOC dataset format follows Matlab, in which indexes start from 0
+                    # VOC dataset format follows Matlab,
+                    # in which indexes start from 0
                     xmin = (float(bounding_box.find('xmin').text) - 1.0) / width
                     ymin = (float(bounding_box.find('ymin').text) - 1.0) / height
                     xmax = (float(bounding_box.find('xmax').text) - 1.0) / width

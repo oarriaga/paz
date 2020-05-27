@@ -1,8 +1,4 @@
-from __future__ import division
-
 import numpy as np
-
-from ..messages import Box2D
 
 
 def compute_iou(box, boxes):
@@ -70,10 +66,10 @@ def to_point_form(boxes):
     """
     center_x, center_y = boxes[:, 0], boxes[:, 1]
     width, height = boxes[:, 2], boxes[:, 3]
-    x_min = center_x - (width / 2.)
-    x_max = center_x + (width / 2.)
-    y_min = center_y - (height / 2.)
-    y_max = center_y + (height / 2.)
+    x_min = center_x - (width / 2.0)
+    x_max = center_x + (width / 2.0)
+    y_min = center_y - (height / 2.0)
+    y_max = center_y + (height / 2.0)
     return np.concatenate([x_min[:, None], y_min[:, None],
                            x_max[:, None], y_max[:, None]], axis=1)
 
@@ -97,25 +93,6 @@ def to_center_form(boxes):
                            width[:, None], height[:, None]], axis=1)
 
 
-def denormalize_box(box, image_shape):
-    """Scales corner box coordinates from normalized values to image dimensions.
-
-    # Arguments
-        box: Numpy array containing corner box coordinates.
-        image_shape: List of integers with (height, width).
-
-    # Returns
-        returns: box corner coordinates in image dimensions
-    """
-    x_min, y_min, x_max, y_max = box[:4]
-    height, width = image_shape
-    x_min = int(x_min * width)
-    y_min = int(y_min * height)
-    x_max = int(x_max * width)
-    y_max = int(y_max * height)
-    return (x_min, y_min, x_max, y_max)
-
-
 def encode(matched, priors, variances):
     """Encode the variances from the priorbox layers into the ground truth boxes
     we have matched (based on jaccard overlap) with the prior boxes.
@@ -130,7 +107,7 @@ def encode(matched, priors, variances):
     """
 
     # dist b/t match center and prior's center
-    g_cxcy = (matched[:, :2] + matched[:, 2:4]) / 2 - priors[:, :2]
+    g_cxcy = (matched[:, :2] + matched[:, 2:4]) / 2.0 - priors[:, :2]
     # encode variance
     g_cxcy /= (variances[0] * priors[:, 2:4])
     # match wh / prior wh
@@ -155,7 +132,7 @@ def decode(predictions, priors, variances):
     boxes = np.concatenate((
         priors[:, :2] + predictions[:, :2] * variances[0] * priors[:, 2:4],
         priors[:, 2:4] * np.exp(predictions[:, 2:4] * variances[1])), 1)
-    boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:4] / 2)
+    boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:4] / 2.0)
     boxes[:, 2:4] = boxes[:, 2:4] + boxes[:, :2]
     return np.concatenate([boxes, predictions[:, 4:]], 1)
     return boxes
@@ -210,64 +187,6 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
     # setting class value to 0 (background argument)
     matches[best_box_iou_per_prior_box < iou_threshold, 4] = 0
     return matches
-
-
-def make_box_square(box, offset_scale=0.05):
-    """Makes box coordinates square.
-
-    # Arguments
-        box: Numpy array with shape (4) with point corner coordinates.
-        offset_scale: Float, scale of the addition applied box sizes.
-
-    # Returns
-        returns: Numpy array with shape (4).
-    """
-
-    x_min, y_min, x_max, y_max = box[:4]
-    center_x = (x_max + x_min) / 2.
-    center_y = (y_max + y_min) / 2.
-    width = x_max - x_min
-    height = y_max - y_min
-
-    if height >= width:
-        half_box = height / 2.
-        x_min = center_x - half_box
-        x_max = center_x + half_box
-    if width > height:
-        half_box = width / 2.
-        y_min = center_y - half_box
-        y_max = center_y + half_box
-
-    box_side_lenght = (x_max + x_min) / 2.
-    offset = offset_scale * box_side_lenght
-    x_min = x_min - offset
-    x_max = x_max + offset
-    y_min = y_min - offset
-    y_max = y_max + offset
-    return (int(x_min), int(y_min), int(x_max), int(y_max))
-
-
-def filter_detections(detections, arg_to_class, conf_thresh=0.5):
-    """Filters boxes outputted from function ``nms_per_class`` as ``Box2D``
-        messages depending on their confidence threshold.
-    # Arguments
-        detections. Numpy array of shape (num_classes, num_boxes, 5)
-    """
-    num_classes = detections.shape[0]
-    filtered_detections = []
-    for class_arg in range(1, num_classes):
-        class_detections = detections[class_arg, :]
-        confidence_mask = np.squeeze(class_detections[:, -1] >= conf_thresh)
-        confident_class_detections = class_detections[confidence_mask]
-        if len(confident_class_detections) == 0:
-            continue
-        class_name = arg_to_class[class_arg]
-        for confident_class_detection in confident_class_detections:
-            coordinates = confident_class_detection[:4]
-            score = confident_class_detection[4]
-            detection = Box2D(coordinates, score, class_name)
-            filtered_detections.append(detection)
-    return filtered_detections
 
 
 def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
@@ -390,127 +309,6 @@ def to_one_hot(class_indices, num_classes):
     return one_hot_vectors
 
 
-def quaternion_to_rotation_matrix(quaternion):
-    """Transforms quaternion to rotation matrix
-
-    # Arguments
-        quaternion: Numpy array of shape (4)
-
-    # Returns
-        rotation_matrix: Numpy array of shape (3, 3)
-    """
-
-    q_w, q_x, q_y, q_z = quaternion
-    sqw, sqx, sqy, sqz = np.square(quaternion)
-    norm = (sqx + sqy + sqz + sqw)
-    rotation_matrix = np.zeros((3, 3))
-
-    # division of square length if quaternion is not already normalized
-    rotation_matrix[0, 0] = (+sqx - sqy - sqz + sqw) / norm
-    rotation_matrix[1, 1] = (-sqx + sqy - sqz + sqw) / norm
-    rotation_matrix[2, 2] = (-sqx - sqy + sqz + sqw) / norm
-
-    tmp1 = q_x * q_y
-    tmp2 = q_z * q_w
-    rotation_matrix[1, 0] = 2.0 * (tmp1 + tmp2) / norm
-    rotation_matrix[0, 1] = 2.0 * (tmp1 - tmp2) / norm
-
-    tmp1 = q_x * q_z
-    tmp2 = q_y * q_w
-    rotation_matrix[2, 0] = 2.0 * (tmp1 - tmp2) / norm
-    rotation_matrix[0, 2] = 2.0 * (tmp1 + tmp2) / norm
-    tmp1 = q_y * q_z
-    tmp2 = q_x * q_w
-    rotation_matrix[2, 1] = 2.0 * (tmp1 + tmp2) / norm
-    rotation_matrix[1, 2] = 2.0 * (tmp1 - tmp2) / norm
-    return rotation_matrix
-
-
-def rotation_matrix_to_quaternion(rotation_matrix):
-    """Calculates normalized quaternion from rotation matrix
-
-    If w is negative the quaternion gets flipped, so that all w are >= 0
-
-    # Arguments
-        rotation_matrix: Numpy array with shape (3, 3)
-
-    # Returns
-        quaternion: Numpy array of shape (4)
-    """
-    trace = np.trace(rotation_matrix)
-
-    if trace > 0:
-        S = np.sqrt(trace + 1) * 2
-        q_w = 0.25 * S
-        q_x = (rotation_matrix[2, 1] - rotation_matrix[1, 2]) / S
-        q_y = (rotation_matrix[0, 2] - rotation_matrix[2, 0]) / S
-        q_z = (rotation_matrix[1, 0] - rotation_matrix[0, 1]) / S
-        return np.asarray([q_w, q_x, q_y, q_z])
-
-    elif ((rotation_matrix[0, 0] > rotation_matrix[1, 1]) and
-          (rotation_matrix[0, 0] > rotation_matrix[2, 2])):
-
-        S = np.sqrt(1.0 + rotation_matrix[0, 0] - rotation_matrix[1, 1] -
-                    rotation_matrix[2, 2]) * 2
-        q_w = (rotation_matrix[2, 1] - rotation_matrix[1, 2]) / S
-        q_x = 0.25 * S
-        q_y = (rotation_matrix[0, 1] + rotation_matrix[1, 0]) / S
-        q_z = (rotation_matrix[0, 2] + rotation_matrix[2, 0]) / S
-
-    elif rotation_matrix[1, 1] > rotation_matrix[2, 2]:
-
-        S = np.sqrt(1.0 + rotation_matrix[1, 1] - rotation_matrix[0, 0] -
-                    rotation_matrix[2, 2]) * 2
-        q_w = (rotation_matrix[0, 2] - rotation_matrix[2, 0]) / S
-        q_x = (rotation_matrix[0, 1] + rotation_matrix[1, 0]) / S
-        q_y = 0.25 * S
-        q_z = (rotation_matrix[1, 2] + rotation_matrix[2, 1]) / S
-
-    else:
-        S = np.sqrt(1.0 + rotation_matrix[2, 2] - rotation_matrix[0, 0] -
-                    rotation_matrix[1, 1]) * 2
-        q_w = (rotation_matrix[1, 0] - rotation_matrix[0, 1]) / S
-        q_x = (rotation_matrix[0, 2] + rotation_matrix[2, 0]) / S
-        q_y = (rotation_matrix[1, 2] + rotation_matrix[2, 1]) / S
-        q_z = 0.25 * S
-
-    if q_w >= 0:
-        return np.asarray([q_w, q_x, q_y, q_z])
-    else:
-        return -1 * np.asarray([q_w, q_x, q_y, q_z])
-
-
-def multiply_quaternions(quaternion1, quaternion0):
-    """Performs quaternion multiplication.
-    # Arguments:
-        quaternion1: Numpy array of shape (4)
-        quaternion0: Numpy array of shape (4)
-
-    # Returns:
-        Numpy array of shape (4)
-    """
-    w0, x0, y0, z0 = quaternion0
-    w1, x1, y1, z1 = quaternion1
-    return np.array(
-        [-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
-         x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
-         -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
-         x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
-
-
-def invert_quaternion(quaternion):
-    """Takes the inverse of a non-normalized quaternion.
-    # Arguments:
-        quaternion: Numpy array of shape (4)
-
-    # Returns:
-        Numpy array of shape (4)
-    """
-    norm = np.linalg.norm(quaternion)
-    quaternion[1:] = -1.0 * quaternion[1:]
-    return quaternion / norm
-
-
 def substract_mean(image_array, mean):
     """ Subtracts image with channel-wise values.
     # Arguments
@@ -525,69 +323,39 @@ def substract_mean(image_array, mean):
     return image_array
 
 
-def make_mosaic(images, shape, border=0):
-    """ Creates an image mosaic.
+def make_box_square(box, offset_scale=0.05):
+    """Makes box coordinates square.
+
     # Arguments
-        images: Numpy array of shape (num_images, height, width, 3)
-        shape: List of two integers indicating the mosaic shape.
-            Shape must satisfy: shape[0] * shape[1] == len(images).
-        border: Integer indicating the border per image.
+        box: Numpy array with shape (4) with point corner coordinates.
+        offset_scale: Float, scale of the addition applied box sizes.
+
     # Returns
-        A numpy array containing all images.
+        returns: List of box coordinates ints.
     """
-    num_images = len(images)
-    num_rows, num_cols = shape
-    image_shape = images.shape[1:]
-    num_channels = images.shape[-1]
-    mosaic = np.ma.masked_all(
-        (num_rows * image_shape[0] + (num_rows - 1) * border,
-         num_cols * image_shape[1] + (num_cols - 1) * border, num_channels),
-        dtype=np.float32)
-    paddedh = image_shape[0] + border
-    paddedw = image_shape[1] + border
-    for image_arg in range(num_images):
-        row = int(np.floor(image_arg / num_cols))
-        col = image_arg % num_cols
-        # image = np.squeeze(images[image_arg])
-        image = images[image_arg]
-        image_shape = image.shape
-        mosaic[row * paddedh:row * paddedh + image_shape[0],
-               col * paddedw:col * paddedw + image_shape[1], :] = image
-    return mosaic
 
+    x_min, y_min, x_max, y_max = box[:4]
+    center_x = (x_max + x_min) / 2.0
+    center_y = (y_max + y_min) / 2.0
+    width = x_max - x_min
+    height = y_max - y_min
 
-def denormalize_keypoints(keypoints, height, width):
-    """Transform normalized keypoint coordinates into image coordinates
-    # Arguments
-        keypoints: Numpy array of shape (num_keypoints, 2)
-        height: Int. Height of the image
-        width: Int. Width of the image
-    """
-    for keypoint_arg, keypoint in enumerate(keypoints):
-        x, y = keypoint[:2]
-        # transform key-point coordinates to image coordinates
-        x = (min(max(x, -1), 1) * width / 2 + width / 2) - 0.5
-        # flip since the image coordinates for y are flipped
-        y = height - 0.5 - (min(max(y, -1), 1) * height / 2 + height / 2)
-        x, y = int(round(x)), int(round(y))
-        keypoints[keypoint_arg][:2] = [x, y]
-    return keypoints
+    if height >= width:
+        half_box = height / 2.0
+        x_min = center_x - half_box
+        x_max = center_x + half_box
+    if width > height:
+        half_box = width / 2.0
+        y_min = center_y - half_box
+        y_max = center_y + half_box
 
-
-def normalize_keypoints(keypoints, height, width):
-    """Transform keypoints in image coordinates to normalized coordinates
-        keypoints: Numpy array of shape (num_keypoints, 2)
-        height: Int. Height of the image
-        width: Int. Width of the image
-    """
-    normalized_keypoints = np.zeros_like(keypoints, dtype=np.float32)
-    for keypoint_arg, keypoint in enumerate(keypoints):
-        x, y = keypoint[:2]
-        # transform key-point coordinates to image coordinates
-        x = (((x + 0.5) - (width / 2.0)) / (width / 2))
-        y = (((height - 0.5 - y) - (height / 2.0)) / (height / 2))
-        normalized_keypoints[keypoint_arg][:2] = [x, y]
-    return normalized_keypoints
+    box_side_lenght = (x_max + x_min) / 2.0
+    offset = offset_scale * box_side_lenght
+    x_min = x_min - offset
+    x_max = x_max + offset
+    y_min = y_min - offset
+    y_max = y_max + offset
+    return (int(x_min), int(y_min), int(x_max), int(y_max))
 
 
 def apply_offsets(coordinates, offset_scales):
@@ -607,3 +375,45 @@ def apply_offsets(coordinates, offset_scales):
     y_min = int(y_min - y_offset)
     x_max = int(x_max + y_offset)
     return (x_min, y_min, x_max, y_max)
+
+
+def denormalize_box(box, image_shape):
+    """Scales corner box coordinates from normalized values to image dimensions.
+
+    # Arguments
+        box: Numpy array containing corner box coordinates.
+        image_shape: List of integers with (height, width).
+
+    # Returns
+        returns: box corner coordinates in image dimensions
+    """
+    x_min, y_min, x_max, y_max = box[:4]
+    height, width = image_shape
+    x_min = int(x_min * width)
+    y_min = int(y_min * height)
+    x_max = int(x_max * width)
+    y_max = int(y_max * height)
+    return (x_min, y_min, x_max, y_max)
+
+
+def flip_left_right(boxes, width):
+    boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+    return boxes
+
+
+def to_absolute_coordinates(image, boxes):
+    height, width = image.shape[:2]
+    boxes[:, 0] = boxes[:, 0] * width
+    boxes[:, 2] = boxes[:, 2] * width
+    boxes[:, 1] = boxes[:, 1] * height
+    boxes[:, 3] = boxes[:, 3] * height
+    return boxes
+
+
+def to_percent_coordinates(image, boxes):
+    height, width = image.shape[:2]
+    boxes[:, 0] = boxes[:, 0] / width
+    boxes[:, 2] = boxes[:, 2] / width
+    boxes[:, 1] = boxes[:, 1] / height
+    boxes[:, 3] = boxes[:, 3] / height
+    return boxes

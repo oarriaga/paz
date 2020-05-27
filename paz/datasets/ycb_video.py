@@ -5,7 +5,7 @@ import numpy as np
 from tensorflow.keras.utils import Progbar
 
 from .utils import get_class_names
-from ..core import Loader
+from ..abstract import Loader
 
 
 class YCBVideo(Loader):

@@ -1,4 +1,4 @@
-import numpy as np
+from ..backend.quaternion import rotation_vector_to_quaternion
 
 
 class Box2D(object):
@@ -15,14 +15,9 @@ class Box2D(object):
     """
     def __init__(self, coordinates, score, class_name=None):
         x_min, y_min, x_max, y_max = coordinates
-        if x_min >= x_max:
-            raise ValueError('Invalid coordinate input x_min >= x_max')
-        if y_min >= y_max:
-            raise ValueError('Invalid coordinate input y_min >= y_max')
-
-        self._coordinates = coordinates
-        self._class_name = class_name
-        self._score = score
+        self.coordinates = coordinates
+        self.class_name = class_name
+        self.score = score
 
     @property
     def coordinates(self):
@@ -49,6 +44,10 @@ class Box2D(object):
     @property
     def score(self):
         return self._score
+
+    @score.setter
+    def score(self, score):
+        self._score = score
 
     @property
     def center(self):
@@ -127,15 +126,7 @@ class Pose6D(object):
     @classmethod
     def from_rotation_vector(
             cls, rotation_vector, translation, class_name=None):
-        theta = np.linalg.norm(rotation_vector)
-        rotation_axis = rotation_vector / theta
-        half_theta = 0.5 * theta
-        norm = np.sin(half_theta)
-        quaternion = np.array([
-            norm * rotation_axis[0],
-            norm * rotation_axis[1],
-            norm * rotation_axis[2],
-            np.cos(half_theta)])
+        quaternion = rotation_vector_to_quaternion(rotation_vector)
         pose6D = cls(quaternion, translation, class_name)
         pose6D.rotation_vector = rotation_vector
         return pose6D
@@ -149,3 +140,26 @@ class Pose6D(object):
         pose_message = ['Pose6D: ', quaternion_message, translation_message]
         pose_message = '\n \t'.join(pose_message)
         return pose_message
+
+
+class Keypoint3D(object):
+    def __init__(self, coordinates, class_name=None):
+        coordinates = coordinates
+        class_name = class_name
+
+    @property
+    def coordinates(self, coordinates):
+        return self._coordinates
+
+    @coordinates.setter
+    def coordinates(self, coordinates):
+        num_keypoints = len(coordinates)
+        if num_keypoints != 3:
+            raise ValueError('Invalid 3D Keypoint length:', num_keypoints)
+        self._coordinates = coordinates
+
+    def project():
+        raise NotImplementedError
+
+    def unproject():
+        raise NotImplementedError

@@ -1,8 +1,15 @@
+from __future__ import division
+
 import numpy as np
 
-from ..core import Processor, Box2D, ops
-from ..core import SequentialProcessor
-from .image import BGR_IMAGENET_MEAN
+from ..abstract import Processor, Box2D
+from ..backend.boxes import match
+from ..backend.boxes import encode
+from ..backend.boxes import decode
+from ..backend.boxes import apply_offsets
+from ..backend.boxes import nms_per_class
+from ..backend.boxes import denormalize_box
+from ..backend.boxes import make_box_square
 
 
 class SquareBoxes2D(Processor):
@@ -17,52 +24,52 @@ class SquareBoxes2D(Processor):
         self.offset_scale = offset_scale
         super(SquareBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        for box_arg in range(len(kwargs['boxes2D'])):
-            coordinates = kwargs['boxes2D'][box_arg].coordinates
-            coordinates = ops.make_box_square(coordinates, self.offset_scale)
-            kwargs['boxes2D'][box_arg].coordinates = coordinates
-        return kwargs
+    def call(self, boxes2D):
+        for box2D in boxes2D:
+            box2D.coordinates = make_box_square(
+                box2D.coordinates, self.offset_scale)
+        return boxes2D
 
 
 class DenormalizeBoxes2D(Processor):
     """Denormalizes boxes shapes to be in accordance to the original image size.
+    # Arguments:
+        image_size: List containing height and width of an image.
     """
     def __init__(self):
         super(DenormalizeBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        image_size = kwargs['image'].shape[:2]
-        for box2D in kwargs['boxes2D']:
-            box2D.coordinates = ops.denormalize_box(
-                box2D.coordinates, image_size)
-        return kwargs
+    def call(self, image, boxes2D):
+        shape = image.shape[:2]
+        for box2D in boxes2D:
+            box2D.coordinates = denormalize_box(box2D.coordinates, shape)
+        return boxes2D
 
 
 class RoundBoxes2D(Processor):
-    """ Round boxes coordinates.
+    """Round to integer box coordinates.
     """
     def __init__(self):
         super(RoundBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        boxes2D = []
-        for box2D in kwargs['boxes2D']:
+    def call(self, boxes2D):
+        for box2D in boxes2D:
             box2D.coordinates = [int(x) for x in box2D.coordinates]
-            boxes2D.append(box2D)
-        kwargs['boxes2D'] = boxes2D
-        return kwargs
+        return boxes2D
 
 
 class ClipBoxes2D(Processor):
-    """Clips boxes coordinates into the image dimensions"""
-    def __init__(self):
+    """Clips boxes coordinates into the image dimensions
+    # Arguments:
+        image_size: List containing height and width of an image.
+    """
+    def __init__(self, image_size):
+        self.image_size = image_size
         super(ClipBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        image_height, image_width = kwargs['image'].shape[:2]
-        for box_arg in range(len(kwargs['boxes2D'])):
-            box2D = kwargs['boxes2D'][box_arg]
+    def call(self, boxes2D):
+        image_height, image_width = self.image.shape[:2]
+        for box2D in range(boxes2D):
             x_min, y_min, x_max, y_max = box2D.coordinates
             if x_min < 0:
                 x_min = 0
@@ -72,9 +79,8 @@ class ClipBoxes2D(Processor):
                 x_max = image_width
             if y_max > image_height:
                 y_max = image_height
-            coordinates = (x_min, y_min, x_max, y_max)
-            kwargs['boxes2D'][box_arg].coordinates = coordinates
-        return kwargs
+            box2D.coordinates = (x_min, y_min, x_max, y_max)
+        return boxes2D
 
 
 class FilterClassBoxes2D(Processor):
@@ -86,43 +92,38 @@ class FilterClassBoxes2D(Processor):
         self.valid_class_names = valid_class_names
         super(FilterClassBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        filtered_boxes2D, boxes2D = [], kwargs['boxes2D']
+    def call(self, boxes2D):
+        filtered_boxes2D = []
         for box2D in boxes2D:
             if box2D.class_name in self.valid_class_names:
                 filtered_boxes2D.append(box2D)
-        kwargs['boxes2D'] = filtered_boxes2D
-        return kwargs
+        return filtered_boxes2D
 
 
 class CropBoxes2D(Processor):
     """Creates a list of images cropped from the bounding boxes.
     # Arguments
         offset_scales: List of floats having x and y scales respectively.
-        topic: String indicating the new key in the data dictionary that
-            will contain the list of cropped images.
     """
-    def __init__(self, offset_scales, topic='image_crops'):
+    def __init__(self, offset_scales):
         self.offset_scales = offset_scales
-        self.topic = topic
         super(CropBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        image, image_crops = kwargs['image'], []
-        for box2D in kwargs['boxes2D']:
+    def call(self, image, boxes2D):
+        image_crops = []
+        for box2D in boxes2D:
             coordinates = box2D.coordinates
-            coordinates = ops.apply_offsets(coordinates, self.offset_scales)
+            coordinates = apply_offsets(coordinates, self.offset_scales)
             x_min, y_min, x_max, y_max = coordinates
             image_crops.append(image[y_min:y_max, x_min:x_max])
-        kwargs[self.topic] = image_crops
-        return kwargs
+        return image_crops
 
 
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
     # Arguments
-        class_names: List of class names ordered with respect to the
-            class indices from the dataset `boxes`.
+        class_names: List of class names ordered with respect to the class
+        indices from the dataset `boxes`.
     """
     def __init__(self, class_names=None, one_hot_encoded=False):
         if class_names is not None:
@@ -130,8 +131,8 @@ class ToBoxes2D(Processor):
         self.one_hot_encoded = one_hot_encoded
         super(ToBoxes2D, self).__init__()
 
-    def call(self, kwargs):
-        numpy_boxes2D, boxes2D = kwargs['boxes'], []
+    def call(self, boxes):
+        numpy_boxes2D, boxes2D = boxes, []
         for numpy_box2D in numpy_boxes2D:
             if self.one_hot_encoded:
                 class_name = self.arg_to_class[np.argmax(numpy_box2D[4:])]
@@ -140,13 +141,7 @@ class ToBoxes2D(Processor):
             elif numpy_box2D.shape[-1] == 4:
                 class_name = None
             boxes2D.append(Box2D(numpy_box2D[:4], 1.0, class_name))
-
-        # check if there are already boxes inside the `Boxes2D` topic
-        if 'boxes2D' in kwargs:
-            kwargs['boxes2D'].extend(boxes2D)
-        else:
-            kwargs['boxes2D'] = boxes2D
-        return kwargs
+        return boxes2D
 
 
 class MatchBoxes(Processor):
@@ -163,40 +158,35 @@ class MatchBoxes(Processor):
         self.iou = iou
         super(MatchBoxes, self).__init__()
 
-    def call(self, kwargs):
-        boxes = ops.match(kwargs['boxes'], self.prior_boxes, self.iou)
-        kwargs['boxes'] = boxes
-        return kwargs
+    def call(self, boxes):
+        boxes = match(boxes, self.prior_boxes, self.iou)
+        return boxes
 
 
 class EncodeBoxes(Processor):
-    """TODO: Encodes bounding boxes.
+    """Encodes bounding boxes.
     """
     def __init__(self, prior_boxes, variances=[.1, .2]):
         self.prior_boxes = prior_boxes
         self.variances = variances
         super(EncodeBoxes, self).__init__()
 
-    def call(self, kwargs):
-        boxes = kwargs['boxes']
-        encoded_boxes = ops.encode(boxes, self.prior_boxes, self.variances)
-        kwargs['boxes'] = encoded_boxes
-        return kwargs
+    def call(self, boxes):
+        encoded_boxes = encode(boxes, self.prior_boxes, self.variances)
+        return encoded_boxes
 
 
 class DecodeBoxes(Processor):
-    """TODO: Decodes boxes.
+    """Decodes bounding boxes.
     """
     def __init__(self, prior_boxes, variances=[.1, .2]):
         self.prior_boxes = prior_boxes
         self.variances = variances
         super(DecodeBoxes, self).__init__()
 
-    def call(self, kwargs):
-        boxes = kwargs['boxes']
-        encoded_boxes = ops.decode(boxes, self.prior_boxes, self.variances)
-        kwargs['boxes'] = encoded_boxes
-        return kwargs
+    def call(self, boxes):
+        decoded_boxes = decode(boxes, self.prior_boxes, self.variances)
+        return decoded_boxes
 
 
 class NonMaximumSuppressionPerClass(Processor):
@@ -207,17 +197,15 @@ class NonMaximumSuppressionPerClass(Processor):
         self.conf_thresh = conf_thresh
         super(NonMaximumSuppressionPerClass, self).__init__()
 
-    def call(self, kwargs):
-        boxes = kwargs['boxes']
-        kwargs['boxes'] = ops.nms_per_class(
-            boxes, self.nms_thresh, self.conf_thresh)
-        return kwargs
+    def call(self, boxes):
+        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
+        return boxes
 
 
 class FilterBoxes(Processor):
     """Filters boxes outputted from function ``detect`` as ``Box2D`` messages
     # Arguments
-        class_names: List of strings.
+        class_names: List of class names.
         conf_thresh: Float.
     """
     def __init__(self, class_names, conf_thresh=0.5):
@@ -227,11 +215,22 @@ class FilterBoxes(Processor):
             list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
-    def call(self, kwargs):
-        detections = kwargs['boxes']
-        kwargs['boxes2D'] = ops.filter_detections(
-            detections, self.arg_to_class, self.conf_thresh)
-        return kwargs
+    def call(self, boxes):
+        num_classes = boxes.shape[0]
+        boxes2D = []
+        for class_arg in range(1, num_classes):
+            class_detections = boxes[class_arg, :]
+            confidence_mask = np.squeeze(
+                class_detections[:, -1] >= self.conf_thresh)
+            confident_class_detections = class_detections[confidence_mask]
+            if len(confident_class_detections) == 0:
+                continue
+            class_name = self.arg_to_class[class_arg]
+            for confident_class_detection in confident_class_detections:
+                coordinates = confident_class_detection[:4]
+                score = confident_class_detection[4]
+                boxes2D.append(Box2D(coordinates, score, class_name))
+        return boxes2D
 
 
 class ApplyOffsets(Processor):
@@ -239,21 +238,15 @@ class ApplyOffsets(Processor):
         super(ApplyOffsets, self).__init__()
         self.offsets = offsets
 
-    def call(self, kwargs):
-        box2D = kwargs['box2D']
-        box2D.coordinates = ops.apply_offsets(kwargs['box2D'], self.offsets)
-        kwargs['box2D'] = box2D
-        return kwargs
+    def call(self, box2D):
+        box2D.coordinates = apply_offsets(box2D.coordinates, self.offsets)
+        return box2D
 
 
-class CropImages(Processor):
-    def __init__(self, offsets, output_topic='image_crops'):
-        self.offsets = offsets
-        self.output_topic = output_topic
-        super(CropImages, self).__init__()
+class CropImage(Processor):
+    def __init__(self):
+        super(CropImage, self).__init__()
 
-    def call(self, kwargs):
-        x_min, y_min, x_max, y_max = kwargs['box2D'].coordinates
-        image_crop = kwargs['image'][y_min:y_max, x_min:x_max]
-        kwargs[self.output_topic] = image_crop
-        return kwargs
+    def call(self, image, box2D):
+        x_min, y_min, x_max, y_max = box2D.coordinates
+        return image[y_min:y_max, x_min:x_max]

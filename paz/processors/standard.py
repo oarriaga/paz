@@ -1,125 +1,174 @@
-from ..core import SequentialProcessor
-from ..core import Processor
-from ..core import ops
 import numpy as np
 
+from ..abstract import Processor
+from ..backend.boxes import to_one_hot
 
-class ToOneHotVector(Processor):
+
+class ControlMap(Processor):
+    def __init__(self, processor, intro_indices=[0], outro_indices=[0]):
+        self.processor = processor
+        if not isinstance(intro_indices, list):
+            raise ValueError('``intro_indices`` must be a list')
+        if not isinstance(outro_indices, list):
+            raise ValueError('``outro_indices`` must be a list')
+        self.intro_indices = intro_indices
+        self.outro_indices = outro_indices
+        name = '-'.join([self.__class__.__name__, self.processor.name])
+        super(ControlMap, self).__init__(name)
+
+    def _select(self, inputs, indices):
+        return [inputs[index] for index in indices]
+
+    def _remove(self, inputs, indices):
+        return [inputs[i] for i in range(len(inputs)) if i not in indices]
+
+    def _split(self, inputs, indices):
+        return self._select(inputs, indices), self._remove(inputs, indices)
+
+    def _insert(self, args, axes, values):
+        [args.insert(axis, value) for axis, value in zip(axes, values)]
+        return args
+
+    def call(self, *args):
+        selections, args = self._split(args, self.intro_indices)
+        selections = self.processor(*selections)
+        if not isinstance(selections, tuple):
+            selections = [selections]
+        args = self._insert(args, self.outro_indices, selections)
+        return tuple(args)
+
+
+class ExpandDomain(ControlMap):
+    def __init__(self, processor):
+        super(ExpandDomain, self).__init__(processor)
+
+
+class CopyDomain(Processor):
+    def __init__(self, intro_indices, outro_indices):
+        super(CopyDomain, self).__init__()
+        if not isinstance(intro_indices, list):
+            raise ValueError('``intro_indices`` must be a list')
+        if not isinstance(outro_indices, list):
+            raise ValueError('``outro_indices`` must be a list')
+        self.intro_indices = intro_indices
+        self.outro_indices = outro_indices
+
+    def _select(self, inputs, indices):
+        return [inputs[index] for index in indices]
+
+    def _insert(self, args, axes, values):
+        [args.insert(axis, value) for axis, value in zip(axes, values)]
+        return args
+
+    def call(self, *args):
+        selections = self._select(args, self.intro_indices)
+        args = self._insert(list(args), self.outro_indices, selections)
+        return tuple(args)
+
+
+class UnpackDictionary(Processor):
+    def __init__(self, order):
+        if not isinstance(order, list):
+            raise ValueError('``order`` must be a list')
+        self.order = order
+        super(UnpackDictionary, self).__init__()
+
+    def call(self, kwargs):
+        args = tuple([kwargs[name] for name in self.order])
+        return args
+
+
+class ExtendInputs(Processor):
+    def __init__(self, processor):
+        self.processor = processor
+        name = '-'.join([self.__class__.__name__, self.processor.name])
+        super(ExtendInputs, self).__init__(name)
+
+    def call(self, X, *args):
+        return self.processor(X), *args
+
+
+class OutputWrapper(Processor):
+    def __init__(self, inputs_info, labels_info):
+        if not isinstance(inputs_info, dict):
+            raise ValueError('``inputs_info`` must be a dictionary')
+        self.inputs_info = inputs_info
+        if not isinstance(labels_info, dict):
+            raise ValueError('``inputs_info`` must be a dictionary')
+        self.labels_info = labels_info
+        self.inputs_name_to_shape = self._extract_name_to_shape(inputs_info)
+        self.labels_name_to_shape = self._extract_name_to_shape(labels_info)
+        super(OutputWrapper, self).__init__()
+
+    def _extract_name_to_shape(self, info):
+        name_to_shape = list(info.values())
+        if len(name_to_shape) != 1:
+            raise ValueError('``values`` of ``info`` must be a single dict')
+        return name_to_shape[0]
+
+    def _wrap(self, args, info):
+        wrap = {}
+        for arg, name_to_shape in info.items():
+            name = list(name_to_shape.keys())[0]
+            wrap[name] = args[arg]
+        return wrap
+
+    def call(self, *args):
+        inputs = self._wrap(args, self.inputs_info)
+        labels = self._wrap(args, self.labels_info)
+        return {'inputs': inputs, 'labels': labels}
+
+
+class Predict(Processor):
+    def __init__(self, model, preprocess=None, postprocess=None):
+        super(Predict, self).__init__()
+        self.model = model
+        self.preprocess = preprocess
+        self.postprocess = postprocess
+
+    def call(self, x):
+        if self.preprocess is not None:
+            x = self.preprocess(x)
+        y = self.model.predict(x)
+        if self.postprocess is not None:
+            y = self.postprocess(y)
+        return y
+
+
+class ToClassName(Processor):
+    def __init__(self, labels):
+        super(ToClassName, self).__init__()
+        self.labels = labels
+
+    def call(self, x):
+        return self.labels[np.argmax(x)]
+
+
+class ExpandDims(Processor):
+    def __init__(self, axis):
+        super(ExpandDims, self).__init__()
+        self.axis = axis
+
+    def call(self, x):
+        return np.expand_dims(x, self.axis)
+
+
+class BoxClassToOneHotVector(Processor):
     """Transform from class index to a one-hot encoded vector.
     # Arguments
         num_classes: Integer. Total number of classes.
         topic: String. Currently valid topics: `boxes`
     """
-    def __init__(self, num_classes, topic='boxes'):
+    def __init__(self, num_classes):
         self.num_classes = num_classes
-        self.topic = topic
-        super(ToOneHotVector, self).__init__()
+        super(BoxClassToOneHotVector, self).__init__()
 
-    def call(self, kwargs):
-        if self.topic == 'boxes':
-            boxes = kwargs[self.topic]
-            class_indices = boxes[:, 4].astype('int')
-            one_hot_vectors = ops.to_one_hot(class_indices, self.num_classes)
-            one_hot_vectors = one_hot_vectors.reshape(-1, self.num_classes)
-            boxes = np.hstack([boxes[:, :4], one_hot_vectors.astype('float')])
-            kwargs[self.topic] = boxes
-        return kwargs
-
-
-class OutputSelector(Processor):
-    """Selects data types (topics) that will be outputted.
-    #Arguments
-        input_topics: List of strings indicating the keys of data
-            dictionary (data topics).
-        output_topics: List of strings indicating the keys of data
-            dictionary (data topics).
-        as_dict: Boolean. If ``True`` output will be a dictionary
-            of form {'inputs':list_of_input_arrays,
-                     'outputs': list_of_output_arrays}
-            If ``False'', output will be of the form
-                list_of_input_arrays + list_of_output_arrays
-    """
-    def __init__(self, input_topics, label_topics):
-        self.input_topics, self.label_topics = input_topics, label_topics
-        super(OutputSelector, self).__init__()
-
-    def call(self, kwargs):
-        inputs, labels = {}, {}
-        for topic in self.input_topics:
-            inputs[topic] = kwargs[topic]
-        for topic in self.label_topics:
-            labels[topic] = kwargs[topic]
-        return {'inputs': inputs, 'labels': labels}
-
-
-class PrintTopics(Processor):
-    def __init__(self, topics):
-        self.topics = topics
-        super(PrintTopics, self).__init__()
-
-    def call(self, kwargs):
-        for topic in self.topics:
-            print(topic, kwargs[topic])
-        return kwargs
-
-
-class Predict(Processor):
-    def __init__(self, model, input_topic, label_topic='predictions',
-                 processors=None):
-
-        super(Predict, self).__init__()
-        self.model = model
-        self.processors = processors
-        if self.processors is not None:
-            self.process = SequentialProcessor(processors)
-        self.input_topic = input_topic
-        self.label_topic = label_topic
-
-    def call(self, kwargs):
-        input_topic = kwargs[self.input_topic]
-        if self.processors is not None:
-            processing_kwargs = {self.input_topic: input_topic}
-            input_topic = self.process(processing_kwargs)[self.input_topic]
-        label_topic = self.model.predict(input_topic)
-        kwargs[self.label_topic] = label_topic
-        return kwargs
-
-
-class SelectElement(Processor):
-    def __init__(self, topic, argument):
-        super(SelectElement, self).__init__()
-        self.topic = topic
-        self.argument = argument
-
-    def call(self, kwargs):
-        kwargs[self.topic] = kwargs[self.topic][self.argument]
-        return kwargs
-
-
-class ToLabel(Processor):
-    def __init__(self, class_names, topic='predictions'):
-        super(ToLabel, self).__init__()
-        self.class_names = class_names
-        self.topic = topic
-
-    def call(self, kwargs):
-        kwargs[self.topic] = self.class_names[np.argmax(kwargs[self.topic])]
-        return kwargs
-
-
-class ExpandDims(Processor):
-    """Wrap around numpy `expand_dims` due to common use before model predict.
-    # Arguments
-        expand_dims: Int or list of Ints.
-        topic: String.
-    """
-    def __init__(self, axis, topic):
-        super(ExpandDims, self).__init__()
-        self.axis, self.topic = axis, topic
-
-    def call(self, kwargs):
-        kwargs[self.topic] = np.expand_dims(kwargs[self.topic], self.axis)
-        return kwargs
+    def call(self, boxes):
+        class_indices = boxes[:, 4].astype('int')
+        one_hot_vectors = to_one_hot(class_indices, self.num_classes)
+        one_hot_vectors = one_hot_vectors.reshape(-1, self.num_classes)
+        boxes = np.hstack([boxes[:, :4], one_hot_vectors.astype('float')])
+        return boxes
 
 
 class Squeeze(Processor):
@@ -128,13 +177,12 @@ class Squeeze(Processor):
         expand_dims: Int or list of Ints.
         topic: String.
     """
-    def __init__(self, axis, topic):
+    def __init__(self, axis):
         super(Squeeze, self).__init__()
-        self.axis, self.topic = axis, topic
+        self.axis = axis
 
-    def call(self, kwargs):
-        kwargs[self.topic] = np.squeeze(kwargs[self.topic], axis=self.axis)
-        return kwargs
+    def call(self, x):
+        return np.squeeze(x, axis=self.axis)
 
 
 class Copy(Processor):
@@ -143,13 +191,11 @@ class Copy(Processor):
         input_topic: String. Topic to copy from.
         label_topic: String. Topic to copy to.
     """
-    def __init__(self, input_topic, label_topic):
+    def __init__(self):
         super(Copy, self).__init__()
-        self.input_topic, self.label_topic = input_topic, label_topic
 
-    def call(self, kwargs):
-        kwargs[self.label_topic] = kwargs[self.input_topic].copy()
-        return kwargs
+    def call(self, X):
+        return X.copy()
 
 
 class Lambda(object):
@@ -160,12 +206,8 @@ class Lambda(object):
         topic: String
     """
 
-    def __init__(self, function, parameters, topic):
+    def __init__(self, function):
         self.function = function
-        self.parameters = parameters
-        self.topic = topic
 
-    def __call__(self, kwargs):
-        data = self.function(kwargs[self.topic], **self.parameters)
-        kwargs[self.topic] = data
-        return kwargs
+    def __call__(self, X):
+        return self.function(X)

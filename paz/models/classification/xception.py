@@ -71,3 +71,11 @@ def build_xception(
                            ])
     model = Model(inputs, output, name=model_name)
     return model
+
+
+def MiniXception(input_shape, num_classes):
+    stem_kernels, block_data = [32, 64], [128, 128, 256, 256, 512, 512, 1024]
+    model_inputs = (input_shape, num_classes, stem_kernels, block_data)
+    model = build_xception(*model_inputs)
+    model._name = 'MINI-XCEPTION'
+    return model

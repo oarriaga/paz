@@ -7,9 +7,9 @@ setup(name='Paz',
       author='Octavio Arriaga',
       author_email='octavio.arriaga@dfki.de',
       license='MIT',
-      install_requires=[
-          'opencv-python',
-          'tensorflow',
-          'numpy'],
+      # install_requires=[
+      #     'opencv-python',
+      #     'tensorflow',
+      #     'numpy'],
       packages=find_packages()
       )

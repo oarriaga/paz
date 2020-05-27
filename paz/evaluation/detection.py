@@ -1,5 +1,6 @@
 import numpy as np
-from ..core.ops import load_image, compute_ious
+from ..backend.boxes import compute_ious
+from ..backend.image import load_image
 
 
 def compute_matches(dataset, detector, class_to_arg, iou_thresh=0.5):

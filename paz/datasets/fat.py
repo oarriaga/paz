@@ -5,7 +5,7 @@ import json
 import numpy as np
 from tensorflow.keras.utils import Progbar
 
-from ..core import Loader
+from ..abstract import Loader
 from .utils import get_class_names
 
 

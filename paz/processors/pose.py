@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..core import Processor
-from ..core import Pose6D
-from ..core import ops
+from ..abstract import Processor, Pose6D
+from ..backend.keypoints import solve_PNP, UPNP
 
 
 class SolvePNP(Processor):
@@ -17,24 +16,21 @@ class SolvePNP(Processor):
     # Returns
         Creates a new topic ``pose6D`` with a Pose6D message.
     """
-    def __init__(self, points3D, camera):
+    def __init__(self, points3D, camera, class_name=None):
         super(SolvePNP, self).__init__()
         self.points3D = points3D
         self.camera = camera
+        self.class_name = class_name
         self.num_keypoints = len(points3D)
 
-    def call(self, kwargs):
-        keypoints = kwargs['keypoints'][:, :2]
+    def call(self, keypoints):
+        keypoints = keypoints[:, :2]
         keypoints = keypoints.astype(np.float64)
         keypoints = keypoints.reshape((self.num_keypoints, 1, 2))
 
-        (success, rotation, translation) = ops.solve_PNP(
-            self.points3D, keypoints, self.camera, ops.UPNP)
+        (success, rotation, translation) = solve_PNP(
+            self.points3D, keypoints, self.camera, UPNP)
 
-        if 'box2D' in kwargs:
-            class_name = kwargs['box2D'].class_name
-        else:
-            class_name = None
-        pose6D = Pose6D.from_rotation_vector(rotation, translation, class_name)
-        kwargs['pose6D'] = pose6D
-        return kwargs
+        pose6D = Pose6D.from_rotation_vector(
+            rotation, translation, self.class_name)
+        return pose6D
