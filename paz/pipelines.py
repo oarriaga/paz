@@ -108,7 +108,41 @@ class KeypointNetInference(Processor):
         self.predict_keypoints.add(pr.Squeeze(axis=0))
         self.predict_keypoints.add(pr.DenormalizeKeypoints())
         self.predict_keypoints.add(pr.RemoveKeypointsDepth())
+        self.draw = pr.DrawKeypoints2D(self.num_keypoints, self.radius, False)
+        self.wrap = pr.WrapOutput(['image', 'keypoints'])
 
-        self.draw_keypoints.add(
-            pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
-        self.draw_keypoints.add(pr.CastImageToInts())
+    def call(self, image):
+        keypoints = self.predict_keypoints(image)
+        image = self.draw(image, keypoints)
+        return self.wrap(image, keypoints)
+
+
+class KeypointSharedAugmentation(Processor):
+    def __init__(self, renderer, projector, size):
+        super(KeypointSharedAugmentation, self).__init__()
+        self.renderer = renderer
+        self.size = size
+        self.render = pr.RenderMultiViewSample(self.renderer)
+        self.normalize = pr.NormalizeImage()
+        self.preprocess = SequentialProcessor()
+        self.preprocess.add(pr.ConvertColorSpace(pr.RGB2BGR))
+        self.preprocess.add(self.normalize)
+        self.wrap = pr.SequenceWrapper(
+            {0: {'image_A': [size, size, 3]},
+             1: {'image_B': [size, size, 3]}},
+            {2: {'matrices': [4, 4 * 4]},
+             3: {'alpha_channels': [size, size, 2]}})
+
+    def call(self):
+        image_A, image_B, matrices, alpha_channels = self.render()
+        image_A = self.preprocess(image_A)
+        image_B = self.preprocess(image_B)
+        alpha_channels = self.normalize(alpha_channels)
+        return self.wrap(image_A, image_B, matrices, alpha_channels)
+        # TODO: this is not working since wrap dictionaries will not be
+        # found by the sequence object
+        # TODO: Implement SelectElement + all keypoint processors.
+        # TODO: Test implementations
+
+
+
