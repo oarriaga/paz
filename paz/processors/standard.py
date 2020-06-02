@@ -78,6 +78,17 @@ class UnpackDictionary(Processor):
         return args
 
 
+class WrapOutput(Processor):
+    def __init__(self, keys):
+        if not isinstance(keys, list):
+            raise ValueError('``order`` must be a list')
+        self.keys = keys
+        super(WrapOutput, self).__init__()
+
+    def call(self, *args):
+        return dict(zip(self.keys, args))
+
+
 class ExtendInputs(Processor):
     def __init__(self, processor):
         self.processor = processor
@@ -88,7 +99,7 @@ class ExtendInputs(Processor):
         return self.processor(X), *args
 
 
-class OutputWrapper(Processor):
+class SequenceWrapper(Processor):
     def __init__(self, inputs_info, labels_info):
         if not isinstance(inputs_info, dict):
             raise ValueError('``inputs_info`` must be a dictionary')
@@ -98,7 +109,7 @@ class OutputWrapper(Processor):
         self.labels_info = labels_info
         self.inputs_name_to_shape = self._extract_name_to_shape(inputs_info)
         self.labels_name_to_shape = self._extract_name_to_shape(labels_info)
-        super(OutputWrapper, self).__init__()
+        super(SequenceWrapper, self).__init__()
 
     def _extract_name_to_shape(self, info):
         name_to_shape = list(info.values())

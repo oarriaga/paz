@@ -60,7 +60,7 @@ class AugmentDetection(SequentialProcessor):
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.preprocess_image, [0], [0]))
             self.add(pr.ControlMap(self.preprocess_boxes, [1], [1]))
-        self.add(pr.OutputWrapper(
+        self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {1: {'boxes': [len(prior_boxes), 4 + num_classes]}}))
 
@@ -80,12 +80,35 @@ class SingleShotInference(Processor):
              pr.DecodeBoxes(model.prior_boxes, variances=[.1, .2]),
              pr.NonMaximumSuppressionPerClass(nms_thresh),
              pr.FilterBoxes(class_names, score_thresh)])
-        self.denormalize_boxes2D = pr.DenormalizeBoxes2D()
         self.predict = pr.Predict(model, preprocessing, postprocessing)
-        self.draw_boxes2D = pr.DrawBoxes2D(class_names)
+
+        self.denormalize = pr.DenormalizeBoxes2D()
+        self.draw = pr.DrawBoxes2D(class_names)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
         boxes2D = self.predict(image)
-        boxes2D = self.denormalize_boxes2D(image, boxes2D)
-        image = self.draw_boxes2D(image, boxes2D)
-        return image
+        boxes2D = self.denormalize(image, boxes2D)
+        image = self.draw(image, boxes2D)
+        return self.wrap(image, boxes2D)
+
+
+class KeypointNetInference(Processor):
+    def __init__(self, model, num_keypoints=None, radius=5):
+
+        super(KeypointNetInference, self).__init__()
+        self.num_keypoints, self.radius = num_keypoints, radius
+        if self.num_keypoints is None:
+            self.num_keypoints = model.output_shape[1]
+
+        self.predict_keypoints = SequentialProcessor()
+        preprocessing = [pr.NormalizeImage(), pr.ExpandDims(axis=0)]
+        self.predict_keypoints.add(pr.Predict(model, preprocessing))
+        self.predict_keypoints.add(pr.SelectElement(0))
+        self.predict_keypoints.add(pr.Squeeze(axis=0))
+        self.predict_keypoints.add(pr.DenormalizeKeypoints())
+        self.predict_keypoints.add(pr.RemoveKeypointsDepth())
+
+        self.draw_keypoints.add(
+            pr.DrawKeypoints2D(self.num_keypoints, self.radius, False))
+        self.draw_keypoints.add(pr.CastImageToInts())

@@ -18,13 +18,14 @@ class HaarCascadeDetectors(Processor):
                 pr.ToBoxes2D(args.models))
             self.detectors.append(detector)
         self.draw_boxes2D = pr.DrawBoxes2D(args.models)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
         boxes2D = []
         for detector in self.detectors:
             boxes2D.extend(detector(image))
         image = self.draw_boxes2D(image, boxes2D)
-        return image
+        return self.wrap(image, boxes2D)
 
 
 if __name__ == "__main__":

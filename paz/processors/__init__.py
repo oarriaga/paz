@@ -55,7 +55,7 @@ from .standard import ControlMap
 from .standard import ExpandDomain
 from .standard import CopyDomain
 from .standard import ExtendInputs
-from .standard import OutputWrapper
+from .standard import SequenceWrapper
 from .standard import Predict
 from .standard import ToClassName
 from .standard import ExpandDims
@@ -64,6 +64,7 @@ from .standard import Squeeze
 from .standard import Copy
 from .standard import Lambda
 from .standard import UnpackDictionary
+from .standard import WrapOutput
 
 from .pose import SolvePNP
 from .pose import UPNP
