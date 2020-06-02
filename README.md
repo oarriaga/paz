@@ -30,7 +30,7 @@ Keras was often misinterpreted as a "beginners" framework; however, once you lea
 It allowed me to automate and write down experiments with no extra boiler-plate code.
 Furthermore, if someone wanted to abandon such comfort one could still go the beaten path and create a custom training loop.
 
-As final remark, I would like to mention that, I feel that we might tend to forget the great effort and emotional carriage behind every open-source project.
+As a final remark, I would like to mention that, I feel that we might tend to forget the great effort and emotional carriage behind every open-source project.
 I feel it's easy to blurry a company name with the individuals behind their project, and we forget that there is someone feeling our criticism and our praise.
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration before we lay our hardened criticism.
