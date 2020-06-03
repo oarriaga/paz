@@ -49,7 +49,7 @@ from .geometric import Expand
 from .geometric import ApplyTranslation
 from .geometric import ApplyRandomTranslation
 
-# from .keypoints import *
+from .keypoints import Render
 
 from .standard import ControlMap
 from .standard import ExpandDomain
@@ -65,6 +65,7 @@ from .standard import Copy
 from .standard import Lambda
 from .standard import UnpackDictionary
 from .standard import WrapOutput
+from .standard import Concatenate
 
 from .pose import SolvePNP
 from .pose import UPNP
