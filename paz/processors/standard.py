@@ -121,10 +121,11 @@ class SequenceWrapper(Processor):
         super(SequenceWrapper, self).__init__()
 
     def _extract_name_to_shape(self, info):
-        name_to_shape = list(info.values())
-        if len(name_to_shape) != 1:
-            raise ValueError('``values`` of ``info`` must be a single dict')
-        return name_to_shape[0]
+        name_to_shape = {}
+        for values in info.values():
+            for key, value in values.items():
+                name_to_shape[key] = value
+        return name_to_shape
 
     def _wrap(self, args, info):
         wrap = {}
@@ -171,6 +172,15 @@ class ExpandDims(Processor):
 
     def call(self, x):
         return np.expand_dims(x, self.axis)
+
+
+class SelectElement(Processor):
+    def __init__(self, index):
+        super(SelectElement, self).__init__()
+        self.index = index
+
+    def call(self, inputs):
+        return inputs[self.index]
 
 
 class BoxClassToOneHotVector(Processor):
