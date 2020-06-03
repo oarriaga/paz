@@ -151,4 +151,4 @@ class KeypointSharedAugmentation(SequentialProcessor):
             {0: {'image_A': [size, size, 3]},
              1: {'image_B': [size, size, 3]}},
             {2: {'matrices': [4, 4 * 4]},
-             3: {'alpha_channels': [size, size, 2]}})
+             3: {'alpha_channels': [size, size, 2]}}))
