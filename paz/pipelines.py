@@ -117,32 +117,38 @@ class KeypointNetInference(Processor):
         return self.wrap(image, keypoints)
 
 
-class KeypointSharedAugmentation(Processor):
-    def __init__(self, renderer, projector, size):
+class RenderTwoViews(Processor):
+    def __init__(self, renderer):
+        super(RenderTwoViews, self).__init__()
+        self.render = pr.Render(renderer)
+
+        self.preprocess_image = SequentialProcessor()
+        self.preprocess_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
+        self.preprocess_image.add(pr.NormalizeImage())
+
+        self.preprocess_alpha = SequentialProcessor()
+        self.preprocess_alpha.add(pr.ExpandDims(-1))
+        self.preprocess_alpha.add(pr.NormalizeImage())
+        self.concatenate = pr.Concatenate(-1)
+
+    def call(self):
+        image_A, image_B, matrices, alpha_A, alpha_B = self.render()
+        image_A = self.preprocess_image(image_A)
+        image_B = self.preprocess_image(image_B)
+        alpha_A = self.preprocess_alpha(alpha_A)
+        alpha_B = self.preprocess_alpha(alpha_B)
+        alpha_channels = self.concatenate([alpha_A, alpha_B])
+        return image_A, image_B, matrices, alpha_channels
+
+
+class KeypointSharedAugmentation(SequentialProcessor):
+    def __init__(self, renderer, size):
         super(KeypointSharedAugmentation, self).__init__()
         self.renderer = renderer
         self.size = size
-        self.render = pr.RenderMultiViewSample(self.renderer)
-        self.normalize = pr.NormalizeImage()
-        self.preprocess = SequentialProcessor()
-        self.preprocess.add(pr.ConvertColorSpace(pr.RGB2BGR))
-        self.preprocess.add(self.normalize)
-        self.wrap = pr.SequenceWrapper(
+        self.add(RenderTwoViews(self.renderer))
+        self.add(pr.SequenceWrapper(
             {0: {'image_A': [size, size, 3]},
              1: {'image_B': [size, size, 3]}},
             {2: {'matrices': [4, 4 * 4]},
              3: {'alpha_channels': [size, size, 2]}})
-
-    def call(self):
-        image_A, image_B, matrices, alpha_channels = self.render()
-        image_A = self.preprocess(image_A)
-        image_B = self.preprocess(image_B)
-        alpha_channels = self.normalize(alpha_channels)
-        return self.wrap(image_A, image_B, matrices, alpha_channels)
-        # TODO: this is not working since wrap dictionaries will not be
-        # found by the sequence object
-        # TODO: Implement SelectElement + all keypoint processors.
-        # TODO: Test implementations
-
-
-
