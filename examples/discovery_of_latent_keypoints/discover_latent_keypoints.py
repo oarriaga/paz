@@ -11,7 +11,7 @@ from paz.models import KeypointNetShared
 from paz.models import Projector
 from paz.pipelines import KeypointNetInference
 from paz.pipelines import KeypointSharedAugmentation
-from paz.core.sequencer import GeneratingSequencer
+from paz.abstract import GeneratingSequence
 from paz.optimization import KeypointNetLoss
 from paz.optimization.callbacks import DrawInferences
 
@@ -99,9 +99,8 @@ focal_length = scene.camera.get_projection_matrix()[0, 0]
 
 # setting sequencer
 input_shape = (args.image_size, args.image_size, 3)
-projector = Projector(focal_length, True)
-processor = KeypointSharedAugmentation(scene, projector, args.image_size)
-sequencer = GeneratingSequencer(processor, args.batch_size, as_list=True)
+processor = KeypointSharedAugmentation(scene, args.image_size)
+sequencer = GeneratingSequence(processor, args.batch_size, as_list=True)
 
 # model instantiation
 model = KeypointNetShared(input_shape, args.num_keypoints,
