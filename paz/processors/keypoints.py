@@ -5,6 +5,15 @@ from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 
 
+class Render(Processor):
+    def __init__(self, renderer):
+        super(Render, self).__init__()
+        self.renderer = renderer
+
+    def call(self):
+        return self.renderer.render()
+
+
 class RenderSingleViewSample(Processor):
     """Renders a batch of images and puts them in the selected topic
     # Arguments
