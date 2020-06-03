@@ -99,6 +99,15 @@ class ExtendInputs(Processor):
         return self.processor(X), *args
 
 
+class Concatenate(Processor):
+    def __init__(self, axis):
+        super(Concatenate, self)
+        self.axis = axis
+
+    def call(self, inputs):
+        return np.concatenate(inputs, self.axis)
+
+
 class SequenceWrapper(Processor):
     def __init__(self, inputs_info, labels_info):
         if not isinstance(inputs_info, dict):
