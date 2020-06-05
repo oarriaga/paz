@@ -88,7 +88,7 @@ def random_plain_background(image):
         alpha_channel: Float array-like. Normalized alpha channel for blending.
     """
     image, alpha_channel = split_alpha_channel(image)
-    random_color = np.random.uniform([3], 0, 255)
+    random_color = np.random.uniform(0, 255, [3])
     random_color = np.reshape(random_color, [1, 1, 3])
     H, W = image.shape[:2]
     background = np.tile(random_color, [H, W, 1])
