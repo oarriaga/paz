@@ -96,7 +96,7 @@ class ExtendInputs(Processor):
         super(ExtendInputs, self).__init__(name)
 
     def call(self, X, *args):
-        return self.processor(X), *args
+        return self.processor(X), args
 
 
 class Concatenate(Processor):
