@@ -68,6 +68,6 @@ class ChangeGenerator(Callback):
             raise ValueError('Unavailable metric:', self.monitor)
         return monitor_value
 
-    def change_scene(self):
-        self.generator.scene.translate = translate
-        self.generator.scene.
+    # def change_scene(self):
+        # self.generator.scene.translate = translate
+        # self.generator.scene.
