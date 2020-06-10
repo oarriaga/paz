@@ -1,7 +1,7 @@
 import argparse
 
 from paz.backend.camera import VideoPlayer, Camera
-from paz.models import SSD300
+from paz.models import SSD300, SSD512
 from paz.datasets import get_class_names
 from paz.pipelines import SingleShotInference
 
@@ -14,11 +14,14 @@ parser.add_argument('-s', '--score_thresh', type=float, default=0.6,
 parser.add_argument('-n', '--nms_thresh', type=float, default=0.45,
                     help='non-maximum suppression threshold')
 parser.add_argument('-d', '--dataset', type=str, default='VOC',
-                    help='Dataset name')
+                    choices=['VOC', 'COCO'], help='Dataset name')
 args = parser.parse_args()
 
 names = get_class_names(args.dataset)
-model = SSD300(len(names))
+if args.dataset == 'VOC':
+    model = SSD300(len(names))
+elif args.dataset == 'COCO':
+    model = SSD512(len(names))
 detect = SingleShotInference(model, names, args.score_thresh, args.nms_thresh)
 camera = Camera(args.camera_id)
 player = VideoPlayer((1280, 960), detect, camera)
