@@ -10,6 +10,7 @@
 *.xml
 *.avi
 *.mp4
+*.npz
 
 dist/*
 build/*
