@@ -11,6 +11,8 @@
 *.avi
 *.mp4
 *.npz
+*.ipynb_checkpoints
+*.ipynb
 
 dist/*
 build/*
