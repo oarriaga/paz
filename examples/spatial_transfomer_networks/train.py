@@ -5,7 +5,7 @@ from paz.backend.image import save_image
 
 dataset_path = "mnist_cluttered_60x60_6distortions.npz"
 batch_size = 256
-num_epochs = 30
+num_epochs = 10
 save_path = ''
 
 data_manager = ClutteredMNIST(dataset_path)
@@ -28,5 +28,5 @@ def plot_predictions(samples):
         save_image('images/original_image_%03d.png' % arg, image)
 
 
-plot_predictions(test_data[0][:9])
 model.fit(x_train, y_train, batch_size, num_epochs, validation_data=val_data)
+plot_predictions(test_data[0][:9])
