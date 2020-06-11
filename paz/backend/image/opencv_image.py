@@ -160,8 +160,9 @@ def save_image(filepath, image):
         filepath: String with image path. It should include postfix e.g. .png
         image: Numpy array.
     """
-    if not os.path.exists(filepath):
-        os.makedirs(filepath)
+    directory_name = os.path.dirname(filepath)
+    if not os.path.exists(directory_name):
+        os.makedirs(directory_name)
     return cv2.imwrite(filepath, image)
 
 
