@@ -3,6 +3,7 @@ from paz.pipelines import AugmentImage, PreprocessImage
 from paz import processors as pr
 
 from processors import MeasureSimilarity, AddCroppedBackground
+from processors import ConcatenateAlphaMask
 
 
 class AutoEncoderInference(SequentialProcessor):
@@ -48,7 +49,7 @@ class SelfSupervisedAugmentation(SequentialProcessor):
         self.max_radius_scale = max_radius_scale
         self.copy = pr.Copy()
         self.augment = SequentialProcessor()
-        self.augment.add(pr.ConcatenateAlphaMask())
+        self.augment.add(ConcatenateAlphaMask())
         self.augment.add(AddCroppedBackground(image_paths, size))
         for arg in range(num_occlusions):
             self.augment.add(pr.AddOcclusion(self.max_radius_scale))
