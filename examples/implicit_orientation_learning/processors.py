@@ -1,4 +1,4 @@
-from paz.core import Processor, SequentialProcessor
+from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
 import numpy as np
 
@@ -62,6 +62,15 @@ class RandomImageCrop(Processor):
         return cropped_image
 
 
+class ConcatenateAlphaMask(Processor):
+    def __init__(self, **kwargs):
+        super(ConcatenateAlphaMask, self).__init__(**kwargs)
+
+    def call(self, image, alpha_mask):
+        alpha_mask = np.expand_dims(alpha_mask, axis=-1)
+        return np.concatenate([image, alpha_mask], axis=2)
+
+
 class MakeRandomPlainImage(Processor):
     def __init__(self, shape):
         super(MakeRandomPlainImage, self).__init__()
@@ -70,6 +79,30 @@ class MakeRandomPlainImage(Processor):
     def call(self):
         random_RGB = np.random.randint(0, 256, self.num_channels)
         return np.ones((self.H, self.W, self.num_channels)) * random_RGB
+
+
+class AddOcclusion(Processor):
+    def __init__(self, max_radius_scale=.5, probability=.5):
+        super(AddOcclusion, self).__init__()
+        self.max_radius_scale = max_radius_scale
+
+    def call(self, image):
+        height, width = image.shape[:2]
+        max_distance = np.max((height, width)) * self.max_radius_scale
+        num_vertices = np.random.randint(3, 7)
+        angle_between_vertices = 2 * np.pi / num_vertices
+        initial_angle = np.random.uniform(0, 2 * np.pi)
+        center = np.random.rand(2) * np.array([width, height])
+        vertices = np.zeros((num_vertices, 2), dtype=np.int32)
+        for vertex_arg in range(num_vertices):
+            angle = initial_angle + (vertex_arg * angle_between_vertices)
+            vertex = np.array([np.cos(angle), np.sin(angle)])
+            vertex = np.random.uniform(0, max_distance) * vertex
+            vertices[vertex_arg] = (vertex + center).astype(np.int32)
+        color = np.random.randint(0, 256, 3).tolist()
+        draw_filled_polygon(image, vertices, color)
+        return image
+
 
 
 class AddCroppedBackground(Processor):
@@ -81,11 +114,11 @@ class AddCroppedBackground(Processor):
             raise ValueError('No paths given in ``image_paths``')
 
         self.image_paths = image_paths
-        self.build_background = SequentialProcessor(pr.LoadImage())
+        self.build_background = SequentialProcessor()
         self.build_background.add(pr.LoadImage())
         self.build_background.add(RandomImageCrop(size))
         self.alpha_blend = AlphaBlending()
-        self.make_random_plain_image = MakeRandomPlainImage()
+        self.make_random_plain_image = MakeRandomPlainImage((size, size, 3))
 
     def call(self, image):
         random_arg = np.random.randint(0, len(self.image_paths))
