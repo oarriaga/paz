@@ -1,4 +1,4 @@
-import numpy as np
+# import numpy as np
 
 from ..abstract import Processor
 
@@ -9,13 +9,9 @@ from ..backend.image import random_brightness
 from ..backend.image import random_contrast
 from ..backend.image import random_hue
 from ..backend.image import resize_image
-from ..backend.image import random_image_quality
+from ..backend.image import random_image_blur
 from ..backend.image import random_flip_left_right
 from ..backend.image import convert_color_space
-
-from ..backend.image import random_crop
-from ..backend.image import random_plain_background
-from ..backend.image import random_cropped_background
 from ..backend.image import show_image
 
 
@@ -178,16 +174,14 @@ class ResizeImages(Processor):
         return [resize_image(image, self.shape) for image in images]
 
 
-class RandomImageQuality(Processor):
+class RandomImageBlur(Processor):
     """Randomizes image quality
     """
-    def __init__(self, lower, upper):
-        self.lower = lower
-        self.upper = upper
-        super(RandomImageQuality, self).__init__()
+    def __init__(self):
+        super(RandomImageBlur, self).__init__()
 
     def call(self, image):
-        return random_image_quality(image, self.lower, self.upper)
+        return random_image_blur(image)
 
 
 class RandomFlipImageLeftRight(Processor):
@@ -209,44 +203,6 @@ class ConvertColorSpace(Processor):
 
     def call(self, image):
         return convert_color_space(image, self.flag)
-
-
-class RandomPlainBackground(Processor):
-    """Adds a monochromatic background to an image with an alpha-mask channel.
-    """
-    def __init__(self):
-        super(RandomPlainBackground, self).__init__()
-
-    def call(self, image):
-        return random_plain_background(image)
-
-
-class RandomImageCrop(Processor):
-    """Crops and returns random patch of an image.
-    """
-    def __init__(self, size):
-        self.size = size
-        super(RandomImageCrop, self).__init__()
-
-    def call(self, image):
-        random_crop(image, self.size)
-
-
-class RandomCroppedBackground(Processor):
-    """Add a random cropped background from a randomly selected given set of
-    images to a .png image with an alpha-mask channel.
-    # Arguments:
-        image_filepaths: List containing the full path to the images
-            used to randomly select a crop.
-    """
-    def __init__(self, image_filepaths):
-        self.image_filepaths = image_filepaths
-        super(RandomCroppedBackground, self).__init__()
-
-    def call(self, image):
-        random_arg = np.random.randint(0, len(self.image_filepaths))
-        background = load_image(self.image_filepaths[random_arg])
-        return random_cropped_background(image, background)
 
 
 class ShowImage(Processor):
