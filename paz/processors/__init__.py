@@ -1,3 +1,5 @@
+# imports are done directly to keep user's auto-complete clean
+
 from .detection import SquareBoxes2D
 from .detection import DenormalizeBoxes2D
 from .detection import RoundBoxes2D
@@ -30,12 +32,9 @@ from .image import RandomContrast
 from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
-from .image import RandomImageQuality
+from .image import RandomImageBlur
 from .image import RandomFlipImageLeftRight
 from .image import ConvertColorSpace
-from .image import RandomPlainBackground
-from .image import RandomImageCrop
-from .image import RandomCroppedBackground
 from .image import ShowImage
 from .image import ImageDataProcessor
 from .image import BGR_IMAGENET_MEAN
