@@ -64,10 +64,12 @@ class RenderMultiViewSample(Processor):
 class ConcatenateAlphaMask(Processor):
     """Concatenate ``alpha_mask`` to ``image``. Useful for changing background.
     """
+    def __init__(self):
+        super(ConcatenateAlphaMask, self).__init__()
+
     def call(self, image, alpha_mask):
         alpha_mask = np.expand_dims(alpha_mask, axis=-1)
-        image = np.concatenate([image, alpha_mask], axis=2)
-        return image
+        return np.concatenate([image, alpha_mask], axis=2)
 
 
 class ProjectKeypoints(Processor):
