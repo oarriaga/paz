@@ -2,8 +2,10 @@ from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines import AugmentImage, PreprocessImage
 from paz import processors as pr
 
-from processors import MeasureSimilarity, AddCroppedBackground
+from processors import MeasureSimilarity
+from processors import BlendRandomCroppedBackground
 from processors import ConcatenateAlphaMask
+from processors import AddOcclusion
 
 
 class AutoEncoderInference(SequentialProcessor):
@@ -42,26 +44,25 @@ class ImplicitRotationInference(Processor):
         return self.wrap(image, latent_vector, latent_image, decoded_image)
 
 
-class SelfSupervisedAugmentation(SequentialProcessor):
-    def __init__(self, renderer, image_paths, size,
-                 num_occlusions=0, max_radius_scale=0.5, split=pr.TRAIN):
-        super(SelfSupervisedAugmentation, self).__init__()
-        self.max_radius_scale = max_radius_scale
-        self.copy = pr.Copy()
-        self.augment = SequentialProcessor()
-        self.augment.add(ConcatenateAlphaMask())
-        self.augment.add(AddCroppedBackground(image_paths, size))
+class RandomizeRenderedImage(SequentialProcessor):
+    def __init__(self, image_paths, num_occlusions=1, max_radius_scale=0.5):
+        super(RandomizeRenderedImage, self).__init__()
+        self.add(ConcatenateAlphaMask())
+        self.add(BlendRandomCroppedBackground(image_paths))
         for arg in range(num_occlusions):
-            self.augment.add(pr.AddOcclusion(self.max_radius_scale))
-        self.augment.add(pr.RandomBlur())
-        self.augment.add(AugmentImage())
+            self.add(AddOcclusion(max_radius_scale))
+        self.add(pr.RandomImageBlur())
+        self.add(AugmentImage())
 
-        self.preprocess = SequentialProcessor()
-        self.preprocess.add(pr.ConvertColorSpace(pr.RGB2BGR))
-        self.preprocess.add(pr.NormalizeImage())
-        self.wrap = pr.SequenceWrapper(
-            {0: {'input_image': [size, size, 3]}},
-            {1: {'label_image': [size, size, 3]}})
+
+class _DomainRandomization(Processor):
+    def __init__(self, renderer, image_paths, num_occlusions, split=pr.TRAIN):
+        super(DomainRandomization, self).__init__()
+        self.copy = pr.Copy()
+        self.render = pr.Render(renderer)
+        self.augment = RandomizeRenderedImage(image_paths, num_occlusions)
+        preprocessors = [pr.ConvertColorSpace(pr.RGB2BGR), pr.NormalizeImage()]
+        self.preprocess = SequentialProcessor(preprocessors)
 
     def call(self):
         input_image, (matrices, alpha_mask, depth) = self.render()
@@ -70,4 +71,15 @@ class SelfSupervisedAugmentation(SequentialProcessor):
             input_image = self.augment(input_image, alpha_mask)
         input_image = self.preprocess(input_image)
         label_image = self.preprocess(label_image)
-        return self.wrap(input_image, label_image)
+        return input_image, label_image
+
+
+class DomainRandomization(SequentialProcessor):
+    def __init__(self, renderer, size, image_paths,
+                 num_occlusions, split=pr.TRAIN):
+        super(_DomainRandomization, self).__init__()
+        self.add(DomainRandomization(
+            renderer, image_paths, num_occlusions, split))
+        self.add(pr.SequenceWrapper(
+            {0: {'input_image': [size, size, 3]}},
+            {1: {'label_image': [size, size, 3]}}))
