@@ -51,18 +51,19 @@ class RandomizeRenderedImage(SequentialProcessor):
         self.add(BlendRandomCroppedBackground(image_paths))
         for arg in range(num_occlusions):
             self.add(AddOcclusion(max_radius_scale))
-        self.add(pr.RandomImageBlur())
+        # self.add(pr.RandomImageBlur())
         self.add(AugmentImage())
 
 
-class _DomainRandomization(Processor):
+class DomainRandomizationProcessor(Processor):
     def __init__(self, renderer, image_paths, num_occlusions, split=pr.TRAIN):
-        super(DomainRandomization, self).__init__()
+        super(DomainRandomizationProcessor, self).__init__()
         self.copy = pr.Copy()
         self.render = pr.Render(renderer)
         self.augment = RandomizeRenderedImage(image_paths, num_occlusions)
         preprocessors = [pr.ConvertColorSpace(pr.RGB2BGR), pr.NormalizeImage()]
         self.preprocess = SequentialProcessor(preprocessors)
+        self.split = split
 
     def call(self):
         input_image, (matrices, alpha_mask, depth) = self.render()
@@ -77,8 +78,8 @@ class _DomainRandomization(Processor):
 class DomainRandomization(SequentialProcessor):
     def __init__(self, renderer, size, image_paths,
                  num_occlusions, split=pr.TRAIN):
-        super(_DomainRandomization, self).__init__()
-        self.add(DomainRandomization(
+        super(DomainRandomization, self).__init__()
+        self.add(DomainRandomizationProcessor(
             renderer, image_paths, num_occlusions, split))
         self.add(pr.SequenceWrapper(
             {0: {'input_image': [size, size, 3]}},
