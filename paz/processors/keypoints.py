@@ -11,7 +11,7 @@ class Render(Processor):
         self.renderer = renderer
 
     def call(self):
-        return self.renderer.render()
+        return self.renderer.render_sample()
 
 
 class RenderSingleViewSample(Processor):
