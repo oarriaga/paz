@@ -1,5 +1,7 @@
-from paz.abstract import Processor, SequentialProcessor
-from paz import processors as pr
+from paz.abstract import Processor
+from paz.backend.image import blend_alpha_channel, random_image_crop
+from paz.backend.image import make_random_plain_image, concatenate_alpha_mask
+from paz.backend.image import draw_filled_polygon, load_image
 import numpy as np
 
 
@@ -22,26 +24,12 @@ class MeasureSimilarity(Processor):
         return kwargs
 
 
-class Normalize(Processor):
-    def __init__(self, topic):
-        super(Normalize, self).__init__()
-        self.topic = topic
-
-    def call(self, kwargs):
-        data = kwargs[self.topic]
-        kwargs[self.topic] = data / np.linalg.norm(data)
-        return kwargs
-
-
 class AlphaBlending(Processor):
     def __init__(self):
         super(AlphaBlending, self).__init__()
 
     def call(self, image, background):
-        if image.shape[-1] != 4:
-            raise ValueError('``image`` does not contain an alpha mask.')
-        foreground, alpha = np.split(image, [3], -1)
-        return (1.0 - (alpha / 255.0)) * background.astype(float)
+        return blend_alpha_channel(image, background)
 
 
 class RandomImageCrop(Processor):
@@ -50,16 +38,16 @@ class RandomImageCrop(Processor):
         self.size = size
 
     def call(self, image):
-        H, W = image.shape[:2]
-        if (self.box_size >= H) or (self.box_size >= W):
-            print('WARNING: Image is smaller than crop size')
-            return None
-        x_min = np.random.randint(0, (W - 1) - self.size)
-        y_min = np.random.randint(0, (H - 1) - self.size)
-        x_max = int(x_min + self.size)
-        y_max = int(y_min + self.size)
-        cropped_image = image[y_min:y_max, x_min:x_max]
-        return cropped_image
+        return random_image_crop(image, self.size)
+
+
+class MakeRandomPlainImage(Processor):
+    def __init__(self, shape):
+        super(MakeRandomPlainImage, self).__init__()
+        self.shape = shape
+
+    def call(self):
+        return make_random_plain_image(self.shape)
 
 
 class ConcatenateAlphaMask(Processor):
@@ -67,63 +55,56 @@ class ConcatenateAlphaMask(Processor):
         super(ConcatenateAlphaMask, self).__init__(**kwargs)
 
     def call(self, image, alpha_mask):
-        alpha_mask = np.expand_dims(alpha_mask, axis=-1)
-        return np.concatenate([image, alpha_mask], axis=2)
+        return concatenate_alpha_mask(image, alpha_mask)
 
 
-class MakeRandomPlainImage(Processor):
-    def __init__(self, shape):
-        super(MakeRandomPlainImage, self).__init__()
-        self.H, self.W, self.num_channels = shape
+class BlendRandomCroppedBackground(Processor):
+    def __init__(self, background_paths):
+        super(BlendRandomCroppedBackground, self).__init__()
+        if not isinstance(background_paths, list):
+            raise ValueError('``background_paths`` must be list')
+        if len(background_paths) == 0:
+            raise ValueError('No paths given in ``background_paths``')
+        self.background_paths = background_paths
 
-    def call(self):
-        random_RGB = np.random.randint(0, 256, self.num_channels)
-        return np.ones((self.H, self.W, self.num_channels)) * random_RGB
+    def call(self, image):
+        random_arg = np.random.randint(0, len(self.background_paths))
+        background_path = self.background_paths[random_arg]
+        background = load_image(background_path)
+        background = random_image_crop(background, image.shape[:2])
+        if background is None:
+            background = make_random_plain_image(image.shape[:2])
+        return blend_alpha_channel(image, background)
 
 
 class AddOcclusion(Processor):
-    def __init__(self, max_radius_scale=.5, probability=.5):
+    def __init__(self, max_radius_scale=0.5, probability=0.5):
+        """TODO: add use of probability
+        """
         super(AddOcclusion, self).__init__()
         self.max_radius_scale = max_radius_scale
 
-    def call(self, image):
-        height, width = image.shape[:2]
-        max_distance = np.max((height, width)) * self.max_radius_scale
-        num_vertices = np.random.randint(3, 7)
-        angle_between_vertices = 2 * np.pi / num_vertices
+    def _random_vertices(self, center, max_radius, min_vertices, max_vertices):
+        num_vertices = np.random.randint(min_vertices, max_vertices)
+        angle_delta = 2 * np.pi / num_vertices
         initial_angle = np.random.uniform(0, 2 * np.pi)
+        angles = initial_angle + np.arange(0, num_vertices) * angle_delta
+        x_component = np.cos(angles).reshape(-1, 1)
+        y_component = np.sin(angles).reshape(-1, 1)
+        vertices = np.concatenate([x_component, y_component], -1)
+        random_lengths = np.random.uniform(0, max_radius, num_vertices)
+        random_lengths = random_lengths.reshape(num_vertices, 1)
+        vertices = vertices * random_lengths
+        vertices = vertices + center
+        return vertices.astype(np.int32)
+
+    def add_occlusion(self, image, max_radius_scale):
+        height, width = image.shape[:2]
+        max_radius = np.max((height, width)) * max_radius_scale
         center = np.random.rand(2) * np.array([width, height])
-        vertices = np.zeros((num_vertices, 2), dtype=np.int32)
-        for vertex_arg in range(num_vertices):
-            angle = initial_angle + (vertex_arg * angle_between_vertices)
-            vertex = np.array([np.cos(angle), np.sin(angle)])
-            vertex = np.random.uniform(0, max_distance) * vertex
-            vertices[vertex_arg] = (vertex + center).astype(np.int32)
+        vertices = self._random_vertices(center, max_radius, 3, 7)
         color = np.random.randint(0, 256, 3).tolist()
-        draw_filled_polygon(image, vertices, color)
-        return image
-
-
-
-class AddCroppedBackground(Processor):
-    def __init__(self, image_paths, size):
-        super(AddCroppedBackground, self).__init__()
-        if not isinstance(image_paths, list):
-            raise ValueError('``image_paths`` must be list')
-        if len(image_paths) == 0:
-            raise ValueError('No paths given in ``image_paths``')
-
-        self.image_paths = image_paths
-        self.build_background = SequentialProcessor()
-        self.build_background.add(pr.LoadImage())
-        self.build_background.add(RandomImageCrop(size))
-        self.alpha_blend = AlphaBlending()
-        self.make_random_plain_image = MakeRandomPlainImage((size, size, 3))
+        return draw_filled_polygon(image, vertices, color)
 
     def call(self, image):
-        random_arg = np.random.randint(0, len(self.image_paths))
-        image_path = self.image_paths[random_arg]
-        background = self.build_background(image_path)
-        if background is None:
-            background = self.make_random_plain_image()
-        return self.alpha_blend(image, background)
+        return self.add_occlusion(image, self.max_radius_scale)
