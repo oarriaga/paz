@@ -73,7 +73,7 @@ class GeneratingSequence(SequenceExtra):
     def __len__(self):
         return self.num_steps
 
-    def _process_batch(self, inputs, labels, batch_index):
+    def process_batch(self, inputs, labels, batch_index):
         for sample_arg in range(self.batch_size):
             sample = self.pipeline()
             self._place_sample(sample['inputs'], sample_arg, inputs)
