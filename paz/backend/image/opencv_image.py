@@ -120,13 +120,13 @@ def save_image(filepath, image):
 
 def random_image_crop(image, size):
     H, W = image.shape[:2]
-    if (size >= H) or (size >= W):
-        print('WARNING: Image is smaller than crop size')
+    if (size[0] >= H) or (size[1] >= W):
+        print('WARNING: Image is smaller than crop size', H, W, size)
         return None
-    x_min = np.random.randint(0, (W - 1) - size)
-    y_min = np.random.randint(0, (H - 1) - size)
-    x_max = int(x_min + size)
-    y_max = int(y_min + size)
+    x_min = np.random.randint(0, (W - 1) - size[1])
+    y_min = np.random.randint(0, (H - 1) - size[0])
+    x_max = int(x_min + size[1])
+    y_max = int(y_min + size[0])
     cropped_image = image[y_min:y_max, x_min:x_max]
     return cropped_image
 
@@ -141,7 +141,9 @@ def blend_alpha_channel(image, background):
     if image.shape[-1] != 4:
         raise ValueError('``image`` does not contain an alpha mask.')
     foreground, alpha = np.split(image, [3], -1)
-    return (1.0 - (alpha / 255.0)) * background.astype(float)
+    alpha = alpha / 255.0
+    background = (1.0 - alpha) * background.astype(float)
+    return (alpha * foreground) + background
 
 
 def concatenate_alpha_mask(image, alpha_mask):
