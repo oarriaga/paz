@@ -52,7 +52,7 @@ def AutoEncoder(input_shape, latent_dimension=128, mode='full',
     x = UpSampling2D((2, 2), name='upsample_4')(x)
     x = Conv2D(input_shape[-1], (3, 3), padding='same', name='conv2D_8')(x)
     output_tensor = Activation('sigmoid', name='label_image')(x)
-    base_name = 'VanillaAutoencoder' + str(latent_dimension)
+    base_name = 'SimpleAutoencoder' + str(latent_dimension)
     if dropout_rate is not None:
         base_name = base_name + 'DRP_' + str(dropout_rate)
 
