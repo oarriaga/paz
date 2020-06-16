@@ -11,45 +11,8 @@ from paz.backend.image import opencv_image
 # random_hue
 # random_plain_background
 # show_image
-
-
-def test_cast_image():
-    casted_image = opencv_image.cast_image(test_image, dtype=np.float32)
-    assert casted_image.dtype == np.float32
-
-
-def test_resize_image():
-    resized_image = opencv_image.resize_image(test_image, (width, height))
-    assert resized_image.size == size
-
-
-def test_convert_color_space():
-    converted_colorspace = opencv_image.convert_color_space(
-        test_image, cv2.COLOR_RGB2BGR)
-    rgb_to_bgr = test_image[..., ::-1]
-    assert np.all(converted_colorspace == rgb_to_bgr)
-
-
-def test_flip_left_right():
-    image_filp = opencv_image.flip_left_right(test_image)
-    assert np.all(image_filp == flipped_image)
-
-
-def test_gaussian_blur_output_shape():
-    blurred = opencv_image.gaussian_blur(test_image)
-    assert test_image.shape == blurred.shape
-
-
-def test_split_alpha_channel():
-    split_alpha_img, alpha_channel = opencv_image.split_alpha_channel(
-        masked_image)
-    assert np.all(split_alpha_img == test_image)
-
-
-def test_alpha_blend():
-    alpha_blend_image = opencv_image.alpha_blend(
-        foreground, background, alpha_mask)
-    assert np.all(alpha_blend_image == test_image)
+# save_image with automatic-directory creation
+# gaussian blur
 
 
 def get_image(shape, r_channel, g_channel, b_channel):
@@ -89,11 +52,39 @@ size = width * height * 3
 affine_matrix = np.array([[2., 1., 0.],
                           [0., 3., 4.]])
 
-test_cast_image()
-test_resize_image()
-test_convert_color_space()
-test_flip_left_right()
-test_gaussian_blur_output_shape()
-test_split_alpha_channel()
-test_alpha_blend()
+# test_cast_image()
+# test_resize_image()
+# test_convert_color_space()
+# test_flip_left_right()
+
+# test_alpha_blend()
+# test_split_alpha_channel()
 # test_warp_affine()
+# test_gaussian_blur_output_shape()
+
+
+def test_cast_image():
+    casted_image = opencv_image.cast_image(test_image, dtype=np.float32)
+    assert casted_image.dtype == np.float32
+
+
+def test_resize_image():
+    resized_image = opencv_image.resize_image(test_image, (width, height))
+    assert resized_image.size == size
+
+
+def test_convert_color_space():
+    converted_colorspace = opencv_image.convert_color_space(
+        test_image, cv2.COLOR_RGB2BGR)
+    rgb_to_bgr = test_image[..., ::-1]
+    assert np.all(converted_colorspace == rgb_to_bgr)
+
+
+def test_flip_left_right():
+    image_filp = opencv_image.flip_left_right(test_image)
+    assert np.all(image_filp == flipped_image)
+
+
+def test_gaussian_blur_output_shape():
+    blurred = opencv_image.gaussian_image_blur(test_image)
+    assert test_image.shape == blurred.shape
