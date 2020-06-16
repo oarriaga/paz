@@ -143,7 +143,8 @@ def blend_alpha_channel(image, background):
     foreground, alpha = np.split(image, [3], -1)
     alpha = alpha / 255.0
     background = (1.0 - alpha) * background.astype(float)
-    return (alpha * foreground) + background
+    image = (alpha * foreground.astype(float)) + background
+    return image.astype('uint8')
 
 
 def concatenate_alpha_mask(image, alpha_mask):
