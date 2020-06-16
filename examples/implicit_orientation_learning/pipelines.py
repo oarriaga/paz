@@ -16,10 +16,11 @@ class AutoEncoderInference(SequentialProcessor):
              pr.ConvertColorSpace(pr.RGB2BGR),
              pr.NormalizeImage(),
              pr.ExpandDims(0)])
-        self.predict = pr.Predict(model, preprocess)
+        self.add(pr.Predict(model, preprocess))
         self.add(pr.Squeeze(0))
         self.add(pr.DenormalizeImage())
         self.add(pr.CastImage('uint8'))
+        self.add(pr.WrapOutput(['image']))
 
 
 class ImplicitRotationInference(Processor):
