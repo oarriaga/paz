@@ -83,6 +83,7 @@ class AddOcclusion(Processor):
         """
         super(AddOcclusion, self).__init__()
         self.max_radius_scale = max_radius_scale
+        self.probability = probability
 
     def _random_vertices(self, center, max_radius, min_vertices, max_vertices):
         num_vertices = np.random.randint(min_vertices, max_vertices)
@@ -107,4 +108,6 @@ class AddOcclusion(Processor):
         return draw_filled_polygon(image, vertices, color)
 
     def call(self, image):
-        return self.add_occlusion(image, self.max_radius_scale)
+        if self.probability >= np.random.rand():
+            image = self.add_occlusion(image, self.max_radius_scale)
+        return image
