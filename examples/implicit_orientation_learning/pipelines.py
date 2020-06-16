@@ -51,7 +51,7 @@ class RandomizeRenderedImage(SequentialProcessor):
         self.add(BlendRandomCroppedBackground(image_paths))
         for arg in range(num_occlusions):
             self.add(AddOcclusion(max_radius_scale))
-        # self.add(pr.RandomImageBlur())
+        self.add(pr.RandomImageBlur())
         self.add(AugmentImage())
 
 
