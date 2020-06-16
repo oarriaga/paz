@@ -1,4 +1,4 @@
-# import numpy as np
+import numpy as np
 
 from ..abstract import Processor
 
@@ -177,11 +177,14 @@ class ResizeImages(Processor):
 class RandomImageBlur(Processor):
     """Randomizes image quality
     """
-    def __init__(self):
+    def __init__(self, probability=0.5):
         super(RandomImageBlur, self).__init__()
+        self.probability = probability
 
     def call(self, image):
-        return random_image_blur(image)
+        if self.probability >= np.random.rand():
+            image = random_image_blur(image)
+        return image
 
 
 class RandomFlipImageLeftRight(Processor):
