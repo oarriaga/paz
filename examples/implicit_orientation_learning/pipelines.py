@@ -11,9 +11,12 @@ from processors import AddOcclusion
 class AutoEncoderInference(SequentialProcessor):
     def __init__(self, model):
         super(AutoEncoderInference, self).__init__()
-        preprocessing = PreprocessImage(model.input_shape[1:3], None)
-        preprocessing.add(pr.ExpandDims(0))
-        self.predict = pr.Predict(model, preprocessing)
+        preprocess = SequentialProcessor(
+            [pr.ResizeImage(model.input_shape[1:3]),
+             pr.ConvertColorSpace(pr.RGB2BGR),
+             pr.NormalizeImage(),
+             pr.ExpandDims(0)])
+        self.predict = pr.Predict(model, preprocess)
         self.add(pr.Squeeze(0))
         self.add(pr.DenormalizeImage())
         self.add(pr.CastImage('uint8'))
