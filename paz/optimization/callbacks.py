@@ -19,28 +19,26 @@ class DrawInferences(Callback):
         verbose: Integer. If is bigger than 1 a message with the learning
             rate decay will be displayed during optimization.
     """
-    def __init__(self, save_path, images, pipeline, input_topic='image',
-                 label_topic='image', verbose=1):
+    def __init__(self, save_path, images, pipeline, topic='image', verbose=1):
         super(DrawInferences, self).__init__()
         self.save_path = os.path.join(save_path, 'images')
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
         self.pipeline = pipeline
         self.images = images
-        self.input_topic = input_topic
-        self.label_topic = label_topic
+        self.topic = topic
         self.verbose = verbose
 
     def on_epoch_end(self, epoch, logs=None):
         for image_arg, image in enumerate(self.images.copy()):
-            inferences = self.pipeline({self.input_topic: image})
+            inferences = self.pipeline(image)
             epoch_name = 'epoch_%03d' % epoch
             save_path = os.path.join(self.save_path, epoch_name)
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             image_name = 'image_%03d.png' % image_arg
             image_name = os.path.join(save_path, image_name)
-            save_image(image_name, inferences[self.label_topic])
+            save_image(image_name, inferences[self.topic])
         if self.verbose:
             print('Saving predicted images in:', self.save_path)
 

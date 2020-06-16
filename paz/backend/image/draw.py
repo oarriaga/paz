@@ -125,6 +125,7 @@ def draw_filled_polygon(image, vertices, color):
         color: Numpy array specifying BGR color of the polygon.
     """
     cv2.fillPoly(image, [vertices], color)
+    return image
 
 
 def draw_random_polygon(image, max_radius_scale=.5):

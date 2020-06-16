@@ -1,105 +1,90 @@
-from paz.core import SequentialProcessor
+from paz.abstract import SequentialProcessor, Processor
+from paz.pipelines import AugmentImage, PreprocessImage
 from paz import processors as pr
+
 from processors import MeasureSimilarity
-from processors import Normalize
-
-
-class SelfSupervisedAugmentation(SequentialProcessor):
-    def __init__(self, renderer, image_paths, size=128,
-                 num_occlusions=0, max_radius_scale=0.5, split='train'):
-
-        super(SelfSupervisedAugmentation, self).__init__()
-        if split not in ['train', 'val', 'test']:
-            raise ValueError('Invalid split mode')
-        if not isinstance(image_paths, list):
-            raise ValueError('``image_paths`` must be list')
-        if len(image_paths) == 0:
-            raise ValueError('No paths given in ``image_paths``')
-
-        self.renderer = renderer
-        self.image_paths = image_paths
-        self.split = split
-        self.size = size
-        self.num_occlusions = num_occlusions
-        self.max_radius_scale = max_radius_scale
-
-        self.add(pr.RenderSingleViewSample(self.renderer))
-        self.add(pr.ConvertColor('RGB', to='BGR'))
-        self.add(pr.Copy('image', 'original_image'))
-
-        if split == 'train':
-            self.add(pr.CastImageToFloat())
-            self.add(pr.ConcatenateAlphaMask())
-            self.add(pr.AddCroppedBackground(self.image_paths, size))
-            for occlusion_arg in range(self.num_occlusions):
-                self.add(pr.AddOcclusion(self.max_radius_scale))
-            self.add(pr.CastImageToFloat())
-            self.add(pr.RandomBlur())
-            self.add(pr.RandomContrast())
-            self.add(pr.RandomBrightness())
-            self.add(pr.CastImageToInts())
-            self.add(pr.ConvertColor('BGR', to='HSV'))
-            self.add(pr.CastImageToFloat())
-            self.add(pr.RandomSaturation())
-            self.add(pr.RandomHue())
-            self.add(pr.CastImageToInts())
-            self.add(pr.ConvertColor('HSV', to='BGR'))
-            self.add(pr.RandomLightingNoise())
-        for topic in ['image', 'original_image']:
-            self.add(pr.ResizeImage((self.size, self.size), topic))
-            self.add(pr.NormalizeImage(topic))
-        self.add(pr.OutputSelector(['image'], ['original_image']))
-
-    @property
-    def input_shapes(self):
-        return [(self.size, self.size, 3)]
-
-    @property
-    def label_shapes(self):
-        return [(self.size, self.size, 3)]
+from processors import BlendRandomCroppedBackground
+from processors import ConcatenateAlphaMask
+from processors import AddOcclusion
 
 
 class AutoEncoderInference(SequentialProcessor):
-    """AutoEncoder inference pipeline
-    # Arguments
-        model: Keras model.
-        topic: String. Name of the topic to be outputted.
-    # Returns
-        Function for outputting reconstructed images
-    """
-    def __init__(self, model, topic='reconstruction'):
+    def __init__(self, model):
         super(AutoEncoderInference, self).__init__()
-        self.topic = topic
-        pipeline = [pr.ResizeImage(model.input_shape[1:3]),
-                    pr.NormalizeImage(),
-                    pr.ExpandDims(axis=0, topic='image')]
-        self.add(pr.Predict(model, 'image', self.topic, pipeline))
-        self.add(pr.Squeeze(0, self.topic))
-        self.add(pr.DenormalizeImage(self.topic))
-        self.add(pr.CastImageToInts(self.topic))
-        self.add(pr.ShowImage(self.topic, self.topic, False))
+        preprocess = SequentialProcessor(
+            [pr.ResizeImage(model.input_shape[1:3]),
+             pr.ConvertColorSpace(pr.RGB2BGR),
+             pr.NormalizeImage(),
+             pr.ExpandDims(0)])
+        self.add(pr.Predict(model, preprocess))
+        self.add(pr.Squeeze(0))
+        self.add(pr.DenormalizeImage())
+        self.add(pr.CastImage('uint8'))
+        self.add(pr.WrapOutput(['image']))
 
 
-class ImplicitRotationInference(SequentialProcessor):
+class ImplicitRotationInference(Processor):
     def __init__(self, encoder, decoder, measure, dictionary):
         super(ImplicitRotationInference, self).__init__()
-        decoder_topic, encoder_topic = 'reconstruction', 'latent_vector'
-        image_topic, dictionary_topic = 'image', 'dictionary_image'
+        preprocessing = PreprocessImage(encoder.input_shape[1:3], None)
+        preprocessing.add(pr.ExpandDims(0))
+        self.encoder = SequentialProcessor()
+        self.encoder.add(pr.Predict(encoder, preprocessing))
+        self.encoder.add(MeasureSimilarity(dictionary, measure))
 
-        # encoder pipeline
-        pipeline = [pr.ResizeImage(encoder.input_shape[1:3]),
-                    pr.NormalizeImage(),
-                    pr.ExpandDims(0, image_topic)]
-        self.add(pr.Predict(encoder, image_topic, encoder_topic, pipeline))
-        # self.add(pr.Squeeze(0, encoder_topic))
-        # self.add(Normalize(encoder_topic))
-        self.add(MeasureSimilarity(
-            dictionary, measure, encoder_topic, dictionary_topic))
-        self.add(pr.ShowImage(dictionary_topic, dictionary_topic, False))
+        self.decoder = SequentialProcessor()
+        self.decoder.add(pr.Predict(decoder))
+        self.decoder.add(pr.Squeeze(0))
+        self.decoder.add(pr.DenormalizeImage())
+        self.decoder.add(pr.CastImage('uint8'))
+        outputs = ['image', 'latent_vector', 'latent_image', 'decoded_image']
+        self.wrap = pr.WrapOutput(outputs)
 
-        # decoder pipeline
-        self.add(pr.Predict(decoder, encoder_topic, decoder_topic))
-        self.add(pr.Squeeze(0, decoder_topic))
-        self.add(pr.DenormalizeImage(decoder_topic))
-        self.add(pr.CastImageToInts(decoder_topic))
-        self.add(pr.ShowImage(decoder_topic, decoder_topic, False))
+    def call(self, image):
+        latent_vector, latent_image = self.encoder(image)
+        self.show_image(latent_image)
+        decoded_image = self.decoder(latent_vector)
+        self.show_image(decoded_image)
+        return self.wrap(image, latent_vector, latent_image, decoded_image)
+
+
+class RandomizeRenderedImage(SequentialProcessor):
+    def __init__(self, image_paths, num_occlusions=1, max_radius_scale=0.5):
+        super(RandomizeRenderedImage, self).__init__()
+        self.add(ConcatenateAlphaMask())
+        self.add(BlendRandomCroppedBackground(image_paths))
+        for arg in range(num_occlusions):
+            self.add(AddOcclusion(max_radius_scale))
+        self.add(pr.RandomImageBlur())
+        self.add(AugmentImage())
+
+
+class DomainRandomizationProcessor(Processor):
+    def __init__(self, renderer, image_paths, num_occlusions, split=pr.TRAIN):
+        super(DomainRandomizationProcessor, self).__init__()
+        self.copy = pr.Copy()
+        self.render = pr.Render(renderer)
+        self.augment = RandomizeRenderedImage(image_paths, num_occlusions)
+        preprocessors = [pr.ConvertColorSpace(pr.RGB2BGR), pr.NormalizeImage()]
+        self.preprocess = SequentialProcessor(preprocessors)
+        self.split = split
+
+    def call(self):
+        input_image, (matrices, alpha_mask, depth) = self.render()
+        label_image = self.copy(input_image)
+        if self.split == pr.TRAIN:
+            input_image = self.augment(input_image, alpha_mask)
+        input_image = self.preprocess(input_image)
+        label_image = self.preprocess(label_image)
+        return input_image, label_image
+
+
+class DomainRandomization(SequentialProcessor):
+    def __init__(self, renderer, size, image_paths,
+                 num_occlusions, split=pr.TRAIN):
+        super(DomainRandomization, self).__init__()
+        self.add(DomainRandomizationProcessor(
+            renderer, image_paths, num_occlusions, split))
+        self.add(pr.SequenceWrapper(
+            {0: {'input_image': [size, size, 3]}},
+            {1: {'label_image': [size, size, 3]}}))
