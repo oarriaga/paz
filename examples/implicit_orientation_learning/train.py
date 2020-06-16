@@ -1,36 +1,34 @@
 import os
-# os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-# os.environ['PYOPENGL_PLATFORM'] = 'egl'
-import json
 import glob
+import json
 import argparse
 
-from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
 
-from paz.core.sequencer import GeneratingSequencer
+from paz.backend.image import save_image
+from paz.abstract import GeneratingSequence
 from paz.optimization.callbacks import DrawInferences
 
 from poseur.scenes import SingleView
 
-from pipelines import SelfSupervisedAugmentation, AutoEncoderInference
+from pipelines import DomainRandomization, AutoEncoderInference
 from model import AutoEncoder
-from paz.core import ops
 
-description = 'Training script for learning 2D probabilistic keypoints'
+description = 'Training script for learning implicit orientation vector'
+root_path = os.path.join(os.path.expanduser('~'), '.keras/paz/')
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument(
-    '-op', '--obj_path',
-    default=os.path.join(
-        os.path.expanduser('~'),
-        '.keras/paz/datasets/ycb/models/035_power_drill/textured.obj'),
-    type=str, help='Path for writing model weights and logs')
+parser.add_argument('-op', '--obj_path', type=str, help='Path of 3D OBJ model',
+                    default=os.path.join(
+                        root_path,
+                        'datasets/ycb/models/035_power_drill/textured.obj'))
 parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
-parser.add_argument('-id', '--images_directory', default=None, type=str,
-                    help='Path to directory containing background images')
+parser.add_argument('-id', '--images_directory', type=str,
+                    help='Path to directory containing background images',
+                    default=os.path.join(
+                        root_path, 'datasets/voc-backgrounds/'))
 parser.add_argument('-bs', '--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
@@ -74,6 +72,7 @@ parser.add_argument('-sa', '--save_path',
                     type=str, help='Path for writing model weights and logs')
 args = parser.parse_args()
 
+
 # setting optimizer and compiling model
 latent_dimension = args.latent_dimension
 model = AutoEncoder((args.image_size, args.image_size, 3), latent_dimension)
@@ -89,9 +88,9 @@ renderer = SingleView(
 
 # creating sequencer
 image_paths = glob.glob(os.path.join(args.images_directory, '*.png'))
-processor = SelfSupervisedAugmentation(
-    renderer, image_paths, args.image_size, args.num_occlusions)
-sequencer = GeneratingSequencer(processor, args.batch_size)
+processor = DomainRandomization(
+    renderer, args.image_size, image_paths, args.num_occlusions)
+sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
 model_name = '_'.join([model.name, str(latent_dimension), args.class_name])
@@ -104,16 +103,20 @@ log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
 stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
 plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
-save = ModelCheckpoint(model_path, 'loss', verbose=1,
-                       save_best_only=True, save_weights_only=True)
-images = (sequencer.__getitem__(0)[0]['image'] * 255).astype('uint8')
+save = ModelCheckpoint(
+    model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=True)
 
-ops.save_images(os.path.join(save_path, 'original_images/'), images)
+# setting drawing callbacks
+images = (sequence.__getitem__(0)[0]['input_image'] * 255).astype('uint8')
+for arg, image in enumerate(images):
+    image_name = 'image_%03d.png' % arg
+    image_path = os.path.join(save_path, 'original_images/' + image_name)
+    save_image(image_path, image)
 inferencer = AutoEncoderInference(model)
-draw = DrawInferences(save_path, images, inferencer,
-                      label_topic='reconstruction')
+draw = DrawInferences(save_path, images, inferencer)
 
 # saving hyper-parameters and model summary as text files
+print(save_path)
 with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
     json.dump(args.__dict__, filer, indent=4)
 with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
@@ -121,7 +124,7 @@ with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
 
 # model optimization
 model.fit_generator(
-    sequencer,
+    sequence,
     steps_per_epoch=args.steps_per_epoch,
     epochs=args.max_num_epochs,
     callbacks=[stop, log, save, plateau, draw],
