@@ -5,23 +5,36 @@ from paz.backend.image import draw_filled_polygon, load_image
 import numpy as np
 
 
+class MakeDictionary(Processor):
+    def __init__(self, encoder, renderer):
+        super(MakeDictionary, self).__init__()
+        self.latent_dimension = encoder.encoder.output_shape[1]
+        self.encoder = encoder
+        self.renderer = renderer
+
+    def call(self):
+        data = self.renderer.render_dictionary()
+        dictionary = {}
+        latent_vectors = np.zeros((len(data), self.latent_dimension))
+        for sample_arg, sample in enumerate(data):
+            image = sample['image']
+            latent_vectors[sample_arg] = self.encoder(image)
+            dictionary[sample_arg] = image
+        dictionary['latent_vectors'] = latent_vectors
+        return dictionary
+
+
 class MeasureSimilarity(Processor):
-    def __init__(self, dictionary, measure, input_topic='latent_vector',
-                 label_topic='dictionary_image'):
+    def __init__(self, dictionary, measure):
         super(MeasureSimilarity, self).__init__()
         self.dictionary = dictionary
         self.measure = measure
-        self.input_topic = input_topic
-        self.label_topic = label_topic
 
-    def call(self, kwargs):
-        latent_vector = kwargs[self.input_topic]
+    def call(self, latent_vector):
         latent_vectors = self.dictionary['latent_vectors']
         measurements = self.measure(latent_vectors, latent_vector)
-        best_arg = np.argmax(measurements)
-        best_image = self.dictionary[best_arg]
-        kwargs[self.label_topic] = best_image
-        return kwargs
+        closest_image = self.dictionary[np.argmax(measurements)]
+        return latent_vector, closest_image
 
 
 class AlphaBlending(Processor):

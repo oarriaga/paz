@@ -1,11 +1,12 @@
 from paz.abstract import SequentialProcessor, Processor
-from paz.pipelines import AugmentImage, PreprocessImage
+from paz.pipelines import AugmentImage
 from paz import processors as pr
 
 from processors import MeasureSimilarity
 from processors import BlendRandomCroppedBackground
 from processors import ConcatenateAlphaMask
 from processors import AddOcclusion
+from processors import MakeDictionary
 
 
 class AutoEncoderInference(SequentialProcessor):
@@ -23,29 +24,47 @@ class AutoEncoderInference(SequentialProcessor):
         self.add(pr.WrapOutput(['image']))
 
 
-class ImplicitRotationInference(Processor):
-    def __init__(self, encoder, decoder, measure, dictionary):
-        super(ImplicitRotationInference, self).__init__()
-        preprocessing = PreprocessImage(encoder.input_shape[1:3], None)
-        preprocessing.add(pr.ExpandDims(0))
-        self.encoder = SequentialProcessor()
-        self.encoder.add(pr.Predict(encoder, preprocessing))
-        self.encoder.add(MeasureSimilarity(dictionary, measure))
+class EncoderPredictor(SequentialProcessor):
+    def __init__(self, encoder):
+        super(EncoderPredictor, self).__init__()
+        self.encoder = encoder
+        preprocess = SequentialProcessor([
+            pr.ConvertColorSpace(pr.RGB2BGR),
+            pr.ResizeImage(encoder.input_shape[1:3]),
+            pr.NormalizeImage(),
+            pr.ExpandDims(0)])
+        self.add(pr.Predict(encoder, preprocess, pr.Squeeze(0)))
 
-        self.decoder = SequentialProcessor()
-        self.decoder.add(pr.Predict(decoder))
-        self.decoder.add(pr.Squeeze(0))
-        self.decoder.add(pr.DenormalizeImage())
-        self.decoder.add(pr.CastImage('uint8'))
+
+class DecoderPredictor(SequentialProcessor):
+    def __init__(self, decoder):
+        self.decoder = decoder
+        super(DecoderPredictor, self).__init__()
+        self.add(pr.Predict(decoder, pr.ExpandDims(0), pr.Squeeze(0)))
+        self.add(pr.DenormalizeImage())
+        self.add(pr.CastImage('uint8'))
+        self.add(pr.ConvertColorSpace(pr.BGR2RGB))
+
+
+class ImplicitRotationPredictor(Processor):
+    def __init__(self, encoder, decoder, measure, renderer):
+        super(ImplicitRotationPredictor, self).__init__()
+        self.show_decoded_image = pr.ShowImage('decoded_image', wait=False)
+        self.show_closest_image = pr.ShowImage('closest_image', wait=False)
+        self.encoder = EncoderPredictor(encoder)
+        self.dictionary = MakeDictionary(self.encoder, renderer)()
+        self.encoder.add(pr.ExpandDims(0))
+        self.encoder.add(MeasureSimilarity(self.dictionary, measure))
+        self.decoder = DecoderPredictor(decoder)
         outputs = ['image', 'latent_vector', 'latent_image', 'decoded_image']
         self.wrap = pr.WrapOutput(outputs)
 
     def call(self, image):
-        latent_vector, latent_image = self.encoder(image)
-        self.show_image(latent_image)
+        latent_vector, closest_image = self.encoder(image)
+        self.show_closest_image(closest_image)
         decoded_image = self.decoder(latent_vector)
-        self.show_image(decoded_image)
-        return self.wrap(image, latent_vector, latent_image, decoded_image)
+        self.show_decoded_image(decoded_image)
+        return self.wrap(image, latent_vector, closest_image, decoded_image)
 
 
 class RandomizeRenderedImage(SequentialProcessor):
