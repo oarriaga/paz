@@ -58,31 +58,6 @@ class RoundBoxes2D(Processor):
         return boxes2D
 
 
-class ClipBoxes2D(Processor):
-    """Clips boxes coordinates into the image dimensions
-    # Arguments:
-        image_size: List containing height and width of an image.
-    """
-    def __init__(self, image_size):
-        self.image_size = image_size
-        super(ClipBoxes2D, self).__init__()
-
-    def call(self, boxes2D):
-        image_height, image_width = self.image.shape[:2]
-        for box2D in range(boxes2D):
-            x_min, y_min, x_max, y_max = box2D.coordinates
-            if x_min < 0:
-                x_min = 0
-            if y_min < 0:
-                y_min = 0
-            if x_max > image_width:
-                x_max = image_width
-            if y_max > image_height:
-                y_max = image_height
-            box2D.coordinates = (x_min, y_min, x_max, y_max)
-        return boxes2D
-
-
 class FilterClassBoxes2D(Processor):
     """Filters boxes with valid class names.
     # Arguments
@@ -105,18 +80,37 @@ class CropBoxes2D(Processor):
     # Arguments
         offset_scales: List of floats having x and y scales respectively.
     """
-    def __init__(self, offset_scales):
-        self.offset_scales = offset_scales
+    def __init__(self):
         super(CropBoxes2D, self).__init__()
 
     def call(self, image, boxes2D):
         image_crops = []
         for box2D in boxes2D:
-            coordinates = box2D.coordinates
-            coordinates = apply_offsets(coordinates, self.offset_scales)
-            x_min, y_min, x_max, y_max = coordinates
+            x_min, y_min, x_max, y_max = box2D.coordinates
             image_crops.append(image[y_min:y_max, x_min:x_max])
         return image_crops
+
+
+class ClipBoxes2D(Processor):
+    """Clips boxes coordinates into the image dimensions"""
+    def __init__(self):
+        super(ClipBoxes2D, self).__init__()
+
+    def call(self, image, boxes2D):
+        image_height, image_width = image.shape[:2]
+        for box2D in boxes2D:
+            x_min, y_min, x_max, y_max = box2D.coordinates
+            if x_min < 0:
+                x_min = 0
+            if y_min < 0:
+                y_min = 0
+            if x_max > image_width:
+                x_max = image_width
+            if y_max > image_height:
+                y_max = image_height
+            coordinates = (x_min, y_min, x_max, y_max)
+            box2D.coordinates = coordinates
+        return boxes2D
 
 
 class ToBoxes2D(Processor):
