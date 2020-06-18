@@ -95,12 +95,11 @@ class DenormalizeKeypoints(Processor):
     # Arguments
         image_size: List of two floats having height and width of image.
     """
-    def __init__(self, image_size):
-        self.image_size = image_size
+    def __init__(self):
         super(DenormalizeKeypoints, self).__init__()
 
     def call(self, keypoints, image):
-        height, width = self.image_size[0:2]
+        height, width = image.shape[0:2]
         keypoints = denormalize_keypoints(keypoints, height, width)
         return keypoints
 
