@@ -50,6 +50,7 @@ from .geometric import ApplyRandomTranslation
 
 from .keypoints import Render
 from .keypoints import DenormalizeKeypoints
+from .keypoints import ChangeKeypointsCoordinateSystem
 
 from .standard import ControlMap
 from .standard import ExpandDomain
