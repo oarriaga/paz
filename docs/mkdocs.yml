@@ -1,0 +1,8 @@
+site_name: PAZ Documentation
+theme: 
+    name: 'readthedocs'
+
+docs_dir: sources
+site_description: 'Modular Robot Perception library in Python.'
+repo_name: 'oarriaga/paz'
+repo_url: 'https://github.com/oarriaga/paz'
