@@ -139,14 +139,14 @@ def decode(predictions, priors, variances):
 
 
 def reversed_argmax(array, axis):
-    """Performs the function of torch.max().
+    """Copycat of function torch.max().
     In case of multiple occurrences of the maximum values, the indices
     corresponding to the last occurrence are returned.
 
-    # Arguments:
-        array : Numpy array
-        axis : int, argmax operation along this specified axis
-    # Returns: index_array : Numpy array of ints
+    # Arguments
+        array: Numpy array
+        axis: int, argmax operation along this specified axis
+    # Returns index_array : Numpy array of ints
     """
     array_flip = np.flip(array, axis=axis)
     return array.shape[axis] - np.argmax(array_flip, axis=axis) - 1
@@ -309,20 +309,6 @@ def to_one_hot(class_indices, num_classes):
     return one_hot_vectors
 
 
-def substract_mean(image_array, mean):
-    """ Subtracts image with channel-wise values.
-    # Arguments
-        image_array: Numpy array with shape (height, width, 3)
-        mean: Numpy array of 3 floats containing the values to be subtracted
-            to the image on each corresponding channel.
-    """
-    image_array = image_array.astype(np.float32)
-    image_array[:, :, 0] -= mean[0]
-    image_array[:, :, 1] -= mean[1]
-    image_array[:, :, 2] -= mean[2]
-    return image_array
-
-
 def make_box_square(box, offset_scale=0.05):
     """Makes box coordinates square.
 
@@ -397,11 +383,24 @@ def denormalize_box(box, image_shape):
 
 
 def flip_left_right(boxes, width):
+    """Flips box coordinates from left-to-right and vice-versa.
+    # Arguments
+        boxes: Numpy array of shape [num_boxes, 4]
+    # Returns
+        Numpy array of shape [num_boxes, 4]
+    """
     boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
     return boxes
 
 
 def to_absolute_coordinates(image, boxes):
+    """Transforms normalized box coordinates into image coordinates.
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape [num_boxes, N] where N >= 4
+    # Returns
+        Numpy array of shape [num_boxes, N]
+    """
     height, width = image.shape[:2]
     boxes[:, 0] = boxes[:, 0] * width
     boxes[:, 2] = boxes[:, 2] * width
@@ -411,6 +410,13 @@ def to_absolute_coordinates(image, boxes):
 
 
 def to_percent_coordinates(image, boxes):
+    """Transforms coordinates in image dimensions to normalized coordinates.
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape [num_boxes, N] where N >= 4
+    # Returns
+        Numpy array of shape [num_boxes, N]
+    """
     height, width = image.shape[:2]
     boxes[:, 0] = boxes[:, 0] / width
     boxes[:, 2] = boxes[:, 2] / width
