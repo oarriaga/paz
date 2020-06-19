@@ -37,8 +37,17 @@ from .image import RandomFlipImageLeftRight
 from .image import ConvertColorSpace
 from .image import ShowImage
 from .image import ImageDataProcessor
+from .image import AlphaBlending
+from .image import RandomImageCrop
+from .image import MakeRandomPlainImage
+from .image import ConcatenateAlphaMask
+from .image import BlendRandomCroppedBackground
+from .image import AddOcclusion
+
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
+
+from .renderer import Render
 
 from .geometric import RandomFlipBoxesLeftRight
 from .geometric import ToAbsoluteBoxCoordinates
@@ -48,7 +57,6 @@ from .geometric import Expand
 from .geometric import ApplyTranslation
 from .geometric import ApplyRandomTranslation
 
-from .keypoints import Render
 from .keypoints import DenormalizeKeypoints
 from .keypoints import ChangeKeypointsCoordinateSystem
 

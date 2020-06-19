@@ -1,49 +1,10 @@
 from paz.abstract import SequentialProcessor, Processor
-from paz.pipelines import AugmentImage
+from paz.pipelines import EncoderPredictor, DecoderPredictor
+from paz.pipelines import RandomizeRenderedImage
 from paz import processors as pr
 
 from processors import MeasureSimilarity
-from processors import BlendRandomCroppedBackground
-from processors import ConcatenateAlphaMask
-from processors import AddOcclusion
 from processors import MakeDictionary
-
-
-class AutoEncoderInference(SequentialProcessor):
-    def __init__(self, model):
-        super(AutoEncoderInference, self).__init__()
-        preprocess = SequentialProcessor(
-            [pr.ResizeImage(model.input_shape[1:3]),
-             pr.ConvertColorSpace(pr.RGB2BGR),
-             pr.NormalizeImage(),
-             pr.ExpandDims(0)])
-        self.add(pr.Predict(model, preprocess))
-        self.add(pr.Squeeze(0))
-        self.add(pr.DenormalizeImage())
-        self.add(pr.CastImage('uint8'))
-        self.add(pr.WrapOutput(['image']))
-
-
-class EncoderPredictor(SequentialProcessor):
-    def __init__(self, encoder):
-        super(EncoderPredictor, self).__init__()
-        self.encoder = encoder
-        preprocess = SequentialProcessor([
-            pr.ConvertColorSpace(pr.RGB2BGR),
-            pr.ResizeImage(encoder.input_shape[1:3]),
-            pr.NormalizeImage(),
-            pr.ExpandDims(0)])
-        self.add(pr.Predict(encoder, preprocess, pr.Squeeze(0)))
-
-
-class DecoderPredictor(SequentialProcessor):
-    def __init__(self, decoder):
-        self.decoder = decoder
-        super(DecoderPredictor, self).__init__()
-        self.add(pr.Predict(decoder, pr.ExpandDims(0), pr.Squeeze(0)))
-        self.add(pr.DenormalizeImage())
-        self.add(pr.CastImage('uint8'))
-        self.add(pr.ConvertColorSpace(pr.BGR2RGB))
 
 
 class ImplicitRotationPredictor(Processor):
@@ -65,17 +26,6 @@ class ImplicitRotationPredictor(Processor):
         decoded_image = self.decoder(latent_vector)
         self.show_decoded_image(decoded_image)
         return self.wrap(image, latent_vector, closest_image, decoded_image)
-
-
-class RandomizeRenderedImage(SequentialProcessor):
-    def __init__(self, image_paths, num_occlusions=1, max_radius_scale=0.5):
-        super(RandomizeRenderedImage, self).__init__()
-        self.add(ConcatenateAlphaMask())
-        self.add(BlendRandomCroppedBackground(image_paths))
-        for arg in range(num_occlusions):
-            self.add(AddOcclusion(max_radius_scale))
-        self.add(pr.RandomImageBlur())
-        self.add(AugmentImage())
 
 
 class DomainRandomizationProcessor(Processor):

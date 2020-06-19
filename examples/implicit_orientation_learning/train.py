@@ -10,10 +10,11 @@ from tensorflow.keras.optimizers import Adam
 from paz.backend.image import save_image
 from paz.abstract import GeneratingSequence
 from paz.optimization.callbacks import DrawInferences
+from paz.pipelines import AutoEncoderPredictor
 
 from poseur.scenes import SingleView
 
-from pipelines import DomainRandomization, AutoEncoderInference
+from pipelines import DomainRandomization
 from model import AutoEncoder
 
 description = 'Training script for learning implicit orientation vector'
@@ -112,7 +113,7 @@ for arg, image in enumerate(images):
     image_name = 'image_%03d.png' % arg
     image_path = os.path.join(save_path, 'original_images/' + image_name)
     save_image(image_path, image)
-inferencer = AutoEncoderInference(model)
+inferencer = AutoEncoderPredictor(model)
 draw = DrawInferences(save_path, images, inferencer)
 
 # saving hyper-parameters and model summary as text files
