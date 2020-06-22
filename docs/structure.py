@@ -1,4 +1,6 @@
 from paz.backend import boxes
+from paz.backend import camera
+from paz.backend import keypoints
 from paz import models
 from paz import processors
 
@@ -24,6 +26,30 @@ PAGES = [
             boxes.to_one_hot,
             boxes.to_percent_coordinates,
             boxes.to_point_form
+        ],
+    },
+
+    {
+        'page': 'backend/keypoints.md',
+        'functions': [
+            keypoints.cascade_classifier,
+            keypoints.denormalize_keypoints,
+            keypoints.normalize_keypoints,
+            keypoints.project_points3D,
+            keypoints.solve_PNP
+        ],
+    },
+
+
+    {
+        'page': 'backend/camera.md',
+        'classes': [
+            (camera.Camera, [camera.Camera.is_open,
+                             camera.Camera.start,
+                             camera.Camera.stop]),
+            (camera.VideoPlayer, [camera.VideoPlayer.step,
+                                  camera.VideoPlayer.run,
+                                  camera.VideoPlayer.record])
         ],
     },
 
