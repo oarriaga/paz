@@ -6,7 +6,7 @@ class Box2D(object):
 
     # Properties
         coordinates: List of float/integers indicating the
-            [x_min, y_min, x_max, y_max] coordinates.
+            ``[x_min, y_min, x_max, y_max]`` coordinates.
         score: Float. Indicates the score of label associated to the box.
         class_name: String indicating the class label name of the object.
 
