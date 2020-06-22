@@ -71,6 +71,7 @@ def get_class_signature(cls):
 
 def post_process_signature(signature):
     parts = re.split(r'\.(?!\d)', signature)
+    """
     if len(parts) >= 4:
         if parts[1] == 'layers':
             signature = 'keras.layers.' + '.'.join(parts[3:])
@@ -78,6 +79,7 @@ def post_process_signature(signature):
             signature = 'keras.utils.' + '.'.join(parts[3:])
         if parts[1] == 'backend':
             signature = 'keras.backend.' + '.'.join(parts[3:])
+    """
     return signature
 
 
