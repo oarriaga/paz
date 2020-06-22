@@ -8,6 +8,7 @@ WEIGHT_PATH = ('https://raw.githubusercontent.com/opencv/opencv/'
 
 class HaarCascadeDetector(object):
     """Haar cascade face detector.
+
     # Arguments
         path: String. Postfix to default openCV haarcascades XML files, see [1]
             e.g. `eye`, `frontalface_alt2`, `fullbody`
@@ -35,6 +36,12 @@ class HaarCascadeDetector(object):
 
     def predict(self, gray_image):
         """ Detects faces from gray images.
+
+        # Arguments
+            gray_image: Numpy array of shape ``(H, W, 2)``.
+
+        # Returns
+            Numpy array of shape ``(num_boxes, 4)``.
         """
         if len(gray_image.shape) != 2:
             raise ValueError('Invalid gray image shape:', gray_image.shape)
