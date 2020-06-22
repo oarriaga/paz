@@ -31,6 +31,7 @@ class Processor(object):
 
 class SequentialProcessor(object):
     """ Abstract class for creating a sequential pipeline of processors.
+
     # Methods:
         add()
     """
@@ -52,6 +53,7 @@ class SequentialProcessor(object):
 
     def add(self, processor):
         """ Adds a process to the sequence of processes to be applied to input.
+
         # Arguments
             processor: An extended class of the parent class `Process`.
         """
@@ -70,6 +72,7 @@ class SequentialProcessor(object):
 
     def remove(self, name):
         """Removes processor from sequence
+
         # Arguments
             name: String indicating the process name
         """
@@ -79,6 +82,7 @@ class SequentialProcessor(object):
 
     def pop(self, index=-1):
         """Pops processor in given index from sequence
+
         # Arguments
             index: Int.
         """
