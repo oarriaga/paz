@@ -1,6 +1,8 @@
 from paz.backend import boxes
 from paz.backend import camera
 from paz.backend import keypoints
+from paz.backend import quaternion
+from paz.backend.image import draw
 from paz import models
 from paz import processors
 
@@ -29,6 +31,7 @@ PAGES = [
         ],
     },
 
+
     {
         'page': 'backend/keypoints.md',
         'functions': [
@@ -42,6 +45,15 @@ PAGES = [
 
 
     {
+        'page': 'backend/quaternion.md',
+        'functions': [
+            quaternion.rotation_vector_to_quaternion
+        ],
+    },
+
+
+
+    {
         'page': 'backend/camera.md',
         'classes': [
             (camera.Camera, [camera.Camera.is_open,
@@ -52,6 +64,24 @@ PAGES = [
                                   camera.VideoPlayer.record])
         ],
     },
+
+
+    {
+        'page': 'backend/image/draw.md',
+        'functions': [
+            draw.draw_circle,
+            draw.draw_cube,
+            draw.draw_dot,
+            draw.draw_filled_polygon,
+            draw.draw_line,
+            draw.draw_random_polygon,
+            draw.draw_rectangle,
+            draw.lincolor,
+            draw.put_text
+        ],
+    },
+
+
 
 
     {
