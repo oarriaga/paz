@@ -3,6 +3,9 @@ from paz.backend import camera
 from paz.backend import keypoints
 from paz.backend import quaternion
 from paz.backend.image import draw
+from paz.abstract import messages
+from paz.abstract import processor
+from paz.abstract import loader
 from paz import models
 from paz import processors
 
@@ -82,8 +85,6 @@ PAGES = [
     },
 
 
-
-
     {
         'page': 'models/detection.md',
         'functions': [
@@ -118,5 +119,38 @@ PAGES = [
             processors.BlendRandomCroppedBackground,
             processors.AddOcclusion
         ]
-    }
+    },
+
+    {
+        'page': 'abstract/messages.md',
+        'classes': [
+            (messages.Box2D, [messages.Box2D.contains]),
+            messages.Pose6D
+        ]
+    },
+
+    {
+        'page': 'abstract/processor.md',
+        'classes': [
+            (processor.Processor, [processor.Processor.call]),
+            (processor.SequentialProcessor, [
+                processor.SequentialProcessor.add,
+                processor.SequentialProcessor.remove,
+                processor.SequentialProcessor.pop,
+                processor.SequentialProcessor.insert,
+                processor.SequentialProcessor.get_processor])
+        ]
+    },
+
+    {
+        'page': 'abstract/loader.md',
+        'classes': [
+            (loader.Loader, [loader.Loader.load_data])
+        ]
+    },
+
+
+
+
+
 ]
