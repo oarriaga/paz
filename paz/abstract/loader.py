@@ -6,6 +6,16 @@ class Loader(object):
         split: String. Dataset split e.g. traing, val, test.
         class_names: List of strings. Label names of the classes.
         name: String. Dataset name.
+
+    # Properties
+        name: Str.
+        path: Str.
+        split: Str or Flag.
+        class_names: List of strings.
+        num_classes: Int.
+
+    # Methods
+        load_data()
     """
     def __init__(self, path, split, class_names, name):
         self.path = path
