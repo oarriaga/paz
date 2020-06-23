@@ -1,5 +1,5 @@
 class Processor(object):
-    """ Abstract class for creating a processor unit.
+    """Abstract class for creating a processor unit.
 
     # Arguments
         name: String indicating name of the processing unit.
@@ -30,10 +30,19 @@ class Processor(object):
 
 
 class SequentialProcessor(object):
-    """ Abstract class for creating a sequential pipeline of processors.
+    """Abstract class for creating a sequential pipeline of processors.
 
-    # Methods:
+    # Arguments
+        processors: List of instantiated child classes of ``Processor``
+            classes.
+        name: String indicating name of the processing unit.
+
+    # Methods
         add()
+        remove()
+        pop()
+        insert()
+        get_processor()
     """
     def __init__(self, processors=None, name=None):
         self.processors = []
@@ -52,10 +61,10 @@ class SequentialProcessor(object):
         self._name = name
 
     def add(self, processor):
-        """ Adds a process to the sequence of processes to be applied to input.
+        """Adds a process to the sequence of processes to be applied to input.
 
         # Arguments
-            processor: An extended class of the parent class `Process`.
+            processor: An instantiated child class of of ``Processor``.
         """
         self.processors.append(processor)
 
@@ -90,11 +99,16 @@ class SequentialProcessor(object):
 
     def insert(self, index, processor):
         """Inserts ``processor`` to self.processors queue at ``index``
+
+        # Argument
+            index: Int.
+            processor: An instantiated child class of of ``Processor``.
         """
         return self.processors.insert(index, processor)
 
     def get_processor(self, name):
         """Gets processor from sequencer
+
         # Arguments
             name: String indicating the process name
         """
