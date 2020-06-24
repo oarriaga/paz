@@ -6,6 +6,15 @@ class Processor(object):
 
     # Methods
         call()
+
+    ```python
+    class NormalizeImage(Processor):
+    def __init__(self):
+        super(NormalizeImage, self).__init__()
+
+    def call(self, image):
+        return image / 255.0
+    ```
     """
     def __init__(self, name=None):
         self.name = name
@@ -43,6 +52,15 @@ class SequentialProcessor(object):
         pop()
         insert()
         get_processor()
+
+    ```python
+    AugmentImage = SequentialProcessor()
+    AugmentImage.add(pr.RandomContrast())
+    AugmentImage.add(pr.RandomBrightness())
+    augment_image = AugmentImage()
+
+    transformed_image = augment_image(image)
+    ```
     """
     def __init__(self, processors=None, name=None):
         self.processors = []
