@@ -14,10 +14,10 @@ from ..backend.boxes import make_box_square
 
 class SquareBoxes2D(Processor):
     """Transforms bounding rectangular boxes into square bounding boxes.
+
     # Arguments
-        offset_scale: Float. Bounding box offset scale i.e.
-            If the square bounding box has shape LxL
-            the offset modifies both sizes L to be:
+        offset_scale: Float. Bounding box offset scale i.e. If the square
+            bounding box has shape LxL the offset modifies both sizes L to be
             L_new = L + (offset_scale * L)
     """
     def __init__(self, offset_scale=0.0):
@@ -33,6 +33,7 @@ class SquareBoxes2D(Processor):
 
 class DenormalizeBoxes2D(Processor):
     """Denormalizes boxes shapes to be in accordance to the original image size.
+
     # Arguments:
         image_size: List containing height and width of an image.
     """
@@ -60,6 +61,7 @@ class RoundBoxes2D(Processor):
 
 class FilterClassBoxes2D(Processor):
     """Filters boxes with valid class names.
+
     # Arguments
         valid_class_names: List of strings indicating class names to be kept.
     """
@@ -77,6 +79,7 @@ class FilterClassBoxes2D(Processor):
 
 class CropBoxes2D(Processor):
     """Creates a list of images cropped from the bounding boxes.
+
     # Arguments
         offset_scales: List of floats having x and y scales respectively.
     """
@@ -115,9 +118,10 @@ class ClipBoxes2D(Processor):
 
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
+
     # Arguments
         class_names: List of class names ordered with respect to the class
-        indices from the dataset `boxes`.
+            indices from the dataset ``boxes``.
     """
     def __init__(self, class_names=None, one_hot_encoded=False):
         if class_names is not None:
@@ -140,11 +144,12 @@ class ToBoxes2D(Processor):
 
 class MatchBoxes(Processor):
     """Match prior boxes with ground truth boxes.
-    #Arguments
+
+    # Arguments
         prior_boxes: Numpy array of shape (num_boxes, 4).
         iou: Float in [0, 1]. Intersection over union in which prior boxes
-        will be considered positive. A positive box is box with a class
-        different than `background`.
+            will be considered positive. A positive box is box with a class
+            different than `background`.
         variance: List of two floats.
     """
     def __init__(self, prior_boxes, iou=.5):
@@ -159,6 +164,10 @@ class MatchBoxes(Processor):
 
 class EncodeBoxes(Processor):
     """Encodes bounding boxes.
+
+    # Arguments
+        prior_boxes: Numpy array of shape (num_boxes, 4).
+        variances: List of two float values.
     """
     def __init__(self, prior_boxes, variances=[.1, .2]):
         self.prior_boxes = prior_boxes
@@ -172,6 +181,10 @@ class EncodeBoxes(Processor):
 
 class DecodeBoxes(Processor):
     """Decodes bounding boxes.
+
+    # Arguments
+        prior_boxes: Numpy array of shape (num_boxes, 4).
+        variances: List of two float values.
     """
     def __init__(self, prior_boxes, variances=[.1, .2]):
         self.prior_boxes = prior_boxes
@@ -185,6 +198,10 @@ class DecodeBoxes(Processor):
 
 class NonMaximumSuppressionPerClass(Processor):
     """Applies non maximum suppression per class.
+
+    # Arguments
+        nms_thresh: Float between [0, 1].
+        conf_thresh: Float between [0, 1].
     """
     def __init__(self, nms_thresh=.45, conf_thresh=0.01):
         self.nms_thresh = nms_thresh
@@ -197,10 +214,11 @@ class NonMaximumSuppressionPerClass(Processor):
 
 
 class FilterBoxes(Processor):
-    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages
+    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
+
     # Arguments
         class_names: List of class names.
-        conf_thresh: Float.
+        conf_thresh: Float between [0, 1].
     """
     def __init__(self, class_names, conf_thresh=0.5):
         self.class_names = class_names
@@ -228,6 +246,11 @@ class FilterBoxes(Processor):
 
 
 class ApplyOffsets(Processor):
+    """Apply offsets to a bounding ``box2D``.
+
+    # Arguments
+        offsets: Float between [0, 1].
+    """
     def __init__(self, offsets):
         super(ApplyOffsets, self).__init__()
         self.offsets = offsets
@@ -238,6 +261,8 @@ class ApplyOffsets(Processor):
 
 
 class CropImage(Processor):
+    """Crop images using a list of ``box2D``.
+    """
     def __init__(self):
         super(CropImage, self).__init__()
 
