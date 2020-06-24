@@ -121,6 +121,40 @@ PAGES = [
         ]
     },
 
+
+    {
+        'page': 'processors/draw.md',
+        'classes': [
+            processors.DrawBoxes2D,
+            processors.DrawKeypoints2D,
+            processors.DrawBoxes3D,
+            processors.DrawRandomPolygon
+        ]
+    },
+
+
+    {
+        'page': 'processors/detection.md',
+        'classes': [
+            processors.SquareBoxes2D,
+            processors.DenormalizeBoxes2D,
+            processors.RoundBoxes2D,
+            processors.ClipBoxes2D,
+            processors.FilterClassBoxes2D,
+            processors.CropBoxes2D,
+            processors.ToBoxes2D,
+            processors.MatchBoxes,
+            processors.EncodeBoxes,
+            processors.DecodeBoxes,
+            processors.NonMaximumSuppressionPerClass,
+            processors.FilterBoxes,
+            processors.ApplyOffsets,
+            processors.CropImage
+        ]
+    },
+
+
+
     {
         'page': 'abstract/messages.md',
         'classes': [
