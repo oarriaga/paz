@@ -6,10 +6,12 @@ from ..backend.keypoints import denormalize_keypoints
 
 
 class ProjectKeypoints(Processor):
-    """Renders a batch of images and puts them in the selected topic
+    """Projects homogenous keypoints (4D) in the camera coordinates system into
+        image coordinates using a projective transformation.
+
     # Arguments
-        projector:
-        keypoints:
+        projector: Instance of ''paz.models.Project''.
+        keypoints: Numpy array of shape ''(num_keypoints, 3)''
     """
     def __init__(self, projector, keypoints):
         self.projector = projector
@@ -24,7 +26,8 @@ class ProjectKeypoints(Processor):
 
 
 class DenormalizeKeypoints(Processor):
-    """Transform normalized keypoint coordinates into image coordinates
+    """Transform normalized keypoints coordinates into image-size coordinates.
+
     # Arguments
         image_size: List of two floats having height and width of image.
     """
@@ -38,7 +41,10 @@ class DenormalizeKeypoints(Processor):
 
 
 class NormalizeKeypoints(Processor):
-    """Transform keypoints in image coordinates to normalized coordinates
+    """Transform keypoints in image-size coordinates to normalized coordinates.
+
+    # Arguments
+        image_size: List of two ints indicating ''(height, width)''
     """
     def __init__(self, image_size):
         self.image_size = image_size
@@ -63,7 +69,6 @@ class RemoveKeypointsDepth(Processor):
 class PartitionKeypoints(Processor):
     """Partitions keypoints from shape [num_keypoints, 2] into a list of the form
         ((2), (2), ....) and length equal to num_of_keypoints.
-        This is performed for tensorflow probablity
     """
     def __init__(self):
         super(PartitionKeypoints, self).__init__()
@@ -78,7 +83,7 @@ class PartitionKeypoints(Processor):
 
 
 class ChangeKeypointsCoordinateSystem(Processor):
-    """Changes ``keypoints`` 2D coordinate system using ``box2D`` coordinates
+    """Changes ''keypoints'' 2D coordinate system using ''box2D'' coordinates
         to locate the new origin at the openCV image origin (top-left).
     """
     def __init__(self):
