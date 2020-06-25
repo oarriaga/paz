@@ -16,7 +16,6 @@ EXCLUDE = {}
 # TODO
 # backend.processors.standard.py
 # backend.pipelines *
-# backend.models *
 # backend.evaluation *
 # backend.optimization *
 # backend.datasets *
