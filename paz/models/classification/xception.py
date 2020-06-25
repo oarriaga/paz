@@ -80,7 +80,7 @@ def build_xception(
 
 
 def MiniXception(input_shape, num_classes):
-    """Build original MiniXception (see references).
+    """Build MiniXception (see references).
 
     # Arguments
         input_shape: List of three integers e.g. ''(H, W, 3)''
