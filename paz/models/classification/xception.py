@@ -7,10 +7,12 @@ from tensorflow.keras.regularizers import l2
 
 def xception_block(input_tensor, num_kernels, l2_reg=0.01):
     """Xception core block.
+
     # Arguments
         input_tenso: Keras tensor.
         num_kernels: Int. Number of convolutional kernels in block.
         l2_reg: Float. l2 regression.
+
     # Returns
         output tensor for the block.
     """
@@ -34,6 +36,7 @@ def xception_block(input_tensor, num_kernels, l2_reg=0.01):
 def build_xception(
         input_shape, num_classes, stem_kernels, block_kernels, l2_reg=0.01):
     """Function for instantiating an Xception model.
+
     # Arguments
         input_shape: List corresponding to the input shape of the model.
         num_classes: Integer.
@@ -43,9 +46,12 @@ def build_xception(
             the number of kernels used in the xception blocks.
         l2_reg. Float. L2 regularization used in the convolutional kernels.
 
+    # Returns
+        Tensorflow-Keras model.
+
     # References
-        Xception: Deep Learning with Depthwise Separable Convolutions
-        https://arxiv.org/abs/1610.02357
+        - [Xception: Deep Learning with Depthwise Separable
+            Convolutions](https://arxiv.org/abs/1610.02357)
     """
 
     x = inputs = Input(input_shape, name='image')
@@ -74,6 +80,19 @@ def build_xception(
 
 
 def MiniXception(input_shape, num_classes):
+    """Build original MiniXception (see references).
+
+    # Arguments
+        input_shape: List of three integers e.g. ''(H, W, 3)''
+        num_classes: Int.
+
+    # Returns
+        Tensorflow-Keras model.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+    """
     stem_kernels, block_data = [32, 64], [128, 128, 256, 256, 512, 512, 1024]
     model_inputs = (input_shape, num_classes, stem_kernels, block_data)
     model = build_xception(*model_inputs)
