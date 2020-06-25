@@ -3,13 +3,23 @@ from paz.backend import camera
 from paz.backend import keypoints
 from paz.backend import quaternion
 from paz.backend.image import draw
+from paz.backend.image import opencv_image
 from paz.abstract import messages
 from paz.abstract import processor
 from paz.abstract import loader
+from paz.abstract import sequence
 from paz import models
 from paz import processors
 
 EXCLUDE = {}
+
+# TODO
+# backend.processors.standard.py
+# backend.pipelines *
+# backend.models *
+# backend.evaluation *
+# backend.optimization *
+# backend.datasets *
 
 PAGES = [
     {
@@ -55,7 +65,6 @@ PAGES = [
     },
 
 
-
     {
         'page': 'backend/camera.md',
         'classes': [
@@ -81,6 +90,33 @@ PAGES = [
             draw.draw_rectangle,
             draw.lincolor,
             draw.put_text
+        ],
+    },
+
+
+    {
+        'page': 'backend/image/opencv_image.md',
+        'functions': [
+            opencv_image.cast_image,
+            opencv_image.resize_image,
+            opencv_image.convert_color_space,
+            opencv_image.load_image,
+            opencv_image.random_saturation,
+            opencv_image.random_brightness,
+            opencv_image.random_contrast,
+            opencv_image.random_hue,
+            opencv_image.random_flip_left_right,
+            opencv_image.show_image,
+            opencv_image.warp_affine,
+            opencv_image.save_image,
+            opencv_image.random_image_crop,
+            opencv_image.make_random_plain_image,
+            opencv_image.blend_alpha_channel,
+            opencv_image.concatenate_alpha_mask,
+            opencv_image.split_and_normalize_alpha_channel,
+            opencv_image.gaussian_image_blur,
+            opencv_image.median_image_blur,
+            opencv_image.random_image_blur
         ],
     },
 
@@ -134,6 +170,20 @@ PAGES = [
 
 
     {
+        'page': 'processors/geometric.md',
+        'classes': [
+            processors.RandomFlipBoxesLeftRight,
+            processors.ToAbsoluteBoxCoordinates,
+            processors.ToNormalizedBoxCoordinates,
+            processors.RandomSampleCrop,
+            processors.ApplyRandomTranslation,
+            processors.ApplyRandomTranslation
+        ]
+    },
+
+
+
+    {
         'page': 'processors/detection.md',
         'classes': [
             processors.SquareBoxes2D,
@@ -154,6 +204,33 @@ PAGES = [
     },
 
 
+    {
+        'page': 'processors/keypoints.md',
+        'classes': [
+            processors.ChangeKeypointsCoordinateSystem,
+            processors.DenormalizeKeypoints,
+            processors.NormalizeKeypoints,
+            processors.PartitionKeypoints,
+            processors.ProjectKeypoints,
+            processors.RemoveKeypointsDepth
+        ]
+    },
+
+    {
+        'page': 'processors/pose.md',
+        'classes': [
+            processors.SolvePNP
+        ]
+    },
+
+
+    {
+        'page': 'processors/renderer.md',
+        'classes': [
+            processors.Render
+        ]
+    },
+
 
     {
         'page': 'abstract/messages.md',
@@ -162,6 +239,17 @@ PAGES = [
             messages.Pose6D
         ]
     },
+
+
+
+    {
+        'page': 'abstract/sequence.md',
+        'classes': [
+            sequence.ProcessingSequence,
+            sequence.GeneratingSequence
+        ]
+    },
+
 
     {
         'page': 'abstract/processor.md',
