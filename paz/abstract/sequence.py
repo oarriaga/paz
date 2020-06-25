@@ -47,6 +47,16 @@ class SequenceExtra(Sequence):
 
 
 class ProcessingSequence(SequenceExtra):
+    """Sequence generator used for processing samples given in ''data''.
+
+    # Arguments
+        processor: Function, used for processing elements of ''data''.
+        batch_size: Int.
+        data: List. Each element of the list is processed by ''processor''.
+        as_list: Bool, if True ''inputs'' and ''labels'' are dispatched as
+            lists. If false ''inputs'' and ''labels'' are dispatched as
+            dictionaries.
+    """
     def __init__(self, processor, batch_size, data, as_list=False):
         self.data = data
         super(ProcessingSequence, self).__init__(
@@ -65,6 +75,16 @@ class ProcessingSequence(SequenceExtra):
 
 
 class GeneratingSequence(SequenceExtra):
+    """Sequence generator used for generating samples.
+
+    # Arguments
+        processor: Function used for generating and processing ''samples''.
+        batch_size: Int.
+        num_steps: Int. Number of steps for each epoch.
+        as_list: Bool, if True ''inputs'' and ''labels'' are dispatched as
+            lists. If false ''inputs'' and ''labels'' are dispatched as
+            dictionaries.
+    """
     def __init__(self, processor, batch_size, num_steps, as_list=False):
         self.num_steps = num_steps
         super(GeneratingSequence, self).__init__(
