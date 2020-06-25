@@ -16,11 +16,9 @@ class HaarCascadeDetector(object):
         scale = Float. Scale for image reduction
         neighbors: Int. Minimum neighbors
 
-    # Methods
-        predict()
-
-    # References
-        [1] https://github.com/opencv/opencv/tree/master/data/haarcascades
+    # Reference
+        - [Haar
+            Cascades](https://github.com/opencv/opencv/tree/master/data/haarcascades)
     """
 
     def __init__(self, weights='frontalface_default', class_arg=None,
