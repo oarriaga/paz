@@ -122,11 +122,44 @@ PAGES = [
 
 
     {
+        'page': 'models/classification.md',
+        'functions': [
+            models.classification.MiniXception
+        ],
+    },
+
+
+    {
         'page': 'models/detection.md',
         'functions': [
             models.detection.SSD300,
-            models.detection.SSD512]
+            models.detection.SSD512,
+            models.detection.HaarCascadeDetector
+        ],
     },
+
+
+    {
+        'page': 'models/keypoint.md',
+        'functions': [
+            models.KeypointNet,
+            models.KeypointNet2D,
+            models.Projector
+        ],
+    },
+
+
+    {
+        'page': 'models/layers.md',
+        'functions': [
+            models.layers.Conv2DNormalization,
+            models.layers.SubtractScalar,
+            models.layers.ExpectedValue2D,
+            models.layers.ExpectedDepth
+        ],
+    },
+
+
 
     {
         'page': 'processors/image.md',
