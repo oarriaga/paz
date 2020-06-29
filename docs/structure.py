@@ -10,15 +10,17 @@ from paz.abstract import loader
 from paz.abstract import sequence
 from paz import models
 from paz import processors
+from paz.optimization import losses
+from paz.optimization import callbacks
 
 EXCLUDE = {}
 
 # TODO
 # backend.processors.standard.py
-# backend.pipelines *
-# backend.evaluation *
-# backend.optimization *
 # backend.datasets *
+# backend.pipelines *
+
+# KeypointNet loss parts.
 
 PAGES = [
     {
@@ -150,11 +152,30 @@ PAGES = [
 
     {
         'page': 'models/layers.md',
-        'functions': [
+        'classes': [
             models.layers.Conv2DNormalization,
             models.layers.SubtractScalar,
             models.layers.ExpectedValue2D,
             models.layers.ExpectedDepth
+        ],
+    },
+
+
+    {
+        'page': 'optimization/callbacks.md',
+        'classes': [
+            callbacks.DrawInferences,
+            callbacks.LearningRateScheduler,
+            callbacks.EvaluateMAP
+        ],
+    },
+
+
+    {
+        'page': 'optimization/losses.md',
+        'classes': [
+            losses.MultiBoxLoss,
+            losses.KeypointNetLoss
         ],
     },
 
