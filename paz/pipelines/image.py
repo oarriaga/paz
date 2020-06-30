@@ -3,6 +3,9 @@ from .. import processors as pr
 
 
 class AugmentImage(SequentialProcessor):
+    """Augments an RGB image by randomly changing contrast, brightness
+        saturation and hue.
+    """
     def __init__(self):
         super(AugmentImage, self).__init__()
         self.add(pr.RandomContrast())
@@ -12,6 +15,15 @@ class AugmentImage(SequentialProcessor):
 
 
 class PreprocessImage(SequentialProcessor):
+    """Preprocess RGB image by resizing it to the given ''shape''. If a
+    ''mean'' is given it is substracted from image and it not the image gets
+    normalized.
+
+    # Arguments
+        shape: List of two Ints.
+        mean: List of three Ints indicating the per-channel mean to be
+            subtracted.
+    """
     def __init__(self, shape, mean=pr.BGR_IMAGENET_MEAN):
         super(PreprocessImage, self).__init__()
         self.add(pr.ResizeImage(shape))
@@ -23,6 +35,11 @@ class PreprocessImage(SequentialProcessor):
 
 
 class AutoEncoderPredictor(SequentialProcessor):
+    """Pipeline for predicting values from an auto-encoder.
+
+    # Arguments
+        model: Keras model.
+    """
     def __init__(self, model):
         super(AutoEncoderPredictor, self).__init__()
         preprocess = SequentialProcessor(
@@ -38,6 +55,11 @@ class AutoEncoderPredictor(SequentialProcessor):
 
 
 class EncoderPredictor(SequentialProcessor):
+    """Pipeline for predicting latent vector of an encoder.
+
+    # Arguments
+        model: Keras model.
+    """
     def __init__(self, encoder):
         super(EncoderPredictor, self).__init__()
         self.encoder = encoder
@@ -50,6 +72,11 @@ class EncoderPredictor(SequentialProcessor):
 
 
 class DecoderPredictor(SequentialProcessor):
+    """Pipeline for predicting decoded image from a latent vector.
+
+    # Arguments
+        model: Keras model.
+    """
     def __init__(self, decoder):
         self.decoder = decoder
         super(DecoderPredictor, self).__init__()
