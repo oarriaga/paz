@@ -159,8 +159,8 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
 
     # Arguments
         boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
-            where the first the first four coordinates correspond to point
-            form box coordinates and the last coordinates is the class
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
             argument. This boxes should be the ground truth boxes.
         prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
             where the four coordinates are in center form coordinates.
