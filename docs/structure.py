@@ -286,6 +286,30 @@ PAGES = [
 
 
     {
+        'page': 'processors/standard.md',
+        'classes': [
+            processors.ControlMap,
+            processors.ExpandDomain,
+            processors.CopyDomain,
+            processors.ExtendInputs,
+            processors.SequenceWrapper,
+            processors.Predict,
+            processors.ToClassName,
+            processors.ExpandDims,
+            processors.BoxClassToOneHotVector,
+            processors.Squeeze,
+            processors.Copy,
+            processors.Lambda,
+            processors.UnpackDictionary,
+            processors.WrapOutput,
+            processors.Concatenate,
+            processors.SelectElement
+        ]
+    },
+
+
+
+    {
         'page': 'abstract/messages.md',
         'classes': [
             (messages.Box2D, [messages.Box2D.contains]),
