@@ -1,5 +1,9 @@
 import os
+import cv2
+import numpy as np
 import argparse
+import tensorflow as tf
+
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler

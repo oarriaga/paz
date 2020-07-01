@@ -57,6 +57,7 @@ class ProcessingSequence(SequenceExtra):
 
     def process_batch(self, inputs, labels, batch_index):
         unprocessed_batch = self._get_unprocessed_batch(self.data, batch_index)
+        
         for sample_arg, unprocessed_sample in enumerate(unprocessed_batch):
             sample = self.pipeline(unprocessed_sample.copy())
             self._place_sample(sample['inputs'], sample_arg, inputs)

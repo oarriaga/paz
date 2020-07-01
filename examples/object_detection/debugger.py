@@ -2,9 +2,10 @@ import numpy as np
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
+from paz.abstract import ProcessingSequence
 from paz import processors as pr
 from paz.pipelines import AugmentDetection
-
+import cv2
 
 class ShowBoxes(Processor):
     def __init__(self, class_names, prior_boxes, variances=[.1, .2]):
@@ -23,7 +24,8 @@ class ShowBoxes(Processor):
         image = self.draw_boxes2D(image, boxes2D)
         image = (image + pr.BGR_IMAGENET_MEAN).astype(np.uint8)
         image = image[..., ::-1]
-        self.show_image(image)
+        cv2.imwrite('image.png', image)
+        #self.show_image(image)
         return image, boxes2D
 
 
@@ -42,10 +44,17 @@ prior_boxes = model.prior_boxes
 testor_encoder = AugmentDetection(prior_boxes)
 testor_decoder = ShowBoxes(class_names, prior_boxes)
 sample_arg = 0
-for sample_arg in range(1000):
+for sample_arg in range(50):
     sample = data[sample_arg]
+    if(type(sample) == str):
+        print("The sample is a string")
     wrapped_outputs = testor_encoder(sample)
-    print(wrapped_outputs['labels'])
+    #print(wrapped_outputs['labels'])
     image = wrapped_outputs['inputs']['image']
     boxes = wrapped_outputs['labels']['boxes']
     image, boxes = testor_decoder(image, boxes)
+
+sequencer = ProcessingSequence(testor_encoder, 32, data)
+
+for batch_arg in range(len(data)):
+    sequencer.__getitem__(batch_arg)
