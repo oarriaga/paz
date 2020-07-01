@@ -33,7 +33,7 @@ def compute_matches(dataset, detector, class_to_arg, iou_thresh=0.5):
             difficulties = None
         # obtaining predictions
         image = load_image(sample['image'])
-        results = detector({'image': image})
+        results = detector(image)
         predicted_boxes, predicted_class_args, predicted_scores = [], [], []
         for box2D in results['boxes2D']:
             predicted_scores.append(box2D.score)
