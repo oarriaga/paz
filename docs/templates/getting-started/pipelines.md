@@ -4,7 +4,7 @@ PAZ allows us to easily create preprocessing, data-augmentation and post-process
 
 In the example below we show how to create a simple data-augmentation pipeline:
 
-```python
+``` python
 from paz.abstract import SequentialProcessor
 from paz import processors as pr
 
@@ -17,7 +17,7 @@ augment_image.add(pr.RandomHue())
 
 The final ''pipeline'' behaves as any Python function:
 
-```python
+``` python
 new_image = augment_image(image)
 ```
 
@@ -28,7 +28,7 @@ Pipelines are built from ''paz.processors''. There are plenty of processors impl
 
 In the example below we show how to build a ''processor'' for normalizing an image to a range from 0 to 1.
 
-```python
+``` python
 from paz.abstract import Processor
 
 class NormalizeImage(Processor):
@@ -43,7 +43,7 @@ class NormalizeImage(Processor):
 
 We can now use our processor to create a pipeline for loading an image and normalizing it:
 
-```python
+``` python
 from paz.abstract import SequentialProcessor
 from paz.processors import LoadImage
 
@@ -54,6 +54,6 @@ preprocess_image.add(NormalizeImage())
 
 We can now use our new function/pipeline to load and normalize an image:
 
-```python
+``` python
 image = preprocess_image('images/cat.jpg')
 ```
