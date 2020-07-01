@@ -6,6 +6,21 @@ from ...models.keypoint.projector import Projector
 
 
 class KeypointNetLoss(object):
+    """KeypointNet loss for discovering latent keypoints.
+
+    # Arguments
+        num_keypints: Int. Number of keypoints to discover.
+        focal_length: Float. Focal length of camera
+        rotation_noise: Float. Noise added to the estimation of the rotation.
+        separation_delta: Float. Delta used for the ''separation'' loss.
+        loss_weights: Dict. having as keys strings with the different losses
+            names e.g. ''consistency'' and as value the weight used for that
+            loss.
+
+    # References
+        - [Discovery of Latent 3D Keypoints via End-to-end
+            Geometric Reasoning](https://arxiv.org/pdf/1807.03146.pdf)
+    """
     def __init__(self, num_keypoints, focal_length, rotation_noise=0.1,
                  separation_delta=0.05, loss_weights={
                      'consistency': 1.0, 'silhouette': 1.0, 'separation': 1.0,

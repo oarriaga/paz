@@ -3,6 +3,17 @@ import tensorflow.keras.backend as K
 
 
 class MultiBoxLoss(object):
+    """Multi-box loss for a single-shot detection architecture.
+
+    # Arguments
+        neg_pos_ratio: Int. Number of negatives used per positive box.
+        alpha: Float. Weight parameter for localization loss.
+        max_num_negatives: Int. Maximum number of negatives per batch.
+
+    # References
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
     def __init__(self, neg_pos_ratio=3, alpha=1.0, max_num_negatives=300):
         self.alpha = alpha
         self.neg_pos_ratio = neg_pos_ratio
@@ -27,12 +38,34 @@ class MultiBoxLoss(object):
         return positive_mask, negative_mask
 
     def compute_loss(self, y_true, y_pred):
+        """Computes localization and classification losses in a batch.
+
+        # Arguments
+            y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with correct labels.
+            y_pred: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with predicted inferences.
+
+        # Returns
+            Tensor with loss per sample in batch.
+        """
         localization_loss = self.localization(y_true, y_pred)
         positive_loss = self.positive_classification(y_true, y_pred)
         negative_loss = self.negative_classification(y_true, y_pred)
         return localization_loss + positive_loss + negative_loss
 
     def localization(self, y_true, y_pred):
+        """Computes localization loss in a batch.
+
+        # Arguments
+            y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with correct labels.
+            y_pred: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with predicted inferences.
+
+        # Returns
+            Tensor with localization loss per sample in batch.
+        """
         batch_size = tf.cast(tf.shape(y_pred)[0], tf.float32)
         local_loss = self._smooth_l1(y_true[:, :, :4], y_pred[:, :, :4])
         positive_mask, negative_mask = self._calculate_masks(y_true)
@@ -43,6 +76,18 @@ class MultiBoxLoss(object):
         return (self.alpha * positive_local_loss * batch_size) / num_positives
 
     def positive_classification(self, y_true, y_pred):
+        """Computes positive classification loss in a batch. Positive boxes are those
+            boxes that contain an object.
+
+        # Arguments
+            y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with correct labels.
+            y_pred: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with predicted inferences.
+
+        # Returns
+            Tensor with positive classification loss per sample in batch.
+        """
         batch_size = tf.cast(tf.shape(y_pred)[0], tf.float32)
         class_loss = self._cross_entropy(y_true[:, :, 4:], y_pred[:, :, 4:])
         positive_mask, negative_mask = self._calculate_masks(y_true)
@@ -53,6 +98,18 @@ class MultiBoxLoss(object):
         return (positive_class_loss * batch_size) / num_positives
 
     def negative_classification(self, y_true, y_pred):
+        """Computes negative classification loss in a batch. Negative boxes are those
+            boxes that don't contain an object.
+
+        # Arguments
+            y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with correct labels.
+            y_pred: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
+                with predicted inferences.
+
+        # Returns
+            Tensor with negative classification loss per sample in batch.
+        """
         batch_size = tf.cast(tf.shape(y_pred)[0], tf.float32)
         class_loss = self._cross_entropy(y_true[:, :, 4:], y_pred[:, :, 4:])
         positive_mask, negative_mask = self._calculate_masks(y_true)

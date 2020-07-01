@@ -1,11 +1,20 @@
 class Processor(object):
-    """ Abstract class for creating a processor unit.
+    """Abstract class for creating a processor unit.
 
     # Arguments
         name: String indicating name of the processing unit.
 
     # Methods
         call()
+
+    ```python
+    class NormalizeImage(Processor):
+    def __init__(self):
+        super(NormalizeImage, self).__init__()
+
+    def call(self, image):
+        return image / 255.0
+    ```
     """
     def __init__(self, name=None):
         self.name = name
@@ -30,9 +39,28 @@ class Processor(object):
 
 
 class SequentialProcessor(object):
-    """ Abstract class for creating a sequential pipeline of processors.
-    # Methods:
+    """Abstract class for creating a sequential pipeline of processors.
+
+    # Arguments
+        processors: List of instantiated child classes of ``Processor``
+            classes.
+        name: String indicating name of the processing unit.
+
+    # Methods
         add()
+        remove()
+        pop()
+        insert()
+        get_processor()
+
+    ```python
+    AugmentImage = SequentialProcessor()
+    AugmentImage.add(pr.RandomContrast())
+    AugmentImage.add(pr.RandomBrightness())
+    augment_image = AugmentImage()
+
+    transformed_image = augment_image(image)
+    ```
     """
     def __init__(self, processors=None, name=None):
         self.processors = []
@@ -51,9 +79,10 @@ class SequentialProcessor(object):
         self._name = name
 
     def add(self, processor):
-        """ Adds a process to the sequence of processes to be applied to input.
+        """Adds a process to the sequence of processes to be applied to input.
+
         # Arguments
-            processor: An extended class of the parent class `Process`.
+            processor: An instantiated child class of of ``Processor``.
         """
         self.processors.append(processor)
 
@@ -70,6 +99,7 @@ class SequentialProcessor(object):
 
     def remove(self, name):
         """Removes processor from sequence
+
         # Arguments
             name: String indicating the process name
         """
@@ -79,6 +109,7 @@ class SequentialProcessor(object):
 
     def pop(self, index=-1):
         """Pops processor in given index from sequence
+
         # Arguments
             index: Int.
         """
@@ -86,11 +117,16 @@ class SequentialProcessor(object):
 
     def insert(self, index, processor):
         """Inserts ``processor`` to self.processors queue at ``index``
+
+        # Argument
+            index: Int.
+            processor: An instantiated child class of of ``Processor``.
         """
         return self.processors.insert(index, processor)
 
     def get_processor(self, name):
         """Gets processor from sequencer
+
         # Arguments
             name: String indicating the process name
         """

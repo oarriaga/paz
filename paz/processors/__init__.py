@@ -57,8 +57,12 @@ from .geometric import Expand
 from .geometric import ApplyTranslation
 from .geometric import ApplyRandomTranslation
 
-from .keypoints import DenormalizeKeypoints
 from .keypoints import ChangeKeypointsCoordinateSystem
+from .keypoints import DenormalizeKeypoints
+from .keypoints import NormalizeKeypoints
+from .keypoints import PartitionKeypoints
+from .keypoints import ProjectKeypoints
+from .keypoints import RemoveKeypointsDepth
 
 from .standard import ControlMap
 from .standard import ExpandDomain

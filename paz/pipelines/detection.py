@@ -5,6 +5,10 @@ from .image import AugmentImage, PreprocessImage
 
 
 class AugmentBoxes(SequentialProcessor):
+    """Perform data augmentation with bounding boxes.
+    # Arguments
+        mean: List of three elements used to fill empty image spaces.
+    """
     def __init__(self, mean=pr.BGR_IMAGENET_MEAN):
         super(AugmentBoxes, self).__init__()
         self.add(pr.ToAbsoluteBoxCoordinates())
@@ -15,6 +19,16 @@ class AugmentBoxes(SequentialProcessor):
 
 
 class PreprocessBoxes(SequentialProcessor):
+    """Preprocess bounding boxes
+
+    # Arguments
+        num_classes: Int.
+        prior_boxes: Numpy array of shape ''[num_boxes, 4]'' containing
+            prior/default bounding boxes.
+        IOU: Float. Intersection over union used to match boxes.
+        variances: List of two floats indicating variances to be encoded
+            for encoding bounding boxes.
+    """
     def __init__(self, num_classes, prior_boxes, IOU, variances):
         super(PreprocessBoxes, self).__init__()
         self.add(pr.MatchBoxes(prior_boxes, IOU),)
@@ -23,6 +37,20 @@ class PreprocessBoxes(SequentialProcessor):
 
 
 class AugmentDetection(SequentialProcessor):
+    """Augment boxes and images for object detection.
+    # Arguments
+        prior_boxes: Numpy array of shape ''[num_boxes, 4]'' containing
+            prior/default bounding boxes.
+        split: Flag from ''paz.processors.TRAIN'', ''paz.processors.VAL''
+            or ''paz.processors.TEST''. Certain transformations would take
+            place depending on the flag.
+        num_classes: Int.
+        size: Int.
+        mean: List of three elements indicating the per channel mean.
+        IOU: Float. Intersection over union used to match boxes.
+        variances: List of two floats indicating variances to be encoded
+            for encoding bounding boxes.
+    """
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
         super(AugmentDetection, self).__init__()
@@ -48,6 +76,15 @@ class AugmentDetection(SequentialProcessor):
 
 
 class SingleShotInference(Processor):
+    """Single-shot object detection prediction.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating the class names.
+        score_thresh: Float.
+        nms_thresh: Float between [0, 1].
+        mean: List of three elements indicating the per channel mean.
+    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.BGR_IMAGENET_MEAN):
         super(SingleShotInference, self).__init__()

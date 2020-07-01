@@ -16,6 +16,7 @@ from itertools import product
 def create_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
                          num_regressions=4, l2_norm=False, batch_norm=False):
     """Adds multibox head with classification and regression output tensors.
+
     # Arguments
         tensors: List of tensors.
         num_classes: Int. Number of classes.

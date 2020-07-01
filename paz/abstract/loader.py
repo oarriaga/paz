@@ -7,6 +7,13 @@ class Loader(object):
         class_names: List of strings. Label names of the classes.
         name: String. Dataset name.
 
+    # Properties
+        name: Str.
+        path: Str.
+        split: Str or Flag.
+        class_names: List of strings.
+        num_classes: Int.
+
     # Methods
         load_data()
     """
@@ -18,6 +25,7 @@ class Loader(object):
 
     def load_data(self):
         """Abstract method for loading dataset.
+
         # Returns
             dictionary containing absolute image paths as keys, and
             ground truth vectors as values.

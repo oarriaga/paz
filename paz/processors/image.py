@@ -27,6 +27,9 @@ RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
 
 class CastImage(Processor):
     """Cast image to given dtype.
+
+    # Arguments
+        dtype: Str or np.dtype
     """
     def __init__(self, dtype):
         self.dtype = dtype
@@ -38,8 +41,9 @@ class CastImage(Processor):
 
 class SubtractMeanImage(Processor):
     """Subtract channel-wise mean to image.
+
     # Arguments
-        mean. List of length 3, containing the channel-wise mean.
+        mean: List of length 3, containing the channel-wise mean.
     """
     def __init__(self, mean):
         self.mean = mean
@@ -50,9 +54,10 @@ class SubtractMeanImage(Processor):
 
 
 class AddMeanImage(Processor):
-    """Subtract channel-wise mean to image.
+    """Adds channel-wise mean to image.
+
     # Arguments
-        mean. List of length 3, containing the channel-wise mean.
+        mean: List of length 3, containing the channel-wise mean.
     """
     def __init__(self, mean):
         self.mean = mean
@@ -63,7 +68,7 @@ class AddMeanImage(Processor):
 
 
 class NormalizeImage(Processor):
-    """Normalize image by diving its values by 255.0.
+    """Normalize image by diving all values by 255.0.
     """
     def __init__(self):
         super(NormalizeImage, self).__init__()
@@ -73,7 +78,7 @@ class NormalizeImage(Processor):
 
 
 class DenormalizeImage(Processor):
-    """Denormalize image by diving its values by 255.0.
+    """Denormalize image by multiplying all values by 255.0.
     """
     def __init__(self):
         super(DenormalizeImage, self).__init__()
@@ -83,8 +88,10 @@ class DenormalizeImage(Processor):
 
 
 class LoadImage(Processor):
-    """Decodes image filepath and loads image as tensor.
-    # TODO: Raise value error whenever the image was not found.
+    """Loads image.
+
+    # Arguments
+        num_channels: Integer, valid integers are: 1, 3 and 4.
     """
     def __init__(self, num_channels=3):
         self.num_channels = num_channels
@@ -96,9 +103,10 @@ class LoadImage(Processor):
 
 class RandomSaturation(Processor):
     """Applies random saturation to an image in RGB space.
+
     # Arguments
-        lower: float. Lower bound for saturation factor.
-        upper: float. Upper bound for saturation factor.
+        lower: Float, lower bound for saturation factor.
+        upper: Float, upper bound for saturation factor.
     """
     def __init__(self, lower=0.3, upper=1.5):
         self.lower = lower
@@ -111,8 +119,9 @@ class RandomSaturation(Processor):
 
 class RandomBrightness(Processor):
     """Adjust random brightness to an image in RGB space.
-    # Arguments:
-        max_delta: float.
+
+    # Arguments
+        max_delta: Float.
     """
     def __init__(self, delta=32):
         self.delta = delta
@@ -124,6 +133,7 @@ class RandomBrightness(Processor):
 
 class RandomContrast(Processor):
     """Applies random contrast to an image in RGB
+
     # Arguments
         lower: Float, indicating the lower bound of the random number
             to be multiplied with the BGR/RGB image.
@@ -141,8 +151,9 @@ class RandomContrast(Processor):
 
 class RandomHue(Processor):
     """Applies random hue to an image in RGB space.
+
     # Arguments
-        delta: Integer, indicating the range (-delta, delta ) of possible
+        delta: Int, indicating the range (-delta, delta ) of possible
             hue values.
     """
     def __init__(self, delta=18):
@@ -155,8 +166,9 @@ class RandomHue(Processor):
 
 class ResizeImage(Processor):
     """Resize image.
+
     # Arguments
-        size: list of two ints.
+        size: List of two ints.
     """
     def __init__(self, size):
         self.size = size
@@ -168,8 +180,9 @@ class ResizeImage(Processor):
 
 class ResizeImages(Processor):
     """Resize list of images.
+
     # Arguments
-        size: list of two ints.
+        size: List of two ints.
     """
     def __init__(self, size):
         self.size = size
@@ -181,6 +194,10 @@ class ResizeImages(Processor):
 
 class RandomImageBlur(Processor):
     """Randomizes image quality
+
+    # Arguments
+        probability: Float between [0, 1]. Assigns probability of how
+            often a random image blur is applied.
     """
     def __init__(self, probability=0.5):
         super(RandomImageBlur, self).__init__()
@@ -193,6 +210,8 @@ class RandomImageBlur(Processor):
 
 
 class RandomFlipImageLeftRight(Processor):
+    """Randomly flip the image left or right
+    """
     def __init__(self):
         super(RandomFlipImageLeftRight, self).__init__()
 
@@ -202,6 +221,7 @@ class RandomFlipImageLeftRight(Processor):
 
 class ConvertColorSpace(Processor):
     """Converts image to a different color space.
+
     # Arguments
         flag: Flag found in ``ops``indicating transform e.g. BGR2RGB
     """
@@ -215,6 +235,7 @@ class ConvertColorSpace(Processor):
 
 class ShowImage(Processor):
     """Shows image in a separate window.
+
     # Arguments
         window_name: String. Window name.
         wait: Boolean
@@ -229,6 +250,11 @@ class ShowImage(Processor):
 
 
 class ImageDataProcessor(Processor):
+    """Wrapper for Keras ImageDataGenerator
+
+    # Arguments
+        generator: An instantiated Keras ImageDataGenerator
+    """
     def __init__(self, generator):
         super(ImageDataProcessor, self).__init__()
         self.generator = generator
@@ -241,6 +267,8 @@ class ImageDataProcessor(Processor):
 
 
 class AlphaBlending(Processor):
+    """Blends image to background using the image's alpha channel.
+    """
     def __init__(self):
         super(AlphaBlending, self).__init__()
 
@@ -249,15 +277,27 @@ class AlphaBlending(Processor):
 
 
 class RandomImageCrop(Processor):
-    def __init__(self, size):
+    """Randomly crops a part of an image.
+
+    # Arguments
+        shape: List of two ints [height, width].
+            Dimensions of image to be cropped.
+    """
+    def __init__(self, shape):
         super(RandomImageCrop, self).__init__()
-        self.size = size
+        self.shape = shape
 
     def call(self, image):
-        return random_image_crop(image, self.size)
+        return random_image_crop(image, self.shape)
 
 
 class MakeRandomPlainImage(Processor):
+    """Makes random plain image by randomly sampling an RGB color.
+
+    # Arguments
+        shape: List of two ints [height, width].
+            Dimensions of plain image to be generated.
+    """
     def __init__(self, shape):
         super(MakeRandomPlainImage, self).__init__()
         self.shape = shape
@@ -267,6 +307,8 @@ class MakeRandomPlainImage(Processor):
 
 
 class ConcatenateAlphaMask(Processor):
+    """Concatenates alpha mask to original image.
+    """
     def __init__(self, **kwargs):
         super(ConcatenateAlphaMask, self).__init__(**kwargs)
 
@@ -275,6 +317,12 @@ class ConcatenateAlphaMask(Processor):
 
 
 class BlendRandomCroppedBackground(Processor):
+    """Blends image with a randomly cropped background.
+
+    # Arguments
+        background_paths: List of strings. Each element of the list is a
+            full-path to an image used for cropping a background.
+    """
     def __init__(self, background_paths):
         super(BlendRandomCroppedBackground, self).__init__()
         if not isinstance(background_paths, list):
@@ -294,6 +342,16 @@ class BlendRandomCroppedBackground(Processor):
 
 
 class AddOcclusion(Processor):
+    """Adds a random occlusion to image by generating random vertices and
+        drawing a polygon.
+
+    # Arguments
+        max_radius_scale: Float between [0, 1].
+            Value multiplied with largest image dimension to obtain the maximum
+                radius possible of a vertex in the occlusion polygon.
+        probability: Float between [0, 1]. Assigns probability of how
+            often an occlusion to an image is generated.
+    """
     def __init__(self, max_radius_scale=0.5, probability=0.5):
         super(AddOcclusion, self).__init__()
         self.max_radius_scale = max_radius_scale

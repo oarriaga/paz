@@ -11,7 +11,6 @@ from ..backend.image import warp_affine
 
 class RandomFlipBoxesLeftRight(Processor):
     """Flips image and implemented labels horizontally.
-    Current implemented labels include ``boxes``.
     """
     def __init__(self):
         super(RandomFlipBoxesLeftRight, self).__init__()
@@ -24,7 +23,7 @@ class RandomFlipBoxesLeftRight(Processor):
 
 
 class ToAbsoluteBoxCoordinates(Processor):
-    """Convert normalized box coordinates to image box coordinates.
+    """Convert normalized box coordinates to image-size box coordinates.
     """
     def __init__(self):
         super(ToAbsoluteBoxCoordinates, self).__init__()
@@ -35,7 +34,7 @@ class ToAbsoluteBoxCoordinates(Processor):
 
 
 class ToNormalizedBoxCoordinates(Processor):
-    """Convert image box coordinates to normalized box coordinates.
+    """Convert image-size box coordinates to normalized box coordinates.
     """
     def __init__(self):
         super(ToNormalizedBoxCoordinates, self).__init__()
@@ -150,6 +149,7 @@ class RandomSampleCrop(Processor):
 class Expand(Processor):
     """Expand image size up to 2x, 3x, 4x and fill values with mean color.
     This transformation is applied with a probability of 50%.
+
     # Arguments
         max_ratio: Float.
         mean: None/List: If `None` expanded image is filled with
@@ -185,13 +185,12 @@ class Expand(Processor):
 
 
 class ApplyTranslation(Processor):
-    """Applies a translation of image and labels
+    """Applies a translation of image and labels.
+
     # Arguments
         translation: A list of length two indicating the x,y translation values
         fill_color: List of three integers indicating the
-            color values e.g. [0,0,0]
-    # TODO:
-        Implement function for ``boxes`` labels
+            color values e.g. ''[0, 0, 0]''
     """
     def __init__(self, translation, fill_color=None):
         super(ApplyTranslation, self).__init__()
@@ -228,11 +227,13 @@ class ApplyTranslation(Processor):
 
 class ApplyRandomTranslation(Processor):
     """Applies a random translation to image and labels
-    #Arguments
+
+    # Arguments
         delta_scale: List with two elements having the normalized deltas.
-            e.g. [.25, .25]
+            e.g. ''[.25, .25]''.
+
         fill_color: List of three integers indicating the
-            color values e.g. [0,0,0]
+            color values e.g. ''[0, 0, 0]''.
     """
     def __init__(
             self, delta_scale=[0.25, 0.25], fill_color=None):

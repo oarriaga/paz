@@ -35,7 +35,8 @@ def SSD512(num_classes=81, weights='COCO', input_shape=(512, 512, 3),
             weights are also trained.
 
     # Reference
-        SSD: Single Shot MultiBox Detector: https://arxiv.org/abs/1512.02325
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
     """
 
     datasets = {'COCO', 'YCBVideo', None}

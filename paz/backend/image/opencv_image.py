@@ -13,10 +13,28 @@ _CHANNELS_TO_FLAG = {1: cv2.IMREAD_GRAYSCALE,
 
 
 def cast_image(image, dtype):
+    """Casts an image into a different type
+
+    # Arguments
+        image: Numpy array.
+        dtype: String or np.dtype.
+
+    # Returns
+        Numpy array.
+    """
     return image.astype(dtype)
 
 
 def resize_image(image, size):
+    """Resize image.
+
+    # Arguments
+        image: Numpy array.
+        dtype: List of two ints.
+
+    # Returns
+        Numpy array.
+    """
     if(type(image) != np.ndarray):
         raise ValueError("Recieved Image is not of type numpy array", type(image))
     else:
@@ -24,16 +42,41 @@ def resize_image(image, size):
 
 
 def convert_color_space(image, flag):
+    """Convert image to a different color space.
+
+    # Arguments
+        image: Numpy array.
+        flag: PAZ or openCV flag. e.g. paz.backend.image.RGB2BGR.
+
+    # Returns
+        Numpy array.
+    """
     return cv2.cvtColor(image, flag)
 
 
 def load_image(filepath, num_channels=3):
+    """Load image from a ''filepath''.
+
+    # Arguments
+        filepath: String indicating full path to the image.
+        num_channels: Int.
+
+    # Returns
+        Numpy array.
+    """
     image = cv2.imread(filepath, _CHANNELS_TO_FLAG[num_channels])
     image = convert_color_space(image, BGR2RGB)
     return image
 
 
 def random_saturation(image, lower=0.3, upper=1.5):
+    """Applies random saturation to an RGB image.
+
+    # Arguments
+        image: Numpy array representing an image RGB format.
+        lower: Float.
+        upper: Float.
+    """
     image = convert_color_space(image, RGB2HSV)
     image = cast_image(image, np.float32)
     image[:, :, 1] = image[:, :, 1] * np.random.uniform(lower, upper)
@@ -44,6 +87,12 @@ def random_saturation(image, lower=0.3, upper=1.5):
 
 
 def random_brightness(image, delta=32):
+    """Applies random brightness to an RGB image.
+
+    # Arguments
+        image: Numpy array representing an image RGB format.
+        delta: Int.
+    """
     image = cast_image(image, np.float32)
     random_brightness = np.random.uniform(-delta, delta)
     image = image + random_brightness
@@ -53,6 +102,13 @@ def random_brightness(image, delta=32):
 
 
 def random_contrast(image, lower=0.5, upper=1.5):
+    """Applies random contrast to an RGB image.
+
+    # Arguments
+        image: Numpy array representing an image RGB format.
+        lower: Float.
+        upper: Float.
+    """
     alpha = np.random.uniform(lower, upper)
     image = cast_image(image, np.float32)
     image = image * alpha
@@ -62,6 +118,12 @@ def random_contrast(image, lower=0.5, upper=1.5):
 
 
 def random_hue(image, delta=18):
+    """Applies random hue to an RGB image.
+
+    # Arguments
+        image: Numpy array representing an image RGB format.
+        delta: Int.
+    """
     image = convert_color_space(image, RGB2HSV)
     image = cast_image(image, np.float32)
     image[:, :, 0] = image[:, :, 0] + np.random.uniform(-delta, delta)
@@ -73,10 +135,20 @@ def random_hue(image, delta=18):
 
 
 def flip_left_right(image):
+    """Flips an image left and right.
+
+    # Arguments
+        image: Numpy array.
+    """
     return image[:, ::-1]
 
 
 def random_flip_left_right(image):
+    """Applies random left or right flip.
+
+    # Arguments
+        image: Numpy array.
+    """
     if np.random.uniform([1], 0, 2) == 1:
         image = flip_left_right(image)
     return image
@@ -84,9 +156,12 @@ def random_flip_left_right(image):
 
 def show_image(image, name='image', wait=True):
     """Shows RGB image in an external window.
+
     # Arguments
         image: Numpy array
         name: String indicating the window name.
+        wait: Boolean. If ''True'' window stays open until user presses a key.
+            If ''False'' windows closes immediately.
     """
     if image.dtype != np.uint8:
         raise ValueError('``image`` must be of type ``uint8``')
@@ -100,6 +175,7 @@ def show_image(image, name='image', wait=True):
 
 def warp_affine(image, matrix, fill_color=[0, 0, 0]):
     """ Transforms `image` using an affine `matrix` transformation.
+
     # Arguments
         image: Numpy array.
         matrix: Numpy array of shape (2,3) indicating affine transformation.
@@ -112,6 +188,7 @@ def warp_affine(image, matrix, fill_color=[0, 0, 0]):
 
 def save_image(filepath, image):
     """Saves an image.
+
     # Arguments
         filepath: String with image path. It should include postfix e.g. .png
         image: Numpy array.
@@ -123,6 +200,15 @@ def save_image(filepath, image):
 
 
 def random_image_crop(image, size):
+    """Randomly crops an image and returns cropped image.
+
+    # Arguments
+        image: Numpy array.
+        size: List of two ints ''(H, W)''.
+
+    # Returns
+        Numpy array of cropped image.
+    """
     H, W = image.shape[:2]
     if (size[0] >= H) or (size[1] >= W):
         print('WARNING: Image is smaller than crop size', H, W, size)
@@ -136,12 +222,26 @@ def random_image_crop(image, size):
 
 
 def make_random_plain_image(shape):
+    """Makes random plain image by sampling three random values.
+
+    # Arguments
+        shape: Image shape e.g. ''(H, W, 3)''.
+
+    # Returns
+        Numpy array of shape ''(H, W, 3)''.
+    """
     if len(shape) != 3:
         raise ValueError('``shape`` must have three values')
     return (np.ones(shape) * np.random.randint(0, 256, shape[-1]))
 
 
 def blend_alpha_channel(image, background):
+    """Blends image with background using an alpha channel.
+
+    # Arguments
+        image: Numpy array with alpha channel. Shape must be ''(H, W, 4)''
+        background: Numpy array of shape ''(H, W, 3)''.
+    """
     if image.shape[-1] != 4:
         raise ValueError('``image`` does not contain an alpha mask.')
     foreground, alpha = np.split(image, [3], -1)
@@ -152,11 +252,29 @@ def blend_alpha_channel(image, background):
 
 
 def concatenate_alpha_mask(image, alpha_mask):
+    """Concatenates alpha mask to image.
+
+    # Arguments
+        image: Numpy array of shape ''(H, W, 3)''.
+        alpha_mask: Numpy array array of shape ''(H, W)''.
+
+    # Returns
+        Numpy array of shape ''(H, W, 4)''.
+    """
     alpha_mask = np.expand_dims(alpha_mask, axis=-1)
     return np.concatenate([image, alpha_mask], axis=2)
 
 
 def split_and_normalize_alpha_channel(image):
+    """Splits alpha channel from an RGBA image and normalizes alpha channel.
+
+    # Arguments
+        image: Numpy array of shape ''(H, W, 4)''.
+
+    # Returns
+        List of two numpy arrays containing respectively the image and the
+            alpha channel.
+    """
     if image.shape[-1] != 4:
         raise ValueError('Provided image does not contain alpha mask.')
     image, alpha_channel = np.split(image, [3], -1)
@@ -165,13 +283,39 @@ def split_and_normalize_alpha_channel(image):
 
 
 def gaussian_image_blur(image, kernel_size=(5, 5)):
+    """Applies Gaussian blur to an image.
+
+    # Arguments
+        image: Numpy array of shape ''(H, W, 4)''.
+        kernel_size: List of two ints e.g. ''(5, 5)''.
+
+    # Returns
+        Numpy array
+    """
     return cv2.GaussianBlur(image, kernel_size, 0)
 
 
 def median_image_blur(image, apperture=5):
+    """Applies median blur to an image.
+
+    # Arguments
+        image: Numpy array of shape ''(H, W, 3)''.
+        apperture. Int.
+
+    # Returns
+        Numpy array.
+    """
     return cv2.medianBlur(image, apperture)
 
 
 def random_image_blur(image):
+    """Applies random choice blur.
+
+    # Arguments
+        image: Numpy array of shape ''(H, W, 3)''.
+
+    # Returns
+        Numpy array.
+    """
     blur = np.random.choice([gaussian_image_blur, median_image_blur])
     return blur(image)

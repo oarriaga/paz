@@ -6,7 +6,7 @@ class Box2D(object):
 
     # Properties
         coordinates: List of float/integers indicating the
-            [x_min, y_min, x_max, y_max] coordinates.
+            ``[x_min, y_min, x_max, y_max]`` coordinates.
         score: Float. Indicates the score of label associated to the box.
         class_name: String indicating the class label name of the object.
 
@@ -88,11 +88,17 @@ class Box2D(object):
 
 class Pose6D(object):
     """ Pose estimation results with 6D coordinates.
+
         # Properties
             quaternion: List of 4 floats indicating (w, x, y, z) components.
             translation: List of 3 floats indicating (x, y, z)
                 translation components.
-            class_name: String indicating the class label name of the object.
+            class_name: String or ``None`` indicating the class label name of
+                the object.
+
+        # Class Methods
+            from_rotation_vector: Instantiates a ``Pose6D`` object using a
+                rotation and a translation vector.
     """
     def __init__(self, quaternion, translation, class_name=None):
         self.quaternion = quaternion
