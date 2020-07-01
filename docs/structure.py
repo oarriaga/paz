@@ -16,7 +16,6 @@ from paz.optimization import callbacks
 EXCLUDE = {}
 
 # TODO
-# backend.processors.standard.py
 # backend.datasets *
 # backend.pipelines *
 
