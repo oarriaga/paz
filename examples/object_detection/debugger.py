@@ -1,3 +1,4 @@
+import numpy as np
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
