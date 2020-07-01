@@ -35,7 +35,10 @@ def resize_image(image, size):
     # Returns
         Numpy array.
     """
-    return cv2.resize(image, size)
+    if(type(image) != np.ndarray):
+        raise ValueError("Recieved Image is not of type numpy array", type(image))
+    else:
+        return cv2.resize(image, size)
 
 
 def convert_color_space(image, flag):
