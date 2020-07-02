@@ -29,6 +29,14 @@ class RenderTwoViews(Processor):
 
 
 class RandomizeRenderedImage(SequentialProcessor):
+    """Performs alpha blending and data-augmentation to an image and
+        it's alpha channel.
+    image_paths: List of strings indicating the paths to the images used for
+        the background.
+    num_occlusions: Int. number of occlusions to be added to the image.
+    max_radius_scale: Float between [0, 1] indicating the maximum radius in
+        scale of the image size.
+    """
     def __init__(self, image_paths, num_occlusions=1, max_radius_scale=0.5):
         super(RandomizeRenderedImage, self).__init__()
         self.add(pr.ConcatenateAlphaMask())
