@@ -7,10 +7,12 @@ class SequenceExtra(Sequence):
     def __init__(self, pipeline, batch_size, as_list=False):
         if not isinstance(pipeline, SequentialProcessor):
             raise ValueError('``processor`` must be a ``SequentialProcessor``')
-        output_wrapper = pipeline.processors[-1]
+        self.output_wrapper = pipeline.processors[-1]
         self.pipeline = pipeline
-        self.inputs_name_to_shape = output_wrapper.inputs_name_to_shape
-        self.labels_name_to_shape = output_wrapper.labels_name_to_shape
+        self.inputs_name_to_shape = self.output_wrapper.inputs_name_to_shape
+        self.labels_name_to_shape = self.output_wrapper.labels_name_to_shape
+        self.ordered_input_names = self.output_wrapper.ordered_input_names
+        self.ordered_label_names = self.output_wrapper.ordered_label_names
         self.batch_size = batch_size
         self.as_list = as_list
 
@@ -38,8 +40,8 @@ class SequenceExtra(Sequence):
         labels = self.make_empty_batches(self.labels_name_to_shape)
         inputs, labels = self.process_batch(inputs, labels, batch_index)
         if self.as_list:
-            inputs = self._to_list(inputs, self.input_names)
-            labels = self._to_list(labels, self.label_names)
+            inputs = self._to_list(inputs, self.ordered_input_names)
+            labels = self._to_list(labels, self.ordered_label_names)
         return inputs, labels
 
     def process_batch(self, inputs, labels, batch_index=None):
@@ -67,7 +69,7 @@ class ProcessingSequence(SequenceExtra):
 
     def process_batch(self, inputs, labels, batch_index):
         unprocessed_batch = self._get_unprocessed_batch(self.data, batch_index)
-        
+
         for sample_arg, unprocessed_sample in enumerate(unprocessed_batch):
             sample = self.pipeline(unprocessed_sample.copy())
             self._place_sample(sample['inputs'], sample_arg, inputs)
