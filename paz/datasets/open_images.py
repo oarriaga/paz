@@ -19,6 +19,10 @@ class OpenImages(Loader):
         split: String determining the data split to load.
             e.g. `train`, `val` or `test`
         class_names: `all` or list. If list it should contain as elements
+            the strings of the class names.
+
+    # TODO
+        Allow selection of subset of class names.
     """
     def __init__(self, path, split='train', class_names='all'):
 
