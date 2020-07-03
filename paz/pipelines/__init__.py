@@ -11,10 +11,6 @@ from .detection import SingleShotInference
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
-from .keypoints import PredictKeypoints
-from .keypoints import KeypointInference
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage
-
-from .pose import PredictPoseFromKeypoints
