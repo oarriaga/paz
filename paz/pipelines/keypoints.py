@@ -4,9 +4,12 @@ from .. import processors as pr
 from .renderer import RenderTwoViews
 
 
-class KeypointSharedAugmentation(SequentialProcessor):
+class KeypointNetSharedAugmentation(SequentialProcessor):
+    """Wraps ''RenderTwoViews'' as a sequential processor for using it directly
+        with a ''paz.GeneratingSequence''.
+    """
     def __init__(self, renderer, size):
-        super(KeypointSharedAugmentation, self).__init__()
+        super(KeypointNetSharedAugmentation, self).__init__()
         self.renderer = renderer
         self.size = size
         self.add(RenderTwoViews(self.renderer))
@@ -18,24 +21,30 @@ class KeypointSharedAugmentation(SequentialProcessor):
 
 
 class KeypointNetInference(Processor):
+    """Performs inference from a ''KeypointNetShared'' model.
+    """
     def __init__(self, model, num_keypoints=None, radius=5):
         super(KeypointNetInference, self).__init__()
         self.num_keypoints, self.radius = num_keypoints, radius
         if self.num_keypoints is None:
             self.num_keypoints = model.output_shape[1]
 
+        preprocessing = SequentialProcessor()
+        preprocessing.add(pr.NormalizeImage())
+        preprocessing.add(pr.ExpandDims(axis=0))
         self.predict_keypoints = SequentialProcessor()
-        preprocessing = [pr.NormalizeImage(), pr.ExpandDims(axis=0)]
         self.predict_keypoints.add(pr.Predict(model, preprocessing))
         self.predict_keypoints.add(pr.SelectElement(0))
         self.predict_keypoints.add(pr.Squeeze(axis=0))
-        self.predict_keypoints.add(pr.DenormalizeKeypoints())
-        self.predict_keypoints.add(pr.RemoveKeypointsDepth())
+        self.postprocess_keypoints = SequentialProcessor()
+        self.postprocess_keypoints.add(pr.DenormalizeKeypoints())
+        self.postprocess_keypoints.add(pr.RemoveKeypointsDepth())
         self.draw = pr.DrawKeypoints2D(self.num_keypoints, self.radius, False)
         self.wrap = pr.WrapOutput(['image', 'keypoints'])
 
     def call(self, image):
         keypoints = self.predict_keypoints(image)
+        keypoints = self.postprocess_keypoints(keypoints, image)
         image = self.draw(image, keypoints)
         return self.wrap(image, keypoints)
 
