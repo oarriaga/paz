@@ -63,12 +63,16 @@ def solve_PNP(points3D, points2D, camera, solver):
     """Calculates 6D pose from 3D points and 2D keypoints correspondences.
 
     # Arguments
-        points: Numpy array of shape ``(num_points, 3)``.
+        points3D: Numpy array of shape ``(num_points, 3)``.
             3D points known in advance.
-        keypoints: Numpy array of shape ``(num_points, 2)``.
+        points2D: Numpy array of shape ``(num_points, 2)``.
             Predicted 2D keypoints of object.
-        camera_intrinsics: Numpy array of shape ``(3, 3)`` calculated from
-            the openCV calibrateCamera function.
+        camera: Instance of ''paz.backend.Camera'' containing as properties
+            the ''camera_intrinsics'' a Numpy array of shape ''(3, 3)''
+            usually calculated from the openCV ''calibrateCamera'' function,
+            and the ''distortion'' a Numpy array of shape ''(5)'' in which the
+            elements are usually obtained from the openCV
+            ''calibrateCamera'' function.
         solver: Flag from e.g openCV.SOLVEPNP_UPNP.
         distortion: Numpy array of shape of 5 elements calculated from
             the openCV calibrateCamera function.
