@@ -182,6 +182,8 @@ class SequenceWrapper(Processor):
         self.labels_info = labels_info
         self.inputs_name_to_shape = self._extract_name_to_shape(inputs_info)
         self.labels_name_to_shape = self._extract_name_to_shape(labels_info)
+        self.ordered_input_names = self._extract_ordered_names(inputs_info)
+        self.ordered_label_names = self._extract_ordered_names(labels_info)
         super(SequenceWrapper, self).__init__()
 
     def _extract_name_to_shape(self, info):
@@ -190,6 +192,14 @@ class SequenceWrapper(Processor):
             for key, value in values.items():
                 name_to_shape[key] = value
         return name_to_shape
+
+    def _extract_ordered_names(self, info):
+        arguments = list(info.keys())
+        arguments.sort()
+        names = []
+        for argument in arguments:
+            names.append(list(info[argument].keys())[0])
+        return names
 
     def _wrap(self, args, info):
         wrap = {}
