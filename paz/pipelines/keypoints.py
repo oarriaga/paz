@@ -7,6 +7,10 @@ from .renderer import RenderTwoViews
 class KeypointNetSharedAugmentation(SequentialProcessor):
     """Wraps ''RenderTwoViews'' as a sequential processor for using it directly
         with a ''paz.GeneratingSequence''.
+
+    # Arguments
+        renderer: ''RenderTwoViews'' processor.
+        size: Image size.
     """
     def __init__(self, renderer, size):
         super(KeypointNetSharedAugmentation, self).__init__()
@@ -22,6 +26,12 @@ class KeypointNetSharedAugmentation(SequentialProcessor):
 
 class KeypointNetInference(Processor):
     """Performs inference from a ''KeypointNetShared'' model.
+
+    # Arguments
+        model: Keras model for predicting keypoints.
+        num_keypoints: Int or None. If None ''num_keypoints'' is
+            tried to be inferred from ''model.output_shape''
+        radius: Int. used for drawing the predicted keypoints.
     """
     def __init__(self, model, num_keypoints=None, radius=5):
         super(KeypointNetInference, self).__init__()
@@ -47,29 +57,3 @@ class KeypointNetInference(Processor):
         keypoints = self.postprocess_keypoints(keypoints, image)
         image = self.draw(image, keypoints)
         return self.wrap(image, keypoints)
-
-
-class PredictKeypoints(SequentialProcessor):
-    def __init__(self, model):
-        super(PredictKeypoints, self).__init__()
-        self.size = model.input_shape[1:3]
-        self.preprocess = SequentialProcessor(
-            [pr.ResizeImage(self.size), pr.NormalizeImage(), pr.ExpandDims(0)])
-        self.add(pr.Predict(model, self.preprocess))
-        self.add(pr.Squeeze(axis=0))
-        self.add(pr.DenormalizeKeypoints())
-
-
-class KeypointInference(Processor):
-    def __init__(self, model, num_keypoints=None, radius=5):
-        super(KeypointInference, self).__init__()
-        self.num_keypoints, self.radius = num_keypoints, radius
-        if self.num_keypoints is None:
-            self.num_keypoints = model.output_shape[1]
-        self.predict_keypoints = PredictKeypoints(model)
-        self.draw = pr.DrawKeypoints2D(self.num_keypoints, self.radius, False)
-        self.wrap = pr.WrapOutput(['image', 'keypoints'])
-
-    def call(self, image):
-        keypoints = self.predict_keypoints(image)
-        image = self.draw(image, keypoints)
