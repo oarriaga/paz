@@ -45,7 +45,7 @@ class AugmentDetection(SequentialProcessor):
             or ''paz.processors.TEST''. Certain transformations would take
             place depending on the flag.
         num_classes: Int.
-        size: Int.
+        size: Int. Image size.
         mean: List of three elements indicating the per channel mean.
         IOU: Float. Intersection over union used to match boxes.
         variances: List of two floats indicating variances to be encoded

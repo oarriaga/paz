@@ -9,7 +9,7 @@ from .detection import PreprocessBoxes
 from .detection import AugmentDetection
 from .detection import SingleShotInference
 
-from .keypoints import KeypointSharedAugmentation
+from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
 from .keypoints import PredictKeypoints
 from .keypoints import KeypointInference

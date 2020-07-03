@@ -9,11 +9,12 @@ import argparse
 
 from paz.models import KeypointNetShared
 from paz.models import Projector
-from paz.pipelines import KeypointNetInference
-from paz.pipelines import KeypointSharedAugmentation
+
 from paz.abstract import GeneratingSequence
 from paz.optimization import KeypointNetLoss
 from paz.optimization.callbacks import DrawInferences
+from paz.pipelines import KeypointNetSharedAugmentation
+from paz.pipelines import KeypointNetInference
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
@@ -33,7 +34,7 @@ parser.add_argument(
     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
-parser.add_argument('-nk', '--num_keypoints', default=10, type=int,
+parser.add_argument('-nk', '--num_keypoints', default=7, type=int,
                     help='Number of keypoints to be learned')
 parser.add_argument('-f', '--filters', default=64, type=int,
                     help='Number of filters in convolutional blocks')
@@ -97,10 +98,11 @@ scene = MultiView(args.obj_path, (args.image_size, args.image_size),
                   args.background, bool(args.smooth))
 focal_length = scene.camera.get_projection_matrix()[0, 0]
 
-# setting sequencer
+# setting sequence
 input_shape = (args.image_size, args.image_size, 3)
-processor = KeypointSharedAugmentation(scene, args.image_size)
-sequencer = GeneratingSequence(processor, args.batch_size, as_list=True)
+processor = KeypointNetSharedAugmentation(scene, args.image_size)
+sequence = GeneratingSequence(processor, args.batch_size,
+                              args.steps_per_epoch, True)
 
 # model instantiation
 model = KeypointNetShared(input_shape, args.num_keypoints,
@@ -136,8 +138,8 @@ stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
 plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
 inferencer = KeypointNetInference(
     model.get_layer('keypointnet'), args.num_keypoints)
-images = (sequencer.__getitem__(0)[0][0] * 255).astype('uint8')
-draw = DrawInferences(save_path, images, inferencer)
+images = (sequence.__getitem__(0)[0][0] * 255).astype('uint8')
+draw = DrawInferences(save_path, images, inferencer, 'image')
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 save = ModelCheckpoint(model_path, 'loss', verbose=1,
                        save_best_only=True, save_weights_only=True)
@@ -150,7 +152,7 @@ with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
 
 # model optimization
 model.fit_generator(
-    sequencer,
+    sequence,
     steps_per_epoch=args.steps_per_epoch,
     epochs=args.max_num_epochs,
     callbacks=[stop, log, save, plateau, draw],
@@ -165,10 +167,10 @@ model = model.get_layer('keypointnet')
 keypoints_set, projector = [], Projector(focal_length, True)
 print('Calculating mean and variance of discovered keypoints...')
 num_forward_passes = args.num_mean_samples
-sequencer.batch_size = 1   # changing batch size of sequencer
+sequence.batch_size = 1   # changing batch size of sequence
 progress_bar = Progbar(num_forward_passes)
 for batch_arg in range(num_forward_passes):
-    (image_A, image_B), (matrices, labels) = sequencer.__getitem__(batch_arg)
+    (image_A, image_B), (matrices, labels) = sequence.__getitem__(batch_arg)
     matrices = matrices[0].reshape(4, 4, 4)
     world_to_A, A_to_world = matrices[0], matrices[2]
     keypoints = model.predict(image_A)[0]
