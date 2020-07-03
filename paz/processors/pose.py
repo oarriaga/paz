@@ -10,10 +10,12 @@ class SolvePNP(Processor):
     # Arguments
         model_points: Numpy array of shape ''(num_points, 3)''.
             Model 3D points known in advance.
-        camera_intrinsics: Numpy array of shape ''(3, 3)'' calculated from
-            the openCV calibrateCamera function.
-        distortion: Numpy array of shape ''(5)'' elements calculated from
-            the openCV calibrateCamera function.
+        camera: Instance of ''paz.backend.Camera'' containing as properties
+            the ''camera_intrinsics'' a Numpy array of shape ''(3, 3)''
+            usually calculated from the openCV ''calibrateCamera'' function,
+            and the ''distortion'' a Numpy array of shape ''(5)'' in which the
+            elements are usually obtained from the openCV
+            ''calibrateCamera'' function.
 
     # Returns
         Instance from ''Pose6D'' message.
