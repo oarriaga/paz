@@ -1,7 +1,7 @@
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
-# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-# os.environ["PYOPENGL_PLATFORM"] = 'egl'
+os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["PYOPENGL_PLATFORM"] = 'egl'
 from distutils.util import strtobool
 
 import json
@@ -13,8 +13,8 @@ from paz.models import Projector
 from paz.abstract import GeneratingSequence
 from paz.optimization import KeypointNetLoss
 from paz.optimization.callbacks import DrawInferences
-from paz.pipelines import KeypointNetSharedAugmentation
-from paz.pipelines import KeypointNetInference
+from paz.pipelines.keypoints import KeypointNetSharedAugmentation
+from paz.pipelines.keypoints import KeypointNetInference
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
