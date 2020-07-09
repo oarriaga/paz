@@ -10,7 +10,8 @@ from ..backend.image import resize_image
 
 
 class FERPlus(Loader):
-    """Class for loading FER2013 [1] emotion classification dataset.
+    """Class for loading FER2013 emotion classification dataset.
+        with FERPlus labels.
     # Arguments
         path: String. Path to directory that has inside the files:
             `fer2013.csv` and  `fer2013new.csv`
@@ -21,8 +22,9 @@ class FERPlus(Loader):
             the image will be resized.
 
     # References
-    [1] kaggle.com/c/challenges-in-representation-learning-facial-\
-            expression-recognition-challenge
+        - [FerPlus](https://www.kaggle.com/c/challenges-in-representation-\
+                learning-facial-expression-recognition-challenge/data)
+        - [FER2013](https://arxiv.org/abs/1608.01041)
     """
     def __init__(self, path, split='train', class_names='all',
                  image_size=(48, 48)):

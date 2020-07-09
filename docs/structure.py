@@ -12,14 +12,13 @@ from paz import models
 from paz import processors
 from paz.optimization import losses
 from paz.optimization import callbacks
+from paz import datasets
+from paz import pipelines
 
 EXCLUDE = {}
 
 # TODO
-# backend.datasets *
 # backend.pipelines *
-
-# KeypointNet loss parts.
 
 PAGES = [
     {
@@ -158,6 +157,19 @@ PAGES = [
             models.layers.ExpectedDepth
         ],
     },
+
+
+    {
+        'page': 'datasets.md',
+        'classes': [
+            datasets.VOC,
+            datasets.FAT,
+            datasets.FER,
+            datasets.FERPlus,
+            datasets.OpenImages
+        ],
+    },
+
 
 
     {
@@ -306,6 +318,25 @@ PAGES = [
         ]
     },
 
+
+    {
+        'page': 'pipelines.md',
+        'classes': [
+            pipelines.AugmentBoxes,
+            pipelines.AugmentDetection,
+            pipelines.AugmentImage,
+            pipelines.AutoEncoderPredictor,
+            pipelines.DecoderPredictor,
+            pipelines.EncoderPredictor,
+            pipelines.KeypointNetInference,
+            pipelines.KeypointNetSharedAugmentation,
+            pipelines.PreprocessBoxes,
+            pipelines.PreprocessImage,
+            pipelines.RandomizeRenderedImage,
+            pipelines.RenderTwoViews,
+            pipelines.SingleShotInference
+        ]
+    },
 
 
     {

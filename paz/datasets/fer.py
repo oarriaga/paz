@@ -7,7 +7,7 @@ from ..backend.image import resize_image
 
 
 class FER(Loader):
-    """Class for loading FER2013 [1] emotion classification dataset.
+    """Class for loading FER2013 emotion classification dataset.
     # Arguments
         path: String. Full path to fer2013.csv file.
         split: String. Valid option contain 'train', 'val' or 'test'.
@@ -17,8 +17,8 @@ class FER(Loader):
             the image will be resized.
 
     # References
-    [1] kaggle.com/c/challenges-in-representation-learning-facial-\
-            expression-recognition-challenge
+        -[FER2013 Dataset and Challenge](kaggle.com/c/challenges-in-\
+            representation-learning-facial-expression-recognition-challenge)
     """
 
     def __init__(

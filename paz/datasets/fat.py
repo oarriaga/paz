@@ -21,10 +21,11 @@ class FAT(Loader):
             strings indicating each class name.
 
     # References
-        [1] https://github.com/NVlabs/Deep_Object_Pose (DOPE)
+        - [Deep Object Pose
+            Estimation (DOPE)](https://github.com/NVlabs/Deep_Object_Pose)
 
     # TODO
-        One can't select to train only a subset of the class_names.
+        Allow selection of class_names.
     """
     def __init__(self, path, split='train', class_names='all'):
         if class_names == 'all':
