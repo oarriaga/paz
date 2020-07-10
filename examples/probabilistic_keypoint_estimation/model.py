@@ -9,7 +9,7 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow_probability import distributions as tfd
 from tensorflow_probability import layers as tfpl
 
-from paz.core.ops import normalize_keypoints
+from paz.backend.keypoints import normalize_keypoints
 
 
 def GaussianMixtureDistribution(X):
