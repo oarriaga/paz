@@ -6,18 +6,17 @@ from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 
-from paz.pipelines import KeypointAugmentation
-from paz.pipelines import KeypointInference
-from paz.core.sequencer import GeneratingSequencer
-from paz.optimization.callbacks import DrawInferences
+from paz.abstract import ProcessingSequence
 
-from models import GaussianMixture
+from facial_keypoints import FacialKeypoints
+from pipelines import AugmentKeypoints
+from model import GaussianMixtureModel
 
 description = 'Training script for learning 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-f', '--filters', default=64, type=int,
+parser.add_argument('-f', '--filters', default=32, type=int,
                     help='Number of filters in convolutional blocks')
-parser.add_argument('-b', '--batch_size', default=32, type=int,
+parser.add_argument('-b', '--batch_size', default=10, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
@@ -29,8 +28,14 @@ parser.add_argument('-e', '--max_num_epochs', default=10000, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-se', '--steps_per_epoch', default=1000, type=int,
                     help='Steps per epoch')
-parser.add_argument('-o', '--num_occlusions', default=2, type=int,
-                    help='Number of occlusions')
+parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
+                    help='Number of keypoints')
+parser.add_argument('-ds', '--delta_scales', default=0.2, type=float,
+                    help='Delta scales')
+parser.add_argument('-is', '--image_size', default=96, type=int,
+                    help='Image size')
+parser.add_argument('-r', '--rotation_range', default=30, type=float,
+                    help='Rotation range')
 parser.add_argument('-s', '--save_path',
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/models'),
@@ -44,34 +49,35 @@ def negative_log_likelihood(y_true, predicted_distributions):
     return - log_likelihood
 
 
-with_partition = True
-batch_shape = (args.batch_size, args.image_size, args.image_size, 3)
-loss = negative_log_likelihood
-model = GaussianMixture(batch_shape, num_keypoints)
+# loading training dataset
+data_manager = FacialKeypoints('dataset/', 'train')
+train_data = data_manager.load_data()
 
+# instantiate keypoint augmentation
+delta_scales = [args.delta_scales, args.delta_scales]
+processor = AugmentKeypoints(args.rotation_range, delta_scales,
+                             True, args.num_keypoints)
+
+print(processor(train_data[0]))
+
+# creating sequencer
+sequence = ProcessingSequence(processor, args.batch_size, train_data, False)
+batch_shape = (args.batch_size, args.image_size, args.image_size, 1)
+
+# instantiate model
+model = GaussianMixtureModel(batch_shape, args.num_keypoints)
+model.summary()
 
 # setting optimizer and compiling model
 optimizer = Adam(args.learning_rate, amsgrad=True)
-model.compile(optimizer, loss=loss)
+model.compile(optimizer, loss=negative_log_likelihood)
 model.summary()
 
-
-# setting scene
-processor = KeypointAugmentation(renderer, projector, keypoints, 'train',
-                                 image_paths, args.image_size, with_partition,
-                                 args.num_occlusions)
-
-
-# creating sequencer
-sequencer = GeneratingSequencer(processor, args.batch_size)
-
-
 # making directory for saving model weights and logs
-model_name = '_'.join([model.name, str(len(keypoints)), args.class_name])
+model_name = '_'.join(['FaceKP', model.name, str(args.num_keypoints)])
 save_path = os.path.join(args.save_path, model_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path)
-
 
 # setting callbacks
 log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
@@ -80,10 +86,6 @@ plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 save = ModelCheckpoint(model_path, 'loss', verbose=1,
                        save_best_only=True, save_weights_only=True)
-images = (sequencer.__getitem__(0)[0]['image'] * 255).astype('uint8')
-inferencer = KeypointInference(model, num_keypoints)
-draw = DrawInferences(save_path, images, inferencer)
-
 
 # saving hyper-parameters and model summary as text files
 with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
@@ -91,12 +93,11 @@ with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
 with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
-
 # model optimization
 model.fit_generator(
-    sequencer,
+    sequence,
     steps_per_epoch=args.steps_per_epoch,
     epochs=args.max_num_epochs,
-    callbacks=[stop, log, save, plateau, draw],
+    callbacks=[stop, log, save, plateau],
     verbose=1,
     workers=0)
