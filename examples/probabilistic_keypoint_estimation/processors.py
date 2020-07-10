@@ -155,10 +155,21 @@ class RandomKeypointRotation(Processor):
             color values e.g. ''[0, 0, 0]''. If ''None'' mean channel values of
             the image will be calculated as fill values.
     """
-    def __init__(self, rotation_range=30, fill_color=None, **kwargs):
-        super(RandomKeypointRotation, self).__init__(**kwargs)
+    def __init__(self, rotation_range=30, fill_color=None, probability=0.5):
+        super(RandomKeypointRotation, self).__init__()
         self.rotation_range = rotation_range
         self.fill_color = fill_color
+        self.probability = probability
+
+    @property
+    def probability(self):
+        return self._probability
+
+    @probability.setter
+    def probability(self, value):
+        if not (0.0 < value <= 1.0):
+            raise ValueError('Probability should be between "[0, 1]".')
+        self._probability = value
 
     def _calculate_image_center(self, image):
         return (int(image.shape[0] / 2), int(image.shape[1] / 2))
@@ -185,12 +196,16 @@ class RandomKeypointRotation(Processor):
         keypoints = keypoints + image_center
         return keypoints
 
+    def _sample_rotation(self, rotation_range):
+        return np.random.uniform(-rotation_range, rotation_range)
+
     def call(self, image, keypoints):
-        degrees = np.random.uniform(-self.rotation_range, self.rotation_range)
-        image = self._rotate_image(image, degrees)
-        image_center = self._calculate_image_center(image)
-        radians = self._degrees_to_radians(degrees)
-        keypoints = self._rotate_keypoints(keypoints, radians, image_center)
+        if self.probability >= np.random.rand():
+            degrees = self._sample_rotation(self.rotation_range)
+            image = self._rotate_image(image, degrees)
+            center = self._calculate_image_center(image)
+            radians = self._degrees_to_radians(degrees)
+            keypoints = self._rotate_keypoints(keypoints, radians, center)
         return image, keypoints
 
 
@@ -203,17 +218,16 @@ def draw_circles(image, points, color=GREEN, radius=3):
 if __name__ == '__main__':
     from facial_keypoints import FacialKeypoints
     from paz.backend.image import show_image
+    from paz.abstract import SequentialProcessor
 
     data_manager = FacialKeypoints('dataset/', 'train')
     faces, keypoints = data_manager.load_data()
     image, keypoints_set = faces[0], keypoints[0]
-    # image = draw_circles(original_image.copy(), keypoints_set.astype('int'))
-    # show_image(image.astype('uint8'))
-    rotate_keypoints = RandomKeypointRotation(30)
-    random_translate = RandomKeypointTranslation(probability=1)
+    augment_keypoints = SequentialProcessor()
+    augment_keypoints.add(RandomKeypointRotation())
+    augment_keypoints.add(RandomKeypointTranslation())
     for arg in range(100):
         original_image, kp = image.copy(), keypoints_set.copy()
-        original_image, kp = rotate_keypoints(original_image, kp)
-        original_image, kp = random_translate(original_image, kp)
+        original_image, kp = augment_keypoints(original_image, kp)
         original_image = draw_circles(original_image, kp.astype('int'))
         show_image(original_image.astype('uint8'))
