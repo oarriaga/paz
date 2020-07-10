@@ -221,13 +221,13 @@ if __name__ == '__main__':
     from paz.abstract import SequentialProcessor
 
     data_manager = FacialKeypoints('dataset/', 'train')
-    faces, keypoints = data_manager.load_data()
-    image, keypoints_set = faces[0], keypoints[0]
+    datasets = data_manager.load_data()
     augment_keypoints = SequentialProcessor()
     augment_keypoints.add(RandomKeypointRotation())
     augment_keypoints.add(RandomKeypointTranslation())
     for arg in range(100):
-        original_image, kp = image.copy(), keypoints_set.copy()
+        original_image = datasets[0]['image'].copy()
+        kp = datasets[0]['keypoints'].copy()
         original_image, kp = augment_keypoints(original_image, kp)
         original_image = draw_circles(original_image, kp.astype('int'))
         show_image(original_image.astype('uint8'))
