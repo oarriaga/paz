@@ -24,19 +24,30 @@ class FacialKeypoints(Loader):
             keypoints[arg] = keypoint_set.to_numpy().reshape(15, 2)
         return keypoints
 
+    def _to_list_of_dictionaries(self, faces, keypoints=None):
+        dataset = []
+        for arg in range(len(faces)):
+            face, sample = faces[arg], {}
+            sample['image'] = face
+            if keypoints is not None:
+                sample['keypoints'] = keypoints[arg]
+            dataset.append(sample)
+        return dataset
+
     def load_data(self):
         data_frame = pd.read_csv(self.path)
         data_frame.fillna(method='ffill', inplace=True)
         faces = self._load_faces(data_frame)
         if self.split == 'train':
             keypoints = self._load_keypoints(data_frame)
-            return faces, keypoints
+            dataset = self._to_list_of_dictionaries(faces, keypoints)
         else:
-            return faces
+            dataset = self._to_list_of_dictionaries(faces, None)
+        return dataset
 
 
 if __name__ == '__main__':
     path = 'dataset/'
     split = 'train'
     data_manager = FacialKeypoints(path, split)
-    faces, keypoints = data_manager.load_data()
+    dataset = data_manager.load_data()
