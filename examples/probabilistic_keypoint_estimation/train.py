@@ -58,20 +58,17 @@ delta_scales = [args.delta_scales, args.delta_scales]
 processor = AugmentKeypoints(args.rotation_range, delta_scales,
                              True, args.num_keypoints)
 
-print(processor(train_data[0]))
-
 # creating sequencer
 sequence = ProcessingSequence(processor, args.batch_size, train_data, True)
 batch_shape = (args.batch_size, args.image_size, args.image_size, 1)
 
 # instantiate model
-model = GaussianMixtureModel(batch_shape, args.num_keypoints)
+model = GaussianMixtureModel(batch_shape, args.num_keypoints, args.filters)
 model.summary()
 
 # setting optimizer and compiling model
 optimizer = Adam(args.learning_rate, amsgrad=True)
 model.compile(optimizer, loss=negative_log_likelihood)
-model.summary()
 
 # making directory for saving model weights and logs
 model_name = '_'.join(['FaceKP', model.name, str(args.num_keypoints)])
