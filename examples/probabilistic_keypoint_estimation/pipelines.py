@@ -27,7 +27,8 @@ class AugmentKeypoints(SequentialProcessor):
             self.add(pr.ControlMap(PartitionKeypoints(), [1], outro_indices))
             labels_info = {}
             for arg in range(num_keypoints):
-                labels_info[arg] = {'keypoint_%s' % arg: [2]}
+                labels_info[arg + 1] = {'keypoint_%s' % arg: [2]}
+            print(labels_info)
         self.add(pr.SequenceWrapper(
             {0: {'image': [96, 96, 1]}}, labels_info))
 
@@ -47,9 +48,11 @@ class PartitionKeypoints(Processor):
 
 
 if __name__ == '__main__':
+    from paz.abstract import ProcessingSequence
+
     data_manager = FacialKeypoints('dataset/', 'train')
     dataset = data_manager.load_data()
-    augment_keypoints = AugmentKeypoints()
+    augment_keypoints = AugmentKeypoints(with_partition=True)
     for arg in range(100):
         sample = dataset[arg]
         predictions = augment_keypoints(sample)
@@ -59,3 +62,5 @@ if __name__ == '__main__':
         original_image = draw_circles(
             original_image, kp.astype('int'))
         show_image(original_image.astype('uint8'))
+    sequence = ProcessingSequence(augment_keypoints, 32, dataset, True)
+    batch = sequence.__getitem__(0)
