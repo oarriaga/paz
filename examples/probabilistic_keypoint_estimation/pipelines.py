@@ -28,7 +28,6 @@ class AugmentKeypoints(SequentialProcessor):
             labels_info = {}
             for arg in range(num_keypoints):
                 labels_info[arg + 1] = {'keypoint_%s' % arg: [2]}
-            print(labels_info)
         self.add(pr.SequenceWrapper(
             {0: {'image': [96, 96, 1]}}, labels_info))
 
