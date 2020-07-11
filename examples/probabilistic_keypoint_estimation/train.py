@@ -61,7 +61,7 @@ processor = AugmentKeypoints(args.rotation_range, delta_scales,
 print(processor(train_data[0]))
 
 # creating sequencer
-sequence = ProcessingSequence(processor, args.batch_size, train_data, False)
+sequence = ProcessingSequence(processor, args.batch_size, train_data, True)
 batch_shape = (args.batch_size, args.image_size, args.image_size, 1)
 
 # instantiate model
