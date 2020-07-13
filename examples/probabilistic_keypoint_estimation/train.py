@@ -16,7 +16,7 @@ description = 'Training script for learning 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-f', '--filters', default=32, type=int,
                     help='Number of filters in convolutional blocks')
-parser.add_argument('-b', '--batch_size', default=10, type=int,
+parser.add_argument('-b', '--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
