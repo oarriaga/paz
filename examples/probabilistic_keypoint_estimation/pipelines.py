@@ -10,11 +10,11 @@ from paz.abstract import Processor
 
 
 class AugmentKeypoints(SequentialProcessor):
-    def __init__(self, split, rotation_range=30, delta_scales=[0.2, 0.2],
+    def __init__(self, phase, rotation_range=30, delta_scales=[0.2, 0.2],
                  with_partition=False, num_keypoints=15):
         super(AugmentKeypoints, self).__init__()
         self.add(pr.UnpackDictionary(['image', 'keypoints']))
-        if split == 'train':
+        if phase == 'train':
             self.add(pr.ControlMap(pr.RandomBrightness()))
             self.add(pr.ControlMap(pr.RandomContrast()))
             self.add(RandomKeypointRotation(rotation_range))
