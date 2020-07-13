@@ -26,8 +26,6 @@ parser.add_argument('-pp', '--plateau_patience', default=3, type=int,
                     help='Number of epochs before reducing learning rate')
 parser.add_argument('-e', '--max_num_epochs', default=10000, type=int,
                     help='Maximum number of epochs before finishing')
-parser.add_argument('-se', '--steps_per_epoch', default=1000, type=int,
-                    help='Steps per epoch')
 parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
                     help='Number of keypoints')
 parser.add_argument('-ds', '--delta_scales', default=0.2, type=float,
@@ -36,6 +34,8 @@ parser.add_argument('-is', '--image_size', default=96, type=int,
                     help='Image size')
 parser.add_argument('-r', '--rotation_range', default=30, type=float,
                     help='Rotation range')
+parser.add_argument('-vs', '--validation_split', default=0.2, type=float,
+                    help='Fraction of the training set used for validation')
 parser.add_argument('-s', '--save_path',
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/models'),
@@ -43,28 +43,39 @@ parser.add_argument('-s', '--save_path',
 args = parser.parse_args()
 
 
+# loading training dataset
+data_manager = FacialKeypoints('dataset/', 'train')
+data = data_manager.load_data()
+
+# split training data-set into train and validation
+num_train_samples = int(len(data) * (1 - args.validation_split))
+datasets = {'train': data[:num_train_samples],
+            'validation': data[num_train_samples:]}
+
+# instantiate keypoint augmentations
+delta_scales = [args.delta_scales, args.delta_scales]
+processor = {}
+for phase in ['train', 'validation']:
+    processor[phase] = AugmentKeypoints(
+        phase, args.rotation_range, delta_scales, True, args.num_keypoints)
+
+# creating sequencers
+sequence = {}
+for phase in ['train', 'validation']:
+    pipeline, data = processor[phase], datasets[phase]
+    sequence[phase] = ProcessingSequence(pipeline, args.batch_size, data, True)
+
+# instantiate model
+batch_shape = (args.batch_size, args.image_size, args.image_size, 1)
+model = GaussianMixtureModel(batch_shape, args.num_keypoints, args.filters)
+model.summary()
+
+
 # creating loss function for gaussian mixture model
 def negative_log_likelihood(y_true, predicted_distributions):
     log_likelihood = predicted_distributions.log_prob(y_true)
     return - log_likelihood
 
-
-# loading training dataset
-data_manager = FacialKeypoints('dataset/', 'train')
-train_data = data_manager.load_data()
-
-# instantiate keypoint augmentation
-delta_scales = [args.delta_scales, args.delta_scales]
-processor = AugmentKeypoints(args.rotation_range, delta_scales,
-                             True, args.num_keypoints)
-
-# creating sequencer
-sequence = ProcessingSequence(processor, args.batch_size, train_data, True)
-batch_shape = (args.batch_size, args.image_size, args.image_size, 1)
-
-# instantiate model
-model = GaussianMixtureModel(batch_shape, args.num_keypoints, args.filters)
-model.summary()
 
 # setting optimizer and compiling model
 optimizer = Adam(args.learning_rate, amsgrad=True)
@@ -78,11 +89,11 @@ if not os.path.exists(save_path):
 
 # setting callbacks
 log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
-stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
-plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
+stop = EarlyStopping(patience=args.stop_patience, verbose=1)
+plateau = ReduceLROnPlateau(patience=args.plateau_patience, verbose=1)
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
-save = ModelCheckpoint(model_path, 'loss', verbose=1,
-                       save_best_only=True, save_weights_only=True)
+save = ModelCheckpoint(model_path, verbose=1, save_best_only=True,
+                       save_weights_only=True)
 
 # saving hyper-parameters and model summary as text files
 with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
@@ -91,10 +102,9 @@ with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
 # model optimization
-model.fit_generator(
-    sequence,
-    steps_per_epoch=args.steps_per_epoch,
+model.fit(
+    sequence['train'],
     epochs=args.max_num_epochs,
     callbacks=[stop, log, save, plateau],
-    verbose=1,
-    workers=0)
+    validation_data=sequence['validation'],
+    verbose=1)
