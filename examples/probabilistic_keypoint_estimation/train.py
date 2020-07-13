@@ -102,7 +102,7 @@ with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
 # model optimization
-model.fit(
+model.fit_generator(
     sequence['train'],
     epochs=args.max_num_epochs,
     callbacks=[stop, log, save, plateau],
