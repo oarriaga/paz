@@ -25,6 +25,7 @@ def draw_circle(image, point, color=GREEN, radius=5):
     inner_radius = int(.8 * radius)
     color = color[::-1]  # transform to BGR for openCV
     cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
+    return image
 
 
 def put_text(image, text, point, scale, color, thickness):
@@ -41,6 +42,7 @@ def put_text(image, text, point, scale, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with text.
     """
+    # cv2.putText returns an image in contrast to other drawing cv2 functions.
     return cv2.putText(image, text, point, FONT, scale, color, thickness, LINE)
 
 
@@ -59,6 +61,7 @@ def draw_line(image, point_A, point_B, color=GREEN, thickness=5):
     """
     color = color[::-1]  # transform to BGR for openCV
     cv2.line(image, tuple(point_A), tuple(point_B), tuple(color), thickness)
+    return image
 
 
 def draw_rectangle(image, corner_A, corner_B, color, thickness):
@@ -104,6 +107,7 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=True):
     point_A = (point[0] - inner_radius, point[1] - inner_radius)
     point_B = (point[0] + inner_radius, point[1] + inner_radius)
     draw_rectangle(image, tuple(point_A), tuple(point_B), color, filled)
+    return image
 
 
 def draw_cube(image, points, color=GREEN, thickness=2):
