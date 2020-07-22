@@ -21,8 +21,7 @@ def quaternion():
 
 @pytest.fixture
 def translation():
-    _translation = np.array([1.0, 0.765, 0])
-    return _translation
+    return np.array([1.0, 0.765, 0])
 
 
 @pytest.fixture
@@ -33,8 +32,7 @@ def rotation_vector():
 
 @pytest.fixture
 def quaternion_result():
-    result = np.array([0.45936268, -0.45684629, 0.04801626, 0.76024458])
-    return result
+    return np.array([0.45936268, -0.45684629, 0.04801626, 0.76024458])
 
 
 @pytest.mark.parametrize("test_point", [[256, 60], [219, 49]])
