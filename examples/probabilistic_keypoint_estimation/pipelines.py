@@ -1,14 +1,12 @@
-import numpy as np
-from facial_keypoints import FacialKeypoints
-from processors import RandomKeypointRotation, RandomKeypointTranslation
-from processors import draw_circles
-from paz.backend.image import show_image
 from paz.backend.keypoints import denormalize_keypoints
 from paz.abstract import SequentialProcessor
-from paz import processors as pr
 from paz.abstract import Processor
+from paz import processors as pr
 
-import tensorflow as tf
+
+from processors import PartitionKeypoints
+from processors import PredictMeanDistribution
+from processors import draw_circles
 
 
 class AugmentKeypoints(SequentialProcessor):
@@ -19,8 +17,8 @@ class AugmentKeypoints(SequentialProcessor):
         if phase == 'train':
             self.add(pr.ControlMap(pr.RandomBrightness()))
             self.add(pr.ControlMap(pr.RandomContrast()))
-            self.add(RandomKeypointRotation(rotation_range))
-            self.add(RandomKeypointTranslation(delta_scales))
+            self.add(pr.RandomKeypointRotation(rotation_range))
+            self.add(pr.RandomKeypointTranslation(delta_scales))
         self.add(pr.ControlMap(pr.NormalizeImage(), [0], [0]))
         self.add(pr.ControlMap(pr.ExpandDims(-1), [0], [0]))
         self.add(pr.ControlMap(pr.NormalizeKeypoints((96, 96)), [1], [1]))
@@ -33,47 +31,6 @@ class AugmentKeypoints(SequentialProcessor):
                 labels_info[arg + 1] = {'keypoint_%s' % arg: [2]}
         self.add(pr.SequenceWrapper(
             {0: {'image': [96, 96, 1]}}, labels_info))
-
-
-class PartitionKeypoints(Processor):
-    """Partitions keypoints from shape ''[num_keypoints, 2]'' into a list of
-        the form ''[(2, 1), (2, 1), ....]'' and length equal to the number of
-        of_keypoints.
-    """
-    def __init__(self):
-        super(PartitionKeypoints, self).__init__()
-
-    def call(self, keypoints):
-        keypoints = np.vsplit(keypoints, len(keypoints))
-        keypoints = [np.squeeze(keypoint) for keypoint in keypoints]
-        return (*keypoints, )
-
-
-class ToNumpyArray(Processor):
-    def __init__(self):
-        super(ToNumpyArray, self).__init__()
-
-    def call(self, predictions):
-        return np.array(predictions)
-
-
-class PredictMeanDistribution(Processor):
-    def __init__(self, model, preprocess=None):
-        super(PredictMeanDistribution, self).__init__()
-        print('Building graph...')
-        self.num_keypoints = len(model.output_shape)
-        # self.model = tf.function(model.mean)
-        self.model = model
-        self.preprocess = preprocess
-
-    def call(self, x):
-        if self.preprocess is not None:
-            x = self.preprocess(x)
-        distributions = self.model(x)
-        keypoints = np.zeros((self.num_keypoints, 2))
-        for arg, distribution in enumerate(distributions):
-            keypoints[arg] = distribution.mean()
-        return keypoints
 
 
 class ProbabilisticKeypointPrediction(Processor):
@@ -125,6 +82,9 @@ class ProbabilisticKeypointPrediction(Processor):
 
 if __name__ == '__main__':
     from paz.abstract import ProcessingSequence
+    from paz.backend.image import show_image
+
+    from facial_keypoints import FacialKeypoints
 
     data_manager = FacialKeypoints('dataset/', 'train')
     dataset = data_manager.load_data()
