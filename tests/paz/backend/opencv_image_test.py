@@ -76,9 +76,9 @@ def test_flip_left_right(load_image, image_shape, rgb_channel):
     assert np.all(image_filp == flipped_image)
 
 
-def test_gaussian_blur_output_shape(load_image, image_shape, rgb_channel):
+def test_gaussian_image_blur_output_shape(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
-    blurred = opencv_image.gaussian_blur(test_image)
+    blurred = opencv_image.gaussian_image_blur(test_image)
     assert test_image.shape == blurred.shape
 
 
