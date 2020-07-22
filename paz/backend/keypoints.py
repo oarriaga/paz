@@ -100,3 +100,16 @@ def project_points3D(points3D, pose6D, camera):
         points3D, pose6D.rotation_vector, pose6D.translation,
         camera.intrinsics, camera.distortion)
     return point2D
+
+
+def translate_keypoints(keypoints, translation):
+    """Translate keypoints.
+
+    # Arguments
+        kepoints: Numpy array of shape ``(num_keypoints, 2)``.
+        translation: A list of length two indicating the x,y translation values
+
+    # Returns
+        Numpy array
+    """
+    return keypoints + translation

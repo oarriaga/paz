@@ -24,6 +24,9 @@ from .opencv_image import split_and_normalize_alpha_channel
 from .opencv_image import gaussian_image_blur
 from .opencv_image import median_image_blur
 from .opencv_image import random_image_blur
+from .opencv_image import translate_image
+from .opencv_image import sample_scaled_translation
+from .opencv_image import get_rotation_matrix
 
 from .draw import draw_random_polygon
 from .draw import draw_circle

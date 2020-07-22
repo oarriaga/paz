@@ -51,7 +51,8 @@ PAGES = [
             keypoints.denormalize_keypoints,
             keypoints.normalize_keypoints,
             keypoints.project_points3D,
-            keypoints.solve_PNP
+            keypoints.solve_PNP,
+            keypoints.translate_keypoints
         ],
     },
 
@@ -115,7 +116,10 @@ PAGES = [
             opencv_image.split_and_normalize_alpha_channel,
             opencv_image.gaussian_image_blur,
             opencv_image.median_image_blur,
-            opencv_image.random_image_blur
+            opencv_image.random_image_blur,
+            opencv_image.translate_image,
+            opencv_image.sample_scaled_translation,
+            opencv_image.get_rotation_matrix
         ],
     },
 
@@ -217,7 +221,8 @@ PAGES = [
             processors.MakeRandomPlainImage,
             processors.ConcatenateAlphaMask,
             processors.BlendRandomCroppedBackground,
-            processors.AddOcclusion
+            processors.AddOcclusion,
+            processors.TranslateImage
         ]
     },
 
@@ -241,7 +246,9 @@ PAGES = [
             processors.ToNormalizedBoxCoordinates,
             processors.RandomSampleCrop,
             processors.ApplyRandomTranslation,
-            processors.ApplyRandomTranslation
+            processors.ApplyRandomTranslation,
+            processors.RandomKeypointTranslation,
+            processors.RandomKeypointRotation
         ]
     },
 
@@ -276,7 +283,8 @@ PAGES = [
             processors.NormalizeKeypoints,
             processors.PartitionKeypoints,
             processors.ProjectKeypoints,
-            processors.RemoveKeypointsDepth
+            processors.RemoveKeypointsDepth,
+            processors.TranslateKeypoints
         ]
     },
 

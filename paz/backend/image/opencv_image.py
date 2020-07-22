@@ -36,7 +36,8 @@ def resize_image(image, size):
         Numpy array.
     """
     if(type(image) != np.ndarray):
-        raise ValueError("Recieved Image is not of type numpy array", type(image))
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
     else:
         return cv2.resize(image, size)
 
@@ -319,3 +320,48 @@ def random_image_blur(image):
     """
     blur = np.random.choice([gaussian_image_blur, median_image_blur])
     return blur(image)
+
+
+def translate_image(image, translation, fill_color):
+    """Translate image.
+
+    # Arguments
+        image: Numpy array.
+        translation: A list of length two indicating the x,y translation values
+        fill_color: List of three floats representing a color.
+
+    # Returns
+        Numpy array
+    """
+    matrix = np.zeros((2, 3), dtype=np.float32)
+    matrix[0, 0], matrix[1, 1] = 1.0, 1.0
+    matrix[0, 2], matrix[1, 2] = translation
+    image = warp_affine(image, matrix, fill_color)
+    return image
+
+
+def sample_scaled_translation(delta_scale, image_shape):
+    """Samples a scaled translation from a uniform distribution.
+
+    # Arguments
+        delta_scale: List with two elements having the normalized deltas.
+            e.g. ''[.25, .25]''.
+        image_shape: List containing the height and width of the image.
+    """
+    x_delta_scale, y_delta_scale = delta_scale
+    x = image_shape[1] * np.random.uniform(-x_delta_scale, x_delta_scale)
+    y = image_shape[0] * np.random.uniform(-y_delta_scale, y_delta_scale)
+    return [x, y]
+
+
+def get_rotation_matrix(center, degrees, scale=1.0):
+    """Returns a 2D rotation matrix.
+
+    # Arguments
+        center: List of two integer values.
+        degrees: Float indicating the angle in degrees.
+
+    # Returns
+        Numpy array
+    """
+    return cv2.getRotationMatrix2D(center, degrees, scale)

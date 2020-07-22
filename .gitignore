@@ -11,6 +11,7 @@
 *.avi
 *.mp4
 *.npz
+*.csv
 *.ipynb_checkpoints
 *.ipynb
 
