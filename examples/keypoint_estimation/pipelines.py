@@ -52,7 +52,7 @@ class PredictMultipleKeypoints2D(Processor):
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
         self.denormalize_keypoints = pr.DenormalizeKeypoints()
         self.crop_boxes2D = pr.CropBoxes2D()
-        self.num_keypoints = len(keypoint_estimator.output_shape)
+        self.num_keypoints = keypoint_estimator.output_shape[1]
         self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
         self.draw_boxes2D = pr.DrawBoxes2D(colors=[0, 255, 0])
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
