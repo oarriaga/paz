@@ -33,7 +33,8 @@ model = KeypointNet2D(input_shape, args.num_keypoints, args.filters)
 model.summary()
 
 # loading weights
-model_name = '_'.join(['FaceKP', model.name, str(args.num_keypoints)])
+model_name = ['FaceKP', model.name, str(args.filters), str(args.num_keypoints)]
+model_name = '_'.join(model_name)
 save_path = os.path.join(args.save_path, model_name)
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 model.load_weights(model_path)

@@ -75,7 +75,8 @@ optimizer = Adam(args.learning_rate, amsgrad=True)
 model.compile(optimizer, loss='mean_squared_error')
 
 # making directory for saving model weights and logs
-model_name = '_'.join(['FaceKP', model.name, str(args.num_keypoints)])
+model_name = ['FaceKP', model.name, str(args.filters), str(args.num_keypoints)]
+model_name = '_'.join(model_name)
 save_path = os.path.join(args.save_path, model_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path)
