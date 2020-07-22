@@ -37,7 +37,8 @@ def SSD300(num_classes=21, base_weights='VOC', head_weights='VOC',
             weights are also trained.
 
     # Reference
-        SSD: Single Shot MultiBox Detector: https://arxiv.org/abs/1512.02325
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
     """
 
     if base_weights not in ['VGG', 'VOC', 'FAT', None]:

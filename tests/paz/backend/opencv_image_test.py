@@ -68,7 +68,7 @@ def test_convert_color_space(load_image, image_shape, rgb_channel):
     rgb_to_bgr = test_image[..., ::-1]
     assert np.all(converted_colorspace == rgb_to_bgr)
 
-
+    
 def test_flip_left_right(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
     image_filp = opencv_image.flip_left_right(test_image)

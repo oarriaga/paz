@@ -11,7 +11,8 @@ from ..backend.keypoints import project_points3D
 
 
 class DrawBoxes2D(Processor):
-    """Draws bounding boxes from Boxes2D messages
+    """Draws bounding boxes from Boxes2D messages.
+
     # Arguments
         class_names: List of strings.
     """
@@ -40,7 +41,8 @@ class DrawBoxes2D(Processor):
 
 class DrawKeypoints2D(Processor):
     """Draws keypoints into image.
-    #Arguments
+
+    # Arguments
         num_keypoints: Int. Used initialize colors for each keypoint
         radius: Float. Approximate radius of the circle in pixel coordinates.
     """
@@ -59,11 +61,10 @@ class DrawKeypoints2D(Processor):
 class DrawBoxes3D(Processor):
     def __init__(self, camera, class_to_dimensions):
         """Draw boxes 3D of multiple objects
+
         # Arguments
-            camera_intrinsics:
-            distortion:
             class_to_dimensions: Dictionary that has as keys the
-            class names and as value a list [model_height, model_width]
+                class names and as value a list [model_height, model_width]
         """
         # model_height=.1, model_width=0.08):
         super(DrawBoxes3D, self).__init__()
@@ -100,9 +101,9 @@ class DrawRandomPolygon(Processor):
     """ Adds occlusion to image
     # Arguments
         max_radius_scale: Maximum radius in scale with respect to image i.e.
-            each vertex radius from the polygon is sampled
-            from [0, max_radius_scale]. This radius is later multiplied by
-            the image dimensions.
+                each vertex radius from the polygon is sampled
+                from [0, max_radius_scale]. This radius is later multiplied by
+                the image dimensions.
     """
     def __init__(self, max_radius_scale=.5):
         super(DrawRandomPolygon, self).__init__()

@@ -6,11 +6,12 @@ class Projector(object):
     """Projects keypoints from image coordinates to 3D space and viceversa.
     This model uses the camera focal length and the depth estimation of a point
     to project it to image coordinates. It works with numpy matrices or
-    tensorflow values. See 'use_numpy'.
+    tensorflow values. See ''use_numpy''.
+
     # Arguments
         focal_length: Float. Focal length of camera used to generate keypoints.
         use_numpy: Boolean. If `True` both unproject and project functions
-        take numpy arrays as inputs. If `False` takes tf.tensors as inputs.
+            take numpy arrays as inputs. If `False` takes tf.tensors as inputs.
     """
     def __init__(self, focal_length, use_numpy=False):
         self.focal_length = focal_length

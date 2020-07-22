@@ -182,6 +182,20 @@ def HRNetDense(input_shape=(128, 128, 3), num_keypoints=20, growth_rate=4):
 
 
 def HRNetResidual(input_shape=(128, 128, 3), num_keypoints=20):
+    """Instantiates HRNET Residual model
+
+    # Arguments
+        input_shape: List of three elements e.g. ''(H, W, 3)''
+        num_keypoints: Int.
+
+    # Returns
+        Tensorflow-Keras model.
+
+    # References
+       -[High-Resolution Representations for Labeling Pixels
+            and Regions](https://arxiv.org/pdf/1904.04514.pdf)
+    """
+
     # stem
     inputs = Input(shape=input_shape, name='image')
     x1 = stem(inputs, 64)

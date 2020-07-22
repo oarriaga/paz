@@ -2,18 +2,15 @@ import numpy as np
 
 
 def compute_iou(box, boxes):
-    """Calculates the intersection over union between 'box' and all 'boxes'
-
-    The variables 'box' and 'boxes' contain the corner coordinates
-    of the left-top corner (x_min, y_min) and the right-bottom (x_max, y_max)
-    corner.
+    """Calculates the intersection over union between 'box' and all 'boxes'.
+    Both `box` and `boxes` are in corner coordinates.
 
     # Arguments
         box: Numpy array with length at least of 4.
-        box_B: Numpy array with shape (num_boxes, 4)
+        boxes: Numpy array with shape `(num_boxes, 4)`.
 
     # Returns
-        Numpy array of shape (num_boxes, 1)
+        Numpy array of shape `(num_boxes, 1)`.
     """
 
     x_min_A, y_min_A, x_max_A, y_max_A = box[:4]
@@ -36,21 +33,19 @@ def compute_iou(box, boxes):
 
 
 def compute_ious(boxes_A, boxes_B):
-    """Calculates the intersection over union between 'boxes_A' and 'boxes_B'
-
-    For each box present in the rows of 'boxes_A' it calculates
-    the intersection over union with respect to all boxes in 'boxes_B'.
-
-    The variables 'boxes_A' and 'boxes_B' contain the corner coordinates
-    of the left-top corner (x_min, y_min) and the right-bottom (x_max, y_max)
-    corner.
+    """Calculates the intersection over union between `boxes_A` and `boxes_B`.
+    For each box present in the rows of `boxes_A` it calculates
+    the intersection over union with respect to all boxes in `boxes_B`.
+    The variables `boxes_A` and `boxes_B` contain the corner coordinates
+    of the left-top corner `(x_min, y_min)` and the right-bottom
+    `(x_max, y_max)` corner.
 
     # Arguments
-        boxes_A: Numpy array with shape (num_boxes_A, 4)
-        boxes_B: Numpy array with shape (num_boxes_B, 4)
+        boxes_A: Numpy array with shape `(num_boxes_A, 4)`.
+        boxes_B: Numpy array with shape `(num_boxes_B, 4)`.
 
     # Returns
-        Numpy array of shape (num_boxes_A, num_boxes_B)
+        Numpy array of shape `(num_boxes_A, num_boxes_B)`.
     """
     return np.apply_along_axis(compute_iou, 1, boxes_A, boxes_B)
 
@@ -59,10 +54,10 @@ def to_point_form(boxes):
     """Transform from center coordinates to corner coordinates.
 
     # Arguments
-        boxes: Numpy array with shape (num_boxes, 4)
+        boxes: Numpy array with shape `(num_boxes, 4)`.
 
     # Returns
-        Numpy array with shape (num_boxes, 4).
+        Numpy array with shape `(num_boxes, 4)`.
     """
     center_x, center_y = boxes[:, 0], boxes[:, 1]
     width, height = boxes[:, 2], boxes[:, 3]
@@ -78,10 +73,10 @@ def to_center_form(boxes):
     """Transform from corner coordinates to center coordinates.
 
     # Arguments
-        boxes: Numpy array with shape (num_boxes, 4)
+        boxes: Numpy array with shape `(num_boxes, 4)`.
 
     # Returns
-        Numpy array with shape (num_boxes, 4).
+        Numpy array with shape `(num_boxes, 4)`.
     """
     x_min, y_min = boxes[:, 0], boxes[:, 1]
     x_max, y_max = boxes[:, 2], boxes[:, 3]
@@ -98,12 +93,14 @@ def encode(matched, priors, variances):
     we have matched (based on jaccard overlap) with the prior boxes.
 
     # Arguments
-        matched: Numpy array of shape (num_priors, 4) with boxes in point-form
-        priors: Numpy array of shape (num_priors, 4) with boxes in center-form
+        matched: Numpy array of shape `(num_priors, 4)` with boxes in
+            point-form.
+        priors: Numpy array of shape `(num_priors, 4)` with boxes in
+            center-form.
         variances: (list[float]) Variances of priorboxes
 
     # Returns
-        encoded boxes: Numpy array of shape (num_priors, 4)
+        encoded boxes: Numpy array of shape `(num_priors, 4)`.
     """
 
     # dist b/t match center and prior's center
@@ -121,12 +118,12 @@ def decode(predictions, priors, variances):
     """Decode default boxes into the ground truth boxes
 
     # Arguments
-        loc: Numpy array of shape (num_priors, 4)
-        priors: Numpy array of shape (num_priors, 4)
-        variances: (list[float]) Variances of priorboxes
+        loc: Numpy array of shape `(num_priors, 4)`.
+        priors: Numpy array of shape `(num_priors, 4)`.
+        variances: List of two floats. Variances of prior boxes.
 
     # Returns
-        decoded boxes: Numpy array of shape (num_priors, 4)
+        decoded boxes: Numpy array of shape `(num_priors, 4)`.
     """
 
     boxes = np.concatenate((
@@ -139,35 +136,39 @@ def decode(predictions, priors, variances):
 
 
 def reversed_argmax(array, axis):
-    """Performs the function of torch.max().
-    In case of multiple occurrences of the maximum values, the indices
-    corresponding to the last occurrence are returned.
+    """Copycat of function torch.max(). In case of multiple occurrences of
+    the maximum values, the indices corresponding to the last
+    occurrence are returned.
 
-    # Arguments:
-        array : Numpy array
-        axis : int, argmax operation along this specified axis
-    # Returns: index_array : Numpy array of ints
+    # Arguments
+        array: Numpy array.
+        axis: int, argmax operation along this specified axis.
+
+    # Returns
+        index_array : Numpy array of ints.
     """
     array_flip = np.flip(array, axis=axis)
     return array.shape[axis] - np.argmax(array_flip, axis=axis) - 1
 
 
 def match(boxes, prior_boxes, iou_threshold=0.5):
-    """Matches each prior box with a ground truth box (box from ``boxes``).
+    """Matches each prior box with a ground truth box (box from `boxes`).
     It then selects which matched box will be considered positive e.g. iou > .5
     and returns for each prior box a ground truth box that is either positive
     (with a class argument different than 0) or negative.
+
     # Arguments
-        boxes: Numpy array of shape (num_ground_truh_boxes, 4 + 1),
-            where the first the first four coordinates correspond to point
-            form box coordinates and the last coordinates is the class
+        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
             argument. This boxes should be the ground truth boxes.
-        prior_boxes: Numpy array of shape (num_prior_boxes, 4).
+        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
             where the four coordinates are in center form coordinates.
         iou_threshold: Float between [0, 1]. Intersection over union
             used to determine which box is considered a positive box.
+
     # Returns
-        numpy array of shape (num_prior_boxes, 4 + 1).
+        numpy array of shape `(num_prior_boxes, 4 + 1)`.
             where the first the first four coordinates correspond to point
             form box coordinates and the last coordinates is the class
             argument.
@@ -193,12 +194,12 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     """Apply non maximum suppression.
 
     # Arguments
-        boxes: Numpy array, box coordinates of shape (num_boxes, 4)
-            where each columns corresponds to x_min, y_min, x_max, y_max
-        scores: Numpy array, of scores given for each box in 'boxes'
-        iou_thresh : float, intersection over union threshold
-            for removing boxes.
-        top_k: int, number of maximum objects per class
+        boxes: Numpy array, box coordinates of shape `(num_boxes, 4)`
+            where each columns corresponds to x_min, y_min, x_max, y_max.
+        scores: Numpy array, of scores given for each box in `boxes`.
+        iou_thresh: float, intersection over union threshold for removing
+            boxes.
+        top_k: int, number of maximum objects per class.
 
     # Returns
         selected_indices: Numpy array, selected indices of kept boxes.
@@ -262,14 +263,14 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
 def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """Applies non-maximum-suppression per class.
     # Arguments
-        box_data: Numpy array of shape (num_prior_boxes, 4 + num_classes)
+        box_data: Numpy array of shape `(num_prior_boxes, 4 + num_classes)`.
         nsm_thresh: Float. Non-maximum suppression threshold.
         conf_thresh: Float. Filter scores with a lower confidence value before
             performing non-maximum supression.
         top_k: Integer. Maximum number of boxes per class outputted by nms.
 
     Returns
-        Numpy array of shape (num_classes, top_k, 5)
+        Numpy array of shape `(num_classes, top_k, 5)`.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
@@ -301,7 +302,7 @@ def to_one_hot(class_indices, num_classes):
         num_classes: Integer. Total number of classes.
 
     # Returns
-        Numpy array with shape (num_samples, num_classes).
+        Numpy array with shape `(num_samples, num_classes)`.
     """
     one_hot_vectors = np.zeros((len(class_indices), num_classes))
     for vector_arg, class_args in enumerate(class_indices):
@@ -309,25 +310,11 @@ def to_one_hot(class_indices, num_classes):
     return one_hot_vectors
 
 
-def substract_mean(image_array, mean):
-    """ Subtracts image with channel-wise values.
-    # Arguments
-        image_array: Numpy array with shape (height, width, 3)
-        mean: Numpy array of 3 floats containing the values to be subtracted
-            to the image on each corresponding channel.
-    """
-    image_array = image_array.astype(np.float32)
-    image_array[:, :, 0] -= mean[0]
-    image_array[:, :, 1] -= mean[1]
-    image_array[:, :, 2] -= mean[2]
-    return image_array
-
-
 def make_box_square(box, offset_scale=0.05):
     """Makes box coordinates square.
 
     # Arguments
-        box: Numpy array with shape (4) with point corner coordinates.
+        box: Numpy array with shape `(4)` with point corner coordinates.
         offset_scale: Float, scale of the addition applied box sizes.
 
     # Returns
@@ -360,10 +347,12 @@ def make_box_square(box, offset_scale=0.05):
 
 def apply_offsets(coordinates, offset_scales):
     """Apply offsets to coordinates
-    #Arguments
+
+    # Arguments
         coordinates: List of floats containing coordinates in point form.
         offset_scales: List of floats having x and y scales respectively.
-    #Returns
+
+    # Returns
         coordinates: List of floats containing coordinates in point form.
     """
     x_min, y_min, x_max, y_max = coordinates
@@ -397,11 +386,24 @@ def denormalize_box(box, image_shape):
 
 
 def flip_left_right(boxes, width):
+    """Flips box coordinates from left-to-right and vice-versa.
+    # Arguments
+        boxes: Numpy array of shape `[num_boxes, 4]`.
+    # Returns
+        Numpy array of shape `[num_boxes, 4]`.
+    """
     boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
     return boxes
 
 
 def to_absolute_coordinates(image, boxes):
+    """Transforms normalized box coordinates into image coordinates.
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
+    # Returns
+        Numpy array of shape `[num_boxes, N]`.
+    """
     height, width = image.shape[:2]
     boxes[:, 0] = boxes[:, 0] * width
     boxes[:, 2] = boxes[:, 2] * width
@@ -411,6 +413,13 @@ def to_absolute_coordinates(image, boxes):
 
 
 def to_percent_coordinates(image, boxes):
+    """Transforms coordinates in image dimensions to normalized coordinates.
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
+    # Returns
+        Numpy array of shape `[num_boxes, N]`.
+    """
     height, width = image.shape[:2]
     boxes[:, 0] = boxes[:, 0] / width
     boxes[:, 2] = boxes[:, 2] / width

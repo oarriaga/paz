@@ -28,5 +28,5 @@ if __name__ == "__main__":
 
     pipeline = FaceClassifier(detector, classifier, labels, offsets)
     camera = Camera(args.camera_id)
-    player = VideoPlayer((1280, 960), pipeline, camera)
+    player = VideoPlayer((640, 480), pipeline, camera)
     player.run()

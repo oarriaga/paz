@@ -5,6 +5,14 @@ from ..backend.boxes import to_one_hot
 
 
 class ControlMap(Processor):
+    """Controls which inputs are passed ''processor'' and the order of its
+        outputs.
+
+    # Arguments
+        processor: Function e.g. a ''paz.processor''
+        intro_indices: List of Ints.
+        outro_indices: List of Ints.
+    """
     def __init__(self, processor, intro_indices=[0], outro_indices=[0]):
         self.processor = processor
         if not isinstance(intro_indices, list):
@@ -39,11 +47,25 @@ class ControlMap(Processor):
 
 
 class ExpandDomain(ControlMap):
+    """Extends number of inputs a function can take applying the identity
+    function to all new/extended inputs.
+    e.g. For a given function f(x) = y. If g = ExtendInputs(f), we can
+    now have g(x, x1, x2, ..., xn) = y, x1, x2, ..., xn.
+
+    # Arguments
+        processor: Function e.g. any procesor in ''paz.processors''.
+    """
     def __init__(self, processor):
         super(ExpandDomain, self).__init__(processor)
 
 
 class CopyDomain(Processor):
+    """Copies ''intro_indices'' and places it ''outro_indices''.
+
+    # Arguments
+        intro_indices: List of Ints.
+        outro_indices: List of Ints.
+    """
     def __init__(self, intro_indices, outro_indices):
         super(CopyDomain, self).__init__()
         if not isinstance(intro_indices, list):
@@ -67,6 +89,12 @@ class CopyDomain(Processor):
 
 
 class UnpackDictionary(Processor):
+    """Unpacks dictionary into a tuple.
+    # Arguments
+        order: List of strings containing the keys of the dictionary.
+            The order of the list is the order in which the tuple
+            would be ordered.
+    """
     def __init__(self, order):
         if not isinstance(order, list):
             raise ValueError('``order`` must be a list')
@@ -79,6 +107,13 @@ class UnpackDictionary(Processor):
 
 
 class WrapOutput(Processor):
+    """Wraps arguments in dictionary
+
+    # Arguments
+        keys: List of strings representing the keys used to wrap the inputs.
+            The order of the list must correspond to the same order of
+            inputs (''args'').
+    """
     def __init__(self, keys):
         if not isinstance(keys, list):
             raise ValueError('``order`` must be a list')
@@ -90,6 +125,14 @@ class WrapOutput(Processor):
 
 
 class ExtendInputs(Processor):
+    """Extends number of inputs a function can take applying the identity
+    function to all new/extended inputs.
+    e.g. For a given function f(x) = y. If g = ExtendInputs(f), we can
+    now have g(x, x1, x2, ..., xn) = y, x1, x2, ..., xn.
+
+    # Arguments
+        processor: Function e.g. any procesor in ''paz.processors''.
+    """
     def __init__(self, processor):
         self.processor = processor
         name = '-'.join([self.__class__.__name__, self.processor.name])
@@ -100,6 +143,11 @@ class ExtendInputs(Processor):
 
 
 class Concatenate(Processor):
+    """Concatenates a list of arrays in given ''axis''.
+
+    # Arguments
+        axis: Int.
+    """
     def __init__(self, axis):
         super(Concatenate, self)
         self.axis = axis
@@ -109,6 +157,22 @@ class Concatenate(Processor):
 
 
 class SequenceWrapper(Processor):
+    """Wraps arguments to directly use
+    ''paz.abstract.ProcessingSequence'' or
+    ''paz.abstract.GeneratingSequence''.
+
+    # Arguments
+        inputs_info: Dictionary containing an integer per key representing
+            the argument to grab, and as value a dictionary containing the
+            tensor name as key and the tensor shape of a single sample as value
+            e.g. {0: {'input_image': [300, 300, 3]}, 1: {'depth': [300, 300]}}.
+            The values given here are for the inputs of the model.
+        labels_info: Dictionary containing an integer per key representing
+            the argument to grab, and as value a dictionary containing the
+            tensor name as key and the tensor shape of a single sample as value
+            e.g. {2: {'classes': [10]}}.
+            The values given here are for the labels of the model.
+    """
     def __init__(self, inputs_info, labels_info):
         if not isinstance(inputs_info, dict):
             raise ValueError('``inputs_info`` must be a dictionary')
@@ -118,6 +182,8 @@ class SequenceWrapper(Processor):
         self.labels_info = labels_info
         self.inputs_name_to_shape = self._extract_name_to_shape(inputs_info)
         self.labels_name_to_shape = self._extract_name_to_shape(labels_info)
+        self.ordered_input_names = self._extract_ordered_names(inputs_info)
+        self.ordered_label_names = self._extract_ordered_names(labels_info)
         super(SequenceWrapper, self).__init__()
 
     def _extract_name_to_shape(self, info):
@@ -126,6 +192,14 @@ class SequenceWrapper(Processor):
             for key, value in values.items():
                 name_to_shape[key] = value
         return name_to_shape
+
+    def _extract_ordered_names(self, info):
+        arguments = list(info.keys())
+        arguments.sort()
+        names = []
+        for argument in arguments:
+            names.append(list(info[argument].keys())[0])
+        return names
 
     def _wrap(self, args, info):
         wrap = {}
@@ -141,6 +215,13 @@ class SequenceWrapper(Processor):
 
 
 class Predict(Processor):
+    """Perform input preprocessing, model prediction and output postprocessing.
+
+    # Arguments
+        model: Class with a ''predict'' method e.g. a Keras model.
+        preprocess: Function applied to given inputs.
+        postprocess: Function applied to outputted predictions from model.
+    """
     def __init__(self, model, preprocess=None, postprocess=None):
         super(Predict, self).__init__()
         self.model = model
@@ -166,6 +247,11 @@ class ToClassName(Processor):
 
 
 class ExpandDims(Processor):
+    """Expand dimension of given array.
+
+    # Arguments
+        axis: Int.
+    """
     def __init__(self, axis):
         super(ExpandDims, self).__init__()
         self.axis = axis
@@ -175,6 +261,11 @@ class ExpandDims(Processor):
 
 
 class SelectElement(Processor):
+    """Selects element of input value.
+
+    # Arguments
+        index: Int. argument to select from ''inputs''.
+    """
     def __init__(self, index):
         super(SelectElement, self).__init__()
         self.index = index
@@ -184,10 +275,10 @@ class SelectElement(Processor):
 
 
 class BoxClassToOneHotVector(Processor):
-    """Transform from class index to a one-hot encoded vector.
+    """Transform box data with class index to a one-hot encoded vector.
+
     # Arguments
         num_classes: Integer. Total number of classes.
-        topic: String. Currently valid topics: `boxes`
     """
     def __init__(self, num_classes):
         self.num_classes = num_classes
@@ -216,28 +307,24 @@ class Squeeze(Processor):
 
 
 class Copy(Processor):
-    """Copy values from ``input_topic`` to a new ``label_topic``
-    # Arguments
-        input_topic: String. Topic to copy from.
-        label_topic: String. Topic to copy to.
+    """Copies value passed to function.
     """
     def __init__(self):
         super(Copy, self).__init__()
 
-    def call(self, X):
-        return X.copy()
+    def call(self, x):
+        return x.copy()
 
 
 class Lambda(object):
     """Applies a lambda function as a processor transformation.
+
     # Arguments
         function: Function.
-        parameters: Dictionary.
-        topic: String
     """
 
     def __init__(self, function):
         self.function = function
 
-    def __call__(self, X):
-        return self.function(X)
+    def __call__(self, x):
+        return self.function(x)

@@ -5,7 +5,6 @@ from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
 from paz.pipelines import AugmentDetection
 
-
 class ShowBoxes(Processor):
     def __init__(self, class_names, prior_boxes, variances=[.1, .2]):
         super(ShowBoxes, self).__init__()

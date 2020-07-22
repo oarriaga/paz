@@ -34,7 +34,8 @@ def KeypointNet2D(input_shape, num_keypoints, filters=64, alpha=0.1):
         Keras/tensorflow model
 
     # References
-        [1] Discovery of Latent 3D Keypoints via End-to-end Geometric Reasoning
+        - [Discovery of Latent 3D Keypoints via End-to-end
+            Geometric Reasoning](https://arxiv.org/abs/1807.03146)
     """
     width, height = input_shape[:2]
     base = input_tensor = Input(input_shape, name='image')
@@ -70,7 +71,8 @@ def KeypointNet(input_shape, num_keypoints, depth=.2, filters=64, alpha=0.1):
         Keras/tensorflow model
 
     # References
-        [1] Discovery of Latent 3D Keypoints via End-to-end Geometric Reasoning
+        - [Discovery of Latent 3D Keypoints via End-to-end
+            Geometric Reasoning](https://arxiv.org/abs/1807.03146)
     """
     width, height = input_shape[:2]
     base = input_tensor = Input(input_shape, name='image')
@@ -101,7 +103,7 @@ def KeypointNet(input_shape, num_keypoints, depth=.2, filters=64, alpha=0.1):
 
 
 def KeypointNetShared(input_shape, num_keypoints, depth, filters, alpha):
-    """Single Keypointnet shared model with two views as input [1]
+    """Keypointnet shared model with two views as input (see references).
 
     # Arguments
         input_shape: List of integers indicating (height, width, num_channels)
@@ -114,7 +116,8 @@ def KeypointNetShared(input_shape, num_keypoints, depth, filters, alpha):
         Keras/tensorflow model
 
     # References
-        [1] Discovery of Latent 3D Keypoints via End-to-end Geometric Reasoning
+        - [Discovery of Latent 3D Keypoints via End-to-end
+            Geometric Reasoning](https://arxiv.org/abs/1807.03146)
     """
 
     model_args = (input_shape, num_keypoints, depth, filters, alpha)

@@ -6,15 +6,19 @@ from ..backend.keypoints import solve_PNP, UPNP
 
 class SolvePNP(Processor):
     """Calculates 6D pose from 3D points and 2D keypoints correspondences.
+
     # Arguments
-        model_points: Numpy array of shape (num_points, 3).
+        model_points: Numpy array of shape ''(num_points, 3)''.
             Model 3D points known in advance.
-        camera intrinsics: Numpy array of shape (3, 3) calculated from
-        the openCV calibrateCamera function
-        distortion: Numpy array of shape of 5 elements calculated from
-        the openCV calibrateCamera function
+        camera: Instance of ''paz.backend.Camera'' containing as properties
+            the ''camera_intrinsics'' a Numpy array of shape ''(3, 3)''
+            usually calculated from the openCV ''calibrateCamera'' function,
+            and the ''distortion'' a Numpy array of shape ''(5)'' in which the
+            elements are usually obtained from the openCV
+            ''calibrateCamera'' function.
+
     # Returns
-        Creates a new topic ``pose6D`` with a Pose6D message.
+        Instance from ''Pose6D'' message.
     """
     def __init__(self, points3D, camera, class_name=None):
         super(SolvePNP, self).__init__()

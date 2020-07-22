@@ -21,11 +21,12 @@ class ProcessGrayImage(SequentialProcessor):
 
 
 class FaceClassifier(Processor):
+    # TODO add processor for offsets
     def __init__(self, detector, classifier, labels, offsets):
         super(FaceClassifier, self).__init__()
         RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
         self.detect = pr.Predict(detector, RGB2GRAY, pr.ToBoxes2D())
-        self.crop_boxes2D = pr.CropBoxes2D(offsets)
+        self.crop_boxes2D = pr.CropBoxes2D()
         preprocess = PreprocessImage(classifier.input_shape[1:3], None)
         preprocess.insert(0, RGB2GRAY)
         preprocess.add(pr.ExpandDims([0, 3]))

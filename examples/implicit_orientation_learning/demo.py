@@ -1,75 +1,70 @@
 import os
 import json
-import numpy as np
+import argparse
+
 from tensorflow.keras.utils import get_file
-
 from sklearn.metrics.pairwise import cosine_similarity as measure
-
-from paz.core import VideoPlayer
-from paz.core import SequentialProcessor
-from paz import processors as pr
-
+from paz.backend.camera import VideoPlayer, Camera
 from poseur.scenes import DictionaryViews
 
 from model import AutoEncoder
-from pipelines import ImplicitRotationInference
-from processors import Normalize
+from pipelines import ImplicitRotationPredictor
 
-# model_name = 'VanillaAutoencoder128_128_Switch_1_scaled'
-model_name = 'VanillaAutoencoder128_128_035_power_drill'
-path = os.path.join(os.path.expanduser('~'), '.keras/paz/models/', model_name)
+
+parser = argparse.ArgumentParser(description='Implicit orientation demo')
+parser.add_argument('-c', '--camera_id', type=int, default=0,
+                    help='Camera device ID')
+parser.add_argument('-f', '--y_fov', type=float, default=3.14159 / 4.0,
+                    help='field of view')
+parser.add_argument('-v', '--viewport_size', type=int, default=128,
+                    help='Size of rendered images')
+parser.add_argument('-d', '--distance', type=float, default=0.3,
+                    help='Distance between camera and 3D model')
+parser.add_argument('-s', '--shift', type=float, default=0.01,
+                    help='Shift')
+parser.add_argument('-l', '--light', type=int, default=10,
+                    help='Light intensity')
+parser.add_argument('-b', '--background', type=int, default=0,
+                    help='Plain background color')
+parser.add_argument('-r', '--roll', type=float, default=3.14159,
+                    help='Maximum roll')
+parser.add_argument('-t', '--translate', type=float, default=0.01,
+                    help='Maximum translation')
+parser.add_argument('-p', '--sphere', type=str, default='full',
+                    help='Rendering mode')
+parser.add_argument('--theta_steps', type=int, default=10,
+                    help='Amount of steps taken in the X-Y plane')
+parser.add_argument('--phi_steps', type=int, default=10,
+                    help='Amount of steps taken from the Z-axis')
+parser.add_argument('--model_name', type=str,
+                    default='VanillaAutoencoder128_128_035_power_drill',
+                    help='Model directory name without root')
+parser.add_argument('--model_path', type=str,
+                    default=os.path.join(
+                        os.path.expanduser('~'), '.keras/paz/models/'),
+                    help='Root directory PAZ trained models')
+args = parser.parse_args()
+
+
+path = os.path.join(args.model_path, args.model_name)
 parameters = json.load(open(os.path.join(path, 'hyperparameters.json'), 'r'))
+
 size = parameters['image_size']
 latent_dimension = parameters['latent_dimension']
-input_shape = (size, size, 3)
-weights_path = os.path.join(path, model_name + '_weights.hdf5')
+weights_path = os.path.join(path, args.model_name + '_weights.hdf5')
+
 OBJ_file = get_file('textured.obj', None,
                     cache_subdir='paz/datasets/ycb/models/035_power_drill/')
 
+renderer = DictionaryViews(
+    OBJ_file, (args.viewport_size, args.viewport_size), args.y_fov,
+    args.distance, args.sphere, args.roll, args.light, args.background,
+    True, args.theta_steps, args.phi_steps)
 
-viewport_size, y_fov = (128, 128), 3.1416 / 4.0
-distance, shift, light, background = 0.3, 0.01, 10, 0
-roll, translate, sphere = 3.14159, 0.01, 'full'
-scene = DictionaryViews(OBJ_file, viewport_size, y_fov, distance,
-                        sphere, roll, light, background, True, 10, 10)
-data = scene.render_dictionary()
-
-
-class EncoderInference(SequentialProcessor):
-    def __init__(self, encoder, input_topic, label_topic):
-        super(EncoderInference, self).__init__()
-        pipeline = [pr.ConvertColor('RGB', to='BGR'),
-                    pr.ResizeImage(encoder.input_shape[1:3]),
-                    pr.NormalizeImage(input_topic),
-                    pr.ExpandDims(0, input_topic)]
-        self.add(pr.Predict(encoder, input_topic, label_topic, pipeline))
-        self.add(pr.Squeeze(0, label_topic))
-        # self.add(Normalize(label_topic))
-
-
-# TODO you can add this as a method of the original pipeline
-encoder = AutoEncoder(input_shape, latent_dimension, mode='encoder')
+encoder = AutoEncoder((size, size, 3), latent_dimension, mode='encoder')
 encoder.load_weights(weights_path, by_name=True)
-
-decoder = AutoEncoder(input_shape, latent_dimension, mode='decoder')
+decoder = AutoEncoder((size, size, 3), latent_dimension, mode='decoder')
 decoder.load_weights(weights_path, by_name=True)
-
-pipeline = EncoderInference(encoder, 'image', 'latent_vector')
-
-
-def make_dictionary(pipeline, data):
-    dictionary = {}
-    latent_vectors = np.zeros((len(data), latent_dimension))
-    for sample_arg, sample in enumerate(data):
-        processed_sample = pipeline(sample)
-        latent_vector = processed_sample['latent_vector']
-        latent_vectors[sample_arg] = latent_vector
-        dictionary[sample_arg] = processed_sample['image']
-    dictionary['latent_vectors'] = latent_vectors
-    return dictionary
-
-
-dictionary = make_dictionary(pipeline, data)
-pipeline = ImplicitRotationInference(encoder, decoder, measure, dictionary)
-player = VideoPlayer((1280, 960), pipeline, camera=2)
-player.start()
+inference = ImplicitRotationPredictor(encoder, decoder, measure, renderer)
+player = VideoPlayer((1280, 960), inference, camera=Camera(device_id=2))
+player.run()

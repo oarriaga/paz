@@ -7,6 +7,7 @@ import numpy as np
 
 class Conv2DNormalization(Layer):
     """Normalization layer as described in ParseNet paper.
+
     # Arguments
         scale: Float determining how much to scale the features.
         axis: Integer specifying axis of image channels.
@@ -15,7 +16,8 @@ class Conv2DNormalization(Layer):
         Feature map tensor normalized with an L2 norm and then scaled.
 
     # References
-        http://cs.unc.edu/~wliu/papers/parsenet.pdf
+        - [ParseNet: Looking Wider to
+            See Better](https://arxiv.org/abs/1506.04579)
     """
     def __init__(self, scale, axis=3, **kwargs):
         self.scale = scale
@@ -37,6 +39,7 @@ class Conv2DNormalization(Layer):
 
 class SubtractScalar(Layer):
     """Subtracts scalar value to tensor.
+
     # Arguments
         constant: Float. Value to be subtracted to all tensor values.
     """
@@ -55,7 +58,8 @@ class SubtractScalar(Layer):
 
 
 class ExpectedValue2D(Layer):
-    """Calculates the expected value along `axes`.
+    """Calculates the expected value along ''axes''.
+
     # Arguments
         axes: List of integers. Axes for which the expected value
             will be calculated.
@@ -88,10 +92,11 @@ class ExpectedValue2D(Layer):
 
 
 class ExpectedDepth(Layer):
-    """Calculates the expected depth along `axes`.
+    """Calculates the expected depth along ''axes''.
     This layer takes two inputs. First input is a depth estimation tensor.
     Second input is a probability map of the keypoints.
     It multiplies both values and calculates the expected depth.
+
     # Arguments
         axes: List of integers. Axes for which the expected value
             will be calculated.
