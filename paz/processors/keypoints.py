@@ -3,6 +3,7 @@ import numpy as np
 from ..abstract import Processor
 from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
+from ..backend.keypoints import translate_keypoints
 
 
 class ProjectKeypoints(Processor):
@@ -94,3 +95,14 @@ class ChangeKeypointsCoordinateSystem(Processor):
         keypoints[:, 0] = keypoints[:, 0] + x_min
         keypoints[:, 1] = keypoints[:, 1] + y_min
         return keypoints
+
+
+class TranslateKeypoints(Processor):
+    """Applies a translation to keypoints.
+    The translation is a list of length two indicating the x, y values.
+    """
+    def __init__(self):
+        super(TranslateKeypoints, self).__init__()
+
+    def call(self, keypoints, translation):
+        return translate_keypoints(keypoints, translation)
