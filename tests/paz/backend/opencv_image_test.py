@@ -16,12 +16,12 @@ from paz.backend.image import opencv_image
 
 @pytest.fixture
 def load_image():
-    def call(shape, rgb_channel, flag=True):
+    def call(shape, rgb_channel, with_mask=True):
         image = np.ones(shape)
         image[:, :, 0] = rgb_channel[0]
         image[:, :, 1] = rgb_channel[1]
         image[:, :, 2] = rgb_channel[2]
-        if flag:
+        if with_mask:
             image[10:50, 50:120] = 100
         return image.astype(np.uint8)
     return call
@@ -35,16 +35,6 @@ def image_shape(request):
 @pytest.fixture(params=[[50, 120, 201]])
 def rgb_channel(request):
     return request.param
-
-
-@pytest.fixture(scope='module')
-def alpha_mask():
-    def call(image):
-        mask = image
-        mask[10:50, 50:120] = 255
-        mask = mask.astype(float) / 255.
-        return mask
-    return call
 
 
 @pytest.fixture(params=[60])
@@ -103,9 +93,9 @@ def test_split_alpha_channel(load_image, image_shape, rgb_channel):
 
 
 @pytest.mark.parametrize("rgb", [[50, 120, 201]])
-def test_alpha_blend(load_image, image_shape, rgb, alpha_mask):
+def test_alpha_blend(load_image, image_shape, rgb):
     test_image = load_image(image_shape, rgb)
-    background_image = load_image(image_shape, rgb, flag=False).astype(float)
+    background_image = load_image(image_shape, rgb, with_mask=False).astype(float)
     foreground = load_image(image_shape, [0, 0, 0])
     alpha = load_image(image_shape, [0, 0, 0])
     alpha[10:50, 50:120] = 255
