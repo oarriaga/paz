@@ -1,5 +1,3 @@
-In this example we show how to train a model using tensorflow-probability.
-
 Please install kaggle python module to automatically download datasets
 
 Make sure to have an account and have set up the API token
