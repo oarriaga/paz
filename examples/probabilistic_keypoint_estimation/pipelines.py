@@ -38,7 +38,7 @@ class ProbabilisticKeypointPrediction(Processor):
         super(ProbabilisticKeypointPrediction, self).__init__()
         # face detector
         RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
-        self.detect = pr.Predict(detector, RGB2GRAY, pr.ToBoxes2D())
+        self.detect = pr.Predict(detector, RGB2GRAY, pr.ToBoxes2D(['face']))
 
         # creating pre-processing pipeline for keypoint estimator
         preprocess = SequentialProcessor()
@@ -65,7 +65,7 @@ class ProbabilisticKeypointPrediction(Processor):
         self.crop_boxes2D = pr.CropBoxes2D()
         self.num_keypoints = len(keypoint_estimator.output_shape)
         self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
-        self.draw_boxes2D = pr.DrawBoxes2D(colors=[0, 255, 0])
+        self.draw_boxes2D = pr.DrawBoxes2D(['face'], colors=[[0, 255, 0]])
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
