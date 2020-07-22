@@ -383,3 +383,18 @@ class RandomKeypointRotation(Processor):
             radians = self._degrees_to_radians(degrees)
             keypoints = self._rotate_keypoints(keypoints, radians, center)
         return image, keypoints
+
+
+class TranslateImage(Processor):
+    """Applies a translation of image.
+    The translation is a list of length two indicating the x, y values.
+    # Arguments
+        fill_color: List of three integers indicating the
+            color values e.g. [0,0,0]
+    """
+    def __init__(self, fill_color=None):
+        super(TranslateImage, self).__init__()
+        self.fill_color = fill_color
+
+    def call(self, image, translation):
+        return translate_image(image, translation, self.fill_color)

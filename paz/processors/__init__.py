@@ -56,6 +56,9 @@ from .geometric import RandomSampleCrop
 from .geometric import Expand
 from .geometric import ApplyTranslation
 from .geometric import ApplyRandomTranslation
+from .geometric import RandomKeypointTranslation
+from .geometric import RandomKeypointRotation
+from .geometric import TranslateImage
 
 from .keypoints import ChangeKeypointsCoordinateSystem
 from .keypoints import DenormalizeKeypoints
@@ -63,6 +66,7 @@ from .keypoints import NormalizeKeypoints
 from .keypoints import PartitionKeypoints
 from .keypoints import ProjectKeypoints
 from .keypoints import RemoveKeypointsDepth
+from .keypoints import TranslateKeypoints
 
 from .standard import ControlMap
 from .standard import ExpandDomain

@@ -18,7 +18,6 @@ from ..backend.image import random_image_crop
 from ..backend.image import make_random_plain_image
 from ..backend.image import concatenate_alpha_mask
 from ..backend.image import draw_filled_polygon
-from ..backend.image import translate_image
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -384,18 +383,3 @@ class AddOcclusion(Processor):
         if self.probability >= np.random.rand():
             image = self.add_occlusion(image, self.max_radius_scale)
         return image
-
-
-class TranslateImage(Processor):
-    """Applies a translation of image.
-    The translation is a list of length two indicating the x, y values.
-    # Arguments
-        fill_color: List of three integers indicating the
-            color values e.g. [0,0,0]
-    """
-    def __init__(self, fill_color=None):
-        super(TranslateImage, self).__init__()
-        self.fill_color = fill_color
-
-    def call(self, image, translation):
-        return translate_image(image, translation, self.fill_color)
