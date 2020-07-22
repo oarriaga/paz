@@ -18,7 +18,7 @@ parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
                     help='Number of keypoints')
 parser.add_argument('-is', '--image_size', default=96, type=int,
                     help='Image size')
-parser.add_argument('-c', '--camera_id', type=int, default=2,
+parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 parser.add_argument('-d', '--detector_name', type=str,
                     default='frontalface_default')
