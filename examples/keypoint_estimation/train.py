@@ -7,10 +7,10 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 
 from paz.abstract import ProcessingSequence
+from paz.models import KeypointNet2D
 
 from facial_keypoints import FacialKeypoints
 from pipelines import AugmentKeypoints
-from model import GaussianMixtureModel
 
 description = 'Training script for learning 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
@@ -57,7 +57,7 @@ delta_scales = [args.delta_scales, args.delta_scales]
 processor = {}
 for phase in ['train', 'validation']:
     processor[phase] = AugmentKeypoints(
-        phase, args.rotation_range, delta_scales, True, args.num_keypoints)
+        phase, args.rotation_range, delta_scales, args.num_keypoints)
 
 # creating sequencers
 sequence = {}
@@ -66,20 +66,13 @@ for phase in ['train', 'validation']:
     sequence[phase] = ProcessingSequence(pipeline, args.batch_size, data, True)
 
 # instantiate model
-batch_shape = (args.batch_size, args.image_size, args.image_size, 1)
-model = GaussianMixtureModel(batch_shape, args.num_keypoints, args.filters)
+input_shape = (args.image_size, args.image_size, 1)
+model = KeypointNet2D(input_shape, args.num_keypoints, args.filters)
 model.summary()
-
-
-# creating loss function for gaussian mixture model
-def negative_log_likelihood(y_true, predicted_distributions):
-    log_likelihood = predicted_distributions.log_prob(y_true)
-    return - log_likelihood
-
 
 # setting optimizer and compiling model
 optimizer = Adam(args.learning_rate, amsgrad=True)
-model.compile(optimizer, loss=negative_log_likelihood)
+model.compile(optimizer, loss='mean_squared_error')
 
 # making directory for saving model weights and logs
 model_name = ['FaceKP', model.name, str(args.filters), str(args.num_keypoints)]

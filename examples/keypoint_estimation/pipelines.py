@@ -2,17 +2,21 @@ from paz.backend.keypoints import denormalize_keypoints
 from paz.abstract import SequentialProcessor
 from paz.abstract import Processor
 from paz import processors as pr
+from paz.backend.image import draw_circle
+from paz.backend.image.draw import GREEN
 
 
-from processors import PartitionKeypoints
-from processors import PredictMeanDistribution
-from processors import draw_circles
+def draw_circles(image, points, color=GREEN, radius=3):
+    for point in points:
+        draw_circle(image, point, color, radius)
+    return image
 
 
 class AugmentKeypoints(SequentialProcessor):
-    def __init__(self, phase, rotation_range=30, delta_scales=[0.2, 0.2],
-                 with_partition=False, num_keypoints=15):
+    def __init__(self, phase, rotation_range=30,
+                 delta_scales=[0.2, 0.2], num_keypoints=15):
         super(AugmentKeypoints, self).__init__()
+
         self.add(pr.UnpackDictionary(['image', 'keypoints']))
         if phase == 'train':
             self.add(pr.ControlMap(pr.RandomBrightness()))
@@ -22,20 +26,13 @@ class AugmentKeypoints(SequentialProcessor):
         self.add(pr.ControlMap(pr.NormalizeImage(), [0], [0]))
         self.add(pr.ControlMap(pr.ExpandDims(-1), [0], [0]))
         self.add(pr.ControlMap(pr.NormalizeKeypoints((96, 96)), [1], [1]))
-        labels_info = {1: {'keypoints': [num_keypoints, 2]}}
-        if with_partition:
-            outro_indices = list(range(1, 16))
-            self.add(pr.ControlMap(PartitionKeypoints(), [1], outro_indices))
-            labels_info = {}
-            for arg in range(num_keypoints):
-                labels_info[arg + 1] = {'keypoint_%s' % arg: [2]}
-        self.add(pr.SequenceWrapper(
-            {0: {'image': [96, 96, 1]}}, labels_info))
+        self.add(pr.SequenceWrapper({0: {'image': [96, 96, 1]}},
+                                    {1: {'keypoints': [num_keypoints, 2]}}))
 
 
-class ProbabilisticKeypointPrediction(Processor):
+class PredictMultipleKeypoints2D(Processor):
     def __init__(self, detector, keypoint_estimator, radius=3):
-        super(ProbabilisticKeypointPrediction, self).__init__()
+        super(PredictMultipleKeypoints2D, self).__init__()
         # face detector
         RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
         self.detect = pr.Predict(detector, RGB2GRAY, pr.ToBoxes2D(['face']))
@@ -47,23 +44,15 @@ class ProbabilisticKeypointPrediction(Processor):
         preprocess.add(pr.NormalizeImage())
         preprocess.add(pr.ExpandDims([0, 3]))
 
-        # creating post-processing pipeline for keypoint esimtator
-        # postprocess = SequentialProcessor()
-        # postprocess.add(ToNumpyArray())
-        # postprocess.add(pr.Squeeze(1))
-
-        # keypoint estimator predictions
-        self.estimate_keypoints = PredictMeanDistribution(
-            keypoint_estimator, preprocess)
-
-        # self.estimate_keypoints = pr.Predict(
-        # keypoint_estimator, preprocess, postprocess)
+        # prediction
+        self.estimate_keypoints = pr.Predict(
+            keypoint_estimator, preprocess, pr.Squeeze(0))
 
         # used for drawing up keypoints in original image
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
         self.denormalize_keypoints = pr.DenormalizeKeypoints()
         self.crop_boxes2D = pr.CropBoxes2D()
-        self.num_keypoints = len(keypoint_estimator.output_shape)
+        self.num_keypoints = keypoint_estimator.output_shape[1]
         self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
         self.draw_boxes2D = pr.DrawBoxes2D(['face'], colors=[[0, 255, 0]])
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
@@ -88,7 +77,7 @@ if __name__ == '__main__':
 
     data_manager = FacialKeypoints('dataset/', 'train')
     dataset = data_manager.load_data()
-    augment_keypoints = AugmentKeypoints('train', with_partition=False)
+    augment_keypoints = AugmentKeypoints('train')
     for arg in range(1, 100):
         sample = dataset[arg]
         predictions = augment_keypoints(sample)

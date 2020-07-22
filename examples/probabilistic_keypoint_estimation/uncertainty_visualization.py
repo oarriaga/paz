@@ -5,7 +5,6 @@ import tensorflow as tf
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from paz.abstract import ProcessingSequence
 from paz.backend.keypoints import denormalize_keypoints
 from paz.backend.image import lincolor
 
@@ -52,7 +51,8 @@ model = GaussianMixtureModel(batch_shape, args.num_keypoints, args.filters)
 model.summary()
 
 # loading weights
-model_name = '_'.join(['FaceKP', model.name, str(args.num_keypoints)])
+model_name = ['FaceKP', model.name, str(args.filters), str(args.num_keypoints)]
+model_name = '_'.join(model_name)
 save_path = os.path.join(args.save_path, model_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path)
