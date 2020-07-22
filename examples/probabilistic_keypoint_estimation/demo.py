@@ -42,12 +42,12 @@ model.compile(run_eagerly=False)
 
 model.predict(np.zeros((1, 96, 96, 1)))  # first prediction takes a while...
 # setting detector
-detector = HaarCascadeDetector(args.detector_name)
+detector = HaarCascadeDetector(args.detector_name, 0)
 
 # setting prediction pipeline
 pipeline = ProbabilisticKeypointPrediction(detector, model)
 
 # setting camera and video player
 camera = Camera(args.camera_id)
-player = VideoPlayer((1280, 960), pipeline, camera)
+player = VideoPlayer((640, 480), pipeline, camera)
 player.run()
