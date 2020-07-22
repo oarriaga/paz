@@ -14,7 +14,7 @@ from pipelines import AugmentKeypoints
 
 description = 'Training script for learning 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-f', '--filters', default=32, type=int,
+parser.add_argument('-f', '--filters', default=8, type=int,
                     help='Number of filters in convolutional blocks')
 parser.add_argument('-b', '--batch_size', default=32, type=int,
                     help='Batch size for training')
