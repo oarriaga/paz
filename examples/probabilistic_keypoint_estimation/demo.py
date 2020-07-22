@@ -9,14 +9,11 @@ from paz.models import HaarCascadeDetector
 from model import GaussianMixtureModel
 from pipelines import ProbabilisticKeypointPrediction
 
-# TODO change camera id
 
 description = 'Demo script for running 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-f', '--filters', default=8, type=int,
                     help='Number of filters in convolutional blocks')
-parser.add_argument('-b', '--batch_size', default=10, type=int,
-                    help='Batch size for training')
 parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
                     help='Number of keypoints')
 parser.add_argument('-is', '--image_size', default=96, type=int,
