@@ -2,7 +2,6 @@ import os
 import argparse
 import numpy as np
 
-import tensorflow as tf
 from paz.backend.camera import Camera
 from paz.backend.camera import VideoPlayer
 from paz.models import HaarCascadeDetector
@@ -12,7 +11,7 @@ from pipelines import ProbabilisticKeypointPrediction
 
 # TODO change camera id
 
-description = 'Training script for learning 2D probabilistic keypoints'
+description = 'Demo script for running 2D probabilistic keypoints'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-f', '--filters', default=8, type=int,
                     help='Number of filters in convolutional blocks')
@@ -42,12 +41,8 @@ model_name = '_'.join(['FaceKP', model.name, str(args.num_keypoints)])
 save_path = os.path.join(args.save_path, model_name)
 model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 model.load_weights(model_path)
-# model.run_eagerly = False
 model.compile(run_eagerly=False)
-print('Building graph...')
-# model = tf.function(model)
 
-print('Making first prediction...')
 model.predict(np.zeros((1, 96, 96, 1)))  # first prediction takes a while...
 # setting detector
 detector = HaarCascadeDetector(args.detector_name)
