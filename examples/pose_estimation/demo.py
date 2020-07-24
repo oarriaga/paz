@@ -2,6 +2,8 @@ import os
 import argparse
 import numpy as np
 
+from tensorflow.keras.utils import get_file
+
 from paz.backend.camera import Camera
 from paz.backend.camera import VideoPlayer
 from paz.models import HaarCascadeDetector
@@ -14,14 +16,14 @@ description = 'Demo script for estimating 6D pose-heads from face-keypoints'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-f', '--filters', default=32, type=int,
                     help='Number of filters in convolutional blocks')
-parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
-                    help='Number of keypoints')
-parser.add_argument('-is', '--image_size', default=96, type=int,
-                    help='Model image size')
 parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 parser.add_argument('-d', '--detector_name', type=str,
                     default='frontalface_default')
+parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
+                    help='Number of keypoints')
+parser.add_argument('-is', '--image_size', default=96, type=int,
+                    help='Model image size')
 parser.add_argument('-fl', '--focal_length', type=float, default=None,
                     help="Focal length in pixels. If ''None'' it's"
                     "approximated using the image width")
@@ -29,10 +31,10 @@ parser.add_argument('-ic', '--image_center', nargs='+', type=float,
                     default=None, help="Image center in pixels for internal"
                     "camera matrix. If ''None'' it's approximated using the"
                     "image center from an extracted frame.")
-parser.add_argument('-s', '--save_path',
-                    default=os.path.join(
-                        os.path.expanduser('~'), '.keras/paz/models'),
-                    type=str, help='Path for writing model weights and logs')
+parser.add_argument('-wu', '--weights_URL', type=str,
+                    default='https://github.com/oarriaga/altamira-data/'
+                    'releases/download/v0.7/', help='URL to keypoint weights')
+# https://github.com/oarriaga/altamira-data/releases/download/v0.7/FaceKP_keypointnet2D_32_15_weights.hdf5
 args = parser.parse_args()
 
 # obtaining a frame to perform focal-length and camera center approximation
@@ -64,10 +66,10 @@ model.summary()
 
 # loading weights
 model_name = ['FaceKP', model.name, str(args.filters), str(args.num_keypoints)]
-model_name = '_'.join(model_name)
-save_path = os.path.join(args.save_path, model_name)
-model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
-model.load_weights(model_path)
+model_name = '%s_weights.hdf5' % '_'.join(model_name)
+URL = args.weights_URL + model_name
+weights_path = get_file(model_name, URL, cache_subdir='paz/models')
+model.load_weights(weights_path)
 model.compile(run_eagerly=False)
 
 # setting detector
