@@ -342,7 +342,11 @@ PAGES = [
             pipelines.PreprocessImage,
             pipelines.RandomizeRenderedImage,
             pipelines.RenderTwoViews,
-            pipelines.SingleShotInference
+            pipelines.SingleShotPrediction,
+            pipelines.SSD512COCO,
+            pipelines.SSD512YCBVideo,
+            pipelines.SSD300VOC,
+            pipelines.SSD300FAT
         ]
     },
 
