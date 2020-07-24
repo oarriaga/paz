@@ -1,8 +1,7 @@
 # (PAZ) Perception for Autonomous Systems
 ![Python package](https://github.com/oarriaga/paz/workflows/Python%20package/badge.svg)
 
-High-level perception library in python.
-
+Multi-level perception library in Python.
 
 * PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
 
@@ -25,7 +24,14 @@ High-level perception library in python.
 
 * PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-* PAZ contains a high-level API for constructing data-augmentation pipelines:
+* PAZ high-level API for easy inference
+
+``` python
+detect = SingleShotInference(SSD300(), class_names)
+inferences = detect(image)
+```
+
+* PAZ mid-level API allows us to construct easy data-augmentation pipelines:
 
 ``` python
 from paz.abstract import SequentialProcessor
@@ -45,10 +51,6 @@ image = augment_image(image)
 
 * For example, a simple API for detecting common-objects (COCO) from an image (check the demo): 
 
-``` python
-detect = SingleShotInference(SSD300(), class_names)
-inferences = detect(image)
-```
 
 * PAZ has a low-level API for using functions as helpers for your project!
 
@@ -86,6 +88,6 @@ I feel it's easy to blurry a company name with the individuals behind their proj
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration before we lay upon you our hardened criticism.
 
-### Why the name PAZ?
+### Why PAZ?
 
 
