@@ -6,7 +6,6 @@ from paz.backend.camera import Camera
 from paz.backend.camera import VideoPlayer
 from paz.models import HaarCascadeDetector
 from paz.models import KeypointNet2D
-from paz.backend.camera import Camera
 
 from pipelines import HeadPose6DEstimation
 # TODO change camera id to 0
@@ -28,47 +27,27 @@ parser.add_argument('-s', '--save_path',
                     type=str, help='Path for writing model weights and logs')
 args = parser.parse_args()
 
-
-
 keypoints3D = np.array([
-    [-2.20, 6.78, 11.38],  # left--center-eye
-    [+2.20, 6.78, 11.38],  # right-center-eye
-    [-1.31, 6.76, 11.07],  # left--eye close to nose
-    [-2.94, 6.10, 11.23],  # left--eye close to ear
-    [+1.31, 6.76, 11.07],  # right-eye close to nose
-    [+2.94, 6.10, 11.23],  # right-eye close to ear
-    [-1.06, 7.58, 12.24],  # left--eyebrow close to nose
-    [-3.75, 5.85, 12.08],  # left--eyebrow close to ear
-    [+1.06, 7.58, 12.24],  # right-eyebrow close to nose
-    [+3.75, 5.85, 12.08],  # right-eyebrow close to ear
-    [0.0, 9.09, 9.19],  # nose
-    [-1.83, 6.91, 6.83],  # lefty-lip
-    [+1.83, 6.91, 6.83],  # right-lip
-    [0.0, 8.26, 7.54],  # up---lip
-    [0.0, 8.15, 6.45],  # down-lip
+    [-220, 678, 1138],  # left--center-eye
+    [+220, 678, 1138],  # right-center-eye
+    [-131, 676, 1107],  # left--eye close to nose
+    [-294, 610, 1123],  # left--eye close to ear
+    [+131, 676, 1107],  # right-eye close to nose
+    [+294, 610, 1123],  # right-eye close to ear
+    [-106, 758, 1224],  # left--eyebrow close to nose
+    [-375, 585, 1208],  # left--eyebrow close to ear
+    [+106, 758, 1224],  # right-eyebrow close to nose
+    [+375, 585, 1208],  # right-eyebrow close to ear
+    [0.0, 909, 919],  # nose
+    [-183, 691, 683],  # lefty-lip
+    [+183, 691, 683],  # right-lip
+    [0.0, 826, 754],  # up---lip
+    [0.0, 815, 645],  # down-lip
 ])
-# keypoints3D = keypoints3D[[3, 5, 10, 11, 12], :]
 
-
-keypoints3D = np.array([(-225.0, 170.0, -135.0),     # left--eye close to ear
-                        (225.0, 170.0, -135.0),      # right-eye close to ear
-                        (0.0, 0.0, 0.0),             # nose
-                        (-150.0, -150.0, -125.0),    # Left--lip
-                        (150.0, -150.0, -125.0),     # right-lip
-                        (0.0, -180.0, -65.0)        # Chin
-                        ])
-
-
-"""
-y = keypoints3D[:, 1]
-z = keypoints3D[:, 2]
-keypoints3D[:, 1] = z
-keypoints3D[:, 2] = y
 keypoints3D = keypoints3D - np.mean(keypoints3D, axis=0)
-keypoints3D = keypoints3D
-"""
-
-model_points = {'keypoints3D': keypoints3D, 'dimensions': {None: [500.0, 500.0]}}
+model_points = {'keypoints3D': keypoints3D,
+                'dimensions': {None: [900.0, 600.0]}}
 
 camera = Camera(args.camera_id)
 camera.start()
@@ -84,7 +63,6 @@ camera.distortion = np.zeros((4, 1))
 camera.intrinsics = np.array([[focal_length, 0, center[0]],
                               [0, focal_length, center[1]],
                               [0, 0, 1]])
-# print(camera_intrinsics)
 
 # instantiate model
 input_shape = (args.image_size, args.image_size, 1)
