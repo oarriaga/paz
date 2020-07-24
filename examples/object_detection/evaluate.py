@@ -7,7 +7,7 @@ from paz.datasets import VOC
 from paz.datasets import get_class_names
 from paz.evaluation import evaluateMAP
 from paz.models import SSD300
-from paz.pipelines import SingleShotInference
+from paz.pipelines import SingleShotPrediction
 
 class_names = get_class_names()
 class_dict = {
@@ -28,7 +28,7 @@ def test(weights_path):
 
     model = SSD300()
     model.load_weights(weights_path)
-    detector = SingleShotInference(model, labels, score_thresh, nms_thresh)
+    detector = SingleShotPrediction(model, labels, score_thresh, nms_thresh)
 
     data_name = 'VOC2007'
     data_split = 'test'
