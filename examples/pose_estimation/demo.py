@@ -1,94 +1,83 @@
 import os
+import argparse
 import numpy as np
-from paz.core import Processor
-import paz.processors as pr
-from paz.pipelines import SingleShotInference
-from paz.pipelines import KeypointInference
-from paz.models import SSD300
-from paz.models import KeypointNet2D
-from paz.datasets import get_class_names
-from paz.core import VideoPlayer
+
 from tensorflow.keras.utils import get_file
 
+from paz.backend.camera import Camera
+from paz.backend.camera import VideoPlayer
+from paz.models import HaarCascadeDetector
+from paz.models import KeypointNet2D
 
-class PoseInference(Processor):
-    def __init__(self, detector, keypoint_pipeline,
-                 points3D, camera_intrinsics, distortions,
-                 offset_scales=[.2, .2]):
+from pipelines import HeadPose6DEstimation
+from pipelines import model_data
 
-        super(PoseInference, self).__init__()
-        self.detector = detector
-        self.detector.remove('DrawBoxes2D')
-        self.detector.add(pr.FilterClassBoxes2D(['035_power_drill']))
-        self.detector.add(pr.SquareBoxes2D())
-        self.detector.add(pr.ClipBoxes2D())
-        # self.detector.add(pr.CropBoxes2D(offset_scales, topic='image_crops'))
-        self.offset_scales = offset_scales
-        self.crop = pr.CropBoxes2D(self.offset_scales, topic='image_crops')
+description = 'Demo script for estimating 6D pose-heads from face-keypoints'
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument('-f', '--filters', default=32, type=int,
+                    help='Number of filters in convolutional blocks')
+parser.add_argument('-c', '--camera_id', type=int, default=0,
+                    help='Camera device ID')
+parser.add_argument('-d', '--detector_name', type=str,
+                    default='frontalface_default')
+parser.add_argument('-nk', '--num_keypoints', default=15, type=int,
+                    help='Number of keypoints')
+parser.add_argument('-is', '--image_size', default=96, type=int,
+                    help='Model image size')
+parser.add_argument('-fl', '--focal_length', type=float, default=None,
+                    help="Focal length in pixels. If ''None'' it's"
+                    "approximated using the image width")
+parser.add_argument('-ic', '--image_center', nargs='+', type=float,
+                    default=None, help="Image center in pixels for internal"
+                    "camera matrix. If ''None'' it's approximated using the"
+                    "image center from an extracted frame.")
+parser.add_argument('-wu', '--weights_URL', type=str,
+                    default='https://github.com/oarriaga/altamira-data/'
+                    'releases/download/v0.7/', help='URL to keypoint weights')
+# https://github.com/oarriaga/altamira-data/releases/download/v0.7/FaceKP_keypointnet2D_32_15_weights.hdf5
+args = parser.parse_args()
 
-        self.keypoint_pipeline = keypoint_pipeline
-        self.keypoint_pipeline.remove('DrawKeypoints2D')
-        self.num_keypoints = self.keypoint_pipeline.num_keypoints
+# obtaining a frame to perform focal-length and camera center approximation
+camera = Camera(args.camera_id)
+camera.start()
+image_size = camera.read().shape[0:2]
+camera.stop()
 
-        self.points3D = points3D
-        self.camera_intrinsics = camera_intrinsics
-        self.distortions = distortions
-        self.move_origin = pr.ChangeKeypointsCoordinateSystem()
-        self.draw_boxes = pr.DrawBoxes2D(self.detector.class_names)
-        self.draw_keypoints = pr.DrawKeypoints2D(self.num_keypoints, 3, False)
-        self.solve_pnp = pr.SolvePNP(points3D, camera_intrinsics, distortions)
+# loading focal length or approximating it
+focal_length = args.focal_length
+if focal_length is None:
+    focal_length = image_size[1]
 
-        self.show_image = pr.ShowImage()
+# loading image/sensor center or approximating it
+image_center = args.image_center
+if args.image_center is None:
+    image_center = (image_size[1] / 2.0, image_size[0] / 2.0)
 
-    def call(self, kwargs):
-        x = self.detector(kwargs)
-        x = self.crop(x)
-        # poses6D, keypoints = [], []
-        for (box2D, image) in zip(x['boxes2D'], x['image_crops']):
-            print(image.shape, image.max(), image.min())
-            k = self.keypoint_pipeline({'box2D': box2D, 'image': image})
-            # k = self.move_origin(k)
-            # k = self.solve_pnp(k)
-            k = self.draw_keypoints(k)
-            return k
-            # k = self.show_image(k)
-            # poses6D.append(k['pose6D'])
-            # keypoints.append(k['keypoints'])
-        # x['poses6D'], x['keypoints'] = poses6D, keypoints
-        # for keypoints in x['keypoints']:
-        #     self.draw_keypoints({'image': x['image'], 'keypoints': keypoints})
-        # x = self.draw_boxes(x)
-        return x
+# building camera parameters
+camera.distortion = np.zeros((4, 1))
+camera.intrinsics = np.array([[focal_length, 0, image_center[0]],
+                              [0, focal_length, image_center[1]],
+                              [0, 0, 1]])
 
+# instantiate model
+input_shape = (args.image_size, args.image_size, 1)
+model = KeypointNet2D(input_shape, args.num_keypoints, args.filters)
+model.summary()
 
-score_thresh, nms_thresh, labels = .05, .45, get_class_names('FAT')
+# loading weights
+model_name = ['FaceKP', model.name, str(args.filters), str(args.num_keypoints)]
+model_name = '%s_weights.hdf5' % '_'.join(model_name)
+URL = args.weights_URL + model_name
+weights_path = get_file(model_name, URL, cache_subdir='paz/models')
+model.load_weights(weights_path)
+model.compile(run_eagerly=False)
 
-ssd300 = SSD300(len(labels), 'FAT', 'FAT')
-detector = SingleShotInference(ssd300, labels, score_thresh, nms_thresh)
-input_shape, num_keypoints = (128, 128, 3), 10
-class_name = '035_power_drill'
-keypointnet2D = KeypointNet2D(input_shape, num_keypoints)
-model_name = '_'.join([keypointnet2D.name, str(num_keypoints), class_name])
-filename = os.path.join(model_name, '_'.join([model_name, 'weights.hdf5']))
-filename = get_file(filename, None, cache_subdir='paz/models')
-keypointnet2D.load_weights(filename)
-keypointer = KeypointInference(keypointnet2D, num_keypoints)
+# setting detector
+detector = HaarCascadeDetector(args.detector_name, 0)
 
-model_name = '_'.join(['keypointnet-shared', str(num_keypoints), class_name])
-filename = os.path.join(model_name, 'keypoints_mean.txt')
-filename = get_file(filename, None, cache_subdir='paz/models')
-points3D = np.loadtxt(filename)[:, :3].astype(np.float64)
+# setting prediction pipeline
+pipeline = HeadPose6DEstimation(detector, model, model_data, camera)
 
-filename = os.path.join('logitech_c270', 'camera_intrinsics.txt')
-filename = get_file(filename, None, cache_subdir='paz/cameras')
-camera_intrinsics = np.loadtxt(filename)
-
-filename = os.path.join('logitech_c270', 'distortions.txt')
-filename = get_file(filename, None, cache_subdir='paz/cameras')
-distortions = np.loadtxt(filename)
-
-pose_pipeline = PoseInference(
-    detector, keypointer, points3D, camera_intrinsics, distortions)
-
-video_player = VideoPlayer((1280, 960), pose_pipeline, 2)
-video_player.run()
+# setting camera and video player
+player = VideoPlayer((640, 480), pipeline, camera)
+player.run()

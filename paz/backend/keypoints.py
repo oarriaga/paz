@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 
 UPNP = cv2.SOLVEPNP_UPNP
+LEVENBERG_MARQUARDT = cv2.SOLVEPNP_ITERATIVE
 
 
 def normalize_keypoints(keypoints, height, width):

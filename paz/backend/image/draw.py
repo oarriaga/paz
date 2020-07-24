@@ -110,7 +110,7 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=True):
     return image
 
 
-def draw_cube(image, points, color=GREEN, thickness=2):
+def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
     """ Draws a cube in image.
 
     # Arguments
@@ -119,6 +119,7 @@ def draw_cube(image, points, color=GREEN, thickness=2):
             of length two indicating ``(y, x)`` openCV coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer indicating the thickness of the line to be drawn.
+        radius: Integer indicating the radius of corner points to be drawn.
 
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with cube.
@@ -148,7 +149,7 @@ def draw_cube(image, points, color=GREEN, thickness=2):
     draw_line(image, points[5][0], points[7][0], color, thickness)
 
     # draw dots
-    # [draw_dot(image, point, color, point_radii) for point in points]
+    [draw_dot(image, np.squeeze(point), color, radius) for point in points]
     return image
 
 
