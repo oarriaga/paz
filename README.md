@@ -4,7 +4,7 @@
 High-level perception library in python.
 
 
-PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
+* PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
 
 | Task (link to tutorial)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
@@ -19,9 +19,9 @@ PAZ contains the following tutorials/examples with training and inference pipeli
 |Attention                   |Spatial Transformers   |
 |Object detection            |HaarCascades           |
 
-PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
+* PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-PAZ contains a high-level API for constructing data-augmentation pipelines:
+* PAZ contains a high-level API for constructing data-augmentation pipelines:
 
 ``` python
 from paz.abstract import SequentialProcessor
@@ -37,31 +37,31 @@ augment_image.add(pr.RandomHue())
 image = augment_image(image)
 ```
 
-PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization.
+* PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization.
 
-For example, a simple API for detecting common-objects (COCO) from an image (check the demo): 
+* For example, a simple API for detecting common-objects (COCO) from an image (check the demo): 
 
 ``` python
 detect = SingleShotInference(SSD300(), class_names)
 inferences = detect(image)
 ```
 
-PAZ has a low-level API for using functions as helpers for your project!
+* PAZ has a low-level API for using functions as helpers for your project!
 
 ``` python
 from paz.backend import boxes, camera, image, keypoints, quaternion
 ```
 
-PAZ has built-in messages e.g. ''Pose6D'' for easier data exchange with other libraries or frameworks.
+* PAZ has built-in messages e.g. ''Pose6D'' for easier data exchange with other libraries or frameworks.
 
-PAZ has custom callbacks for evaluating MAP in object detectors while training and drawing inferences of any model
+* PAZ has custom callbacks for evaluating MAP in object detectors while training and drawing inferences of any model
 
-PAZ has modular losses for calculating metrics while training
+* PAZ has modular losses for calculating metrics while training
     
-PAZ comes with data loaders for the following datasets:
+* PAZ comes with data loaders for the following datasets:
     OpenImages, VOC, YCB-Video, FAT, FERPlus, FER2013
 
-PAZ has automatic batch creating and dispatching
+* PAZ has automatic batch creating and dispatching
 
 ## Installation
 
