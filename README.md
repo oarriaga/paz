@@ -6,6 +6,8 @@ High-level perception library in python.
 
 * PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
 
+<center>
+
 | Task (link to tutorial)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
 |Object detection            |SSD-512                |
@@ -18,6 +20,8 @@ High-level perception library in python.
 |Keypoint estimation         |KeypointNet2D          |
 |Attention                   |Spatial Transformers   |
 |Object detection            |HaarCascades           |
+
+</center>
 
 * PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
