@@ -1,11 +1,16 @@
-from paz.backend.keypoints import denormalize_keypoints, solve_PNP, UPNP
+from paz.backend.keypoints import denormalize_keypoints, solve_PNP
+# from paz.backend.keypoints import UPNP
 from paz.abstract import SequentialProcessor, Pose6D
 from paz.abstract import Processor
 from paz import processors as pr
 from paz.backend.image import draw_circle
 from paz.backend.image.draw import GREEN
+from paz.backend.keypoints import project_points3D
+from paz.backend.image.draw import draw_dot
+from paz.backend.image.draw import draw_line
 import numpy as np
 import cv2
+
 
 def draw_circles(image, points, color=GREEN, radius=3):
     for point in points:
@@ -68,6 +73,87 @@ class SolvePNP(Processor):
         return pose6D
 
 
+def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
+    """ Draws a cube in image.
+
+    # Arguments
+        image: Numpy array of shape ``[H, W, 3]``.
+        points: List of length 8  having each element a list
+            of length two indicating ``(y, x)`` openCV coordinates.
+        color: List of length three indicating RGB color of point.
+        thickness: Integer indicating the thickness of the line to be drawn.
+
+    # Returns
+        Numpy array with shape ``[H, W, 3]``. Image with cube.
+    """
+    color = color[::-1]  # transform to BGR for openCV
+
+    # draw bottom
+    draw_line(image, points[0][0], points[1][0], color, thickness)
+    draw_line(image, points[1][0], points[2][0], color, thickness)
+    draw_line(image, points[3][0], points[2][0], color, thickness)
+    draw_line(image, points[3][0], points[0][0], color, thickness)
+
+    # draw top
+    draw_line(image, points[4][0], points[5][0], color, thickness)
+    draw_line(image, points[6][0], points[5][0], color, thickness)
+    draw_line(image, points[6][0], points[7][0], color, thickness)
+    draw_line(image, points[4][0], points[7][0], color, thickness)
+
+    # draw sides
+    draw_line(image, points[0][0], points[4][0], color, thickness)
+    draw_line(image, points[7][0], points[3][0], color, thickness)
+    draw_line(image, points[5][0], points[1][0], color, thickness)
+    draw_line(image, points[2][0], points[6][0], color, thickness)
+
+    # draw X mark on top
+    draw_line(image, points[4][0], points[6][0], color, thickness)
+    draw_line(image, points[5][0], points[7][0], color, thickness)
+
+    # draw dots
+    [draw_dot(image, np.squeeze(point), color, radius) for point in points]
+    return image
+
+
+class DrawBoxes3D(Processor):
+    def __init__(self, camera, class_to_dimensions):
+        """Draw boxes 3D of multiple objects
+
+        # Arguments
+            class_to_dimensions: Dictionary that has as keys the
+                class names and as value a list [model_height, model_width]
+        """
+        super(DrawBoxes3D, self).__init__()
+        self.camera = camera
+        self.class_to_dimensions = class_to_dimensions
+        self.class_to_points = self._make_points(self.class_to_dimensions)
+
+    def _make_points(self, class_to_dimensions):
+        class_to_points = {}
+        for class_name, dimensions in self.class_to_dimensions.items():
+            height, width = dimensions
+            point_1 = [+width, -height, +width]
+            point_2 = [+width, -height, -width]
+            point_3 = [-width, -height, -width]
+            point_4 = [-width, -height, +width]
+            point_5 = [+width, +height, +width]
+            point_6 = [+width, +height, -width]
+            point_7 = [-width, +height, -width]
+            point_8 = [-width, +height, +width]
+            points = [point_1, point_2, point_3, point_4,
+                      point_5, point_6, point_7, point_8]
+            points = np.array(points)
+            class_to_points[class_name] = points
+        return class_to_points
+
+    def call(self, image, pose6D):
+        points3D = self.class_to_points[pose6D.class_name]
+        args = (points3D, pose6D, self.camera)
+        points2D = project_points3D(*args).astype(np.int32)
+        draw_cube(image, points2D, thickness=1)
+        return image
+
+
 class HeadPose6DEstimation(Processor):
     def __init__(self, detector, keypointer, model_points, camera, radius=3):
         super(HeadPose6DEstimation, self).__init__()
@@ -93,7 +179,7 @@ class HeadPose6DEstimation(Processor):
         self.num_keypoints = keypointer.output_shape[1]
         self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
         self.draw_boxes2D = pr.DrawBoxes2D(['face'], colors=[[0, 255, 0]])
-        self.draw_box3D = pr.DrawBoxes3D(camera, model_points['dimensions'])
+        self.draw_box3D = DrawBoxes3D(camera, model_points['dimensions'])
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
 
         self.solve_PNP = SolvePNP(model_points['keypoints3D'], camera)
@@ -107,7 +193,7 @@ class HeadPose6DEstimation(Processor):
             keypoints = self.denormalize_keypoints(keypoints, cropped_image)
             keypoints = self.change_coordinates(keypoints, box2D)
             # keypoints = keypoints[13:15, :]
-            keypoints = keypoints[[3, 5, 10, 11, 12, 14], :]
+            # keypoints = keypoints[[3, 5, 10, 11, 12, 14], :]
             pose6D = self.solve_PNP(keypoints)
             image = self.draw_box3D(image, pose6D)
             image = self.draw(image, keypoints)
