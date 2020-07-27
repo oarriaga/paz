@@ -47,8 +47,7 @@ def boxes():
 
 @pytest.fixture
 def target():
-    target = [0.48706725, 0.787838, 0.70033113, 0.70739083, 0.39040922]
-    return target
+    return [0.48706725, 0.787838, 0.70033113, 0.70739083, 0.39040922]
 
 
 @pytest.fixture
@@ -62,9 +61,8 @@ def boxes_with_label():
 
 
 @pytest.fixture
-def target_matches():
-    target_unique_matches = np.array([[238., 155., 306., 204.]])
-    return target_unique_matches
+def target_unique_matches():
+    return np.array([[238., 155., 306., 204.]])
 
 
 @pytest.fixture
@@ -103,28 +101,27 @@ def test_compute_ious(boxes, target):
     assert np.allclose(result, target)
 
 
-@pytest.mark.parametrize("box", [[.1, .2, .3, .4]])
+@pytest.mark.parametrize('box', [[.1, .2, .3, .4]])
 def test_denormalize_box(box):
     box = denormalize_box(box, (200, 300))
     assert(box == (30, 40, 90, 80))
 
 
 def test_to_center_form_inverse(boxes):
-    box_A, _ = boxes
+    box_A = boxes[0]
     assert np.all(to_point_form(to_center_form(box_A)) == box_A)
 
 
 def test_to_point_form_inverse(boxes):
-    box_A, _ = boxes
+    box_A = boxes[0]
     assert np.all(to_point_form(to_center_form(box_A)) == box_A)
 
 
 def test_to_center_form(boxes):
-    box_A, _ = boxes
+    box_A = boxes[0]
     boxes = to_center_form(box_A)
     boxes_A_result = to_point_form(boxes)
-    print(boxes_A_result == box_A)
-    print(boxes)
+    assert(boxes_A_result.all() == box_A.all())
 
 
 # def test_rotation_matrix_to_quaternion():
@@ -138,9 +135,9 @@ def test_to_center_form(boxes):
 #     assert np.allclose(rotation_matrix, affine_matrix[:3, :3])
 
 
-def test_match_box(boxes_with_label, target_matches):
+def test_match_box(boxes_with_label, target_unique_matches):
     matched_boxes = match(boxes_with_label, create_prior_boxes('VOC'))
-    assert np.array_equal(target_matches,
+    assert np.array_equal(target_unique_matches,
                           np.unique(matched_boxes[:, :-1], axis=0))
 
 
@@ -148,20 +145,18 @@ def test_to_encode(boxes_with_label):
     priors = create_prior_boxes('VOC')
     matches = match(boxes_with_label, priors)
     variances = [.1, .2]
-    assert np.all(
-        np.round(decode(
-            encode(matches, priors, variances), priors, variances)
-        ) == matches)
+    encoded_boxes = encode(matches, priors, variances)
+    decoded_boxes = decode(encoded_boxes, priors, variances)
+    assert np.all(np.round(decoded_boxes) == matches)
 
 
 def test_to_decode(boxes_with_label):
     priors = create_prior_boxes('VOC')
     matches = match(boxes_with_label, priors)
     variances = [.1, .2]
-    assert np.all(
-        np.round(decode(
-            encode(matches, priors, variances), priors, variances)
-        ) == matches)
+    encoded_boxes = encode(matches, priors, variances)
+    decoded_boxes = decode(encoded_boxes, priors, variances)
+    assert np.all(np.round(decoded_boxes) == matches)
 
 
 def test_prior_boxes(target_prior_boxes):
