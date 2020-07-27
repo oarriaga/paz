@@ -23,7 +23,7 @@ def draw_circle(image, point, color=GREEN, radius=5):
     """
     cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
     inner_radius = int(.8 * radius)
-    color = color[::-1]  # transform to BGR for openCV
+    # color = color[::-1]  # transform to BGR for openCV
     cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
     return image
 
@@ -59,7 +59,7 @@ def draw_line(image, point_A, point_B, color=GREEN, thickness=5):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with line.
     """
-    color = color[::-1]  # transform to BGR for openCV
+    # color = color[::-1]  # transform to BGR for openCV
     cv2.line(image, tuple(point_A), tuple(point_B), tuple(color), thickness)
     return image
 
@@ -78,7 +78,7 @@ def draw_rectangle(image, corner_A, corner_B, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    color = color[::-1]  # transform to BGR for openCV
+    # color = color[::-1]  # transform to BGR for openCV
     return cv2.rectangle(
         image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
 
@@ -99,7 +99,7 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=True):
     # drawing outer black rectangle
     point_A = (point[0] - radius, point[1] - radius)
     point_B = (point[0] + radius, point[1] + radius)
-    color = color[::-1]  # transform to BGR for openCV
+    # color = color[::-1]  # transform to BGR for openCV
     draw_rectangle(image, tuple(point_A), tuple(point_B), (0, 0, 0), filled)
 
     # drawing innner rectangle with given `color`
@@ -124,7 +124,7 @@ def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with cube.
     """
-    color = color[::-1]  # transform to BGR for openCV
+    # color = color[::-1]  # transform to BGR for openCV
 
     # draw bottom
     draw_line(image, points[0][0], points[1][0], color, thickness)
@@ -165,7 +165,7 @@ def draw_filled_polygon(image, vertices, color):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with polygon.
     """
-    color = color[::-1]  # transform to BGR for openCV
+    # color = color[::-1]  # transform to BGR for openCV
     cv2.fillPoly(image, [vertices], color)
     return image
 
