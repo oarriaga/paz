@@ -15,14 +15,18 @@ class DrawBoxes2D(Processor):
 
     # Arguments
         class_names: List of strings.
+        colors: List of lists containing the color values
+        weighted: Boolean. If ``True`` the colors are weighted with the
+            score of the bounding box.
     """
-    def __init__(self, class_names=None, colors=None):
+    def __init__(self, class_names=None, colors=None, weighted=False):
         self.class_names = class_names
         self.colors = colors
+        self.weighted = weighted
         if self.colors is None:
             self.colors = lincolor(len(self.class_names))
+
         if class_names is not None:
-            self.num_classes = len(self.class_names)
             self.class_to_color = dict(zip(self.class_names, self.colors))
         else:
             self.class_to_color = {None: self.colors, '': self.colors}
@@ -33,6 +37,8 @@ class DrawBoxes2D(Processor):
             x_min, y_min, x_max, y_max = box2D.coordinates
             class_name = box2D.class_name
             color = self.class_to_color[class_name]
+            if self.weighted:
+                color = [int(channel * box2D.score) for channel in color]
             text = '{:0.2f}, {}'.format(box2D.score, class_name)
             put_text(image, text, (x_min, y_min - 10), .7, color, 1)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
