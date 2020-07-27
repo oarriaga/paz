@@ -25,7 +25,8 @@ PAGES = [
         'page': 'backend/boxes.md',
         'functions': [
             boxes.apply_non_max_suppression,
-            boxes.apply_offsets,
+            boxes.offset,
+            boxes.clip,
             boxes.compute_iou,
             boxes.compute_ious,
             boxes.decode,
@@ -269,7 +270,7 @@ PAGES = [
             processors.DecodeBoxes,
             processors.NonMaximumSuppressionPerClass,
             processors.FilterBoxes,
-            processors.ApplyOffsets,
+            processors.OffsetBoxes2D,
             processors.CropImage
         ]
     },
@@ -346,7 +347,11 @@ PAGES = [
             pipelines.SSD512COCO,
             pipelines.SSD512YCBVideo,
             pipelines.SSD300VOC,
-            pipelines.SSD300FAT
+            pipelines.SSD300FAT,
+            pipelines.HaarCascadePrediction,
+            pipelines.HaarCascadeFrontalFace,
+            pipelines.XceptionClassifierFER,
+            pipelines.XceptionDetectionFER,
         ]
     },
 
