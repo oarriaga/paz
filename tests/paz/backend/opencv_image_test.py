@@ -1,8 +1,8 @@
-import cv2
 import numpy as np
 import pytest
 
 from paz.backend.image import opencv_image
+from paz.backend.image.opencv_image import split_and_normalize_alpha_channel
 
 # TODO:
 # Add tests for the following random functions:
@@ -47,7 +47,7 @@ def resized_shape(request):
     return call
 
 
-@pytest.mark.parametrize("rgb_channel", [[50, 120, 201]])
+@pytest.mark.parametrize('rgb_channel', [[50, 120, 201]])
 def test_cast_image(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
     casted_image = opencv_image.cast_image(test_image, dtype=np.float32)
@@ -64,11 +64,11 @@ def test_resize_image(load_image, image_shape, rgb_channel, resized_shape):
 def test_convert_color_space(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
     converted_colorspace = opencv_image.convert_color_space(
-        test_image, cv2.COLOR_RGB2BGR)
+        test_image, opencv_image.RGB2BGR)
     rgb_to_bgr = test_image[..., ::-1]
     assert np.all(converted_colorspace == rgb_to_bgr)
 
-    
+
 def test_flip_left_right(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
     image_filp = opencv_image.flip_left_right(test_image)
@@ -76,7 +76,7 @@ def test_flip_left_right(load_image, image_shape, rgb_channel):
     assert np.all(image_filp == flipped_image)
 
 
-def test_gaussian_image_blur_output_shape(load_image, image_shape, rgb_channel):
+def test_gaussian_blur_output_shape(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
     blurred = opencv_image.gaussian_image_blur(test_image)
     assert test_image.shape == blurred.shape
@@ -84,22 +84,24 @@ def test_gaussian_image_blur_output_shape(load_image, image_shape, rgb_channel):
 
 def test_split_alpha_channel(load_image, image_shape, rgb_channel):
     test_image = load_image(image_shape, rgb_channel)
-    b_channel, g_channel, r_channel = cv2.split(test_image)
+    b_channel = test_image[:, :, 0]
     alpha_channel = np.ones(b_channel.shape, dtype=b_channel.dtype) * 50
-    masked_image = cv2.merge((b_channel, g_channel, r_channel, alpha_channel))
-    split_alpha_img, alpha_mode = opencv_image.split_alpha_channel(
+    masked_image = np.dstack((test_image, alpha_channel))
+    split_alpha_img, alpha_mode = split_and_normalize_alpha_channel(
         masked_image)
     assert np.all(split_alpha_img == test_image)
 
 
-@pytest.mark.parametrize("rgb", [[50, 120, 201]])
+@pytest.mark.parametrize('rgb', [[50, 120, 201]])
 def test_alpha_blend(load_image, image_shape, rgb):
     test_image = load_image(image_shape, rgb)
-    background_image = load_image(image_shape, rgb, with_mask=False).astype(float)
-    foreground = load_image(image_shape, [0, 0, 0])
-    alpha = load_image(image_shape, [0, 0, 0])
-    alpha[10:50, 50:120] = 255
-    alpha = alpha.astype(float) / 255.
-    alpha_blend_image = opencv_image.alpha_blend(
-        foreground, background_image, alpha)
+    background_image = load_image(image_shape, rgb,
+                                  with_mask=False).astype(float)
+    alpha_channel = load_image(image_shape, [0, 0, 0],
+                               with_mask=False)
+    alpha_channel = alpha_channel[:, :, 0]
+    alpha_channel[10:50, 50:120] = 255
+    image = np.dstack((test_image, alpha_channel))
+    alpha_blend_image = opencv_image.blend_alpha_channel(
+        image, background_image)
     assert np.all(alpha_blend_image == test_image)
