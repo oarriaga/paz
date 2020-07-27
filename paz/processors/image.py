@@ -9,14 +9,15 @@ from ..backend.image import random_brightness
 from ..backend.image import random_contrast
 from ..backend.image import random_hue
 from ..backend.image import resize_image
-from ..backend.image import random_image_quality
+from ..backend.image import random_image_blur
 from ..backend.image import random_flip_left_right
 from ..backend.image import convert_color_space
-
-from ..backend.image import random_crop
-from ..backend.image import random_plain_background
-from ..backend.image import random_cropped_background
 from ..backend.image import show_image
+from ..backend.image import blend_alpha_channel
+from ..backend.image import random_image_crop
+from ..backend.image import make_random_plain_image
+from ..backend.image import concatenate_alpha_mask
+from ..backend.image import draw_filled_polygon
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -26,6 +27,9 @@ RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
 
 class CastImage(Processor):
     """Cast image to given dtype.
+
+    # Arguments
+        dtype: Str or np.dtype
     """
     def __init__(self, dtype):
         self.dtype = dtype
@@ -37,8 +41,9 @@ class CastImage(Processor):
 
 class SubtractMeanImage(Processor):
     """Subtract channel-wise mean to image.
+
     # Arguments
-        mean. List of length 3, containing the channel-wise mean.
+        mean: List of length 3, containing the channel-wise mean.
     """
     def __init__(self, mean):
         self.mean = mean
@@ -49,9 +54,10 @@ class SubtractMeanImage(Processor):
 
 
 class AddMeanImage(Processor):
-    """Subtract channel-wise mean to image.
+    """Adds channel-wise mean to image.
+
     # Arguments
-        mean. List of length 3, containing the channel-wise mean.
+        mean: List of length 3, containing the channel-wise mean.
     """
     def __init__(self, mean):
         self.mean = mean
@@ -62,7 +68,7 @@ class AddMeanImage(Processor):
 
 
 class NormalizeImage(Processor):
-    """Normalize image by diving its values by 255.0.
+    """Normalize image by diving all values by 255.0.
     """
     def __init__(self):
         super(NormalizeImage, self).__init__()
@@ -72,7 +78,7 @@ class NormalizeImage(Processor):
 
 
 class DenormalizeImage(Processor):
-    """Denormalize image by diving its values by 255.0.
+    """Denormalize image by multiplying all values by 255.0.
     """
     def __init__(self):
         super(DenormalizeImage, self).__init__()
@@ -82,8 +88,10 @@ class DenormalizeImage(Processor):
 
 
 class LoadImage(Processor):
-    """Decodes image filepath and loads image as tensor.
-    # TODO: Raise value error whenever the image was not found.
+    """Loads image.
+
+    # Arguments
+        num_channels: Integer, valid integers are: 1, 3 and 4.
     """
     def __init__(self, num_channels=3):
         self.num_channels = num_channels
@@ -95,9 +103,10 @@ class LoadImage(Processor):
 
 class RandomSaturation(Processor):
     """Applies random saturation to an image in RGB space.
+
     # Arguments
-        lower: float. Lower bound for saturation factor.
-        upper: float. Upper bound for saturation factor.
+        lower: Float, lower bound for saturation factor.
+        upper: Float, upper bound for saturation factor.
     """
     def __init__(self, lower=0.3, upper=1.5):
         self.lower = lower
@@ -110,8 +119,9 @@ class RandomSaturation(Processor):
 
 class RandomBrightness(Processor):
     """Adjust random brightness to an image in RGB space.
-    # Arguments:
-        max_delta: float.
+
+    # Arguments
+        max_delta: Float.
     """
     def __init__(self, delta=32):
         self.delta = delta
@@ -123,6 +133,7 @@ class RandomBrightness(Processor):
 
 class RandomContrast(Processor):
     """Applies random contrast to an image in RGB
+
     # Arguments
         lower: Float, indicating the lower bound of the random number
             to be multiplied with the BGR/RGB image.
@@ -140,8 +151,9 @@ class RandomContrast(Processor):
 
 class RandomHue(Processor):
     """Applies random hue to an image in RGB space.
+
     # Arguments
-        delta: Integer, indicating the range (-delta, delta ) of possible
+        delta: Int, indicating the range (-delta, delta ) of possible
             hue values.
     """
     def __init__(self, delta=18):
@@ -154,8 +166,9 @@ class RandomHue(Processor):
 
 class ResizeImage(Processor):
     """Resize image.
+
     # Arguments
-        size: list of two ints.
+        size: List of two ints.
     """
     def __init__(self, size):
         self.size = size
@@ -167,8 +180,9 @@ class ResizeImage(Processor):
 
 class ResizeImages(Processor):
     """Resize list of images.
+
     # Arguments
-        size: list of two ints.
+        size: List of two ints.
     """
     def __init__(self, size):
         self.size = size
@@ -178,19 +192,26 @@ class ResizeImages(Processor):
         return [resize_image(image, self.shape) for image in images]
 
 
-class RandomImageQuality(Processor):
+class RandomImageBlur(Processor):
     """Randomizes image quality
+
+    # Arguments
+        probability: Float between [0, 1]. Assigns probability of how
+            often a random image blur is applied.
     """
-    def __init__(self, lower, upper):
-        self.lower = lower
-        self.upper = upper
-        super(RandomImageQuality, self).__init__()
+    def __init__(self, probability=0.5):
+        super(RandomImageBlur, self).__init__()
+        self.probability = probability
 
     def call(self, image):
-        return random_image_quality(image, self.lower, self.upper)
+        if self.probability >= np.random.rand():
+            image = random_image_blur(image)
+        return image
 
 
 class RandomFlipImageLeftRight(Processor):
+    """Randomly flip the image left or right
+    """
     def __init__(self):
         super(RandomFlipImageLeftRight, self).__init__()
 
@@ -200,6 +221,7 @@ class RandomFlipImageLeftRight(Processor):
 
 class ConvertColorSpace(Processor):
     """Converts image to a different color space.
+
     # Arguments
         flag: Flag found in ``ops``indicating transform e.g. BGR2RGB
     """
@@ -211,46 +233,9 @@ class ConvertColorSpace(Processor):
         return convert_color_space(image, self.flag)
 
 
-class RandomPlainBackground(Processor):
-    """Adds a monochromatic background to an image with an alpha-mask channel.
-    """
-    def __init__(self):
-        super(RandomPlainBackground, self).__init__()
-
-    def call(self, image):
-        return random_plain_background(image)
-
-
-class RandomImageCrop(Processor):
-    """Crops and returns random patch of an image.
-    """
-    def __init__(self, size):
-        self.size = size
-        super(RandomImageCrop, self).__init__()
-
-    def call(self, image):
-        random_crop(image, self.size)
-
-
-class RandomCroppedBackground(Processor):
-    """Add a random cropped background from a randomly selected given set of
-    images to a .png image with an alpha-mask channel.
-    # Arguments:
-        image_filepaths: List containing the full path to the images
-            used to randomly select a crop.
-    """
-    def __init__(self, image_filepaths):
-        self.image_filepaths = image_filepaths
-        super(RandomCroppedBackground, self).__init__()
-
-    def call(self, image):
-        random_arg = np.random.randint(0, len(self.image_filepaths))
-        background = load_image(self.image_filepaths[random_arg])
-        return random_cropped_background(image, background)
-
-
 class ShowImage(Processor):
     """Shows image in a separate window.
+
     # Arguments
         window_name: String. Window name.
         wait: Boolean
@@ -265,6 +250,11 @@ class ShowImage(Processor):
 
 
 class ImageDataProcessor(Processor):
+    """Wrapper for Keras ImageDataGenerator
+
+    # Arguments
+        generator: An instantiated Keras ImageDataGenerator
+    """
     def __init__(self, generator):
         super(ImageDataProcessor, self).__init__()
         self.generator = generator
@@ -273,4 +263,123 @@ class ImageDataProcessor(Processor):
         random_parameters = self.generator.get_random_transform(image.shape)
         image = self.generator.apply_transform(image, random_parameters)
         image = self.generator.standardize(image)
+        return image
+
+
+class AlphaBlending(Processor):
+    """Blends image to background using the image's alpha channel.
+    """
+    def __init__(self):
+        super(AlphaBlending, self).__init__()
+
+    def call(self, image, background):
+        return blend_alpha_channel(image, background)
+
+
+class RandomImageCrop(Processor):
+    """Randomly crops a part of an image.
+
+    # Arguments
+        shape: List of two ints [height, width].
+            Dimensions of image to be cropped.
+    """
+    def __init__(self, shape):
+        super(RandomImageCrop, self).__init__()
+        self.shape = shape
+
+    def call(self, image):
+        return random_image_crop(image, self.shape)
+
+
+class MakeRandomPlainImage(Processor):
+    """Makes random plain image by randomly sampling an RGB color.
+
+    # Arguments
+        shape: List of two ints [height, width].
+            Dimensions of plain image to be generated.
+    """
+    def __init__(self, shape):
+        super(MakeRandomPlainImage, self).__init__()
+        self.shape = shape
+
+    def call(self):
+        return make_random_plain_image(self.shape)
+
+
+class ConcatenateAlphaMask(Processor):
+    """Concatenates alpha mask to original image.
+    """
+    def __init__(self, **kwargs):
+        super(ConcatenateAlphaMask, self).__init__(**kwargs)
+
+    def call(self, image, alpha_mask):
+        return concatenate_alpha_mask(image, alpha_mask)
+
+
+class BlendRandomCroppedBackground(Processor):
+    """Blends image with a randomly cropped background.
+
+    # Arguments
+        background_paths: List of strings. Each element of the list is a
+            full-path to an image used for cropping a background.
+    """
+    def __init__(self, background_paths):
+        super(BlendRandomCroppedBackground, self).__init__()
+        if not isinstance(background_paths, list):
+            raise ValueError('``background_paths`` must be list')
+        if len(background_paths) == 0:
+            raise ValueError('No paths given in ``background_paths``')
+        self.background_paths = background_paths
+
+    def call(self, image):
+        random_arg = np.random.randint(0, len(self.background_paths))
+        background_path = self.background_paths[random_arg]
+        background = load_image(background_path)
+        background = random_image_crop(background, image.shape[:2])
+        if background is None:
+            background = make_random_plain_image(image.shape[:2])
+        return blend_alpha_channel(image, background)
+
+
+class AddOcclusion(Processor):
+    """Adds a random occlusion to image by generating random vertices and
+        drawing a polygon.
+
+    # Arguments
+        max_radius_scale: Float between [0, 1].
+            Value multiplied with largest image dimension to obtain the maximum
+                radius possible of a vertex in the occlusion polygon.
+        probability: Float between [0, 1]. Assigns probability of how
+            often an occlusion to an image is generated.
+    """
+    def __init__(self, max_radius_scale=0.5, probability=0.5):
+        super(AddOcclusion, self).__init__()
+        self.max_radius_scale = max_radius_scale
+        self.probability = probability
+
+    def _random_vertices(self, center, max_radius, min_vertices, max_vertices):
+        num_vertices = np.random.randint(min_vertices, max_vertices)
+        angle_delta = 2 * np.pi / num_vertices
+        initial_angle = np.random.uniform(0, 2 * np.pi)
+        angles = initial_angle + np.arange(0, num_vertices) * angle_delta
+        x_component = np.cos(angles).reshape(-1, 1)
+        y_component = np.sin(angles).reshape(-1, 1)
+        vertices = np.concatenate([x_component, y_component], -1)
+        random_lengths = np.random.uniform(0, max_radius, num_vertices)
+        random_lengths = random_lengths.reshape(num_vertices, 1)
+        vertices = vertices * random_lengths
+        vertices = vertices + center
+        return vertices.astype(np.int32)
+
+    def add_occlusion(self, image, max_radius_scale):
+        height, width = image.shape[:2]
+        max_radius = np.max((height, width)) * max_radius_scale
+        center = np.random.rand(2) * np.array([width, height])
+        vertices = self._random_vertices(center, max_radius, 3, 7)
+        color = np.random.randint(0, 256, 3).tolist()
+        return draw_filled_polygon(image, vertices, color)
+
+    def call(self, image):
+        if self.probability >= np.random.rand():
+            image = self.add_occlusion(image, self.max_radius_scale)
         return image

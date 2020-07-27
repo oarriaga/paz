@@ -34,6 +34,9 @@ class Camera(object):
 
     def start(self):
         """ Starts capturing device
+
+        # Returns
+            Camera object.
         """
         self.camera = cv2.VideoCapture(self.device_id)
         return self.camera
@@ -44,15 +47,17 @@ class Camera(object):
         return self.camera.release()
 
     def read(self):
-        """Reads camera input and returns a frame
+        """Reads camera input and returns a frame.
+
         # Returns
-            Array of camera
+            Image array.
         """
         frame = self.camera.read()[1]
         return frame
 
     def is_open(self):
-        """Checks if camera is open
+        """Checks if camera is open.
+
         # Returns
             Boolean
         """
@@ -73,10 +78,11 @@ class VideoPlayer(object):
 
     # Properties
         image_size: List of two integers. Output size of the displayed image.
-        pipeline: Function. Should take BGR image as input and it should
+        pipeline: Function. Should take RGB image as input and it should
             output a dictionary with key 'image' containing a visualization
-            of the inferences.
-            Built-in pipelines can be found in paz/processing/pipelines.py
+            of the inferences. Built-in pipelines can be found in
+            ``paz/processing/pipelines``.
+
     # Methods
         run()
         record()
@@ -89,6 +95,9 @@ class VideoPlayer(object):
 
     def step(self):
         """ Runs the pipeline process once
+
+        # Returns
+            Inferences from ``pipeline``.
         """
         if self.camera.is_open() is False:
             raise 'Camera has not started. Call ``start`` method.'
@@ -97,12 +106,13 @@ class VideoPlayer(object):
         if frame is None:
             print('Frame: None')
             return None
+        # all pipelines start with an RGB image
         frame = convert_color_space(frame, BGR2RGB)
         return self.pipeline(frame)
 
     def run(self):
         """Opens camera and starts continuous inference using ``pipeline``,
-        until the user presses `q` inside the opened window.
+        until the user presses ``q`` inside the opened window.
         """
         self.camera.start()
         while True:
@@ -116,11 +126,12 @@ class VideoPlayer(object):
 
     def record(self, name='video.avi', fps=20, fourCC='XVID'):
         """Opens camera and records continuous inference using ``pipeline``.
+
         # Arguments
-            name: String. Video name. Must include the postfix .avi
-            fps: Int. Frames per second
+            name: String. Video name. Must include the postfix .avi.
+            fps: Int. Frames per second.
             fourCC: String. Indicates the four character code of the video.
-            e.g. XVID, MJPG, X264
+            e.g. XVID, MJPG, X264.
         """
         self.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)

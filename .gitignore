@@ -11,6 +11,7 @@
 *.avi
 *.mp4
 *.npz
+*.csv
 *.ipynb_checkpoints
 *.ipynb
 
@@ -25,4 +26,3 @@ docs/theme/fonts/*
 docs/theme/img/*
 
 install.sh
-examples/keypoint_estimation/

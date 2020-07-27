@@ -14,33 +14,33 @@ class DrawInferences(Callback):
 
     # Arguments
         save_path: String. Path in which the images will be saved.
-        sequencer: Sequencer with __getitem__ function for calling a batch.
-        inferencer: Paz Processor for performing inference.
-        verbose: Integer. If is bigger than 1 a message with the learning
-            rate decay will be displayed during optimization.
+        images: List of numpy arrays of shape.
+        pipeline: Function that takes as input an element of ''images''
+            and outputs a ''Dict'' with inferences.
+        topic: Key to the ''inferences'' dictionary containing as value the
+            drawn inferences.
+        verbose: Integer. If is bigger than 1 messages would be displayed.
     """
-    def __init__(self, save_path, images, pipeline, input_topic='image',
-                 label_topic='image', verbose=1):
+    def __init__(self, save_path, images, pipeline, topic='image', verbose=1):
         super(DrawInferences, self).__init__()
         self.save_path = os.path.join(save_path, 'images')
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
         self.pipeline = pipeline
         self.images = images
-        self.input_topic = input_topic
-        self.label_topic = label_topic
+        self.topic = topic
         self.verbose = verbose
 
     def on_epoch_end(self, epoch, logs=None):
         for image_arg, image in enumerate(self.images.copy()):
-            inferences = self.pipeline({self.input_topic: image})
+            inferences = self.pipeline(image)
             epoch_name = 'epoch_%03d' % epoch
             save_path = os.path.join(self.save_path, epoch_name)
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             image_name = 'image_%03d.png' % image_arg
             image_name = os.path.join(save_path, image_name)
-            save_image(image_name, inferences[self.label_topic])
+            save_image(image_name, inferences[self.topic])
         if self.verbose:
             print('Saving predicted images in:', self.save_path)
 
@@ -54,8 +54,7 @@ class LearningRateScheduler(Callback):
             is multiplied by this factor.
         scheduled_epochs: List of integers. Indicates in which epochs
             the learning rate will be multiplied by the gamma decay factor.
-        verbose: Integer. If is bigger than 1 a message with the learning
-            rate decay will be displayed during optimization.
+        verbose: Integer. If is bigger than 1 messages would be displayed.
     """
     def __init__(
             self, learning_rate, gamma_decay, scheduled_epochs, verbose=1):
@@ -85,6 +84,16 @@ class LearningRateScheduler(Callback):
 
 
 class EvaluateMAP(Callback):
+    """Evaluates mean average precision (MAP) of an object detector.
+
+    # Arguments
+        data_manager: Data manager and loader class. See ''paz.datasets''
+            for examples.
+        detector: Tensorflow-Keras model.
+        period: Int. Indicates how often the evaluation is performed.
+        save_path: Str.
+        iou_thresh: Float.
+    """
     def __init__(
             self, data_manager, detector, period, save_path, iou_thresh=0.5):
         super(EvaluateMAP, self).__init__()
@@ -95,7 +104,9 @@ class EvaluateMAP(Callback):
         self.dataset = data_manager.load_data()
         self.iou_thresh = iou_thresh
         self.class_names = self.data_manager.class_names
-        self.class_dict = {class_name: class_arg for class_arg, class_name in enumerate(self.class_names)}
+        self.class_dict = {}
+        for class_arg, class_name in enumerate(self.class_names):
+            self.class_dict[class_name] = class_arg
 
     def on_epoch_end(self, epoch, logs):
         if (epoch + 1) % self.period == 0:
@@ -112,9 +123,12 @@ class EvaluateMAP(Callback):
                 if arg == 0 or np.isnan(ap):  # skip background
                     continue
                 metrics[self.class_names[arg]] = ap
-                result_str += '{:<16}: {:.4f}\n'.format(self.class_names[arg], ap)
+                result_str += '{:<16}: {:.4f}\n'.format(
+                    self.class_names[arg], ap)
             print(result_str)
 
             # Saving the evaluation results
-            with open(os.path.join(self.save_path, 'MAP_Evaluation_Log.txt'), 'a') as eval_log_file:
-                eval_log_file.write('Epoch: {}\n{}\n'.format(str(epoch), result_str))
+            filename = os.path.join(self.save_path, 'MAP_Evaluation_Log.txt')
+            with open(filename, 'a') as eval_log_file:
+                eval_log_file.write('Epoch: {}\n{}\n'.format(
+                    str(epoch), result_str))

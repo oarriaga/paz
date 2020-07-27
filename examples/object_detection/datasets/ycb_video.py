@@ -9,7 +9,7 @@ from ..abstract import Loader
 
 
 class YCBVideo(Loader):
-    """ Dataset loader for the YCBVideo dataset [1].
+    """Dataset loader for the YCBVideo dataset.
 
     # Arguments
         path: String indicating full path to dataset
@@ -20,7 +20,7 @@ class YCBVideo(Loader):
             strings indicating each class name.
 
     # References
-        [1] https://arxiv.org/abs/1711.00199 (PoseCNN)
+        - [PoseCNN](https://arxiv.org/abs/1711.00199)
 
     # TODO
         One can't select to train only a subset of the class_names.

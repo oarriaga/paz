@@ -6,7 +6,7 @@ from paz.datasets import get_class_names
 from paz.pipelines import SingleShotInference
 
 
-parser = argparse.ArgumentParser(description='MultiHaarCascadeDetectors')
+parser = argparse.ArgumentParser(description='SSD object detection demo')
 parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 parser.add_argument('-s', '--score_thresh', type=float, default=0.6,

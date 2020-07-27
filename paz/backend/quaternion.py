@@ -2,6 +2,14 @@ import numpy as np
 
 
 def rotation_vector_to_quaternion(rotation_vector):
+    """Transforms rotation vector into quaternion.
+
+    # Arguments
+        rotation_vector: Numpy array of shape ``(3)``.
+
+    # Returns
+        Numpy array representing a quaternion having a shape ``(4)``.
+    """
     theta = np.linalg.norm(rotation_vector)
     rotation_axis = rotation_vector / theta
     half_theta = 0.5 * theta

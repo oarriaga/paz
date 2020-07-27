@@ -21,7 +21,7 @@ def AutoEncoder(input_shape, latent_dimension=128, mode='full',
     if mode not in ['full', 'encoder', 'decoder']:
         raise ValueError('Invalid mode.')
 
-    i = Input(input_shape, name='image')
+    i = Input(input_shape, name='input_image')
     x = Conv2D(32, (3, 3), strides=(2, 2), padding='same', name='conv2D_1')(i)
     x = Activation('relu', name='relu_1')(x)
     x = Conv2D(64, (3, 3), strides=(2, 2), padding='same', name='conv2D_2')(x)
@@ -51,10 +51,10 @@ def AutoEncoder(input_shape, latent_dimension=128, mode='full',
     x = Activation('relu', name='relu_7')(x)
     x = UpSampling2D((2, 2), name='upsample_4')(x)
     x = Conv2D(input_shape[-1], (3, 3), padding='same', name='conv2D_8')(x)
-    output_tensor = Activation('sigmoid', name='original_image')(x)
-    base_name = 'VanillaAutoencoder' + str(latent_dimension)
+    output_tensor = Activation('sigmoid', name='label_image')(x)
+    base_name = 'SimpleAutoencoder' + str(latent_dimension)
     if dropout_rate is not None:
-        base_name = base_name + 'DPR_' + str(dropout_rate)
+        base_name = base_name + 'DRP_' + str(dropout_rate)
 
     if mode == 'encoder':
         name = base_name + '-encoder'

@@ -1,3 +1,5 @@
+# imports are done directly to keep user's auto-complete clean
+
 from .detection import SquareBoxes2D
 from .detection import DenormalizeBoxes2D
 from .detection import RoundBoxes2D
@@ -30,16 +32,22 @@ from .image import RandomContrast
 from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
-from .image import RandomImageQuality
+from .image import RandomImageBlur
 from .image import RandomFlipImageLeftRight
 from .image import ConvertColorSpace
-from .image import RandomPlainBackground
-from .image import RandomImageCrop
-from .image import RandomCroppedBackground
 from .image import ShowImage
 from .image import ImageDataProcessor
+from .image import AlphaBlending
+from .image import RandomImageCrop
+from .image import MakeRandomPlainImage
+from .image import ConcatenateAlphaMask
+from .image import BlendRandomCroppedBackground
+from .image import AddOcclusion
+
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
+
+from .renderer import Render
 
 from .geometric import RandomFlipBoxesLeftRight
 from .geometric import ToAbsoluteBoxCoordinates
@@ -48,9 +56,17 @@ from .geometric import RandomSampleCrop
 from .geometric import Expand
 from .geometric import ApplyTranslation
 from .geometric import ApplyRandomTranslation
+from .geometric import RandomKeypointTranslation
+from .geometric import RandomKeypointRotation
+from .geometric import TranslateImage
 
-from .keypoints import Render
+from .keypoints import ChangeKeypointsCoordinateSystem
 from .keypoints import DenormalizeKeypoints
+from .keypoints import NormalizeKeypoints
+from .keypoints import PartitionKeypoints
+from .keypoints import ProjectKeypoints
+from .keypoints import RemoveKeypointsDepth
+from .keypoints import TranslateKeypoints
 
 from .standard import ControlMap
 from .standard import ExpandDomain

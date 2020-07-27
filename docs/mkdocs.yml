@@ -1,0 +1,21 @@
+site_name: 'PAZ: Perception for Autonomous Systems'
+
+theme: 
+    name: 'material'
+    palette:
+      primary: white
+      accent: orange
+    font:
+      text: Ubuntu
+      code: Ubuntu Mono
+    logo: images/logo3.png
+    favicon: images/logo3.png
+
+markdown_extensions:
+  - codehilite
+    
+
+docs_dir: sources
+site_description: 'Modular Robot Perception library in Python.'
+repo_name: 'oarriaga/paz'
+repo_url: 'https://github.com/oarriaga/paz'
