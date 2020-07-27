@@ -12,7 +12,7 @@ from .detection import EncodeBoxes
 from .detection import DecodeBoxes
 from .detection import NonMaximumSuppressionPerClass
 from .detection import FilterBoxes
-from .detection import ApplyOffsets
+from .detection import OffsetBoxes2D
 from .detection import CropImage
 
 from .draw import DrawBoxes2D

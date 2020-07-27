@@ -1,7 +1,5 @@
 import os
-import numpy as np
 import argparse
-import tensorflow as tf
 
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
@@ -12,7 +10,7 @@ from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
 from paz.abstract import ProcessingSequence
 from paz.optimization.callbacks import EvaluateMAP
-from paz.pipelines import SingleShotInference
+from paz.pipelines import SingleShotPrediction
 from paz.processors import TRAIN, VAL
 
 description = 'Training script for single-shot object detection models'
@@ -96,7 +94,7 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 evaluate = EvaluateMAP(
     evaluation_data_managers[0],
-    SingleShotInference(model, data_managers[0].class_names, 0.01, 0.45),
+    SingleShotPrediction(model, data_managers[0].class_names, 0.01, 0.45),
     args.evaluation_period,
     args.save_path,
     args.AP_IOU)

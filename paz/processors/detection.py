@@ -6,7 +6,8 @@ from ..abstract import Processor, Box2D
 from ..backend.boxes import match
 from ..backend.boxes import encode
 from ..backend.boxes import decode
-from ..backend.boxes import apply_offsets
+from ..backend.boxes import offset
+from ..backend.boxes import clip
 from ..backend.boxes import nms_per_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
@@ -14,20 +15,13 @@ from ..backend.boxes import make_box_square
 
 class SquareBoxes2D(Processor):
     """Transforms bounding rectangular boxes into square bounding boxes.
-
-    # Arguments
-        offset_scale: Float. Bounding box offset scale i.e. If the square
-            bounding box has shape LxL the offset modifies both sizes L to be
-            L_new = L + (offset_scale * L)
     """
-    def __init__(self, offset_scale=0.0):
-        self.offset_scale = offset_scale
+    def __init__(self):
         super(SquareBoxes2D, self).__init__()
 
     def call(self, boxes2D):
         for box2D in boxes2D:
-            box2D.coordinates = make_box_square(
-                box2D.coordinates, self.offset_scale)
+            box2D.coordinates = make_box_square(box2D.coordinates)
         return boxes2D
 
 
@@ -102,17 +96,23 @@ class ClipBoxes2D(Processor):
     def call(self, image, boxes2D):
         image_height, image_width = image.shape[:2]
         for box2D in boxes2D:
-            x_min, y_min, x_max, y_max = box2D.coordinates
-            if x_min < 0:
-                x_min = 0
-            if y_min < 0:
-                y_min = 0
-            if x_max > image_width:
-                x_max = image_width
-            if y_max > image_height:
-                y_max = image_height
-            coordinates = (x_min, y_min, x_max, y_max)
-            box2D.coordinates = coordinates
+            box2D.coordinates = clip(box2D.coordinates, image.shape[:2])
+        return boxes2D
+
+
+class OffsetBoxes2D(Processor):
+    """Offsets the height and widht of a list of ``Boxes2D``.
+
+    # Arguments
+        offsets: Float between [0, 1].
+    """
+    def __init__(self, offsets):
+        super(OffsetBoxes2D, self).__init__()
+        self.offsets = offsets
+
+    def call(self, boxes2D):
+        for box2D in boxes2D:
+            box2D.coordinates = offset(box2D.coordinates, self.offsets)
         return boxes2D
 
 
@@ -243,21 +243,6 @@ class FilterBoxes(Processor):
                 score = confident_class_detection[4]
                 boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D
-
-
-class ApplyOffsets(Processor):
-    """Apply offsets to a bounding ``box2D``.
-
-    # Arguments
-        offsets: Float between [0, 1].
-    """
-    def __init__(self, offsets):
-        super(ApplyOffsets, self).__init__()
-        self.offsets = offsets
-
-    def call(self, box2D):
-        box2D.coordinates = apply_offsets(box2D.coordinates, self.offsets)
-        return box2D
 
 
 class CropImage(Processor):

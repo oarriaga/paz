@@ -1,8 +1,7 @@
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from paz.abstract import SequentialProcessor, ProcessingSequence, Processor
+from paz.abstract import SequentialProcessor, ProcessingSequence
 from paz.pipelines import PreprocessImage
 import paz.processors as pr
-import numpy as np
 
 
 class ProcessGrayImage(SequentialProcessor):
@@ -18,33 +17,6 @@ class ProcessGrayImage(SequentialProcessor):
         self.add(pr.ExpandDomain(self.process))
         self.add(pr.SequenceWrapper({0: {'image': [size, size, 1]}},
                                     {1: {'label': [num_classes]}}))
-
-
-class FaceClassifier(Processor):
-    # TODO add processor for offsets
-    def __init__(self, detector, classifier, labels, offsets):
-        super(FaceClassifier, self).__init__()
-        RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
-        self.detect = pr.Predict(detector, RGB2GRAY, pr.ToBoxes2D())
-        self.crop_boxes2D = pr.CropBoxes2D()
-        preprocess = PreprocessImage(classifier.input_shape[1:3], None)
-        preprocess.insert(0, RGB2GRAY)
-        preprocess.add(pr.ExpandDims([0, 3]))
-        self.classify = SequentialProcessor()
-        self.classify.add(pr.Predict(classifier, preprocess))
-        self.classify.add(pr.CopyDomain([0], [1]))
-        self.classify.add(pr.ControlMap(pr.ToClassName(labels), [0], [0]))
-        self.draw = pr.DrawBoxes2D(labels)
-        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
-
-    def call(self, image):
-        boxes2D = self.detect(image)
-        images = self.crop_boxes2D(image, boxes2D)
-        for cropped_image, box2D in zip(images, boxes2D):
-            box2D.class_name, scores = self.classify(cropped_image)
-            box2D.score = np.amax(scores)
-        image = self.draw(image, boxes2D)
-        return self.wrap(image, boxes2D)
 
 
 if __name__ == "__main__":
