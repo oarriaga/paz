@@ -15,8 +15,7 @@ def score(request):
 
 @pytest.fixture
 def quaternion():
-    _quaternion = np.array([-0.4732069, 0.5253096, 0.4732069, 0.5255476])
-    return _quaternion
+    return np.array([-0.4732069, 0.5253096, 0.4732069, 0.5255476])
 
 
 @pytest.fixture
@@ -26,8 +25,7 @@ def translation():
 
 @pytest.fixture
 def rotation_vector():
-    vector = np.array([1., -0.994522, 0.104528])
-    return vector
+    return np.array([1., -0.994522, 0.104528])
 
 
 @pytest.fixture

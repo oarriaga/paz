@@ -22,10 +22,10 @@ def test_add_processor(processor):
         sequential_processor.add(processor)
         assert(processor in sequential_processor.processors)
     else:
-        raise ValueError("Value is not an object of Processor()")
+        raise ValueError('Value is not an object of Processor()')
 
 
-@pytest.mark.parametrize("processor_name", ['processor_0', 'processor_1'])
+@pytest.mark.parametrize('processor_name', ['processor_0', 'processor_1'])
 def test_remove_processor(get_sequential_processor, processor_name):
     test_processor = get_sequential_processor(processor_name)
     for processor in test_processor.processors:
@@ -33,35 +33,35 @@ def test_remove_processor(get_sequential_processor, processor_name):
             test_processor.remove(processor_name)
             break
         else:
-            print("Processor %s not in sequential_processor", processor_name)
-    for processor_ in test_processor.processors:
-        assert(processor_.name != processor_name)
+            print('Processor %s not in sequential_processor', processor_name)
+    for processor in test_processor.processors:
+        assert(processor.name != processor_name)
 
 
-@pytest.mark.parametrize("index", [0, 1])
+@pytest.mark.parametrize('index', [0, 1])
 def test_insert_processor(index, get_sequential_processor, processor):
     if(isinstance(index, int)):
         sequential_processor = get_sequential_processor('processor_1')
         if(index < (len(sequential_processor.processors) - 1)):
-            raise IndexError("Index out of bounds")
+            raise IndexError('Index out of bounds')
         else:
             sequential_processor.insert(index, processor)
             inserted_processor = sequential_processor.processors[index].name
         assert(processor.name == inserted_processor)
     else:
-        raise ValueError("Index is not of type int")
+        raise ValueError('Index is not of type int')
 
 
-@pytest.mark.parametrize("index, names", [(0, 'processor_0')])
+@pytest.mark.parametrize('index, names', [(0, 'processor_0')])
 def test_pop_processor(index, names, get_sequential_processor):
     if(isinstance(index, int)):
         sequential_processor = get_sequential_processor(names)
         if(index < (len(sequential_processor.processors) - 1)):
-            raise IndexError("Index out of bounds")
+            raise IndexError('Index out of bounds')
         else:
             to_pop = sequential_processor.processors[index].name
             sequential_processor.pop(index)
             for processor in sequential_processor.processors:
                 assert(to_pop != processor.name)
     else:
-        raise ValueError("Index is not of type int")
+        raise ValueError('Index is not of type int')
