@@ -3,6 +3,11 @@ from tensorflow.keras.layers import Activation, MaxPooling2D, Add, Input
 from tensorflow.keras.layers import GlobalAveragePooling2D
 from tensorflow.keras import Model
 from tensorflow.keras.regularizers import l2
+from tensorflow.keras.models import load_model
+from tensorflow.keras.utils import get_file
+
+
+URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.6/'
 
 
 def xception_block(input_tensor, num_kernels, l2_reg=0.01):
@@ -79,12 +84,14 @@ def build_xception(
     return model
 
 
-def MiniXception(input_shape, num_classes):
+def MiniXception(input_shape, num_classes, weights=None):
     """Build MiniXception (see references).
 
     # Arguments
         input_shape: List of three integers e.g. ''(H, W, 3)''
         num_classes: Int.
+        weights: ``None`` or string with pre-trained dataset. Valid datasets
+            include only ''FER''.
 
     # Returns
         Tensorflow-Keras model.
@@ -93,8 +100,14 @@ def MiniXception(input_shape, num_classes):
        - [Real-time Convolutional Neural Networks for Emotion and
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
-    stem_kernels, block_data = [32, 64], [128, 128, 256, 256, 512, 512, 1024]
-    model_inputs = (input_shape, num_classes, stem_kernels, block_data)
-    model = build_xception(*model_inputs)
+    if weights == 'FER':
+        filename = 'fer2013_mini_XCEPTION.119-0.65.hdf5'
+        path = get_file(filename, URL + filename, cache_subdir='paz/models')
+        model = load_model(path)
+    else:
+        stem_kernels = [32, 64]
+        block_data = [128, 128, 256, 256, 512, 512, 1024]
+        model_inputs = (input_shape, num_classes, stem_kernels, block_data)
+        model = build_xception(*model_inputs)
     model._name = 'MINI-XCEPTION'
     return model
