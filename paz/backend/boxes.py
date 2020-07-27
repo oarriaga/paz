@@ -310,17 +310,16 @@ def to_one_hot(class_indices, num_classes):
     return one_hot_vectors
 
 
-def make_box_square(box, offset_scale=0.05):
-    """Makes box coordinates square.
+def make_box_square(box):
+    """Makes box coordinates square with sides equal to the longest original side.
 
     # Arguments
         box: Numpy array with shape `(4)` with point corner coordinates.
-        offset_scale: Float, scale of the addition applied box sizes.
 
     # Returns
         returns: List of box coordinates ints.
     """
-
+    # TODO add ``calculate_center`` ``calculate_side_dimensions`` functions.
     x_min, y_min, x_max, y_max = box[:4]
     center_x = (x_max + x_min) / 2.0
     center_y = (y_max + y_min) / 2.0
@@ -329,24 +328,19 @@ def make_box_square(box, offset_scale=0.05):
 
     if height >= width:
         half_box = height / 2.0
-        x_min = center_x - half_box
-        x_max = center_x + half_box
+        x_min = int(center_x - half_box)
+        x_max = int(center_x + half_box)
+
     if width > height:
         half_box = width / 2.0
-        y_min = center_y - half_box
-        y_max = center_y + half_box
+        y_min = int(center_y - half_box)
+        y_max = int(center_y + half_box)
 
-    box_side_lenght = (x_max + x_min) / 2.0
-    offset = offset_scale * box_side_lenght
-    x_min = x_min - offset
-    x_max = x_max + offset
-    y_min = y_min - offset
-    y_max = y_max + offset
-    return (int(x_min), int(y_min), int(x_max), int(y_max))
+    return x_min, y_min, x_max, y_max
 
 
-def apply_offsets(coordinates, offset_scales):
-    """Apply offsets to coordinates
+def offset(coordinates, offset_scales):
+    """Apply offsets to box coordinates
 
     # Arguments
         coordinates: List of floats containing coordinates in point form.
@@ -354,6 +348,7 @@ def apply_offsets(coordinates, offset_scales):
 
     # Returns
         coordinates: List of floats containing coordinates in point form.
+            i.e. [x_min, y_min, x_max, y_max].
     """
     x_min, y_min, x_max, y_max = coordinates
     x_offset_scale, y_offset_scale = offset_scales
@@ -364,6 +359,30 @@ def apply_offsets(coordinates, offset_scales):
     y_min = int(y_min - y_offset)
     x_max = int(x_max + y_offset)
     return (x_min, y_min, x_max, y_max)
+
+
+def clip(coordinates, image_shape):
+    """Clip box to valid image coordinates
+    # Arguments
+        coordinates: List of floats containing coordinates in point form
+            i.e. [x_min, y_min, x_max, y_max].
+        image_shape: List of two integers indicating height and width of image
+            respectively.
+
+    # Returns
+        List of clipped coordinates.
+    """
+    height, width = image_shape[:2]
+    x_min, y_min, x_max, y_max = coordinates
+    if x_min < 0:
+        x_min = 0
+    if y_min < 0:
+        y_min = 0
+    if x_max > width:
+        x_max = width
+    if y_max > height:
+        y_max = height
+    return x_min, y_min, x_max, y_max
 
 
 def denormalize_box(box, image_shape):
