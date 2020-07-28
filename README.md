@@ -24,31 +24,56 @@ Multi-level perception library in Python.
 
 * PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-* PAZ high-level API for easy inference
+## High-level API
+PAZ has easy out-of-the-box inference:
 
 ``` python
-detect = SingleShotInference(SSD300(), class_names)
+from paz.pipelines import SSD512COCO
+
+detect = SSD512COCO()
+
+# you can detect directly from an RGB image
 inferences = detect(image)
 ```
 
-* PAZ mid-level API allows us to construct easy data-augmentation pipelines:
+## Mid-level API (sequential)
+PAZ allows you to construct easy data-augmentation pipelines:
 
 ``` python
 from paz.abstract import SequentialProcessor
 from paz import processors as pr
 
-augment_image = SequentialProcessor()
-augment_image.add(pr.RandomContrast())
-augment_image.add(pr.RandomBrightness())
-augment_image.add(pr.RandomSaturation())
-augment_image.add(pr.RandomHue())
+augment = SequentialProcessor()
+augment.add(pr.RandomContrast())
+augment.add(pr.RandomBrightness())
+augment.add(pr.RandomSaturation())
+augment.add(pr.RandomHue())
 
-# you can now use it as a normal function!
-image = augment_image(image)
+# you can now use this now as a normal function
+image = augment(image)
 ```
 
-* PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization.
+Pipelines with **Mid-level API** doesn't stop here. PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization and multiple inferences.
 
+## Mid-level API ()
+
+``` python
+class EmotionDetector(Processor):
+    def __init__(self):
+        super(EmotionDetector, self).__init__()
+        self.detect = HaarCascadeFrontalFace(draw=False)
+        self.crop = pr.CropBoxes2D()
+        self.classify = XceptionClassifierFER()
+        self.draw = pr.DrawBoxes2D(self.classify.class_names)
+
+    def call(self, image):
+        boxes2D = self.detect(image)['boxes2D']
+        cropped_images = self.crop(image, boxes2D)
+        for cropped_image, box2D in zip(cropped_images, boxes2D):
+            box2D.class_name = self.classify(cropped_image)['class_name']
+        return self.draw(image, boxes2D)
+ ```
+ 
 * For example, a simple API for detecting common-objects (COCO) from an image (check the demo): 
 
 
