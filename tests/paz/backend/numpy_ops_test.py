@@ -6,7 +6,7 @@ from paz.backend.boxes import compute_ious
 from paz.backend.boxes import denormalize_box
 from paz.backend.boxes import to_point_form
 from paz.backend.boxes import to_center_form
-# from paz.backend.quaternion import quaternion_to_rotation_matrix
+from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.boxes import encode
 from paz.backend.boxes import match
 from paz.backend.boxes import decode
@@ -14,18 +14,6 @@ from paz.models.detection.utils import create_prior_boxes
 
 # from paz.datasets import VOC
 # from paz.core.ops import get_ground_truths
-
-# affine_matrix = np.array(
-#     [[-0., -0.994522, 0.104528, 3.135854],
-#      [0., 0.104528, 0.994522, 29.835657],
-#      [-1., 0., 0., 0.],
-#      [0., 0., -0., 1.]])
-
-# quaternion_target = np.array([0.525483, -0.473147, 0.525483, 0.473147])
-
-# target_image_count = [16551, 4952]
-
-# target_box_count = [47223, 14976]
 
 
 @pytest.fixture
@@ -82,6 +70,26 @@ def target_prior_boxes():
     return target_prior_box
 
 
+@pytest.fixture
+def quaternion_target():
+    return np.array([0.45936268, -0.45684629, 0.04801626, 0.76024458])
+
+
+@pytest.fixture
+def rotation_vector():
+    return np.array([1., -0.994522, 0.104528])
+
+
+@pytest.fixture
+def target_image_count():
+    return ([16551, 4952])
+
+
+@pytest.fixture
+def target_box_count():
+    return ([47223, 14976])
+
+
 def test_compute_iou(boxes, target):
     box_A, box_B = boxes
     result = compute_iou(box_A[1, :], box_B)
@@ -124,15 +132,9 @@ def test_to_center_form(boxes):
     assert(boxes_A_result.all() == box_A.all())
 
 
-# def test_rotation_matrix_to_quaternion():
-#     result = rotation_matrix_to_quaternion(affine_matrix[:3, :3])
-#     assert np.allclose(result, quaternion_target)
-
-
-# def test_rotation_matrix_to_quaternion_inverse():
-#     quaternion = rotation_matrix_to_quaternion(affine_matrix[:3, :3])
-#     rotation_matrix = quaternion_to_rotation_matrix(quaternion)
-#     assert np.allclose(rotation_matrix, affine_matrix[:3, :3])
+def test_rotation_vector_to_quaternion(rotation_vector, quaternion_target):
+    result = rotation_vector_to_quaternion(rotation_vector)
+    assert np.allclose(result, quaternion_target)
 
 
 def test_match_box(boxes_with_label, target_unique_matches):
@@ -165,38 +167,23 @@ def test_prior_boxes(target_prior_boxes):
 
 
 # def test_data_loader_check():
-#    voc_root = './examples/object_detection/data/VOCdevkit/'
-#    data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
-#    data_splits = [['trainval', 'trainval'], 'test']
-#
-#    data_managers, datasets = [], []
-#    for data_name, data_split in zip(data_names, data_splits):
-#        data_manager = VOC(
-#            voc_root, data_split, name=data_name, evaluate=True)
-#        data_managers.append(data_manager)
-#        datasets.append(data_manager.load_data())
-#
-#    image_count = []
-#    boxes_count = []
-#    for dataset in datasets:
-#        boxes, labels, difficults = get_ground_truths(dataset)
-#        boxes = np.concatenate(boxes, axis=0)
-#        image_count.append(len(dataset))
-#        boxes_count.append(len(boxes))
-#    assert image_count == target_image_count
-#    assert target_box_count == boxes_count
-#
+#     voc_root = './examples/object_detection/data/VOCdevkit/'
+#     data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
+#     data_splits = [['trainval', 'trainval'], 'test']
 
-# test_compute_iou()
-# test_compute_ious()
-# test_compute_ious_shape()
-# test_denormalize_box()
-# test_to_center_form_inverse()
-# test_to_point_form_inverse()
-# test_rotation_matrix_to_quaternion()
-# test_rotation_matrix_to_quaternion_inverse()
-# test_prior_boxes()
-# test_match_box()
-# test_to_encode()
-# test_to_decode()
-# test_data_loader_check()
+#     data_managers, datasets = [], []
+#     for data_name, data_split in zip(data_names, data_splits):
+#         data_manager = VOC(
+#             voc_root, data_split, name=data_name, evaluate=True)
+#         data_managers.append(data_manager)
+#         datasets.append(data_manager.load_data())
+
+#     image_count = []
+#     boxes_count = []
+#     for dataset in datasets:
+#         boxes, labels, difficults = get_ground_truths(dataset)
+#         boxes = np.concatenate(boxes, axis=0)
+#         image_count.append(len(dataset))
+#         boxes_count.append(len(boxes))
+#     assert image_count == target_image_count
+#     assert target_box_count == boxes_count
