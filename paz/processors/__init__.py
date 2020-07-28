@@ -97,6 +97,10 @@ from ..backend.image.opencv_image import HSV2RGB
 from ..backend.keypoints import UPNP
 from ..backend.keypoints import LEVENBERG_MARQUARDT
 
+from ..backend.image.draw import GREEN
+from ..backend.image.draw import FONT
+from ..backend.image.draw import LINE
+
 TRAIN = 0
 VAL = 1
 TEST = 2

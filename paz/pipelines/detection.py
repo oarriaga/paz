@@ -215,6 +215,15 @@ EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
 
 
 class XceptionDetectionFER(Processor):
+    """Emotion classification and detection pipeline.
+
+    # Returns
+        Dictionary with ``image`` and ``boxes2D``.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+    """
     def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
         super(XceptionDetectionFER, self).__init__()
         self.offsets = offsets
