@@ -175,36 +175,39 @@ class HaarCascadePrediction(Processor):
         detector: An instantiated HaarCascadeDetector model.
         offsets: List of two elements. Each element must be between [0, 1].
         class_names: List of strings.
+        draw: Boolean flag. If ``True`` the prediction will be drawn
+            in the image.
 
     # Returns
         A function for predicting bounding box detections.
     """
-    def __init__(self, detector, class_names=None, colors=None):
+    def __init__(self, detector, class_names=None, colors=None, draw=True):
         super(HaarCascadePrediction, self).__init__()
         self.detector = detector
         self.class_names = class_names
         self.colors = colors
+        self.draw = draw
         RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
         postprocess = SequentialProcessor()
         postprocess.add(pr.ToBoxes2D(self.class_names))
         self.predict = pr.Predict(self.detector, RGB2GRAY, postprocess)
-        self.draw = pr.DrawBoxes2D(self.class_names, self.colors)
+        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names, self.colors)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
         boxes2D = self.predict(image)
-        image = self.draw(image, boxes2D)
+        if self.draw:
+            image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
 
 
 class HaarCascadeFrontalFace(HaarCascadePrediction):
     """HaarCascade pipeline for detecting frontal faces
     """
-    def __init__(self, class_name='Face'):
+    def __init__(self, class_name='Face', color=[0, 255, 0], draw=True):
         self.model = HaarCascadeDetector('frontalface_default', class_arg=0)
-        self.class_name = [class_name]
         super(HaarCascadeFrontalFace, self).__init__(
-            self.model, self.class_name)
+            self.model, [class_name], [color], draw)
 
 
 EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
