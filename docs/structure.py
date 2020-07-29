@@ -343,15 +343,19 @@ PAGES = [
             pipelines.PreprocessImage,
             pipelines.RandomizeRenderedImage,
             pipelines.RenderTwoViews,
-            pipelines.SingleShotPrediction,
+            pipelines.DetectSingleShot,
             pipelines.SSD512COCO,
             pipelines.SSD512YCBVideo,
             pipelines.SSD300VOC,
             pipelines.SSD300FAT,
-            pipelines.HaarCascadePrediction,
+            pipelines.DetectHaarCascade,
             pipelines.HaarCascadeFrontalFace,
-            pipelines.XceptionClassifierFER,
-            pipelines.XceptionDetectionFER,
+            pipelines.DetectMiniXceptionFER,
+            pipelines.DetectKeypoints2D,
+            pipelines.DetectMiniXceptionFER,
+            pipelines.MiniXceptionFER,
+            pipelines.EstimateKeypoints2D,
+            pipelines.FaceKeypointNet2D32
         ]
     },
 
