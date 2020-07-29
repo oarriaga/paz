@@ -1,6 +1,8 @@
 from paz.abstract import SequentialProcessor
 from paz.abstract import Processor
 from paz import processors as pr
+from paz.pipelines import HaarCascadeFrontalFace
+from paz.pipelines import FaceKeypointNet2D32
 import numpy as np
 
 
@@ -22,51 +24,42 @@ class AugmentKeypoints(SequentialProcessor):
                                     {1: {'keypoints': [num_keypoints, 2]}}))
 
 
-class HeadPose6DEstimation(Processor):
-    def __init__(self, detector, keypointer, model_points, camera, radius=3):
-        super(HeadPose6DEstimation, self).__init__()
-        # face detector
-        RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
-        self.detect = pr.Predict(detector, RGB2GRAY, pr.ToBoxes2D(['face']))
-
-        # creating pre-processing pipeline for keypoint estimator
-        preprocess = SequentialProcessor()
-        preprocess.add(pr.ResizeImage(keypointer.input_shape[1:3]))
-        preprocess.add(pr.ConvertColorSpace(pr.RGB2GRAY))
-        preprocess.add(pr.NormalizeImage())
-        preprocess.add(pr.ExpandDims([0, 3]))
-
-        # prediction
-        self.estimate_keypoints = pr.Predict(
-            keypointer, preprocess, pr.Squeeze(0))
-
-        # used for drawing up keypoints in original image
+class EstimatePoseKeypoints(Processor):
+    def __init__(self, detect, estimate_keypoints, camera,
+                 offsets, model_points, class_to_dimensions, radius=3):
+        super(EstimatePoseKeypoints, self).__init__()
+        self.num_keypoints = estimate_keypoints.num_keypoints
+        self.detect = detect
+        self.estimate_keypoints = estimate_keypoints
+        self.square = SequentialProcessor()
+        self.square.add(pr.SquareBoxes2D())
+        self.square.add(pr.OffsetBoxes2D(offsets))
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
-        self.denormalize_keypoints = pr.DenormalizeKeypoints()
-        self.crop_boxes2D = pr.CropBoxes2D()
-        self.num_keypoints = keypointer.output_shape[1]
-        self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
-        self.draw_box3D = pr.DrawBoxes3D(camera, model_points['dimensions'])
-        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
-
-        self.solve_PNP = pr.SolvePNP(model_points['keypoints3D'], camera)
+        self.solve_PNP = pr.SolvePNP(model_points, camera)
+        self.draw_keypoints = pr.DrawKeypoints2D(self.num_keypoints, radius)
+        self.draw_box3D = pr.DrawBoxes3D(camera, class_to_dimensions)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'keypoints', 'poses6D'])
 
     def call(self, image):
-        boxes2D = self.detect(image)
-        poses6D = []
-        cropped_images = self.crop_boxes2D(image, boxes2D)
+        boxes2D = self.detect(image)['boxes2D']
+        boxes2D = self.square(boxes2D)
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        poses6D, keypoints2D = [], []
         for cropped_image, box2D in zip(cropped_images, boxes2D):
-            keypoints = self.estimate_keypoints(cropped_image)
-            keypoints = self.denormalize_keypoints(keypoints, cropped_image)
+            keypoints = self.estimate_keypoints(cropped_image)['keypoints']
             keypoints = self.change_coordinates(keypoints, box2D)
             pose6D = self.solve_PNP(keypoints)
+            image = self.draw_keypoints(image, keypoints)
             image = self.draw_box3D(image, pose6D)
-            image = self.draw(image, keypoints)
+            keypoints2D.append(keypoints)
             poses6D.append(pose6D)
-        return self.wrap(image, boxes2D, poses6D)
+        return self.wrap(image, boxes2D, keypoints2D, poses6D)
 
 
-keypoints3D = np.array([
+FACE_KEYPOINTS3D = np.array([
     [-220, 678, 1138],  # left--center-eye
     [+220, 678, 1138],  # right-center-eye
     [-131, 676, 1107],  # left--eye close to nose
@@ -84,6 +77,13 @@ keypoints3D = np.array([
     [0.0, 815, 645],  # down-lip
 ])
 
+FACE_KEYPOINTS3D = FACE_KEYPOINTS3D - np.mean(FACE_KEYPOINTS3D, axis=0)
 
-keypoints3D = keypoints3D - np.mean(keypoints3D, axis=0)
-model_data = {'keypoints3D': keypoints3D, 'dimensions': {None: [900.0, 600.0]}}
+
+class HeadPoseKeypointNet2D32(EstimatePoseKeypoints):
+    def __init__(self, camera, offsets=[0, 0], radius=3):
+        detect = HaarCascadeFrontalFace(draw=False)
+        estimate_keypoints = FaceKeypointNet2D32(draw=False)
+        super(HeadPoseKeypointNet2D32, self).__init__(
+            detect, estimate_keypoints, camera, offsets,
+            FACE_KEYPOINTS3D, {None: [900.0, 600.0]}, radius=3)
