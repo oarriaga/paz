@@ -2,6 +2,8 @@ from ..abstract import SequentialProcessor, Processor
 from .. import processors as pr
 
 from .renderer import RenderTwoViews
+from ..models import KeypointNet2D
+from tensorflow.keras.utils import get_file
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -57,3 +59,59 @@ class KeypointNetInference(Processor):
         keypoints = self.postprocess_keypoints(keypoints, image)
         image = self.draw(image, keypoints)
         return self.wrap(image, keypoints)
+
+
+class EstimateKeypoints2D(Processor):
+    """Basic 2D keypoint prediction pipeline.
+
+    # Arguments
+        model: Keras model for predicting keypoints.
+        num_keypoints: Int or None. If None ''num_keypoints'' is
+            tried to be inferred from ''model.output_shape''
+        draw: Boolean indicating if inferences should be drawn.
+        radius: Int. used for drawing the predicted keypoints.
+    """
+    def __init__(self, model, num_keypoints, draw=True, radius=3,
+                 color=pr.RGB2BGR):
+        self.model = model
+        self.num_keypoints = num_keypoints
+        self.draw, self.radius, self.color = draw, radius, color
+        self.preprocess = SequentialProcessor()
+        self.preprocess.add(pr.ResizeImage(self.model.input_shape[1:3]))
+        self.preprocess.add(pr.ConvertColorSpace(self.color))
+        self.preprocess.add(pr.NormalizeImage())
+        self.preprocess.add(pr.ExpandDims([0, 3]))
+        self.predict = pr.Predict(model, self.preprocess, pr.Squeeze(0))
+        self.denormalize = pr.DenormalizeKeypoints()
+        self.draw = pr.DrawKeypoints2D(self.num_keypoints, self.radius, False)
+        self.wrap = pr.WrapOutput(['image', 'keypoints'])
+
+    def call(self, image):
+        keypoints = self.predict(image)
+        keypoints = self.denormalize(keypoints, image)
+        if self.draw:
+            image = self.draw(image, keypoints)
+        return self.wrap(image, keypoints)
+
+
+class FaceKeypointNet2D32(EstimateKeypoints2D):
+    """KeypointNet2D model trained with Kaggle Facial Detection challenge.
+
+    # Arguments
+        draw: Boolean indicating if inferences should be drawn.
+        radius: Int. used for drawing the predicted keypoints.
+    """
+    def __init__(self, draw=True, radius=3):
+        model = KeypointNet2D((96, 96, 1), 15, 32, 0.1)
+        self.weights_URL = ('https://github.com/oarriaga/altamira-data/'
+                            'releases/download/v0.7/')
+        weights_path = self.get_weights_path(model)
+        model.load_weights(weights_path)
+        super(FaceKeypointNet2D32, self).__init__(
+            model, 15, draw, radius, pr.RGB2GRAY)
+
+    def get_weights_path(self, model):
+        model_name = '_'.join(['FaceKP', model.name, '32', '15'])
+        model_name = '%s_weights.hdf5' % model_name
+        URL = self.weights_URL + model_name
+        return get_file(model_name, URL, cache_subdir='paz/models')

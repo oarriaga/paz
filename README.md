@@ -3,6 +3,8 @@
 
 Multi-level perception library in Python.
 
+## Selected examples:
+
 * PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
 
 <center>
@@ -32,7 +34,7 @@ from paz.pipelines import SSD512COCO
 
 detect = SSD512COCO()
 
-# you can detect directly from an RGB image
+# apply directly to an RGB image-array
 inferences = detect(image)
 ```
 
@@ -55,7 +57,7 @@ image = augment(image)
 
 Pipelines with **Mid-level API** doesn't stop here. PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization and multiple inferences.
 
-## Mid-level API ()
+## Mid-level API (explicit)
 
 ``` python
 class EmotionDetector(Processor):

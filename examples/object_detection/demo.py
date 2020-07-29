@@ -1,9 +1,7 @@
 import argparse
 
+from paz.pipelines import SSD300FAT, SSD300VOC, SSD512COCO, SSD512YCBVideo
 from paz.backend.camera import VideoPlayer, Camera
-from paz.models import SSD300, SSD512
-from paz.datasets import get_class_names
-from paz.pipelines import SingleShotPrediction
 
 
 parser = argparse.ArgumentParser(description='SSD object detection demo')
@@ -14,15 +12,16 @@ parser.add_argument('-s', '--score_thresh', type=float, default=0.6,
 parser.add_argument('-n', '--nms_thresh', type=float, default=0.45,
                     help='non-maximum suppression threshold')
 parser.add_argument('-d', '--dataset', type=str, default='VOC',
-                    choices=['VOC', 'COCO'], help='Dataset name')
+                    choices=['VOC', 'COCO', 'YCBVideo', 'FAT'],
+                    help='Dataset name')
 args = parser.parse_args()
+name_to_model = {'VOC': SSD300VOC,
+                 'FAT': SSD300FAT,
+                 'COCO': SSD512COCO,
+                 'YCBVideo': SSD512YCBVideo}
 
-names = get_class_names(args.dataset)
-if args.dataset == 'VOC':
-    model = SSD300(len(names))
-elif args.dataset == 'COCO':
-    model = SSD512(len(names))
-detect = SingleShotPrediction(model, names, args.score_thresh, args.nms_thresh)
+pipeline = name_to_model[args.dataset]
+detect = pipeline(args.score_thresh, args.nms_thresh)
 camera = Camera(args.camera_id)
 player = VideoPlayer((1280, 960), detect, camera)
 player.run()
