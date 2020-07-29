@@ -52,7 +52,7 @@ class DrawKeypoints2D(Processor):
         num_keypoints: Int. Used initialize colors for each keypoint
         radius: Float. Approximate radius of the circle in pixel coordinates.
     """
-    def __init__(self, num_keypoints, radius=3, normalized=True):
+    def __init__(self, num_keypoints, radius=3, normalized=False):
         super(DrawKeypoints2D, self).__init__()
         self.colors = lincolor(num_keypoints, normalized=normalized)
         self.radius = radius
