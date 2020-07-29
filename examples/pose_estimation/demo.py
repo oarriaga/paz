@@ -1,4 +1,4 @@
-import os
+# import os
 import argparse
 import numpy as np
 
@@ -9,8 +9,9 @@ from paz.backend.camera import VideoPlayer
 from paz.models import HaarCascadeDetector
 from paz.models import KeypointNet2D
 
-from pipelines import HeadPose6DEstimation
-from pipelines import model_data
+# from pipelines import HeadPose6DEstimation
+from pipelines import HeadPoseKeypointNet2D32
+# from pipelines import model_data
 
 description = 'Demo script for estimating 6D pose-heads from face-keypoints'
 parser = argparse.ArgumentParser(description=description)
@@ -76,7 +77,8 @@ model.compile(run_eagerly=False)
 detector = HaarCascadeDetector(args.detector_name, 0)
 
 # setting prediction pipeline
-pipeline = HeadPose6DEstimation(detector, model, model_data, camera)
+# pipeline = HeadPose6DEstimation(detector, model, model_data, camera)
+pipeline = HeadPoseKeypointNet2D32(camera)
 
 # setting camera and video player
 player = VideoPlayer((640, 480), pipeline, camera)
