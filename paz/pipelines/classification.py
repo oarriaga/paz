@@ -10,11 +10,11 @@ EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
                   [0, 0, 255], [0, 255, 255], [0, 255, 0]]
 
 
-class XceptionClassifierFER(SequentialProcessor):
+class MiniXceptionFER(SequentialProcessor):
     """Mini Xception pipeline for classifying emotions from RGB faces.
     """
     def __init__(self):
-        super(XceptionClassifierFER, self).__init__()
+        super(MiniXceptionFER, self).__init__()
         self.classifier = MiniXception((48, 48, 1), 7, weights='FER')
         self.class_names = get_class_names('FER')
 
