@@ -355,7 +355,9 @@ PAGES = [
             pipelines.DetectMiniXceptionFER,
             pipelines.MiniXceptionFER,
             pipelines.EstimateKeypoints2D,
-            pipelines.FaceKeypointNet2D32
+            pipelines.FaceKeypointNet2D32,
+            pipelines.pose.EstimatePoseKeypoints,
+            pipelines.pose.HeadPoseKeypointNet2D32
         ]
     },
 
