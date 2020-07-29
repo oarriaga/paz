@@ -8,7 +8,7 @@ from paz.models import KeypointNet2D
 from pipelines import PredictMultipleKeypoints2D
 from tensorflow.keras.utils import get_file
 
-description = 'Demo script for running 2D probabilistic keypoints'
+description = 'Demo script for running 2D keypoints face detector'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-f', '--filters', default=32, type=int,
                     help='Number of filters in convolutional blocks')
