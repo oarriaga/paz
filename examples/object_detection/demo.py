@@ -3,7 +3,7 @@ import argparse
 from paz.backend.camera import VideoPlayer, Camera
 from paz.models import SSD300, SSD512
 from paz.datasets import get_class_names
-from paz.pipelines import SingleShotPrediction
+from paz.pipelines import DetectSingleShot
 
 
 parser = argparse.ArgumentParser(description='SSD object detection demo')
@@ -22,7 +22,7 @@ if args.dataset == 'VOC':
     model = SSD300(len(names))
 elif args.dataset == 'COCO':
     model = SSD512(len(names))
-detect = SingleShotPrediction(model, names, args.score_thresh, args.nms_thresh)
+detect = DetectSingleShot(model, names, args.score_thresh, args.nms_thresh)
 camera = Camera(args.camera_id)
 player = VideoPlayer((1280, 960), detect, camera)
 player.run()
