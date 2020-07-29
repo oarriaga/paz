@@ -6,7 +6,8 @@ from ..models import SSD512, SSD300, HaarCascadeDetector
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
-from .classification import XceptionClassifierFER
+from .classification import MiniXceptionFER
+from .keypoints import FaceKeypointNet2D32
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -80,7 +81,7 @@ class AugmentDetection(SequentialProcessor):
             {1: {'boxes': [len(prior_boxes), 4 + num_classes]}}))
 
 
-class SingleShotPrediction(Processor):
+class DetectSingleShot(Processor):
     """Single-shot object detection prediction.
 
     # Arguments
@@ -97,7 +98,7 @@ class SingleShotPrediction(Processor):
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
 
-        super(SingleShotPrediction, self).__init__()
+        super(DetectSingleShot, self).__init__()
         preprocessing = SequentialProcessor(
             [pr.ResizeImage(self.model.input_shape[1:3]),
              pr.ConvertColorSpace(pr.RGB2BGR),
@@ -122,7 +123,7 @@ class SingleShotPrediction(Processor):
         return self.wrap(image, boxes2D)
 
 
-class SSD512COCO(SingleShotPrediction):
+class SSD512COCO(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD512 trained on COCO.
         score_thresh: Float between [0, 1]
@@ -134,7 +135,7 @@ class SSD512COCO(SingleShotPrediction):
             model, names, score_thresh, nms_thresh)
 
 
-class SSD512YCBVideo(SingleShotPrediction):
+class SSD512YCBVideo(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD512 trained on YCBVideo.
         score_thresh: Float between [0, 1]
@@ -146,7 +147,7 @@ class SSD512YCBVideo(SingleShotPrediction):
             model, names, score_thresh, nms_thresh)
 
 
-class SSD300VOC(SingleShotPrediction):
+class SSD300VOC(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD300 trained on VOC.
         score_thresh: Float between [0, 1]
@@ -157,7 +158,7 @@ class SSD300VOC(SingleShotPrediction):
         super(SSD300VOC, self).__init__(model, names, score_thresh, nms_thresh)
 
 
-class SSD300FAT(SingleShotPrediction):
+class SSD300FAT(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD300 trained on FAT.
         score_thresh: Float between [0, 1]
@@ -168,7 +169,7 @@ class SSD300FAT(SingleShotPrediction):
         super(SSD300FAT, self).__init__(model, names, score_thresh, nms_thresh)
 
 
-class HaarCascadePrediction(Processor):
+class DetectHaarCascade(Processor):
     """HaarCascade prediction pipeline/function from RGB-image.
 
     # Arguments
@@ -182,7 +183,7 @@ class HaarCascadePrediction(Processor):
         A function for predicting bounding box detections.
     """
     def __init__(self, detector, class_names=None, colors=None, draw=True):
-        super(HaarCascadePrediction, self).__init__()
+        super(DetectHaarCascade, self).__init__()
         self.detector = detector
         self.class_names = class_names
         self.colors = colors
@@ -201,7 +202,7 @@ class HaarCascadePrediction(Processor):
         return self.wrap(image, boxes2D)
 
 
-class HaarCascadeFrontalFace(HaarCascadePrediction):
+class HaarCascadeFrontalFace(DetectHaarCascade):
     """HaarCascade pipeline for detecting frontal faces
     """
     def __init__(self, class_name='Face', color=[0, 255, 0], draw=True):
@@ -214,7 +215,7 @@ EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
                   [0, 0, 255], [0, 255, 255], [0, 255, 0]]
 
 
-class XceptionDetectionFER(Processor):
+class DetectMiniXceptionFER(Processor):
     """Emotion classification and detection pipeline.
 
     # Returns
@@ -225,7 +226,7 @@ class XceptionDetectionFER(Processor):
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
     def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
-        super(XceptionDetectionFER, self).__init__()
+        super(DetectMiniXceptionFER, self).__init__()
         self.offsets = offsets
         self.colors = colors
 
@@ -238,7 +239,7 @@ class XceptionDetectionFER(Processor):
         self.crop = pr.CropBoxes2D()
 
         # classification
-        self.classify = XceptionClassifierFER()
+        self.classify = MiniXceptionFER()
 
         # drawing and wrapping
         self.class_names = self.classify.class_names
@@ -256,3 +257,56 @@ class XceptionDetectionFER(Processor):
             box2D.score = np.amax(predictions['scores'])
         image = self.draw(image, boxes2D)
         return self.wrap(image, boxes2D)
+
+
+class DetectKeypoints2D(Processor):
+    def __init__(self, detect, estimate_keypoints, offsets=[0, 0], radius=3):
+        """General detection and keypoint estimator pipeline.
+        # Arguments
+            detect: Function for detecting objects. The output should be a
+                dictionary with key ``Boxes2D`` containing a list
+                of ``Boxes2D`` messages.
+            estimate_keypoints: Function for estimating keypoints. The output
+                should be a dictionary with key ``keypoints`` containing
+                a numpy array of keypoints.
+            offsets: List of two elements. Each element must be between [0, 1].
+            radius: Int indicating the radius of the keypoints to be drawn.
+        """
+        super(DetectKeypoints2D, self).__init__()
+        self.detect = detect
+        self.estimate_keypoints = estimate_keypoints
+        self.num_keypoints = estimate_keypoints.num_keypoints
+        self.square = SequentialProcessor()
+        self.square.add(pr.SquareBoxes2D())
+        self.square.add(pr.OffsetBoxes2D(offsets))
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
+        self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
+        self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
+        self.draw_boxes = pr.DrawBoxes2D(detect.class_names, detect.colors)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+
+    def call(self, image):
+        boxes2D = self.detect(image)['boxes2D']
+        boxes2D = self.square(boxes2D)
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        for cropped_image, box2D in zip(cropped_images, boxes2D):
+            keypoints = self.estimate_keypoints(cropped_image)['keypoints']
+            keypoints = self.change_coordinates(keypoints, box2D)
+            image = self.draw(image, keypoints)
+        image = self.draw_boxes(image, boxes2D)
+        return self.wrap(image, boxes2D)
+
+
+class DetectFaceKeypointNet2D32(DetectKeypoints2D):
+    """Frontal face detection pipeline with facial keypoint estimation.
+    # Arguments
+        offsets: List of two elements. Each element must be between [0, 1].
+        radius: Int indicating the radius of the keypoints to be drawn.
+    """
+    def __init__(self, offsets=[0, 0], radius=3):
+        detect = HaarCascadeFrontalFace(draw=False)
+        estimate_keypoints = FaceKeypointNet2D32(draw=False)
+        super(DetectFaceKeypointNet2D32, self).__init__(
+            detect, estimate_keypoints, offsets, radius)
