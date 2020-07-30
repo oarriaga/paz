@@ -170,8 +170,10 @@ def show_image(image, name='image', wait=True):
     image = convert_color_space(image, RGB2BGR)
     cv2.imshow(name, image)
     if wait:
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        while True:
+            if cv2.waitKey(0) & 0xFF == ord('q'):
+                break
+    cv2.destroyAllWindows()
 
 
 def warp_affine(image, matrix, fill_color=[0, 0, 0]):
