@@ -131,10 +131,7 @@ class DetectionLayer(KL.Layer):
         self.config = config
 
     def call(self, inputs):
-        rois = inputs[0]
-        mrcnn_class = inputs[1]
-        mrcnn_bbox = inputs[2]
-        image_meta = inputs[3]
+        rois, mrcnn_class, mrcnn_bbox, image_meta = inputs
 
         # Get windows of images in normalized coordinates. Windows are the area
         # in the image that excludes the padding.
@@ -143,7 +140,7 @@ class DetectionLayer(KL.Layer):
         m = utils.parse_image_meta_graph(image_meta)
         image_shape = m['image_shape'][0]
         window = utils.norm_boxes_graph(m['window'], image_shape[:2])
-
+       
         # Run detection refinement graph on each item in the batch
         detections_batch = utils.batch_slice(
             [rois, mrcnn_class, mrcnn_bbox, window],
@@ -379,6 +376,8 @@ class DetectionTargetLayer(KL.Layer):
         return [None, None, None, None]
 
 
+
+
 #Feature Pyramid Network Head
 def fpn_classifier_graph(rois, feature_maps, image_meta,
                          pool_size, num_classes, train_bn=True,
@@ -404,14 +403,24 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_classifier")([rois, image_meta] + feature_maps)
+    
+    conv_2d_layer = KL.Conv2D(fc_layers_size, (pool_size, pool_size), padding="valid")
+    #x = time_distributed_layer(x, fc_layers_size, (pool_size, pool_size))
     # Two 1024 FC layers (implemented with Conv2D for consistency)
-    x = KL.TimeDistributed(KL.Conv2D(fc_layers_size, (pool_size, pool_size), padding="valid"),
-                           name="mrcnn_class_conv1")(x)
+    x = KL.TimeDistributed(conv_2d_layer, name="mrcnn_class_conv1")(x)
+    
+    x = tf.reshape(x, [1000, x.shape[2], x.shape[3], x.shape[4]])
+    x = tf.expand_dims(x, axis=0)
+    
     x = KL.TimeDistributed(utils.BatchNorm(), name='mrcnn_class_bn1')(x, training=train_bn)
+    
     x = KL.Activation('relu')(x)
+
     x = KL.TimeDistributed(KL.Conv2D(fc_layers_size, (1, 1)),
                            name="mrcnn_class_conv2")(x)
+
     x = KL.TimeDistributed(utils.BatchNorm(), name='mrcnn_class_bn2')(x, training=train_bn)
+
     x = KL.Activation('relu')(x)
 
     shared = KL.Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
@@ -422,18 +431,16 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
                                             name='mrcnn_class_logits')(shared)
     mrcnn_probs = KL.TimeDistributed(KL.Activation("softmax"),
                                      name="mrcnn_class")(mrcnn_class_logits)
-
+   
+    
     # BBox head
     # [batch, num_rois, NUM_CLASSES * (dy, dx, log(dh), log(dw))]
     x = KL.TimeDistributed(KL.Dense(num_classes * 4, activation='linear'),
                            name='mrcnn_bbox_fc')(shared)
     # Reshape to [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))]
     s = K.int_shape(x)
-    if(s[1] == None):
-        mrcnn_bbox = KL.Reshape((-1, num_classes, 4), name="mrcnn_bbox")(x)
-    else:
-        mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
-
+    mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
+    
     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
 
@@ -697,7 +704,6 @@ class PyramidROIAlign(KL.Layer):
     def call(self, inputs):
         # Crop boxes [batch, num_boxes, (y1, x1, y2, x2)] in normalized coords
         boxes = inputs[0]
-
         # Image meta
         # Holds details about the image. See compose_image_meta()
         image_meta = inputs[1]
@@ -772,7 +778,9 @@ class PyramidROIAlign(KL.Layer):
 
         # Re-add the batch dimension
         shape = tf.concat([tf.shape(boxes)[:2], tf.shape(pooled)[1:]], axis=0)
+        
         pooled = tf.reshape(pooled, shape)
+        
         return pooled
 
     def compute_output_shape(self, input_shape):
