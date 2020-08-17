@@ -6,7 +6,7 @@ from paz.pipelines import DetectFaceKeypointNet2D32
 
 description = 'Demo script for running 2D keypoints face detector'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-c', '--camera_id', type=int, default=2,
+parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 args = parser.parse_args()
 
