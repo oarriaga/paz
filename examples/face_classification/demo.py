@@ -1,7 +1,7 @@
 import argparse
 from paz.backend.camera import VideoPlayer
 from paz.backend.camera import Camera
-from paz.pipelines import XceptionDetectionFER
+from paz.pipelines import DetectMiniXceptionFER
 
 
 if __name__ == "__main__":
@@ -12,7 +12,7 @@ if __name__ == "__main__":
                         help='Scaled offset to be added to bounding boxes')
     args = parser.parse_args()
 
-    pipeline = XceptionDetectionFER([args.offset, args.offset])
+    pipeline = DetectMiniXceptionFER([args.offset, args.offset])
     camera = Camera(args.camera_id)
     player = VideoPlayer((640, 480), pipeline, camera)
     player.run()
