@@ -2,11 +2,21 @@ from paz.backend.keypoints import denormalize_keypoints
 from paz.abstract import SequentialProcessor
 from paz.abstract import Processor
 from paz import processors as pr
+from paz.pipelines import HaarCascadeFrontalFace
+from paz.abstract import Box2D
 
 
+from model import GaussianMixtureModel
 from processors import PartitionKeypoints
 from processors import PredictMeanDistribution
+from processors import PredictDistributions
+from processors import ToProbabilityGrid
+from processors import DrawProbabilities
+from processors import ComputeMeans
 from processors import draw_circles
+import numpy as np
+import tensorflow as tf
+import os
 
 
 class AugmentKeypoints(SequentialProcessor):
@@ -78,6 +88,93 @@ class ProbabilisticKeypointPrediction(Processor):
             image = self.draw(image, keypoints)
         image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
+
+
+x = np.linspace(-1, 1, 96).astype('float32')
+GRID = tf.stack(np.meshgrid(x, x), axis=2)
+
+
+class GMMKeypoints(Processor):
+    def __init__(self, model, draw=True):
+        super(GMMKeypoints, self).__init__()
+        self.num_keypoints = len(model.output_shape)
+        preprocess = SequentialProcessor()
+        preprocess.add(pr.ResizeImage(model.input_shape[1:3]))
+        preprocess.add(pr.ConvertColorSpace(pr.RGB2GRAY))
+        preprocess.add(pr.NormalizeImage())
+        preprocess.add(pr.ExpandDims([0, 3]))
+        self.estimate_keypoints = PredictDistributions(model, preprocess)
+        self.to_grid = ToProbabilityGrid(GRID)
+        self.draw = draw
+        self.draw_probabilities = DrawProbabilities(self.num_keypoints)
+        self.wrap = pr.WrapOutput(['image', 'probabilities', 'distributions'])
+
+    def call(self, image):
+        distributions = self.estimate_keypoints(image)
+        probabilities = []
+        for arg, distribution in enumerate(distributions):
+            probability = self.to_grid(distribution)
+            print(probability.shape)
+            print(probability.min())
+            print(probability.max())
+            probabilities.append(probability)
+        if self.draw:
+            image = self.draw_probabilities(
+                image, probabilities, distributions)
+        return self.wrap(image, probabilities, distributions)
+
+
+class GMMKeypointNet2D(GMMKeypoints):
+    def __init__(self, draw=True):
+        model = GaussianMixtureModel((1, 96, 96, 1), 15, 8)
+        weights_path = self.get_weights_path(model)
+        model.load_weights(weights_path)
+        super(GMMKeypointNet2D, self).__init__(model, draw)
+
+    def get_weights_path(self, model):
+        root = os.path.join(os.path.expanduser('~'), '.keras/paz/models')
+        name = '_'.join(['FaceKP', model.name, str(8), str(15)])
+        print(name, root)
+        full_path = os.path.join(root, name)
+        weights_name = '%s_weights.hdf5' % name
+        return os.path.join(full_path, weights_name)
+
+
+class DetectGMMKeypointNet2D(Processor):
+    def __init__(self, radius=3):
+        super(DetectGMMKeypointNet2D, self).__init__()
+        self.detect = HaarCascadeFrontalFace(draw=False)
+        self.estimate_keypoints = GMMKeypointNet2D(draw=False)
+        self.num_keypoints = self.estimate_keypoints.num_keypoints
+
+        self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
+        self.denormalize_keypoints = pr.DenormalizeKeypoints()
+        self.crop = pr.CropBoxes2D()
+        self.compute_means = ComputeMeans()
+        self.draw_keypoints = pr.DrawKeypoints2D(self.num_keypoints, radius)
+        self.draw_probabilities = DrawProbabilities(self.num_keypoints)
+        self.draw_boxes2D = pr.DrawBoxes2D(['Face'], colors=[[0, 255, 0]])
+        outputs = ['image', 'boxes2D', 'keypoints2D', 'contours']
+        self.wrap = pr.WrapOutput(outputs)
+
+    def call(self, image):
+        boxes2D = self.detect(image)['boxes2D']
+        boxes2D = [Box2D([95, 150, 455, 520], 1.0, 'Face')]
+        cropped_images = self.crop(image, boxes2D)
+        keypoints2D, contours = [], []
+        for cropped_image, box2D in zip(cropped_images, boxes2D):
+            inferences = self.estimate_keypoints(cropped_image)
+            distributions = inferences['distributions']
+            probabilities = inferences['probabilities']
+            keypoints = self.compute_means(distributions)
+            keypoints = self.denormalize_keypoints(keypoints, cropped_image)
+            keypoints = self.change_coordinates(keypoints, box2D)
+            keypoints2D.append(keypoints)
+            contour = self.draw_probabilities(cropped_image, probabilities)
+            contours.append(contour)
+            image = self.draw_keypoints(image, keypoints)
+        image = self.draw_boxes2D(image, boxes2D)
+        return self.wrap(image, boxes2D, keypoints2D, contours)
 
 
 if __name__ == '__main__':

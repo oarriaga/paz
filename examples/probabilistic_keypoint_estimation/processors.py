@@ -1,8 +1,13 @@
 from paz.backend.image import draw_circle
 from paz.backend.image.draw import GREEN
+from paz.backend.image import resize_image
 from paz import processors as pr
 from paz.abstract import Processor
 import numpy as np
+from paz.backend.image import lincolor
+import seaborn as sns
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 
 class PartitionKeypoints(Processor):
@@ -25,6 +30,88 @@ class ToNumpyArray(Processor):
 
     def call(self, predictions):
         return np.array(predictions)
+
+
+class PredictDistributions(Processor):
+    def __init__(self, model, preprocess=None):
+        super(PredictDistributions, self).__init__()
+        self.model = model
+        self.preprocess = preprocess
+
+    def call(self, x):
+        if self.preprocess is not None:
+            x = self.preprocess(x)
+        distributions = self.model(x)
+        return distributions
+
+
+class ComputeMeans(Processor):
+    def __init__(self):
+        super(ComputeMeans, self).__init__()
+
+    def call(self, distributions):
+        keypoints = np.zeros((len(distributions), 2))
+        for arg, distribution in enumerate(distributions):
+            keypoints[arg] = distribution.mean()
+        return keypoints
+
+
+class ToProbabilityGrid(Processor):
+    def __init__(self, grid):
+        self.grid = grid
+
+    def call(self, distribution):
+        probability = distribution.prob(self.grid).numpy()[::-1, :]
+        return probability
+
+
+def build_figure():
+    figure = Figure()
+    canvas = FigureCanvas(figure)
+    axis = figure.gca()
+    axis.axis('off')
+    figure.tight_layout(pad=0)
+    axis.margins(0)
+    # figure.canvas.draw()
+    return figure, axis, canvas
+
+
+def to_pixels(figure):
+    figure.canvas.draw()
+    image = np.frombuffer(figure.canvas.tostring_rgb(), dtype=np.uint8)
+    image = image.reshape(figure.canvas.get_width_height()[::-1] + (3,))
+    return image
+
+
+def interpolate_probability(probability, shape):
+    normalization_constant = np.max(probability)
+    probability = probability / normalization_constant
+    probability = probability * 255.0
+    probability = probability.astype('uint8')
+    probability = resize_image(probability, shape)
+    probability = probability / 255.0
+    probability = probability * normalization_constant
+    return probability
+
+
+class DrawProbabilities(Processor):
+    def __init__(self, num_keypoints, normalized=True):
+        self.colors = lincolor(num_keypoints, normalized=normalized)
+        self.figure, self.axis, self.canvas = build_figure()
+        # self._figure, self._axis, self._canvas = build_figure()
+
+    def call(self, image, probabilities):
+        for color, probability in zip(self.colors, probabilities):
+            cmap = sns.light_palette(color, input='hsl', as_cmap=True)
+            probability = interpolate_probability(probability, image.shape[:2])
+            self.axis.contour(probability, cmap=cmap, levels=np.arange(1, 50, 3))
+        self.axis.imshow(image)
+        contour = to_pixels(self.figure)
+        # contour = resize_image(contour, (image.shape[:2]))
+        # self._axis.imshow(image)
+        # self._axis.imshow(contour)
+        # new_image = to_pixels(self._figure)
+        return contour
 
 
 class PredictMeanDistribution(Processor):
