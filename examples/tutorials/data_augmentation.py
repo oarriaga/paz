@@ -2,6 +2,7 @@ from paz.pipelines import AugmentImage
 from paz.abstract import SequentialProcessor
 from paz.backend.image import show_image, load_image
 import paz.processors as pr
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 augment = SequentialProcessor()
 augment.add(pr.RandomContrast())
@@ -42,3 +43,20 @@ augment.add(transform)
 for _ in range(5):
     image = augment('image.jpg')
     show_image(image)
+
+# We can also use the Keras ImageDataGenerator
+# We first instantiate a generator
+generator = ImageDataGenerator(
+    rotation_range=30,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    zoom_range=0.1,
+    horizontal_flip=True)
+
+# We can add it by using our processor/wrapper ImageDataProcessor:
+augment = SequentialProcessor()
+augment.add(pr.LoadImage())
+augment.add(pr.ImageDataProcessor(generator))
+augment.add(pr.ShowImage())
+for _ in range(5):
+    image = augment('image.jpg')
