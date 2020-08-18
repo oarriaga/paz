@@ -229,7 +229,7 @@ class ApplyTranslation(Processor):
         return image
 
 
-class ApplyRandomTranslation(Processor):
+class RandomTranslation(Processor):
     """Applies a random translation to image and labels
 
     # Arguments
@@ -241,7 +241,7 @@ class ApplyRandomTranslation(Processor):
     """
     def __init__(
             self, delta_scale=[0.25, 0.25], fill_color=None):
-        super(ApplyRandomTranslation, self).__init__()
+        super(RandomTranslation, self).__init__()
         self.delta_scale = delta_scale
         self.apply_translation = ApplyTranslation(None, fill_color)
 
@@ -383,6 +383,53 @@ class RandomKeypointRotation(Processor):
             radians = self._degrees_to_radians(degrees)
             keypoints = self._rotate_keypoints(keypoints, radians, center)
         return image, keypoints
+
+
+class RandomRotation(Processor):
+    """Randomly rotate an images
+    # Arguments
+        rotation_range: Int. indicating the max and min values in degrees
+            of the uniform distribution ''[-range, range]'' from which the
+            angles are sampled.
+        fill_color: ''None'' or List of three integers indicating the
+            color values e.g. ''[0, 0, 0]''. If ''None'' mean channel values of
+            the image will be calculated as fill values.
+        probability: Float between 0 and 1.
+    """
+    def __init__(self, rotation_range=30, fill_color=None, probability=0.5):
+        super(RandomRotation, self).__init__()
+        self.rotation_range = rotation_range
+        self.fill_color = fill_color
+        self.probability = probability
+
+    @property
+    def probability(self):
+        return self._probability
+
+    @probability.setter
+    def probability(self, value):
+        if not (0.0 < value <= 1.0):
+            raise ValueError('Probability should be between "[0, 1]".')
+        self._probability = value
+
+    def _calculate_image_center(self, image):
+        return (int(image.shape[0] / 2), int(image.shape[1] / 2))
+
+    def _rotate_image(self, image, degrees):
+        center = self._calculate_image_center(image)
+        matrix = get_rotation_matrix(center, degrees)
+        if self.fill_color is None:
+            fill_color = np.mean(image, axis=(0, 1))
+        return warp_affine(image, matrix, fill_color)
+
+    def _sample_rotation(self, rotation_range):
+        return np.random.uniform(-rotation_range, rotation_range)
+
+    def call(self, image):
+        if self.probability >= np.random.rand():
+            degrees = self._sample_rotation(self.rotation_range)
+            image = self._rotate_image(image, degrees)
+        return image
 
 
 class TranslateImage(Processor):
