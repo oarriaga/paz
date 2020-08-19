@@ -24,6 +24,8 @@ from mask_rcnn.layers import build_rpn_model
 from mask_rcnn.layers import ProposalLayer, DetectionLayer, AnchorsLayer, DetectionTargetLayer
 from mask_rcnn.layers import build_fpn_mask_graph, fpn_classifier_graph
 
+from paz.models.detection.utils import create_prior_boxes
+
 # Requires TensorFlow 2.0+
 from distutils.version import LooseVersion
 assert LooseVersion(tf.__version__) >= LooseVersion("2.0")
@@ -217,7 +219,7 @@ class MaskRCNN():
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
-                                     train_bn=config.TRAIN_BN,
+                                     mode=mode, train_bn=config.TRAIN_BN,
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
 
             mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
@@ -258,7 +260,7 @@ class MaskRCNN():
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
-                                     train_bn=config.TRAIN_BN,
+                                     mode=mode, train_bn=config.TRAIN_BN,
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
 
             # Detections
@@ -284,7 +286,7 @@ class MaskRCNN():
         if config.GPU_COUNT > 1:
             from mrcnn.parallel_model import ParallelModel
             model = ParallelModel(model, config.GPU_COUNT)
-
+        model.prior_boxes = create_prior_boxes('YCBVideo')
         return model
 
     def find_last(self):
@@ -317,44 +319,12 @@ class MaskRCNN():
         return checkpoint
 
     def load_weights(self, filepath, by_name=False, exclude=None):
-        """Modified version of the corresponding Keras function with
-        the addition of multi-GPU support and the ability to exclude
-        some layers from loading.
-        exclude: list of layer names to exclude
+        """Load model weights.
+        filepath: Path to .h5 file
         """
-        import h5py
-        # Conditional import to support versions of Keras before 2.2
-        # TODO: remove in about 6 months (end of 2018)
-        try:
-            from keras.engine import saving
-        except ImportError:
-            from keras.engine import topology as saving
-
-        if exclude:
-            by_name = True
-
-        if h5py is None:
-            raise ImportError('`load_weights` requires h5py.')
-        f = h5py.File(filepath, mode='r')
-        if 'layer_names' not in f.attrs and 'model_weights' in f:
-            f = f['model_weights']
-
-        # In multi-GPU training, we wrap the model. Get layers
-        # of the inner model because they have the weights.
+        #Load keras model
         keras_model = self.keras_model
-        layers = keras_model.inner_model.layers if hasattr(keras_model, "inner_model")\
-            else keras_model.layers
-
-        # Exclude some layers
-        if exclude:
-            layers = filter(lambda l: l.name not in exclude, layers)
-
-        if by_name:
-            saving.load_weights_from_hdf5_group_by_name(f, layers)
-        else:
-            saving.load_weights_from_hdf5_group(f, layers)
-        if hasattr(f, 'close'):
-            f.close()
+        keras_model.load_weights(filepath, by_name=True)
 
         # Update the log directory
         self.set_log_dir(filepath)
