@@ -380,7 +380,7 @@ class DetectionTargetLayer(KL.Layer):
 
 #Feature Pyramid Network Head
 def fpn_classifier_graph(rois, feature_maps, image_meta,
-                         pool_size, num_classes, train_bn=True,
+                         pool_size, num_classes, mode, train_bn=True,
                          fc_layers_size=1024):
     """Builds the computation graph of the feature pyramid network classifier
     and regressor heads.
