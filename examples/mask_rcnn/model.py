@@ -20,9 +20,10 @@ import tensorflow.keras.layers as KL
 import tensorflow.keras.models as KM
 
 from mask_rcnn import utils
-from mask_rcnn.layers import build_rpn_model
-from mask_rcnn.layers import ProposalLayer, DetectionLayer, AnchorsLayer, DetectionTargetLayer
-from mask_rcnn.layers import build_fpn_mask_graph, fpn_classifier_graph
+from mask_rcnn.layers import AnchorsLayer, DetectionTargetLayer
+from mask_rcnn.inference_graph import build_rpn_model, resnet_graph
+from mask_rcnn.inference_graph import ProposalLayer, DetectionLayer
+from mask_rcnn.inference_graph import build_fpn_mask_graph, fpn_classifier_graph
 
 from paz.models.detection.utils import create_prior_boxes
 
