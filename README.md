@@ -13,6 +13,7 @@ Multi-level perception library in Python.
 |---------------------------:|-----------------------| 
 |Object detection            |SSD-512                |
 |Probabilistic keypoint est. |Gaussian Mixture CNN   |
+|Detection and Segmentation  |MaskRCNN (in progress) |
 |Keypoint estimation         |HRNet                  |
 |6D Pose estimation          |KeypointNet2D          |
 |Implicit orientation        |AutoEncoder            |
