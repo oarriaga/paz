@@ -7,7 +7,14 @@ Multi-level perception library in Python.
 
 * PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
 
-<center>
+| Probabilistic keypoints    | 6D head estimation  | 6D pose estimation|
+|---------------------------:|-----------------------| --|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="256">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/pose_estimation.png" width="256">|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="256">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="256">|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/discovery_keypoints.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/haar_cascades.png" width="256">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="256">|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="256">| |
+
+
 
 | Task (link to tutorial)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
@@ -16,7 +23,7 @@ Multi-level perception library in Python.
 |Keypoint estimation         |HRNet                  |
 |6D Pose estimation          |KeypointNet2D          |
 |Implicit orientation        |AutoEncoder            |
-|Emotion classification      |MiniXception           |
+|Emotion classification      |MiniXception            |
 |Discovery of Keypoints      |KeypointNet            |
 |Keypoint estimation         |KeypointNet2D          |
 |Attention                   |Spatial Transformers   |
