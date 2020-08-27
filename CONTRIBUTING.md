@@ -16,7 +16,9 @@
 
 4. If new functionality is added please include unit-tests for it.
 
-5. Commits should try to have the following structure:
+5. Please make sure that all unit-tests are passing before your make your PR.
+
+6. Commits should try to have the following structure:
     - Commits are titles:
         - Start with a capital letter
         - Don't end the commit with a period
@@ -26,8 +28,9 @@
             "Remove deprecated backend function"
     - Find more information about how to write good commits [here](https://chris.beams.io/posts/git-commit/).
             
-6. Provide documentation of new features:
+7. Provide documentation of new features:
     - Use the documentation syntax of the repository
     - If new functionality is added please add your function to paz/docs/structure.py
 
-7. After looking into the points here discussed, please submit your PR such that we can start a discussion about it.
+
+8. After looking into the points here discussed, please submit your PR such that we can start a discussion about it and check that all tests are passing.
