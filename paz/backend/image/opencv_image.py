@@ -173,7 +173,7 @@ def show_image(image, name='image', wait=True):
         while True:
             if cv2.waitKey(0) & 0xFF == ord('q'):
                 break
-    cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
 
 def warp_affine(image, matrix, fill_color=[0, 0, 0]):

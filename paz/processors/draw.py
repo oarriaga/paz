@@ -18,11 +18,14 @@ class DrawBoxes2D(Processor):
         colors: List of lists containing the color values
         weighted: Boolean. If ``True`` the colors are weighted with the
             score of the bounding box.
+        scale: Float. Scale of drawn text.
     """
-    def __init__(self, class_names=None, colors=None, weighted=False):
+    def __init__(self, class_names=None, colors=None,
+                 weighted=False, scale=0.7):
         self.class_names = class_names
         self.colors = colors
         self.weighted = weighted
+        self.scale = scale
         if self.colors is None:
             self.colors = lincolor(len(self.class_names))
 
@@ -40,7 +43,7 @@ class DrawBoxes2D(Processor):
             if self.weighted:
                 color = [int(channel * box2D.score) for channel in color]
             text = '{:0.2f}, {}'.format(box2D.score, class_name)
-            put_text(image, text, (x_min, y_min - 10), .7, color, 1)
+            put_text(image, text, (x_min, y_min - 10), self.scale, color, 1)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return image
 
@@ -65,18 +68,21 @@ class DrawKeypoints2D(Processor):
 
 
 class DrawBoxes3D(Processor):
-    def __init__(self, camera, class_to_dimensions):
+    def __init__(self, camera, class_to_dimensions, thickness=1):
         """Draw boxes 3D of multiple objects
 
         # Arguments
+            camera: Instance of ``paz.backend.camera.Camera''.
             class_to_dimensions: Dictionary that has as keys the
                 class names and as value a list [model_height, model_width]
+            thickness: Int. Thickness of 3D box
         """
         # model_height=.1, model_width=0.08):
         super(DrawBoxes3D, self).__init__()
         self.camera = camera
         self.class_to_dimensions = class_to_dimensions
         self.class_to_points = self._make_points(self.class_to_dimensions)
+        self.thickness = thickness
 
     def _make_points(self, class_to_dimensions):
         class_to_points = {}
@@ -99,7 +105,7 @@ class DrawBoxes3D(Processor):
         points3D = self.class_to_points[pose6D.class_name]
         args = (points3D, pose6D, self.camera)
         points2D = project_points3D(*args).astype(np.int32)
-        draw_cube(image, points2D, thickness=1)
+        draw_cube(image, points2D, thickness=self.thickness)
         return image
 
 

@@ -28,8 +28,8 @@ FACE_KEYPOINTNET3D = FACE_KEYPOINTNET3D - np.mean(FACE_KEYPOINTNET3D, axis=0)
 
 
 class EstimatePoseKeypoints(Processor):
-    def __init__(self, detect, estimate_keypoints, camera,
-                 offsets, model_points, class_to_dimensions, radius=3):
+    def __init__(self, detect, estimate_keypoints, camera, offsets,
+                 model_points, class_to_dimensions, radius=3, thickness=1):
         """Pose estimation pipeline using keypoints.
 
         # Arguments
@@ -49,6 +49,7 @@ class EstimatePoseKeypoints(Processor):
                 two integers indicating the height and width of the object.
                 e.g. {'PowerDrill': [30, 20]}.
             radius: Int. radius of keypoint to be drawn.
+            thickness: Int. thickness of 3D box.
 
         # Returns
             A function that takes an RGB image and outputs the following
@@ -67,7 +68,7 @@ class EstimatePoseKeypoints(Processor):
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
         self.solve_PNP = pr.SolvePNP(model_points, camera)
         self.draw_keypoints = pr.DrawKeypoints2D(self.num_keypoints, radius)
-        self.draw_box3D = pr.DrawBoxes3D(camera, class_to_dimensions)
+        self.draw_box = pr.DrawBoxes3D(camera, class_to_dimensions, thickness)
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'keypoints', 'poses6D'])
 
     def call(self, image):
@@ -81,7 +82,7 @@ class EstimatePoseKeypoints(Processor):
             keypoints = self.change_coordinates(keypoints, box2D)
             pose6D = self.solve_PNP(keypoints)
             image = self.draw_keypoints(image, keypoints)
-            image = self.draw_box3D(image, pose6D)
+            image = self.draw_box(image, pose6D)
             keypoints2D.append(keypoints)
             poses6D.append(pose6D)
         return self.wrap(image, boxes2D, keypoints2D, poses6D)
@@ -103,9 +104,9 @@ class HeadPoseKeypointNet2D32(EstimatePoseKeypoints):
             inferences as keys of a dictionary:
                 ``image``, ``boxes2D``, ``keypoints`` and ``poses6D``.
         """
-    def __init__(self, camera, offsets=[0, 0], radius=3):
+    def __init__(self, camera, offsets=[0, 0], radius=3, thickness=1):
         detect = HaarCascadeFrontalFace(draw=False)
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
         super(HeadPoseKeypointNet2D32, self).__init__(
             detect, estimate_keypoints, camera, offsets,
-            FACE_KEYPOINTNET3D, {None: [900.0, 600.0]}, radius)
+            FACE_KEYPOINTNET3D, {None: [900.0, 600.0]}, radius, thickness)

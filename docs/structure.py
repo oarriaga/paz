@@ -246,8 +246,8 @@ PAGES = [
             processors.ToAbsoluteBoxCoordinates,
             processors.ToNormalizedBoxCoordinates,
             processors.RandomSampleCrop,
-            processors.ApplyRandomTranslation,
-            processors.ApplyRandomTranslation,
+            processors.RandomTranslation,
+            processors.RandomRotation,
             processors.RandomKeypointTranslation,
             processors.RandomKeypointRotation
         ]
