@@ -26,3 +26,8 @@
             "Remove deprecated backend function"
     - Find more information about how to write good commits [here](https://chris.beams.io/posts/git-commit/).
             
+6. Provide documentation of new features:
+    - Use the documentation syntax of the repository
+    - If new functionality is added please add your function to paz/docs/structure.py
+
+7. After looking into the points here discussed, please submit your PR such that we can start a discussion about it.
