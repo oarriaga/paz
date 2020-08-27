@@ -20,53 +20,50 @@ PAZ is used in the following examples:
 
 | [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
 |---------------------------|-----------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="512">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="512"> |
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="400">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="400"> |
 
 
 
-<center>
-
-| Task (link to tutorial)    |Model (link to paper)  |
-|---------------------------:|-----------------------| 
-|Object detection            |SSD-512                |
-|Probabilistic keypoint est. |Gaussian Mixture CNN   |
-|Detection and Segmentation  |MaskRCNN (in progress) |
-|Keypoint estimation         |HRNet                  |
-|6D Pose estimation          |KeypointNet2D          |
-|Implicit orientation        |AutoEncoder            |
-|Emotion classification      |MiniXception           |
-|Discovery of Keypoints      |KeypointNet            |
-|Keypoint estimation         |KeypointNet2D          |
-|Attention                   |Spatial Transformers   |
-|Object detection            |HaarCascades           |
-
-</center>
 
 ## Table of Contents
 <!--ts-->
 * [Examples](#selected-examples)
 * [Hierarchical APIs](#hierarchical-apis)
     * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#mid-level)
+* [Models](#models)
 * [Installation](#installation)
 * [Motivation](#motivation)
 <!--te-->
 
 ## Hierarchical APIs
+PAZ can be used with three diferent API levels which are there to be helpful for the user's specific application.
 
 ### High-level
-PAZ has easy out-of-the-box inference:
+Easy out-of-the-box prediction. For example, for detecting objects we can call the following pipeline:
 
 ``` python
 from paz.pipelines import SSD512COCO
 
 detect = SSD512COCO()
 
-# apply directly to an RGB image-array
+# apply directly to an image (numpy-array)
 inferences = detect(image)
 ```
+
+There are multiple high-level functions a.k.a. ``pipelines`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/pipelines)
+
+Those functions are build using our mid-level API described now below.
+
+
 ### Mid-level
+While the high-level API is useful for quick applications, it might not be flexible enough for your specific purporse.
+
+Therefore, in PAZ we can build high-level functions using our a mid-level API.
+
 #### Mid-level: Sequential
-PAZ allows you to construct easy data-augmentation pipelines:
+If your function is sequential you can construct a sequential function using ``SequentialProcessor``.
+
+In the example below we create a data-augmentation pipeline:
 
 ``` python
 from paz.abstract import SequentialProcessor
@@ -82,17 +79,32 @@ augment.add(pr.RandomHue())
 image = augment(image)
 ```
 
-Pipelines with **Mid-level API** doesn't stop here. PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization and multiple inferences.
+You can also add **any function** not only those found in ``processors``.
 
-#### Mid-level: Explicit
+For example we can pass a numpy function to our original data-augmentation pipeline:
 
 ``` python
+augment.add(np.mean)
+```
+There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors)
+
+
+#### Mid-level: Explicit
+Non-sequential pipelines can be also build by abstracting ``Processor``.
+
+In the example below we build a emotion classifier using our high-level and mid-level functions.
+
+``` python
+from paz.pipelines import HaarCascadeFrontalFace, MiniXceptionFER
+from paz.abstract import Processor
+import paz.processors as pr
+
 class EmotionDetector(Processor):
     def __init__(self):
         super(EmotionDetector, self).__init__()
         self.detect = HaarCascadeFrontalFace(draw=False)
         self.crop = pr.CropBoxes2D()
-        self.classify = XceptionClassifierFER()
+        self.classify = MiniXceptionFER()
         self.draw = pr.DrawBoxes2D(self.classify.class_names)
 
     def call(self, image):
@@ -122,6 +134,27 @@ from paz.backend import boxes, camera, image, keypoints, quaternion
     OpenImages, VOC, YCB-Video, FAT, FERPlus, FER2013
 
 * PAZ has automatic batch creating and dispatching
+
+## Models
+The following models are implemented in PAZ.
+<center>
+
+| Task (link to tutorial)    |Model (link to paper)  |
+|---------------------------:|-----------------------| 
+|Object detection            |SSD-512                |
+|Object detection            |SSD-300                |
+|Probabilistic keypoint est. |Gaussian Mixture CNN   |
+|Detection and Segmentation  |MaskRCNN (in progress) |
+|Keypoint estimation         |HRNet                  |
+|6D Pose estimation          |KeypointNet2D          |
+|Implicit orientation        |AutoEncoder            |
+|Emotion classification       |MiniXception           |
+|Discovery of Keypoints      |KeypointNet            |
+|Keypoint estimation         |KeypointNet2D          |
+|Attention                   |Spatial Transformers   |
+|Object detection            |HaarCascades           |
+
+</center>
 
 ## Installation
 
