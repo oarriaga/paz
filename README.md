@@ -126,9 +126,17 @@ from paz.backend import boxes, camera, image, keypoints, quaternion
 
 ## Installation
 
-3. Run: `pip install . --user`
+Run: `pip install . --user`
 * PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
+## Coverage
+Test coverage can be checked using [coverage](https://coverage.readthedocs.io/en/coverage-5.2.1/).
+You can install coverage by calling: `pip install coverage --user`
+You can then check for the test coverage by running:
+```
+coverage run -m pytest tests/
+coverage report -m
+```
 
 ### Motivation
 Even though there are multiple high-level computer vision libraries in different DL frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
