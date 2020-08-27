@@ -4,22 +4,21 @@
 Multi-level perception library in Python.
 
 ## Selected examples:
+PAZ has the following examples:
 
-* PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
-
-| Probabilistic 2D keypoints| 6D head-pose estimation  | 6D pose estimation|
+| [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
 |---------------------------|--------------------------| ------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/pose_estimation.png" width="400">|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="430">|
 
-| Object detection          | 2D keypoint estimation   | Instance segmentation  |
+| 6D pose estimation          | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/master/examples/mask_rcnn)  |
 |---------------------------|--------------------------| -----------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="415"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="415">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="400">|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/pose_estimation.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="420">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="400">|
 
-| 3D keypoint discovery     | Haar Cascade detector | Emotion classifier         |
+| [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) | [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification)         |
 |---------------------------|-----------------------| --------------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/discovery_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/haar_cascades.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="400">
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/discovery_keypoints.png" width="410"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/haar_cascades.png" width="410">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="400">
 
-| Implicit orientation  | Attention (STNs) |
+| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
 |---------------------------|-----------------------|
 |<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="512">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="512"> |
 
