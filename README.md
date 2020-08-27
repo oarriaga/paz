@@ -37,7 +37,7 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 ## Hierarchical APIs
 PAZ can be used with three diferent API levels which are there to be helpful for the user's specific application.
 
-### High-level
+## High-level
 Easy out-of-the-box prediction. For example, for detecting objects we can call the following pipeline:
 
 ``` python
@@ -51,10 +51,10 @@ inferences = detect(image)
 
 There are multiple high-level functions a.k.a. ``pipelines`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/pipelines). Those functions are build using our mid-level API described now below.
 
-### Mid-level
+## Mid-level
 While the high-level API is useful for quick applications, it might not be flexible enough for your specific purporse. Therefore, in PAZ we can build high-level functions using our a mid-level API.
 
-#### Mid-level: Sequential
+### Mid-level: Sequential
 If your function is sequential you can construct a sequential function using ``SequentialProcessor``. In the example below we create a data-augmentation pipeline:
 
 ``` python
@@ -79,7 +79,7 @@ augment.add(np.mean)
 There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors)
 
 
-#### Mid-level: Explicit
+### Mid-level: Explicit
 Non-sequential pipelines can be also build by abstracting ``Processor``. In the example below we build a emotion classifier from scratch using our high-level and mid-level functions.
 
 ``` python
@@ -109,7 +109,7 @@ predictions = detect(image)
 
 ``Processors`` allow us to easily compose, compress and extract away unecessary parameters of functions. However, processors are ultimately build using our low-level API (small functions) explained next.
 
-### Low-level
+## Low-level
 
 PAZ has a lot of small functions for [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
 
@@ -127,7 +127,7 @@ image = load_image('my_image.png')
 show_image(image)
 ```
 
-### Additional functionality
+## Additional functionality
 
 * PAZ has [built-in messages](https://github.com/oarriaga/paz/blob/master/paz/abstract/messages.py) e.g. ''Pose6D'' for easier data exchange with other libraries or frameworks such as [ROS](https://www.ros.org/).
 
