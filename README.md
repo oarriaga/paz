@@ -7,12 +7,21 @@ Multi-level perception library in Python.
 
 * PAZ contains the following tutorials/examples with training and inference pipelines as well as pre-trained models in tf2:
 
-| Probabilistic keypoints    | 6D head estimation  | 6D pose estimation|
-|---------------------------:|-----------------------| --|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="256">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/pose_estimation.png" width="256">|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="256">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="256">|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/discovery_keypoints.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/haar_cascades.png" width="256">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="256">|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="256"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="256">| |
+| Probabilistic 2D keypoints| 6D head-pose estimation  | 6D pose estimation|
+|---------------------------|--------------------------| ------------------|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/pose_estimation.png" width="400">|
+
+| Object detection          | 2D keypoint estimation   | Instance segmentation  |
+|---------------------------|--------------------------| -----------------------|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="415"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="415">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="400">|
+
+| 3D keypoint discovery     | Haar Cascade detector | Emotion classifier         |
+|---------------------------|-----------------------| --------------------------|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/discovery_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/haar_cascades.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="400">
+
+| Implicit orientation  | Attention (STNs) |
+|---------------------------|-----------------------|
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="512">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="512"> |
 
 
 
