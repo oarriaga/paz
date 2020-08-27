@@ -20,9 +20,9 @@ PAZ is used in the following examples:
 
 | [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
 |---------------------------|-----------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="400">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="400"> |
+|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="512">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="512"> |
 
-All models (except Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)) can be re-trained with your own data.
+All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
 ## Table of Contents
 <!--ts-->
@@ -55,9 +55,7 @@ There are multiple high-level functions a.k.a. ``pipelines`` already implemented
 While the high-level API is useful for quick applications, it might not be flexible enough for your specific purporse. Therefore, in PAZ we can build high-level functions using our a mid-level API.
 
 #### Mid-level: Sequential
-If your function is sequential you can construct a sequential function using ``SequentialProcessor``.
-
-In the example below we create a data-augmentation pipeline:
+If your function is sequential you can construct a sequential function using ``SequentialProcessor``. In the example below we create a data-augmentation pipeline:
 
 ``` python
 from paz.abstract import SequentialProcessor
@@ -73,9 +71,7 @@ augment.add(pr.RandomHue())
 image = augment(image)
 ```
 
-You can also add **any function** not only those found in ``processors``.
-
-For example we can pass a numpy function to our original data-augmentation pipeline:
+You can also add **any function** not only those found in ``processors``. For example we can pass a numpy function to our original data-augmentation pipeline:
 
 ``` python
 augment.add(np.mean)
@@ -84,9 +80,7 @@ There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [h
 
 
 #### Mid-level: Explicit
-Non-sequential pipelines can be also build by abstracting ``Processor``.
-
-In the example below we build a emotion classifier from scratch using our high-level and mid-level functions.
+Non-sequential pipelines can be also build by abstracting ``Processor``. In the example below we build a emotion classifier from scratch using our high-level and mid-level functions.
 
 ``` python
 from paz.pipelines import HaarCascadeFrontalFace, MiniXceptionFER
@@ -137,12 +131,12 @@ show_image(image)
 
 * PAZ has [built-in messages](https://github.com/oarriaga/paz/blob/master/paz/abstract/messages.py) e.g. ''Pose6D'' for easier data exchange with other libraries or frameworks such as [ROS](https://www.ros.org/).
 
-There are custom callbacks e.g. MAP evaluation for object detectors while training
+* There are custom callbacks e.g. MAP evaluation for object detectors while training
     
-PAZ comes with data loaders for the following datasets:
+* PAZ comes with data loaders for the following datasets:
     OpenImages, VOC, YCB-Video, FAT, FERPlus, FER2013
 
-We have an automatic batch creation and dispatching wrappers for an easy connection between generators and our pipelines. Please look at the examples and the processor ``pr.SequenceWrapper`` for more information.
+* We have an automatic batch creation and dispatching wrappers for an easy connection between generators and our pipelines. Please look at the examples and the processor ``pr.SequenceWrapper`` for more information.
 
 The following models are implemented in PAZ. All models can be trained with your own data.
 
@@ -166,9 +160,13 @@ The following models are implemented in PAZ. All models can be trained with your
 </center>
 
 ## Installation
+PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-Run: `pip install . --user`
-* PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
+To install PAZ you can run:
+
+```
+pip install . --user
+```
 
 ## Coverage
 Test coverage can be checked using [coverage](https://coverage.readthedocs.io/en/coverage-5.2.1/).
