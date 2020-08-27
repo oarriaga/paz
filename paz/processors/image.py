@@ -337,7 +337,7 @@ class BlendRandomCroppedBackground(Processor):
         background = load_image(background_path)
         background = random_image_crop(background, image.shape[:2])
         if background is None:
-            background = make_random_plain_image(image.shape[:2])
+            background = make_random_plain_image(image.shape[:3])
         return blend_alpha_channel(image, background)
 
 
