@@ -138,10 +138,10 @@ coverage run -m pytest tests/
 coverage report -m
 ```
 
-### Motivation
+## Motivation
 Even though there are multiple high-level computer vision libraries in different DL frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
 
-#### Why Keras over other frameworks/libraries?
+### Why Keras over other frameworks/libraries?
 In simple terms, I have always felt the API to be more mature.
 It allowed me to express my ideas at the level of complexity that was required. 
 Keras was often misinterpreted as a "beginners" framework; however, once you learn to abstract: Layer, Callbacks, Loss, Metrics or Model, the API remained intact and helpful for more complicated ideas. 
