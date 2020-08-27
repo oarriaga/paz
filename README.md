@@ -25,14 +25,17 @@ Multi-level perception library in Python.
 
 
 
+<center>
+
 | Task (link to tutorial)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
 |Object detection            |SSD-512                |
 |Probabilistic keypoint est. |Gaussian Mixture CNN   |
+|Detection and Segmentation  |MaskRCNN (in progress) |
 |Keypoint estimation         |HRNet                  |
 |6D Pose estimation          |KeypointNet2D          |
 |Implicit orientation        |AutoEncoder            |
-|Emotion classification      |MiniXception            |
+|Emotion classification      |MiniXception           |
 |Discovery of Keypoints      |KeypointNet            |
 |Keypoint estimation         |KeypointNet2D          |
 |Attention                   |Spatial Transformers   |
@@ -40,9 +43,18 @@ Multi-level perception library in Python.
 
 </center>
 
-* PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
+## Table of Contents
+<!--ts-->
+* [Examples](#selected-examples)
+* [Hierarchical APIs](#hierarchical-apis)
+    * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#mid-level)
+* [Installation](#installation)
+* [Motivation](#motivation)
+<!--te-->
 
-## High-level API
+## Hierarchical APIs
+
+### High-level
 PAZ has easy out-of-the-box inference:
 
 ``` python
@@ -53,8 +65,8 @@ detect = SSD512COCO()
 # apply directly to an RGB image-array
 inferences = detect(image)
 ```
-
-## Mid-level API (sequential)
+### Mid-level
+#### Mid-level: Sequential
 PAZ allows you to construct easy data-augmentation pipelines:
 
 ``` python
@@ -73,7 +85,7 @@ image = augment(image)
 
 Pipelines with **Mid-level API** doesn't stop here. PAZ has out-of-the-box data-augmentation pipelines for object detection, keypoint-estimation, image-classification and domain-randomization and multiple inferences.
 
-## Mid-level API (explicit)
+#### Mid-level: Explicit
 
 ``` python
 class EmotionDetector(Processor):
@@ -94,7 +106,7 @@ class EmotionDetector(Processor):
  
 * For example, a simple API for detecting common-objects (COCO) from an image (check the demo): 
 
-
+### Low-level
 * PAZ has a low-level API for using functions as helpers for your project!
 
 ``` python
@@ -115,6 +127,8 @@ from paz.backend import boxes, camera, image, keypoints, quaternion
 ## Installation
 
 3. Run: `pip install . --user`
+* PAZ has only three dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
+
 
 ### Motivation
 Even though there are multiple high-level computer vision libraries in different DL frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
@@ -131,6 +145,4 @@ I feel it's easy to blurry a company name with the individuals behind their proj
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration before we lay upon you our hardened criticism.
 
-### Why PAZ?
-
-
+## Why PAZ?
