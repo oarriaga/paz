@@ -130,14 +130,14 @@ show_image(image)
 
 ## Additional functionality
 
-* PAZ has [built-in messages](https://github.com/oarriaga/paz/blob/master/paz/abstract/messages.py) e.g. ''Pose6D'' for easier data exchange with other libraries or frameworks such as [ROS](https://www.ros.org/).
+* PAZ has [built-in messages](https://github.com/oarriaga/paz/blob/master/paz/abstract/messages.py) e.g. ``Pose6D`` for an easier data exchange with other libraries or frameworks such as [ROS](https://www.ros.org/).
 
-* There are custom callbacks e.g. MAP evaluation for object detectors while training
+* There are custom [callbacks](https://github.com/oarriaga/paz/blob/master/paz/optimization/callbacks.py) e.g. MAP evaluation for object detectors while training
     
-* PAZ comes with data loaders for the following datasets:
+* PAZ comes with [data loaders](https://github.com/oarriaga/paz/tree/master/paz/datasets) for the multiple datasets:
     OpenImages, VOC, YCB-Video, FAT, FERPlus, FER2013
 
-* We have an automatic batch creation and dispatching wrappers for an easy connection between generators and our pipelines. Please look at the examples and the processor ``pr.SequenceWrapper`` for more information.
+* We have an automatic [batch creation and dispatching wrappers](https://github.com/oarriaga/paz/blob/master/paz/abstract/sequence.py) for an easy connection between you ``pipelines`` and tensorflow generators. Please look at the examples and the processor ``pr.SequenceWrapper`` for more information.
 
 ### Models
 
@@ -154,7 +154,7 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Implicit orientation](https://github.com/oarriaga/paz/blob/master/examples/implicit_orientation_learning/model.py)        |[AutoEncoder](https://arxiv.org/abs/1902.01275)            |
 |[Emotion classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/xception.py)       |[MiniXception](https://arxiv.org/abs/1710.07557)           |
 |[Discovery of Keypoints](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)      |[KeypointNet](https://arxiv.org/abs/1807.03146)            |
-|[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)|   |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
+|[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)  |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)           |
 
