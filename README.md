@@ -168,7 +168,12 @@ To install PAZ you can run:
 pip install . --user
 ```
 
-## Coverage
+## Tests and coverage
+Continuous integration is managed trough [github actions](https://github.com/features/actions) using [pytest](https://docs.pytest.org/en/stable/).
+You can then check for the tests by running:
+```
+pytest tests
+``` 
 Test coverage can be checked using [coverage](https://coverage.readthedocs.io/en/coverage-5.2.1/).
 You can install coverage by calling: `pip install coverage --user`
 You can then check for the test coverage by running:
