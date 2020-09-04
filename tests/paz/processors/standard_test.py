@@ -1,5 +1,5 @@
 from paz.abstract import SequentialProcessor, Processor
-# from paz.processors import ControlMap
+from paz.processors import ControlMap
 
 
 class Sum(Processor):
@@ -26,55 +26,6 @@ class MultiplyByFactor(Processor):
 
     def call(self, x):
         return self.factor * x
-
-
-class ControlMap(Processor):
-    """Controls which inputs are passed ''processor'' and the order of its
-        outputs.
-
-    # Arguments
-        processor: Function e.g. a ''paz.processor''
-        intro_indices: List of Ints.
-        outro_indices: List of Ints.
-    """
-    def __init__(self, processor, intro_indices=[0], outro_indices=[0], keep=None):
-        self.processor = processor
-        if not isinstance(intro_indices, list):
-            raise ValueError('``intro_indices`` must be a list')
-        if not isinstance(outro_indices, list):
-            raise ValueError('``outro_indices`` must be a list')
-        self.intro_indices = intro_indices
-        self.outro_indices = outro_indices
-        name = '-'.join([self.__class__.__name__, self.processor.name])
-        self.keep = keep
-        super(ControlMap, self).__init__(name)
-
-    def _select(self, inputs, indices):
-        return [inputs[index] for index in indices]
-
-    def _remove(self, inputs, indices):
-        return [inputs[i] for i in range(len(inputs)) if i not in indices]
-
-    def _split(self, inputs, indices):
-        return self._select(inputs, indices), self._remove(inputs, indices)
-
-    def _insert(self, args, extra_args, indices):
-        [args.insert(index, arg) for index, arg in zip(indices, extra_args)]
-        return args
-
-    def call(self, *args):
-        selected_args, remaining_args = self._split(args, self.intro_indices)
-        processed_args = self.processor(*selected_args)
-        if not isinstance(processed_args, tuple):
-            processed_args = [processed_args]
-        if len(processed_args) != outro_indices:
-            raise ValueError("Mismatch of ``outro_indices`` "
-                             "and processor's output")
-        if keep is not None:
-            keep_args = self._select(selected_args, list(keep.keys())
-
-        args = self._insert(remaining_args, processed_args, self.outro_indices)
-        return tuple(args)
 
 
 def test_controlmap_reduction_and_selection_to_arg_1():
@@ -117,12 +68,19 @@ def test_controlmap_parallelization_in_different_order():
     assert pipeline(10, 5) == (10 * 3.0, 5 * 2.0)
 
 
-test_controlmap_reduction_and_selection_to_arg_1()
-test_controlmap_reduction_and_selection_to_arg_2()
-test_controlmap_reduction_and_flip()
-test_controlmap_reduction_and_retention()
-test_controlmap_parallelization()
-test_controlmap_parallelization_in_different_order()
+def test_controlmap_reduction_and_keep():
+    pipeline = SequentialProcessor()
+    pipeline.add(ControlMap(Sum(), [1, 2], [1], {2: 0}))
+    assert pipeline(2, 5, 10) == (10, 2, 5 + 10)
+
+
+# test_controlmap_reduction_and_selection_to_arg_1()
+# test_controlmap_reduction_and_selection_to_arg_2()
+# test_controlmap_reduction_and_flip()
+# test_controlmap_reduction_and_retention()
+# test_controlmap_parallelization()
+# test_controlmap_parallelization_in_different_order()
+# test_controlmap_reduction_and_keep()
 
 '''
 # sample = {'boxes': 5, 'keypoints': 10, 'image': 2}
