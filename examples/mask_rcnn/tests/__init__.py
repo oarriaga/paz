@@ -1,1 +1,0 @@
-from mask_rcnn.inference import test
