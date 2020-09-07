@@ -154,7 +154,7 @@ for _ in range(10):
 data = [{'image': image_fullpath, 'boxes': box_data}]
 batch_size = 1
 sequence = ProcessingSequence(augmentator, batch_size, data)
-for _ in range(100):
+for _ in range(10):
     batch = sequence.__getitem__(0)
     batch_images, batch_boxes = batch[0]['image'], batch[1]['boxes']
     image, boxes = batch_images[0], batch_boxes[0]
