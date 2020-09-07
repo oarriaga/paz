@@ -12,8 +12,13 @@ class ControlMap(Processor):
         processor: Function e.g. a ''paz.processor''
         intro_indices: List of Ints.
         outro_indices: List of Ints.
+        keep: ''None'' or dictionary. If ``None`` control maps operates
+            without explicitly retaining an input. If dict it must contain
+            as keys the input args to be kept and as values where they should
+            be located at the end.
     """
-    def __init__(self, processor, intro_indices=[0], outro_indices=[0]):
+    def __init__(self, processor, intro_indices=[0], outro_indices=[0],
+                 keep=None):
         self.processor = processor
         if not isinstance(intro_indices, list):
             raise ValueError('``intro_indices`` must be a list')
@@ -22,6 +27,7 @@ class ControlMap(Processor):
         self.intro_indices = intro_indices
         self.outro_indices = outro_indices
         name = '-'.join([self.__class__.__name__, self.processor.name])
+        self.keep = keep
         super(ControlMap, self).__init__(name)
 
     def _select(self, inputs, indices):
@@ -33,17 +39,25 @@ class ControlMap(Processor):
     def _split(self, inputs, indices):
         return self._select(inputs, indices), self._remove(inputs, indices)
 
-    def _insert(self, args, axes, values):
-        [args.insert(axis, value) for axis, value in zip(axes, values)]
+    def _insert(self, args, extra_args, indices):
+        [args.insert(index, arg) for index, arg in zip(indices, extra_args)]
         return args
 
     def call(self, *args):
-        selections, args = self._split(args, self.intro_indices)
-        selections = self.processor(*selections)
-        if not isinstance(selections, tuple):
-            selections = [selections]
-        args = self._insert(args, self.outro_indices, selections)
-        return tuple(args)
+        selected_args, remaining_args = self._split(args, self.intro_indices)
+        processed_args = self.processor(*selected_args)
+        if not isinstance(processed_args, tuple):
+            processed_args = [processed_args]
+        return_args = self._insert(
+            remaining_args, processed_args, self.outro_indices)
+
+        if self.keep is not None:
+            keep_intro = list(self.keep.keys())
+            keep_outro = list(self.keep.values())
+            keep_args = self._select(args, keep_intro)
+            return_args = self._insert(return_args, keep_args, keep_outro)
+
+        return tuple(return_args)
 
 
 class ExpandDomain(ControlMap):
