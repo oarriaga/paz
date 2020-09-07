@@ -3,12 +3,12 @@
 
 import os
 import numpy as np
-from paz.abstract import SequentialProcessor
-from paz.backend.image import show_image, load_image, resize_image
-import paz.processors as pr
-from paz.models.detection.utils import create_prior_boxes
-from paz.backend.image import convert_color_space
 from tensorflow.keras.utils import get_file
+
+from paz.abstract import SequentialProcessor, ProcessingSequence
+from paz.models.detection.utils import create_prior_boxes
+import paz.processors as pr
+import paz.backend as P
 
 # let's download a test image and put it inside our PAZ directory
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
@@ -43,19 +43,17 @@ class PreprocessImage(SequentialProcessor):
 # Let's see who it works:
 preprocess_image, augment_image = PreprocessImage((300, 300)), AugmentImage()
 
-'''
 for _ in range(10):
-    image = load_image(image_fullpath)
+    image = P.image.load_image(image_fullpath)
     image = preprocess_image(augment_image(image))
-    show_image(image.astype('uint8'))
-'''
+    P.image.show_image(image.astype('uint8'))
 
 # Boxes
 
 # Let's first build our box labels:
 # For a tutorial on how to build your box labels check here:
 # paz/examples/tutorials/bounding_boxes.py
-H, W = load_image(image_fullpath).shape[:2]
+H, W = P.image.load_image(image_fullpath).shape[:2]
 class_names = ['background', 'human', 'horse']
 box_data = np.array([[200 / W, 60 / H, 300 / W, 200 / H, 1],
                      [100 / W, 90 / H, 400 / W, 300 / H, 2]])
@@ -75,19 +73,18 @@ class AugmentBoxes(SequentialProcessor):
 # We now visualize our current box augmentation
 # For that we build a quick pipeline for drawing our boxes
 draw_boxes = SequentialProcessor([
-    pr.ControlMap(pr.ToBoxes2D(class_names, True), [1], [1]),
+    pr.ControlMap(pr.ToBoxes2D(class_names, False), [1], [1]),
     pr.ControlMap(pr.DenormalizeBoxes2D(), [0, 1], [1], {0: 0}),
     pr.DrawBoxes2D(class_names),
     pr.ShowImage()])
 
 # Let's test it our box data augmentation pipeline
 augment_boxes = AugmentBoxes()
-'''
 for _ in range(10):
-    image = load_image(image_fullpath)
+    image = P.image.load_image(image_fullpath)
     image, boxes = augment_boxes(image, box_data.copy())
-    draw_boxes(resize_image(image, (300, 300)), boxes)
-'''
+    draw_boxes(P.image.resize_image(image, (300, 300)), boxes)
+
 
 # There is also some box-preprocessing that is required.
 # Mostly we must match our boxes to a set of default (prior) boxes.
@@ -130,6 +127,7 @@ class AugmentDetection(SequentialProcessor):
 
 
 prior_boxes = create_prior_boxes()
+draw_boxes.processors[0].processor.one_hot_encoded = True
 draw_boxes.insert(0, pr.ControlMap(pr.DecodeBoxes(prior_boxes), [1], [1]))
 draw_boxes.insert(2, pr.ControlMap(
     pr.FilterClassBoxes2D(class_names[1:]), [1], [1]))
@@ -137,13 +135,28 @@ draw_boxes.insert(2, pr.ControlMap(
 
 def deprocess_image(image):
     image = (image + pr.BGR_IMAGENET_MEAN).astype('uint8')
-    return convert_color_space(image, pr.BGR2RGB)
+    return P.image.convert_color_space(image, pr.BGR2RGB)
 
 
-augment_detection = AugmentDetection(prior_boxes)
+augmentator = AugmentDetection(prior_boxes, num_classes=len(class_names))
 for _ in range(10):
     sample = {'image': image_fullpath, 'boxes': box_data.copy()}
-    data = augment_detection(sample)
+    data = augmentator(sample)
     image, boxes = data['inputs']['image'], data['labels']['boxes']
+    image = deprocess_image(image)
+    draw_boxes(image, boxes)
+
+# Note that we change the input and output format from lists to a dictionaries.
+# The input changed by adding the ``pr.UnpackDictionary`` processor, and the
+# output changed by the ``pr.SequenceWrapper`` processor.
+# The ``pr.SequenceWrapper`` method allows us to easily connect the complete
+# pipeline to a Sequence Generator.
+data = [{'image': image_fullpath, 'boxes': box_data}]
+batch_size = 1
+sequence = ProcessingSequence(augmentator, batch_size, data)
+for _ in range(100):
+    batch = sequence.__getitem__(0)
+    batch_images, batch_boxes = batch[0]['image'], batch[1]['boxes']
+    image, boxes = batch_images[0], batch_boxes[0]
     image = deprocess_image(image)
     draw_boxes(image, boxes)
