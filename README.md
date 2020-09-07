@@ -10,7 +10,7 @@ PAZ is used in the following examples:
 |---------------------------|--------------------------| ------------------|
 |<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="430">|
 
-| [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/master/examples/mask_rcnn)  |
+| [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |
 |---------------------------|--------------------------| -----------------------|
 |<img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="420">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="400">|
 
@@ -148,7 +148,7 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|                
 |[Probabilistic keypoint est.](https://github.com/oarriaga/paz/blob/master/examples/probabilistic_keypoint_estimation/model.py) |[Gaussian Mixture CNN](https://www.robots.ox.ac.uk/~vgg/publications/2018/Neumann18a/)   |
-|[Detection and Segmentation](https://github.com/oarriaga/paz/blob/master/examples/mask_rcnn/model.py)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
+|[Detection and Segmentation](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/hrnet.py)|[HRNet](https://arxiv.org/abs/1908.07919)|               
 |[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[KeypointNet2D](https://arxiv.org/abs/1807.03146)          |
 |[Implicit orientation](https://github.com/oarriaga/paz/blob/master/examples/implicit_orientation_learning/model.py)        |[AutoEncoder](https://arxiv.org/abs/1902.01275)            |
