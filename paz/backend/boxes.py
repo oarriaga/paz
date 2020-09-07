@@ -411,8 +411,9 @@ def flip_left_right(boxes, width):
     # Returns
         Numpy array of shape `[num_boxes, 4]`.
     """
-    boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
-    return boxes
+    flipped_boxes = boxes.copy()
+    flipped_boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+    return flipped_boxes
 
 
 def to_absolute_coordinates(image, boxes):
