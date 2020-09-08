@@ -60,17 +60,19 @@ class AugmentDetection(SequentialProcessor):
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
         super(AugmentDetection, self).__init__()
-
+        # image processors
         self.augment_image = AugmentImage()
-        self.augment_image.insert(0, pr.LoadImage())
         self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
         self.preprocess_image = PreprocessImage((size, size), mean)
 
+        # box processors
         self.augment_boxes = AugmentBoxes()
         args = (num_classes, prior_boxes, IOU, variances)
         self.preprocess_boxes = PreprocessBoxes(*args)
 
+        # pipeline
         self.add(pr.UnpackDictionary(['image', 'boxes']))
+        self.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_image, [0], [0]))
             self.add(pr.ControlMap(self.augment_boxes, [0, 1], [0, 1]))
