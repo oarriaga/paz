@@ -43,10 +43,12 @@ class PreprocessImage(SequentialProcessor):
 # Let's see who it works:
 preprocess_image, augment_image = PreprocessImage((300, 300)), AugmentImage()
 
+'''
 for _ in range(10):
     image = P.image.load_image(image_fullpath)
     image = preprocess_image(augment_image(image))
     P.image.show_image(image.astype('uint8'))
+'''
 
 # Boxes
 
@@ -64,8 +66,8 @@ class AugmentBoxes(SequentialProcessor):
     def __init__(self, mean=pr.BGR_IMAGENET_MEAN):
         super(AugmentBoxes, self).__init__()
         self.add(pr.ToAbsoluteBoxCoordinates())
-        self.add(pr.Expand(mean=mean))
-        self.add(pr.RandomSampleCrop())
+        # self.add(pr.Expand(mean=mean))
+        # self.add(pr.RandomSampleCrop())
         self.add(pr.RandomFlipBoxesLeftRight())
         self.add(pr.ToNormalizedBoxCoordinates())
 
@@ -79,11 +81,13 @@ draw_boxes = SequentialProcessor([
     pr.ShowImage()])
 
 # Let's test it our box data augmentation pipeline
+'''
 augment_boxes = AugmentBoxes()
 for _ in range(10):
     image = P.image.load_image(image_fullpath)
     image, boxes = augment_boxes(image, box_data.copy())
     draw_boxes(P.image.resize_image(image, (300, 300)), boxes)
+'''
 
 
 # There is also some box-preprocessing that is required.
@@ -139,12 +143,14 @@ def deprocess_image(image):
 
 
 augmentator = AugmentDetection(prior_boxes, num_classes=len(class_names))
+'''
 for _ in range(10):
     sample = {'image': image_fullpath, 'boxes': box_data.copy()}
     data = augmentator(sample)
     image, boxes = data['inputs']['image'], data['labels']['boxes']
     image = deprocess_image(image)
     draw_boxes(image, boxes)
+'''
 
 # Note that we change the input and output format from lists to a dictionaries.
 # The input changed by adding the ``pr.UnpackDictionary`` processor, and the
@@ -155,6 +161,7 @@ data = [{'image': image_fullpath, 'boxes': box_data}]
 batch_size = 1
 sequence = ProcessingSequence(augmentator, batch_size, data)
 for _ in range(10):
+    print(data[0]['boxes'])
     batch = sequence.__getitem__(0)
     batch_images, batch_boxes = batch[0]['image'], batch[1]['boxes']
     image, boxes = batch_images[0], batch_boxes[0]
