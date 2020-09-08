@@ -3,8 +3,8 @@ import numpy as np
 from ..abstract import Processor
 
 from ..backend.boxes import flip_left_right
-from ..backend.boxes import to_absolute_coordinates
-from ..backend.boxes import to_percent_coordinates
+from ..backend.boxes import to_image_coordinates
+from ..backend.boxes import to_normalized_coordinates
 from ..backend.boxes import compute_iou
 from ..backend.image import warp_affine
 from ..backend.image import translate_image
@@ -26,14 +26,14 @@ class RandomFlipBoxesLeftRight(Processor):
         return image, boxes
 
 
-class ToAbsoluteBoxCoordinates(Processor):
+class ToImageBoxCoordinates(Processor):
     """Convert normalized box coordinates to image-size box coordinates.
     """
     def __init__(self):
-        super(ToAbsoluteBoxCoordinates, self).__init__()
+        super(ToImageBoxCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        boxes = to_absolute_coordinates(image, boxes)
+        boxes = to_image_coordinates(boxes, image)
         return image, boxes
 
 
@@ -44,7 +44,7 @@ class ToNormalizedBoxCoordinates(Processor):
         super(ToNormalizedBoxCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        boxes = to_percent_coordinates(image, boxes)
+        boxes = to_normalized_coordinates(boxes, image)
         return image, boxes
 
 

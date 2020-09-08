@@ -36,10 +36,10 @@ PAGES = [
             boxes.make_box_square,
             boxes.match,
             boxes.nms_per_class,
-            boxes.to_absolute_coordinates,
+            boxes.to_image_coordinates,
             boxes.to_center_form,
             boxes.to_one_hot,
-            boxes.to_percent_coordinates,
+            boxes.to_normalized_coordinates,
             boxes.to_point_form
         ],
     },
@@ -243,7 +243,7 @@ PAGES = [
         'page': 'processors/geometric.md',
         'classes': [
             processors.RandomFlipBoxesLeftRight,
-            processors.ToAbsoluteBoxCoordinates,
+            processors.ToImageBoxCoordinates,
             processors.ToNormalizedBoxCoordinates,
             processors.RandomSampleCrop,
             processors.RandomTranslation,
