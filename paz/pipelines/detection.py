@@ -17,7 +17,7 @@ class AugmentBoxes(SequentialProcessor):
     """
     def __init__(self, mean=pr.BGR_IMAGENET_MEAN):
         super(AugmentBoxes, self).__init__()
-        self.add(pr.ToAbsoluteBoxCoordinates())
+        self.add(pr.ToImageBoxCoordinates())
         self.add(pr.Expand(mean=mean))
         self.add(pr.RandomSampleCrop())
         self.add(pr.RandomFlipBoxesLeftRight())
