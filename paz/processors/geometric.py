@@ -51,8 +51,11 @@ class ToNormalizedBoxCoordinates(Processor):
 class RandomSampleCrop(Processor):
     """Crops and image while adjusting the bounding boxes.
     Boxes should be in point form.
+    # Arguments
+        probability: Float between ''[0, 1]''.
     """
-    def __init__(self):
+    def __init__(self, probability=0.5):
+        self.probability = probability
         self.sample_options = (
             # using entire original input image
             None,
@@ -67,7 +70,7 @@ class RandomSampleCrop(Processor):
         super(RandomSampleCrop, self).__init__()
 
     def call(self, image, boxes):
-        if np.random.randint(0, 2):
+        if self.probability < np.random.rand():
             return image, boxes
         labels = boxes[:, -1:]
         boxes = boxes[:, :4]
@@ -158,14 +161,16 @@ class Expand(Processor):
         max_ratio: Float.
         mean: None/List: If `None` expanded image is filled with
             the image mean.
+        probability: Float between ''[0, 1]''.
     """
-    def __init__(self, max_ratio=2, mean=None):
+    def __init__(self, max_ratio=2, mean=None, probability=0.5):
         super(Expand, self).__init__()
         self.max_ratio = max_ratio
         self.mean = mean
+        self.probability = probability
 
     def call(self, image, boxes):
-        if np.random.randint(0, 2):
+        if self.probability < np.random.rand():
             return image, boxes
         height, width, num_channels = image.shape
         ratio = np.random.uniform(1, self.max_ratio)
@@ -182,10 +187,10 @@ class Expand(Processor):
 
         expanded_image[int(top):int(top + height),
                        int(left):int(left + width)] = image
-
-        boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
-        boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
-        return expanded_image, boxes
+        expanded_boxes = boxes.copy()
+        expanded_boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
+        expanded_boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
+        return expanded_image, expanded_boxes
 
 
 class ApplyTranslation(Processor):
