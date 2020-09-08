@@ -50,7 +50,7 @@ from .image import RGB_IMAGENET_MEAN
 from .renderer import Render
 
 from .geometric import RandomFlipBoxesLeftRight
-from .geometric import ToAbsoluteBoxCoordinates
+from .geometric import ToImageBoxCoordinates
 from .geometric import ToNormalizedBoxCoordinates
 from .geometric import RandomSampleCrop
 from .geometric import Expand
