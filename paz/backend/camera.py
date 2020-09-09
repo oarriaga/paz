@@ -39,6 +39,8 @@ class Camera(object):
             Camera object.
         """
         self.camera = cv2.VideoCapture(self.device_id)
+        if self.camera is None or not self.camera.isOpened():
+            raise ValueError('Unable to open device', self.device_id)
         return self.camera
 
     def stop(self):
@@ -100,7 +102,7 @@ class VideoPlayer(object):
             Inferences from ``pipeline``.
         """
         if self.camera.is_open() is False:
-            raise 'Camera has not started. Call ``start`` method.'
+            raise ValueError('Camera has not started. Call ``start`` method.')
 
         frame = self.camera.read()
         if frame is None:
