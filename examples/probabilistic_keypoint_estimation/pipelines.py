@@ -55,7 +55,8 @@ class ProbabilisticKeypointPrediction(Processor):
         preprocess.add(pr.ResizeImage(keypoint_estimator.input_shape[1:3]))
         preprocess.add(pr.ConvertColorSpace(pr.RGB2GRAY))
         preprocess.add(pr.NormalizeImage())
-        preprocess.add(pr.ExpandDims([0, 3]))
+        preprocess.add(pr.ExpandDims(0))
+        preprocess.add(pr.ExpandDims(-1))
 
         # creating post-processing pipeline for keypoint esimtator
         # postprocess = SequentialProcessor()
@@ -102,7 +103,8 @@ class GMMKeypoints(Processor):
         preprocess.add(pr.ResizeImage(model.input_shape[1:3]))
         preprocess.add(pr.ConvertColorSpace(pr.RGB2GRAY))
         preprocess.add(pr.NormalizeImage())
-        preprocess.add(pr.ExpandDims([0, 3]))
+        preprocess.add(pr.ExpandDims(0))
+        preprocess.add(pr.ExpandDims(-1))
         self.estimate_keypoints = PredictDistributions(model, preprocess)
         self.to_grid = ToProbabilityGrid(GRID)
         self.draw = draw
