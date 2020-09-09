@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<!-- metadata for the DFKI RIC Software Catalogue -->
+<package>
+  <description brief="Perception for Autonomous Systems">
+      PAZ is a hierarchical perception library in Python containing
+      examples for object detection, pose estimation, instance segmentation,
+      keypoint estimation, emotion recognition, keypoint discovery
+      and attention.
+  </description>
+  <author>Octavio Arriaga/octavio.arriaga@dfki.de</author>
+  <maintainer>Octavio Arriaga/octavio.arriaga@dfki.de</maintainer>
+  <license>MIT</license>
+  <url>https://github.com/oarriaga/paz</url>
+  <keywords>
+    <keyword>perception</keyword>
+    <keyword>learning</keyword>
+    <keyword>object detection</keyword>
+    <keyword>pose estimation</keyword>
+    <keyword>keypoint estimation</keyword>
+    <keyword>instance segmentation/keyword>
+    <keyword>emotion recognition/keyword>
+    <keyword>python</keyword>
+    <keyword>tensorflow</keyword>
+    <keyword>openCV</keyword>
+  </keywords>
+  <activity>active</activity>
+  <stage>2</stage>
+</package>
