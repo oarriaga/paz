@@ -20,7 +20,8 @@ class MiniXceptionFER(SequentialProcessor):
 
         preprocess = PreprocessImage(self.classifier.input_shape[1:3], None)
         preprocess.insert(0, pr.ConvertColorSpace(pr.RGB2GRAY))
-        preprocess.add(pr.ExpandDims([0, 3]))
+        preprocess.add(pr.ExpandDims(0))
+        preprocess.add(pr.ExpandDims(-1))
         self.add(pr.Predict(self.classifier, preprocess))
         self.add(pr.CopyDomain([0], [1]))
         self.add(pr.ControlMap(pr.ToClassName(self.class_names), [0], [0]))
