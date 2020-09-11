@@ -163,7 +163,7 @@ The following models are implemented in PAZ and they can be trained with your ow
 ## Installation
 PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-To install PAZ you can run:
+To install PAZ clone the repository and inside it run:
 
 ```
 pip install . --user
