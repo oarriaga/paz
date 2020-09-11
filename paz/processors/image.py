@@ -223,7 +223,8 @@ class ConvertColorSpace(Processor):
     """Converts image to a different color space.
 
     # Arguments
-        flag: Flag found in ``ops``indicating transform e.g. BGR2RGB
+        flag: Flag found in ``processors``indicating transform e.g.
+            ``pr.BGR2RGB``
     """
     def __init__(self, flag):
         self.flag = flag
