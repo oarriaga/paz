@@ -6,15 +6,15 @@ PAZ is used in the following examples:
 
 | [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
 |---------------------------|--------------------------| ------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="380" height="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="390" height="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="400" height="400">|
 
 | [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |
 |---------------------------|--------------------------| -----------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="420">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="400" height="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="392" height="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400" height="400">|
 
 | [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) | 6D pose estimation |
 |---------------------------|-----------------------| --------------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="410"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400"> |
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="400" height="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="400" height="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400" height="400"> |
 
 | [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
 |---------------------------|-----------------------|
