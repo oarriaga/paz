@@ -32,6 +32,7 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 * [Additional functionality](#additional-functionality)
     * [Implemented models](#models)
 * [Installation](#installation)
+* [Documentation](#documentation)
 * [Motivation](#motivation)
 <!--te-->
 
@@ -181,6 +182,8 @@ You can then check for the test coverage by running:
 coverage run -m pytest tests/
 coverage report -m
 ```
+## Documentation
+In order to build a documentation of all the functionality please look [here](https://github.com/oarriaga/paz/tree/master/docs).
 
 ## Motivation
 Even though there are multiple high-level computer vision libraries in different deep learning frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
