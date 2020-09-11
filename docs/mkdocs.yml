@@ -24,6 +24,7 @@ repo_url: 'https://github.com/oarriaga/paz'
 nav:
 - Introduction: index.md
 - Installation: installation.md
+- Contributing: contributing.md
 - Getting started:
   - Guide to pipelines: getting-started/pipelines.md
 - Models:
