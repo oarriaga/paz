@@ -7,6 +7,7 @@ class Processor(object):
     # Methods
         call()
 
+    # Example
     ```python
     class NormalizeImage(Processor):
     def __init__(self):
@@ -53,6 +54,7 @@ class SequentialProcessor(object):
         insert()
         get_processor()
 
+    # Example
     ```python
     AugmentImage = SequentialProcessor()
     AugmentImage.add(pr.RandomContrast())
