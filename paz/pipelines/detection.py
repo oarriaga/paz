@@ -130,8 +130,21 @@ class DetectSingleShot(Processor):
 class SSD512COCO(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD512 trained on COCO.
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
+
+        # Arguments
+            score_thresh: Float between [0, 1]
+            nms_thresh: Float between [0, 1].
+
+        # Example
+            ``` python
+            from paz.pipelines import SSD512COCO
+
+            detect = SSD512COCO()
+
+            # apply directly to an image (numpy-array)
+            inferences = detect(image)
+        ```
+
         """
         model = SSD512()
         names = get_class_names('COCO')
@@ -142,8 +155,10 @@ class SSD512COCO(DetectSingleShot):
 class SSD512YCBVideo(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD512 trained on YCBVideo.
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
+
+        # Arguments
+            score_thresh: Float between [0, 1]
+            nms_thresh: Float between [0, 1].
         """
         model = SSD512(weights='YCBVideo')
         names = get_class_names('YCBVideo')
@@ -154,8 +169,10 @@ class SSD512YCBVideo(DetectSingleShot):
 class SSD300VOC(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD300 trained on VOC.
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
+
+        # Arguments
+            score_thresh: Float between [0, 1]
+            nms_thresh: Float between [0, 1].
         """
         model = SSD300()
         names = get_class_names('VOC')
@@ -165,8 +182,10 @@ class SSD300VOC(DetectSingleShot):
 class SSD300FAT(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         """Single-shot inference pipeline with SSD300 trained on FAT.
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
+
+        # Arguments
+            score_thresh: Float between [0, 1]
+            nms_thresh: Float between [0, 1].
         """
         model = SSD300(22, 'FAT', 'FAT')
         names = get_class_names('FAT')
@@ -208,6 +227,11 @@ class DetectHaarCascade(Processor):
 
 class HaarCascadeFrontalFace(DetectHaarCascade):
     """HaarCascade pipeline for detecting frontal faces
+
+    # Arguments
+        class_name: String indicating the class name.
+        color: List indicating the RGB color e.g. ``[0, 255, 0]``.
+        draw: Boolean. If ``False`` the bounding boxes are not drawn.
     """
     def __init__(self, class_name='Face', color=[0, 255, 0], draw=True):
         self.model = HaarCascadeDetector('frontalface_default', class_arg=0)
@@ -306,6 +330,7 @@ class DetectKeypoints2D(Processor):
 
 class DetectFaceKeypointNet2D32(DetectKeypoints2D):
     """Frontal face detection pipeline with facial keypoint estimation.
+
     # Arguments
         offsets: List of two elements. Each element must be between [0, 1].
         radius: Int indicating the radius of the keypoints to be drawn.
