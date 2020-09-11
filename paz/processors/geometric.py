@@ -392,12 +392,13 @@ class RandomKeypointRotation(Processor):
 
 class RandomRotation(Processor):
     """Randomly rotate an images
+
     # Arguments
         rotation_range: Int. indicating the max and min values in degrees
-            of the uniform distribution ''[-range, range]'' from which the
+            of the uniform distribution ``[-range, range]`` from which the
             angles are sampled.
         fill_color: ''None'' or List of three integers indicating the
-            color values e.g. ''[0, 0, 0]''. If ''None'' mean channel values of
+            color values e.g. ``[0, 0, 0]``. If ``None`` mean channel values of
             the image will be calculated as fill values.
         probability: Float between 0 and 1.
     """
@@ -440,9 +441,10 @@ class RandomRotation(Processor):
 class TranslateImage(Processor):
     """Applies a translation of image.
     The translation is a list of length two indicating the x, y values.
+
     # Arguments
         fill_color: List of three integers indicating the
-            color values e.g. [0,0,0]
+            color values e.g. ``[0, 0, 0]``
     """
     def __init__(self, fill_color=None):
         super(TranslateImage, self).__init__()
