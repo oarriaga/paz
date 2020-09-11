@@ -384,14 +384,14 @@ PAGES = [
         'page': 'pipelines/applications.md',
         'classes': [
             pipelines.SSD512COCO,
-            pipelines.SSD512YCBVideo,
             pipelines.SSD300VOC,
+            pipelines.SSD512YCBVideo,
             pipelines.SSD300FAT,
-            pipelines.HaarCascadeFrontalFace,
             pipelines.DetectMiniXceptionFER,
             pipelines.MiniXceptionFER,
             pipelines.FaceKeypointNet2D32,
-            pipelines.HeadPoseKeypointNet2D32
+            pipelines.HeadPoseKeypointNet2D32,
+            pipelines.HaarCascadeFrontalFace,
         ]
     },
 
