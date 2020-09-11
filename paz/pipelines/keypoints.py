@@ -101,6 +101,21 @@ class FaceKeypointNet2D32(EstimateKeypoints2D):
     # Arguments
         draw: Boolean indicating if inferences should be drawn.
         radius: Int. used for drawing the predicted keypoints.
+
+    # Example
+        ``` python
+        from paz.pipelines import FaceKeypointNet2D32
+
+        estimate_keypoints= FaceKeypointNet2D32()
+
+        # apply directly to an image (numpy-array)
+        inference = estimate_keypoints(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``keypoints``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a numpy array representing the keypoints.
     """
     def __init__(self, draw=True, radius=3):
         model = KeypointNet2D((96, 96, 1), 15, 32, 0.1)
