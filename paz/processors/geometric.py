@@ -272,6 +272,7 @@ class RandomTranslation(Processor):
 
 class RandomKeypointTranslation(Processor):
     """Applies a random translation to image and keypoints.
+
     # Arguments
         delta_scale: List with two elements having the normalized deltas.
             e.g. ''[.25, .25]''.
@@ -328,6 +329,7 @@ class RandomKeypointTranslation(Processor):
 
 class RandomKeypointRotation(Processor):
     """Randomly rotate an images with its corresponding keypoints.
+
     # Arguments
         rotation_range: Int. indicating the max and min values in degrees
             of the uniform distribution ''[-range, range]'' from which the
