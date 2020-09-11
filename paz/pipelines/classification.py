@@ -12,6 +12,25 @@ EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
 
 class MiniXceptionFER(SequentialProcessor):
     """Mini Xception pipeline for classifying emotions from RGB faces.
+
+    # Example
+        ``` python
+        from paz.pipelines import MiniXceptionFER
+
+        classify = MiniXceptionFER()
+
+        # apply directly to an image (numpy-array)
+        inference = classify(image)
+        ```
+
+     # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``class_names`` and ``scores``.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+
     """
     def __init__(self):
         super(MiniXceptionFER, self).__init__()
