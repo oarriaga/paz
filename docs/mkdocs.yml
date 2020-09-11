@@ -1,7 +1,7 @@
-site_name: 'PAZ: Perception for Autonomous Systems'
+site_name: 'PAZ - Documentation'
 
 theme: 
-    name: 'material'
+    name: 'readthedocs'
     palette:
       primary: white
       accent: orange
@@ -19,3 +19,47 @@ docs_dir: sources
 site_description: 'Modular Robot Perception library in Python.'
 repo_name: 'oarriaga/paz'
 repo_url: 'https://github.com/oarriaga/paz'
+
+
+nav:
+- Introduction: index.md
+- Installation: installation.md
+- Getting started:
+  - Guide to pipelines: getting-started/pipelines.md
+- Models:
+  - Detection: models/detection.md
+  - Keypoints: models/keypoint.md
+  - Classification: models/classification.md
+  - Layers: models/layers.md
+- Pipelines (high-level):
+  - Applications: pipelines/applications.md
+  - Image: pipelines/image.md
+  - Detection: pipelines/detection.md
+  - Keypoints: pipelines/keypoints.md
+  - Pose: pipelines/pose.md
+  - Renderer: pipelines/renderer.md
+- Processors (mid-level):
+  - Image: processors/image.md
+  - Draw: processors/draw.md
+  - Detection: processors/detection.md
+  - Geometric: processors/geometric.md
+  - Keypoints: processors/keypoints.md
+  - Standard: processors/standard.md
+  - Pose: processors/pose.md
+  - Renderer: processors/renderer.md
+- Backends (low-level):
+  - Image: backend/image.md
+  - Draw: backend/draw.md
+  - Boxes: backend/boxes.md
+  - Keypoints: backend/keypoints.md
+  - Quaternions: backend/quaternion.md
+  - Camera: backend/camera.md
+- Abstract (core):
+  - Messages: abstract/messages.md
+  - Processor: abstract/processor.md
+  - Sequence: abstract/sequence.md
+  - Loader: abstract/loader.md
+- Additional functionality:
+  - Datasets: datasets.md
+  - Losses: optimization/losses.md
+  - Callbacks: optimization/callbacks.md
