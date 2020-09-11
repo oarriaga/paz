@@ -8,19 +8,19 @@ PAZ is used in the following examples:
 
 | [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
 |---------------------------|--------------------------| ------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/head_pose.png" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/object_detection.png" width="430">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
 
 | [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |
 |---------------------------|--------------------------| -----------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/emotion.gif" width="400">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/keypoints.png" width="420">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/mask.png" width="400">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="420">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
 
 | [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) | 6D pose estimation |
 |---------------------------|-----------------------| --------------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/discovery_keypoints.png" width="410"> | <img src="https://github.com/oarriaga/altamira-data/blob/master/images/haar_cascades.png" width="410">| <img src="https://github.com/oarriaga/altamira-data/blob/master/images/pose_estimation.png" width="400"> |
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="410"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400"> |
 
 | [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
 |---------------------------|-----------------------|
-|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/implicit_pose.png" width="512">|<img src="https://github.com/oarriaga/altamira-data/blob/master/images/attention.png" width="512"> |
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="512">|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="512"> |
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
@@ -32,6 +32,7 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 * [Additional functionality](#additional-functionality)
     * [Implemented models](#models)
 * [Installation](#installation)
+* [Documentation](#documentation)
 * [Motivation](#motivation)
 <!--te-->
 
@@ -162,7 +163,7 @@ The following models are implemented in PAZ and they can be trained with your ow
 ## Installation
 PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-To install PAZ you can run:
+To install PAZ clone the repository and inside it run:
 
 ```
 pip install . --user
@@ -181,6 +182,8 @@ You can then check for the test coverage by running:
 coverage run -m pytest tests/
 coverage report -m
 ```
+## Documentation
+In order to build a documentation of all the functionality please look [here](https://github.com/oarriaga/paz/tree/master/docs).
 
 ## Motivation
 Even though there are multiple high-level computer vision libraries in different deep learning frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).

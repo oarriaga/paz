@@ -111,11 +111,12 @@ class DrawBoxes3D(Processor):
 
 class DrawRandomPolygon(Processor):
     """ Adds occlusion to image
+
     # Arguments
         max_radius_scale: Maximum radius in scale with respect to image i.e.
                 each vertex radius from the polygon is sampled
-                from [0, max_radius_scale]. This radius is later multiplied by
-                the image dimensions.
+                from ``[0, max_radius_scale]``. This radius is later
+                multiplied by the image dimensions.
     """
     def __init__(self, max_radius_scale=.5):
         super(DrawRandomPolygon, self).__init__()

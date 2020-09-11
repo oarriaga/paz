@@ -46,3 +46,9 @@ draw_boxes.add(pr.ShowImage())
 
 # now you have everything in a single packed function that loads and draws!
 draw_boxes(image_fullpath, box_data)
+
+# Also note if one of your function is ``eating`` away one input that you
+# wish to keep in your pipeline, you can use the ``keep`` dictionary to
+# explicitly say which of your inputs you wish to keep and where it should
+# be located. This is represented respectively by the ``key`` and the
+# ``value`` of the ``keep`` dictionary.

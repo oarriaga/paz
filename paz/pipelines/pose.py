@@ -89,8 +89,8 @@ class EstimatePoseKeypoints(Processor):
 
 
 class HeadPoseKeypointNet2D32(EstimatePoseKeypoints):
-    """Head pose estimation pipeline using a HaarCascade face detector
-        and a pre-trained KeypointNet2D estimation model.
+    """Head pose estimation pipeline using a ``HaarCascade`` face detector
+        and a pre-trained ``KeypointNet2D`` estimation model.
 
         # Arguments
             camera: Instance of ``paz.backend.camera.Camera`` with
@@ -98,6 +98,16 @@ class HeadPoseKeypointNet2D32(EstimatePoseKeypoints):
             offsets: List of floats indicating the scaled offset to
                 be added to the ``Box2D`` coordinates.
             radius: Int. radius of keypoint to be drawn.
+
+        # Example
+            ``` python
+            from paz.pipelines import HeadPoseKeypointNet2D32
+
+            estimate_pose = HeadPoseKeypointNet2D32()
+
+            # apply directly to an image (numpy-array)
+            inferences = estimate_pose(image)
+            ```
 
         # Returns
             A function that takes an RGB image and outputs the following

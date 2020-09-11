@@ -15,8 +15,8 @@ class AugmentImage(SequentialProcessor):
 
 
 class PreprocessImage(SequentialProcessor):
-    """Preprocess RGB image by resizing it to the given ''shape''. If a
-    ''mean'' is given it is substracted from image and it not the image gets
+    """Preprocess RGB image by resizing it to the given ``shape``. If a
+    ``mean`` is given it is substracted from image and it not the image gets
     normalized.
 
     # Arguments

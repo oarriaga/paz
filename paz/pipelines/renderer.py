@@ -6,20 +6,21 @@ from .image import AugmentImage
 
 class RenderTwoViews(Processor):
     """Renders two views along with their transformations.
+
     # Arguments
-        renderer: A class with a method ''render_sample'' that outputs
+        renderer: A class with a method ``render_sample`` that outputs
             two lists. The first list contains two numpy arrays
-            representing the images e.g. ''(image_A, image_B)'' each
-            of shape ''(H, W, 3)''.
+            representing the images e.g. ``(image_A, image_B)`` each
+            of shape ``[H, W, 3]``.
             The other list contains three numpy arrays representing the
             transformations from the origin to the cameras and the
             two alpha channels of both images e.g.
-            ''[matrices, alpha_channel_A, alpha_channel_B]''.
-            ''matrices'' is a numpy array of shape ''(4, 4 * 4)''.
-            Each row is a matrix of ''4 x 4'' representing the following
-            transformations respectively: ''world_to_A'', ''world_to_B'',
-            ''A_to_world'' and  ''B_to_world''.
-            The shape of each ''alpha_channel'' should be ''(H, W)''.
+            ``[matrices, alpha_channel_A, alpha_channel_B]``.
+            ``matrices`` is a numpy array of shape ``(4, 4 * 4)``.
+            Each row is a matrix of ``4 x 4`` representing the following
+            transformations respectively: ``world_to_A``, ``world_to_B``,
+            ``A_to_world`` and  ``B_to_world``.
+            The shape of each ``alpha_channel`` should be ``[H, W]``.
             A built in renderer are available in ''github/oarriaga/poseur''.
     """
     def __init__(self, renderer):

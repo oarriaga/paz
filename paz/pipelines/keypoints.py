@@ -7,11 +7,11 @@ from tensorflow.keras.utils import get_file
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
-    """Wraps ''RenderTwoViews'' as a sequential processor for using it directly
-        with a ''paz.GeneratingSequence''.
+    """Wraps ``RenderTwoViews`` as a sequential processor for using it directly
+        with a ``paz.GeneratingSequence``.
 
     # Arguments
-        renderer: ''RenderTwoViews'' processor.
+        renderer: ``RenderTwoViews`` processor.
         size: Image size.
     """
     def __init__(self, renderer, size):
@@ -27,12 +27,12 @@ class KeypointNetSharedAugmentation(SequentialProcessor):
 
 
 class KeypointNetInference(Processor):
-    """Performs inference from a ''KeypointNetShared'' model.
+    """Performs inference from a ``KeypointNetShared`` model.
 
     # Arguments
         model: Keras model for predicting keypoints.
-        num_keypoints: Int or None. If None ''num_keypoints'' is
-            tried to be inferred from ''model.output_shape''
+        num_keypoints: Int or None. If None ``num_keypoints`` is
+            tried to be inferred from ``model.output_shape``
         radius: Int. used for drawing the predicted keypoints.
     """
     def __init__(self, model, num_keypoints=None, radius=5):
@@ -66,8 +66,8 @@ class EstimateKeypoints2D(Processor):
 
     # Arguments
         model: Keras model for predicting keypoints.
-        num_keypoints: Int or None. If None ''num_keypoints'' is
-            tried to be inferred from ''model.output_shape''
+        num_keypoints: Int or None. If None ``num_keypoints`` is
+            tried to be inferred from ``model.output_shape``
         draw: Boolean indicating if inferences should be drawn.
         radius: Int. used for drawing the predicted keypoints.
     """
@@ -101,6 +101,21 @@ class FaceKeypointNet2D32(EstimateKeypoints2D):
     # Arguments
         draw: Boolean indicating if inferences should be drawn.
         radius: Int. used for drawing the predicted keypoints.
+
+    # Example
+        ``` python
+        from paz.pipelines import FaceKeypointNet2D32
+
+        estimate_keypoints= FaceKeypointNet2D32()
+
+        # apply directly to an image (numpy-array)
+        inference = estimate_keypoints(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``keypoints``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a numpy array representing the keypoints.
     """
     def __init__(self, draw=True, radius=3):
         model = KeypointNet2D((96, 96, 1), 15, 32, 0.1)
