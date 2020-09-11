@@ -10,7 +10,7 @@ from .utils import get_class_names
 
 
 class FAT(Loader):
-    """ Dataset loader for the falling things dataset (FAT) [1].
+    """ Dataset loader for the falling things dataset (FAT).
 
     # Arguments
         path: String indicating full path to dataset
@@ -23,10 +23,8 @@ class FAT(Loader):
     # References
         - [Deep Object Pose
             Estimation (DOPE)](https://github.com/NVlabs/Deep_Object_Pose)
-
-    # TODO
-        Allow selection of class_names.
     """
+    # TODO: Allow selection of class_names.
     def __init__(self, path, split='train', class_names='all'):
         if class_names == 'all':
             class_names = get_class_names('FAT')
