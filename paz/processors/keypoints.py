@@ -84,7 +84,7 @@ class PartitionKeypoints(Processor):
 
 
 class ChangeKeypointsCoordinateSystem(Processor):
-    """Changes ''keypoints'' 2D coordinate system using ''box2D'' coordinates
+    """Changes ``keypoints`` 2D coordinate system using ``box2D`` coordinates
         to locate the new origin at the openCV image origin (top-left).
     """
     def __init__(self):
