@@ -12,6 +12,7 @@ from .keypoints import FaceKeypointNet2D32
 
 class AugmentBoxes(SequentialProcessor):
     """Perform data augmentation with bounding boxes.
+
     # Arguments
         mean: List of three elements used to fill empty image spaces.
     """
@@ -29,7 +30,7 @@ class PreprocessBoxes(SequentialProcessor):
 
     # Arguments
         num_classes: Int.
-        prior_boxes: Numpy array of shape ''[num_boxes, 4]'' containing
+        prior_boxes: Numpy array of shape ``[num_boxes, 4]`` containing
             prior/default bounding boxes.
         IOU: Float. Intersection over union used to match boxes.
         variances: List of two floats indicating variances to be encoded
@@ -44,11 +45,12 @@ class PreprocessBoxes(SequentialProcessor):
 
 class AugmentDetection(SequentialProcessor):
     """Augment boxes and images for object detection.
+
     # Arguments
-        prior_boxes: Numpy array of shape ''[num_boxes, 4]'' containing
+        prior_boxes: Numpy array of shape ``[num_boxes, 4]`` containing
             prior/default bounding boxes.
-        split: Flag from ''paz.processors.TRAIN'', ''paz.processors.VAL''
-            or ''paz.processors.TEST''. Certain transformations would take
+        split: Flag from `paz.processors.TRAIN`, ``paz.processors.VAL``
+            or ``paz.processors.TEST``. Certain transformations would take
             place depending on the flag.
         num_classes: Int.
         size: Int. Image size.
@@ -175,7 +177,7 @@ class DetectHaarCascade(Processor):
     """HaarCascade prediction pipeline/function from RGB-image.
 
     # Arguments
-        detector: An instantiated HaarCascadeDetector model.
+        detector: An instantiated ``HaarCascadeDetector`` model.
         offsets: List of two elements. Each element must be between [0, 1].
         class_names: List of strings.
         draw: Boolean flag. If ``True`` the prediction will be drawn
