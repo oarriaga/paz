@@ -22,11 +22,15 @@ repo_url: 'https://github.com/oarriaga/paz'
 
 
 nav:
-- Introduction: index.md
+- Getting-started: index.md
 - Installation: installation.md
 - Contributing: contributing.md
-- Getting started:
-  - Guide to pipelines: getting-started/pipelines.md
+- Tutorials:
+  - Intro to processors: getting-started/introduction_to_processors.md
+  - Image augmentation: getting-started/image_augmentation.md
+  - Bounding boxes: getting-started/bounding_boxes.md
+  - Control-map: getting-started/controlmap.md
+  - Object detection pipeline: getting-started/object_detection_pipeline.md
 - Models:
   - Detection: models/detection.md
   - Keypoints: models/keypoint.md
