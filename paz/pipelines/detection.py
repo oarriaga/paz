@@ -128,24 +128,32 @@ class DetectSingleShot(Processor):
 
 
 class SSD512COCO(DetectSingleShot):
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
-        """Single-shot inference pipeline with SSD512 trained on COCO.
+    """Single-shot inference pipeline with SSD512 trained on COCO.
 
-        # Arguments
-            score_thresh: Float between [0, 1]
-            nms_thresh: Float between [0, 1].
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
 
-        # Example
-            ``` python
-            from paz.pipelines import SSD512COCO
+    # Example
+        ``` python
+        from paz.pipelines import SSD512COCO
 
-            detect = SSD512COCO()
+        detect = SSD512COCO()
 
-            # apply directly to an image (numpy-array)
-            inferences = detect(image)
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
         ```
+     # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
 
-        """
+    # Reference
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         model = SSD512()
         names = get_class_names('COCO')
         super(SSD512COCO, self).__init__(
@@ -153,13 +161,31 @@ class SSD512COCO(DetectSingleShot):
 
 
 class SSD512YCBVideo(DetectSingleShot):
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
-        """Single-shot inference pipeline with SSD512 trained on YCBVideo.
+    """Single-shot inference pipeline with SSD512 trained on YCBVideo.
 
-        # Arguments
-            score_thresh: Float between [0, 1]
-            nms_thresh: Float between [0, 1].
-        """
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD512YCBVideo
+
+        detect = SSD512YCBVideo()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         model = SSD512(weights='YCBVideo')
         names = get_class_names('YCBVideo')
         super(SSD512YCBVideo, self).__init__(
@@ -167,26 +193,62 @@ class SSD512YCBVideo(DetectSingleShot):
 
 
 class SSD300VOC(DetectSingleShot):
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
-        """Single-shot inference pipeline with SSD300 trained on VOC.
+    """Single-shot inference pipeline with SSD300 trained on VOC.
 
-        # Arguments
-            score_thresh: Float between [0, 1]
-            nms_thresh: Float between [0, 1].
-        """
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD300VOC
+
+        detect = SSD300VOC()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    # Reference
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         model = SSD300()
         names = get_class_names('VOC')
         super(SSD300VOC, self).__init__(model, names, score_thresh, nms_thresh)
 
 
 class SSD300FAT(DetectSingleShot):
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
-        """Single-shot inference pipeline with SSD300 trained on FAT.
+    """Single-shot inference pipeline with SSD300 trained on FAT.
 
-        # Arguments
-            score_thresh: Float between [0, 1]
-            nms_thresh: Float between [0, 1].
-        """
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD300FAT
+
+        detect = SSD300FAT()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45):
         model = SSD300(22, 'FAT', 'FAT')
         names = get_class_names('FAT')
         super(SSD300FAT, self).__init__(model, names, score_thresh, nms_thresh)
@@ -232,6 +294,22 @@ class HaarCascadeFrontalFace(DetectHaarCascade):
         class_name: String indicating the class name.
         color: List indicating the RGB color e.g. ``[0, 255, 0]``.
         draw: Boolean. If ``False`` the bounding boxes are not drawn.
+
+    # Example
+        ``` python
+        from paz.pipelines import HaarCascadeFrontalFace
+
+        detect = HaarCascadeFrontalFace()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
     """
     def __init__(self, class_name='Face', color=[0, 255, 0], draw=True):
         self.model = HaarCascadeDetector('frontalface_default', class_arg=0)
@@ -248,6 +326,21 @@ class DetectMiniXceptionFER(Processor):
 
     # Returns
         Dictionary with ``image`` and ``boxes2D``.
+
+    # Example
+        ``` python
+        from paz.pipelines import DetectMiniXceptionFER
+
+        detect = DetectMiniXceptionFER()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
 
     # References
        - [Real-time Convolutional Neural Networks for Emotion and
@@ -334,6 +427,22 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
     # Arguments
         offsets: List of two elements. Each element must be between [0, 1].
         radius: Int indicating the radius of the keypoints to be drawn.
+
+    # Example
+        ``` python
+        from paz.pipelines import DetectFaceKeypointNet2D32
+
+        detect = DetectFaceKeypointNet2D32()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
     """
     def __init__(self, offsets=[0, 0], radius=3):
         detect = HaarCascadeFrontalFace(draw=False)
