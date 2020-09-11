@@ -111,6 +111,7 @@ class DrawBoxes3D(Processor):
 
 class DrawRandomPolygon(Processor):
     """ Adds occlusion to image
+
     # Arguments
         max_radius_scale: Maximum radius in scale with respect to image i.e.
                 each vertex radius from the polygon is sampled
