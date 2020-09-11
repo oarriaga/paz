@@ -266,6 +266,7 @@ class DetectMiniXceptionFER(Processor):
 class DetectKeypoints2D(Processor):
     def __init__(self, detect, estimate_keypoints, offsets=[0, 0], radius=3):
         """General detection and keypoint estimator pipeline.
+
         # Arguments
             detect: Function for detecting objects. The output should be a
                 dictionary with key ``Boxes2D`` containing a list
