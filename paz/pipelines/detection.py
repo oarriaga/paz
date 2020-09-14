@@ -186,8 +186,8 @@ class SSD512YCBVideo(DetectSingleShot):
 
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45):
-        model = SSD512(weights='YCBVideo')
         names = get_class_names('YCBVideo')
+        model = SSD512(weights='YCBVideo', num_classes=len(names))
         super(SSD512YCBVideo, self).__init__(
             model, names, score_thresh, nms_thresh)
 
@@ -406,19 +406,21 @@ class DetectKeypoints2D(Processor):
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
         self.draw = pr.DrawKeypoints2D(self.num_keypoints, radius, False)
         self.draw_boxes = pr.DrawBoxes2D(detect.class_names, detect.colors)
-        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'keypoints'])
 
     def call(self, image):
         boxes2D = self.detect(image)['boxes2D']
         boxes2D = self.square(boxes2D)
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
+        keypoints2D = []
         for cropped_image, box2D in zip(cropped_images, boxes2D):
             keypoints = self.estimate_keypoints(cropped_image)['keypoints']
             keypoints = self.change_coordinates(keypoints, box2D)
+            keypoints2D.append(keypoints)
             image = self.draw(image, keypoints)
         image = self.draw_boxes(image, boxes2D)
-        return self.wrap(image, boxes2D)
+        return self.wrap(image, boxes2D, keypoints2D)
 
 
 class DetectFaceKeypointNet2D32(DetectKeypoints2D):
