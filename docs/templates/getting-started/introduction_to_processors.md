@@ -58,7 +58,7 @@ We can now use our new function/pipeline to load and normalize an image:
 image = preprocess_image('images/cat.jpg')
 ```
 
-## Why the name ``Processor`` 
+## Why the name ``Processor``?
 Originally PAZ was only meant for pre-processing pipelines that included data-augmentation, normalization, etc. However, I found out that we could use the same API for post-processing; therefore, I thought at the time that ``Processor`` would be adequate to describe the capacity of both pre-processing and post-processing.
-Names that I also thought could have worked were: ``Function``, ``Functor`` but I didn't want to use those since I thought they could also cause confusion. Similarly, in Keras this abstraction is interpreted as a ``Layer`` but here I don't think that abstraction is adequate.
-A layer of computation maybe? So after having this thoughts swirling around I decided to go with ``Processor`` and try to be explicit about my mental jugglery hoping the name doesn't cause much mental overhead.
+Names that I also thought could have worked were: ``Function``, ``Functor`` but I didn't want to use those since I thought they would be more confusing. Similarly, in Keras this abstraction is interpreted as a ``Layer`` but here I don't think that abstraction is adequate.
+A layer of computation maybe? So after having this thoughts swirling around I decided to go with ``Processor`` and be explicit about my mental jugglery hoping that this name doesn't cause much mental overhead in the future.
