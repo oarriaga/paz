@@ -206,7 +206,7 @@ You put your craft out there for all of us to use and appreciate, and we ought f
 
 ## Funding
 PAZ is currently developed in the [Robotics Group](https://robotik.dfki-bremen.de/de/ueber-uns/universitaet-bremen-arbeitsgruppe-robotik.html) of the [University of Bremen](https://www.uni-bremen.de/), together with the [Robotics Innovation Center](https://robotik.dfki-bremen.de/en/startpage.html) of the **German Research Center for Artificial Intelligence** (DFKI) in Bremen.
-PAZ has been funded by the [German Federal Ministry for Economic Affairs and Energy](https://www.bmwi.de/Navigation/EN/Home/home.html) and the [German Aerospace Center](https://www.dlr.de/DE/Home/home_node.html) (DLR).
+PAZ has been funded by the German Federal Ministry for Economic Affairs and Energy and the [German Aerospace Center](https://www.dlr.de/DE/Home/home_node.html) (DLR).
 PAZ been used and/or developed in the projects [TransFIT](https://robotik.dfki-bremen.de/en/research/projects/transfit.html) and [KiMMI-SF](https://robotik.dfki-bremen.de/en/research/projects/kimmi-sf/).
 
 <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/funding_partners.png" width="1200">
