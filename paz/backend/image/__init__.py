@@ -15,7 +15,7 @@ from .opencv_image import random_hue
 from .opencv_image import random_flip_left_right
 from .opencv_image import show_image
 from .opencv_image import warp_affine
-from .opencv_image import save_image
+from .opencv_image import write_image
 from .opencv_image import random_image_crop
 from .opencv_image import make_random_plain_image
 from .opencv_image import blend_alpha_channel
