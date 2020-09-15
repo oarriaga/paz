@@ -205,7 +205,7 @@ You put your craft out there for all of us to use and appreciate, and we ought f
 * The name PAZ satisfies it's theoretical definition by having it as an acronym for **Perception for Autonomous Systems** where the letter S is replaced for Z in order to indicate that for "System" we mean almost anything i.e. Z being a classical algebraic variable to indicate an unknown element.
 
 ## Funding
-PAZ is currently developed in the [Robotics Group](https://robotik.dfki-bremen.de/de/ueber-uns/universitaet-bremen-arbeitsgruppe-robotik.html) of the [University of Bremen](https://www.uni-bremen.de/), together with the [Robotics Innovation Center](https://robotik.dfki-bremen.de/en/startpage.html) of the German Research Center for Artificial Intelligence (DFKI) in Bremen.
+PAZ is currently developed in the [Robotics Group](https://robotik.dfki-bremen.de/de/ueber-uns/universitaet-bremen-arbeitsgruppe-robotik.html) of the [University of Bremen](https://www.uni-bremen.de/), together with the [Robotics Innovation Center](https://robotik.dfki-bremen.de/en/startpage.html) of the **German Research Center for Artificial Intelligence** (DFKI) in Bremen.
 PAZ has been funded by the [German Federal Ministry for Economic Affairs and Energy](https://www.bmwi.de/Navigation/EN/Home/home.html) and the [German Aerospace Center](https://www.dlr.de/DE/Home/home_node.html) (DLR).
 PAZ been used and/or developed in the projects [TransFIT](https://robotik.dfki-bremen.de/en/research/projects/transfit.html) and [KiMMI-SF](https://robotik.dfki-bremen.de/en/research/projects/kimmi-sf/).
 
