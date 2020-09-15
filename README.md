@@ -4,7 +4,7 @@
 Hierarchical perception library in Python.
 
 ## Selected examples:
-PAZ is used in the following examples:
+PAZ is used in the following examples (links to **real-time demos** and training scripts):
 
 | [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
 |---------------------------|--------------------------| ------------------|
