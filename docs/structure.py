@@ -109,7 +109,7 @@ PAGES = [
             opencv_image.random_flip_left_right,
             opencv_image.show_image,
             opencv_image.warp_affine,
-            opencv_image.save_image,
+            opencv_image.write_image,
             opencv_image.random_image_crop,
             opencv_image.make_random_plain_image,
             opencv_image.blend_alpha_channel,
