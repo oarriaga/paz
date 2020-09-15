@@ -4,7 +4,7 @@ import numpy as np
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
 
-from ..backend.image import save_image
+from ..backend.image import write_image
 
 from paz.evaluation import evaluateMAP
 
@@ -40,7 +40,7 @@ class DrawInferences(Callback):
                 os.makedirs(save_path)
             image_name = 'image_%03d.png' % image_arg
             image_name = os.path.join(save_path, image_name)
-            save_image(image_name, inferences[self.topic])
+            write_image(image_name, inferences[self.topic])
         if self.verbose:
             print('Saving predicted images in:', self.save_path)
 

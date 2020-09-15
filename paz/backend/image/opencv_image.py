@@ -189,15 +189,16 @@ def warp_affine(image, matrix, fill_color=[0, 0, 0]):
         image, matrix, (width, height), borderValue=fill_color)
 
 
-def save_image(filepath, image):
-    """Saves an image.
+def write_image(filepath, image):
+    """Makes a directory of the ``filepath`` if it doesn't exist and inside
+        writes the ``image``.
 
     # Arguments
         filepath: String with image path. It should include postfix e.g. .png
         image: Numpy array.
     """
     directory_name = os.path.dirname(filepath)
-    if not os.path.exists(directory_name):
+    if (not os.path.exists(directory_name) and (len(directory_name) > 0)):
         os.makedirs(directory_name)
     return cv2.imwrite(filepath, image)
 

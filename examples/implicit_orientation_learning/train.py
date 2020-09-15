@@ -7,7 +7,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
 
-from paz.backend.image import save_image
+from paz.backend.image import write_image
 from paz.abstract import GeneratingSequence
 from paz.optimization.callbacks import DrawInferences
 from paz.pipelines import AutoEncoderPredictor
@@ -112,7 +112,7 @@ images = (sequence.__getitem__(0)[0]['input_image'] * 255).astype('uint8')
 for arg, image in enumerate(images):
     image_name = 'image_%03d.png' % arg
     image_path = os.path.join(save_path, 'original_images/' + image_name)
-    save_image(image_path, image)
+    write_image(image_path, image)
 inferencer = AutoEncoderPredictor(model)
 draw = DrawInferences(save_path, images, inferencer)
 
