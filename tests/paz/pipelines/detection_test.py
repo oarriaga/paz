@@ -15,7 +15,7 @@ from paz.abstract.messages import Box2D
 @pytest.fixture
 def image_with_everyday_objects():
     URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-           '/v0.9.1/image_with_everyday_object_detection.jpg')
+           '/v0.9.1/image_with_everyday_classes.jpg')
     filename = os.path.basename(URL)
     fullpath = get_file(filename, URL, cache_subdir='paz/tests')
     image = load_image(fullpath)
