@@ -10,9 +10,13 @@ from tensorflow.keras.utils import get_file
 
 # let's download a test image and put it inside our PAZ directory
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-             '/v0.9/test_image_classification.png')
-image_filename = os.path.basename(IMAGE_URL)
-image_fullpath = get_file(image_filename, IMAGE_URL, cache_subdir='paz/data')
+             '/v0.9/image_augmentation.png')
+filename = os.path.basename(IMAGE_URL)
+image_fullpath = get_file(filename, IMAGE_URL, cache_subdir='paz/tutorials')
+
+# we load the original image and display it
+image = load_image(image_fullpath)
+show_image(image)
 
 # We construct a data augmentation pipeline using the built-in PAZ processors:
 augment = SequentialProcessor()
