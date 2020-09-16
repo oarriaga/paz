@@ -190,8 +190,10 @@ def warp_affine(image, matrix, fill_color=[0, 0, 0]):
 
 
 def write_image(filepath, image):
-    """Makes a directory of the ``filepath`` if it doesn't exist and inside
-        writes the ``image``.
+    """Writes an image inside ``filepath``. If ``filepath`` doesn't exist
+        it makes a directory. If ``image`` has three channels the image is
+        converted into BGR and then written. This is done such that this
+        function compatible with ``load_image``.
 
     # Arguments
         filepath: String with image path. It should include postfix e.g. .png
@@ -200,6 +202,8 @@ def write_image(filepath, image):
     directory_name = os.path.dirname(filepath)
     if (not os.path.exists(directory_name) and (len(directory_name) > 0)):
         os.makedirs(directory_name)
+    if image.shape[-1] == 3:
+        image = convert_color_space(image, RGB2BGR)
     return cv2.imwrite(filepath, image)
 
 

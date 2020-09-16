@@ -8,19 +8,19 @@ PAZ is used in the following examples (links to **real-time demos** and training
 
 | [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
 |---------------------------|--------------------------| ------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="430"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="440">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
 
 | [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |
 |---------------------------|--------------------------| -----------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="420">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="420">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
 
 | [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) | 6D pose estimation |
 |---------------------------|-----------------------| --------------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="410"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400"> |
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="420"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="420">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400"> |
 
-| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
-|---------------------------|-----------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="512">|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="512"> |
+| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |     |
+|---------------------------|-----------------------|-----------------|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="370">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="370"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="400">|
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
@@ -28,12 +28,13 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 <!--ts-->
 * [Examples](#selected-examples)
 * [Hierarchical APIs](#hierarchical-apis)
-    * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#mid-level)
+    * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#low-level)
 * [Additional functionality](#additional-functionality)
     * [Implemented models](#models)
 * [Installation](#installation)
 * [Documentation](#documentation)
 * [Motivation](#motivation)
+* [Funding](#funding)
 <!--te-->
 
 ## Hierarchical APIs
@@ -50,6 +51,12 @@ detect = SSD512COCO()
 # apply directly to an image (numpy-array)
 inferences = detect(image)
 ```
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detections_in_the_street.png" width="1000">
+</p>
+
+
 
 There are multiple high-level functions a.k.a. ``pipelines`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/pipelines). Those functions are build using our mid-level API described now below.
 
@@ -72,24 +79,32 @@ augment.add(pr.RandomHue())
 # you can now use this now as a normal function
 image = augment(image)
 ```
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
+</p>
 
 You can also add **any function** not only those found in ``processors``. For example we can pass a numpy function to our original data-augmentation pipeline:
 
 ``` python
 augment.add(np.mean)
 ```
-There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors)
+There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors).
+
+Using these processors we can build a **data augmentation for object detection**: [``pr.AugmentDetection``](https://github.com/oarriaga/paz/blob/master/paz/pipelines/detection.py#L46)
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
+</p>
 
 
 ### Mid-level: Explicit
 Non-sequential pipelines can be also build by abstracting ``Processor``. In the example below we build a emotion classifier from **scratch** using our high-level and mid-level functions.
 
 ``` python
-from paz.pipelines import HaarCascadeFrontalFace, MiniXceptionFER
-from paz.abstract import Processor
+from paz.applications import HaarCascadeFrontalFace, MiniXceptionFER
 import paz.processors as pr
 
-class EmotionDetector(Processor):
+class EmotionDetector(pr.Processor):
     def __init__(self):
         super(EmotionDetector, self).__init__()
         self.detect = HaarCascadeFrontalFace(draw=False)
@@ -108,12 +123,16 @@ detect = EmotionDetector()
 # you can now apply it to an image (numpy array)
 predictions = detect(image)
 ```
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion_classification_in_the_wild.png" width="800">
+</p>
 
-``Processors`` allow us to easily compose, compress and extract away unnecessary parameters of functions. However, processors are ultimately build using our low-level API (small functions) explained next.
+
+``Processors`` allow us to easily compose, compress and extract away parameters of functions. However, most processors are build using our low-level API (backend) shown next.
 
 ## Low-level
 
-Most mid-level processors are built from small backend functions: [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
+Most mid-level processors are mostly built from small backend functions found in: [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
 
 These functions can found in ``paz.backend``:
 
@@ -136,7 +155,7 @@ show_image(image)
 * There are custom [callbacks](https://github.com/oarriaga/paz/blob/master/paz/optimization/callbacks.py) e.g. MAP evaluation for object detectors while training.
     
 * PAZ comes with [data loaders](https://github.com/oarriaga/paz/tree/master/paz/datasets) for the multiple datasets:
-    OpenImages, VOC, YCB-Video, FAT, FERPlus, FER2013
+    [OpenImages](https://github.com/oarriaga/paz/blob/master/paz/datasets/open_images.py), [VOC](https://github.com/oarriaga/paz/blob/master/paz/datasets/voc.py), [YCB-Video](https://github.com/oarriaga/paz/blob/master/examples/object_detection/datasets/ycb_video.py), [FAT](https://github.com/oarriaga/paz/blob/master/paz/datasets/fat.py), [FERPlus](https://github.com/oarriaga/paz/blob/master/paz/datasets/ferplus.py), [FER2013](https://github.com/oarriaga/paz/blob/master/paz/datasets/fer.py).
 
 * We have an automatic [batch creation and dispatching wrappers](https://github.com/oarriaga/paz/blob/master/paz/abstract/sequence.py) for an easy connection between you ``pipelines`` and tensorflow generators. Please look at the [tutorials](https://github.com/oarriaga/paz/tree/master/examples/tutorials) for more information.
 
@@ -200,5 +219,14 @@ I feel it's easy to blurry a company name with the individuals behind their proj
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration before we lay upon you our hardened criticism.
 
-## Why PAZ?
+## Why the name **PAZ**?
 * The name PAZ satisfies it's theoretical definition by having it as an acronym for **Perception for Autonomous Systems** where the letter S is replaced for Z in order to indicate that for "System" we mean almost anything i.e. Z being a classical algebraic variable to indicate an unknown element.
+
+## Funding
+PAZ is currently developed in the [Robotics Group](https://robotik.dfki-bremen.de/de/ueber-uns/universitaet-bremen-arbeitsgruppe-robotik.html) of the [University of Bremen](https://www.uni-bremen.de/), together with the [Robotics Innovation Center](https://robotik.dfki-bremen.de/en/startpage.html) of the **German Research Center for Artificial Intelligence** (DFKI) in **Bremen**.
+PAZ has been funded by the German Federal Ministry for Economic Affairs and Energy and the [German Aerospace Center](https://www.dlr.de/DE/Home/home_node.html) (DLR).
+PAZ been used and/or developed in the projects [TransFIT](https://robotik.dfki-bremen.de/en/research/projects/transfit.html) and [KiMMI-SF](https://robotik.dfki-bremen.de/en/research/projects/kimmi-sf/).
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/funding_partners.png" width="1200">
+</p>
