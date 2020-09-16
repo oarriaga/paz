@@ -90,7 +90,7 @@ augment.add(np.mean)
 ```
 There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors).
 
-Using these processors we can build a **data augmentation for object detection**: [``pr.AugmentDetection``](https://github.com/oarriaga/paz/blob/master/paz/pipelines/detection.py#L46)
+Using these processors we can build more complex pipelines e.g. **data augmentation for object detection**: [``pr.AugmentDetection``](https://github.com/oarriaga/paz/blob/master/paz/pipelines/detection.py#L46)
 
 <p align="center">
    <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
@@ -132,7 +132,7 @@ predictions = detect(image)
 
 ## Low-level
 
-Most mid-level processors are mostly built from small backend functions found in: [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
+Mid-level processors are mostly built from small backend functions found in: [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
 
 These functions can found in ``paz.backend``:
 

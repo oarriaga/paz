@@ -18,13 +18,14 @@ from paz.backend.image import load_image
 First we will download a test image and put it inside our PAZ directory
 ``` python
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-             '/v0.9/test_image_detection.png')
+             '/v0.9/object_detection_augmentation.png')
 image_filename = os.path.basename(IMAGE_URL)
 image_fullpath = get_file(image_filename, IMAGE_URL, cache_subdir='paz/data')
 ```
 
 Let's first build our labels:
 Keep in mind that the origin of our images is located at the **top-left**.
+
 The ``x_min, y_min`` are the **normalized** coordinates of **top-left** bounding-box corner.
 ``` python
 height, width = load_image(image_fullpath).shape[:2]

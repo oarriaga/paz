@@ -16,7 +16,7 @@ from tensorflow.keras.utils import get_file
 Let's download a test image and put it inside our PAZ directory
 ``` python
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-             '/v0.9/test_image_classification.png')
+             '/v0.9/image_augmentation.png')
 image_filename = os.path.basename(IMAGE_URL)
 image_fullpath = get_file(image_filename, IMAGE_URL, cache_subdir='paz/data')
 ```
@@ -65,6 +65,14 @@ We now create another processor for geometric augmentation.
 ``` python
 transform = SequentialProcessor([pr.RandomRotation(), pr.RandomTranslation()])
 ```
+
+You should start getting now transformations similar to these ones:
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
+</p>
+
+
 
 We can call both of our processors separately:
 ``` python

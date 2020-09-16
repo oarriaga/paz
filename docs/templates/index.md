@@ -16,9 +16,10 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------| --------------------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="400" height="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="400" height="400">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400" height="400"> |
 
-| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |
-|---------------------------|-----------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="512">|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="512"> |
+| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |     |
+|---------------------------|-----------------------|-----------------|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="340"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="400">|
+
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
@@ -38,6 +39,11 @@ inferences = detect(image)
 ```
 
 There are multiple high-level functions a.k.a. ``pipelines`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/pipelines). Those functions are build using our mid-level API described now below.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detections_in_the_street.png" width="1000">
+</p>
+
 
 ## Mid-level
 While the high-level API is useful for quick applications, it might not be flexible enough for your specific purporse. Therefore, in PAZ we can build high-level functions using our a mid-level API.
@@ -59,23 +65,35 @@ augment.add(pr.RandomHue())
 image = augment(image)
 ```
 
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
+</p>
+
+
 You can also add **any function** not only those found in ``processors``. For example we can pass a numpy function to our original data-augmentation pipeline:
 
 ``` python
 augment.add(np.mean)
 ```
-There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors)
+
+There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors).
+
+Using these processors we can build more complex pipelines e.g. **data augmentation for object detection**: [``pr.AugmentDetection``](https://github.com/oarriaga/paz/blob/master/paz/pipelines/detection.py#L46)
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
+</p>
+
 
 
 ### Mid-level: Explicit
 Non-sequential pipelines can be also build by abstracting ``Processor``. In the example below we build a emotion classifier from scratch using our high-level and mid-level functions.
 
 ``` python
-from paz.pipelines import HaarCascadeFrontalFace, MiniXceptionFER
-from paz.abstract import Processor
+from paz.applications import HaarCascadeFrontalFace, MiniXceptionFER
 import paz.processors as pr
 
-class EmotionDetector(Processor):
+class EmotionDetector(pr.Processor):
     def __init__(self):
         super(EmotionDetector, self).__init__()
         self.detect = HaarCascadeFrontalFace(draw=False)
@@ -94,12 +112,17 @@ detect = EmotionDetector()
 # you can now apply it to an image (numpy array)
 predictions = detect(image)
 ```
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion_classification_in_the_wild.png" width="800">
+</p>
 
-``Processors`` allow us to easily compose, compress and extract away unecessary parameters of functions. However, processors are ultimately build using our low-level API (small functions) explained next.
+
+``Processors`` allow us to easily compose, compress and extract away parameters of functions. However, most processors are build using our low-level API (backend) shown next.
+
 
 ## Low-level
 
-PAZ has a lot of small functions for [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
+Mid-level processors are mostly built from small backend functions found in: [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
 
 These functions can found in ``paz.backend``:
 
@@ -122,6 +145,6 @@ show_image(image)
 * There are custom [callbacks](https://github.com/oarriaga/paz/blob/master/paz/optimization/callbacks.py) e.g. MAP evaluation for object detectors while training
     
 * PAZ comes with [data loaders](https://github.com/oarriaga/paz/tree/master/paz/datasets) for the multiple datasets:
-    OpenImages, VOC, YCB-Video, FAT, FERPlus, FER2013
+    [OpenImages](https://github.com/oarriaga/paz/blob/master/paz/datasets/open_images.py), [VOC](https://github.com/oarriaga/paz/blob/master/paz/datasets/voc.py), [YCB-Video](https://github.com/oarriaga/paz/blob/master/examples/object_detection/datasets/ycb_video.py), [FAT](https://github.com/oarriaga/paz/blob/master/paz/datasets/fat.py), [FERPlus](https://github.com/oarriaga/paz/blob/master/paz/datasets/ferplus.py), [FER2013](https://github.com/oarriaga/paz/blob/master/paz/datasets/fer.py).
 
 * We have an automatic [batch creation and dispatching wrappers](https://github.com/oarriaga/paz/blob/master/paz/abstract/sequence.py) for an easy connection between you ``pipelines`` and tensorflow generators. Please look at the examples and the processor ``pr.SequenceWrapper`` for more information.
