@@ -16,7 +16,7 @@ from tensorflow.keras.utils import get_file
 Let's download a test image and put it inside our PAZ directory
 ``` python
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-             '/v0.9/test_image_classification.png')
+             '/v0.9/image_augmentation.png')
 image_filename = os.path.basename(IMAGE_URL)
 image_fullpath = get_file(image_filename, IMAGE_URL, cache_subdir='paz/data')
 ```

@@ -20,7 +20,7 @@ import paz.backend as P
 Let's download a test image and put it inside our PAZ directory
 ``` python
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-             '/v0.9/test_image_detection.png')
+             '/v0.9/object_detection_augmentation.png')
 image_filename = os.path.basename(IMAGE_URL)
 image_fullpath = get_file(image_filename, IMAGE_URL, cache_subdir='paz/data')
 ```
@@ -118,6 +118,9 @@ class PreprocessBoxes(SequentialProcessor):
 
 
 Putting everything together in a single processor:
+
+**Note** that these is the same processor we have internally in PAZ: ``paz.pipelines.AugmentDetection``.
+
 ``` python
 class AugmentDetection(SequentialProcessor):
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
