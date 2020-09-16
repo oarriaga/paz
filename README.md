@@ -80,7 +80,7 @@ augment.add(pr.RandomHue())
 image = augment(image)
 ```
 <p align="center">
-<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
 </p>
 
 You can also add **any function** not only those found in ``processors``. For example we can pass a numpy function to our original data-augmentation pipeline:
@@ -93,7 +93,7 @@ There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [h
 Using these processors we can build a **data augmentation for object detection**: [``pr.AugmentDetection``](https://github.com/oarriaga/paz/blob/master/paz/pipelines/detection.py#L46)
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
 </p>
 
 
@@ -101,11 +101,10 @@ Using these processors we can build a **data augmentation for object detection**
 Non-sequential pipelines can be also build by abstracting ``Processor``. In the example below we build a emotion classifier from **scratch** using our high-level and mid-level functions.
 
 ``` python
-from paz.pipelines import HaarCascadeFrontalFace, MiniXceptionFER
-from paz.abstract import Processor
+from paz.applications import HaarCascadeFrontalFace, MiniXceptionFER
 import paz.processors as pr
 
-class EmotionDetector(Processor):
+class EmotionDetector(pr.Processor):
     def __init__(self):
         super(EmotionDetector, self).__init__()
         self.detect = HaarCascadeFrontalFace(draw=False)
@@ -124,6 +123,10 @@ detect = EmotionDetector()
 # you can now apply it to an image (numpy array)
 predictions = detect(image)
 ```
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion_classification_in_the_wild.png" width="800">
+</p>
+
 
 ``Processors`` allow us to easily compose, compress and extract away parameters of functions. However, most processors are build using our low-level API (backend) explained next.
 
