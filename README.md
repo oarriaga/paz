@@ -52,6 +52,12 @@ detect = SSD512COCO()
 inferences = detect(image)
 ```
 
+<p align="center">
+<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detections_in_the_street.png" width="1000">
+</p>
+
+
+
 There are multiple high-level functions a.k.a. ``pipelines`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/pipelines). Those functions are build using our mid-level API described now below.
 
 ## Mid-level
