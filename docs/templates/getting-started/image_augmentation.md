@@ -66,6 +66,14 @@ We now create another processor for geometric augmentation.
 transform = SequentialProcessor([pr.RandomRotation(), pr.RandomTranslation()])
 ```
 
+You should start getting now transformations similar to these ones:
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
+</p>
+
+
+
 We can call both of our processors separately:
 ``` python
 for _ in range(5):

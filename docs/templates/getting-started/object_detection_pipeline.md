@@ -192,3 +192,11 @@ for _ in range(10):
     image = deprocess_image(image)
     draw_boxes(image, boxes)
 ```
+
+You should now be able to see transformations similar to these ones:
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
+</p>
+
+
