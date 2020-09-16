@@ -8,9 +8,9 @@ from paz.backend.image import load_image
 
 # let's download a test image and put it inside our PAZ directory
 IMAGE_URL = ('https://github.com/oarriaga/altamira-data/releases/download'
-             '/v0.9/test_image_detection.png')
-image_filename = os.path.basename(IMAGE_URL)
-image_fullpath = get_file(image_filename, IMAGE_URL, cache_subdir='paz/data')
+             '/v0.9/object_detection_augmentation.png')
+filename = os.path.basename(IMAGE_URL)
+image_fullpath = get_file(filename, IMAGE_URL, cache_subdir='paz/tutorials')
 
 
 # Boxes
