@@ -102,6 +102,8 @@ from ..backend.image.draw import GREEN
 from ..backend.image.draw import FONT
 from ..backend.image.draw import LINE
 
+from ..abstract import Processor
+
 TRAIN = 0
 VAL = 1
 TEST = 2
