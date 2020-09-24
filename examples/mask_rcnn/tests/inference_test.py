@@ -6,9 +6,9 @@ from mask_rcnn import inference
 
 @pytest.fixture
 def test_results():
-    file_path = '/home/incendio/Documents/Thesis/test_images/elephant.jpg'
+    file_path = '../test_images/elephant.jpg'
     image = cv2.imread(file_path)
-    return inference.test(image)[0]
+    return inference.test([image])[0]
 
 @pytest.mark.parametrize('box', [np.array([34, 55, 359, 592])])
 def test_bounding_box(test_results, box):
@@ -23,7 +23,7 @@ def test_mask_shape(test_results, mask_shape):
     assert (mask_shape == masks.shape)
 
 
-@pytest.mark.parametrize('ones', [79848])
+@pytest.mark.parametrize('ones', [79842])
 def test_mask(test_results, ones):
     masks = test_results['masks']
     masks = np.array(masks)[:, :, 0]
