@@ -20,8 +20,7 @@ import tensorflow.keras.layers as KL
 import tensorflow.keras.models as KM
 
 from mask_rcnn import utils
-from mask_rcnn.layers import AnchorsLayer, DetectionTargetLayer, ProposalLayer
-from mask_rcnn.inference_graph import DetectionLayer
+from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
 
 
 # Requires TensorFlow 2.0+
@@ -143,8 +142,8 @@ class MaskRCNN():
         #     # TODO: can this be optimized to avoid duplicating the anchors?
         #     anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
             
-        #     anchor_layer = AnchorsLayer(name='anchors')
-        #     anchors = anchor_layer(anchors)
+        #     #anchor_layer = AnchorsLayer(name='anchors')
+        #     anchors = Layer(name='anchors')(anchors)
         #     # A hack to get around Keras's bad support for constants
         #     #anchors = KL.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image)
         # else:
