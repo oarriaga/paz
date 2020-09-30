@@ -7,11 +7,8 @@ Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
 """
 
-import sys
-import os
 import logging
 import math
-import random
 import numpy as np
 import tensorflow as tf
 import scipy
@@ -19,57 +16,47 @@ import skimage.transform
 import urllib.request
 import shutil
 import warnings
-import sys
 import colorsys
 
 from skimage.measure import find_contours
 import matplotlib.pyplot as plt
-from matplotlib import patches,  lines
+from matplotlib import patches, lines
 from matplotlib.patches import Polygon
 from distutils.version import LooseVersion
 
 import tensorflow.keras.backend as K
-import tensorflow.keras.layers as KL
-import tensorflow.keras.models as KM
-from mask_rcnn import config
-from mask_rcnn import layers
+from tensorflow.keras.layers import ZeroPadding2D, MaxPooling2D
+from tensorflow.keras.layers import Conv2D, Dense, Activation
+from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
+from tensorflow.keras.layers import Input, Conv2DTranspose
+from tensorflow.keras.layers import BatchNormalization, Add
+from tensorflow.keras.models import Model
+from mask_rcnn.layers import PyramidROIAlign, rpn_graph
 
+COCO_MODEL_URL = 'https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5'
 
-# Root directory of the project
-ROOT_DIR = os.path.abspath("../")
-
-# Import Mask RCNN
-sys.path.append(ROOT_DIR)
-
-# URL from which to download the latest COCO trained weights
-COCO_MODEL_URL = "https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5"
-
-
-############################################################
-#  Bounding Boxes
-############################################################
 
 def extract_bboxes(mask):
     """Compute bounding boxes from masks.
-    mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
 
-    Returns: bbox array [num_instances, (y1, x1, y2, x2)].
+    # Arguments:
+        mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
+
+    # Returns: 
+        bbox array [num_instances, (y_min, x_min, y_max, x_max)].
     """
     boxes = np.zeros([mask.shape[-1], 4], dtype=np.int32)
     for i in range(mask.shape[-1]):
         m = mask[:, :, i]
-        # Bounding box.
+
         horizontal_indicies = np.where(np.any(m, axis=0))[0]
         vertical_indicies = np.where(np.any(m, axis=1))[0]
         if horizontal_indicies.shape[0]:
             x1, x2 = horizontal_indicies[[0, -1]]
             y1, y2 = vertical_indicies[[0, -1]]
-            # x2 and y2 should not be part of the box. Increment by 1.
             x2 += 1
             y2 += 1
         else:
-            # No mask for this instance. Might happen due to
-            # resizing or cropping. Set bbox to zeros
             x1, x2, y1, y2 = 0, 0, 0, 0
         boxes[i] = np.array([y1, x1, y2, x2])
     return boxes.astype(np.int32)
@@ -77,15 +64,16 @@ def extract_bboxes(mask):
 
 def compute_iou(box, boxes, box_area, boxes_area):
     """Calculates IoU of the given box with the array of the given boxes.
-    box: 1D vector [y1, x1, y2, x2]
-    boxes: [boxes_count, (y1, x1, y2, x2)]
-    box_area: float. the area of 'box'
-    boxes_area: array of length boxes_count.
 
-    Note: the areas are passed in rather than calculated here for
-    efficiency. Calculate once in the caller to avoid duplicate work.
+    # Arguments:
+        box: 1D vector [y_min, x_min, y_max, x_max]
+        boxes: [boxes_count, (y_min, x_min, y_max, x_max)]
+        box_area: float. the area of 'box'
+        boxes_area: array of length boxes_count.
+
+    # Returns:
+        Intersection over union of given boxes
     """
-    # Calculate intersection areas
     y1 = np.maximum(box[0], boxes[:, 0])
     y2 = np.minimum(box[2], boxes[:, 2])
     x1 = np.maximum(box[1], boxes[:, 1])
@@ -98,9 +86,9 @@ def compute_iou(box, boxes, box_area, boxes_area):
 
 def compute_overlaps(boxes1, boxes2):
     """Computes IoU overlaps between two sets of boxes.
-    boxes1, boxes2: [N, (y1, x1, y2, x2)].
 
-    For better performance, pass the largest set first and the smaller second.
+    # Arguments:
+        boxes1, boxes2: [N, (y_min, x_min, y_max, x_max)].
     """
     # Areas of anchors and GT boxes
     area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
@@ -117,9 +105,10 @@ def compute_overlaps(boxes1, boxes2):
 
 def compute_overlaps_masks(masks1, masks2):
     """Computes IoU overlaps between two sets of masks.
-    masks1, masks2: [Height, Width, instances]
+
+    # Arguments:
+        masks1, masks2: [Height, Width, instances]
     """
-    
     # If either set of masks is empty return empty result
     if masks1.shape[-1] == 0 or masks2.shape[-1] == 0:
         return np.zeros((masks1.shape[-1], masks2.shape[-1]))
@@ -129,7 +118,6 @@ def compute_overlaps_masks(masks1, masks2):
     area1 = np.sum(masks1, axis=0)
     area2 = np.sum(masks2, axis=0)
 
-    # intersections and union
     intersections = np.dot(masks1.T, masks2)
     union = area1[:, None] + area2[None, :] - intersections
     overlaps = intersections / union
@@ -137,36 +125,13 @@ def compute_overlaps_masks(masks1, masks2):
     return overlaps
 
 
-def box_refinement_graph(box, gt_box):
-    """Compute refinement needed to transform box to gt_box.
-    box and gt_box are [N, (y1, x1, y2, x2)]
-    """
-    box = tf.cast(box, tf.float32)
-    gt_box = tf.cast(gt_box, tf.float32)
-
-    height = box[:, 2] - box[:, 0]
-    width = box[:, 3] - box[:, 1]
-    center_y = box[:, 0] + 0.5 * height
-    center_x = box[:, 1] + 0.5 * width
-
-    gt_height = gt_box[:, 2] - gt_box[:, 0]
-    gt_width = gt_box[:, 3] - gt_box[:, 1]
-    gt_center_y = gt_box[:, 0] + 0.5 * gt_height
-    gt_center_x = gt_box[:, 1] + 0.5 * gt_width
-
-    dy = (gt_center_y - center_y) / height
-    dx = (gt_center_x - center_x) / width
-    dh = tf.math.log(gt_height / height)
-    dw = tf.math.log(gt_width / width)
-
-    result = tf.stack([dy, dx, dh, dw], axis=1)
-    return result
-
-
 def box_refinement(box, gt_box):
     """Compute refinement needed to transform box to gt_box.
-    box and gt_box are [N, (y1, x1, y2, x2)]. (y2, x2) is
-    assumed to be outside the box.
+
+    # Arguments:
+        box: [N, (y_min, x_min, y_max, x_max)]. 
+        gt_box: Ground-truth box [N, (y_min, x_min, y_max, x_max)]
+            (y_max, x_max) is assumed to be outside the box.
     """
     box = box.astype(np.float32)
     gt_box = gt_box.astype(np.float32)
@@ -189,24 +154,14 @@ def box_refinement(box, gt_box):
     return np.stack([dy, dx, dh, dw], axis=1)
 
 
-############################################################
-#  Dataset
-############################################################
-
 class Dataset(object):
     """The base class for dataset classes.
-    To use it, create a new class that adds functions specific to the dataset
-    you want to use. For example:
 
-    class CatsAndDogsDataset(Dataset):
-        def load_cats_and_dogs(self):
-            ...
-        def load_mask(self, image_id):
-            ...
-        def image_reference(self, image_id):
-            ...
-
-    See COCODataset and ShapesDataset as examples.
+    # Arguments:
+        data_path: String. Path to data
+        split: String. Dataset split e.g train or val
+        name: String. Dataset name
+        evaluate: Boolean.
     """
 
     def __init__(self, data_path=None, split=None, name=None, evaluate=False, class_map=None):
@@ -345,34 +300,16 @@ class Dataset(object):
 def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square"):
     """Resizes an image keeping the aspect ratio unchanged.
 
-    min_dim: if provided, resizes the image such that it's smaller
-        dimension == min_dim
-    max_dim: if provided, ensures that the image longest side doesn't
-        exceed this value.
-    min_scale: if provided, ensure that the image is scaled up by at least
-        this percent even if min_dim doesn't require it.
-    mode: Resizing mode.
-        none: No resizing. Return the image unchanged.
-        square: Resize and pad with zeros to get a square image
-            of size [max_dim, max_dim].
-        pad64: Pads width and height with zeros to make them multiples of 64.
-               If min_dim or min_scale are provided, it scales the image up
-               before padding. max_dim is ignored in this mode.
-               The multiple of 64 is needed to ensure smooth scaling of feature
-               maps up and down the 6 levels of the FPN pyramid (2**6=64).
-        crop: Picks random crops from the image. First, scales the image based
-              on min_dim and min_scale, then picks a random crop of
-              size min_dim x min_dim. Can be used in training only.
-              max_dim is not used in this mode.
+    # Arguments:
+        min_dim: Minimum dimension of image to resize
+        max_dim: Maximum dimension of image to resize
+        min_scale: Image scale percentage
+        mode: Resizing mode. e.g. None, square, pad64 or crop
 
-    Returns:
-    image: the resized image
-    window: (y1, x1, y2, x2). If max_dim is provided, padding might
-        be inserted in the returned image. If so, this window is the
-        coordinates of the image part of the full image (excluding
-        the padding). The x2, y2 pixels are not included.
-    scale: The scale factor used to resize the image
-    padding: Padding added to the image [(top, bottom), (left, right), (0, 0)]
+    # Returns:
+        image: Resized image
+        window: Coordinates of unpadded image (y_min, x_min, y_max, x_max)
+        padding: Padding added to the image [(top, bottom), (left, right), (0, 0)]
     """
     # Keep track of image dtype and return results in the same dtype
     image_dtype = image.dtype
@@ -439,8 +376,8 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
     elif mode == "crop":
         # Pick a random crop
         h, w = image.shape[:2]
-        y = random.randint(0, (h - min_dim))
-        x = random.randint(0, (w - min_dim))
+        y = np.random.randint(0, (h - min_dim))
+        x = np.random.randint(0, (w - min_dim))
         crop = (y, x, min_dim, min_dim)
         image = image[y:y + min_dim, x:x + min_dim]
         window = (0, 0, min_dim, min_dim)
@@ -451,12 +388,11 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
 
 def resize_mask(mask, scale, padding, crop=None):
     """Resizes a mask using the given scale and padding.
-    Typically, you get the scale and padding from resize_image() to
-    ensure both, the image and the mask, are resized consistently.
 
-    scale: mask scaling factor
-    padding: Padding to add to the mask in the form
-            [(top, bottom), (left, right), (0, 0)]
+    # Arguments:
+        scale: mask scaling factor
+        padding: Padding to add to the mask in the form
+                [(top, bottom), (left, right), (0, 0)]
     """
     # Suppress warning from scipy 0.13.0, the output shape of zoom() is
     # calculated with round() instead of int()
@@ -473,9 +409,12 @@ def resize_mask(mask, scale, padding, crop=None):
 
 def minimize_mask(bbox, mask, mini_shape):
     """Resize masks to a smaller version to reduce memory load.
-    Mini-masks can be resized back to image scale using expand_masks()
+       Mini-masks can be resized back to image scale using expand_masks()
 
-    See inspect_data.ipynb notebook for more details.
+    # Arguments:
+        bbox: bounding box coordinates
+        mask: Numpy array
+        mini_shape: Shape to which mask is to be minimized
     """
     mini_mask = np.zeros(mini_shape + (mask.shape[-1],), dtype=bool)
     for i in range(mask.shape[-1]):
@@ -493,36 +432,36 @@ def minimize_mask(bbox, mask, mini_shape):
 
 def unmold_mask(mask, bbox, image_shape):
     """Converts a mask generated by the neural network to a format similar
-    to its original shape.
-    mask: [height, width] of type float. A small, typically 28x28 mask.
-    bbox: [y1, x1, y2, x2]. The box to fit the mask in.
+       to its original shape.
 
-    Returns a binary mask with the same size as the original image.
+    # Arguments:
+        mask: [height, width] of type float. Typically 28x28 mask.
+        bbox: [y_min, x_min, y_max, x_max]. The box to fit the mask in.
+
+    # Returns:
+        A binary mask with the same size as the original image.
     """
     threshold = 0.5
     y1, x1, y2, x2 = bbox
     mask = resize(mask, (y2 - y1, x2 - x1))
     mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
 
-    # Put the mask in the right location.
     full_mask = np.zeros(image_shape[:2], dtype=np.bool)
     full_mask[y1:y2, x1:x2] = mask
     return full_mask
 
 
-############################################################
-#  Anchors
-############################################################
-
 def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
-    """
-    scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
-    ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
-    shape: [height, width] spatial shape of the feature map over which
-            to generate anchors.
-    feature_stride: Stride of the feature map relative to the image in pixels.
-    anchor_stride: Stride of anchors on the feature map. For example, if the
-        value is 2 then generate anchors for every other feature map pixel.
+    """Generates anchor boxes
+
+    # Arguments:
+        scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
+        ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
+        shape: [height, width] spatial shape of the feature map over which
+                to generate anchors.
+        feature_stride: Stride of the feature map relative to the image in pixels.
+        anchor_stride: Stride of anchors on the feature map. For example, if the
+            value is 2 then generate anchors for every other feature map pixel.
     """
     # Get all combinations of scales and ratios
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
@@ -556,15 +495,13 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
                              anchor_stride):
     """Generate anchors at different levels of a feature pyramid. Each scale
-    is associated with a level of the pyramid, but each ratio is used in
-    all levels of the pyramid.
+       is associated with a level of the pyramid, but each ratio is used in
+       all levels of the pyramid.
 
-    Returns:
-    anchors: [N, (y1, x1, y2, x2)]. All generated anchors in one array. Sorted
-        with the same order of the given scales. So, anchors of scale[0] come
-        first, then anchors of scale[1], and so on.
+    # Returns:
+        anchors: [N, (y1, x1, y2, x2)]. All generated anchors in one array. Sorted
+            with the same order of the given scales.
     """
-    # Anchors
     # [anchor_count, (y1, x1, y2, x2)]
     anchors = []
     for i in range(len(scales)):
@@ -575,17 +512,19 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
 
 def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
     """Build a ResNet graph.
+
+    # Arguments:
         architecture: Can be resnet50 or resnet101
         stage5: Boolean. If False, stage5 of the network is not created
         train_bn: Boolean. Train or freeze Batch Norm layers
     """
     assert architecture in ["resnet50", "resnet101"]
     # Stage 1
-    x = KL.ZeroPadding2D((3, 3))(input_image)
-    x = KL.Conv2D(64, (7, 7), strides=(2, 2), name='conv1', use_bias=True)(x)
+    x = ZeroPadding2D((3, 3))(input_image)
+    x = Conv2D(64, (7, 7), strides=(2, 2), name='conv1', use_bias=True)(x)
     x = BatchNorm(name='bn_conv1')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
-    C1 = x = KL.MaxPooling2D((3, 3), strides=(2, 2), padding="same")(x)
+    x = Activation('relu')(x)
+    C1 = x = MaxPooling2D((3, 3), strides=(2, 2), padding="same")(x)
     # Stage 2
     x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1), train_bn=train_bn)
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='b', train_bn=train_bn)
@@ -611,22 +550,23 @@ def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
     return [C1, C2, C3, C4, C5]
 
 
-#Feature Pyramid Network Head
 def fpn_classifier_graph(rois, feature_maps, mode, 
                          config, train_bn=True,
                          fc_layers_size=1024):
     """Builds the computation graph of the feature pyramid network classifier
-    and regressor heads.
-    rois: [batch, num_rois, (y1, x1, y2, x2)] Proposal boxes in normalized
-          coordinates.
-    feature_maps: List of feature maps from different layers of the pyramid,
-                  [P2, P3, P4, P5]. Each has a different resolution.
-    image_meta: [batch, (meta data)] Image details. See compose_image_meta()
-    pool_size: The width of the square feature map generated from ROI Pooling.
-    num_classes: number of classes, which determines the depth of the results
-    train_bn: Boolean. Train or freeze Batch Norm layers
-    fc_layers_size: Size of the 2 FC layers
-    Returns:
+       and regressor heads.
+
+    # Arguments:
+        rois: [batch, num_rois, (y_min, x_min, y_max, x_max)] Proposal boxes in normalized
+               coordinates.
+        feature_maps: List of feature maps from different layers of the pyramid,
+                      [P2, P3, P4, P5]. Each has a different resolution.
+        image_meta: [batch, (meta data)] Image details. See compose_image_meta()
+        pool_size: The width of the square feature map generated from ROI Pooling.
+        num_classes: number of classes, which determines the depth of the results
+        train_bn: Boolean. Train or freeze Batch Norm layers
+        fc_layers_size: Size of the 2 FC layers
+    # Returns:
         logits: [batch, num_rois, NUM_CLASSES] classifier logits (before softmax)
         probs: [batch, num_rois, NUM_CLASSES] classifier probabilities
         bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))] Deltas to apply to
@@ -640,45 +580,45 @@ def fpn_classifier_graph(rois, feature_maps, mode,
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
     
-    x = layers.PyramidROIAlign([pool_size, pool_size],
+    x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_classifier")([rois, image_shape] + feature_maps)
     
-    conv_2d_layer = KL.Conv2D(fc_layers_size, (pool_size, pool_size), padding="valid")
+    conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size), padding="valid")
     #x = time_distributed_layer(x, fc_layers_size, (pool_size, pool_size))
     # Two 1024 FC layers (implemented with Conv2D for consistency)
-    x = KL.TimeDistributed(conv_2d_layer, name="mrcnn_class_conv1")(x)
+    x = TimeDistributed(conv_2d_layer, name="mrcnn_class_conv1")(x)
     
     x = tf.reshape(x, [1000, x.shape[2], x.shape[3], x.shape[4]])
     x = tf.expand_dims(x, axis=0)
     
-    x = KL.TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(x, training=train_bn)
+    x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(x, training=train_bn)
     
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(fc_layers_size, (1, 1)),
+    x = TimeDistributed(Conv2D(fc_layers_size, (1, 1)),
                            name="mrcnn_class_conv2")(x)
 
-    x = KL.TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(x, training=train_bn)
+    x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(x, training=train_bn)
 
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    shared = KL.Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
+    shared = Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
                        name="pool_squeeze")(x)
 
     # Classifier head
-    mrcnn_class_logits = KL.TimeDistributed(KL.Dense(num_classes),
+    mrcnn_class_logits = TimeDistributed(Dense(num_classes),
                                             name='mrcnn_class_logits')(shared)
-    mrcnn_probs = KL.TimeDistributed(KL.Activation("softmax"),
+    mrcnn_probs = TimeDistributed(Activation("softmax"),
                                      name="mrcnn_class")(mrcnn_class_logits)
    
     
     # BBox head
     # [batch, num_rois, NUM_CLASSES * (dy, dx, log(dh), log(dw))]
-    x = KL.TimeDistributed(KL.Dense(num_classes * 4, activation='linear'),
+    x = TimeDistributed(Dense(num_classes * 4, activation='linear'),
                            name='mrcnn_bbox_fc')(shared)
     # Reshape to [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))]
     s = K.int_shape(x)
-    mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
+    mrcnn_bbox = Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
     
     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
@@ -703,37 +643,37 @@ def build_fpn_mask_graph(rois, feature_maps, config, train_bn=True):
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
 
-    x = layers.PyramidROIAlign([pool_size, pool_size],
+    x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_mask")([rois, image_shape] + feature_maps)
 
     # Conv layers
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv1")(x)
-    x = KL.TimeDistributed(BatchNorm(),
+    x = TimeDistributed(BatchNorm(),
                            name='mrcnn_mask_bn1')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv2")(x)
-    x = KL.TimeDistributed(BatchNorm(),
+    x = TimeDistributed(BatchNorm(),
                            name='mrcnn_mask_bn2')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv3")(x)
-    x = KL.TimeDistributed(BatchNorm(),
+    x = TimeDistributed(BatchNorm(),
                            name='mrcnn_mask_bn3')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv4")(x)
-    x = KL.TimeDistributed(BatchNorm(),
+    x = TimeDistributed(BatchNorm(),
                            name='mrcnn_mask_bn4')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
+    x = TimeDistributed(Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
                            name="mrcnn_mask_deconv")(x)
-    x = KL.TimeDistributed(KL.Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
+    x = TimeDistributed(Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
                            name="mrcnn_mask")(x)
     return x
 
@@ -752,10 +692,10 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth):
     rpn_bbox: [batch, H * W * anchors_per_location, (dy, dx, log(dh), log(dw))] Deltas to be
                 applied to anchors.
     """
-    input_feature_map = KL.Input(shape=[None, None, depth],
+    input_feature_map = Input(shape=[None, None, depth],
                                  name="input_rpn_feature_map")
-    outputs = layers.rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
-    return KM.Model([input_feature_map], outputs, name="rpn_model")
+    outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
+    return Model([input_feature_map], outputs, name="rpn_model")
 
 ############################################################
 #  Miscellaneous
@@ -911,50 +851,6 @@ def compute_recall(pred_boxes, gt_boxes, iou):
     return recall, positive_ids
 
 
-# ## Batch Slicing
-# Some custom layers support a batch size of 1 only, and require a lot of work
-# to support batches greater than 1. This function slices an input tensor
-# across the batch dimension and feeds batches of size 1. Effectively,
-# an easy way to support batches > 1 quickly with little code modification.
-# In the long run, it's more efficient to modify the code to support large
-# batches and getting rid of this function. Consider this a temporary solution
-def batch_slice(inputs, graph_fn, batch_size, names=None):
-    """Splits inputs into slices and feeds each slice to a copy of the given
-    computation graph and then combines the results. It allows you to run a
-    graph on a batch of inputs even if the graph is written to support one
-    instance only.
-
-    inputs: list of tensors. All must have the same first dimension length
-    graph_fn: A function that returns a TF tensor that's part of a graph.
-    batch_size: number of slices to divide the data into.
-    names: If provided, assigns names to the resulting tensors.
-    """
-    if not isinstance(inputs, list):
-        inputs = [inputs]
-
-    outputs = []
-    for i in range(batch_size):
-        inputs_slice = [x[i] for x in inputs]
-        output_slice = graph_fn(*inputs_slice)
-        if not isinstance(output_slice, (tuple, list)):
-            output_slice = [output_slice]
-        outputs.append(output_slice)
-    # Change outputs from a list of slices where each is
-    # a list of outputs to a list of outputs and each has
-    # a list of slices
-    outputs = list(zip(*outputs))
-
-    if names is None:
-        names = [None] * len(outputs)
-
-    result = [tf.stack(o, axis=0, name=n)
-              for o, n in zip(outputs, names)]
-    if len(result) == 1:
-        result = result[0]
-
-    return result
-
-
 def download_trained_weights(coco_model_path, verbose=1):
     """Download COCO trained weights from Releases.
 
@@ -1027,7 +923,7 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
 
 
 #Utility functions
-class BatchNorm(KL.BatchNormalization):
+class BatchNorm(BatchNormalization):
     """Extends the Keras BatchNormalization class to allow a central place
     to make changes if needed.
     Batch normalization has a negative effect on training if batches are small
@@ -1155,18 +1051,6 @@ def unmold_image(normalized_images, config):
     return (normalized_images + config.MEAN_PIXEL).astype(np.uint8)
 
 
-#Graphs
-def trim_zeros_graph(boxes, name='trim_zeros'):
-    """Often boxes are represented with matrices of shape [N, 4] and
-    are padded with zeros. This removes zero boxes.
-    boxes: [N, 4] matrix of boxes.
-    non_zeros: [N] a 1D boolean mask identifying the rows to keep
-    """
-    non_zeros = tf.cast(tf.reduce_sum(tf.abs(boxes), axis=1), tf.bool)
-    boxes = tf.boolean_mask(boxes, non_zeros, name=name)
-    return boxes, non_zeros
-
-
 def batch_pack_graph(x, counts, num_rows):
     """Picks different number of values from each row
     in x depending on the values in counts.
@@ -1237,7 +1121,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     # TODO: will be removed in a future update in favor of augmentation
     if augment:
         logging.warning("'augment' is deprecated. Use 'augmentation' instead.")
-        if random.randint(0, 1):
+        if np.random.randint(0, 1):
             image = np.fliplr(image)
             mask = np.fliplr(mask)
 
@@ -1841,22 +1725,22 @@ def identity_block(input_tensor, kernel_size, filters, stage, block,
     conv_name_base = 'res' + str(stage) + block + '_branch'
     bn_name_base = 'bn' + str(stage) + block + '_branch'
 
-    x = KL.Conv2D(nb_filter1, (1, 1), name=conv_name_base + '2a',
+    x = Conv2D(nb_filter1, (1, 1), name=conv_name_base + '2a',
                   use_bias=use_bias)(input_tensor)
     x = BatchNorm(name=bn_name_base + '2a')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.Conv2D(nb_filter2, (kernel_size, kernel_size), padding='same',
+    x = Conv2D(nb_filter2, (kernel_size, kernel_size), padding='same',
                   name=conv_name_base + '2b', use_bias=use_bias)(x)
     x = BatchNorm(name=bn_name_base + '2b')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.Conv2D(nb_filter3, (1, 1), name=conv_name_base + '2c',
+    x = Conv2D(nb_filter3, (1, 1), name=conv_name_base + '2c',
                   use_bias=use_bias)(x)
     x = BatchNorm(name=bn_name_base + '2c')(x, training=train_bn)
 
-    x = KL.Add()([x, input_tensor])
-    x = KL.Activation('relu', name='res' + str(stage) + block + '_out')(x)
+    x = Add()([x, input_tensor])
+    x = Activation('relu', name='res' + str(stage) + block + '_out')(x)
     return x
 
 
@@ -1878,26 +1762,26 @@ def conv_block(input_tensor, kernel_size, filters, stage, block,
     conv_name_base = 'res' + str(stage) + block + '_branch'
     bn_name_base = 'bn' + str(stage) + block + '_branch'
 
-    x = KL.Conv2D(nb_filter1, (1, 1), strides=strides,
+    x = Conv2D(nb_filter1, (1, 1), strides=strides,
                   name=conv_name_base + '2a', use_bias=use_bias)(input_tensor)
     x = BatchNorm(name=bn_name_base + '2a')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.Conv2D(nb_filter2, (kernel_size, kernel_size), padding='same',
+    x = Conv2D(nb_filter2, (kernel_size, kernel_size), padding='same',
                   name=conv_name_base + '2b', use_bias=use_bias)(x)
     x = BatchNorm(name=bn_name_base + '2b')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    x = Activation('relu')(x)
 
-    x = KL.Conv2D(nb_filter3, (1, 1), name=conv_name_base +
+    x = Conv2D(nb_filter3, (1, 1), name=conv_name_base +
                   '2c', use_bias=use_bias)(x)
     x = BatchNorm(name=bn_name_base + '2c')(x, training=train_bn)
 
-    shortcut = KL.Conv2D(nb_filter3, (1, 1), strides=strides,
+    shortcut = Conv2D(nb_filter3, (1, 1), strides=strides,
                          name=conv_name_base + '1', use_bias=use_bias)(input_tensor)
     shortcut = BatchNorm(name=bn_name_base + '1')(shortcut, training=train_bn)
 
-    x = KL.Add()([x, shortcut])
-    x = KL.Activation('relu', name='res' + str(stage) + block + '_out')(x)
+    x = Add()([x, shortcut])
+    x = Activation('relu', name='res' + str(stage) + block + '_out')(x)
     return x
 
 
@@ -2104,7 +1988,7 @@ def random_colors(N, bright=True):
     brightness = 1.0 if bright else 0.7
     hsv = [(i / N, 1, brightness) for i in range(N)]
     colors = list(map(lambda c: colorsys.hsv_to_rgb(*c), hsv))
-    random.shuffle(colors)
+    np.random.shuffle(colors)
     return colors
 
 
