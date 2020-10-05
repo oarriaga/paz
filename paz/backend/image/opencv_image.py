@@ -207,24 +207,24 @@ def write_image(filepath, image):
     return cv2.imwrite(filepath, image)
 
 
-def random_image_crop(image, size):
-    """Randomly crops an image and returns cropped image.
+def random_shape_crop(image, shape):
+    """Randomly crops an image of the given ``shape``.
 
     # Arguments
         image: Numpy array.
-        size: List of two ints ''(H, W)''.
+        shape: List of two ints ''(H, W)''.
 
     # Returns
         Numpy array of cropped image.
     """
     H, W = image.shape[:2]
-    if (size[0] >= H) or (size[1] >= W):
-        print('WARNING: Image is smaller than crop size', H, W, size)
+    if (shape[0] >= H) or (shape[1] >= W):
+        print('WARNING: Image is smaller than crop shape', H, W, shape)
         return None
-    x_min = np.random.randint(0, (W - 1) - size[1])
-    y_min = np.random.randint(0, (H - 1) - size[0])
-    x_max = int(x_min + size[1])
-    y_max = int(y_min + size[0])
+    x_min = np.random.randint(0, (W - 1) - shape[1])
+    y_min = np.random.randint(0, (H - 1) - shape[0])
+    x_max = int(x_min + shape[1])
+    y_max = int(y_min + shape[0])
     cropped_image = image[y_min:y_max, x_min:x_max]
     return cropped_image
 
