@@ -14,10 +14,11 @@ from ..backend.image import random_flip_left_right
 from ..backend.image import convert_color_space
 from ..backend.image import show_image
 from ..backend.image import blend_alpha_channel
-from ..backend.image import random_image_crop
+from ..backend.image import random_shape_crop
 from ..backend.image import make_random_plain_image
 from ..backend.image import concatenate_alpha_mask
 from ..backend.image import draw_filled_polygon
+from ..backend.image import gaussian_image_blur
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -170,12 +171,12 @@ class ResizeImage(Processor):
     # Arguments
         size: List of two ints.
     """
-    def __init__(self, size):
-        self.size = size
+    def __init__(self, shape):
+        self.shape = shape
         super(ResizeImage, self).__init__()
 
     def call(self, image):
-        return resize_image(image, self.size)
+        return resize_image(image, self.shape)
 
 
 class ResizeImages(Processor):
@@ -184,8 +185,8 @@ class ResizeImages(Processor):
     # Arguments
         size: List of two ints.
     """
-    def __init__(self, size):
-        self.size = size
+    def __init__(self, shape):
+        self.shape = shape
         super(ResizeImages, self).__init__()
 
     def call(self, images):
@@ -206,6 +207,24 @@ class RandomImageBlur(Processor):
     def call(self, image):
         if self.probability >= np.random.rand():
             image = random_image_blur(image)
+        return image
+
+
+class RandomGaussianBlur(Processor):
+    """Randomizes image quality
+
+    # Arguments
+        probability: Float between [0, 1]. Assigns probability of how
+            often a random image blur is applied.
+    """
+    def __init__(self, kernel_size=(5, 5), probability=0.5):
+        super(RandomGaussianBlur, self).__init__()
+        self.kernel_size = kernel_size
+        self.probability = probability
+
+    def call(self, image):
+        if self.probability >= np.random.rand():
+            image = gaussian_image_blur(image, self.kernel_size)
         return image
 
 
@@ -277,19 +296,19 @@ class AlphaBlending(Processor):
         return blend_alpha_channel(image, background)
 
 
-class RandomImageCrop(Processor):
-    """Randomly crops a part of an image.
+class RandomShapeCrop(Processor):
+    """Randomly crops a part of an image of always the same given ``shape``.
 
     # Arguments
         shape: List of two ints [height, width].
             Dimensions of image to be cropped.
     """
     def __init__(self, shape):
-        super(RandomImageCrop, self).__init__()
+        super(RandomShapeCrop, self).__init__()
         self.shape = shape
 
     def call(self, image):
-        return random_image_crop(image, self.shape)
+        return random_shape_crop(image, self.shape)
 
 
 class MakeRandomPlainImage(Processor):
@@ -336,7 +355,7 @@ class BlendRandomCroppedBackground(Processor):
         random_arg = np.random.randint(0, len(self.background_paths))
         background_path = self.background_paths[random_arg]
         background = load_image(background_path)
-        background = random_image_crop(background, image.shape[:2])
+        background = random_shape_crop(background, image.shape[:2])
         if background is None:
             H, W, num_channels = image.shape
             # background contains always a channel less
@@ -387,3 +406,29 @@ class AddOcclusion(Processor):
         if self.probability >= np.random.rand():
             image = self.add_occlusion(image, self.max_radius_scale)
         return image
+
+
+class RandomImageCrop(Processor):
+    """Crops randomly a rectangle from an image.
+
+    # Arguments
+        crop_factor: Float between ``[0, 1]``.
+        probability: Float between ``[0, 1]``.
+    """
+    def __init__(self, crop_factor=0.3, probability=0.5):
+        self.crop_factor = crop_factor
+        self.probability = probability
+        super(RandomImageCrop, self).__init__()
+
+    def call(self, image):
+        if self.probability < np.random.rand():
+            return image
+        H, W = image.shape[:2]
+        W_crop = np.random.uniform(self.crop_factor * W, W)
+        H_crop = np.random.uniform(self.crop_factor * H, H)
+        x_min = np.random.uniform(W - W_crop)
+        y_min = np.random.uniform(H - H_crop)
+        x_max = x_min + W_crop
+        y_max = y_min + H_crop
+        cropped_image = image[int(x_min):int(x_max), int(y_min):int(y_max), :]
+        return cropped_image
