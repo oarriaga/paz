@@ -645,7 +645,7 @@ def build_fpn_mask_graph(rois, feature_maps, config, train_bn=True):
 
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_mask")([rois, image_shape] + feature_maps)
-
+    
     # Conv layers
     x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv1")(x)

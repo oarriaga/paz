@@ -1,6 +1,3 @@
-import numpy as np
-import tensorflow as tf
-
 from mask_rcnn.model import MaskRCNN
 from mask_rcnn.config import Config
 from mask_rcnn.utils import norm_boxes_graph, resize_image
@@ -16,11 +13,13 @@ class TestConfig(Config):
 
 def test(images, weights_path):
     config = TestConfig()
+    min_dim, max_dim = config.IMAGE_MIN_DIM, config.IMAGE_MAX_DIM
+    scale, mode = config.IMAGE_MIN_SCALE, config.IMAGE_RESIZE_MODE
     molded_image, window, _, _, _ = resize_image(images[0],
-                                min_dim=config.IMAGE_MIN_DIM,
-                                min_scale=config.IMAGE_MIN_SCALE,
-                                max_dim=config.IMAGE_MAX_DIM,
-                                mode=config.IMAGE_RESIZE_MODE)
+                                                 min_dim=min_dim,
+                                                 min_scale=scale,
+                                                 max_dim=max_dim,
+                                                 mode=mode)
     image_shape = molded_image.shape
     window = norm_boxes_graph(window, image_shape[:2])
     config.WINDOW = window
@@ -32,4 +31,3 @@ def test(images, weights_path):
 
     results = base_model.detect(images)
     return results
-

@@ -32,13 +32,11 @@ def box_refinement_graph(box, prior_box):
 
 def batch_slice(inputs, graph_function, batch_size, names=None):
     """Splits inputs into slices and feeds each slice to a copy of the given
-       computation graph and then combines the results. It allows you to run a
-       graph on a batch of inputs even if the graph is written to support one
-       instance only.
+       computation graph and then combines the results.
 
     # Arguments:
         inputs: list of tensors. All must have the same first dimension length
-        graph_function: A function that returns a TF tensor that's part of a graph.
+        graph_function: Function that returns a tensor that's part of a graph.
         batch_size: number of slices to divide the data into.
         names: If provided, assigns names to the resulting tensors.
     """
@@ -113,7 +111,6 @@ def clip_boxes_graph(boxes, window):
     window_y_min, window_x_min, window_y_max, window_x_max = \
         tf.split(window, 4)
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
-
     y_min = tf.maximum(tf.minimum(y_min, window_y_max), window_y_min)
     x_min = tf.maximum(tf.minimum(x_min, window_x_max), window_x_min)
     y_max = tf.maximum(tf.minimum(y_max, window_y_max), window_y_min)

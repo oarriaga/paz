@@ -35,7 +35,7 @@ class DetectionLayer(Layer):
             lambda x, y, w: self.refine_detections_graph(x, y, w),
             self.IMAGES_PER_GPU)
         return tf.reshape(detections_batch,
-            [self.BATCH_SIZE, self.DETECTION_MAX_INSTANCES, 6])
+                          [self.BATCH_SIZE, self.DETECTION_MAX_INSTANCES, 6])
 
     def refine_detections_graph(self, rois, probs, deltas):
         class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)

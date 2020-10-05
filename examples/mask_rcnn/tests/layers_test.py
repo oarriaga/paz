@@ -5,14 +5,22 @@ from tensorflow.keras.layers import Input, Lambda
 
 from mask_rcnn.config import Config
 from mask_rcnn.layers import ProposalLayer, DetectionTargetLayer
-from mask_rcnn.utils import norm_boxes_graph
+from mask_rcnn.layers import DetectionLayer, PyramidROIAlign
+from mask_rcnn.utils import norm_boxes_graph, fpn_classifier_graph
 from mask_rcnn.model import MaskRCNN
 
 
 class MaskRCNNConfig(Config):
     NAME = 'ycb'
     IMAGES_PER_GPU = 1
-    NUM_CLASSES = 21 + 1
+    NUM_CLASSES = 80 + 1
+
+
+@pytest.fixture
+def config():
+    config = MaskRCNNConfig()
+    config.WINDOW = norm_boxes_graph((171, 0, 853, 1024), (640, 640))
+    return config
 
 
 @pytest.fixture
@@ -23,8 +31,12 @@ def model():
 
 
 @pytest.fixture
-def RPN_model(model):
-    feature_maps = model.keras_model.output
+def feature_maps(model):
+    return model.keras_model.output
+
+
+@pytest.fixture
+def RPN_model(model, feature_maps):
     return model.RPN(feature_maps)
 
 
@@ -50,8 +62,17 @@ def ground_truth_boxes():
 
 
 @pytest.fixture
-def proposal_layer(RPN_model, anchors):
-    config = MaskRCNNConfig()
+def FPN_classifier(proposal_layer, feature_maps, config):
+    _, mrcnn_class, mrcnn_bbox = fpn_classifier_graph(proposal_layer,
+                                                      feature_maps[:-1],
+                                                      'inference',
+                                                      config=config,
+                                                      train_bn=config.TRAIN_BN)
+    return mrcnn_class, mrcnn_bbox
+
+
+@pytest.fixture
+def proposal_layer(RPN_model, anchors, config):
     _, RPN_class, RPN_box = RPN_model
     return ProposalLayer(proposal_count=2000,
                          nms_threshold=0.7,
@@ -60,8 +81,7 @@ def proposal_layer(RPN_model, anchors):
 
 
 @pytest.fixture
-def detection_target_layer(proposal_layer, ground_truth):
-    config = MaskRCNNConfig()
+def detection_target_layer(proposal_layer, ground_truth, config):
     class_ids, boxes, masks = ground_truth
     target_layer = DetectionTargetLayer(config)
     return target_layer([proposal_layer, class_ids, boxes, masks])
@@ -83,3 +103,19 @@ def test_detection_target_layer(detection_target_layer, shapes):
     assert shapes == results_shape
     assert target_mask.shape[-2:] == mask_shape
     assert ROIs.shape[2] == target_box.shape[2] == 4
+
+
+@pytest.mark.parametrize('shape', [(1, 100, 6)])
+def test_detection_layer(proposal_layer, FPN_classifier, config, shape):
+    mrcnn_class, mrcnn_bbox = FPN_classifier
+    detections = DetectionLayer(config, name='mrcnn_detection')(
+                        [proposal_layer, mrcnn_class, mrcnn_bbox])
+    assert detections.shape == shape
+
+
+@pytest.mark.parametrize('shape', [(1024, 1024, 3)])
+def test_pyramid_ROI_align(proposal_layer, feature_maps, shape):
+    ROI_align = PyramidROIAlign([7, 7])(
+                                [proposal_layer, shape] + feature_maps)
+    assert K.int_shape(ROI_align) == (1, None, 7, 7, 256)
+
