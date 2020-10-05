@@ -33,11 +33,13 @@ from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
 from .image import RandomImageBlur
+from .image import RandomGaussianBlur
 from .image import RandomFlipImageLeftRight
 from .image import ConvertColorSpace
 from .image import ShowImage
 from .image import ImageDataProcessor
 from .image import AlphaBlending
+from .image import RandomShapeCrop
 from .image import RandomImageCrop
 from .image import MakeRandomPlainImage
 from .image import ConcatenateAlphaMask
@@ -103,6 +105,7 @@ from ..backend.image.draw import FONT
 from ..backend.image.draw import LINE
 
 from ..abstract import Processor
+from ..abstract import SequentialProcessor
 
 TRAIN = 0
 VAL = 1
