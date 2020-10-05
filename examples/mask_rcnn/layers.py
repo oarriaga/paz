@@ -1,12 +1,10 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
-from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.layers import Activation
-from tensorflow.keras.layers import Lambda
 
 from mask_rcnn.layer_utils import batch_slice, trim_zeros_graph
 from mask_rcnn.layer_utils import box_refinement_graph
+from mask_rcnn.layer_utils import clip_boxes_graph, apply_box_deltas_graph
 
 
 class DetectionLayer(Layer):
@@ -203,36 +201,6 @@ class ProposalLayer(Layer):
         return (None, self.proposal_count, 4)
 
 
-def overlaps_graph(boxes_A, boxes_B):
-    """Computes IoU overlaps between two sets of boxes.
-
-    # Arguments:
-        boxesA: [N, (y_min, x_min, y_max, x_max)]
-        boxesB = [N, (y_min, x_min, y_max, x_max)]
-    """
-    box_A = tf.reshape(tf.tile(tf.expand_dims(boxes_A, 1),
-                            [1, 1, tf.shape(boxes_B)[0]]), [-1, 4])
-    box_B = tf.tile(boxes_B, [tf.shape(boxes_A)[0], 1])
-
-    box_A_y_min, box_A_x_min, box_A_y_max, box_A_x_max = tf.split(box_A,
-                                                                  4, axis=1)
-    box_B_y_min, box_B_x_min, box_B_y_max, box_B_x_max = tf.split(box_B,
-                                                                  4, axis=1)
-    y_min = tf.maximum(box_A_y_min, box_B_y_min)
-    x_min = tf.maximum(box_A_x_min, box_B_x_min)
-    y_max = tf.minimum(box_A_y_max, box_B_y_max)
-    x_max = tf.minimum(box_A_x_max, box_B_x_max)
-    intersection = tf.maximum(x_max - x_min, 0) * tf.maximum(y_max - y_min, 0)
-
-    box_A_area = (box_A_y_max - box_A_y_min) * (box_A_x_max - box_A_x_min)
-    box_B_area = (box_B_y_max - box_B_y_min) * (box_B_x_max - box_B_x_min)
-    union = box_A_area + box_B_area - intersection
-
-    iou = intersection / union
-    overlaps = tf.reshape(iou, [tf.shape(boxes_A)[0], tf.shape(boxes_B)[0]])
-    return overlaps
-
-
 class DetectionTargetLayer(Layer):
     """Subsamples proposals and generates target box refinement, class_ids,
        and masks for each.
@@ -272,93 +240,33 @@ class DetectionTargetLayer(Layer):
                 w, x, y, z), self.IMAGES_PER_GPU, names=names)
         return outputs
 
-    def compute_output_shape(self, input_shape):
-        return [
-            (None, self.TRAIN_ROIS_PER_IMAGE, 4),  # rois
-            (None, self.TRAIN_ROIS_PER_IMAGE),  # class_ids
-            (None, self.TRAIN_ROIS_PER_IMAGE, 4),  # deltas
-            (None, self.TRAIN_ROIS_PER_IMAGE, self.MASK_SHAPE[0],
-             self.MASK_SHAPE[1])  # masks
-        ]
-
     def detection_targets_graph(self, proposals, prior_class_ids, prior_boxes,
                                 prior_masks):
-        # Assertions
         asserts = [
             tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
                       name='roi_assertion'),
         ]
         with tf.control_dependencies(asserts):
             proposals = tf.identity(proposals)
-
         ground_truth = [prior_class_ids, prior_boxes, prior_masks]
-        proposals, ground_truth = self.remove_zero_padding(proposals,
-                                                           ground_truth)
-        refined_ground_truth, crowd_boxes = self.refine_instances(ground_truth)
-        _, refined_boxes, _ = refined_ground_truth
+        refined_priors, crowd_boxes = self.refine_instances(proposals,
+                                                            ground_truth)
+        _, refined_boxes, _ = refined_priors
 
-        overlaps = overlaps_graph(proposals, refined_boxes)
+        overlaps = self.compute_overlaps_graph(proposals, refined_boxes)
         positive_indices, positive_rois, negative_rois = \
             self.compute_ROI_overlaps(proposals, refined_boxes,
                                       crowd_boxes, overlaps)
-
-        # Assign positive ROIs to GT boxes.
-        positive_overlaps = tf.gather(overlaps, positive_indices)
-        roi_gt_box_assignment = tf.cond(
-                tf.greater(tf.shape(positive_overlaps)[1], 0),
-                true_fn=lambda: tf.argmax(positive_overlaps, axis=1),
-                false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
-        )
-        roi_prior_boxes = tf.gather(prior_boxes, roi_gt_box_assignment)
-        roi_prior_class_ids = tf.gather(prior_class_ids, roi_gt_box_assignment)
-
-        # Compute bbox refinement for positive ROIs
-        deltas = box_refinement_graph(positive_rois, roi_prior_boxes)
-        deltas /= self.BBOX_STD_DEV
-
-        # Assign positive ROIs to GT masks
-        # Permute masks to [N, height, width, 1]
-        transposed_masks = tf.expand_dims(
-                           tf.transpose(prior_masks, [2, 0, 1]), -1)
-        # Pick the right mask for each ROI
-        roi_masks = tf.gather(transposed_masks, roi_gt_box_assignment)
-
-        # Compute mask targets
-        boxes = positive_rois
-        if self.USE_MINI_MASK:
-            # Transform ROI coordinates from normalized image space
-            # to normalized mini-mask space.
-            y1, x1, y2, x2 = tf.split(positive_rois, 4, axis=1)
-            gt_y1, gt_x1, gt_y2, gt_x2 = tf.split(roi_prior_boxes, 4, axis=1)
-            gt_h = gt_y2 - gt_y1
-            gt_w = gt_x2 - gt_x1
-            y1 = (y1 - gt_y1) / gt_h
-            x1 = (x1 - gt_x1) / gt_w
-            y2 = (y2 - gt_y1) / gt_h
-            x2 = (x2 - gt_x1) / gt_w
-            boxes = tf.concat([y1, x1, y2, x2], 1)
-        box_ids = tf.range(0, tf.shape(roi_masks)[0])
-        masks = tf.image.crop_and_resize(tf.cast(roi_masks, tf.float32), boxes,
-                                         box_ids, self.MASK_SHAPE)
-        # Remove the extra dimension from masks.
-        masks = tf.squeeze(masks, axis=3)
-
-        # Threshold mask pixels at 0.5 to have GT masks be 0 or 1 to use with
-        # binary cross entropy loss.
-        masks = tf.round(masks)
-
-        # Append negative ROIs and pad bbox deltas and masks that
-        # are not used for negative ROIs with zeros.
-        rois = tf.concat([positive_rois, negative_rois], axis=0)
-        N = tf.shape(negative_rois)[0]
-        P = tf.maximum(self.TRAIN_ROIS_PER_IMAGE - tf.shape(rois)[0], 0)
-        rois = tf.pad(rois, [(0, P), (0, 0)])
-        roi_prior_boxes = tf.pad(roi_prior_boxes, [(0, N + P), (0, 0)])
-        roi_prior_class_ids = tf.pad(roi_prior_class_ids, [(0, N + P)])
-        deltas = tf.pad(deltas, [(0, N + P), (0, 0)])
-        masks = tf.pad(masks, [[0, N + P], (0, 0), (0, 0)])
-
-        return rois, roi_prior_class_ids, deltas, masks
+        deltas, ROI_priors = self.update_priors(overlaps, positive_indices,
+                                                positive_rois, refined_priors)
+        masks = self.compute_target_masks(positive_rois, ROI_priors)
+        ROIs, num_negatives, num_positives = self.pad_ROI(positive_rois,
+                                                          negative_rois)
+        ROI_class_ids, deltas, masks = self.pad_ROI_priors(num_positives,
+                                                           num_negatives,
+                                                           ROI_priors,
+                                                           deltas, masks)
+        return ROIs, ROI_class_ids, deltas, masks
 
     def remove_zero_padding(self, proposals, ground_truth):
         class_ids, boxes, masks = ground_truth
@@ -372,7 +280,69 @@ class DetectionTargetLayer(Layer):
 
         return proposals, [class_ids, boxes, masks]
 
-    def refine_instances(self, ground_truth):
+    def pad_ROI_priors(self, num_positives, num_negatives, ROI_priors,
+                       deltas, masks):
+        ROI_class_ids, ROI_boxes, _ = ROI_priors
+        ROI_boxes = tf.pad(ROI_boxes,
+                           [(0, num_negatives + num_positives), (0, 0)])
+        ROI_class_ids = tf.pad(ROI_class_ids,
+                               [(0, num_negatives + num_positives)])
+        deltas = tf.pad(deltas, [(0, num_negatives + num_positives), (0, 0)])
+        masks = tf.pad(masks, [[0, num_negatives + num_positives],
+                       (0, 0), (0, 0)])
+        return ROI_class_ids, deltas, masks
+
+    def pad_ROI(self, positive_rois, negative_rois):
+        ROIs = tf.concat([positive_rois, negative_rois], axis=0)
+        num_negatives = tf.shape(negative_rois)[0]
+        train_ROI = self.TRAIN_ROIS_PER_IMAGE - tf.shape(ROIs)[0]
+        num_positives = tf.maximum(train_ROI, 0)
+        ROIs = tf.pad(ROIs, [(0, num_positives), (0, 0)])
+        return ROIs, num_positives, num_negatives
+
+    def update_priors(self, overlaps, positive_indices,
+                      positive_rois, priors):
+        class_ids, boxes, masks = priors
+        positive_overlaps = tf.gather(overlaps, positive_indices)
+        roi_gt_box_assignment = tf.cond(
+                tf.greater(tf.shape(positive_overlaps)[1], 0),
+                true_fn=lambda: tf.argmax(positive_overlaps, axis=1),
+                false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
+        )
+        roi_prior_boxes = tf.gather(boxes, roi_gt_box_assignment)
+        roi_prior_class_ids = tf.gather(class_ids, roi_gt_box_assignment)
+        deltas = box_refinement_graph(positive_rois, roi_prior_boxes)
+        deltas /= self.BBOX_STD_DEV
+        transposed_masks = tf.expand_dims(tf.transpose(masks, [2, 0, 1]), -1)
+        roi_masks = tf.gather(transposed_masks, roi_gt_box_assignment)
+        return deltas, [roi_prior_class_ids, roi_prior_boxes, roi_masks]
+
+    def compute_target_masks(self, positive_rois, ROI_priors):
+        ROI_class_ids, ROI_boxes, ROI_masks = ROI_priors
+        boxes = positive_rois
+        if self.USE_MINI_MASK:
+            boxes = self.transform_ROI_coordinates(positive_rois, ROI_boxes)
+        box_ids = tf.range(0, tf.shape(ROI_masks)[0])
+        masks = tf.image.crop_and_resize(tf.cast(ROI_masks, tf.float32), boxes,
+                                         box_ids, self.MASK_SHAPE)
+        masks = tf.squeeze(masks, axis=3)
+        return tf.round(masks)
+
+    def transform_ROI_coordinates(self, boxes, ROI_boxes):
+        y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
+        ROI_y_min, ROI_x_min, ROI_y_max, ROI_x_max = tf.split(ROI_boxes, 4,
+                                                              axis=1)
+        H = ROI_y_max - ROI_y_min
+        W = ROI_x_max - ROI_x_min
+        y_min = (y_min - ROI_y_min) / H
+        x_min = (x_min - ROI_x_min) / W
+        y_max = (y_max - ROI_y_min) / H
+        x_max = (x_max - ROI_x_min) / W
+        return tf.concat([y_min, x_min, y_max, x_max], 1)
+
+    def refine_instances(self, proposals, ground_truth):
+        proposals, ground_truth = self.remove_zero_padding(proposals,
+                                                           ground_truth)
         class_ids, boxes, masks = ground_truth
         crowd_ix = tf.where(class_ids < 0)[:, 0]
         non_crowd_ix = tf.where(class_ids > 0)[:, 0]
@@ -383,7 +353,7 @@ class DetectionTargetLayer(Layer):
         return [class_ids, boxes, masks], crowd_boxes
 
     def compute_ROI_overlaps(self, proposals, boxes, crowd_boxes, overlaps):
-        crowd_overlaps = overlaps_graph(proposals, crowd_boxes)
+        crowd_overlaps = self.compute_overlaps_graph(proposals, crowd_boxes)
         crowd_iou_max = tf.reduce_max(crowd_overlaps, axis=1)
         no_crowd_bool = (crowd_iou_max < 0.001)
 
@@ -410,88 +380,41 @@ class DetectionTargetLayer(Layer):
         negative_rois = tf.gather(proposals, negative_indices)
         return positive_indices, positive_rois, negative_rois
 
+    def compute_overlaps_graph(self, boxes_A, boxes_B):
+        box_A = tf.reshape(tf.tile(tf.expand_dims(boxes_A, 1),
+                           [1, 1, tf.shape(boxes_B)[0]]), [-1, 4])
+        box_B = tf.tile(boxes_B, [tf.shape(boxes_A)[0], 1])
+
+        boxA_y_min, boxA_x_min, boxA_y_max, boxA_x_max = tf.split(box_A,
+                                                                  4, axis=1)
+        boxB_y_min, boxB_x_min, boxB_y_max, boxB_x_max = tf.split(box_B,
+                                                                  4, axis=1)
+        y_min = tf.maximum(boxA_y_min, boxB_y_min)
+        x_min = tf.maximum(boxA_x_min, boxB_x_min)
+        y_max = tf.minimum(boxA_y_max, boxB_y_max)
+        x_max = tf.minimum(boxA_x_max, boxB_x_max)
+        overlap = tf.maximum(x_max - x_min, 0) * tf.maximum(y_max - y_min, 0)
+
+        box_A_area = (boxA_y_max - boxA_y_min) * (boxA_x_max - boxA_x_min)
+        box_B_area = (boxB_y_max - boxB_y_min) * (boxB_x_max - boxB_x_min)
+        union = box_A_area + box_B_area - overlap
+
+        IOU = overlap / union
+        overlaps = tf.reshape(IOU,
+                              [tf.shape(boxes_A)[0], tf.shape(boxes_B)[0]])
+        return overlaps
+
+    def compute_output_shape(self, input_shape):
+        return [
+            (None, self.TRAIN_ROIS_PER_IMAGE, 4),  # ROIs
+            (None, self.TRAIN_ROIS_PER_IMAGE),  # class_ids
+            (None, self.TRAIN_ROIS_PER_IMAGE, 4),  # deltas
+            (None, self.TRAIN_ROIS_PER_IMAGE, self.MASK_SHAPE[0],
+             self.MASK_SHAPE[1])  # masks
+        ]
+
     def compute_mask(self, inputs, mask=None):
         return [None, None, None, None]
-
-
-def apply_box_deltas_graph(boxes, deltas):
-    """Applies the given deltas to the given boxes.
-
-    # Arguments:
-        boxes: [N, (y_min, x_min, y_max, x_max)] boxes to update
-        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
-    """
-    H = boxes[:, 2] - boxes[:, 0]
-    W = boxes[:, 3] - boxes[:, 1]
-    center_y = boxes[:, 0] + 0.5 * H
-    center_x = boxes[:, 1] + 0.5 * W
-
-    center_y += deltas[:, 0] * H
-    center_x += deltas[:, 1] * W
-    H *= tf.exp(deltas[:, 2])
-    W *= tf.exp(deltas[:, 3])
-
-    y_min = center_y - 0.5 * H
-    x_min = center_x - 0.5 * W
-    y_max = y_min + H
-    x_max = x_min + W
-    result = tf.stack([y_min, x_min, y_max, x_max], axis=1,
-                      name='apply_box_deltas_out')
-    return result
-
-
-def clip_boxes_graph(boxes, window):
-    """
-    boxes: [N, (y_min, x_min, y_max, x_max)]
-    window: [4] in the form y1, x1, y2, x2
-    """
-    window_y_min, window_x_min, window_y_max, window_x_max = \
-        tf.split(window, 4)
-    y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
-
-    y_min = tf.maximum(tf.minimum(y_min, window_y_max), window_y_min)
-    x_min = tf.maximum(tf.minimum(x_min, window_x_max), window_x_min)
-    y_max = tf.maximum(tf.minimum(y_max, window_y_max), window_y_min)
-    x_max = tf.maximum(tf.minimum(x_max, window_x_max), window_x_min)
-
-    clipped = tf.concat([y_min, x_min, y_max, x_max], axis=1,
-                        name='clipped_boxes')
-    clipped.set_shape((clipped.shape[0], 4))
-    return clipped
-
-
-def rpn_graph(feature_map, anchors_per_location, anchor_stride):
-    """Builds the computation graph of Region Proposal Network.
-
-    # Arguments:
-        feature_map: backbone features [batch, height, width, depth]
-        anchors_per_location: number of anchors per pixel in feature map
-        anchor_stride: Typically 1 (anchors for every pixel in feature map),
-                       or 2 (every other pixel).
-
-    # Returns:
-        rpn_class_logits: [batch, H * W * anchors_per_location, 2]
-                           Anchor classifier logits (before softmax)
-        rpn_probs: [batch, H * W * anchors_per_location, 2]
-                    Anchor classifier probabilities.
-        rpn_bbox: [batch, H * W * anchors, (dy, dx, log(dh), log(dw))]
-                   Deltas to be applied to anchors.
-    """
-    shared = Conv2D(512, (3, 3), padding='same', activation='relu',
-                    strides=anchor_stride,
-                    name='rpn_conv_shared')(feature_map)
-    x = Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-               activation='linear', name='rpn_class_raw')(shared)
-
-    rpn_class_logits = Lambda(lambda t: tf.reshape(t,
-                              [tf.shape(t)[0], -1, 2]))(x)
-    rpn_probs = Activation('softmax', name='rpn_class_xxx')(rpn_class_logits)
-    x = Conv2D(anchors_per_location * 4, (1, 1), padding='valid',
-               activation='linear', name='rpn_bbox_pred')(shared)
-
-    rpn_bbox = Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 4]))(x)
-
-    return [rpn_class_logits, rpn_probs, rpn_bbox]
 
 
 class PyramidROIAlign(Layer):
@@ -571,4 +494,4 @@ class PyramidROIAlign(Layer):
         return tf.math.log(x) / tf.math.log(2.0)
 
     def compute_output_shape(self, input_shape):
-        return input_shape[0][:2] + self.pool_shape + (input_shape[2][-1], )
+        return input_shape[0][:2] + self.pool_shape + (input_shape[2][-1],)
