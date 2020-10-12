@@ -20,7 +20,7 @@ import colorsys
 
 from skimage.measure import find_contours
 import matplotlib.pyplot as plt
-from matplotlib import patches, lines
+from matplotlib import patches
 from matplotlib.patches import Polygon
 from distutils.version import LooseVersion
 
@@ -42,13 +42,12 @@ def extract_bboxes(mask):
     # Arguments:
         mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
 
-    # Returns: 
+    # Returns:
         bbox array [num_instances, (y_min, x_min, y_max, x_max)].
     """
     boxes = np.zeros([mask.shape[-1], 4], dtype=np.int32)
     for i in range(mask.shape[-1]):
         m = mask[:, :, i]
-
         horizontal_indicies = np.where(np.any(m, axis=0))[0]
         vertical_indicies = np.where(np.any(m, axis=1))[0]
         if horizontal_indicies.shape[0]:
@@ -74,227 +73,77 @@ def compute_iou(box, boxes, box_area, boxes_area):
     # Returns:
         Intersection over union of given boxes
     """
-    y1 = np.maximum(box[0], boxes[:, 0])
-    y2 = np.minimum(box[2], boxes[:, 2])
-    x1 = np.maximum(box[1], boxes[:, 1])
-    x2 = np.minimum(box[3], boxes[:, 3])
-    intersection = np.maximum(x2 - x1, 0) * np.maximum(y2 - y1, 0)
+    y_min = np.maximum(box[0], boxes[:, 0])
+    y_max = np.minimum(box[2], boxes[:, 2])
+    x_min = np.maximum(box[1], boxes[:, 1])
+    x_max = np.minimum(box[3], boxes[:, 3])
+    intersection = np.maximum(x_max - x_min, 0) * np.maximum(y_max - y_min, 0)
     union = box_area + boxes_area[:] - intersection[:]
     iou = intersection / union
     return iou
 
 
-def compute_overlaps(boxes1, boxes2):
+def compute_overlaps(boxes_A, boxes_B):
     """Computes IoU overlaps between two sets of boxes.
 
     # Arguments:
-        boxes1, boxes2: [N, (y_min, x_min, y_max, x_max)].
+        boxes_A, boxes_B: [N, (y_min, x_min, y_max, x_max)].
     """
-    # Areas of anchors and GT boxes
-    area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
-    area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+    area1 = (boxes_A[:, 2] - boxes_A[:, 0]) * (boxes_A[:, 3] - boxes_A[:, 1])
+    area2 = (boxes_B[:, 2] - boxes_B[:, 0]) * (boxes_B[:, 3] - boxes_B[:, 1])
 
-    # Compute overlaps to generate matrix [boxes1 count, boxes2 count]
-    # Each cell contains the IoU value.
-    overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
+    overlaps = np.zeros((boxes_A.shape[0], boxes_B.shape[0]))
     for i in range(overlaps.shape[1]):
-        box2 = boxes2[i]
-        overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
+        box_B = boxes_B[i]
+        overlaps[:, i] = compute_iou(box_B, boxes_A, area2[i], area1)
     return overlaps
 
 
-def compute_overlaps_masks(masks1, masks2):
+def compute_overlaps_masks(mask_A, mask_B):
     """Computes IoU overlaps between two sets of masks.
 
     # Arguments:
-        masks1, masks2: [Height, Width, instances]
+        mask_A, mask_B: [Height, Width, instances]
     """
-    # If either set of masks is empty return empty result
-    if masks1.shape[-1] == 0 or masks2.shape[-1] == 0:
-        return np.zeros((masks1.shape[-1], masks2.shape[-1]))
-    # flatten masks and compute their areas
-    masks1 = np.reshape(masks1 > .5, (-1, masks1.shape[-1])).astype(np.float32)
-    masks2 = np.reshape(masks2 > .5, (-1, masks2.shape[-1])).astype(np.float32)
-    area1 = np.sum(masks1, axis=0)
-    area2 = np.sum(masks2, axis=0)
+    if mask_A.shape[-1] == 0 or mask_B.shape[-1] == 0:
+        return np.zeros((mask_A.shape[-1], mask_B.shape[-1]))
+    mask_A = np.reshape(mask_A > .5, (-1, mask_A.shape[-1])).astype(np.float32)
+    mask_B = np.reshape(mask_B > .5, (-1, mask_B.shape[-1])).astype(np.float32)
+    area1 = np.sum(mask_A, axis=0)
+    area2 = np.sum(mask_B, axis=0)
 
-    intersections = np.dot(masks1.T, masks2)
+    intersections = np.dot(mask_A.T, mask_B)
     union = area1[:, None] + area2[None, :] - intersections
     overlaps = intersections / union
-
     return overlaps
 
 
-def box_refinement(box, gt_box):
-    """Compute refinement needed to transform box to gt_box.
+def box_refinement(box, ground_truth_box):
+    """Compute refinement needed to transform box to ground_truth_box.
 
     # Arguments:
-        box: [N, (y_min, x_min, y_max, x_max)]. 
-        gt_box: Ground-truth box [N, (y_min, x_min, y_max, x_max)]
-            (y_max, x_max) is assumed to be outside the box.
+        box: [N, (y_min, x_min, y_max, x_max)]
+        ground_truth_box: [N, (y_min, x_min, y_max, x_max)]
+                          (y_max, x_max) is assumed to be outside the box.
     """
     box = box.astype(np.float32)
-    gt_box = gt_box.astype(np.float32)
+    ground_truth_box = ground_truth_box.astype(np.float32)
 
     height = box[:, 2] - box[:, 0]
     width = box[:, 3] - box[:, 1]
-    center_y = box[:, 0] + 0.5 * height
-    center_x = box[:, 1] + 0.5 * width
+    center_Y = box[:, 0] + 0.5 * height
+    center_X = box[:, 1] + 0.5 * width
 
-    gt_height = gt_box[:, 2] - gt_box[:, 0]
-    gt_width = gt_box[:, 3] - gt_box[:, 1]
-    gt_center_y = gt_box[:, 0] + 0.5 * gt_height
-    gt_center_x = gt_box[:, 1] + 0.5 * gt_width
+    ground_truth_H = ground_truth_box[:, 2] - ground_truth_box[:, 0]
+    ground_truth_W = ground_truth_box[:, 3] - ground_truth_box[:, 1]
+    groundtruth_center_Y = ground_truth_box[:, 0] + 0.5 * ground_truth_H
+    groundtruth_center_X = ground_truth_box[:, 1] + 0.5 * ground_truth_W
 
-    dy = (gt_center_y - center_y) / height
-    dx = (gt_center_x - center_x) / width
-    dh = np.log(gt_height / height)
-    dw = np.log(gt_width / width)
-
-    return np.stack([dy, dx, dh, dw], axis=1)
-
-
-class Dataset(object):
-    """The base class for dataset classes.
-
-    # Arguments:
-        data_path: String. Path to data
-        split: String. Dataset split e.g train or val
-        name: String. Dataset name
-        evaluate: Boolean.
-    """
-
-    def __init__(self, data_path=None, split=None, name=None, evaluate=False, class_map=None):
-        self._image_ids = []
-        self.image_info = []
-        # Background is always the first class
-        self.class_info = [{'source': None, 'id': None, 'name': None}]
-        self.source_class_ids = {}
-
-    def add_class(self, source, class_id, class_name):
-        assert "." not in source, "Source name cannot contain a dot"
-        # Does the class exist already?
-        for info in self.class_info:
-            if info['source'] == source and info["id"] == class_id:
-                # source.class_id combination already available, skip
-                return
-        # Add the class
-        self.class_info.append({
-            "source": source,
-            "id": class_id,
-            "name": class_name,
-        })
-
-    def add_image(self, source, image_id, path, **kwargs):
-        image_info = {
-            "id": image_id,
-            "source": source,
-            "path": path,
-        }
-        image_info.update(kwargs)
-        self.image_info.append(image_info)
-
-    def image_reference(self, image_id):
-        """Return a link to the image in its source Website or details about
-        the image that help looking it up or debugging it.
-
-        Override for your dataset, but pass to this function
-        if you encounter images not in your dataset.
-        """
-        return ""
-
-    def prepare(self, class_map=None):
-        """Prepares the Dataset class for use.
-
-        TODO: class map is not supported yet. When done, it should handle mapping
-              classes from different datasets to the same class ID.
-        """
-
-        def clean_name(name):
-            """Returns a shorter version of object names for cleaner display."""
-            return ",".join(name.split(",")[:1])
-
-        # Build (or rebuild) everything else from the info dicts.
-        self.num_classes = len(self.class_info)
-        self.class_ids = np.arange(self.num_classes)
-        # self.class_names = [c["name"] for c in self.class_info]
-        self.num_images = len(self.image_info)
-        self._image_ids = np.arange(self.num_images)
-
-        # Mapping from source class and image IDs to internal IDs
-        self.class_from_source_map = {"{}.{}".format(info['source'], info['id']): id
-                                      for info, id in zip(self.class_info, self.class_ids)}
-        self.image_from_source_map = {"{}.{}".format(info['source'], info['id']): id
-                                      for info, id in zip(self.image_info, self.image_ids)}
-
-        # Map sources to class_ids they support
-        self.sources = list(set([i['source'] for i in self.class_info]))
-        self.source_class_ids = {}
-        # Loop over datasets
-        for source in self.sources:
-            self.source_class_ids[source] = []
-            # Find classes that belong to this dataset
-            for i, info in enumerate(self.class_info):
-                # Include BG class in all datasets
-                if i == 0 or source == info['source']:
-                    self.source_class_ids[source].append(i)
-
-    def map_source_class_id(self, source_class_id):
-        """Takes a source class ID and returns the int class ID assigned to it.
-
-        For example:
-        dataset.map_source_class_id("coco.12") -> 23
-        """
-        return self.class_from_source_map[source_class_id]
-
-    def get_source_class_id(self, class_id, source):
-        """Map an internal class ID to the corresponding class ID in the source dataset."""
-        info = self.class_info[class_id]
-        assert info['source'] == source
-        return info['id']
-
-    @property
-    def image_ids(self):
-        return self._image_ids
-
-    def source_image_link(self, image_id):
-        """Returns the path or URL to the image.
-        Override this to return a URL to the image if it's available online for easy
-        debugging.
-        """
-        return self.image_info[image_id]["path"]
-
-    # def load_image(self, image_id):
-    #     """Load the specified image and return a [H,W,3] Numpy array.
-    #     """
-    #     # Load image
-    #     image = skimage.io.imread(self.image_info[image_id]['path'])
-    #     # If grayscale. Convert to RGB for consistency.
-    #     if image.ndim != 3:
-    #         image = skimage.color.gray2rgb(image)
-    #     # If has an alpha channel, remove it for consistency
-    #     if image.shape[-1] == 4:
-    #         image = image[..., :3]
-    #     return image
-
-    def load_mask(self, image_id):
-        """Load instance masks for the given image.
-
-        Different datasets use different ways to store masks. Override this
-        method to load instance masks and return them in the form of am
-        array of binary masks of shape [height, width, instances].
-
-        Returns:
-            masks: A bool array of shape [height, width, instance count] with
-                a binary mask per instance.
-            class_ids: a 1D array of class IDs of the instance masks.
-        """
-        # Override this function to load a mask from your dataset.
-        # Otherwise, it returns an empty mask.
-        logging.warning("You are using the default load_mask(), maybe you need to define your own one.")
-        mask = np.empty([0, 0, 0])
-        class_ids = np.empty([0], np.int32)
-        return mask, class_ids
+    dY = (groundtruth_center_Y - center_Y) / height
+    dX = (groundtruth_center_X - center_X) / width
+    dH = np.log(ground_truth_H / height)
+    dW = np.log(ground_truth_W / width)
+    return np.stack([dY, dX, dH, dW], axis=1)
 
 
 def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square"):
@@ -311,78 +160,65 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         window: Coordinates of unpadded image (y_min, x_min, y_max, x_max)
         padding: Padding added to the image [(top, bottom), (left, right), (0, 0)]
     """
-    # Keep track of image dtype and return results in the same dtype
     image_dtype = image.dtype
-    # Default window (y1, x1, y2, x2) and default scale == 1.
-    h, w = image.shape[:2]
-    window = (0, 0, h, w)
+    H, W = image.shape[:2]
+    window = (0, 0, H, W)
     scale = 1
     padding = [(0, 0), (0, 0), (0, 0)]
     crop = None
 
-    if mode == "none":
+    if mode == 'none':
         return image, window, scale, padding, crop
 
-    # Scale?
     if min_dim:
-        # Scale up but not down
-        scale = max(1, min_dim / min(h, w))
+        scale = max(1, min_dim / min(H, W))
     if min_scale and scale < min_scale:
         scale = min_scale
 
-    # Does it exceed max dim?
-    if max_dim and mode == "square":
-        image_max = max(h, w)
+    if max_dim and mode == 'square':
+        image_max = max(H, W)
         if round(image_max * scale) > max_dim:
             scale = max_dim / image_max
-
-    # Resize image using bilinear interpolation
     if scale != 1:
-        image = resize(image, (round(h * scale), round(w * scale)),
+        image = resize(image, (round(H * scale), round(W * scale)),
                        preserve_range=True)
 
-    # Need padding or cropping?
-    if mode == "square":
-        # Get new height and width
-        h, w = image.shape[:2]
-        top_pad = (max_dim - h) // 2
-        bottom_pad = max_dim - h - top_pad
-        left_pad = (max_dim - w) // 2
-        right_pad = max_dim - w - left_pad
+    if mode == 'square':
+        H, W = image.shape[:2]
+        top_pad = (max_dim - H) // 2
+        bottom_pad = max_dim - H - top_pad
+        left_pad = (max_dim - W) // 2
+        right_pad = max_dim - W - left_pad
         padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
         image = np.pad(image, padding, mode='constant', constant_values=0)
-        window = (top_pad, left_pad, h + top_pad, w + left_pad)
-    elif mode == "pad64":
-        h, w = image.shape[:2]
-        # Both sides must be divisible by 64
-        assert min_dim % 64 == 0, "Minimum dimension must be a multiple of 64"
-        # Height
-        if h % 64 > 0:
-            max_h = h - (h % 64) + 64
-            top_pad = (max_h - h) // 2
-            bottom_pad = max_h - h - top_pad
+        window = (top_pad, left_pad, H + top_pad, W + left_pad)
+    elif mode == 'pad64':
+        H, W = image.shape[:2]
+        assert min_dim % 64 == 0, 'Minimum dimension must be a multiple of 64'
+        if H % 64 > 0:
+            max_H = H - (H % 64) + 64
+            top_pad = (max_H - H) // 2
+            bottom_pad = max_H - H - top_pad
         else:
             top_pad = bottom_pad = 0
-        # Width
-        if w % 64 > 0:
-            max_w = w - (w % 64) + 64
-            left_pad = (max_w - w) // 2
-            right_pad = max_w - w - left_pad
+        if W % 64 > 0:
+            max_W = W - (W % 64) + 64
+            left_pad = (max_W - W) // 2
+            right_pad = max_W - W - left_pad
         else:
             left_pad = right_pad = 0
         padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
         image = np.pad(image, padding, mode='constant', constant_values=0)
-        window = (top_pad, left_pad, h + top_pad, w + left_pad)
-    elif mode == "crop":
-        # Pick a random crop
-        h, w = image.shape[:2]
-        y = np.random.randint(0, (h - min_dim))
-        x = np.random.randint(0, (w - min_dim))
-        crop = (y, x, min_dim, min_dim)
-        image = image[y:y + min_dim, x:x + min_dim]
+        window = (top_pad, left_pad, H + top_pad, W + left_pad)
+    elif mode == 'crop':
+        H, W = image.shape[:2]
+        Y = np.random.randint(0, (H - min_dim))
+        X = np.random.randint(0, (W - min_dim))
+        crop = (Y, X, min_dim, min_dim)
+        image = image[Y:Y + min_dim, X:X + min_dim]
         window = (0, 0, min_dim, min_dim)
     else:
-        raise Exception("Mode {} not supported".format(mode))
+        raise Exception('Mode {} not supported'.format(mode))
     return image.astype(image_dtype), window, scale, padding, crop
 
 
@@ -394,60 +230,55 @@ def resize_mask(mask, scale, padding, crop=None):
         padding: Padding to add to the mask in the form
                 [(top, bottom), (left, right), (0, 0)]
     """
-    # Suppress warning from scipy 0.13.0, the output shape of zoom() is
-    # calculated with round() instead of int()
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter('ignore')
         mask = scipy.ndimage.zoom(mask, zoom=[scale, scale, 1], order=0)
     if crop is not None:
-        y, x, h, w = crop
-        mask = mask[y:y + h, x:x + w]
+        Y, X, H, W = crop
+        mask = mask[Y:Y + H, X:X + W]
     else:
         mask = np.pad(mask, padding, mode='constant', constant_values=0)
     return mask
 
 
-def minimize_mask(bbox, mask, mini_shape):
+def minimize_mask(box, masks, mini_shape):
     """Resize masks to a smaller version to reduce memory load.
        Mini-masks can be resized back to image scale using expand_masks()
 
     # Arguments:
-        bbox: bounding box coordinates
-        mask: Numpy array
+        box: bounding box coordinates
+        masks: stacked boolean masks
         mini_shape: Shape to which mask is to be minimized
     """
-    mini_mask = np.zeros(mini_shape + (mask.shape[-1],), dtype=bool)
-    for i in range(mask.shape[-1]):
-        # Pick slice and cast to bool in case load_mask() returned wrong dtype
-        m = mask[:, :, i].astype(bool)
-        y1, x1, y2, x2 = bbox[i][:4]
-        m = m[y1:y2, x1:x2]
-        if m.size == 0:
-            raise Exception("Invalid bounding box with area of zero")
-        # Resize with bilinear interpolation
-        m = resize(m, mini_shape)
-        mini_mask[:, :, i] = np.around(m).astype(np.bool)
+    mini_mask = np.zeros(mini_shape + (masks.shape[-1],), dtype=bool)
+    for mask_index in range(masks.shape[-1]):
+        mask = masks[:, :, mask_index].astype(bool)
+        y_min, x_min, y_max, x_max = box[mask_index][:4]
+        mask = mask[y_min:y_max, x_min:x_max]
+        if mask.size == 0:
+            raise Exception('Invalid bounding box with area of zero')
+        mask = resize(mask, mini_shape)
+        mini_mask[:, :, mask_index] = np.around(mask).astype(np.bool)
     return mini_mask
 
 
-def unmold_mask(mask, bbox, image_shape):
-    """Converts a mask generated by the neural network to a format similar
-       to its original shape.
+def unmold_mask(mask, box, image_shape):
+    """Unmolds masks to original shape
 
     # Arguments:
         mask: [height, width] of type float. Typically 28x28 mask.
-        bbox: [y_min, x_min, y_max, x_max]. The box to fit the mask in.
+        box: [y_min, x_min, y_max, x_max]. The box to fit the mask in.
 
     # Returns:
         A binary mask with the same size as the original image.
     """
     threshold = 0.5
-    y1, x1, y2, x2 = bbox
-    mask = resize(mask, (y2 - y1, x2 - x1))
+    y_min, x_min, y_max, x_max = box
+    mask = resize(mask, (y_max - y_min, x_max - x_min))
     mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
 
     full_mask = np.zeros(image_shape[:2], dtype=np.bool)
-    full_mask[y1:y2, x1:x2] = mask
+    full_mask[y_min:y_max, x_min:x_max] = mask
     return full_mask
 
 
@@ -459,34 +290,26 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
         ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
         shape: [height, width] spatial shape of the feature map over which
                 to generate anchors.
-        feature_stride: Stride of the feature map relative to the image in pixels.
-        anchor_stride: Stride of anchors on the feature map. For example, if the
+        feature_stride: feature map stride relative to the image in pixels.
+        anchor_stride: anchor stride on feature map. For example, if the
             value is 2 then generate anchors for every other feature map pixel.
     """
-    # Get all combinations of scales and ratios
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
     ratios = ratios.flatten()
 
-    # Enumerate heights and widths from scales and ratios
     heights = scales / np.sqrt(ratios)
     widths = scales * np.sqrt(ratios)
+    shifts_Y = np.arange(0, shape[0], anchor_stride) * feature_stride
+    shifts_X = np.arange(0, shape[1], anchor_stride) * feature_stride
+    shifts_X, shifts_Y = np.meshgrid(shifts_X, shifts_Y)
 
-    # Enumerate shifts in feature space
-    shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
-    shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
-    shifts_x, shifts_y = np.meshgrid(shifts_x, shifts_y)
+    box_widths, box_center_X = np.meshgrid(widths, shifts_X)
+    box_heights, box_center_Y = np.meshgrid(heights, shifts_Y)
 
-    # Enumerate combinations of shifts, widths, and heights
-    box_widths, box_centers_x = np.meshgrid(widths, shifts_x)
-    box_heights, box_centers_y = np.meshgrid(heights, shifts_y)
-
-    # Reshape to get a list of (y, x) and a list of (h, w)
     box_centers = np.stack(
-        [box_centers_y, box_centers_x], axis=2).reshape([-1, 2])
+        [box_center_Y, box_center_X], axis=2).reshape([-1, 2])
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
-
-    # Convert to corner coordinates (y1, x1, y2, x2)
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
     return boxes
@@ -499,19 +322,19 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
        all levels of the pyramid.
 
     # Returns:
-        anchors: [N, (y1, x1, y2, x2)]. All generated anchors in one array. Sorted
-            with the same order of the given scales.
+        anchors: [N, (y1, x1, y2, x2)]. All generated anchors in one array.
+                 Sorted with the same order of the given scales.
     """
-    # [anchor_count, (y1, x1, y2, x2)]
     anchors = []
-    for i in range(len(scales)):
-        anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
-                                        feature_strides[i], anchor_stride))
+    for level in range(len(scales)):
+        anchors.append(generate_anchors(scales[level], ratios,
+                                        feature_shapes[level],
+                                        feature_strides[level], anchor_stride))
     return np.concatenate(anchors, axis=0)
 
 
 def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
-    """Build a ResNet graph.
+    """Builds ResNet graph.
 
     # Arguments:
         architecture: Can be resnet50 or resnet101
@@ -524,27 +347,39 @@ def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
     x = Conv2D(64, (7, 7), strides=(2, 2), name='conv1', use_bias=True)(x)
     x = BatchNorm(name='bn_conv1')(x, training=train_bn)
     x = Activation('relu')(x)
-    C1 = x = MaxPooling2D((3, 3), strides=(2, 2), padding="same")(x)
+    C1 = x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
     # Stage 2
-    x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1), train_bn=train_bn)
-    x = identity_block(x, 3, [64, 64, 256], stage=2, block='b', train_bn=train_bn)
-    C2 = x = identity_block(x, 3, [64, 64, 256], stage=2, block='c', train_bn=train_bn)
+    x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1),
+                   train_bn=train_bn)
+    x = identity_block(x, 3, [64, 64, 256], stage=2, block='b',
+                       train_bn=train_bn)
+    C2 = x = identity_block(x, 3, [64, 64, 256], stage=2, block='c',
+                            train_bn=train_bn)
     # Stage 3
-    x = conv_block(x, 3, [128, 128, 512], stage=3, block='a', train_bn=train_bn)
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block='b', train_bn=train_bn)
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block='c', train_bn=train_bn)
-    C3 = x = identity_block(x, 3, [128, 128, 512], stage=3, block='d', train_bn=train_bn)
+    x = conv_block(x, 3, [128, 128, 512], stage=3, block='a',
+                   train_bn=train_bn)
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='b',
+                       train_bn=train_bn)
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='c',
+                       train_bn=train_bn)
+    C3 = x = identity_block(x, 3, [128, 128, 512], stage=3, block='d',
+                            train_bn=train_bn)
     # Stage 4
-    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a', train_bn=train_bn)
-    block_count = {"resnet50": 5, "resnet101": 22}[architecture]
+    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a',
+                   train_bn=train_bn)
+    block_count = {'resnet50': 5, 'resnet101': 22}[architecture]
     for i in range(block_count):
-        x = identity_block(x, 3, [256, 256, 1024], stage=4, block=chr(98 + i), train_bn=train_bn)
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block=chr(98 + i),
+                           train_bn=train_bn)
     C4 = x
     # Stage 5
     if stage5:
-        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a', train_bn=train_bn)
-        x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b', train_bn=train_bn)
-        C5 = x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c', train_bn=train_bn)
+        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a',
+                       train_bn=train_bn)
+        x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b',
+                           train_bn=train_bn)
+        C5 = x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c',
+                                train_bn=train_bn)
     else:
         C5 = None
     return [C1, C2, C3, C4, C5]
@@ -557,145 +392,129 @@ def fpn_classifier_graph(rois, feature_maps, mode,
        and regressor heads.
 
     # Arguments:
-        rois: [batch, num_rois, (y_min, x_min, y_max, x_max)] Proposal boxes in normalized
-               coordinates.
-        feature_maps: List of feature maps from different layers of the pyramid,
-                      [P2, P3, P4, P5]. Each has a different resolution.
-        image_meta: [batch, (meta data)] Image details. See compose_image_meta()
-        pool_size: The width of the square feature map generated from ROI Pooling.
-        num_classes: number of classes, which determines the depth of the results
+        rois: [batch, num_rois, (y_min, x_min, y_max, x_max)] 
+              Proposal boxes in normalized coordinates.
+        feature_maps: List of feature maps from different pyramid layers,
+                      [P2, P3, P4, P5].
+        image_meta: [batch, (meta data)] Image details
+        pool_size: The width of the square feature map generated from ROI Pool.
+        num_classes: number of classes
         train_bn: Boolean. Train or freeze Batch Norm layers
         fc_layers_size: Size of the 2 FC layers
+
     # Returns:
-        logits: [batch, num_rois, NUM_CLASSES] classifier logits (before softmax)
+        logits: classifier logits (before softmax)
+                [batch, num_rois, NUM_CLASSES]
         probs: [batch, num_rois, NUM_CLASSES] classifier probabilities
-        bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))] Deltas to apply to
-                     proposal boxes
+        bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))]
+                     Deltas to apply to proposal boxes
     """
-    # ROI Pooling
-    # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
     pool_size = config.POOL_SIZE
     num_classes = config.NUM_CLASSES
-
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
-    
-    x = PyramidROIAlign([pool_size, pool_size],
-                        name="roi_align_classifier")([rois, image_shape] + feature_maps)
-    
-    conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size), padding="valid")
-    #x = time_distributed_layer(x, fc_layers_size, (pool_size, pool_size))
-    # Two 1024 FC layers (implemented with Conv2D for consistency)
-    x = TimeDistributed(conv_2d_layer, name="mrcnn_class_conv1")(x)
-    
+
+    x = PyramidROIAlign([pool_size, pool_size], name='roi_align_classifier')(
+                        [rois, image_shape] + feature_maps)
+    conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size),
+                           padding='valid')
+    x = TimeDistributed(conv_2d_layer, name='mrcnn_class_conv1')(x)
     x = tf.reshape(x, [1000, x.shape[2], x.shape[3], x.shape[4]])
     x = tf.expand_dims(x, axis=0)
-    
-    x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(x, training=train_bn)
-    
+    x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(
+                        x, training=train_bn)
     x = Activation('relu')(x)
-
     x = TimeDistributed(Conv2D(fc_layers_size, (1, 1)),
-                           name="mrcnn_class_conv2")(x)
-
-    x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(x, training=train_bn)
-
+                        name='mrcnn_class_conv2')(x)
+    x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(
+                        x, training=train_bn)
     x = Activation('relu')(x)
-
     shared = Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
-                       name="pool_squeeze")(x)
-
+                    name='pool_squeeze')(x)
     # Classifier head
     mrcnn_class_logits = TimeDistributed(Dense(num_classes),
-                                            name='mrcnn_class_logits')(shared)
-    mrcnn_probs = TimeDistributed(Activation("softmax"),
-                                     name="mrcnn_class")(mrcnn_class_logits)
-   
-    
-    # BBox head
-    # [batch, num_rois, NUM_CLASSES * (dy, dx, log(dh), log(dw))]
+                                         name='mrcnn_class_logits')(shared)
+    mrcnn_probs = TimeDistributed(Activation('softmax'),
+                                  name='mrcnn_class')(mrcnn_class_logits)
+    # Bounding box head
     x = TimeDistributed(Dense(num_classes * 4, activation='linear'),
-                           name='mrcnn_bbox_fc')(shared)
-    # Reshape to [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))]
+                        name='mrcnn_bbox_fc')(shared)
     s = K.int_shape(x)
-    mrcnn_bbox = Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
-    
+    mrcnn_bbox = Reshape((s[1], num_classes, 4), name='mrcnn_bbox')(x)
     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
 
 def build_fpn_mask_graph(rois, feature_maps, config, train_bn=True):
-    """Builds the computation graph of the mask head of Feature Pyramid Network.
-    rois: [batch, num_rois, (y1, x1, y2, x2)] Proposal boxes in normalized
-          coordinates.
-    feature_maps: List of feature maps from different layers of the pyramid,
-                  [P2, P3, P4, P5]. Each has a different resolution.
-    image_meta: [batch, (meta data)] Image details. See compose_image_meta()
-    pool_size: The width of the square feature map generated from ROI Pooling.
-    num_classes: number of classes, which determines the depth of the results
-    train_bn: Boolean. Train or freeze Batch Norm layers
-    Returns: Masks [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, NUM_CLASSES]
+    """Builds computation graph of the mask head of Feature Pyramid Network.
+
+    # Arguments:
+        rois: [batch, num_rois, (y_min, x_min, y_max, x_max)]
+              Proposal boxes in normalized coordinates.
+        feature_maps: List of feature maps from different pyramid layers,
+                      [P2, P3, P4, P5]. Each has a different resolution.
+        image_meta: [batch, (meta data)] Image details
+        pool_size: The width of the square feature map generated from ROI Pool.
+        num_classes: number of classes
+        train_bn: Boolean. Train or freeze Batch Norm layers
+
+    # Returns:
+        Masks [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, NUM_CLASSES]
     """
-    # ROI Pooling
-    # Shape: [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, channels]
     pool_size = config.MASK_POOL_SIZE
     num_classes = config.NUM_CLASSES
-    
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
 
-    x = PyramidROIAlign([pool_size, pool_size],
-                        name="roi_align_mask")([rois, image_shape] + feature_maps)
-    
-    # Conv layers
-    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv1")(x)
+    x = PyramidROIAlign([pool_size, pool_size], name='roi_align_mask')(
+                        [rois, image_shape] + feature_maps)
+    x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
+                        name='mrcnn_mask_conv1')(x)
     x = TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn1')(x, training=train_bn)
+                        name='mrcnn_mask_bn1')(x, training=train_bn)
     x = Activation('relu')(x)
-
-    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv2")(x)
+    x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
+                        name='mrcnn_mask_conv2')(x)
     x = TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn2')(x, training=train_bn)
+                        name='mrcnn_mask_bn2')(x, training=train_bn)
     x = Activation('relu')(x)
-
-    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv3")(x)
+    x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
+                        name='mrcnn_mask_conv3')(x)
+    x = TimeDistributed(BatchNorm(), name='mrcnn_mask_bn3')(
+                        x, training=train_bn)
+    x = Activation('relu')(x)
+    x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
+                        name='mrcnn_mask_conv4')(x)
     x = TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn3')(x, training=train_bn)
+                        name='mrcnn_mask_bn4')(x, training=train_bn)
     x = Activation('relu')(x)
-
-    x = TimeDistributed(Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv4")(x)
-    x = TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn4')(x, training=train_bn)
-    x = Activation('relu')(x)
-
-    x = TimeDistributed(Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
-                           name="mrcnn_mask_deconv")(x)
-    x = TimeDistributed(Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
-                           name="mrcnn_mask")(x)
+    x = TimeDistributed(Conv2DTranspose(256, (2, 2), strides=2,
+                        activation='relu'), name='mrcnn_mask_deconv')(x)
+    x = TimeDistributed(Conv2D(num_classes, (1, 1), strides=1,
+                        activation='sigmoid'), name='mrcnn_mask')(x)
     return x
 
 
 def build_rpn_model(anchor_stride, anchors_per_location, depth):
     """Builds a Keras model of the Region Proposal Network.
-    It wraps the RPN graph so it can be used multiple times with shared
-    weights.
-    anchors_per_location: number of anchors per pixel in the feature map
-    anchor_stride: Controls the density of anchors. Typically 1 (anchors for
-                   every pixel in the feature map), or 2 (every other pixel).
-    depth: Depth of the backbone feature map.
-    Returns a Keras Model object. The model outputs, when called, are:
-    rpn_class_logits: [batch, H * W * anchors_per_location, 2] Anchor classifier logits (before softmax)
-    rpn_probs: [batch, H * W * anchors_per_location, 2] Anchor classifier probabilities.
-    rpn_bbox: [batch, H * W * anchors_per_location, (dy, dx, log(dh), log(dw))] Deltas to be
-                applied to anchors.
+
+    # Arguments:
+        anchors_per_location: number of anchors per pixel in feature map
+        anchor_stride: Anchor for every pixel in feature map
+                       Typically 1 or 2
+        depth: Depth of the backbone feature map.
+
+    # Returns:
+        rpn_class_logits: [batch, H * W * anchors_per_location, 2]
+                          Anchor classifier logits (before softmax)
+        rpn_probs: [batch, H * W * anchors_per_location, 2]
+                   Anchor classifier probabilities.
+        rpn_bbox: [batch, H * W * anchors_per_location,
+                  (dy, dx, log(dh), log(dw))] Deltas to be applied to anchors.
     """
     input_feature_map = Input(shape=[None, None, depth],
-                              name="input_rpn_feature_map")
+                              name='input_rpn_feature_map')
     outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
-    return Model([input_feature_map], outputs, name="rpn_model")
+    return Model([input_feature_map], outputs, name='rpn_model')
 
 
 def rpn_graph(feature_map, anchors_per_location, anchor_stride):
@@ -720,26 +539,20 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
                     name='rpn_conv_shared')(feature_map)
     x = Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
                activation='linear', name='rpn_class_raw')(shared)
-
     rpn_class_logits = Lambda(lambda t: tf.reshape(t,
                               [tf.shape(t)[0], -1, 2]))(x)
     rpn_probs = Activation('softmax', name='rpn_class_xxx')(rpn_class_logits)
     x = Conv2D(anchors_per_location * 4, (1, 1), padding='valid',
                activation='linear', name='rpn_bbox_pred')(shared)
-
     rpn_bbox = Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 4]))(x)
-
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
-############################################################
-#  Miscellaneous
-############################################################
 
 def trim_zeros(x):
-    """It's common to have tensors larger than the available data and
-    pad with zeros. This function removes rows that are all zeros.
+    """Removes rows that are all zeros.
 
-    x: [rows, columns].
+    # Arguments:
+        x: [rows, columns]
     """
     assert len(x.shape) == 2
     return x[~np.all(x == 0, axis=1)]
@@ -757,23 +570,19 @@ def compute_matches(gt_boxes, gt_class_ids, gt_masks,
                     the matched ground truth box.
         overlaps: [pred_boxes, gt_boxes] IoU overlaps.
     """
-    # Trim zero padding
-    # TODO: cleaner to do zero unpadding upstream
     gt_boxes = trim_zeros(gt_boxes)
     gt_masks = gt_masks[..., :gt_boxes.shape[0]]
     pred_boxes = trim_zeros(pred_boxes)
     pred_scores = pred_scores[:pred_boxes.shape[0]]
-    # Sort predictions by score from high to low
+
     indices = np.argsort(pred_scores)[::-1]
     pred_boxes = pred_boxes[indices]
     pred_class_ids = pred_class_ids[indices]
     pred_scores = pred_scores[indices]
     pred_masks = pred_masks[..., indices]
 
-    # Compute IoU overlaps [pred_masks, gt_masks]
     overlaps = compute_overlaps_masks(pred_masks, gt_masks)
 
-    # Loop through predictions and find matching ground truth boxes
     match_count = 0
     pred_match = -1 * np.ones([pred_boxes.shape[0]])
     gt_match = -1 * np.ones([gt_boxes.shape[0]])
