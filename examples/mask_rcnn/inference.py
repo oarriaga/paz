@@ -27,7 +27,7 @@ def test(images, weights_path):
     base_model = MaskRCNN(config=config, model_dir='../../mask_rcnn')
     inference_model = InferenceGraph(model=base_model, config=config)
     base_model.keras_model = inference_model()
-    base_model.load_weights(weights_path, by_name=True)
+    base_model.keras_model.load_weights(weights_path, by_name=True)
 
     results = base_model.detect(images)
     return results
