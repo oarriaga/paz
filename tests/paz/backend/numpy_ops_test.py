@@ -10,6 +10,9 @@ from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.boxes import encode
 from paz.backend.boxes import match
 from paz.backend.boxes import decode
+from paz.backend.boxes import flip_left_right
+from paz.backend.boxes import to_image_coordinates
+from paz.backend.boxes import to_normalized_coordinates
 from paz.models.detection.utils import create_prior_boxes
 
 # from paz.datasets import VOC
@@ -164,6 +167,24 @@ def test_to_decode(boxes_with_label):
 def test_prior_boxes(target_prior_boxes):
     prior_boxes = create_prior_boxes('VOC')
     assert np.all(prior_boxes[:10].astype('float32') == target_prior_boxes)
+
+
+def test_flip_left_right_pass_by_value(boxes_with_label):
+    initial_boxes_with_label = boxes_with_label.copy()
+    flip_left_right(boxes_with_label, 1.0)
+    assert np.all(initial_boxes_with_label == boxes_with_label)
+
+
+def test_to_image_coordinates_pass_by_value(boxes_with_label):
+    initial_boxes_with_label = boxes_with_label.copy()
+    to_image_coordinates(boxes_with_label, np.ones((10, 10)))
+    assert np.all(initial_boxes_with_label == boxes_with_label)
+
+
+def test_to_normalized_coordinates_pass_by_value(boxes_with_label):
+    initial_boxes_with_label = boxes_with_label.copy()
+    to_normalized_coordinates(boxes_with_label, np.ones((10, 10)))
+    assert np.all(initial_boxes_with_label == boxes_with_label)
 
 
 # def test_data_loader_check():

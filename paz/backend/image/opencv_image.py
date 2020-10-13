@@ -170,7 +170,9 @@ def show_image(image, name='image', wait=True):
     image = convert_color_space(image, RGB2BGR)
     cv2.imshow(name, image)
     if wait:
-        cv2.waitKey(0)
+        while True:
+            if cv2.waitKey(0) & 0xFF == ord('q'):
+                break
         cv2.destroyAllWindows()
 
 
@@ -187,16 +189,21 @@ def warp_affine(image, matrix, fill_color=[0, 0, 0]):
         image, matrix, (width, height), borderValue=fill_color)
 
 
-def save_image(filepath, image):
-    """Saves an image.
+def write_image(filepath, image):
+    """Writes an image inside ``filepath``. If ``filepath`` doesn't exist
+        it makes a directory. If ``image`` has three channels the image is
+        converted into BGR and then written. This is done such that this
+        function compatible with ``load_image``.
 
     # Arguments
         filepath: String with image path. It should include postfix e.g. .png
         image: Numpy array.
     """
     directory_name = os.path.dirname(filepath)
-    if not os.path.exists(directory_name):
+    if (not os.path.exists(directory_name) and (len(directory_name) > 0)):
         os.makedirs(directory_name)
+    if image.shape[-1] == 3:
+        image = convert_color_space(image, RGB2BGR)
     return cv2.imwrite(filepath, image)
 
 

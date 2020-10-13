@@ -1,6 +1,6 @@
 from cluttered_mnist import ClutteredMNIST
 from STN import STN
-from paz.backend.image import save_image
+from paz.backend.image import write_image
 
 
 dataset_path = "mnist_cluttered_60x60_6distortions.npz"
@@ -24,8 +24,8 @@ def plot_predictions(samples):
         interpolated, image = images
         interpolated = (interpolated * 255).astype('uint8')
         image = (image * 255).astype('uint8')
-        save_image('images/interpolated_image_%03d.png' % arg, interpolated)
-        save_image('images/original_image_%03d.png' % arg, image)
+        write_image('images/interpolated_image_%03d.png' % arg, interpolated)
+        write_image('images/original_image_%03d.png' % arg, image)
 
 
 model.fit(x_train, y_train, batch_size, num_epochs, validation_data=val_data)

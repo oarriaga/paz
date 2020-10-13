@@ -50,14 +50,15 @@ from .image import RGB_IMAGENET_MEAN
 from .renderer import Render
 
 from .geometric import RandomFlipBoxesLeftRight
-from .geometric import ToAbsoluteBoxCoordinates
+from .geometric import ToImageBoxCoordinates
 from .geometric import ToNormalizedBoxCoordinates
 from .geometric import RandomSampleCrop
 from .geometric import Expand
 from .geometric import ApplyTranslation
-from .geometric import ApplyRandomTranslation
+from .geometric import RandomTranslation
 from .geometric import RandomKeypointTranslation
 from .geometric import RandomKeypointRotation
+from .geometric import RandomRotation
 from .geometric import TranslateImage
 
 from .keypoints import ChangeKeypointsCoordinateSystem
@@ -100,6 +101,8 @@ from ..backend.keypoints import LEVENBERG_MARQUARDT
 from ..backend.image.draw import GREEN
 from ..backend.image.draw import FONT
 from ..backend.image.draw import LINE
+
+from ..abstract import Processor
 
 TRAIN = 0
 VAL = 1

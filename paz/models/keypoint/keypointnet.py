@@ -22,10 +22,10 @@ def block(x, num_filters, dilation_rate, alpha, name, kernel_size=(3, 3)):
 
 
 def KeypointNet2D(input_shape, num_keypoints, filters=64, alpha=0.1):
-    """Model for discovering keypoint locations in 2D space, modified from [1]
+    """Model for discovering keypoint locations in 2D space, modified from
 
     # Arguments
-        input_shape: List of integers indicating (height, width, num_channels)
+        input_shape: List of integers indicating ``[H, W, num_channels]``.
         num_keypoints: Int. Number of keypoints to discover.
         filters: Int. Number of filters used in convolutional layers.
         alpha: Float. Alpha parameter of leaky relu.
@@ -58,10 +58,10 @@ def KeypointNet2D(input_shape, num_keypoints, filters=64, alpha=0.1):
 
 
 def KeypointNet(input_shape, num_keypoints, depth=.2, filters=64, alpha=0.1):
-    """Keypointnet model for discovering keypoint locations in 3D space [1]
+    """Keypointnet model for discovering keypoint locations in 3D space
 
     # Arguments
-        input_shape: List of integers indicating (height, width, num_channels)
+        input_shape: List of integers indicating ``[H, W, num_channels)``.
         num_keypoints: Int. Number of keypoints to discover.
         depth: Float. Prior depth (centimeters) of keypoints.
         filters: Int. Number of filters used in convolutional layers.
@@ -103,10 +103,10 @@ def KeypointNet(input_shape, num_keypoints, depth=.2, filters=64, alpha=0.1):
 
 
 def KeypointNetShared(input_shape, num_keypoints, depth, filters, alpha):
-    """Keypointnet shared model with two views as input (see references).
+    """Keypointnet shared model with two views as input.
 
     # Arguments
-        input_shape: List of integers indicating (height, width, num_channels)
+        input_shape: List of integers indicating ``[H, W, num_channels]``.
         num_keypoints: Int. Number of keypoints to discover.
         depth: Float. Prior depth (centimeters) of keypoints.
         filters: Int. Number of filters used in convolutional layers.

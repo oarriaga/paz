@@ -223,7 +223,8 @@ class ConvertColorSpace(Processor):
     """Converts image to a different color space.
 
     # Arguments
-        flag: Flag found in ``ops``indicating transform e.g. BGR2RGB
+        flag: Flag found in ``processors``indicating transform e.g.
+            ``pr.BGR2RGB``
     """
     def __init__(self, flag):
         self.flag = flag
@@ -337,7 +338,10 @@ class BlendRandomCroppedBackground(Processor):
         background = load_image(background_path)
         background = random_image_crop(background, image.shape[:2])
         if background is None:
-            background = make_random_plain_image(image.shape[:2])
+            H, W, num_channels = image.shape
+            # background contains always a channel less
+            num_channels = num_channels - 1
+            background = make_random_plain_image((H, W, num_channels))
         return blend_alpha_channel(image, background)
 
 

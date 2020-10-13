@@ -88,10 +88,10 @@ def MiniXception(input_shape, num_classes, weights=None):
     """Build MiniXception (see references).
 
     # Arguments
-        input_shape: List of three integers e.g. ''(H, W, 3)''
+        input_shape: List of three integers e.g. ``[H, W, 3]``
         num_classes: Int.
         weights: ``None`` or string with pre-trained dataset. Valid datasets
-            include only ''FER''.
+            include only ``FER``.
 
     # Returns
         Tensorflow-Keras model.

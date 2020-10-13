@@ -3,8 +3,8 @@ import numpy as np
 from ..abstract import Processor
 
 from ..backend.boxes import flip_left_right
-from ..backend.boxes import to_absolute_coordinates
-from ..backend.boxes import to_percent_coordinates
+from ..backend.boxes import to_image_coordinates
+from ..backend.boxes import to_normalized_coordinates
 from ..backend.boxes import compute_iou
 from ..backend.image import warp_affine
 from ..backend.image import translate_image
@@ -26,14 +26,14 @@ class RandomFlipBoxesLeftRight(Processor):
         return image, boxes
 
 
-class ToAbsoluteBoxCoordinates(Processor):
+class ToImageBoxCoordinates(Processor):
     """Convert normalized box coordinates to image-size box coordinates.
     """
     def __init__(self):
-        super(ToAbsoluteBoxCoordinates, self).__init__()
+        super(ToImageBoxCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        boxes = to_absolute_coordinates(image, boxes)
+        boxes = to_image_coordinates(boxes, image)
         return image, boxes
 
 
@@ -44,15 +44,18 @@ class ToNormalizedBoxCoordinates(Processor):
         super(ToNormalizedBoxCoordinates, self).__init__()
 
     def call(self, image, boxes):
-        boxes = to_percent_coordinates(image, boxes)
+        boxes = to_normalized_coordinates(boxes, image)
         return image, boxes
 
 
 class RandomSampleCrop(Processor):
     """Crops and image while adjusting the bounding boxes.
     Boxes should be in point form.
+    # Arguments
+        probability: Float between ''[0, 1]''.
     """
-    def __init__(self):
+    def __init__(self, probability=0.5):
+        self.probability = probability
         self.sample_options = (
             # using entire original input image
             None,
@@ -67,7 +70,7 @@ class RandomSampleCrop(Processor):
         super(RandomSampleCrop, self).__init__()
 
     def call(self, image, boxes):
-        if np.random.randint(0, 2):
+        if self.probability < np.random.rand():
             return image, boxes
         labels = boxes[:, -1:]
         boxes = boxes[:, :4]
@@ -158,14 +161,16 @@ class Expand(Processor):
         max_ratio: Float.
         mean: None/List: If `None` expanded image is filled with
             the image mean.
+        probability: Float between ''[0, 1]''.
     """
-    def __init__(self, max_ratio=2, mean=None):
+    def __init__(self, max_ratio=2, mean=None, probability=0.5):
         super(Expand, self).__init__()
         self.max_ratio = max_ratio
         self.mean = mean
+        self.probability = probability
 
     def call(self, image, boxes):
-        if np.random.randint(0, 2):
+        if self.probability < np.random.rand():
             return image, boxes
         height, width, num_channels = image.shape
         ratio = np.random.uniform(1, self.max_ratio)
@@ -182,10 +187,10 @@ class Expand(Processor):
 
         expanded_image[int(top):int(top + height),
                        int(left):int(left + width)] = image
-
-        boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
-        boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
-        return expanded_image, boxes
+        expanded_boxes = boxes.copy()
+        expanded_boxes[:, 0:2] = boxes[:, 0:2] + (int(left), int(top))
+        expanded_boxes[:, 2:4] = boxes[:, 2:4] + (int(left), int(top))
+        return expanded_image, expanded_boxes
 
 
 class ApplyTranslation(Processor):
@@ -229,7 +234,7 @@ class ApplyTranslation(Processor):
         return image
 
 
-class ApplyRandomTranslation(Processor):
+class RandomTranslation(Processor):
     """Applies a random translation to image and labels
 
     # Arguments
@@ -241,7 +246,7 @@ class ApplyRandomTranslation(Processor):
     """
     def __init__(
             self, delta_scale=[0.25, 0.25], fill_color=None):
-        super(ApplyRandomTranslation, self).__init__()
+        super(RandomTranslation, self).__init__()
         self.delta_scale = delta_scale
         self.apply_translation = ApplyTranslation(None, fill_color)
 
@@ -267,6 +272,7 @@ class ApplyRandomTranslation(Processor):
 
 class RandomKeypointTranslation(Processor):
     """Applies a random translation to image and keypoints.
+
     # Arguments
         delta_scale: List with two elements having the normalized deltas.
             e.g. ''[.25, .25]''.
@@ -323,6 +329,7 @@ class RandomKeypointTranslation(Processor):
 
 class RandomKeypointRotation(Processor):
     """Randomly rotate an images with its corresponding keypoints.
+
     # Arguments
         rotation_range: Int. indicating the max and min values in degrees
             of the uniform distribution ''[-range, range]'' from which the
@@ -385,12 +392,61 @@ class RandomKeypointRotation(Processor):
         return image, keypoints
 
 
+class RandomRotation(Processor):
+    """Randomly rotate an images
+
+    # Arguments
+        rotation_range: Int. indicating the max and min values in degrees
+            of the uniform distribution ``[-range, range]`` from which the
+            angles are sampled.
+        fill_color: ''None'' or List of three integers indicating the
+            color values e.g. ``[0, 0, 0]``. If ``None`` mean channel values of
+            the image will be calculated as fill values.
+        probability: Float between 0 and 1.
+    """
+    def __init__(self, rotation_range=30, fill_color=None, probability=0.5):
+        super(RandomRotation, self).__init__()
+        self.rotation_range = rotation_range
+        self.fill_color = fill_color
+        self.probability = probability
+
+    @property
+    def probability(self):
+        return self._probability
+
+    @probability.setter
+    def probability(self, value):
+        if not (0.0 < value <= 1.0):
+            raise ValueError('Probability should be between "[0, 1]".')
+        self._probability = value
+
+    def _calculate_image_center(self, image):
+        return (int(image.shape[0] / 2), int(image.shape[1] / 2))
+
+    def _rotate_image(self, image, degrees):
+        center = self._calculate_image_center(image)
+        matrix = get_rotation_matrix(center, degrees)
+        if self.fill_color is None:
+            fill_color = np.mean(image, axis=(0, 1))
+        return warp_affine(image, matrix, fill_color)
+
+    def _sample_rotation(self, rotation_range):
+        return np.random.uniform(-rotation_range, rotation_range)
+
+    def call(self, image):
+        if self.probability >= np.random.rand():
+            degrees = self._sample_rotation(self.rotation_range)
+            image = self._rotate_image(image, degrees)
+        return image
+
+
 class TranslateImage(Processor):
     """Applies a translation of image.
     The translation is a list of length two indicating the x, y values.
+
     # Arguments
         fill_color: List of three integers indicating the
-            color values e.g. [0,0,0]
+            color values e.g. ``[0, 0, 0]``
     """
     def __init__(self, fill_color=None):
         super(TranslateImage, self).__init__()

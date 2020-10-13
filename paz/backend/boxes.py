@@ -411,11 +411,12 @@ def flip_left_right(boxes, width):
     # Returns
         Numpy array of shape `[num_boxes, 4]`.
     """
-    boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
-    return boxes
+    flipped_boxes = boxes.copy()
+    flipped_boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+    return flipped_boxes
 
 
-def to_absolute_coordinates(image, boxes):
+def to_image_coordinates(boxes, image):
     """Transforms normalized box coordinates into image coordinates.
     # Arguments
         image: Numpy array.
@@ -424,14 +425,15 @@ def to_absolute_coordinates(image, boxes):
         Numpy array of shape `[num_boxes, N]`.
     """
     height, width = image.shape[:2]
-    boxes[:, 0] = boxes[:, 0] * width
-    boxes[:, 2] = boxes[:, 2] * width
-    boxes[:, 1] = boxes[:, 1] * height
-    boxes[:, 3] = boxes[:, 3] * height
-    return boxes
+    image_boxes = boxes.copy()
+    image_boxes[:, 0] = boxes[:, 0] * width
+    image_boxes[:, 2] = boxes[:, 2] * width
+    image_boxes[:, 1] = boxes[:, 1] * height
+    image_boxes[:, 3] = boxes[:, 3] * height
+    return image_boxes
 
 
-def to_percent_coordinates(image, boxes):
+def to_normalized_coordinates(boxes, image):
     """Transforms coordinates in image dimensions to normalized coordinates.
     # Arguments
         image: Numpy array.
@@ -440,8 +442,9 @@ def to_percent_coordinates(image, boxes):
         Numpy array of shape `[num_boxes, N]`.
     """
     height, width = image.shape[:2]
-    boxes[:, 0] = boxes[:, 0] / width
-    boxes[:, 2] = boxes[:, 2] / width
-    boxes[:, 1] = boxes[:, 1] / height
-    boxes[:, 3] = boxes[:, 3] / height
-    return boxes
+    normalized_boxes = boxes.copy()
+    normalized_boxes[:, 0] = boxes[:, 0] / width
+    normalized_boxes[:, 2] = boxes[:, 2] / width
+    normalized_boxes[:, 1] = boxes[:, 1] / height
+    normalized_boxes[:, 3] = boxes[:, 3] / height
+    return normalized_boxes

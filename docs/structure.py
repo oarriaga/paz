@@ -36,10 +36,10 @@ PAGES = [
             boxes.make_box_square,
             boxes.match,
             boxes.nms_per_class,
-            boxes.to_absolute_coordinates,
+            boxes.to_image_coordinates,
             boxes.to_center_form,
             boxes.to_one_hot,
-            boxes.to_percent_coordinates,
+            boxes.to_normalized_coordinates,
             boxes.to_point_form
         ],
     },
@@ -80,7 +80,7 @@ PAGES = [
 
 
     {
-        'page': 'backend/image/draw.md',
+        'page': 'backend/draw.md',
         'functions': [
             draw.draw_circle,
             draw.draw_cube,
@@ -96,7 +96,7 @@ PAGES = [
 
 
     {
-        'page': 'backend/image/opencv_image.md',
+        'page': 'backend/image.md',
         'functions': [
             opencv_image.cast_image,
             opencv_image.resize_image,
@@ -109,7 +109,7 @@ PAGES = [
             opencv_image.random_flip_left_right,
             opencv_image.show_image,
             opencv_image.warp_affine,
-            opencv_image.save_image,
+            opencv_image.write_image,
             opencv_image.random_image_crop,
             opencv_image.make_random_plain_image,
             opencv_image.blend_alpha_channel,
@@ -243,11 +243,11 @@ PAGES = [
         'page': 'processors/geometric.md',
         'classes': [
             processors.RandomFlipBoxesLeftRight,
-            processors.ToAbsoluteBoxCoordinates,
+            processors.ToImageBoxCoordinates,
             processors.ToNormalizedBoxCoordinates,
             processors.RandomSampleCrop,
-            processors.ApplyRandomTranslation,
-            processors.ApplyRandomTranslation,
+            processors.RandomTranslation,
+            processors.RandomRotation,
             processors.RandomKeypointTranslation,
             processors.RandomKeypointRotation
         ]
@@ -329,29 +329,69 @@ PAGES = [
 
 
     {
-        'page': 'pipelines.md',
+        'page': 'pipelines/image.md',
+        'classes': [
+            pipelines.AugmentImage,
+            pipelines.PreprocessImage,
+            pipelines.DecoderPredictor,
+            pipelines.EncoderPredictor,
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/detection.md',
         'classes': [
             pipelines.AugmentBoxes,
             pipelines.AugmentDetection,
-            pipelines.AugmentImage,
-            pipelines.AutoEncoderPredictor,
-            pipelines.DecoderPredictor,
-            pipelines.EncoderPredictor,
+            pipelines.PreprocessBoxes,
+            pipelines.DetectSingleShot,
+            pipelines.DetectHaarCascade,
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/keypoints.md',
+        'classes': [
             pipelines.KeypointNetInference,
             pipelines.KeypointNetSharedAugmentation,
-            pipelines.PreprocessBoxes,
-            pipelines.PreprocessImage,
+            pipelines.EstimateKeypoints2D,
+            pipelines.DetectKeypoints2D,
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/pose.md',
+        'classes': [
+            pipelines.EstimatePoseKeypoints,
+            pipelines.HeadPoseKeypointNet2D32
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/renderer.md',
+        'classes': [
             pipelines.RandomizeRenderedImage,
             pipelines.RenderTwoViews,
-            pipelines.SingleShotPrediction,
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/applications.md',
+        'classes': [
             pipelines.SSD512COCO,
-            pipelines.SSD512YCBVideo,
             pipelines.SSD300VOC,
+            pipelines.SSD512YCBVideo,
             pipelines.SSD300FAT,
-            pipelines.HaarCascadePrediction,
+            pipelines.DetectMiniXceptionFER,
+            pipelines.MiniXceptionFER,
+            pipelines.FaceKeypointNet2D32,
+            pipelines.HeadPoseKeypointNet2D32,
             pipelines.HaarCascadeFrontalFace,
-            pipelines.XceptionClassifierFER,
-            pipelines.XceptionDetectionFER,
         ]
     },
 
@@ -394,8 +434,6 @@ PAGES = [
             (loader.Loader, [loader.Loader.load_data])
         ]
     },
-
-
 
 
 

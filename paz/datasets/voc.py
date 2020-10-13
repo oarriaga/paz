@@ -7,6 +7,29 @@ from ..abstract import Loader
 
 
 class VOC(Loader):
+    """ Dataset loader for the falling things dataset (FAT).
+
+    # Arguments
+        data_path: Data path to VOC2007 annotations
+        split: String determining the data split to load.
+            e.g. `train`, `val` or `test`
+        class_names: `all` or list. If list it should contain as elements
+            strings indicating each class name.
+        name: String or list indicating with dataset or datasets to load.
+            e.g. ``VOC2007`` or ``[''VOC2007'', VOC2012]``.
+        with_difficult_samples: Boolean. If ``True`` flagged difficult boxes
+            will be added to the returned data.
+        evaluate: Boolean. If ``True`` returned data will be loaded without
+            normalization for a direct evaluation.
+
+    # Return
+        data: List of dictionaries with keys corresponding to the image paths
+        and values numpy arrays of shape ``[num_objects, 4 + 1]``
+        where the ``+ 1`` contains the ``class_arg`` and ``num_objects`` refers
+        to the amount of boxes in the image.
+
+    """
+    # TODO check for split
     def __init__(self, path=None, split='train', class_names='all',
                  name='VOC2007', with_difficult_samples=True, evaluate=False):
 
@@ -21,17 +44,17 @@ class VOC(Loader):
         self.arg_to_class = None
 
     def load_data(self):
-        if self.name == 'VOC2007':
+        if ((self.name == 'VOC2007') or (self.name == 'VOC2012')):
             ground_truth_data = self._load_VOC(self.name, self.split)
-        if self.name == 'VOC2012':
-            ground_truth_data = self._load_VOC(self.name, self.split)
-        if isinstance(self.name, list):
+        elif isinstance(self.name, list):
             if not isinstance(self.split, list):
                 raise Exception("'split' should also be a list")
             if set(self.name).issubset(['VOC2007', 'VOC2012']):
                 data_A = self._load_VOC(self.name[0], self.split[0])
                 data_B = self._load_VOC(self.name[1], self.split[1])
                 ground_truth_data = data_A + data_B
+        else:
+            raise ValueError('Invalid name given.')
         return ground_truth_data
 
     def _load_VOC(self, dataset_name, split):
@@ -57,7 +80,7 @@ class VOCParser(object):
 
     # Return
         data: Dictionary which keys correspond to the image names
-        and values are numpy arrays of shape (num_objects, 4 + num_classes)
+        and values are numpy arrays of shape (num_objects, 4 + 1)
         num_objects refers to the number of objects in that specific image
     """
 
@@ -68,9 +91,6 @@ class VOCParser(object):
 
         if dataset_name not in ['VOC2007', 'VOC2012']:
             raise Exception('Invalid dataset name.')
-
-        # if split not in ['train', 'val', 'trainval', 'test', 'all']:
-        #     raise Exception('Invalid split name.')
 
         # creating data set prefix paths variables
         self.dataset_name = dataset_name
@@ -115,6 +135,7 @@ class VOCParser(object):
             size_tree = root.find('size')
             width = float(size_tree.find('width').text)
             height = float(size_tree.find('height').text)
+            # check evaluate flag
             if self.evaluate:
                 width = 1
                 height = 1
