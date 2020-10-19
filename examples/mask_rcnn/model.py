@@ -7,20 +7,15 @@ Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
 """
 
-import os
 import re
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.layers import Input, Add, Conv2D, Concatenate
 from tensorflow.keras.layers import UpSampling2D, MaxPooling2D
 from tensorflow.keras.models import Model
 
-from mask_rcnn.utils import log, mold_image, compose_image_meta
-from mask_rcnn.utils import resnet_graph, build_rpn_model
-from mask_rcnn.utils import norm_boxes, generate_pyramid_anchors
-from mask_rcnn.utils import denorm_boxes, unmold_mask, resize_image
-from mask_rcnn.utils import compute_backbone_shapes
+from mask_rcnn.utils import log
+from mask_rcnn.utils import get_resnet_features, build_rpn_model
 tf.compat.v1.disable_eager_execution()
 
 
@@ -37,8 +32,8 @@ class MaskRCNN():
         self.model_dir = model_dir
         self.TRAIN_BN = config.TRAIN_BN
         self.IMAGE_SHAPE = config.IMAGE_SHAPE
-        self.BACKBONE = config.BACKBONE
-        self.TOP_DOWN_PYRAMID_SIZE = config.TOP_DOWN_PYRAMID_SIZE
+        self.get_backbone_features = config.BACKBONE
+        self.FPN_SIZE = config.TOP_DOWN_PYRAMID_SIZE
         self.keras_model = self.build()
 
     def build(self):
@@ -81,37 +76,35 @@ class MaskRCNN():
         #             shape=[config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1], None],
         #             name="input_gt_masks", dtype=bool)
 
-        if callable(self.BACKBONE):
-            _, C2, C3, C4, C5 = self.BACKBONE(input_image, stage5=True,
-                                              train_bn=self.TRAIN_BN)
+        if callable(self.get_backbone_features):
+            _, C2, C3, C4, C5 = self.get_backbone_features(
+                        input_image, stage5=True, train_bn=self.TRAIN_BN)
         else:
-            _, C2, C3, C4, C5 = resnet_graph(input_image, self.BACKBONE,
+            _, C2, C3, C4, C5 = get_resnet_features(input_image, self.get_backbone_features,
                                              stage5=True,
                                              train_bn=self.TRAIN_BN)
 
-        P5 = Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c5p5')(C5)
-        P4 = Add(name='fpn_p4add')([
-            UpSampling2D(size=(2, 2), name='fpn_p5upsampled')(P5),
-            Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c4p4')(C4)])
-        P3 = Add(name='fpn_p3add')([
-            UpSampling2D(size=(2, 2), name='fpn_p4upsampled')(P4),
-            Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (1, 1),
-                   name='fpn_c3p3')(C3)])
-        P2 = Add(name='fpn_p2add')([
-            UpSampling2D(size=(2, 2), name='fpn_p3upsampled')(P3),
-            Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c2p2')(C2)])
+        P5 = Conv2D(self.FPN_SIZE, (1, 1), name='fpn_c5p5')(C5)
+        upsample_P5 = UpSampling2D(size=(2, 2), name='fpn_p5upsampled')(P5)
+        conv2d_P4 = Conv2D(self.FPN_SIZE, (1, 1), name='fpn_c4p4')(C4)
+        P4 = Add(name='fpn_p4add')([upsample_P5, conv2d_P4])
+
+        upsample_P4 = UpSampling2D(size=(2, 2), name='fpn_p4upsampled')(P4)
+        conv2d_P3 = Conv2D(self.FPN_SIZE, (1, 1), name='fpn_c3p3')(C3)
+        P3 = Add(name='fpn_p3add')([upsample_P4, conv2d_P3])
+
+        upsample_P3 = UpSampling2D(size=(2, 2), name='fpn_p3upsampled')(P3)
+        conv2d_P2 = Conv2D(self.FPN_SIZE, (1, 1), name='fpn_c2p2')(C2)
+        P2 = Add(name='fpn_p2add')([upsample_P3, conv2d_P2])
+
         # Attach 3x3 conv to all P layers to get the final feature maps.
-        P2 = Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding='SAME',
-                    name='fpn_p2')(P2)
-        P3 = Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding='SAME',
-                    name='fpn_p3')(P3)
-        P4 = Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding='SAME',
-                    name='fpn_p4')(P4)
-        P5 = Conv2D(self.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding='SAME',
-                    name='fpn_p5')(P5)
+        P2 = Conv2D(self.FPN_SIZE, (3, 3), padding='SAME', name='fpn_p2')(P2)
+        P3 = Conv2D(self.FPN_SIZE, (3, 3), padding='SAME', name='fpn_p3')(P3)
+        P4 = Conv2D(self.FPN_SIZE, (3, 3), padding='SAME', name='fpn_p4')(P4)
+        P5 = Conv2D(self.FPN_SIZE, (3, 3), padding='SAME', name='fpn_p5')(P5)
         P6 = MaxPooling2D(pool_size=(1, 1), strides=2, name='fpn_p6')(P5)
 
-        model = Model([input_image], [P2, P3, P4, P5, P6])
+        model = Model([input_image], [P2, P3, P4, P5, P6], name='mask_rcnn')
 
         # Anchors
         # if mode == "training":
@@ -201,33 +194,13 @@ class MaskRCNN():
     def RPN(self, rpn_feature_maps):
         rpn = build_rpn_model(self.config.RPN_ANCHOR_STRIDE,
                               len(self.config.RPN_ANCHOR_RATIOS),
-                              self.TOP_DOWN_PYRAMID_SIZE)
+                              self.FPN_SIZE)
         layer_outputs = [rpn([feature]) for feature in rpn_feature_maps]
-        output_names = ['rpn_class_logits', 'rpn_class', 'rpn_bbox']
+        names = ['rpn_class_logits', 'rpn_class', 'rpn_bbox']
         outputs = list(zip(*layer_outputs))
-        return [Concatenate(axis=1, name=name)(list(output))
-                for output, name in zip(outputs, output_names)]
-
-    def find_last_checkpoint(self):
-        directory_names = next(os.walk(self.model_dir))[1]
-        key = self.config.NAME.lower()
-        directory_names = filter(lambda f: f.startswith(key), directory_names)
-        directory_names = sorted(directory_names)
-        if not directory_names:
-            import errno
-            raise FileNotFoundError(
-                errno.ENOENT,
-                'Could not find model directory {}'.format(self.model_dir))
-        directory = os.path.join(self.model_dir, directory_names[-1])
-        checkpoints = next(os.walk(directory))[2]
-        checkpoints = filter(lambda f: f.startswith('mask_rcnn'), checkpoints)
-        checkpoints = sorted(checkpoints)
-        if not checkpoints:
-            import errno
-            raise FileNotFoundError(
-                errno.ENOENT, 'Could not find weights in {}'.format(directory))
-        last_checkpoint = os.path.join(directory, checkpoints[-1])
-        return last_checkpoint
+        outputs = [Concatenate(axis=1, name=name)(list(output))
+                   for output, name in zip(outputs, names)]
+        return outputs
 
     def get_imagenet_weights(self):
         WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/'\
@@ -241,6 +214,15 @@ class MaskRCNN():
 
     def set_trainable(self, layer_regex, keras_model=None,
                       indent=0, verbose=1):
+        """Sets model layers as trainable if their names match
+            the given regular expression.
+
+        # Arguments:
+            layer_regex: Pre-defined layer regular expressions
+                         Select 'heads', '3+', '4+', '5+' or 'all'
+            keras_model: Mask RCNN model
+        """
+        
         if verbose > 0 and keras_model is None:
             log('Selecting layers to train')
 
@@ -250,7 +232,6 @@ class MaskRCNN():
         layers = keras_model.layers
         for layer in layers:
             if layer.__class__.__name__ == 'Model':
-                print('In model: ', layer.name)
                 self.set_trainable(
                     layer_regex, keras_model=layer, indent=indent + 4)
                 continue
@@ -264,197 +245,3 @@ class MaskRCNN():
             if trainable and verbose > 0:
                 log("{}{:20}   ({})".format(" " * indent, layer.name,
                                             layer.__class__.__name__))
-
-    def mold_inputs(self, images):
-        """Mold inputs as expected by network
-
-        # Arguments:
-            images: List of image matrices [height,width,depth]
-
-        # Returns:
-            molded_images: [N, h, w, 3]. Images resized and normalized.
-            image_metas: [N, length of meta data]. Details about each image.
-            windows: [N, (y_min, x_min, y_max, x_max)]
-                     Image portion exculsing padding
-        """
-        molded_images, image_metas, windows = [], [], []
-        for image in images:
-            molded_image, window, scale, padding, crop = resize_image(
-                image,
-                min_dim=self.config.IMAGE_MIN_DIM,
-                min_scale=self.config.IMAGE_MIN_SCALE,
-                max_dim=self.config.IMAGE_MAX_DIM,
-                mode=self.config.IMAGE_RESIZE_MODE)
-
-            molded_image = mold_image(molded_image, self.config)
-            image_meta = compose_image_meta(
-                0, image.shape, molded_image.shape, window, scale,
-                np.zeros([self.config.NUM_CLASSES], dtype=np.int32))
-            molded_images.append(molded_image)
-            windows.append(window)
-            image_metas.append(image_meta)
-        molded_images = np.stack(molded_images)
-        image_metas = np.stack(image_metas)
-        windows = np.stack(windows)
-        return molded_images, image_metas, windows
-
-    def unmold_detections(self, detections, mrcnn_mask, original_image_shape,
-                          image_shape, window):
-        """Unmolds the detections
-
-        # Arguments:
-            detections: [N, (y_min, x_min, y_max, x_max, class_id, score)]
-            mrcnn_mask: [N, height, width, num_classes]
-            original_image_shape: [H, W, num_channels] before resizing
-            image_shape: [H, W, num_channels] After resizing
-            window: [y_min, x_min, y_max, x_max]
-
-        # Returns:
-            boxes: [N, (y_min, x_min, y_max, x_max)]
-                   Bounding boxes in pixels
-            class_ids: Integer class IDs for each bounding box
-            scores: Float probability scores of the class_id
-            masks: [height, width, num_instances] Instance masks
-        """
-        zero_index = np.where(detections[:, 4] == 0)[0]
-        N = zero_index[0] if zero_index.shape[0] > 0 else detections.shape[0]
-
-        boxes = detections[:N, :4]
-        class_ids = detections[:N, 4].astype(np.int32)
-        scores = detections[:N, 5]
-        masks = mrcnn_mask[np.arange(N), :, :, class_ids]
-
-        window = norm_boxes(window, image_shape[:2])
-        Wy_min, Wx_min, Wy_max, Wx_max = window
-        shift = np.array([Wy_min, Wx_min, Wy_min, Wx_min])
-        window_H = Wy_max - Wy_min
-        window_W = Wx_max - Wx_min
-        scale = np.array([window_H, window_W, window_H, window_W])
-        boxes = np.divide(boxes - shift, scale)
-
-        boxes = denorm_boxes(boxes, original_image_shape[:2])
-        exclude_index = np.where(
-            (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
-        if exclude_index.shape[0] > 0:
-            boxes = np.delete(boxes, exclude_index, axis=0)
-            class_ids = np.delete(class_ids, exclude_index, axis=0)
-            scores = np.delete(scores, exclude_index, axis=0)
-            masks = np.delete(masks, exclude_index, axis=0)
-            N = class_ids.shape[0]
-
-        full_masks = []
-        for index in range(N):
-            full_mask = unmold_mask(masks[index], boxes[index],
-                                    original_image_shape)
-            full_masks.append(full_mask)
-        full_masks = np.stack(full_masks, axis=-1)\
-            if full_masks else np.empty(original_image_shape[:2] + (0,))
-        return boxes, class_ids, scores, full_masks
-
-    def detect(self, images, verbose=0):
-        """Runs the detection pipeline.
-
-        # Arguments:
-            images: List of images, potentially of different sizes.
-
-        # Returns:
-            rois: [N, (y_min, x_min, y_max, x_max)]
-                  detection bounding boxes
-            class_ids: N, int class IDs
-            scores: N, float probability scores for the class IDs
-            masks: [H, W, num_masks] instance binary masks
-        """
-        assert len(images) == self.config.BATCH_SIZE,\
-            'len(images) must be equal to BATCH_SIZE'
-
-        if verbose:
-            log('Processing {} images'.format(len(images)))
-            for image in images:
-                log('image', image)
-
-        molded_images, image_metas, windows = self.mold_inputs(images)
-        image_shape = molded_images[0].shape
-        for g in molded_images[1:]:
-            assert g.shape == image_shape,\
-                'After resizing, all images must have the same size'
-
-        anchors = self.get_anchors(image_shape)
-        anchors = np.broadcast_to(anchors, 
-                                  (self.config.BATCH_SIZE,) + anchors.shape)
-        if verbose:
-            log('molded_images', molded_images)
-            log('image_metas', image_metas)
-            log('anchors', anchors)
-
-        detections, _, _, mrcnn_mask, _, _, _ =\
-            self.keras_model.predict([molded_images, anchors], verbose=0)
-
-        results = []
-        for index, image in enumerate(images):
-            final_rois, final_class_ids, final_scores, final_masks =\
-                self.unmold_detections(detections[index], mrcnn_mask[index],
-                                       image.shape, molded_images[index].shape,
-                                       windows[index])
-            results.append({
-                'rois': final_rois,
-                'class_ids': final_class_ids,
-                'scores': final_scores,
-                'masks': final_masks,
-            })
-        return results
-
-    def get_anchors(self, image_shape):
-        """Returns anchor pyramid for the given image size
-        """
-        backbone_shapes = compute_backbone_shapes(self.config, image_shape)
-        if not hasattr(self, '_anchor_cache'):
-            self._anchor_cache = {}
-        if not tuple(image_shape) in self._anchor_cache:
-            anchors = generate_pyramid_anchors(
-                self.config.RPN_ANCHOR_SCALES,
-                self.config.RPN_ANCHOR_RATIOS,
-                backbone_shapes,
-                self.config.BACKBONE_STRIDES,
-                self.config.RPN_ANCHOR_STRIDE)
-            self.anchors = anchors
-            self._anchor_cache[tuple(image_shape)] = norm_boxes(
-                                                    anchors, image_shape[:2])
-        return self._anchor_cache[tuple(image_shape)]
-
-    def ancestor(self, tensor, name, checked=None):
-        """Finds the ancestor of a TF tensor in the computation graph.
-
-        # Arguments:
-            tensor: TensorFlow symbolic tensor.
-            name: Name of ancestor tensor to find
-            checked: A list of tensors that were already
-                     searched to avoid loops in traversing the graph.
-        """
-        checked = checked if checked is not None else []
-        if len(checked) > 500:
-            return None
-        if isinstance(name, str):
-            name = re.compile(name.replace('/', r'(\_\d+)*/'))
-        for parent in tensor.op.inputs:
-            if parent in checked:
-                continue
-            if bool(re.fullmatch(name, parent.name)):
-                return parent
-            checked.append(parent)
-            ancestor = self.ancestor(parent, name, checked)
-            if ancestor is not None:
-                return ancestor
-        return None
-
-    def find_trainable_layer(self, layer):
-        if layer.__class__.__name__ == 'TimeDistributed':
-            return self.find_trainable_layer(layer.layer)
-        return layer
-
-    def get_trainable_layers(self):
-        layers = []
-        for layer in self.keras_model.layers:
-            layer = self.find_trainable_layer(layer)
-            if layer.get_weights():
-                layers.append(layer)
-        return layers

@@ -333,7 +333,7 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     return np.concatenate(anchors, axis=0)
 
 
-def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
+def get_resnet_features(input_image, architecture, stage5=False, train_bn=True):
     """Builds ResNet graph.
 
     # Arguments:
@@ -881,7 +881,7 @@ def parse_image_meta_graph(meta):
     }
 
 
-def mold_image(images, config):
+def normalize_image(images, config):
     """Expects an RGB image (or array of images) and subtracts
     the mean pixel and converts it to float. Expects image
     colors in RGB order.
@@ -1498,7 +1498,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             batch_image_meta[b] = image_meta
             batch_rpn_match[b] = rpn_match[:, np.newaxis]
             batch_rpn_bbox[b] = rpn_bbox
-            batch_images[b] = mold_image(image.astype(np.float32), config)
+            batch_images[b] = normalize_image(image.astype(np.float32), config)
             batch_gt_class_ids[b, :gt_class_ids.shape[0]] = gt_class_ids
             batch_gt_boxes[b, :gt_boxes.shape[0]] = gt_boxes
             batch_gt_masks[b, :, :, :gt_masks.shape[-1]] = gt_masks
