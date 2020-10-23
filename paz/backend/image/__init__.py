@@ -38,3 +38,4 @@ from .draw import draw_cube
 from .draw import draw_random_polygon
 from .draw import draw_filled_polygon
 from .draw import lincolor
+from .draw import make_mosaic
