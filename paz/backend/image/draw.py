@@ -228,3 +228,34 @@ def lincolor(num_colors, saturation=1, value=1, normalized=False):
             RGB_color = [int(color * 255) for color in RGB_color]
         RGB_colors.append(RGB_color)
     return RGB_colors
+
+
+def make_mosaic(images, shape, border=0):
+    """ Creates an image mosaic.
+
+    # Arguments
+        images: Numpy array of shape (num_images, height, width, num_channels)
+        shape: List of two integers indicating the mosaic shape.
+            Shape must satisfy: shape[0] * shape[1] == len(images).
+        border: Integer indicating the border per image.
+
+    # Returns
+        A numpy array containing all images.
+    """
+    num_images = len(images)
+    num_rows, num_cols = shape
+    H, W, num_channels = images.shape[1:]
+    mosaic = np.ma.masked_all(
+        (num_rows * H + (num_rows - 1) * border,
+         num_cols * W + (num_cols - 1) * border, num_channels),
+        dtype=np.float32)
+    padded_H = H + border
+    padded_W = W + border
+    for image_arg in range(num_images):
+        row = int(np.floor(image_arg / num_cols))
+        col = image_arg % num_cols
+        image = images[image_arg]
+        image_shape = image.shape
+        mosaic[row * padded_H:row * padded_H + image_shape[0],
+               col * padded_W:col * padded_W + image_shape[1], :] = image
+    return mosaic.astype('uint8')
