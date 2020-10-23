@@ -90,7 +90,8 @@ PAGES = [
             draw.draw_random_polygon,
             draw.draw_rectangle,
             draw.lincolor,
-            draw.put_text
+            draw.put_text,
+            draw.make_mosaic
         ],
     },
 
