@@ -6,10 +6,11 @@ from tensorflow.keras.regularizers import L2
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from tensorflow.keras.callbacks import ModelCheckpoint
 from paz.datasets.ycb_video import YCBVideo
-
+from paz.abstract import ProcessingSequence
 from mask_rcnn.model import MaskRCNN
 from mask_rcnn.config import Config
 from mask_rcnn.utils import data_generator
+from mask_rcnn.pipeline import DetectionPipeline
 
 
 class YCBVideoConfig(Config):
@@ -84,13 +85,27 @@ layer_regex = {
 if args.layers in layer_regex.keys():
     layers = layer_regex[args.layers]
 
+boxes = data_managers[0].data['boxes']
+masks = data_managers[0].data['masks']
 
-train_generator = data_generator(data_managers[0], config, shuffle=True,
-                                 augmentation=None,
-                                 batch_size=config.BATCH_SIZE)
-val_generator = data_generator(evaluation_data_managers[0], config,
-                               shuffle=True,
-                               batch_size=config.BATCH_SIZE)
+# setting detection pipeline
+detectors = []
+for split in ['TRAIN', 'VAL']:
+    detector = DetectionPipeline(boxes, masks, split=split)
+    detectors.append(detector)
+
+# setting sequencers
+sequencers = []
+for data, detector in zip(datasets, detectors):
+    sequencer = ProcessingSequence(detector, args.batch_size, data)
+    sequencers.append(sequencer)
+
+# train_generator = data_generator(data_managers[0], config, shuffle=True,
+#                                  augmentation=None,
+#                                  batch_size=config.BATCH_SIZE)
+# val_generator = data_generator(evaluation_data_managers[0], config,
+#                                shuffle=True,
+#                                batch_size=config.BATCH_SIZE)
 
 model_path = os.path.join(args.save_path, 'ycb')
 if not os.path.exists(model_path):
@@ -138,11 +153,11 @@ for name in loss_names:
 
 
 model.keras_model.fit_generator(
-    train_generator,
+    sequencers[0],
     epochs=args.epochs,
     steps_per_epoch=args.steps_per_epoch,
     callbacks=[log, checkpoint, early_stop],
-    validation_data=val_generator,
+    validation_data=evaluation_data_managers[0],
     validation_steps=config.VALIDATION_STEPS,
     max_queue_size=100,
     workers=args.workers,

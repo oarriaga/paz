@@ -894,7 +894,6 @@ def unmold_image(normalized_images, config):
     return (normalized_images + config.MEAN_PIXEL).astype(np.uint8)
 
 
-
 def norm_boxes_graph(boxes, shape):
     """Converts boxes from pixel coordinates to normalized coordinates.
     boxes: [..., (y1, x1, y2, x2)] in pixel coordinates
@@ -1409,10 +1408,10 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
     # [anchor_count, (y1, x1, y2, x2)]
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
     anchors = generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
-                                             config.RPN_ANCHOR_RATIOS,
-                                             backbone_shapes,
-                                             config.BACKBONE_STRIDES,
-                                             config.RPN_ANCHOR_STRIDE)
+                                       config.RPN_ANCHOR_RATIOS,
+                                       backbone_shapes,
+                                       config.BACKBONE_STRIDES,
+                                       config.RPN_ANCHOR_STRIDE)
 
     # Keras requires a generator to run indefinitely.
     while True:

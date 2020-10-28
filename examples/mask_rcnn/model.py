@@ -80,9 +80,10 @@ class MaskRCNN():
             _, C2, C3, C4, C5 = self.get_backbone_features(
                         input_image, stage5=True, train_bn=self.TRAIN_BN)
         else:
-            _, C2, C3, C4, C5 = get_resnet_features(input_image, self.get_backbone_features,
-                                             stage5=True,
-                                             train_bn=self.TRAIN_BN)
+            _, C2, C3, C4, C5 = get_resnet_features(input_image,
+                                                    self.get_backbone_features,
+                                                    stage5=True,
+                                                    train_bn=self.TRAIN_BN)
 
         P5 = Conv2D(self.FPN_SIZE, (1, 1), name='fpn_c5p5')(C5)
         upsample_P5 = UpSampling2D(size=(2, 2), name='fpn_p5upsampled')(P5)

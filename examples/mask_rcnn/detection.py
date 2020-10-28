@@ -6,6 +6,19 @@ from mask_rcnn.utils import generate_pyramid_anchors, denorm_boxes
 from mask_rcnn.utils import unmold_mask
 
 
+class NormalizeImages(Processor):
+    def __init__(self, config):
+        self.config = config
+        super(NormalizeImages, self).__init__()
+
+    def call(self, images, windows):
+        normalized_images = []
+        for image in images:
+            molded_image = normalize_image(image, self.config)
+            normalized_images.append(molded_image)
+        return normalized_images, windows
+
+
 class ResizeImages(Processor):
     def __init__(self, config):
         self.IMAGE_MIN_DIM = config.IMAGE_MIN_DIM
@@ -25,18 +38,6 @@ class ResizeImages(Processor):
             resized_images.append(resized_image)
             windows.append(window)
         return resized_images, windows
-
-
-class NormalizeImages(Processor):
-    def __init__(self, config):
-        self.config = config
-
-    def call(self, images, windows):
-        normalized_images = []
-        for image in images:
-            molded_image = normalize_image(image, self.config)
-            normalized_images.append(molded_image)
-        return normalized_images, windows
 
 
 class Detect(Processor):

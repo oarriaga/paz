@@ -4,6 +4,7 @@ from ..abstract import Processor
 
 from ..backend.image import cast_image
 from ..backend.image import load_image
+from ..backend.image import load_mask
 from ..backend.image import random_saturation
 from ..backend.image import random_brightness
 from ..backend.image import random_contrast
@@ -99,6 +100,20 @@ class LoadImage(Processor):
 
     def call(self, image):
         return load_image(image, self.num_channels)
+
+
+class LoadMask(Processor):
+    """Loads mask.
+
+    # Arguments
+        num_channels: Integer, valid integers are: 1, 3 and 4.
+    """
+    def __init__(self, num_channels=3):
+        self.num_channels = num_channels
+        super(LoadMask, self).__init__()
+
+    def call(self, mask):
+        return load_mask(mask)
 
 
 class RandomSaturation(Processor):

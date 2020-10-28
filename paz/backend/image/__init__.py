@@ -8,6 +8,7 @@ from .opencv_image import cast_image
 from .opencv_image import resize_image
 from .opencv_image import convert_color_space
 from .opencv_image import load_image
+from .opencv_image import load_mask
 from .opencv_image import random_saturation
 from .opencv_image import random_brightness
 from .opencv_image import random_contrast
@@ -38,3 +39,4 @@ from .draw import draw_cube
 from .draw import draw_random_polygon
 from .draw import draw_filled_polygon
 from .draw import lincolor
+from .draw import add_mask

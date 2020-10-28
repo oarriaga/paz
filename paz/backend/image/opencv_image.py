@@ -70,6 +70,27 @@ def load_image(filepath, num_channels=3):
     return image
 
 
+def load_mask(masks):
+    """Stacks and loads masks for given dictionary of filepaths.
+
+    # Arguments
+        masks: Dictionary containing filepath to masks
+
+    # Returns
+        Numpy array
+    """
+    class_ids = sorted(list(masks.keys()))
+    mask_array = []
+    for class_id in class_ids:
+        rgb_mask = cv2.imread(masks[class_id])
+        rgb_mask = convert_color_space(rgb_mask, BGR2RGB)
+        mask_array.append(rgb_mask)
+    mask = np.stack(mask_array, axis=2)
+    mask_shape = (mask.shape[0], mask.shape[1], 3 * len(class_ids))
+    mask = np.reshape(mask, mask_shape)
+    return mask
+
+
 def random_saturation(image, lower=0.3, upper=1.5):
     """Applies random saturation to an RGB image.
 

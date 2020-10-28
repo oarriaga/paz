@@ -228,3 +228,7 @@ def lincolor(num_colors, saturation=1, value=1, normalized=False):
             RGB_color = [int(color * 255) for color in RGB_color]
         RGB_colors.append(RGB_color)
     return RGB_colors
+
+
+def add_mask(image, mask):
+    return cv2.add(image, mask)
