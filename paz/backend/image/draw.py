@@ -6,7 +6,7 @@ import cv2
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
-
+FILLED = cv2.FILLED
 
 def draw_circle(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
@@ -83,7 +83,7 @@ def draw_rectangle(image, corner_A, corner_B, color, thickness):
         image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
 
 
-def draw_dot(image, point, color=GREEN, radius=5, filled=True):
+def draw_dot(image, point, color=GREEN, radius=5, filled=FILLED):
     """ Draws a dot (small rectangle) in image.
 
     # Arguments
@@ -99,7 +99,7 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=True):
     # drawing outer black rectangle
     point_A = (int(point[0] - radius), int(point[1] - radius))
     point_B = (int(point[0] + radius), int(point[1] + radius))
-    draw_rectangle(image, tuple(point_A), tuple(point_B), (0, 0, 0), filled)
+    draw_rectangle(image, tuple(point_A), tuple(point_B), color, filled)
 
     # drawing innner rectangle with given `color`
     inner_radius = int(0.8 * radius)
