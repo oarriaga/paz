@@ -27,16 +27,25 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 ## Table of Contents
 <!--ts-->
 * [Examples](#selected-examples)
+* [Installation](#installation)
 * [Hierarchical APIs](#hierarchical-apis)
     * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#low-level)
 * [Additional functionality](#additional-functionality)
     * [Implemented models](#models)
-* [Installation](#installation)
 * [Documentation](#documentation)
 * [Motivation](#motivation)
 * [Citation](#citation)
 * [Funding](#funding)
 <!--te-->
+
+
+## Installation
+PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
+
+To install PAZ clone the repository and inside it run:
+```
+pip install pypaz --user
+```
 
 ## Hierarchical APIs
 PAZ can be used with three different API levels which are there to be helpful for the user's specific application.
@@ -179,29 +188,6 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)           |
 
-
-## Installation
-PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
-
-To install PAZ clone the repository and inside it run:
-
-```
-pip install . --user
-```
-
-## Tests and coverage
-Continuous integration is managed trough [github actions](https://github.com/features/actions) using [pytest](https://docs.pytest.org/en/stable/).
-You can then check for the tests by running:
-```
-pytest tests
-``` 
-Test coverage can be checked using [coverage](https://coverage.readthedocs.io/en/coverage-5.2.1/).
-You can install coverage by calling: `pip install coverage --user`
-You can then check for the test coverage by running:
-```
-coverage run -m pytest tests/
-coverage report -m
-```
 ## Documentation
 In order to build the documentation of all the functionality in PAZ please look [here](https://github.com/oarriaga/paz/tree/master/docs).
 
@@ -220,8 +206,24 @@ I feel it's easy to blurry a company name with the individuals behind their proj
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration.
 
+
 ## Why the name **PAZ**?
 * The name PAZ satisfies it's theoretical definition by having it as an acronym for **Perception for Autonomous Systems** where the letter S is replaced for Z in order to indicate that for "System" we mean almost anything i.e. Z being a classical algebraic variable to indicate an unknown element.
+
+
+## Tests and coverage
+Continuous integration is managed trough [github actions](https://github.com/features/actions) using [pytest](https://docs.pytest.org/en/stable/).
+You can then check for the tests by running:
+```
+pytest tests
+``` 
+Test coverage can be checked using [coverage](https://coverage.readthedocs.io/en/coverage-5.2.1/).
+You can install coverage by calling: `pip install coverage --user`
+You can then check for the test coverage by running:
+```
+coverage run -m pytest tests/
+coverage report -m
+```
 
 ## Citation
 If you use PAZ please consider citating it. You can also find our paper here [https://arxiv.org/abs/2010.14541](https://arxiv.org/abs/2010.14541).
