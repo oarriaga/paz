@@ -97,15 +97,14 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=True):
         Numpy array with shape ``[H, W, 3]``. Image with dot.
     """
     # drawing outer black rectangle
-    point_A = (point[0] - radius, point[1] - radius)
-    point_B = (point[0] + radius, point[1] + radius)
-    # color = color[::-1]  # transform to BGR for openCV
+    point_A = (int(point[0] - radius), int(point[1] - radius))
+    point_B = (int(point[0] + radius), int(point[1] + radius))
     draw_rectangle(image, tuple(point_A), tuple(point_B), (0, 0, 0), filled)
 
     # drawing innner rectangle with given `color`
-    inner_radius = int(.8 * radius)
-    point_A = (point[0] - inner_radius, point[1] - inner_radius)
-    point_B = (point[0] + inner_radius, point[1] + inner_radius)
+    inner_radius = int(0.8 * radius)
+    point_A = (int(point[0] - inner_radius), int(point[1] - inner_radius))
+    point_B = (int(point[0] + inner_radius), int(point[1] + inner_radius))
     draw_rectangle(image, tuple(point_A), tuple(point_B), color, filled)
     return image
 
