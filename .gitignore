@@ -20,7 +20,7 @@
 
 dist/*
 build/*
-Paz.egg-info/*
+pypaz.egg-info/
 .pytest_cache/
 
 docs/site/*
