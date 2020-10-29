@@ -222,6 +222,17 @@ You put your craft out there for all of us to use and appreciate, and we ought f
 ## Why the name **PAZ**?
 * The name PAZ satisfies it's theoretical definition by having it as an acronym for **Perception for Autonomous Systems** where the letter S is replaced for Z in order to indicate that for "System" we mean almost anything i.e. Z being a classical algebraic variable to indicate an unknown element.
 
+```BibTeX
+@misc{arriaga2020perception,
+      title={Perception for Autonomous Systems (PAZ)}, 
+      author={Octavio Arriaga and Matias Valdenegro-Toro and Mohandass Muthuraja and Sushma Devaramani and Frank Kirchner},
+      year={2020},
+      eprint={2010.14541},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```
+
 ## Funding
 PAZ is currently developed in the [Robotics Group](https://robotik.dfki-bremen.de/de/ueber-uns/universitaet-bremen-arbeitsgruppe-robotik.html) of the [University of Bremen](https://www.uni-bremen.de/), together with the [Robotics Innovation Center](https://robotik.dfki-bremen.de/en/startpage.html) of the **German Research Center for Artificial Intelligence** (DFKI) in **Bremen**.
 PAZ has been funded by the German Federal Ministry for Economic Affairs and Energy and the [German Aerospace Center](https://www.dlr.de/DE/Home/home_node.html) (DLR).
