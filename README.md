@@ -34,6 +34,7 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 * [Installation](#installation)
 * [Documentation](#documentation)
 * [Motivation](#motivation)
+* [Citation](#citation)
 * [Funding](#funding)
 <!--te-->
 
@@ -210,17 +211,20 @@ Even though there are multiple high-level computer vision libraries in different
 ### Why Keras over other frameworks/libraries?
 In simple terms, I have always felt the API of Keras to be more mature.
 It allowed me to express my ideas at the level of complexity that was required. 
-Keras was often misinterpreted as a "beginners" framework; however, once you learn to abstract: Layer, Callbacks, Loss, Metrics or Model, the API remained intact and helpful for more complicated ideas. 
+Keras was often misinterpreted as an inflexible or a beginners framework; however, once you learn to abstract `Layer`, `Callbacks`, `Loss`, `Metrics` or `Model`, the API remained intact and helpful for more complicated ideas. 
 It allowed me to automate and write down experiments with no extra boilerplate.
-Furthermore, one could have had always created a custom training loop.
+Furthermore, one could always have created a custom training loop.
 
-As a final remark, I would like to mention, that I feel that we might tend to forget the great effort and emotional carriage behind every (open-source) project.
+As a final remark, I would like to mention, that I feel that we might tend to forget the great effort and emotional status behind every (open-source) project.
 I feel it's easy to blurry a company name with the individuals behind their project, and we forget that there is someone feeling our criticism and our praise.
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
-You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration before we lay upon you our hardened criticism.
+You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration.
 
 ## Why the name **PAZ**?
 * The name PAZ satisfies it's theoretical definition by having it as an acronym for **Perception for Autonomous Systems** where the letter S is replaced for Z in order to indicate that for "System" we mean almost anything i.e. Z being a classical algebraic variable to indicate an unknown element.
+
+## Citation
+If you use PAZ please consider citating it. You can also find our paper here [https://arxiv.org/abs/2010.14541](https://arxiv.org/abs/2010.14541).
 
 ```BibTeX
 @misc{arriaga2020perception,
