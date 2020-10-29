@@ -42,7 +42,7 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 ## Installation
 PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-To install PAZ clone the repository and inside it run:
+To install PAZ with pypi run:
 ```
 pip install pypaz --user
 ```
