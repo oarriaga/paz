@@ -54,6 +54,7 @@ nav:
   - Keypoints: backend/keypoints.md
   - Quaternions: backend/quaternion.md
   - Camera: backend/camera.md
+  - Render: backend/render.md
 - Abstract (core):
   - Messages: abstract/messages.md
   - Processor: abstract/processor.md
