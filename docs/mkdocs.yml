@@ -1,15 +1,10 @@
 site_name: 'PAZ - Documentation'
 
-theme: 
-    name: 'readthedocs'
-    palette:
-      primary: white
-      accent: orange
-    font:
-      text: Ubuntu
-      code: Ubuntu Mono
-    logo: images/logo3.png
-    favicon: images/logo3.png
+theme:
+  name: 'material'
+  palette:
+    primary: orange
+    accent: indigo
 
 markdown_extensions:
   - codehilite
