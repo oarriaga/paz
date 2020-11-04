@@ -1,0 +1,16 @@
+name: Publish Website
+on:
+  push:
+    branches:
+      - master
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - run: pip install mkdocs-material
+      - run: python docs/autogenerate_documentation.py
+      - run: mkdocs gh-deploy --force
