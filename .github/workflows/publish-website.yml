@@ -12,5 +12,6 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install mkdocs-material
+      - run: pip install . --user
       - run: python docs/autogenerate_documentation.py
       - run: mkdocs gh-deploy --force
