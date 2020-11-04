@@ -1,10 +1,6 @@
 """ Code extracted and modified from Keras:
 https://github.com/keras-team/keras/blob/master/docs/autogen.py
 """
-
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import re
 import inspect
 import os
@@ -70,26 +66,22 @@ def get_class_signature(cls):
 
 
 def post_process_signature(signature):
-    parts = re.split(r'\.(?!\d)', signature)
-    """
-    if len(parts) >= 4:
-        if parts[1] == 'layers':
-            signature = 'keras.layers.' + '.'.join(parts[3:])
-        if parts[1] == 'utils':
-            signature = 'keras.utils.' + '.'.join(parts[3:])
-        if parts[1] == 'backend':
-            signature = 'keras.backend.' + '.'.join(parts[3:])
-    """
     return signature
 
 
 def clean_module_name(name):
-    if name.startswith('keras_applications'):
-        name = name.replace('keras_applications', 'keras.applications')
-    if name.startswith('keras_preprocessing'):
-        name = name.replace('keras_preprocessing', 'keras.preprocessing')
     assert name[:4] == 'paz.', 'Invalid module name: %s' % name
     return name
+
+
+def function_to_source_link(function):
+    module_name = clean_module_name(function.__module__)
+    path = module_name.replace('.', '/')
+    path += '.py'
+    line = inspect.getsourcelines(function)[-1]
+    link = ('https://github.com/oarriaga/'
+            'paz/blob/master/' + path + '#L' + str(line))
+    return '[[source]](' + link + ')'
 
 
 def class_to_source_link(cls):
@@ -266,6 +258,8 @@ def collect_class_methods(cls, methods):
 
 def render_function(function, method=True):
     subblocks = []
+    subblocks.append('<span style="float:right;">' +
+                     function_to_source_link(function) + '</span>')
     signature = get_function_signature(function, method=method)
     if method:
         signature = signature.replace(
