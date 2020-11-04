@@ -1,5 +1,6 @@
 from paz.backend import boxes
 from paz.backend import camera
+from paz.backend import render
 from paz.backend import keypoints
 from paz.backend import quaternion
 from paz.backend.image import draw
@@ -122,6 +123,26 @@ PAGES = [
             opencv_image.translate_image,
             opencv_image.sample_scaled_translation,
             opencv_image.get_rotation_matrix
+        ],
+    },
+
+
+    {
+        'page': 'backend/render.md',
+        'functions': [
+            render.calculate_norm,
+            render.compute_modelview_matrices,
+            render.get_look_at_transform,
+            render.random_perturbation,
+            render.random_translation,
+            render.roll_camera,
+            render.sample_point_in_full_sphere,
+            render.sample_point_in_sphere,
+            render.sample_point_in_top_sphere,
+            render.sample_uniformly,
+            render.scale_translation,
+            render.split_alpha_channel,
+            render.translate_camera,
         ],
     },
 
