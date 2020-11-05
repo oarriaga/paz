@@ -28,16 +28,15 @@ All models can be re-trained with your own data (except for Mask-RCNN, we are wo
 <!--ts-->
 * [Examples](#selected-examples)
 * [Installation](#installation)
+* [Documentation](#documentation)
 * [Hierarchical APIs](#hierarchical-apis)
     * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#low-level)
 * [Additional functionality](#additional-functionality)
     * [Implemented models](#models)
-* [Documentation](#documentation)
 * [Motivation](#motivation)
 * [Citation](#citation)
 * [Funding](#funding)
 <!--te-->
-
 
 ## Installation
 PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
@@ -46,6 +45,9 @@ To install PAZ with pypi run:
 ```
 pip install pypaz --user
 ```
+
+## Documentation
+Full documentation can be found [https://oarriaga.github.io/paz/](https://oarriaga.github.io/paz/).
 
 ## Hierarchical APIs
 PAZ can be used with three different API levels which are there to be helpful for the user's specific application.
@@ -187,9 +189,6 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)  |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)           |
-
-## Documentation
-In order to build the documentation of all the functionality in PAZ please look [here](https://github.com/oarriaga/paz/tree/master/docs).
 
 ## Motivation
 Even though there are multiple high-level computer vision libraries in different deep learning frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
