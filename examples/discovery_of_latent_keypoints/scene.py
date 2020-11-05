@@ -30,7 +30,6 @@ class DualView():
                  distance=0.3, light=5.0, top_only=True, scale=10.0, roll=None,
                  shift=None):
 
-        super(DualView, self).__init__()
         self._build_scene(filepath, viewport_size, light, y_fov)
         self.distance, self.roll = distance, roll
         self.top_only, self.shift, self.scale = top_only, shift, scale
@@ -39,7 +38,7 @@ class DualView():
         self.epsilon = 0.01
 
     def _build_scene(self, path, size, light, y_fov):
-        self.scene = Scene(bg_color=[0, 0, 0])
+        self.scene = Scene(bg_color=[0, 0, 0, 0])
         self.light = self.scene.add(DirectionalLight([1.0, 1.0, 1.0], light))
         self.camera = self.scene.add(
             PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
