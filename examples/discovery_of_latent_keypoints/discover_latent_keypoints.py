@@ -2,14 +2,11 @@ import os
 # os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
 # os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 # os.environ["PYOPENGL_PLATFORM"] = 'egl'
-from distutils.util import strtobool
-
 import json
 import argparse
-
+import numpy as np
 from paz.models import KeypointNetShared
 from paz.models import Projector
-
 from paz.abstract import GeneratingSequence
 from paz.optimization import KeypointNetLoss
 from paz.optimization.callbacks import DrawInferences
@@ -21,17 +18,11 @@ from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.utils import Progbar
 
-from poseur.scenes import MultiView
-import numpy as np
+from scene import DualView
 
 description = 'Training script for learning latent 3D keypoints'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument(
-    '-op', '--obj_path',
-    default=os.path.join(
-        os.path.expanduser('~'),
-        '.keras/paz/datasets/ycb/models/035_power_drill/textured.obj'),
-    type=str, help='Path for writing model weights and logs')
+parser.add_argument('-fp', '--filepath', type=str, help='Path of OBJ mesh')
 parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
 parser.add_argument('-nk', '--num_keypoints', default=7, type=int,
@@ -56,26 +47,20 @@ parser.add_argument('-e', '--max_num_epochs', default=10000, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
                     help='Steps per epoch')
-parser.add_argument('-sh', '--sphere', default='full',
-                    choices=['full', 'half'], type=str,
+parser.add_argument('-to', '--top_only', default=0, choices=[0, 1], type=int,
                     help='Flag for full sphere or top half for rendering')
-parser.add_argument('-sm', '--smooth', type=strtobool, nargs='?',
-                    const=True, default=True,
-                    help='Activate smoothness trimesh flag for loading object')
 parser.add_argument('-r', '--roll', default=3.14159, type=float,
-                    help='Threshold for camera roll in radians')
-parser.add_argument('-t', '--translation', default=None, type=float,
-                    help='Threshold for translation')
+                    help='Angle in radians used to sample roll of camera')
+parser.add_argument('-s', '--shift', default=None, type=float,
+                    help='Shift in XY camera axis')
 parser.add_argument('-d', '--depth', default=0.30, type=float,
                     help='Distance from camera to origin in meters')
-parser.add_argument('-s', '--shift', default=0.05, type=float,
-                    help='Threshold of random shift of camera')
 parser.add_argument('-fv', '--y_fov', default=3.14159 / 4.0, type=float,
                     help='Field of view angle in radians')
+parser.add_argument('-sc', '--scale', default=10.0, type=float,
+                    help='Scale applied to translation vector')
 parser.add_argument('-l', '--light', default=5.0, type=float,
                     help='Light intensity from poseur')
-parser.add_argument('-bk', '--background', default=0, type=int,
-                    help='Background color')
 parser.add_argument('-rn', '--rotation_noise', default=0.1, type=float,
                     help='Sigma of noise added to relative pose estimation')
 parser.add_argument('-sd', '--separation_delta', default=0.05, type=float,
@@ -92,11 +77,10 @@ args = parser.parse_args()
 
 
 # setting scene
-scene = MultiView(args.obj_path, (args.image_size, args.image_size),
-                  args.y_fov, args.depth, args.sphere, args.roll,
-                  args.translation, args.shift, args.light,
-                  args.background, bool(args.smooth))
-focal_length = scene.camera.get_projection_matrix()[0, 0]
+scene = DualView(args.filepath, (args.image_size, args.image_size),
+                 args.y_fov, args.depth, args.light, bool(args.top_only),
+                 args.scale, args.roll, args.shift)
+focal_length = scene.camera.camera.get_projection_matrix()[0, 0]
 
 # setting sequence
 input_shape = (args.image_size, args.image_size, 3)
