@@ -5,7 +5,8 @@ import argparse
 from tensorflow.keras.utils import get_file
 from sklearn.metrics.pairwise import cosine_similarity as measure
 from paz.backend.camera import VideoPlayer, Camera
-from poseur.scenes import DictionaryViews
+
+from scenes import DictionaryView
 
 from model import AutoEncoder
 from pipelines import ImplicitRotationPredictor
@@ -30,7 +31,7 @@ parser.add_argument('-r', '--roll', type=float, default=3.14159,
                     help='Maximum roll')
 parser.add_argument('-t', '--translate', type=float, default=0.01,
                     help='Maximum translation')
-parser.add_argument('-p', '--sphere', type=str, default='full',
+parser.add_argument('-p', '--top_only', type=int, default=0,
                     help='Rendering mode')
 parser.add_argument('--theta_steps', type=int, default=10,
                     help='Amount of steps taken in the X-Y plane')
@@ -53,18 +54,18 @@ size = parameters['image_size']
 latent_dimension = parameters['latent_dimension']
 weights_path = os.path.join(path, args.model_name + '_weights.hdf5')
 
-OBJ_file = get_file('textured.obj', None,
+obj_path = get_file('textured.obj', None,
                     cache_subdir='paz/datasets/ycb/models/035_power_drill/')
 
-renderer = DictionaryViews(
-    OBJ_file, (args.viewport_size, args.viewport_size), args.y_fov,
-    args.distance, args.sphere, args.roll, args.light, args.background,
-    True, args.theta_steps, args.phi_steps)
+renderer = DictionaryView(
+    obj_path, (args.viewport_size, args.viewport_size), args.y_fov,
+    args.distance, bool(args.top_only), args.light, args.theta_steps,
+    args.phi_steps)
 
 encoder = AutoEncoder((size, size, 3), latent_dimension, mode='encoder')
 encoder.load_weights(weights_path, by_name=True)
 decoder = AutoEncoder((size, size, 3), latent_dimension, mode='decoder')
 decoder.load_weights(weights_path, by_name=True)
 inference = ImplicitRotationPredictor(encoder, decoder, measure, renderer)
-player = VideoPlayer((1280, 960), inference, camera=Camera(device_id=2))
+player = VideoPlayer((1280, 960), inference, camera=Camera(args.camera_id))
 player.run()
