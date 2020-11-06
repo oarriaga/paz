@@ -39,7 +39,7 @@ class DomainRandomizationProcessor(Processor):
         self.split = split
 
     def call(self):
-        input_image, (matrices, alpha_mask, depth) = self.render()
+        input_image, alpha_mask = self.render()
         label_image = self.copy(input_image)
         if self.split == pr.TRAIN:
             input_image = self.augment(input_image, alpha_mask)
