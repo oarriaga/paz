@@ -13,4 +13,4 @@ class Render(Processor):
         self.renderer = renderer
 
     def call(self):
-        return self.renderer.render_sample()
+        return self.renderer.render()

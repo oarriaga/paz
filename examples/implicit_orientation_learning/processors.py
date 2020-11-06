@@ -10,7 +10,7 @@ class MakeDictionary(Processor):
         self.renderer = renderer
 
     def call(self):
-        data = self.renderer.render_dictionary()
+        data = self.renderer.render()
         dictionary = {}
         latent_vectors = np.zeros((len(data), self.latent_dimension))
         for sample_arg, sample in enumerate(data):

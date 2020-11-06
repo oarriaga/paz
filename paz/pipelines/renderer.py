@@ -8,7 +8,7 @@ class RenderTwoViews(Processor):
     """Renders two views along with their transformations.
 
     # Arguments
-        renderer: A class with a method ``render_sample`` that outputs
+        renderer: A class with a method ``render`` that outputs
             two lists. The first list contains two numpy arrays
             representing the images e.g. ``(image_A, image_B)`` each
             of shape ``[H, W, 3]``.
@@ -21,7 +21,6 @@ class RenderTwoViews(Processor):
             transformations respectively: ``world_to_A``, ``world_to_B``,
             ``A_to_world`` and  ``B_to_world``.
             The shape of each ``alpha_channel`` should be ``[H, W]``.
-            A built in renderer are available in ''github/oarriaga/poseur''.
     """
     def __init__(self, renderer):
         super(RenderTwoViews, self).__init__()
@@ -32,18 +31,17 @@ class RenderTwoViews(Processor):
         self.preprocess_image.add(pr.NormalizeImage())
 
         self.preprocess_alpha = SequentialProcessor()
-        self.preprocess_alpha.add(pr.ExpandDims(-1))
         self.preprocess_alpha.add(pr.NormalizeImage())
         self.concatenate = pr.Concatenate(-1)
 
     def call(self):
-        [image_A, image_B], labels = self.render()
-        [matrices, alpha_A, alpha_B] = labels
-        image_A = self.preprocess_image(image_A)
-        image_B = self.preprocess_image(image_B)
-        alpha_A = self.preprocess_alpha(alpha_A)
-        alpha_B = self.preprocess_alpha(alpha_B)
+        data = self.render()
+        image_A = self.preprocess_image(data['image_A'])
+        image_B = self.preprocess_image(data['image_B'])
+        alpha_A = self.preprocess_alpha(data['alpha_A'])
+        alpha_B = self.preprocess_alpha(data['alpha_B'])
         alpha_channels = self.concatenate([alpha_A, alpha_B])
+        matrices = data['matrices']
         return image_A, image_B, matrices, alpha_channels
 
 

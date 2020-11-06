@@ -269,7 +269,6 @@ def concatenate_alpha_mask(image, alpha_mask):
     # Returns
         Numpy array of shape ''(H, W, 4)''.
     """
-    alpha_mask = np.expand_dims(alpha_mask, axis=-1)
     return np.concatenate([image, alpha_mask], axis=2)
 
 
