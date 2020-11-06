@@ -12,7 +12,7 @@ from paz.abstract import GeneratingSequence
 from paz.optimization.callbacks import DrawInferences
 from paz.pipelines import AutoEncoderPredictor
 
-from poseur.scenes import SingleView
+from scenes import SingleView
 
 from pipelines import DomainRandomization
 from model import AutoEncoder
@@ -46,15 +46,12 @@ parser.add_argument('-e', '--max_num_epochs', default=10000, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
                     help='Steps per epoch')
-parser.add_argument('-sh', '--sphere', default='full',
-                    choices=['full', 'half'], type=str,
+parser.add_argument('-sh', '--top_only', default=0, choices=[0, 1], type=int,
                     help='Flag for full sphere or top half for rendering')
 parser.add_argument('-ls', '--loss', default='binary_crossentropy', type=str,
                     help='tf.keras loss function name to be used')
 parser.add_argument('-r', '--roll', default=3.14159, type=float,
                     help='Threshold for camera roll in radians')
-parser.add_argument('-t', '--translation', default=0.05, type=float,
-                    help='Threshold for translation')
 parser.add_argument('-s', '--shift', default=0.05, type=float,
                     help='Threshold of random shift of camera')
 parser.add_argument('-d', '--depth', nargs='+', type=float,
@@ -82,15 +79,15 @@ model.compile(optimizer, args.loss, metrics=['mse'])
 model.summary()
 
 # setting scene
-renderer = SingleView(
-    args.obj_path, (args.image_size, args.image_size),
-    args.y_fov, args.depth, args.sphere, args.roll,
-    args.translation, args.shift, args.light)
+renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
+                      args.y_fov, args.depth, args.light, bool(args.top_only),
+                      args.roll, args.shift)
 
 # creating sequencer
 image_paths = glob.glob(os.path.join(args.images_directory, '*.png'))
 processor = DomainRandomization(
     renderer, args.image_size, image_paths, args.num_occlusions)
+
 sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
