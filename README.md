@@ -18,9 +18,13 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------| --------------------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="420"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="420">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400"> |
 
-| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |     |
+| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |  [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces/eigenfaces.py) |
 |---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="370">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="370"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="400">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="370">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="370"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="350">|
+
+|                           |                       |                 |
+|---------------------------|-----------------------|-----------------|
+| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="400">|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="400"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="400">|
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
