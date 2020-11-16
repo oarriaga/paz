@@ -2,9 +2,13 @@ import os
 # os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
 # os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 # os.environ["PYOPENGL_PLATFORM"] = 'egl'
+# os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 import json
 import argparse
 import numpy as np
+# If you cant find the path to paz module (might happen in pycharm), uncomment the following 2 lines:
+# import sys
+# sys.path.insert(1, '/home/robot/git/paz/paz')
 from paz.models import KeypointNetShared
 from paz.models import Projector
 from paz.abstract import GeneratingSequence
