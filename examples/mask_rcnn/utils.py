@@ -31,7 +31,7 @@ from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
 from tensorflow.keras.layers import Input, Conv2DTranspose
 from tensorflow.keras.layers import BatchNormalization, Add
 from tensorflow.keras.models import Model
-from mask_rcnn.layers import PyramidROIAlign
+from .layers import PyramidROIAlign
 
 COCO_MODEL_URL = 'https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5'
 
@@ -385,7 +385,7 @@ def get_resnet_features(input_image, architecture, stage5=False, train_bn=True):
     return [C1, C2, C3, C4, C5]
 
 
-def fpn_classifier_graph(rois, feature_maps, mode, 
+def fpn_classifier_graph(rois, feature_maps, 
                          config, train_bn=True,
                          fc_layers_size=1024):
     """Builds the computation graph of the feature pyramid network classifier
@@ -412,8 +412,8 @@ def fpn_classifier_graph(rois, feature_maps, mode,
     pool_size = config.POOL_SIZE
     num_classes = config.NUM_CLASSES
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
+    #image_shape = (640, 640, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
-
     x = PyramidROIAlign([pool_size, pool_size], name='roi_align_classifier')(
                         [rois, image_shape] + feature_maps)
     conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size),
@@ -1019,7 +1019,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     image_meta = compose_image_meta(image_id, original_shape, image.shape,
                                     window, scale, active_class_ids)
 
-    return image, image_meta, class_ids, bbox, mask
+    return image, class_ids, bbox, mask
 
 
 def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
@@ -1400,7 +1400,6 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
     image_index = -1
     image_data = dataset.data['image']
     image_ids = list(image_data.keys())
-    # image_ids = np.copy(dataset.image_ids)
     error_count = 0
     no_augmentation_sources = no_augmentation_sources or []
 
@@ -1426,15 +1425,15 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
 
             # If the image source is not to be augmented pass None as augmentation
             if dataset.image_info[int(image_id)]['source'] in no_augmentation_sources:
-                image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
-                load_image_gt(dataset, config, image_id, augment=augment,
+                image, gt_class_ids, gt_boxes, gt_masks = load_image_gt(
+                                dataset, config, image_id, augment=augment,
                                 augmentation=None,
                                 use_mini_mask=config.USE_MINI_MASK)
             else:
-                image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
-                    load_image_gt(dataset, config, image_id, augment=augment,
-                                augmentation=augmentation,
-                                use_mini_mask=config.USE_MINI_MASK)
+                image, gt_class_ids, gt_boxes, gt_masks = load_image_gt(
+                    dataset, config, image_id, augment=augment,
+                    augmentation=augmentation,
+                    use_mini_mask=config.USE_MINI_MASK)
             gt_class_ids = np.array(gt_class_ids)
             # Skip images that have no instances. This can happen in cases
             # where we train on a subset of classes and the image doesn't
@@ -1512,7 +1511,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
 
             # Batch full?
             if b >= batch_size:
-                inputs = [batch_images, batch_image_meta, batch_rpn_match, batch_rpn_bbox,
+                inputs = [batch_images, batch_rpn_match, batch_rpn_bbox,
                           batch_gt_class_ids, batch_gt_boxes, batch_gt_masks]
                 outputs = []
 
