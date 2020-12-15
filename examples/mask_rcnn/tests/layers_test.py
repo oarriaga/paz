@@ -65,7 +65,6 @@ def ground_truth_boxes():
 def FPN_classifier(proposal_layer, feature_maps, config):
     _, mrcnn_class, mrcnn_bbox = fpn_classifier_graph(proposal_layer,
                                                       feature_maps[:-1],
-                                                      'inference',
                                                       config=config,
                                                       train_bn=config.TRAIN_BN)
     return mrcnn_class, mrcnn_bbox

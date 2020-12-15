@@ -1,9 +1,9 @@
-from mask_rcnn.model import MaskRCNN
-from mask_rcnn.config import Config
-from mask_rcnn.utils import norm_boxes_graph
-from mask_rcnn.inference_graph import InferenceGraph
-from mask_rcnn.detection import ResizeImages, NormalizeImages
-from mask_rcnn.detection import Detect, PostprocessInputs
+from .model import MaskRCNN
+from .config import Config
+from .utils import norm_boxes_graph
+from .inference_graph import InferenceGraph
+from .detection import ResizeImages, NormalizeImages
+from .detection import Detect, PostprocessInputs
 from paz.abstract import SequentialProcessor
 
 

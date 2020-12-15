@@ -39,7 +39,6 @@ class InferenceGraph():
 
         _, classes, mrcnn_bbox = fpn_classifier_graph(rpn_rois,
                                                       feature_maps[:-1],
-                                                      mode='inference',
                                                       config=self.config,
                                                       train_bn=self.TRAIN_BN)
         detections = DetectionLayer(self.config, name='mrcnn_detection')(

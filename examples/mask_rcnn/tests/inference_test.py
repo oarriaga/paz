@@ -26,7 +26,7 @@ def test_mask_shape(test_results, mask_shape):
     assert (mask_shape == masks.shape)
 
 
-@pytest.mark.parametrize('ones', [79842])
+@pytest.mark.parametrize('ones', [79847])
 def test_mask(test_results, ones):
     masks = test_results['masks']
     masks = np.array(masks)[:, :, 0]
