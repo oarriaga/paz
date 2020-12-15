@@ -1,30 +1,40 @@
 import os
 import argparse
 import tensorflow as tf
-from tensorflow.keras.optimizer import SGD
-from tensorflow.keras.regularizers import L2
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from tensorflow.keras.callbacks import ModelCheckpoint
-from paz.datasets.ycb_video import YCBVideo
-from paz.abstract import ProcessingSequence
-from mask_rcnn.model import MaskRCNN
+from model import MaskRCNN
 from mask_rcnn.config import Config
+from pipeline import DetectionPipeline, DataSequencer
+from paz.models.detection.utils import create_prior_boxes
+#from ycb import YCBVideo
+from loss import Loss
+from network import create_network_head
 from mask_rcnn.utils import data_generator
-from mask_rcnn.pipeline import DetectionPipeline
+from shapes_loader import ShapesDataset
 
 
-class YCBVideoConfig(Config):
-    """Configuration for training on YCB-Video dataset.
-    Derives from the base Config class and overrides values specific
-    to the YCB-Video dataset.
+class ShapesConfig(Config):
+    """Configuration for training on the toy shapes dataset.
     """
-    NAME = "ycb"
-    IMAGES_PER_GPU = 1
-    NUM_CLASSES = 1 + 21
+    NAME = 'shapes'
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 8
+    NUM_CLASSES = 1 + 3  # background + 3 shapes
+    IMAGE_MIN_DIM = 128
+    IMAGE_MAX_DIM = 128
+    RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128)
+    TRAIN_ROIS_PER_IMAGE = 32
+    STEPS_PER_EPOCH = 100
+    VALIDATION_STEPS = 5
 
 
 description = 'Training script for Mask RCNN model'
 parser = argparse.ArgumentParser(description=description)
+parser.add_argument('-bs', '--batch_size', default=10, type=int,
+                    help='Batch size for training')
 parser.add_argument('-dp', '--data_path', required=False,
                     type=str, help='Directory for loading data')
 parser.add_argument('-sp', '--save_path', required=False,
@@ -33,7 +43,7 @@ parser.add_argument('-sp', '--save_path', required=False,
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for SGD')
 parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
-                    help='Batch size for training')
+                    help='steps per epoch for training')
 parser.add_argument('-m', '--momentum', default=0.9, type=float,
                     help='Momentum for SGD')
 parser.add_argument('-e', '--num_epochs', default=120, type=int,
@@ -53,24 +63,29 @@ print('Path to save model: ', args.save_path)
 print('Data path: ', args.data_path)
 
 optimizer = SGD(args.learning_rate, args.momentum)
+config = ShapesConfig()
 
-data_splits = ['train', 'val', 'test']
+# Training data
+dataset_train = ShapesDataset()
+dataset_train.load_shapes(500, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
+dataset_train.prepare()
 
-data_managers, datasets, evaluation_data_managers = [], [], []
-for data_split in data_splits:
-    data_manager = YCBVideo(args.data_path, data_split)
-    data_managers.append(data_manager)
-    datasets.append(data_manager.load_data())
-    if data_split == 'test':
-        eval_data_manager = YCBVideo(args.data_path, data_split)
-        evaluation_data_managers.append(eval_data_manager)
+# Validation data
+dataset_val = ShapesDataset()
+dataset_val.load_shapes(50, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
+dataset_val.prepare()
+
+train_generator = data_generator(dataset_train, config, shuffle=True,
+                                 augmentation=None,
+                                 batch_size=config.BATCH_SIZE)
+val_generator = data_generator(dataset_val, config,
+                               shuffle=True, batch_size=config.BATCH_SIZE)
 
 # instantiating model
-num_classes = data_managers[0].num_classes
-config = YCBVideoConfig()
+num_classes = config.NUM_CLASSES
 model = MaskRCNN(config=config, model_dir=args.data_path)
-model.keras_model.load_weights(model.get_imagenet_weights())
-model.summary()
+model.keras_model = create_network_head(model, config)
+model.keras_model.load_weights(model.get_imagenet_weights(), by_name=True)
 
 layer_regex = {
     # all layers but the backbone
@@ -85,55 +100,48 @@ layer_regex = {
 if args.layers in layer_regex.keys():
     layers = layer_regex[args.layers]
 
-boxes = data_managers[0].data['boxes']
-masks = data_managers[0].data['masks']
-
 # setting detection pipeline
 detectors = []
+prior_boxes = create_prior_boxes('YCBVideo')
 for split in ['TRAIN', 'VAL']:
-    detector = DetectionPipeline(boxes, masks, split=split)
+    detector = DetectionPipeline(config, prior_boxes, num_classes=num_classes)
     detectors.append(detector)
 
 # setting sequencers
-sequencers = []
-for data, detector in zip(datasets, detectors):
-    sequencer = ProcessingSequence(detector, args.batch_size, data)
-    sequencers.append(sequencer)
+# sequencers = []
+# for data, detector in zip(datasets, detectors):
+#     sequencer = DataSequencer(detector, args.batch_size, data)
+#     sequencers.append(sequencer)
 
-# train_generator = data_generator(data_managers[0], config, shuffle=True,
-#                                  augmentation=None,
-#                                  batch_size=config.BATCH_SIZE)
-# val_generator = data_generator(evaluation_data_managers[0], config,
-#                                shuffle=True,
-#                                batch_size=config.BATCH_SIZE)
-
-model_path = os.path.join(args.save_path, 'ycb')
+model_path = os.path.join(args.save_path, 'shapes')
 if not os.path.exists(model_path):
     os.makedirs(model_path)
-log = CSVLogger(os.path.join(model_path, 'ycb' + '-optimization.log'))
+log = CSVLogger(os.path.join(model_path, 'shapes' + '-optimization.log'))
 save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 early_stop = EarlyStopping(monitor='loss', patience=3)
 
 model.set_trainable(layers)
 
-loss_names = ['rpn_class_loss',  'rpn_bbox_loss',
-              'mrcnn_class_loss', 'mrcnn_bbox_loss', 'mrcnn_mask_loss']
-added_loss_name = []
+# keras_model._losses = []
+# keras_model._per_input_losses = {}
+# loss_names = ['rpn_class_loss',  'rpn_bbox_loss',
+#               'mrcnn_class_loss', 'mrcnn_bbox_loss', 'mrcnn_mask_loss']
+# added_loss_name = []
 
-for name in loss_names:
-    layer = model.keras_model.get_layer(name)
-    if layer.output.name in added_loss_name:
-        continue
-    loss = (
-        tf.reduce_mean(input_tensor=layer.output, keepdims=True)
-        * config.LOSS_WEIGHTS.get(name, 1.))
-    model.keras_model.add_loss(loss)
-    added_loss_name.append(layer.output.name)
+# for name in loss_names:
+#     layer = model.keras_model.get_layer(name)
+#     if layer.output.name in added_loss_name:
+#         continue
+#     loss = (
+#         tf.reduce_mean(input_tensor=layer.output, keepdims=True)
+#         * config.LOSS_WEIGHTS.get(name, 1.))
+#     model.keras_model.add_loss(loss)
+#     added_loss_name.append(layer.output.name)
 
-# L2 Regularization
+# l2 Regularization
 reg_losses = [
-    L2(config.WEIGHT_DECAY)(w) / tf.cast(tf.size(input=w), tf.float32)
+    l2(config.WEIGHT_DECAY)(w) / tf.cast(tf.size(input=w), tf.float32)
     for w in model.keras_model.trainable_weights
     if 'gamma' not in w.name and 'beta' not in w.name]
 model.keras_model.add_loss(lambda: tf.add_n(reg_losses))
@@ -141,23 +149,38 @@ model.keras_model.compile(
             optimizer=optimizer,
             loss=[None] * len(model.keras_model.outputs))
 
-for name in loss_names:
-    if name in model.keras_model.metrics_names:
-        continue
-    layer = model.keras_model.get_layer(name)
-    model.keras_model.metrics_names.append(name)
-    loss = (
-        tf.math.reduce_mean(input_tensor=layer.output, keepdims=True)
-        * config.LOSS_WEIGHTS.get(name, 1.))
-    model.keras_model.add_metric(loss, name=name, aggregation='mean')
+loss = Loss(config)
+losses = {'rpn_class_logits': loss.rpn_class_loss_graph,
+          'rpn_bbox': loss.rpn_bbox_loss_graph,
+          'mrcnn_class': loss.mrcnn_class_loss_graph,
+          'mrcnn_bbox': loss.mrcnn_bbox_loss_graph,
+          'mrcnn_mask': loss.mrcnn_mask_loss_graph}
+
+metrics = {'rpn_class_logits': loss.rpn_class_metrics,
+           'rpn_bbox': loss.rpn_bbox_metrics,
+           'mrcnn_class': loss.mrcnn_class_metrics,
+           'mrcnn_bbox': loss.mrcnn_bbox_metrics,
+           'mrcnn_mask': loss.mrcnn_mask_metrics}
+
+model.keras_model.compile(optimizer, losses, metrics=metrics)
+
+# for name in loss_names:
+#     if name in model.keras_model.metrics_names:
+#         continue
+#     layer = model.keras_model.get_layer(name)
+#     model.keras_model.metrics_names.append(name)
+#     loss = (
+#         tf.math.reduce_mean(input_tensor=layer.output, keepdims=True)
+#         * config.LOSS_WEIGHTS.get(name, 1.))
+#     model.keras_model.add_metric(loss, name=name, aggregation='mean')
 
 
 model.keras_model.fit_generator(
-    sequencers[0],
+    dataset_train,
     epochs=args.epochs,
     steps_per_epoch=args.steps_per_epoch,
     callbacks=[log, checkpoint, early_stop],
-    validation_data=evaluation_data_managers[0],
+    validation_data=dataset_val,
     validation_steps=config.VALIDATION_STEPS,
     max_queue_size=100,
     workers=args.workers,
