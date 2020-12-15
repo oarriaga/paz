@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
-from mask_rcnn.layer_utils import batch_slice, trim_zeros_graph
-from mask_rcnn.layer_utils import box_refinement_graph
-from mask_rcnn.layer_utils import clip_boxes_graph, apply_box_deltas_graph
+from .layer_utils import batch_slice, trim_zeros_graph
+from .layer_utils import box_refinement_graph
+from .layer_utils import clip_boxes_graph, apply_box_deltas_graph
 
 
 class DetectionLayer(Layer):

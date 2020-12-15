@@ -1,114 +1,142 @@
 import pytest
-from mask_rcnn.config import Config
-from mask_rcnn.model import MaskRCNN
-from mask_rcnn.layers import ProposalLayer, DetectionTargetLayer
-from mask_rcnn.utils import norm_boxes_graph, fpn_classifier_graph
-from mask_rcnn.utils import parse_image_meta_graph, build_fpn_mask_graph
-
+import numpy as np
 import tensorflow as tf
-import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Input, Lambda
 
-from mask_rcnn import loss
+from mask_rcnn.config import Config
+from mask_rcnn.loss import Loss
+tf.compat.v1.disable_eager_execution()
+session = tf.compat.v1.Session()
 
 
 class MaskRCNNConfig(Config):
-    NAME = 'ycb'
+    NAME = 'shapes'
     IMAGES_PER_GPU = 1
-    NUM_CLASSES = 80 + 1
+    NUM_CLASSES = 1 + 3
 
 
 @pytest.fixture
-def config():
-    return MaskRCNNConfig()
+def loss():
+    config = MaskRCNNConfig()
+    return Loss(config)
 
 
 @pytest.fixture
-def model(config):
-    base_model = MaskRCNN(config=config,
-                          model_dir='../../mask_rcnn')
-    return base_model
+def class_ids():
+    y_pred = tf.constant([[[0.6, 0.8, 0.7],
+                           [0.3, 0.2, 0.2],
+                           [0.4, 0.9, 0.1],
+                           [0.7, 0.5, 0.2]]], dtype=tf.float32)
+    return y_pred
 
 
 @pytest.fixture
-def feature_maps(model):
-    return model.keras_model.output
+def target_RPN_boxes():
+    y_true = tf.constant([[[149, 75, 225, 147],
+                           [217, 137, 295, 220],
+                           [214, 110, 243, 159],
+                           [180, 179, 211, 205]]], dtype=tf.float32)
+    return y_true
 
 
 @pytest.fixture
-def anchors():
-    return Input(shape=[None, 4])
+def RPN_boxes():
+    y_pred = tf.constant([[[129, 122, 167, 172],
+                           [194, 49, 218, 75],
+                           [180, 179, 211, 205],
+                           [213, 203, 279, 258]]], dtype=tf.float32)
+    return y_pred
 
 
 @pytest.fixture
-def RPN_model(model, feature_maps):
-    return model.RPN(feature_maps)
+def target_boxes():
+    y_true = tf.constant([[[149, 75, 225, 147],
+                           [180, 179, 211, 205]]], dtype=tf.float32)
+    return y_true
 
 
 @pytest.fixture
-def proposal_layer(RPN_model, anchors, config):
-    _, RPN_class, RPN_box = RPN_model
-    return ProposalLayer(proposal_count=2000,
-                         nms_threshold=0.7,
-                         name='ROI',
-                         config=config)([RPN_class, RPN_box, anchors])
+def boxes():
+    y_pred = tf.constant([[[[129, 122, 167, 172],
+                            [213, 203, 279, 258]],
+                           [[194, 49, 218, 75],
+                            [180, 179, 211, 205]],
+                           [[217, 137, 295, 220],
+                            [214, 110, 243, 159]],
+                           [[194, 49, 218, 75],
+                            [213, 203, 279, 258]]]], dtype=tf.float32)
+    return y_pred
 
 
 @pytest.fixture
-def ground_truth_boxes():
-    input_image = Input(shape=[None, None, 3])
-    input_boxes = Input(shape=[None, 4], dtype=tf.float32)
-    boxes = Lambda(lambda x:
-                   norm_boxes_graph(x, K.shape(input_image)[1:3]))(input_boxes)
-    return boxes
+def target_mask():
+    y_true = tf.constant([[[[0., 1.],
+                            [1., 0.]]]], dtype=tf.float32)
+    return y_true
 
 
 @pytest.fixture
-def ground_truth(ground_truth_boxes):
-    class_ids = Input(shape=[None], dtype=tf.int32)
-    masks = Input(shape=[1024, 1024, None], dtype=bool)
-    return [class_ids, ground_truth_boxes, masks]
+def mask():
+    y_pred = tf.constant([[[[[0., 1., 0.],
+                             [0., 1., 1.]],
+                            [[1., 0., 1.],
+                             [0., 1., 0.]]]]], dtype=tf.float32)
+    return y_pred
 
 
-@pytest.fixture
-def predicted_mask(config, target, feature_maps):
-    rois, _, _, _ = target
-    return build_fpn_mask_graph(rois, feature_maps[:-1],
-                                config,
-                                train_bn=config.TRAIN_BN)
+@pytest.mark.parametrize('softmax_loss', [1.1095])
+def test_class_loss(loss, class_ids, softmax_loss):
+    y_true = np.ones((1, 4))
+    active_class = tf.constant([1., 0., 1.])
+    class_loss = loss.mrcnn_class_loss_graph(active_class, y_true, class_ids)
+    if session._closed:
+        class_loss = class_loss.numpy()
+    else:
+        class_loss = session.run(class_loss)
+    assert np.round(class_loss, 4) == np.float32(softmax_loss)
 
 
-@pytest.fixture
-def predictions(proposal_layer, feature_maps, config, predicted_mask):
-    class_logits, _, boxes = fpn_classifier_graph(proposal_layer,
-                                                  feature_maps[:-1],
-                                                  'inference',
-                                                  config=config,
-                                                  train_bn=config.TRAIN_BN)
-    return [class_logits, boxes, predicted_mask]
+@pytest.mark.parametrize('categorical_loss', [0.6931])
+def test_rpn_classifier_loss(loss, categorical_loss):
+    y_true = tf.ones((1, 4, 1))
+    y_pred = tf.zeros((1, 4, 2))
+    classifier_loss = loss.rpn_class_loss_graph(y_true, y_pred)
+    if session._closed:
+        classifier_loss = classifier_loss.numpy()
+    else:
+        classifier_loss = session.run(classifier_loss)
+    assert np.round(classifier_loss, 4) == np.float32(categorical_loss)
 
 
-@pytest.fixture
-def target(proposal_layer, ground_truth, config):
-    class_ids, boxes, masks = ground_truth
-    target_layer = DetectionTargetLayer(config)
-    return target_layer([proposal_layer, class_ids, boxes, masks])
+@pytest.mark.parametrize('l1_loss', [52.125])
+def test_rpn_box_loss(loss, target_RPN_boxes, RPN_boxes, l1_loss):
+    rpn_match = tf.ones((1, 4, 1))
+    box_loss = loss.rpn_bbox_loss_graph(rpn_match, target_RPN_boxes,
+                                        RPN_boxes)
+    if session._closed:
+        box_loss = box_loss.numpy()
+    else:
+        box_loss = session.run(box_loss)
+    assert box_loss == l1_loss
 
 
-@pytest.fixture
-def active_class_ids(config):
-    input_image_meta = Input(shape=[config.IMAGE_META_SIZE],
-                             name='input_image_meta')
-    return Lambda(
-                lambda x: parse_image_meta_graph(x)['active_class_ids']
-                )(input_image_meta)
+@pytest.mark.parametrize('l1_loss', [88.75])
+def test_mrcnn_box_loss(loss, target_boxes, boxes, l1_loss):
+    target_ids = tf.constant([1, 0])
+    box_loss = loss.mrcnn_bbox_loss_graph([target_ids, target_boxes, None],
+                                          boxes)
+    if session._closed:
+        box_loss = box_loss.numpy()
+    else:
+        box_loss = session.run(box_loss)
+    assert box_loss == l1_loss
 
 
-def test_loss_function(config, RPN_model, target, predictions,
-                       predicted_mask, active_class_ids):
-    RPN_class_logits, _, RPN_boxes = RPN_model
-    target = target[1:]
-    loss_function = loss.Loss(config, [RPN_class_logits, RPN_boxes],
-                              target, predictions, active_class_ids)
-    output = loss_function.compute_loss()
-    print(output)
+@pytest.mark.parametrize('crossentropy_loss', [11.522856])
+def test_mrcnn_mask_loss(loss, target_mask, mask, crossentropy_loss):
+    y_true = [tf.constant([1]), None, target_mask]
+    mask_loss = loss.mrcnn_mask_loss_graph(y_true, mask)
+    if session._closed:
+        mask_loss = mask_loss.numpy()
+    else:
+        mask_loss = session.run(mask_loss)
+    assert mask_loss == np.float32(crossentropy_loss)

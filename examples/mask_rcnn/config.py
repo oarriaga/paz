@@ -189,11 +189,12 @@ class Config(object):
     # Loss weights for more precise optimization.
     # Can be used for R-CNN training setup.
     LOSS_WEIGHTS = {
-        "rpn_class_loss": 1.,
-        "rpn_bbox_loss": 1.,
-        "mrcnn_class_loss": 1.,
-        "mrcnn_bbox_loss": 1.,
-        "mrcnn_mask_loss": 1.
+        "rpn_class_logits": 1.,
+        "rpn_bbox": 1.,
+        "mrcnn": 1.,
+        "mrcnn_class": 1.,
+        "mrcnn_bbox": 1.,
+        "mrcnn_mask": 1.
     }
 
     # Use RPN ROIs or externally generated ROIs for training
