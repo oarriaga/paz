@@ -22,23 +22,23 @@ def prior_boxes():
 
 @pytest.fixture
 def image_path():
-    return '../old_random_data/train/rgb/19.png'
+    return '../example/test.png'
 
 
 @pytest.fixture
 def box_data(image_path):
     H, W = P.image.load_image(image_path).shape[:2]
-    boxes = np.array([[270/W, 284/H, 363/W, 364/H, 1],
-                      [292/W, 208/H, 454/W, 373/H, 2],
-                      [187/W, 240/H, 319/W, 357/H, 3]])
+    boxes = np.array([[160/W, 64/H, 222/W, 134/H, 1],
+                      [29/W, 171/H, 107/W, 266/H, 2],
+                      [83/W, 147/H, 201/W, 283/H, 3]])
     return boxes
 
 
 @pytest.fixture
 def mask_data():
-    mask = {'21': '../old_random_data/train/mask/19_21.png',
-            '02': '../old_random_data/train/mask/19_02.png',
-            '01': '../old_random_data/train/mask/19_01.png'}
+    mask = {'12': '../example/32_12.png',
+            '03': '../example/32_03.png',
+            '02': '../example/32_02.png'}
     return mask
 
 
@@ -50,8 +50,8 @@ def target_mask(mask_data):
 
 @pytest.fixture
 def class_names():
-    classes = ['background', '061_foam_brick', '003_cracker_box', 
-               '002_master_chef_can']
+    classes = ['background', '021_bleach_cleanser', '004_sugar_box', 
+               '003_cracker_box']
     return classes
 
 
@@ -99,7 +99,7 @@ def sequencer(augmentator, data):
     return image, boxes, masks
 
 
-@pytest.mark.parametrize('ones', [14284667])
+@pytest.mark.parametrize('ones', [13735427.])
 def test_masks(sequencer, ones):
     _, _, masks = sequencer
     assert np.sum(masks) == ones
