@@ -41,7 +41,7 @@ PAGES = [
             boxes.to_center_form,
             boxes.to_one_hot,
             boxes.to_normalized_coordinates,
-            boxes.to_point_form
+            boxes.to_corner_form
         ],
     },
 
