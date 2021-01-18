@@ -139,8 +139,8 @@ def mask_classes(boxes, positive_mask, ignoring_mask):
     class_indices = boxes[:, 4]
     negative_mask = np.not_equal(positive_mask, 1.0)
     class_indices = np.where(negative_mask, 0.0, class_indices)
-    ignoring_mask = np.equal(ignoring_mask, 1.0)
-    class_indices = np.where(ignoring_mask, -1.0, class_indices)
+    # ignoring_mask = np.equal(ignoring_mask, 1.0)
+    # class_indices = np.where(ignoring_mask, -1.0, class_indices)
     class_indices = np.expand_dims(class_indices, axis=-1)
     boxes[:, 4:5] = class_indices
     return boxes
