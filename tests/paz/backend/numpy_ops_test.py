@@ -150,7 +150,7 @@ def test_match_box(boxes_with_label, target_unique_matches):
 def test_to_encode(boxes_with_label):
     priors = create_prior_boxes('VOC')
     matches = match(boxes_with_label, priors)
-    variances = [.1, .2]
+    variances = [0.1, 0.1, 0.2, 0.2]
     encoded_boxes = encode(matches, priors, variances)
     decoded_boxes = decode(encoded_boxes, priors, variances)
     assert np.all(np.round(decoded_boxes) == matches)
@@ -159,7 +159,7 @@ def test_to_encode(boxes_with_label):
 def test_to_decode(boxes_with_label):
     priors = create_prior_boxes('VOC')
     matches = match(boxes_with_label, priors)
-    variances = [.1, .2]
+    variances = [0.1, 0.1, 0.2, 0.2]
     encoded_boxes = encode(matches, priors, variances)
     decoded_boxes = decode(encoded_boxes, priors, variances)
     assert np.all(np.round(decoded_boxes) == matches)
