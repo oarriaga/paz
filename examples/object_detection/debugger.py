@@ -1,12 +1,19 @@
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+
+
 import numpy as np
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
-from paz.pipelines import AugmentDetection
+from detection import AugmentDetection
+# from paz.pipelines import AugmentDetection
+
 
 class ShowBoxes(Processor):
-    def __init__(self, class_names, prior_boxes, variances=[.1, .2]):
+    def __init__(self, class_names, prior_boxes, variances=[0.1, 0.1, 0.2, 0.2]):
         super(ShowBoxes, self).__init__()
         self.deprocess_boxes = SequentialProcessor([
             pr.DecodeBoxes(prior_boxes, variances),
@@ -35,7 +42,8 @@ data_manager = VOC('VOCdevkit/')
 data = data_manager.load_data()
 
 class_names = data_manager.class_names
-model = SSD300(base_weights='VGG', head_weights=None)
+# model = SSD300(base_weights='VGG', head_weights=None)
+model = SSD300()
 prior_boxes = model.prior_boxes
 
 testor_encoder = AugmentDetection(prior_boxes)

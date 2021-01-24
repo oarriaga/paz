@@ -2,6 +2,11 @@ import argparse
 
 from paz.pipelines import SSD300FAT, SSD300VOC, SSD512COCO, SSD512YCBVideo
 from paz.backend.camera import VideoPlayer, Camera
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+
+
 
 
 parser = argparse.ArgumentParser(description='SSD object detection demo')

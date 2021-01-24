@@ -11,7 +11,7 @@ tf.config.experimental.set_memory_growth(gpus[0], True)
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler
-from paz.pipelines import AugmentDetection
+from detection import AugmentDetection
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
