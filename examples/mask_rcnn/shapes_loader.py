@@ -18,7 +18,7 @@ class Shapes(Loader):
     """
     def __init__(self, num_samples, size, split='train', class_names='all'):
         if class_names == 'all':
-            class_names = ['square', 'circle', 'triangle']
+            class_names = ['background', 'square', 'circle', 'triangle']
         super(Shapes, self).__init__(None, split, class_names, 'Shapes')
         self.num_samples = num_samples
         self.size = size
@@ -60,8 +60,8 @@ class Shapes(Loader):
         H, W = self.size
         masks = np.zeros([H, W, len(shapes)], dtype=np.uint8)
         for idx, (shape, _, dims) in enumerate(shapes):
-            masks[..., idx:idx+1] = self.draw_shape(
-                masks[..., idx:idx+1].copy(), shape, dims, 1)
+            args = (masks[..., idx:idx + 1].copy(), shape, dims, 1)
+            masks[..., idx:idx + 1] = self.draw_shape(*args)
         occlusion = np.logical_not(masks[..., -1]).astype(np.uint8)
         for index in range(len(shapes)-2, -1, -1):
             masks[..., index] = masks[..., index] * occlusion
@@ -70,7 +70,8 @@ class Shapes(Loader):
         return masks
 
     def get_boxes(self, masks):
-        boxes = np.zeros([masks.shape[-1], 4], dtype=np.int32)
+        H, W = masks.shape[:2]
+        boxes = np.zeros([masks.shape[-1], 4], dtype=np.float32)
         for index in range(masks.shape[-1]):
             mask = masks[:, :, index]
             horizontal_indicies = np.where(np.any(mask, axis=0))[0]
@@ -82,8 +83,8 @@ class Shapes(Loader):
                 Y2 += 1
             else:
                 X1, X2, Y1, Y2 = 0, 0, 0, 0
-            boxes[index] = np.array([Y1, X1, Y2, X2])
-        return boxes.astype(np.int32)
+            boxes[index] = np.array([X1 / W, Y1 / H, X2 / W, Y2 / H])
+        return boxes
 
     def draw_shape(self, image, shape, dims, color):
         center_x, center_y, size = dims
@@ -113,13 +114,12 @@ class Shapes(Loader):
     def random_image(self):
         H, W = self.size
         shapes, boxes = [], []
-        N = np.random.randint(1, 4)
-        for _ in range(N):
+        for _ in range(3):
             shape, color, dims = self.random_shape(H, W)
             shapes.append((shape, color, dims))
             X, Y, size = dims
             boxes.append([Y - size, X - size, Y + size, X + size])
         boxes = np.asarray(boxes)
-        indices, _ = apply_non_max_suppression(boxes, np.arange(N), 0.3)
+        indices, _ = apply_non_max_suppression(boxes, np.arange(3), 0.3)
         shapes = [shape for _, shape in enumerate(shapes) if _ in indices]
         return shapes
