@@ -19,7 +19,6 @@ from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
 from .draw import DrawBoxes3D
 from .draw import DrawRandomPolygon
-from .draw import DrawRGBMasks
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -27,7 +26,6 @@ from .image import AddMeanImage
 from .image import NormalizeImage
 from .image import DenormalizeImage
 from .image import LoadImage
-from .image import LoadMask
 from .image import RandomSaturation
 from .image import RandomBrightness
 from .image import RandomContrast

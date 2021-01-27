@@ -3,7 +3,6 @@ import numpy as np
 from ..abstract import Processor
 from ..backend.image import lincolor
 from ..backend.image import draw_rectangle
-from ..backend.image import add_mask
 from ..backend.image import put_text
 from ..backend.image import draw_circle
 from ..backend.image import draw_cube
@@ -125,19 +124,4 @@ class DrawRandomPolygon(Processor):
 
     def call(self, image):
         return draw_random_polygon(image)
-
-
-class DrawRGBMasks(Processor):
-    """ Draws RGB masks on image.
-
-    """
-    def __init__(self):
-        super(DrawRGBMasks, self).__init__()
-
-    def call(self, image, masks):
-        masked = image.copy()
-        for index in range(0, masks.shape[2], 3):
-            mask = masks[:, :, index:index+3]
-            masked = add_mask(masked, mask)
-        return masked
 
