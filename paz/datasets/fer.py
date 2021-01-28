@@ -1,3 +1,4 @@
+import os
 from tensorflow.keras.utils import to_categorical
 import numpy as np
 
@@ -27,6 +28,7 @@ class FER(Loader):
         if class_names == 'all':
             class_names = get_class_names('FER')
 
+        path = os.path.join(path, 'fer2013.csv')
         super(FER, self).__init__(path, split, class_names, 'FER')
         self.image_size = image_size
         self._split_to_filter = {'train': 'Training', 'val': 'PublicTest',
@@ -35,11 +37,11 @@ class FER(Loader):
     def load_data(self):
         data = np.genfromtxt(self.path, str, delimiter=',', skip_header=1)
         data = data[data[:, -1] == self._split_to_filter[self.split]]
-        faces = np.zeros((len(data), *self.image_size, 1))
+        faces = np.zeros((len(data), *self.image_size))
         for sample_arg, sample in enumerate(data):
             face = np.array(sample[1].split(' '), dtype=int).reshape(48, 48)
             face = resize_image(face, self.image_size)
-            faces[sample_arg, :, :, 0] = face
+            faces[sample_arg, :, :] = face
         emotions = to_categorical(data[:, 0].astype(int), self.num_classes)
 
         data = []
