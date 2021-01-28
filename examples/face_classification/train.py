@@ -50,7 +50,7 @@ name_to_manager = {'FER': FER, 'FERPlus': FERPlus}
 data_managers, datasets = {}, {}
 for split in splits:
     data_path = os.path.join(args.data_path, args.dataset)
-    kwargs = {'path': data_path} if args.dataset in ['FERPlus'] else {}
+    kwargs = {'path': data_path}
     data_manager = name_to_manager[args.dataset](split=split, **kwargs)
     data_managers[split] = data_manager
     datasets[split] = data_manager.load_data()
