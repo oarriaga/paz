@@ -1,26 +1,18 @@
 import tensorflow as tf
-
 from tensorflow.keras.layers import Conv2D, Dense
+from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import Input, Lambda
 from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import Dropout
-from tensorflow.keras.layers import ZeroPadding2D
 from tensorflow.keras.models import Model
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.utils import get_file
 
-from paz.models.detection.model_util import NUM_HEADING_BIN, NUM_SIZE_CLUSTER, NUM_OBJECT_POINT
+from paz.models.detection.model_util import NUM_HEADING_BIN, NUM_SIZE_CLUSTER
+from paz.models.detection.model_util import parse_output_to_tensors
 from paz.models.detection.model_util import point_cloud_masking
-from paz.models.detection.model_util import placeholder_inputs, parse_output_to_tensors, get_loss
 from paz.optimization.losses.frustumpointnet_loss import FPointNet_loss
-# from paz.models.detection.model_util import FPointNet_loss
-
-
-# FPointNet_loss = FrustumPointNetLoss()
 
 
 def Instance_Seg_Net(point_cloud, one_hot_vec):
-    batch_size = point_cloud.get_shape().as_list()[0]
+
     num_points = point_cloud.get_shape().as_list()[1]
 
     net = tf.expand_dims(point_cloud, 2)
@@ -172,9 +164,11 @@ def FrustumPointNetModel(point_cloud_shape=(1024, 3), one_hot_vec_shape=(3,), ma
     training_model = Model([point_cloud, one_hot_vec, mask_label, center_label, heading_class_label,
                             heading_residual_label, size_class_label, size_residual_label], loss,
                            name='f_pointnet_train')
+
     det_model = Model(inputs=[point_cloud, one_hot_vec],
                       outputs=[logits, box3d_center, heading_scores, heading_residual, size_scores, size_residual],
                       name='f_pointnet_inference')
+
     training_model.summary()
     return training_model, det_model
 
