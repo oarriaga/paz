@@ -21,7 +21,8 @@ num_samples = 1000
 iou_thresh = 0.3
 max_num_shapes = 3
 metrics = ['mean_squared_error']
-loss = 'categorical_crossentropy'
+# loss = 'categorical_crossentropy'
+loss = 'binary_crossentropy'
 H, W = image_shape = input_shape[:2]
 batch_size = 5
 epochs = 10
