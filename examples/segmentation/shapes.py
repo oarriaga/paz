@@ -27,7 +27,7 @@ class Shapes(Loader):
         self.name_to_arg = dict(zip(class_names, range(len(class_names))))
         self.arg_to_name = dict(zip(range(len(class_names)), class_names))
         self.num_samples, self.image_size = num_samples, image_size
-        self.labels = ['image', 'mask', 'box_data']
+        self.labels = ['image', 'masks', 'box_data']
         self.iou_thresh = iou_thresh
         self.max_num_shapes = max_num_shapes
         super(Shapes, self).__init__(None, split, class_names, 'Shapes')
