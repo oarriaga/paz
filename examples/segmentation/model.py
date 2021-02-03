@@ -54,7 +54,7 @@ def build_UNET(num_classes, backbone, branch_tensors,
 
     kwargs = {'use_bias': True, 'kernel_initializer': 'glorot_uniform'}
     x = Conv2D(num_classes, 3, (1, 1), 'same', **kwargs)(x)
-    outputs = Activation(activation, name='output')(x)
+    outputs = Activation(activation, name='masks')(x)
     model = Model(inputs, outputs, name=name)
     return model
 
