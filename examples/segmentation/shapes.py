@@ -103,13 +103,17 @@ class Shapes(Loader):
     def _draw_masks(self, shapes):
         H, W = self.image_size
         class_masks = []
-        for class_mask in range(self.num_classes - 1):  # -1 for background
+        for class_mask in range(self.num_classes):
             class_masks.append(np.zeros([H, W, 1]))
+        class_masks[0] = np.logical_not(class_masks[0])
         for shape_arg, (shape, color, dimensions) in enumerate(shapes):
-            mask_arg = self.name_to_arg[shape] - 1  # -1 because background
+            mask_arg = self.name_to_arg[shape]
             class_mask = class_masks[mask_arg]
             class_mask = self._draw_shape(class_mask, shape, dimensions, 1)
             class_masks[mask_arg] = class_mask
+            negative_mask = np.logical_not(class_mask)
+            background_mask = class_masks[0].copy()
+            class_masks[0] = np.logical_and(negative_mask, background_mask)
         masks = np.concatenate(class_masks, axis=-1).astype(np.uint8)
         return masks
 
@@ -120,11 +124,14 @@ if __name__ == '__main__':
     dataset = data_manager.load_data()
     for sample in dataset:
         image = sample['image']
-        masks = (sample['mask'] * 255.0).astype('uint8')
+        masks = (sample['masks'] * 255.0).astype('uint8')
+        background_mask, masks = masks[..., 0:1], masks[..., 1:]
+        background_mask = np.repeat(background_mask, 3, axis=-1)
         boxes = sample['box_data']
         for box in boxes:
             coordinates, class_arg = box[:4], box[4]
             # coordinates = denormalize_box(coordinates, (128, 128))
             class_name = data_manager.arg_to_name[class_arg]
             image = draw_box(image, coordinates, class_name, 1.0)
-        show_image(np.concatenate([image, masks], axis=1))
+            print(background_mask.shape)
+        show_image(np.concatenate([image, masks, background_mask], axis=1))
