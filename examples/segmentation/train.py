@@ -7,6 +7,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import CSVLogger, EarlyStopping
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from paz.abstract import ProcessingSequence, SequentialProcessor
+from loss import DiceLoss, JaccardLoss, FocalLoss
 from paz import processors as pr
 
 from shapes import Shapes
@@ -16,13 +17,15 @@ from pipelines import PostprocessSegmentation
 
 num_classes = 3
 input_shape = (128, 128, 3)
-activation = 'sigmoid'
+# softmax requires a background class and a background mask
+activation = 'softmax'
+# activation = 'sigmoid'
 num_samples = 1000
 iou_thresh = 0.3
 max_num_shapes = 3
 metrics = ['mean_squared_error']
-# loss = 'categorical_crossentropy'
-loss = 'binary_crossentropy'
+loss = JaccardLoss()
+# loss = [DiceLoss(), JaccardLoss(), FocalLoss()]
 H, W = image_shape = input_shape[:2]
 batch_size = 5
 epochs = 10
@@ -33,7 +36,7 @@ experiment_path = 'experiments/'
 
 data_manager = Shapes(num_samples, image_shape, iou_thresh=iou_thresh,
                       max_num_shapes=max_num_shapes)
-num_classes = data_manager.num_classes - 1
+num_classes = data_manager.num_classes
 data = data_manager.load_data()
 processor = PreprocessSegmentation(image_shape, num_classes)
 
@@ -54,8 +57,8 @@ model.compile(optimizer, loss, metrics)
 model.summary()
 model.fit(sequence, batch_size=batch_size, epochs=epochs, callbacks=callbacks)
 
-
-postprocess = PostprocessSegmentation(model)
+colors = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+postprocess = PostprocessSegmentation(model, colors)
 for sample in data:
     image = sample['image']
     postprocess(image)
