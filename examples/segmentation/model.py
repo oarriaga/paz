@@ -2,7 +2,8 @@ from tensorflow.keras.layers import Conv2DTranspose, Concatenate, UpSampling2D
 from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras import Model
-from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications import VGG16, VGG19
+from tensorflow.keras.applications import ResNet50V2
 
 
 def convolution_block(inputs, filters, kernel_size=3, activation='relu'):
@@ -81,11 +82,31 @@ def UNET_VGG16(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
     VGG16_branches = ['block5_conv3', 'block4_conv3', 'block3_conv3',
                       'block2_conv2', 'block1_conv2']
     return UNET(input_shape, num_classes, VGG16_branches, VGG16, weights,
-                freeze, activation, decoder_type, decode_filters, 'UNET_VGG16')
+                freeze, activation, decoder_type, decode_filters, 'UNET-VGG16')
+
+
+def UNET_VGG19(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
+               freeze=False, activation='sigmoid', decoder_type='upsample',
+               decode_filters=[256, 128, 64, 32, 16]):
+    VGG19_branches = ['block5_conv4', 'block4_conv4', 'block3_conv4',
+                      'block2_conv2', 'block1_conv2']
+    return UNET(input_shape, num_classes, VGG19_branches, VGG19, weights,
+                freeze, activation, decoder_type, decode_filters, 'UNET-VGG19')
+
+
+def UNET_RESNET50(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
+                  freeze=False, activation='sigmoid', decoder_type='upsample',
+                  decode_filters=[256, 128, 64, 32, 16]):
+    RESNET50_branches = ['conv4_block6_1_relu', 'conv3_block4_1_relu',
+                         'conv2_block3_1_relu', 'conv1_conv', 'input_1']
+    return UNET(input_shape, num_classes, RESNET50_branches, ResNet50V2,
+                weights, freeze, activation, decoder_type, decode_filters,
+                'UNET-RESNET50')
 
 
 if __name__ == '__main__':
     from tensorflow.keras.utils import plot_model
-    model = UNET_VGG16()
+    model = UNET_VGG19()
+    # model = UNET_RESNET50()
     model.summary()
     plot_model(model, 'unet.png', True, True, dpi=200)
