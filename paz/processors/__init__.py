@@ -87,6 +87,7 @@ from .standard import UnpackDictionary
 from .standard import WrapOutput
 from .standard import Concatenate
 from .standard import SelectElement
+from .standard import StochasticProcessor
 
 from .pose import SolvePNP
 
