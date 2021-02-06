@@ -347,7 +347,8 @@ PAGES = [
             processors.UnpackDictionary,
             processors.WrapOutput,
             processors.Concatenate,
-            processors.SelectElement
+            processors.SelectElement,
+            processors.StochasticProcessor
         ]
     },
 
