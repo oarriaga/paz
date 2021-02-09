@@ -1,6 +1,6 @@
 from tensorflow.keras.layers import Conv2DTranspose, Concatenate, UpSampling2D
 from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation
-from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import MaxPooling2D, Input
 from tensorflow.keras import Model
 from tensorflow.keras.applications import VGG16, VGG19
 from tensorflow.keras.applications import ResNet50V2
@@ -31,15 +31,32 @@ def transpose_block(x, filters, branch):
     return x
 
 
-def build_backbone(BACKBONE, shape, branch_names, weights, frozen=False):
+def freeze_model(model):
+    for layer in model.layers:
+        layer.trainable = False
+    return model
+
+
+def get_tensors(model, layer_names):
+    tensors = []
+    for layer_name in layer_names:
+        tensors.append(model.get_layer(layer_name).output)
+    return model, tensors
+
+
+def build_backbone(BACKBONE, shape, branch_names, weights,
+                   frozen=False, input_tensor=None):
+
     kwargs = {'include_top': False, 'input_shape': shape, 'weights': weights}
+    if input_tensor is not None:
+        kwargs.pop('input_shape')
+        kwargs['input_tensor'] = input_tensor
     backbone = BACKBONE(**kwargs)
+
     if frozen:
-        for layer in backbone.layers:
-            layer.trainable = False
-    branch_tensors = []
-    for layer_name in branch_names:
-        branch_tensors.append(backbone.get_layer(layer_name).output)
+        backbone = freeze_model(backbone)
+
+    backbone, branch_tensors = get_tensors(backbone, branch_names)
     return backbone, branch_tensors
 
 
@@ -62,9 +79,11 @@ def build_UNET(num_classes, backbone, branch_tensors,
 
 def UNET(input_shape, num_classes, branch_names, BACKBONE, weights,
          freeze_backbone=False, activation='sigmoid', decoder_type='upsample',
-         decoder_filters=[256, 128, 64, 32, 16], name='UNET'):
+         decoder_filters=[256, 128, 64, 32, 16], input_tensor=None,
+         name='UNET'):
 
-    args = [BACKBONE, input_shape, branch_names, weights, freeze_backbone]
+    args = [BACKBONE, input_shape, branch_names,
+            weights, freeze_backbone, input_tensor]
     backbone, branch_tensors = build_backbone(*args)
     if decoder_type == 'upsample':
         decoder = upsample_block
@@ -77,36 +96,43 @@ def UNET(input_shape, num_classes, branch_names, BACKBONE, weights,
 
 
 def UNET_VGG16(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
-               freeze=False, activation='sigmoid', decoder_type='upsample',
+               freeze_backbone=False, activation='sigmoid',
+               decoder_type='upsample',
                decode_filters=[256, 128, 64, 32, 16]):
     VGG16_branches = ['block5_conv3', 'block4_conv3', 'block3_conv3',
                       'block2_conv2', 'block1_conv2']
     return UNET(input_shape, num_classes, VGG16_branches, VGG16, weights,
-                freeze, activation, decoder_type, decode_filters, 'UNET-VGG16')
+                freeze_backbone, activation, decoder_type, decode_filters,
+                name='UNET-VGG16')
 
 
 def UNET_VGG19(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
-               freeze=False, activation='sigmoid', decoder_type='upsample',
+               freeze_backbone=False, activation='sigmoid',
+               decoder_type='upsample',
                decode_filters=[256, 128, 64, 32, 16]):
     VGG19_branches = ['block5_conv4', 'block4_conv4', 'block3_conv4',
                       'block2_conv2', 'block1_conv2']
     return UNET(input_shape, num_classes, VGG19_branches, VGG19, weights,
-                freeze, activation, decoder_type, decode_filters, 'UNET-VGG19')
+                freeze_backbone, activation, decoder_type, decode_filters,
+                name='UNET-VGG19')
 
 
 def UNET_RESNET50(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
-                  freeze=False, activation='sigmoid', decoder_type='upsample',
+                  freeze_backbone=False, activation='sigmoid',
+                  decoder_type='upsample',
                   decode_filters=[256, 128, 64, 32, 16]):
     RESNET50_branches = ['conv4_block6_1_relu', 'conv3_block4_1_relu',
-                         'conv2_block3_1_relu', 'conv1_conv', 'input_1']
+                         'conv2_block3_1_relu', 'conv1_conv', 'input_resnet50']
+    input_tensor = Input(input_shape, name='input_resnet50')
     return UNET(input_shape, num_classes, RESNET50_branches, ResNet50V2,
-                weights, freeze, activation, decoder_type, decode_filters,
-                'UNET-RESNET50')
+                weights, freeze_backbone, activation, decoder_type,
+                decode_filters, input_tensor, 'UNET-RESNET50')
 
 
 if __name__ == '__main__':
     from tensorflow.keras.utils import plot_model
-    model = UNET_VGG19()
+    model = UNET_VGG16()
+    # model = UNET_VGG19()
     # model = UNET_RESNET50()
     model.summary()
     plot_model(model, 'unet.png', True, True, dpi=200)
