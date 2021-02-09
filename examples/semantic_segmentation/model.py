@@ -197,6 +197,27 @@ def UNET_VGG16(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
                freeze_backbone=False, activation='sigmoid',
                decoder_type='upsample',
                decode_filters=[256, 128, 64, 32, 16]):
+    """Build a UNET model with a ``VGG16`` backbone.
+
+    # Arguments
+        input_shape: List of integers: ``(H, W, num_channels)``.
+        num_classes: Integer used for output number of channels.
+        branch_names: List of strings containing layer names of ``BACKBONE()``.
+        BACKBONE: Class for instantiating a backbone model
+        weights: String indicating backbone weights e.g.
+            ''imagenet'', ``None``.
+        freeze_backbone: Boolean. If True ``BACKBONE()`` updates are frozen.
+        decoder_type: String indicating decoding function e.g.
+            ''upsample ''transpose''.
+        decoder_filters: List of integers used in each application of decoder.
+        activation: Output activation of the model.
+        input_tensor: Input tensor. If given ``shape`` is overwritten and this
+            tensor is used instead as input.
+        name: String. indicating the name of the model.
+
+    # Returns
+        A UNET-VGG16 Keras/tensorflow model.
+    """
     VGG16_branches = ['block5_conv3', 'block4_conv3', 'block3_conv3',
                       'block2_conv2', 'block1_conv2']
     return UNET(input_shape, num_classes, VGG16_branches, VGG16, weights,
@@ -208,6 +229,28 @@ def UNET_VGG19(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
                freeze_backbone=False, activation='sigmoid',
                decoder_type='upsample',
                decode_filters=[256, 128, 64, 32, 16]):
+    """Build a UNET model with a ``VGG19`` backbone.
+
+    # Arguments
+        input_shape: List of integers: ``(H, W, num_channels)``.
+        num_classes: Integer used for output number of channels.
+        branch_names: List of strings containing layer names of ``BACKBONE()``.
+        BACKBONE: Class for instantiating a backbone model
+        weights: String indicating backbone weights e.g.
+            ''imagenet'', ``None``.
+        freeze_backbone: Boolean. If True ``BACKBONE()`` updates are frozen.
+        decoder_type: String indicating decoding function e.g.
+            ''upsample ''transpose''.
+        decoder_filters: List of integers used in each application of decoder.
+        activation: Output activation of the model.
+        input_tensor: Input tensor. If given ``shape`` is overwritten and this
+            tensor is used instead as input.
+        name: String. indicating the name of the model.
+
+    # Returns
+        A UNET-VGG19 Keras/tensorflow model.
+    """
+
     VGG19_branches = ['block5_conv4', 'block4_conv4', 'block3_conv4',
                       'block2_conv2', 'block1_conv2']
     return UNET(input_shape, num_classes, VGG19_branches, VGG19, weights,
@@ -219,6 +262,27 @@ def UNET_RESNET50(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
                   freeze_backbone=False, activation='sigmoid',
                   decoder_type='upsample',
                   decode_filters=[256, 128, 64, 32, 16]):
+    """Build a UNET model with a ``RESNET50V2`` backbone.
+
+    # Arguments
+        input_shape: List of integers: ``(H, W, num_channels)``.
+        num_classes: Integer used for output number of channels.
+        branch_names: List of strings containing layer names of ``BACKBONE()``.
+        BACKBONE: Class for instantiating a backbone model
+        weights: String indicating backbone weights e.g.
+            ''imagenet'', ``None``.
+        freeze_backbone: Boolean. If True ``BACKBONE()`` updates are frozen.
+        decoder_type: String indicating decoding function e.g.
+            ''upsample ''transpose''.
+        decoder_filters: List of integers used in each application of decoder.
+        activation: Output activation of the model.
+        input_tensor: Input tensor. If given ``shape`` is overwritten and this
+            tensor is used instead as input.
+        name: String. indicating the name of the model.
+
+    # Returns
+        A UNET-RESNET50V2 Keras/tensorflow model.
+    """
     RESNET50_branches = ['conv4_block6_1_relu', 'conv3_block4_1_relu',
                          'conv2_block3_1_relu', 'conv1_conv', 'input_resnet50']
     input_tensor = Input(input_shape, name='input_resnet50')
@@ -229,8 +293,8 @@ def UNET_RESNET50(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
 
 if __name__ == '__main__':
     from tensorflow.keras.utils import plot_model
-    model = UNET_VGG16()
-    # model = UNET_VGG19()
-    # model = UNET_RESNET50()
+    model = UNET_VGG16(weights=None)
+    model = UNET_VGG19(weights=None)
+    model = UNET_RESNET50(weights=None)
     model.summary()
     plot_model(model, 'unet.png', True, True, dpi=200)
