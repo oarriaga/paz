@@ -4,6 +4,7 @@ import numpy as np
 from model import UNET_VGG16, UNET_VGG19, UNET_RESNET50
 from loss import compute_jaccard_score, JaccardLoss
 from loss import compute_F_beta_score, DiceLoss
+from loss import compute_focal_loss
 
 
 def test_shapes_of_UNETVGG19():
@@ -97,3 +98,18 @@ def test_F_beta_loss_half_overlap(full_mask, half_mask):
 def test_F_beta_loss_no_overlap(full_mask, empty_mask):
     score = DiceLoss()(full_mask, empty_mask).numpy()
     assert np.allclose(1.0, score)
+
+
+def test_focal_loss_full_overlap(full_mask):
+    score = compute_focal_loss(full_mask, full_mask).numpy()
+    assert np.allclose(0.0, score)
+
+
+def test_focal_loss_half_overlap(full_mask, half_mask):
+    score = compute_focal_loss(full_mask, half_mask).numpy()
+    assert np.allclose(1.4390868, np.mean(score))
+
+
+def test_focal_loss_no_overlap(full_mask, empty_mask):
+    score = compute_focal_loss(full_mask, empty_mask).numpy()
+    assert np.allclose(2.8781736, score)
