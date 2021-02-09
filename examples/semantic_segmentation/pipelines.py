@@ -1,7 +1,6 @@
 from paz import processors as pr
 from paz.backend.image.draw import lincolor
 import numpy as np
-from paz.backend.image import blend_alpha_channel
 
 
 class PreprocessImage(pr.SequentialProcessor):
