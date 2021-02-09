@@ -7,6 +7,17 @@ from tensorflow.keras.applications import ResNet50V2
 
 
 def convolution_block(inputs, filters, kernel_size=3, activation='relu'):
+    """UNET convolution block containing Conv2D -> BatchNorm -> Activation
+
+    # Arguments
+        inputs: Keras/tensorflow tensor input.
+        filters: Int. Number of filters.
+        kernel_size: Int. Kernel size of convolutions.
+        activation: String. Activation used convolution.
+
+    # Returns
+        Keras/tensorflow tensor.
+    """
     kwargs = {'use_bias': False, 'kernel_initializer': 'he_uniform'}
     x = Conv2D(filters, kernel_size, (1, 1), 'same', **kwargs)(inputs)
     x = BatchNormalization()(x)
@@ -15,6 +26,18 @@ def convolution_block(inputs, filters, kernel_size=3, activation='relu'):
 
 
 def upsample_block(x, filters, branch):
+    """UNET upsample block. This block upsamples ``x``, concatenates a
+    ``branch`` tensor and applies two convolution blocks:
+    Upsample -> Concatenate -> 2 x ConvBlock.
+
+    # Arguments
+        x: Keras/tensorflow tensor.
+        filters: Int. Number of filters
+        branch: Tensor to be concatated to the upsamples ``x`` tensor.
+
+    # Returns
+        A Keras tensor.
+    """
     x = UpSampling2D(size=2)(x)
     x = Concatenate(axis=3)([x, branch])
     x = convolution_block(x, filters)
@@ -23,6 +46,18 @@ def upsample_block(x, filters, branch):
 
 
 def transpose_block(x, filters, branch):
+    """UNET transpose block. This block upsamples ``x``, concatenates a
+    ``branch`` tensor and applies two convolution blocks:
+    Conv2DTranspose -> Concatenate -> 2 x ConvBlock.
+
+    # Arguments
+        x: Keras/tensorflow tensor.
+        filters: Int. Number of filters
+        branch: Tensor to be concatated to the upsamples ``x`` tensor.
+
+    # Returns
+        A Keras tensor.
+    """
     x = Conv2DTranspose(filters, 4, (2, 2), 'same', use_bias=False)(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
@@ -32,12 +67,29 @@ def transpose_block(x, filters, branch):
 
 
 def freeze_model(model):
+    """Freezes gradient pass for the entire model
+
+    # Arguments:
+        model: Keras/tensorflow model
+
+    # Returns:
+        A Keras/tensorflow model
+    """
     for layer in model.layers:
         layer.trainable = False
     return model
 
 
 def get_tensors(model, layer_names):
+    """Gets all the tensor outputs of the given layer names.
+
+    # Arguments
+        model: Keras/tensorflow model.
+        layer_names: List of strings which each string is a layer name.
+
+    # Returns
+        List of Keras tensors.
+    """
     tensors = []
     for layer_name in layer_names:
         tensors.append(model.get_layer(layer_name).output)
@@ -46,7 +98,19 @@ def get_tensors(model, layer_names):
 
 def build_backbone(BACKBONE, shape, branch_names, weights,
                    frozen=False, input_tensor=None):
+    """Builds ``BACKBONE`` class for UNET model.
 
+    # Arguments
+        BACKBONE: Class for instantiating a backbone model
+        shape: List of integers: ``(H, W, num_channels)``.
+        branch_names: List of strings containing layer names of ``BACKBONE()``.
+        weights: String or ``None``.
+        frozen: Boolean. If True ``BACKBONE()`` updates are frozen.
+        input_tensor: Input tensor. If given ``shape`` is overwritten and this
+            tensor is used instead as input.
+
+    # Returns
+    """
     kwargs = {'include_top': False, 'input_shape': shape, 'weights': weights}
     if input_tensor is not None:
         kwargs.pop('input_shape')
@@ -62,6 +126,20 @@ def build_backbone(BACKBONE, shape, branch_names, weights,
 
 def build_UNET(num_classes, backbone, branch_tensors,
                decoder, decoder_filters, activation, name):
+    """Build UNET with a given ``backbone`` model.
+
+    # Arguments
+        num_classes: Integer used for output number of channels.
+        backbone: Instantiated backbone model.
+        branch_tensors: List of tensors from ``backbone`` model
+        decoder: Function used for upsampling and decoding the output.
+        decoder_filters: List of integers used in each application of decoder.
+        activation: Output activation of the model.
+        name: String. indicating the name of the model.
+
+    # Returns
+        A UNET Keras/tensorflow model.
+    """
     inputs, x = backbone.input, backbone.output
     if isinstance(backbone.layers[-1], MaxPooling2D):
         x = convolution_block(x, 512)
@@ -81,7 +159,27 @@ def UNET(input_shape, num_classes, branch_names, BACKBONE, weights,
          freeze_backbone=False, activation='sigmoid', decoder_type='upsample',
          decoder_filters=[256, 128, 64, 32, 16], input_tensor=None,
          name='UNET'):
+    """Build a generic UNET model with a given ``BACKBONE`` class.
 
+    # Arguments
+        input_shape: List of integers: ``(H, W, num_channels)``.
+        num_classes: Integer used for output number of channels.
+        branch_names: List of strings containing layer names of ``BACKBONE()``.
+        BACKBONE: Class for instantiating a backbone model
+        weights: String indicating backbone weights e.g.
+            ''imagenet'', ``None``.
+        freeze_backbone: Boolean. If True ``BACKBONE()`` updates are frozen.
+        decoder_type: String indicating decoding function e.g.
+            ''upsample ''transpose''.
+        decoder_filters: List of integers used in each application of decoder.
+        activation: Output activation of the model.
+        input_tensor: Input tensor. If given ``shape`` is overwritten and this
+            tensor is used instead as input.
+        name: String. indicating the name of the model.
+
+    # Returns
+        A UNET Keras/tensorflow model.
+    """
     args = [BACKBONE, input_shape, branch_names,
             weights, freeze_backbone, input_tensor]
     backbone, branch_tensors = build_backbone(*args)
