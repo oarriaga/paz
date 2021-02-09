@@ -289,24 +289,3 @@ def UNET_RESNET50(num_classes=1, input_shape=(224, 224, 3), weights='imagenet',
     return UNET(input_shape, num_classes, RESNET50_branches, ResNet50V2,
                 weights, freeze_backbone, activation, decoder_type,
                 decode_filters, input_tensor, 'UNET-RESNET50')
-
-
-def test_shapes_of_UNETVGG19():
-    model = UNET_VGG19(weights=None)
-    assert model.input_shape[1:3] == model.output_shape[1:3]
-
-
-def test_shapes_of_UNETVGG16():
-    model = UNET_VGG16(weights=None)
-    assert model.input_shape[1:3] == model.output_shape[1:3]
-
-
-def test_shapes_of_UNET_RESNET50V2():
-    model = UNET_RESNET50(weights=None)
-    assert model.input_shape[1:3] == model.output_shape[1:3]
-
-
-if __name__ == '__main__':
-    test_shapes_of_UNETVGG19()
-    test_shapes_of_UNETVGG16()
-    test_shapes_of_UNET_RESNET50V2()
