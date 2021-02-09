@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.losses import Loss
 
@@ -55,3 +56,31 @@ class FocalLoss(Loss):
 
     def call(self, y_true, y_pred):
         return compute_focal_loss(y_true, y_pred, self.gamma, self.alpha)
+
+
+def test_jaccard_score_full_overlap():
+    y_true = np.ones((32, 128, 128, 1))
+    y_pred = np.ones((32, 128, 128, 1))
+    score = compute_jaccard_score(y_true, y_pred).numpy()
+    assert np.allclose(1.0, score)
+
+
+def test_jaccard_score_no_overlap():
+    y_true = np.ones((32, 128, 128, 1))
+    y_pred = np.zeros((32, 128, 128, 1))
+    score = compute_jaccard_score(y_true, y_pred).numpy()
+    assert np.allclose(0.0, score)
+
+
+def test_jaccard_score_half_overlap():
+    y_true = np.ones((32, 128, 128, 1))
+    y_pred_A = np.ones((16, 128, 128, 1))
+    y_pred_B = np.zeros((16, 128, 128, 1))
+    y_pred = np.concatenate([y_pred_A, y_pred_B], axis=0)
+    score = compute_jaccard_score(y_true, y_pred).numpy()
+    assert np.allclose(0.5, np.mean(score))
+
+
+test_jaccard_score_no_overlap()
+test_jaccard_score_half_overlap()
+test_jaccard_score_full_overlap()
