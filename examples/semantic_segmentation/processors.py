@@ -1,5 +1,6 @@
 from paz import processors as pr
 from paz.backend.image.draw import lincolor
+from backend import resize_image_with_nearest_neighbors
 import numpy as np
 
 
@@ -20,18 +21,27 @@ CITY_ESCAPES_ID_TO_MASK = {
 class FromIdToMask(pr.Processor):
     def __init__(self, id_to_mask=CITY_ESCAPES_ID_TO_MASK):
         super(FromIdToMask, self).__init__()
-        self.id_to_mask
+        self.id_to_mask = id_to_mask
         self.num_classes = len(set(list(self.id_to_mask.values())))
 
     def call(self, image):
         H, W = image.shape[:2]
-        masks = np.ones((H, W, self.num_classes))
+        masks = np.zeros((H, W, self.num_classes))
         unique_ids = np.unique(image)
         for unique_id in unique_ids:
             id_mask = image[:, :, 0] == unique_id
             mask_arg = self.id_to_mask[unique_id]
             masks[:, :, mask_arg] = id_mask.astype('int')
         return masks
+
+
+class ResizeImageWithNearestNeighbors(pr.Processor):
+    def __init__(self, shape):
+        self.shape = shape
+        super(ResizeImageWithNearestNeighbors, self).__init__()
+
+    def call(self, image):
+        return resize_image_with_nearest_neighbors(image, self.shape)
 
 
 class MasksToColors(pr.Processor):
