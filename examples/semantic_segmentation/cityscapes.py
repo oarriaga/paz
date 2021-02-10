@@ -14,7 +14,7 @@ class CityScapes(Loader):
 
     def load_data(self):
         image_path = os.path.join(self.image_path, '*/*.png')
-        label_path = os.path.join(self.label_path, '*/*color.png')
+        label_path = os.path.join(self.label_path, '*/*labelIds.png')
         image_paths = glob.glob(image_path)
         label_paths = glob.glob(label_path)
         image_paths = sorted(image_paths)
@@ -27,7 +27,7 @@ class CityScapes(Loader):
         return dataset
 
 
-label_path = '/home/octavio/Downloads/dummy/gtCoarse/'
+label_path = '/home/octavio/Downloads/dummy/gtFine/'
 image_path = '/home/octavio/Downloads/dummy/RGB_images/leftImg8bit/'
 data_manager = CityScapes(image_path, label_path, 'train', None)
 dataset = data_manager.load_data()
