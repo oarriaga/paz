@@ -15,7 +15,7 @@ from cityscapes import CityScapes
 from pipelines import PreprocessSegmentationIds
 from pipelines import PostprocessSegmentationIds
 
-num_classes = 3
+# num_classes = 3
 input_shape = (128, 128, 3)
 # softmax requires a background class and a background mask
 activation = 'softmax'
@@ -36,28 +36,37 @@ experiment_path = 'experiments/'
 
 label_path = '/home/octavio/Downloads/dummy/gtFine/'
 image_path = '/home/octavio/Downloads/dummy/RGB_images/leftImg8bit/'
-data_manager = CityScapes(image_path, label_path, 'train')
-data = data_manager.load_data()
-num_classes = data_manager.num_classes
+train_manager = CityScapes(image_path, label_path, 'train')
+val_manager = CityScapes(image_path, label_path, 'val')
+data = train_manager.load_data()
+val_data = val_manager.load_data()
+num_classes = train_manager.num_classes
 processor = PreprocessSegmentationIds(image_shape, num_classes)
 
 # setting additional callbacks
 callbacks = []
 log_filename = os.path.join(experiment_path, 'optimization.log')
 log = CSVLogger(log_filename)
-stop = EarlyStopping('loss', patience=stop_patience)
+stop = EarlyStopping(patience=stop_patience)
 save_filename = os.path.join(experiment_path, 'model.hdf5')
-save = ModelCheckpoint(save_filename, 'loss', save_best_only=True)
-plateau = ReduceLROnPlateau('loss', patience=reduce_patience)
+save = ModelCheckpoint(save_filename, save_best_only=True)
+plateau = ReduceLROnPlateau(patience=reduce_patience)
 callbacks.extend([log, stop, save, plateau])
 
 model = UNET_VGG16(num_classes, input_shape, 'imagenet', freeze, activation)
 sequence = ProcessingSequence(processor, batch_size, data)
+val_sequence = ProcessingSequence(processor, batch_size, val_data)
 optimizer = Adam()
 model.compile(optimizer, loss, metrics)
 model.summary()
-model.fit(sequence, batch_size=batch_size, epochs=epochs, callbacks=callbacks)
+model.fit(sequence,
+          validation_data=val_sequence,
+          batch_size=batch_size,
+          epochs=epochs,
+          callbacks=callbacks)
 
+save_filename = os.path.join(experiment_path, 'model.tf')
+model.save_weights(save_filename, save_format='tf')
 # colors = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
 # postprocess = PostprocessSegmentationIds(model, colors)
 # for sample in data:
