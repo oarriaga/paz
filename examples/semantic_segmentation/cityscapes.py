@@ -10,7 +10,7 @@ from pipelines import PostProcessImage
 def get_class_names(dataset_name):
     if dataset_name == 'CityScapes':
         return ['void', 'flat', 'construction',
-                'object', 'nature', 'human', 'vehicle']
+                'object', 'nature', 'sky', 'human', 'vehicle']
 
 
 class CityScapes(Loader):
@@ -49,11 +49,9 @@ if __name__ == "__main__":
     dataset = data_manager.load_data()
     class_names = data_manager.class_names
     num_classes = len(class_names)
-    preprocess = PreprocessSegmentationIds((512, 512), num_classes)
-    # preprocess = PreprocessSegmentationIds((256, 256), num_classes)
+    preprocess = PreprocessSegmentationIds((128, 128), num_classes)
     postprocess_masks = PostprocessSegmentationIds(num_classes)
     postprocess_image = PostProcessImage()
-
     for sample in dataset:
         preprocessed_sample = preprocess(sample)
         image = preprocessed_sample['inputs']['input_1']
