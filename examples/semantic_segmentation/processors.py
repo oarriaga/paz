@@ -1,5 +1,6 @@
 from paz import processors as pr
 from paz.backend.image.draw import lincolor
+# from paz.backend.image import show_image
 from backend import resize_image_with_nearest_neighbors
 import numpy as np
 
@@ -29,9 +30,11 @@ class FromIdToMask(pr.Processor):
         masks = np.zeros((H, W, self.num_classes))
         unique_ids = np.unique(image)
         for unique_id in unique_ids:
-            id_mask = image[:, :, 0] == unique_id
             mask_arg = self.id_to_mask[unique_id]
-            masks[:, :, mask_arg] = id_mask.astype('int')
+            id_mask = image[:, :, 0] == unique_id
+            mask = masks[:, :, mask_arg]
+            mask = mask + id_mask.astype('int')
+            masks[:, :, mask_arg] = mask
         return masks
 
 
@@ -54,6 +57,7 @@ class MasksToColors(pr.Processor):
 
     def call(self, masks):
         H, W, num_masks = masks.shape
+        assert num_masks == self.num_classes
         image = np.zeros((H, W, 3))
         for mask_arg in range(self.num_classes):
             mask = masks[..., mask_arg]
@@ -63,6 +67,7 @@ class MasksToColors(pr.Processor):
             color_mask = color * mask
             # image = (image + color_mask) / 2.0
             image = image + color_mask
+            # show_image((255 * image).astype('uint8'))
         return image
 
 
