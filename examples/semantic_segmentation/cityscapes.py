@@ -5,6 +5,8 @@ from paz.abstract import Loader
 
 class CityScapes(Loader):
     def __init__(self, image_path, label_path, split, class_names):
+        if split not in ['train', 'val', 'test']:
+            raise ValueError('Invalid split name:', split)
         self.image_path = os.path.join(image_path, split)
         self.label_path = os.path.join(label_path, split)
         super(CityScapes, self).__init__(
