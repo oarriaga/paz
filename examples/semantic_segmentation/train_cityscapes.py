@@ -28,7 +28,7 @@ loss = JaccardLoss()
 # loss = [DiceLoss(), JaccardLoss(), FocalLoss()]
 H, W = image_shape = input_shape[:2]
 batch_size = 5
-epochs = 10
+epochs = 20
 freeze = True
 stop_patience = 5
 reduce_patience = 2
@@ -63,7 +63,9 @@ model.fit(sequence,
           validation_data=val_sequence,
           batch_size=batch_size,
           epochs=epochs,
-          callbacks=callbacks)
+          callbacks=callbacks,
+          workers=4,
+          use_multiprocessing=True)
 
 save_filename = os.path.join(experiment_path, 'model.tf')
 model.save_weights(save_filename, save_format='tf')
