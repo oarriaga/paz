@@ -14,6 +14,20 @@ def get_class_names(dataset_name):
 
 
 class CityScapes(Loader):
+    """CityScapes data manager for loading the paths of the RGB and
+        segmentation masks.
+
+    # Arguments
+        image_path: String. Path to RGB images e.g. '/home/user/leftImg8bit/'
+        label_path: String. Path to label masks e.g. '/home/user/gtFine/'
+        split: String. Valid option contain 'train', 'val' or 'test'.
+        class_names: String or list: If 'all' then it loads all default
+            class names.
+
+    # References
+        -[The Cityscapes Dataset for Semantic Urban Scene Understanding](
+        https://www.cityscapes-dataset.com/citation/)
+    """
     def __init__(self, image_path, label_path, split, class_names='all'):
         if split not in ['train', 'val', 'test']:
             raise ValueError('Invalid split name:', split)
