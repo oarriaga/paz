@@ -1,12 +1,10 @@
-import os
 import tensorflow as tf
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpus[0], True)
 
 from cityscapes import CityScapes
 from paz import processors as pr
-from paz.backend.image import show_image
-from processors import PreprocessImage, Round, MasksToColors
+from processors import Round, MasksToColors
 from model import UNET_VGG16
 
 

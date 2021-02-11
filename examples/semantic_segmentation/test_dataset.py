@@ -1,3 +1,10 @@
+import numpy as np
+from paz.datasets import CityScapes
+from pipelines import PreprocessSegmentationIds
+from pipelines import PostprocessSegmentationIds
+from pipelines import PostProcessImage
+
+
 if __name__ == "__main__":
     from paz.backend.image import show_image
 
