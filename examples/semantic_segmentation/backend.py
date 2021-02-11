@@ -34,3 +34,20 @@ def draw_triangle(image, center_x, center_y, size, color):
     points = np.array([[vertex_A, vertex_B, vertex_C]], dtype=np.int32)
     cv2.fillPoly(image, points, color)
     return image
+
+
+def resize_image_with_nearest_neighbors(image, size):
+    """Resize image using nearest neighbors interpolation.
+
+    # Arguments
+        image: Numpy array.
+        size: List of two ints.
+
+    # Returns
+        Numpy array.
+    """
+    if(type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    else:
+        return cv2.resize(image, size, interpolation=cv2.INTER_NEAREST)

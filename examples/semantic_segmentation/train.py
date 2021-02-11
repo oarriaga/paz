@@ -6,12 +6,12 @@ tf.config.experimental.set_memory_growth(gpus[0], True)
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import CSVLogger, EarlyStopping
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-from paz.abstract import ProcessingSequence, SequentialProcessor
-from loss import DiceLoss, JaccardLoss, FocalLoss
-from paz import processors as pr
+from paz.abstract import ProcessingSequence
+from paz.optimization import DiceLoss, JaccardLoss, FocalLoss
+from paz.models import UNET_VGG16
+# from paz import processors as pr
 
 from shapes import Shapes
-from model import UNET_VGG16
 from pipelines import PreprocessSegmentation
 from pipelines import PostprocessSegmentation
 
@@ -24,8 +24,8 @@ num_samples = 1000
 iou_thresh = 0.3
 max_num_shapes = 3
 metrics = ['mean_squared_error']
-loss = JaccardLoss()
-# loss = [DiceLoss(), JaccardLoss(), FocalLoss()]
+# loss = JaccardLoss()
+loss = [DiceLoss(), JaccardLoss(), FocalLoss()]
 H, W = image_shape = input_shape[:2]
 batch_size = 5
 epochs = 10
