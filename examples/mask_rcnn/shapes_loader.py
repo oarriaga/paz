@@ -76,13 +76,10 @@ class Shapes(Loader):
             mask = masks[:, :, index]
             horizontal_indicies = np.where(np.any(mask, axis=0))[0]
             vertical_indicies = np.where(np.any(mask, axis=1))[0]
-            if horizontal_indicies.shape[0]:
-                X1, X2 = horizontal_indicies[[0, -1]]
-                Y1, Y2 = vertical_indicies[[0, -1]]
-                X2 += 1
-                Y2 += 1
-            else:
-                X1, X2, Y1, Y2 = 0, 0, 0, 0
+            X1, X2 = horizontal_indicies[[0, -1]]
+            Y1, Y2 = vertical_indicies[[0, -1]]
+            X2 += 1
+            Y2 += 1
             boxes[index] = np.array([X1 / W, Y1 / H, X2 / W, Y2 / H])
         return boxes
 
@@ -103,13 +100,16 @@ class Shapes(Loader):
             cv2.fillPoly(image, points, color)
         return image
 
-    def random_shape(self, height, width, buffer=20):
-        shape = np.random.choice(self.class_names)
+    def random_shape(self, H, W, buffer=20):
+        shape = np.random.choice(self.class_names[1:])
         color = tuple([np.random.randint(0, 255) for _ in range(3)])
-        center_y = np.random.randint(buffer, height - buffer - 1)
-        center_x = np.random.randint(buffer, width - buffer - 1)
-        size = np.random.randint(buffer, height // 4)
-        return shape, color, (center_x, center_y, size)
+        Y = np.random.randint(buffer, H - buffer - 1)
+        X = np.random.randint(buffer, W - buffer - 1)
+        size = np.random.randint(buffer, H // 4)
+        check_dimension = (Y + size) > H or (X + size) > W
+        if check_dimension or size > Y or size > X:
+            return self.random_shape(H, W)
+        return shape, color, (X, Y, size)
 
     def random_image(self):
         H, W = self.size
