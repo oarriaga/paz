@@ -6,8 +6,8 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.models import Model
 
-from paz.optimization.losses.frustumpointnet_loss import g_mean_size_arr, \
-    NUM_HEADING_BIN, NUM_SIZE_CLUSTER
+from examples.frustum_pointnet.frustum_loader import g_mean_size_arr
+from paz.optimization.losses.frustumpointnet_loss import FrustumPointNetLoss
 
 
 def ModelOutputToTensor(output, IntermediateOutputs, NUM_HEADING_BIN=12,
@@ -51,80 +51,6 @@ def ModelOutputToTensor(output, IntermediateOutputs, NUM_HEADING_BIN=12,
             tf.constant(g_mean_size_arr,  dtype=tf.float32), 0)
 
     return IntermediateOutputs
-
-
-def ExtractBox3DCornersHelper(centers, headings, sizes):
-    """ TF layer. Input: (N,3), (N,), (N,3), Output: (N,8,3) """
-    # print '-----', centers
-    batch_size = centers.get_shape()[0]
-    length = tf.slice(sizes, [0, 0], [-1, 1])  # (N,1)
-    width = tf.slice(sizes, [0, 1], [-1, 1])  # (N,1)
-    height = tf.slice(sizes, [0, 2], [-1, 1])  # (N,1)
-    # print l,w,h
-    x_corners = tf.concat([length / 2, length / 2, -length / 2, -length / 2,
-                           length / 2, length / 2, -length / 2, -length / 2],
-                          axis=1)  # (N,8)
-    y_corners = tf.concat([height / 2, height / 2, height / 2, height / 2,
-                           -height / 2, -height / 2, -height / 2, -height / 2],
-                          axis=1)  # (N,8)
-    z_corners = tf.concat([width / 2, -width / 2, -width / 2, width / 2,
-                           width / 2, -width / 2, -width / 2, width / 2],
-                          axis=1)  # (N,8)
-    corners = tf.concat([tf.expand_dims(x_corners, 1),
-                         tf.expand_dims(y_corners, 1),
-                         tf.expand_dims(z_corners, 1)],
-                        axis=1)  # (N,3,8)
-    cosine_value = tf.cos(headings)
-    sine_value = tf.sin(headings)
-    ones = tf.ones([batch_size], dtype=tf.float32)
-    zeros = tf.zeros([batch_size], dtype=tf.float32)
-    row1 = tf.stack([cosine_value, zeros, sine_value], axis=1)  # (N,3)
-    row2 = tf.stack([zeros, ones, zeros], axis=1)
-    row3 = tf.stack([-sine_value, zeros, cosine_value], axis=1)
-    R = tf.concat([tf.expand_dims(row1, 1), tf.expand_dims(row2, 1),
-                   tf.expand_dims(row3, 1)], axis=1)  # (N,3,3)
-    corners_3d = tf.matmul(R, corners)  # (N,3,8)
-    corners_3d += tf.tile(tf.expand_dims(centers, 2), [1, 1, 8])  # (N,3,8)
-    corners_3d = tf.transpose(corners_3d, perm=[0, 2, 1])  # (N,8,3)
-    return corners_3d
-
-
-def ToOneHot(input_tensor, depth):
-    OneHot = tf.one_hot(tf.cast(input_tensor, tf.int64), depth=depth,
-                        on_value=1, off_value=0, axis=-1)
-    return OneHot
-
-
-def ExtractBox3DCorners(center, heading_residuals, size_residuals):
-    """ TF layer.
-    Inputs:
-        center: (B,3)
-        heading_residuals: (B,NH)
-        size_residuals: (B,NS,3)
-    Outputs:
-        box3d_corners: (B,NH,NS,8,3) tensor
-    """
-    batch_size = center.get_shape()[0]
-    heading_bin_centers = tf.constant(np.arange(0, 2 * np.pi, 2 * np.pi /
-                                                NUM_HEADING_BIN),
-                                      dtype=tf.float32)  # (NH,)
-    headings = heading_residuals + tf.expand_dims(heading_bin_centers, 0)
-
-    mean_sizes = tf.expand_dims(tf.constant(g_mean_size_arr, dtype=tf.float32),
-                                0) + size_residuals  # (B,NS,1)
-    sizes = mean_sizes + size_residuals  # (B,NS,3)
-    sizes = tf.tile(tf.expand_dims(sizes, 1), [1, NUM_HEADING_BIN, 1, 1])
-    headings = tf.tile(tf.expand_dims(headings, -1), [1, 1, NUM_SIZE_CLUSTER])
-    centers = tf.tile(tf.expand_dims(tf.expand_dims(center, 1), 1),
-                      [1, NUM_HEADING_BIN, NUM_SIZE_CLUSTER, 1])
-
-    N = batch_size * NUM_HEADING_BIN * NUM_SIZE_CLUSTER
-    corners_3d = ExtractBox3DCornersHelper(tf.reshape(centers, [N, 3]),
-                                           tf.reshape(headings, [N]),
-                                           tf.reshape(sizes, [N, 3]))
-
-    return tf.reshape(corners_3d,
-                      [batch_size, NUM_HEADING_BIN, NUM_SIZE_CLUSTER, 8, 3])
 
 
 def ObjectPointCloudMasking(point_cloud, mask, npoints=512):
@@ -343,7 +269,11 @@ def SpatialTransformerNetwork(object_point_cloud, one_hot_vec):
 
 
 def FrustumPointNetModel(point_cloud_shape=(1024, 3), one_hot_vec_shape=(3,),
-                         batch_size=32):
+                         mask_label_shape=(1024,), center_label_shape=(3,),
+                         heading_class_label_shape=(),
+                         heading_residual_label_shape=(),
+                         size_class_label_shape=(),
+                         size_residual_label_shape=(3,), batch_size=32):
     """ Loss functions for 3D object detection.
         Input:
             Frustum_Point_Cloud: TF int32 tensor in shape (B,N)
@@ -368,7 +298,19 @@ def FrustumPointNetModel(point_cloud_shape=(1024, 3), one_hot_vec_shape=(3,),
     point_cloud = Input(point_cloud_shape, name="frustum_point_cloud",
                         batch_size=batch_size)
     one_hot_vector = Input(one_hot_vec_shape, name="one_hot_vec",
-                           batch_size=batch_size)
+                        batch_size=batch_size)
+    mask_label = Input(mask_label_shape, name="segmentation_label",
+                       batch_size=batch_size)
+    center_label = Input(center_label_shape, name="box3d_center",
+                         batch_size=batch_size)
+    heading_class_label = Input(heading_class_label_shape, name="angle_class",
+                                batch_size=batch_size)
+    heading_residual_label = Input(heading_residual_label_shape,
+                                   name="angle_residual", batch_size=batch_size)
+    size_class_label = Input(size_class_label_shape, name="size_class",
+                             batch_size=batch_size)
+    size_residual_label = Input(size_residual_label_shape, name="size_residual",
+                                batch_size=batch_size)
 
     logits = InstanceSegmentationNet(point_cloud, one_hot_vector)  # bs,n,2
     IntermediateOutputs['mask_logits'] = logits
@@ -390,52 +332,37 @@ def FrustumPointNetModel(point_cloud_shape=(1024, 3), one_hot_vec_shape=(3,),
     # 3D Box Estimation
     box_pred = BoxEstimationNetwork(object_point_cloud_xyz_new, one_hot_vector)
 
-    IntermediateOutputs = ModelOutputToTensor(box_pred, IntermediateOutputs,
-                                              NUM_HEADING_BIN, NUM_SIZE_CLUSTER)
+    IntermediateOutputs = ModelOutputToTensor(box_pred, IntermediateOutputs)
     IntermediateOutputs['center'] = IntermediateOutputs['center_boxnet'] + \
                                     stage1_center  # Bx3
 
-    logits = tf.identity(IntermediateOutputs['mask_logits'], name='seg_logits')
-    stage1_center = tf.identity(IntermediateOutputs['stage1_center'],
-                                name='seg_pc_centroid')
-    box3d_center = tf.identity(IntermediateOutputs['center'], name='center')
-    heading_scores = tf.identity(IntermediateOutputs['heading_scores'],
-                                 name='heading_class')
-    tf.identity(IntermediateOutputs['heading_residuals_normalized'],
-                name='heading_residuals_normalized')
-    heading_residual = tf.identity(IntermediateOutputs['heading_residuals'],
-                                   name='heading residuals')
-    size_scores = tf.identity(IntermediateOutputs['size_scores'],
-                              name='size_class')
-    tf.identity(IntermediateOutputs['size_residuals_normalized'],
-                name='size_residuals_normalized')
-    size_residual = tf.identity(IntermediateOutputs['size_residuals'],
-                                name='size_residuals')
+    logits = IntermediateOutputs['mask_logits']
+    heading_scores = IntermediateOutputs['heading_scores']  # BxNUM_HEADING_BIN
+    heading_residual = IntermediateOutputs['heading_residuals']
+    size_scores = IntermediateOutputs['size_scores']
+    size_residual = IntermediateOutputs['size_residuals']
+    box3d_center = IntermediateOutputs['center']
 
-    hcls_onehot = ToOneHot(IntermediateOutputs['heading_scores'],
-                           NUM_HEADING_BIN)
+    loss = FrustumPointNetLoss().TotalLoss([mask_label, center_label,
+                                            heading_class_label,
+                                            heading_residual_label,
+                                            size_class_label,
+                                            size_residual_label,
+                                            IntermediateOutputs])
 
-    scls_onehot = ToOneHot(IntermediateOutputs['size_scores'], NUM_SIZE_CLUSTER)
+    training_model = Model([point_cloud, one_hot_vector, mask_label,
+                            center_label, heading_class_label,
+                            heading_residual_label, size_class_label,
+                            size_residual_label], loss,
+                           name='f_pointnet_train')
 
-    corners_3d = ExtractBox3DCorners(IntermediateOutputs['center'],
-                                     IntermediateOutputs['heading_residuals'],
-                                     IntermediateOutputs['size_residuals'])
+    det_model = Model(inputs=[point_cloud, one_hot_vector],
+                      outputs=[logits, box3d_center, heading_scores,
+                               heading_residual, size_scores, size_residual],
+                      name='f_pointnet_inference')
+    training_model.summary()
 
-    gt_mask = tf.tile(tf.expand_dims(hcls_onehot, 2),
-                      [1, 1, NUM_SIZE_CLUSTER]) * tf.tile(tf.expand_dims(
-        scls_onehot, 1), [1, NUM_HEADING_BIN, 1])
-
-    corners_3d_pred = tf.reduce_sum(tf.cast(tf.expand_dims(
-        tf.expand_dims(gt_mask, -1), -1), dtype=tf.float32) * corners_3d,
-                                    axis=[1, 2])
-
-    model = Model(inputs=[point_cloud, one_hot_vector],
-                  outputs=[logits, box3d_center, stage1_center, heading_scores,
-                           heading_residual, size_scores, size_residual,
-                           corners_3d_pred],
-                  name='FrustumPointNet')
-
-    return model
+    return training_model, det_model
 
 
 if __name__ == '__main__':
