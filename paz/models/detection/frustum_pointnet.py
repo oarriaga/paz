@@ -6,7 +6,7 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.models import Model
 
-from examples.frustum_pointnet.frustum_loader import g_mean_size_arr
+from examples.frustum_pointnet.dataset_utils import g_mean_size_arr
 from paz.optimization.losses.frustumpointnet_loss import FrustumPointNetLoss
 
 
@@ -88,7 +88,6 @@ def ObjectPointCloudMasking(point_cloud, mask, npoints=512):
     object_pc = tf.gather_nd(point_cloud, indices)
     return object_pc, indices
 
-
 def PointCloudTranslation(point_cloud, logits, IntermediateOutputs,
                           NUM_OBJECT_POINT=512, xyz_only=True):
     """ Select point cloud with predicted 3D mask,
@@ -134,8 +133,10 @@ def PointCloudTranslation(point_cloud, logits, IntermediateOutputs,
             [point_cloud_xyz_stage1, point_cloud_features], axis=-1)
     num_channels = point_cloud_stage1.get_shape()[2]
 
-    object_point_cloud, _ = ObjectPointCloudMasking(point_cloud_stage1,
-                                                    mask, NUM_OBJECT_POINT)
+    object_point_cloud, indices = ObjectPointCloudMasking(point_cloud_stage1,
+                                                          mask,
+                                                          NUM_OBJECT_POINT)
+
     object_point_cloud.set_shape([batch_size, NUM_OBJECT_POINT, num_channels])
 
     return object_point_cloud, tf.squeeze(mask_xyz_mean, axis=1), \
