@@ -1,9 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.losses import Huber
-from examples.frustum_pointnet.frustum_loader import NUM_HEADING_BIN, \
+from examples.frustum_pointnet.dataset_utils import NUM_HEADING_BIN, \
     g_mean_size_arr, NUM_SIZE_CLUSTER
-
 
 def ExtractBox3DCornersHelper(centers, headings, sizes):
     """ TF layer.
@@ -107,7 +106,7 @@ class FrustumPointNetLoss:
         self.box_loss_weight = box_loss_weight
         self.mask_weight = mask_weight
 
-    def _HuberLoss(self, y_true, y_pred):
+    def _huber_loss(self, y_true, y_pred):
         """
         Huber Loss calculation for regressed output
         @param y_true: Label of the loss
@@ -115,9 +114,9 @@ class FrustumPointNetLoss:
         @return: Loss value
         """
         h = Huber()
-        return h(y_true, y_pred).numpy()
+        return h(y_true, y_pred)
 
-    def _CrossEntropyLoss(self, y_true, y_pred):
+    def _cross_entropy_loss(self, y_true, y_pred):
         """
         Cross Entropy Loss calculation for classification output
         @param y_true: Label of the loss
@@ -128,7 +127,7 @@ class FrustumPointNetLoss:
                               (logits=y_pred, labels=tf.cast(y_true, tf.int64)))
         return loss
 
-    def ToOneHot(self, input_tensor, depth):
+    def to_one_hot(self, input_tensor, depth):
         OneHot = tf.one_hot(tf.cast(input_tensor, tf.int64), depth=depth,
                             on_value=1, off_value=0, axis=-1)
         return OneHot
@@ -140,52 +139,55 @@ class FrustumPointNetLoss:
                                                             args[4], args[5], \
                                                             args[6]
 
-        mask_loss = self._CrossEntropyLoss(y_true=tf.cast(mask_label, tf.int64),
-                                           y_pred=end_points['mask_logits'])
+        mask_loss = self._cross_entropy_loss(y_true=tf.cast(mask_label,
+                                                            tf.int64),
+                                             y_pred=end_points['mask_logits'])
 
-        center_loss = self._HuberLoss(y_true=center_label,
-                                      y_pred=end_points['center'])
+        center_loss = self._huber_loss(y_true=center_label,
+                                       y_pred=end_points['center'])
 
-        stage1_center_loss = self._HuberLoss(y_true=center_label,
-                                             y_pred=end_points['stage1_center'])
+        stage1_center_loss = self._huber_loss(y_true=center_label,
+                                              y_pred=end_points[
+                                                  'stage1_center'])
 
-        heading_class_loss = self._CrossEntropyLoss(
+        heading_class_loss = self._cross_entropy_loss(
             y_true=tf.cast(heading_class_label, tf.int64),
             y_pred=end_points['heading_scores'])
 
-        hcls_onehot = self.ToOneHot(heading_class_label, NUM_HEADING_BIN)
+        heading_cls_onehot = self.to_one_hot(heading_class_label,
+                                             NUM_HEADING_BIN)
 
         heading_residual_normalized_label = (heading_residual_label /
                                              (np.pi / NUM_HEADING_BIN))
 
-        heading_residual_normalized_loss = self._HuberLoss(
+        heading_residual_normalized_loss = self._huber_loss(
             y_true=heading_residual_normalized_label, y_pred=tf.reduce_sum(
                 end_points['heading_residuals_normalized'] *
-                tf.cast(hcls_onehot, dtype=tf.float32), axis=1))
+                tf.cast(heading_cls_onehot, dtype=tf.float32), axis=1))
 
-        size_class_loss = self._CrossEntropyLoss(
+        size_class_loss = self._cross_entropy_loss(
             y_pred=end_points['size_scores'], y_true=tf.cast(size_class_label,
                                                              tf.int64))
 
-        scls_onehot = self.ToOneHot(tf.cast(size_class_label, tf.int64),
-                                    NUM_SIZE_CLUSTER)
+        size_cls_onehot = self.to_one_hot(tf.cast(size_class_label, tf.int64),
+                                          NUM_SIZE_CLUSTER)
 
-        scls_onehot_tiled = tf.tile(tf.expand_dims(tf.cast(scls_onehot,
-                                                           dtype=tf.float32),
-                                                   -1), [1, 1, 3])
+        size_cls_onehot_tiled = tf.tile(tf.expand_dims(tf.cast(size_cls_onehot,
+                                                               dtype=tf.float32)
+                                                       ,-1), [1, 1, 3])
         predicted_size_residual_normalized = tf.reduce_sum(
-            end_points['size_residuals_normalized'] * scls_onehot_tiled,
+            end_points['size_residuals_normalized'] * size_cls_onehot_tiled,
             axis=[1])
 
         mean_size_arr_expand = tf.expand_dims(tf.constant(g_mean_size_arr,
                                                           dtype=tf.float32), 0)
 
-        mean_size_label = tf.reduce_sum(scls_onehot_tiled *
+        mean_size_label = tf.reduce_sum(size_cls_onehot_tiled *
                                         mean_size_arr_expand, axis=[1])
 
         size_residual_label_normalized = size_residual_label / mean_size_label
 
-        size_residual_normalized_loss = self._HuberLoss(
+        size_residual_normalized_loss = self._huber_loss(
             y_true=size_residual_label_normalized,
             y_pred=predicted_size_residual_normalized)
 
@@ -193,9 +195,9 @@ class FrustumPointNetLoss:
                                          end_points['heading_residuals'],
                                          end_points['size_residuals'])
 
-        gt_mask = tf.tile(tf.expand_dims(hcls_onehot, 2),
+        gt_mask = tf.tile(tf.expand_dims(heading_cls_onehot, 2),
                           [1, 1, NUM_SIZE_CLUSTER]) * tf.tile(tf.expand_dims(
-            scls_onehot, 1), [1, NUM_HEADING_BIN, 1])
+            size_cls_onehot, 1), [1, NUM_HEADING_BIN, 1])
 
         corners_3d_pred = tf.reduce_sum(tf.cast(tf.expand_dims(
             tf.expand_dims(gt_mask, -1), -1), dtype=tf.float32) * corners_3d,
@@ -208,14 +210,14 @@ class FrustumPointNetLoss:
         heading_label = tf.expand_dims(heading_residual_label, 1) + \
                         tf.expand_dims(heading_bin_centers, 0)  # (B,NH)
 
-        heading_label = tf.reduce_sum(tf.cast(hcls_onehot, dtype=tf.float32) *
-                                      heading_label, 1)
+        heading_label = tf.reduce_sum(tf.cast(heading_cls_onehot,
+                                              dtype=tf.float32) * heading_label,
+                                      1)
 
         mean_sizes = tf.expand_dims(tf.constant(g_mean_size_arr,
-                                                dtype=tf.float32),
-                                    0)  # (1,NS,3)
+                                                dtype=tf.float32),0)  # (1,NS,3)
         size_label = mean_sizes + tf.expand_dims(size_residual_label, 1)
-        size_label = tf.reduce_sum(tf.expand_dims(tf.cast(scls_onehot,
+        size_label = tf.reduce_sum(tf.expand_dims(tf.cast(size_cls_onehot,
                                                           dtype=tf.float32),
                                                   -1) * size_label, axis=[1])
 
@@ -225,10 +227,10 @@ class FrustumPointNetLoss:
                                                        heading_label
                                                        + np.pi, size_label)
 
-        corners_3D_loss = self._HuberLoss(y_true=corners_3d_gt,
-                                          y_pred=corners_3d_pred)
-        corners_3D_flip_loss = self._HuberLoss(y_true=corners_3d_gt_flip,
-                                               y_pred=corners_3d_pred)
+        corners_3D_loss = self._huber_loss(y_true=corners_3d_gt,
+                                           y_pred=corners_3d_pred)
+        corners_3D_flip_loss = self._huber_loss(y_true=corners_3d_gt_flip,
+                                                y_pred=corners_3d_pred)
 
         corners_loss = tf.minimum(corners_3D_loss, corners_3D_flip_loss)
 
