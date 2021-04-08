@@ -25,6 +25,8 @@ dist/*
 build/*
 pypaz.egg-info/
 .pytest_cache/
+venv/
+.idea/
 
 docs/site/*
 docs/sources/*
