@@ -1,23 +1,26 @@
 import os
 
-import cv2
 import json
 import numpy as np
+from paz.backend.image.opencv_image import load_image, resize_image
 
 from paz.abstract import Loader
 
 
 class HandKeypoints(Loader):
-    def __init__(self, path, split='train'):
+    def __init__(self, path, image_size=(300, 300, 3), split='train'):
         super().__init__(path, split, None, 'HandKeypoints')
         self.path = path
         self.split = split
+        self.image_size = image_size
 
     def _load_images(self, image_paths):
-        hands = np.zeros((len(image_paths), 300, 300, 3))
+        hands = np.zeros((len(image_paths), self.image_size[0],
+                          self.image_size[1], self.image_size[2]))
         for arg, image_path in enumerate(image_paths):
-            img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-            resized = cv2.resize(img, (300, 300), interpolation=cv2.INTER_AREA)
+            image = load_image(image_path)
+            resized = resize_image(image,
+                                   (self.image_size[0], self.image_size[1]))
             hands[arg] = resized
         return hands
 
