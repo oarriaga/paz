@@ -72,5 +72,5 @@ class HandKeypoints(Loader):
 if __name__ == '__main__':
     path = 'dataset/'
     split = 'train'
-    data_manager = FacialKeypoints(path, split)
+    data_manager = HandKeypoints(path, split)
     dataset = data_manager.load_data()
