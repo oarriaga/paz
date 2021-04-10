@@ -89,7 +89,7 @@ def PoseNet(segmented_image):
     X_30 = Conv2D(128, 7, activation='relu', padding='same',
                   name='conv2_25')(X_29)
     X_31 = Conv2D(21, 1, padding='same', activation=None, name='conv2_26')(X_30)
-    print(X_31.shape)
+
     return X_31
 
 
@@ -107,7 +107,7 @@ def PosePriorNet(score_maps, hand_side, P):
                  name='conv3_5')(X_4)
     X_6 = Conv2D(128, 3, padding='same', activation=None, strides=2,
                  name='conv3_6')(X_5)
-    print(X_6.shape)
+
     X_7 = tf.reshape(X_6, [batch_size, -1])  # this is Bx2048
     X_7 = tf.concat([X_7, hand_side], 1)
 
@@ -117,8 +117,8 @@ def PosePriorNet(score_maps, hand_side, P):
     X_9 = Dense(512, activation='relu')(X_8)
     X_9 = Dropout(rate=0.2)(X_9)
 
-    X_10 = Dense(P)
-    return X_6
+    X_10 = Dense(P)(X_9)
+    return X_10
 
 
 if __name__ == '__main__':
