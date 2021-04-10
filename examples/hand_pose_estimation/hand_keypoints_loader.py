@@ -6,7 +6,7 @@ from paz.backend.image.opencv_image import load_image, resize_image
 
 
 class HandDataset(Loader):
-    def __init__(self, path, split='training', image_size=(300, 300, 3)):
+    def __init__(self, path, split='training', image_size=(256, 256, 3)):
         super().__init__(path, split, None, 'HandSegmentation')
         self.path = path
         self.split = split
@@ -38,8 +38,8 @@ class HandDataset(Loader):
         return anno_all
 
     def load_data(self):
+        images = sorted(glob.glob(self.path + self.split + '/color/*.png'))
         if self.split == 'training':
-            images = sorted(glob.glob(self.path + self.split + '/color/*.png'))
             seg_labels = sorted(glob.glob(self.path + self.split +
                                           '/mask/*.png'))
             annotations = self._load_annotation(self.path + self.split +
@@ -47,7 +47,6 @@ class HandDataset(Loader):
             dataset = self._to_list_of_dictionaries(images, seg_labels,
                                                     annotations)
         else:
-            images = sorted(glob.glob(self.path + self.split + '/color/*.png'))
             dataset = self._to_list_of_dictionaries(images, None, None)
         return dataset
 
