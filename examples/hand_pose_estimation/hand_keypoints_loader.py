@@ -8,7 +8,7 @@ from paz.backend.image.opencv_image import load_image, resize_image
 
 class HandDataset(Loader):
     def __init__(self, path, split='training', image_size=(256, 256, 3),
-                 use_wrist_coordinates=True, ):
+                 use_wrist_coordinates=True, flip_to_left=True):
         super().__init__(path, split, None, 'HandPoseEstimation')
         self.path = path
         self.split = split
@@ -21,6 +21,7 @@ class HandDataset(Loader):
                                      16: 'root', 15: 16, 14: 15, 13: 14,
                                      20: 'root', 19: 20, 18: 19, 17: 18}
         self.kinematic_chain_list = list(self.kinematic_chain_dict.keys())
+        self.flip_to_left = flip_to_left
 
     def _load_images(self, image_path):
         image = load_image(image_path)
@@ -72,7 +73,7 @@ class HandDataset(Loader):
 
         return transformation_matrix
 
-    def _get_rotation_matrix_y(self, angle):
+    def _get_transformation_matrix_y(self, angle):
         ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
         rotation_matrix_y = self._gen_matrix_from_vectors(
             np.array([np.cos(angle), zeros, np.sin(angle), zeros,
@@ -81,13 +82,37 @@ class HandDataset(Loader):
                       zeros, zeros, zeros, ones]))
         return rotation_matrix_y
 
-    def _get_rotation_matrix_x(self, angle):
+    def _get_transformation_matrix_x(self, angle):
         ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
         rotation_matrix_x = self._gen_matrix_from_vectors(
             np.array([ones, zeros, zeros, zeros,
                       zeros, np.cos(angle), -np.sin(angle), zeros,
                       zeros, np.sin(angle), np.cos(angle), zeros,
                       zeros, zeros, zeros, ones]))
+        return rotation_matrix_x
+
+    def _get_rotation_matrix_x(self, angle):
+        ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
+        rotation_matrix_x = self._gen_matrix_from_vectors(
+            np.array([ones, zeros, zeros,
+                      zeros, np.cos(angle), np.sin(angle),
+                      zeros, -np.sin(angle), np.cos(angle)]))
+        return rotation_matrix_x
+
+    def _get_rotation_matrix_y(self, angle):
+        ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
+        rotation_matrix_x = self._gen_matrix_from_vectors(
+            np.array([np.cos(angle), zeros, -np.sin(angle),
+                      zeros, ones, zeros,
+                      np.sin(angle), zeros, np.cos(angle)]))
+        return rotation_matrix_x
+
+    def _get_rotation_matrix_z(self, angle):
+        ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
+        rotation_matrix_x = self._gen_matrix_from_vectors(
+            np.array([np.cos(angle), np.sin(angle), zeros,
+                      -np.sin(angle), np.cos(angle), zeros,
+                      zeros, zeros, ones]))
         return rotation_matrix_x
 
     def _get_translation_matrix(self, translation_vector):
@@ -106,14 +131,13 @@ class HandDataset(Loader):
             vector[:, 2, 0] ** 2)
         gamma = np.arctan2(vector[:, 0, 0], vector[:, 2, 0])
 
-        matrix_after_y_rotation = np.matmul(self._get_rotation_matrix_y(-gamma),
-                                            vector)
+        matrix_after_y_rotation = np.matmul(self._get_transformation_matrix_y(
+            -gamma), vector)
         alpha = np.arctan2(-matrix_after_y_rotation[:, 1, 0],
                            matrix_after_y_rotation[:, 2, 0])
         matrix_after_x_rotation = np.matmul(self._get_translation_matrix(
-            -length_from_origin), np.matmul(self._get_rotation_matrix_x(-alpha),
-                                            self._get_rotation_matrix_y(
-                                                -gamma)))
+            -length_from_origin), np.matmul(self._get_transformation_matrix_x(
+            -alpha), self._get_transformation_matrix_y(-gamma)))
 
         final_transformation_matrix = np.matmul(matrix_after_x_rotation,
                                                 matrix_after_y_rotation)
@@ -238,6 +262,59 @@ class HandDataset(Loader):
         keypoint_normed = kp_coord_xyz21_rel / index_root_bone_length
         return keypoint_scale, keypoint_normed
 
+    def _get_canonical_transformations(self, keypoints_3D):
+        keypoints = np.reshape(keypoints_3D, [-1, 21, 3])
+
+        ROOT_NODE_ID = 0
+        ALIGN_NODE_ID = 12
+        ROT_NODE_ID = 20
+
+        translation_reference = np.expand_dims(keypoints[:, ROOT_NODE_ID, :], 1)
+        translated_keypoints = keypoints - translation_reference
+
+        alignment_keypoint = translated_keypoints[:, ALIGN_NODE_ID, :]
+
+        alpha = np.arctan2(alignment_keypoint[:, 0], alignment_keypoint[:, 1])
+        rotation_matrix_z = self._get_rotation_matrix_z(alpha)
+        resultant_keypoints = np.matmul(translated_keypoints, rotation_matrix_z)
+
+        reference_keypoint_z_rotation = resultant_keypoints[:, ALIGN_NODE_ID, :]
+        beta = -np.arctan2(reference_keypoint_z_rotation[:, 2],
+                           reference_keypoint_z_rotation[:, 1])
+        rotation_matrix_x = self._get_rotation_matrix_x(beta + 3.14159)
+        resultant_keypoints = np.matmul(resultant_keypoints, rotation_matrix_x)
+
+        reference_keypoint_z_rotation = resultant_keypoints[:, ROT_NODE_ID, :]
+        gamma = np.arctan2(reference_keypoint_z_rotation[:, 2],
+                           reference_keypoint_z_rotation[:, 0])
+        rotation_matrix_y = self._get_rotation_matrix_y(gamma)
+        keypoints_transformed = np.matmul(resultant_keypoints,
+                                          rotation_matrix_y)
+
+        final_rotation_matrix = np.matmul(np.matmul(rotation_matrix_z,
+                                                    rotation_matrix_x),
+                                          rotation_matrix_y)
+        return keypoints_transformed, final_rotation_matrix
+
+    def _flip_right_hand(self, canonical_keypoints, flip_right):
+        shape = canonical_keypoints.shape()
+        expanded = False
+        if len(shape)==2:
+            canonical_keypoints = np.expand_dims(canonical_keypoints, 0)
+            flip_right = np.expand_dims(flip_right, 0)
+            expanded = True
+        canonical_keypoints_mirrored = np.stack(
+            [canonical_keypoints[:, :, 0], canonical_keypoints[:, :, 1],
+             -canonical_keypoints[:, :, 2]], -1)
+
+        canonical_keypoints_left = np.where(flip_right,
+                                             canonical_keypoints_mirrored,
+                                             canonical_keypoints)
+        if expanded:
+            canonical_keypoints_left = np.squeeze(canonical_keypoints_left,
+                                                   [0])
+        return canonical_keypoints_left
+
     def _to_list_of_dictionaries(self, hands, segmentation_labels=None,
                                  annotations=None):
         dataset = []
@@ -257,7 +334,7 @@ class HandDataset(Loader):
                 sample['key_point_visibility'] = self._extract_visibility_mask(
                     annotations[arg]['uv_vis'][:, 2] == 1)
                 sample['camera_matrix'] = annotations[arg]['K']
-                sample['hand_side_one_hot'], sample['hand_side_3Dkey_points'] =\
+                sample['hand_side_one_hot'], sample['hand_side_3Dkey_points'] = \
                     self._extract_hand_side(sample['hand_mask'],
                                             sample['key_points_3D'])
                 sample['keypoint_scale'], sample['normalized_keypoints'] = \
@@ -265,6 +342,16 @@ class HandDataset(Loader):
                 sample['keypoints_local_frame'] = np.squeeze(
                     self.transform_to_relative_frames(
                         sample['normalized_keypoints']))
+                canonical_keypoints, rotation_matrix = \
+                    self._get_canonical_transformations(
+                        sample['keypoints_local_frame'])
+                canonical_keypoints, rotation_matrix = \
+                    np.squeeze(canonical_keypoints), np.squeeze(rotation_matrix)
+                canonical_keypoints = self._flip_right_hand(
+                    canonical_keypoints, np.logical_not(self.flip_to_left))
+                sample['canonical_keypoints'] = canonical_keypoints
+                sample['rotation_matrix'] = np.matrix_inverse(rotation_matrix)
+
             dataset.append(sample)
         return dataset
 
