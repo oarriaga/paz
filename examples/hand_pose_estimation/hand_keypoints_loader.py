@@ -14,6 +14,13 @@ class HandDataset(Loader):
         self.split = split
         self.image_size = image_size
         self.use_wrist_coordinates = use_wrist_coordinates
+        self.kinematic_chain_dict = {0: 'root',
+                                     4: 'root', 3: 4, 2: 3, 1: 2,
+                                     8: 'root', 7: 8, 6: 7, 5: 6,
+                                     12: 'root', 11: 12, 10: 11, 9: 10,
+                                     16: 'root', 15: 16, 14: 15, 13: 14,
+                                     20: 'root', 19: 20, 18: 19, 17: 18}
+        self.kinematic_chain_list = list(self.kinematic_chain_dict.keys())
 
     def _load_images(self, image_path):
         image = load_image(image_path)
@@ -38,9 +45,9 @@ class HandDataset(Loader):
                 0.5 * (keypoint_2D[0, :] + keypoint_2D[12, :]), 0)
             palm_coord_uv_right = np.expand_dims(
                 0.5 * (keypoint_2D[21, :] + keypoint_2D[33, :]), 0)
-            keypoint_2D = np.concat(
-                [palm_coord_uv_left, keypoint_2D[1:21, :], palm_coord_uv_right,
-                 keypoint_2D[-20:, :]], 0)
+            keypoint_2D = np.concat([palm_coord_uv_left, keypoint_2D[1:21, :],
+                                     palm_coord_uv_right, keypoint_2D[-20:, :]],
+                                    0)
         return keypoint_2D
 
     def _extract_hand_mask(self, segmentation_label):
@@ -70,10 +77,10 @@ class HandDataset(Loader):
         raw_mask_left = np.logical_and(np.greater(hand_parts_mask, one_map),
                                        np.less(hand_parts_mask, one_map * 18))
         raw_mask_right = np.greater(hand_parts_mask, one_map * 17)
-        hand_map_l = np.where(raw_mask_left, one_map, zero_map)
-        hand_map_r = np.where(raw_mask_right, one_map, zero_map)
-        num_px_left_hand = np.reduce_sum(hand_map_l)
-        num_px_right_hand = np.reduce_sum(hand_map_r)
+        hand_map_left = np.where(raw_mask_left, one_map, zero_map)
+        hand_map_right = np.where(raw_mask_right, one_map, zero_map)
+        num_px_left_hand = np.reduce_sum(hand_map_left)
+        num_px_right_hand = np.reduce_sum(hand_map_right)
 
         # PRODUCE the 21 subset using the segmentation masks
         # We only deal with the more prominent hand for each frame
@@ -94,6 +101,15 @@ class HandDataset(Loader):
                                        off_value=0.0, dtype=np.float32)
 
         return hand_side_one_hot, hand_side_keypoints
+
+    def _normalize_keypoints(self, keypoints):
+        kp_coord_xyz_root = keypoints[0, :]
+        kp_coord_xyz21_rel = keypoints - kp_coord_xyz_root
+        index_root_bone_length = np.sqrt(np.reduce_sum(
+            np.square(kp_coord_xyz21_rel[12, :] - kp_coord_xyz21_rel[11, :])))
+        keypoint_scale = index_root_bone_length
+        keypoint_normed = kp_coord_xyz21_rel / index_root_bone_length
+        return keypoint_scale, keypoint_normed
 
     def _to_list_of_dictionaries(self, hands, segmentation_labels=None,
                                  annotations=None):
