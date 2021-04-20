@@ -173,6 +173,10 @@ class HandDataset(Loader):
                     geometric_entities[:3], 1)
                 tranformations[bone_index] = geometric_entities[3]
 
+        key_point_relative_frame = np.stack(relative_coordinates, 1)
+
+        return key_point_relative_frame
+
     def _extract_hand_mask(self, segmentation_label):
         hand_mask = np.greater(segmentation_label, 1)
         bg_mask = np.logical_not(hand_mask)
@@ -253,9 +257,14 @@ class HandDataset(Loader):
                 sample['key_point_visibility'] = self._extract_visibility_mask(
                     annotations[arg]['uv_vis'][:, 2] == 1)
                 sample['camera_matrix'] = annotations[arg]['K']
-                sample['hand_side_one_hot'], sample['hand_side_3Dkey_points'] = \
+                sample['hand_side_one_hot'], sample['hand_side_3Dkey_points'] =\
                     self._extract_hand_side(sample['hand_mask'],
                                             sample['key_points_3D'])
+                sample['keypoint_scale'], sample['normalized_keypoints'] = \
+                    self._normalize_keypoints(sample['hand_side_3Dkey_points'])
+                sample['keypoints_local_frame'] = np.squeeze(
+                    self.transform_to_relative_frames(
+                        sample['normalized_keypoints']))
             dataset.append(sample)
         return dataset
 
