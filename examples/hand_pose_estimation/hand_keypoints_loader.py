@@ -50,6 +50,129 @@ class HandDataset(Loader):
                                     0)
         return keypoint_2D
 
+    def to_homogeneous_coordinates(self, vector):
+        batch_size = vector.shape[0]
+        vector = np.reshape(vector, [batch_size, -1, 1])
+        vector = np.concat([vector, np.ones((batch_size, 1, 1))], 1)
+        return vector
+
+    def _gen_matrix_from_vectors(self, vectors):
+        batch_size = vectors.shape[0]
+        vector_list = [np.reshape(x, [1, batch_size]) for x in vectors]
+
+        transformation_matrix = np.dynamic_stitch([[0], [1], [2], [3],
+                                                   [4], [5], [6], [7],
+                                                   [8], [9], [10], [11],
+                                                   [12], [13], [14], [15]],
+                                                  vector_list)
+
+        transformation_matrix = np.reshape(transformation_matrix,
+                                           [4, 4, batch_size])
+        transformation_matrix = np.transpose(transformation_matrix, [2, 0, 1])
+
+        return transformation_matrix
+
+    def _get_rotation_matrix_y(self, angle):
+        ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
+        rotation_matrix_y = self._gen_matrix_from_vectors(
+            np.array([np.cos(angle), zeros, np.sin(angle), zeros,
+                      zeros, ones, zeros, zeros,
+                      -np.sin(angle), zeros, np.cos(angle), zeros,
+                      zeros, zeros, zeros, ones]))
+        return rotation_matrix_y
+
+    def _get_rotation_matrix_x(self, angle):
+        ones, zeros = np.ones_like(angle), np.zeros_like(angle, dtype=np.float)
+        rotation_matrix_x = self._gen_matrix_from_vectors(
+            np.array([ones, zeros, zeros, zeros,
+                      zeros, np.cos(angle), -np.sin(angle), zeros,
+                      zeros, np.sin(angle), np.cos(angle), zeros,
+                      zeros, zeros, zeros, ones]))
+        return rotation_matrix_x
+
+    def _get_translation_matrix(self, translation_vector):
+        ones, zeros = np.ones_like(translation_vector), np.zeros_like(
+            translation_vector, dtype=np.float)
+        rotation_matrix_x = self._gen_matrix_from_vectors(
+            np.array([ones, zeros, zeros, zeros,
+                      zeros, ones, zeros, zeros,
+                      zeros, zeros, ones, translation_vector,
+                      zeros, zeros, zeros, ones]))
+        return rotation_matrix_x
+
+    def _get_geometric_entities(self, vector, transformation_matrix):
+        length_from_origin = np.sqrt(
+            vector[:, 0, 0] ** 2 + vector[:, 1, 0] ** 2 +
+            vector[:, 2, 0] ** 2)
+        gamma = np.arctan2(vector[:, 0, 0], vector[:, 2, 0])
+
+        matrix_after_y_rotation = np.matmul(self._get_rotation_matrix_y(-gamma),
+                                            vector)
+        alpha = np.arctan2(-matrix_after_y_rotation[:, 1, 0],
+                           matrix_after_y_rotation[:, 2, 0])
+        matrix_after_x_rotation = np.matmul(self._get_translation_matrix(
+            -length_from_origin), np.matmul(self._get_rotation_matrix_x(-alpha),
+                                            self._get_rotation_matrix_y(
+                                                -gamma)))
+
+        final_transformation_matrix = np.matmul(matrix_after_x_rotation,
+                                                matrix_after_y_rotation)
+
+        # make them all batched scalars
+        length_from_origin = np.reshape(length_from_origin, [-1])
+        alpha = np.reshape(alpha, [-1])
+        gamma = np.reshape(gamma, [-1])
+        return length_from_origin, alpha, gamma, final_transformation_matrix
+
+    def _get_homogeneous_transformation_matrix(self, homogeneous_coords):
+        ones, zeros = np.ones_like(homogeneous_coords), np.zeros_like(
+            homogeneous_coords, dtype=np.float)
+        transformation_matrix = self._gen_matrix_from_vectors(
+            np.array([ones, zeros, zeros, zeros, zeros, ones, zeros, zeros,
+                      zeros, zeros, ones, homogeneous_coords, zeros, zeros,
+                      zeros, ones]))
+
+    def transform_to_relative_frames(self, keypoints_3D):
+        keypoints_3D = keypoints_3D.reshape([-1, 21, 3])
+        tranformations = [None] * len(self.kinematic_chain_list)
+        relative_coordinates = [0.0] * len(self.kinematic_chain_list)
+        for bone_index in self.kinematic_chain_list:
+            parent_key = self.kinematic_chain_dict[bone_index]
+            if parent_key == 'root':
+                keypoints_residual = self.to_homogeneous_coordinates(
+                    np.expand_dims(keypoints_3D[:, bone_index, :], 1))
+                Translation_matrix = self._get_translation_matrix(np.zeros_like(
+                    keypoints_3D[:, 0, 0]))
+                geometric_entities = self._get_geometric_entities(
+                    keypoints_residual, Translation_matrix)
+                relative_coordinates[bone_index] = np.stack(
+                    geometric_entities[:3], 1)
+                tranformations[bone_index] = geometric_entities[3]
+            else:
+                Transformation_matrix = tranformations[parent_key]
+                x_local_parent = np.matmul(
+                    Transformation_matrix,
+                    self.to_homogeneous_coordinates(np.expand_dims(
+                        keypoints_3D[:, parent_key, :], 1)))
+                x_local_child = np.matmul(
+                    Transformation_matrix,
+                    self.to_homogeneous_coordinates(np.expand_dims(
+                        keypoints_3D[:, bone_index, :], 1)))
+
+                # calculate bone vector in local coords
+                delta_vec = x_local_child - x_local_parent
+                delta_vec = self.to_homogeneous_coordinates(np.expand_dims(
+                    delta_vec[:, :3, :], 1))
+
+                # get articulation angles from bone vector
+                geometric_entities = self._get_geometric_entities(
+                    delta_vec, Transformation_matrix)
+
+                # save results
+                relative_coordinates[bone_index] = np.stack(
+                    geometric_entities[:3], 1)
+                tranformations[bone_index] = geometric_entities[3]
+
     def _extract_hand_mask(self, segmentation_label):
         hand_mask = np.greater(segmentation_label, 1)
         bg_mask = np.logical_not(hand_mask)
