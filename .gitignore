@@ -18,6 +18,7 @@
 *tf.index*
 checkpoint
 *.coverage
+*.npy
 
 !.github/manifest.xml
 
