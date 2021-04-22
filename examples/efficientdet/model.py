@@ -18,8 +18,6 @@ class EfficientDet(tf.keras.Model):
     def __init__(self, config, name=""):
         """Initialize model.
         # Arguments
-            model_name: String, indicating the EfficientDet-Dx
-            architecture name, x denotes the EfficientDet type.
             config: Configuration of the EfficientDet model.
             name: A string of layer name.
             feature_only: Boolean, for building the base feature network only

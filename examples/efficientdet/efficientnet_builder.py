@@ -3,6 +3,14 @@ import efficientnet.tfkeras as efficientnet
 
 
 def build_backbone(config):
+    """
+    Build backbone model.
+    # Arguments
+        config: Configuration of the EfficientDet model.
+    # Returns
+        EfficientNet model with intermediate feature levels.
+    """
+
     backbone_name = config["backbone_name"]
     weight = config["backbone_weight"]
 
