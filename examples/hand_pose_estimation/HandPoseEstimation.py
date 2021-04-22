@@ -31,9 +31,7 @@ def HandSegNet(image):
     X_17 = Conv2D(2, 1, padding='same', activation=None, name='conv1_14')(X_16)
     X_18 = UpSampling2D(size=(8, 8), interpolation='bilinear')(X_17)
 
-    X_19 = tf.argmax(X_18, axis=-1)
-    X_19 = tf.expand_dims(X_19, axis=-1)
-    return X_19
+    return X_18
 
 
 def PoseNet(segmented_image):
