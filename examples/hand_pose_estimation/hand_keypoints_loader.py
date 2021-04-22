@@ -208,8 +208,8 @@ class HandDataset(Loader):
 
     def _extract_hand_mask(self, segmentation_label):
         hand_mask = np.greater(segmentation_label, 1)
-        bg_mask = np.logical_not(hand_mask)
-        return np.cast(np.stack([bg_mask, hand_mask], 2), np.int32)
+        background_mask = np.logical_not(hand_mask)
+        return np.cast(np.stack([background_mask, hand_mask], 2), np.int32)
 
     def _extract_visibility_mask(self, visibility_mask):
         visibility_mask = np.cast(visibility_mask, np.bool)
@@ -235,19 +235,20 @@ class HandDataset(Loader):
         raw_mask_right = np.greater(hand_parts_mask, one_map * 17)
         hand_map_left = np.where(raw_mask_left, one_map, zero_map)
         hand_map_right = np.where(raw_mask_right, one_map, zero_map)
-        num_px_left_hand = np.reduce_sum(hand_map_left)
-        num_px_right_hand = np.reduce_sum(hand_map_right)
+        num_pixels_left_hand = np.reduce_sum(hand_map_left)
+        num_pixels_right_hand = np.reduce_sum(hand_map_right)
 
         kp_coord_xyz_left = key_point_3D[:21, :]
         kp_coord_xyz_right = key_point_3D[-21:, :]
 
         dominant_hand = np.logical_and(
             np.cast(np.ones_like(kp_coord_xyz_left), np.bool),
-            np.greater(num_px_left_hand, num_px_right_hand))
+            np.greater(num_pixels_left_hand, num_pixels_right_hand))
         hand_side_keypoints = np.where(dominant_hand, kp_coord_xyz_left,
                                        kp_coord_xyz_right)
 
-        hand_side = np.where(np.greater(num_px_left_hand, num_px_right_hand),
+        hand_side = np.where(np.greater(num_pixels_left_hand,
+                                        num_pixels_right_hand),
                              np.constant(0, dtype=np.int32),
                              np.constant(1, dtype=np.int32))
 
