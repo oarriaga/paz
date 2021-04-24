@@ -63,7 +63,7 @@ class Shapes(Loader):
             args = (masks[..., idx:idx + 1].copy(), shape, dims, 1)
             masks[..., idx:idx + 1] = self.draw_shape(*args)
         occlusion = np.logical_not(masks[..., -1]).astype(np.uint8)
-        for index in range(len(shapes)-2, -1, -1):
+        for index in range(len(shapes) - 2, -1, -1):
             masks[..., index] = masks[..., index] * occlusion
             occlusion = np.logical_and(occlusion,
                                        np.logical_not(masks[..., index]))

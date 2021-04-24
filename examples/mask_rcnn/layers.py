@@ -58,8 +58,7 @@ class DetectionLayer(Layer):
             tf.gather(refined_rois, keep),
             tf.cast(tf.gather(class_ids, keep),
                     dtype=tf.float32)[..., tf.newaxis],
-            tf.gather(class_scores, keep)[..., tf.newaxis]
-            ], axis=1)
+            tf.gather(class_scores, keep)[..., tf.newaxis]], axis=1)
 
         return self.zero_pad_detections(detections)
 
@@ -78,10 +77,10 @@ class DetectionLayer(Layer):
         ixs = tf.where(tf.equal(class_ids, unique_class_id))[:, 0]
 
         class_keep = tf.image.non_max_suppression(
-                tf.gather(ROIs, ixs),
-                tf.gather(scores, ixs),
-                max_output_size=self.DETECTION_MAX_INSTANCES,
-                iou_threshold=self.DETECTION_NMS_THRESHOLD)
+            tf.gather(ROIs, ixs),
+            tf.gather(scores, ixs),
+            max_output_size=self.DETECTION_MAX_INSTANCES,
+            iou_threshold=self.DETECTION_NMS_THRESHOLD)
         class_keep = tf.gather(keep, tf.gather(ixs, class_keep))
         gap = self.DETECTION_MAX_INSTANCES - tf.shape(class_keep)[0]
         class_keep = tf.pad(class_keep, [(0, gap)],
@@ -104,8 +103,8 @@ class DetectionLayer(Layer):
         return self.merge_results(nms_keep)
 
     def filter_low_confidence(self, class_scores, keep):
-        confidence = tf.where(class_scores >= 
-                              self.DETECTION_MIN_CONFIDENCE)[:, 0]
+        confidence = tf.where(
+            class_scores >= self.DETECTION_MIN_CONFIDENCE)[:, 0]
         keep = tf.sets.intersection(tf.expand_dims(keep, 0),
                                     tf.expand_dims(confidence, 0))
         return tf.sparse.to_dense(keep)[0]
@@ -305,9 +304,9 @@ class DetectionTargetLayer(Layer):
         class_ids, boxes, masks = priors
         positive_overlaps = tf.gather(overlaps, positive_indices)
         roi_gt_box_assignment = tf.cond(
-                tf.greater(tf.shape(positive_overlaps)[1], 0),
-                true_fn=lambda: tf.argmax(positive_overlaps, axis=1),
-                false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
+            tf.greater(tf.shape(positive_overlaps)[1], 0),
+            true_fn=lambda: tf.argmax(positive_overlaps, axis=1),
+            false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
         )
         roi_prior_boxes = tf.gather(boxes, roi_gt_box_assignment)
         roi_prior_class_ids = tf.gather(class_ids, roi_gt_box_assignment)
@@ -459,7 +458,7 @@ class PyramidROIAlign(Layer):
         image_area = tf.cast(image_shape[0] * image_shape[1], tf.float32)
 
         ROI_level = self.log2_graph(
-                    tf.sqrt(height * width) / (224.0 / tf.sqrt(image_area)))
+            tf.sqrt(height * width) / (224.0 / tf.sqrt(image_area)))
         ROI_level = tf.minimum(5, tf.maximum(
             2, 4 + tf.cast(tf.round(ROI_level), tf.int32)))
         return tf.squeeze(ROI_level, 2)

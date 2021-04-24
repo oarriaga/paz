@@ -146,7 +146,8 @@ def box_refinement(box, ground_truth_box):
     return np.stack([dY, dX, dH, dW], axis=1)
 
 
-def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square"):
+def resize_image(image, min_dim=None, max_dim=None,
+                 min_scale=None, mode="square"):
     """Resizes an image keeping the aspect ratio unchanged.
 
     # Arguments:
@@ -158,7 +159,8 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
     # Returns:
         image: Resized image
         window: Coordinates of unpadded image (y_min, x_min, y_max, x_max)
-        padding: Padding added to the image [(top, bottom), (left, right), (0, 0)]
+        padding: Padding added to the image
+            [(top, bottom), (left, right), (0, 0)]
     """
     image_dtype = image.dtype
     H, W = image.shape[:2]
@@ -333,7 +335,8 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     return np.concatenate(anchors, axis=0)
 
 
-def get_resnet_features(input_image, architecture, stage5=False, train_bn=True):
+def get_resnet_features(input_image, architecture,
+                        stage5=False, train_bn=True):
     """Builds ResNet graph.
 
     # Arguments:
@@ -385,14 +388,14 @@ def get_resnet_features(input_image, architecture, stage5=False, train_bn=True):
     return [C1, C2, C3, C4, C5]
 
 
-def fpn_classifier_graph(rois, feature_maps, 
+def fpn_classifier_graph(rois, feature_maps,
                          config, train_bn=True,
                          fc_layers_size=1024):
     """Builds the computation graph of the feature pyramid network classifier
        and regressor heads.
 
     # Arguments:
-        rois: [batch, num_rois, (y_min, x_min, y_max, x_max)] 
+        rois: [batch, num_rois, (y_min, x_min, y_max, x_max)]
               Proposal boxes in normalized coordinates.
         feature_maps: List of feature maps from different pyramid layers,
                       [P2, P3, P4, P5].
@@ -412,22 +415,22 @@ def fpn_classifier_graph(rois, feature_maps,
     pool_size = config.POOL_SIZE
     num_classes = config.NUM_CLASSES
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
-    #image_shape = (640, 640, 3)
+    #  image_shape = (640, 640, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
     x = PyramidROIAlign([pool_size, pool_size], name='roi_align_classifier')(
-                        [rois, image_shape] + feature_maps)
+        [rois, image_shape] + feature_maps)
     conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size),
                            padding='valid')
     x = TimeDistributed(conv_2d_layer, name='mrcnn_class_conv1')(x)
     x = tf.reshape(x, [1000, x.shape[2], x.shape[3], x.shape[4]])
     x = tf.expand_dims(x, axis=0)
     x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(
-                        x, training=train_bn)
+        x, training=train_bn)
     x = Activation('relu')(x)
     x = TimeDistributed(Conv2D(fc_layers_size, (1, 1)),
                         name='mrcnn_class_conv2')(x)
     x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(
-                        x, training=train_bn)
+        x, training=train_bn)
     x = Activation('relu')(x)
     shared = Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
                     name='pool_squeeze')(x)
@@ -466,7 +469,7 @@ def build_fpn_mask_graph(rois, feature_maps, config, train_bn=True):
     image_shape = tf.convert_to_tensor(np.array(image_shape))
 
     x = PyramidROIAlign([pool_size, pool_size], name='roi_align_mask')(
-                        [rois, image_shape] + feature_maps)
+        [rois, image_shape] + feature_maps)
     x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
                         name='mrcnn_mask_conv1')(x)
     x = TimeDistributed(BatchNorm(),
@@ -480,7 +483,7 @@ def build_fpn_mask_graph(rois, feature_maps, config, train_bn=True):
     x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
                         name='mrcnn_mask_conv3')(x)
     x = TimeDistributed(BatchNorm(), name='mrcnn_mask_bn3')(
-                        x, training=train_bn)
+        x, training=train_bn)
     x = Activation('relu')(x)
     x = TimeDistributed(Conv2D(256, (3, 3), padding='same'),
                         name='mrcnn_mask_conv4')(x)
@@ -658,14 +661,14 @@ def compute_ap_range(gt_box, gt_class_id, gt_mask,
     """Compute AP over a range or IoU thresholds. Default range is 0.5-0.95."""
     # Default is 0.5 to 0.95 with increments of 0.05
     iou_thresholds = iou_thresholds or np.arange(0.5, 1.0, 0.05)
-    
+
     # Compute AP over range of IoU thresholds
     AP = []
     for iou_threshold in iou_thresholds:
         ap, precisions, recalls, overlaps =\
             compute_ap(gt_box, gt_class_id, gt_mask,
-                        pred_box, pred_class_id, pred_score, pred_mask,
-                        iou_threshold=iou_threshold)
+                       pred_box, pred_class_id, pred_score, pred_mask,
+                       iou_threshold=iou_threshold)
         if verbose:
             print("AP @{:.2f}:\t {:.3f}".format(iou_threshold, ap))
         AP.append(ap)

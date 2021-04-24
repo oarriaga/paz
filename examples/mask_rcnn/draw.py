@@ -14,8 +14,8 @@ def apply_mask(image, mask, color, alpha=0.5):
                                         image[:, :, channel])
     return image
 
- 
- class DrawBinaryMasks(Processor):
+
+class DrawBinaryMasks(Processor):
     """ Draws Binary mask on an image
     """
     def __init__(self):
@@ -28,4 +28,3 @@ def apply_mask(image, mask, color, alpha=0.5):
             mask = masks[:, :, index]
             masked = apply_mask(masked, mask, colors[index])
         return masked
- 

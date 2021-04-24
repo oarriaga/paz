@@ -42,7 +42,7 @@ class Loss():
     def rpn_class_metrics(self, y_true, y_pred):
         loss = self.rpn_class_loss_graph(y_true, y_pred)
         metric = tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-                    'rpn_class_logits', 1.)
+            'rpn_class_logits', 1.)
         return metric
 
     def rpn_bbox_loss_graph(self, rpn_match, y_true, y_pred):
@@ -59,7 +59,7 @@ class Loss():
     def rpn_bbox_metrics(self, y_true, y_pred):
         loss = self.rpn_bbox_loss_graph(y_true, y_pred)
         metric = tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-                    'rpn_bbox', 1.)
+            'rpn_bbox', 1.)
         return metric
 
     def mrcnn_loss_graph(self, y_true, y_pred):
@@ -71,7 +71,7 @@ class Loss():
     def mrcnn_metrics(self, y_true, y_pred):
         loss = self.mrcnn_loss_graph(y_true, y_pred)
         metric = tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-                    'mrcnn', 1.)
+            'mrcnn', 1.)
         return metric
 
     def mrcnn_class_loss_graph(self, active_ids, y_true, y_pred):
@@ -87,7 +87,7 @@ class Loss():
     def mrcnn_class_metrics(self, y_true, y_pred):
         loss = self.mrcnn_class_loss_graph(y_true, y_pred)
         metric = tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-                    'mrcnn_class', 1.)
+            'mrcnn_class', 1.)
         return metric
 
     def mrcnn_bbox_loss_graph(self, y_true, y_pred):
@@ -112,7 +112,7 @@ class Loss():
     def mrcnn_bbox_metrics(self, y_true, y_pred):
         loss = self.mrcnn_bbox_loss_graph(y_true, y_pred)
         metric = tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-                    'mrcnn_bbox', 1.)
+            'mrcnn_bbox', 1.)
         return metric
 
     def mrcnn_mask_loss_graph(self, y_true, y_pred):
@@ -144,5 +144,5 @@ class Loss():
     def mrcnn_mask_metrics(self, y_true, y_pred):
         loss = self.mrcnn_mask_loss_graph(y_true, y_pred)
         metric = tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-                    'mrcnn_mask', 1.)
+            'mrcnn_mask', 1.)
         return metric

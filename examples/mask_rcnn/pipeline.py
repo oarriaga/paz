@@ -34,7 +34,8 @@ class ComputeBoxDeltas(SequentialProcessor):
 
 class DetectionPipeline(SequentialProcessor):
     def __init__(self, config, prior_boxes, split='TRAIN', num_classes=4,
-                 size=320, mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
+                 size=320, mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
+                 variances=[.1, .2]):
         super(DetectionPipeline, self).__init__()
 
         self.augment_image = AugmentImage()
@@ -46,7 +47,7 @@ class DetectionPipeline(SequentialProcessor):
         self.num_anchors_per_image = config.RPN_TRAIN_ANCHORS_PER_IMAGE
 
         self.preprocess_mask = PreprocessMask((size, size))
-        
+
         self.add(pr.UnpackDictionary(['image', 'boxes', 'mask']))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_image, [0], [0]))
@@ -60,4 +61,3 @@ class DetectionPipeline(SequentialProcessor):
              2: {'matches': [len(prior_boxes)]},
              3: {'boxes': [(num_classes - 1), 5]},
              4: {'mask': [size, size, (num_classes - 1)]}}))
-

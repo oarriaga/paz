@@ -14,11 +14,11 @@ def get_anchors(config):
     """
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
     anchors = generate_pyramid_anchors(
-                config.RPN_ANCHOR_SCALES,
-                config.RPN_ANCHOR_RATIOS,
-                backbone_shapes,
-                config.BACKBONE_STRIDES,
-                config.RPN_ANCHOR_STRIDE)
+        config.RPN_ANCHOR_SCALES,
+        config.RPN_ANCHOR_RATIOS,
+        backbone_shapes,
+        config.BACKBONE_STRIDES,
+        config.RPN_ANCHOR_STRIDE)
     anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
     anchors = Layer(name='anchors')(anchors)
     return anchors
@@ -30,10 +30,10 @@ def create_network_head(backbone_model, config):
     rpn_class_logits, rpn_class, rpn_bbox = backbone_model.RPN(feature_maps)
     anchors = get_anchors(config)
     rpn_rois = ProposalLayer(
-                proposal_count=config.POST_NMS_ROIS_INFERENCE,
-                nms_threshold=config.RPN_NMS_THRESHOLD,
-                name='ROI',
-                config=config)([rpn_class, rpn_bbox, anchors])
+        proposal_count=config.POST_NMS_ROIS_INFERENCE,
+        nms_threshold=config.RPN_NMS_THRESHOLD,
+        name='ROI',
+        config=config)([rpn_class, rpn_bbox, anchors])
 
     # Groundtruth for detections
     input_rpn_match = Input(shape=[None, 1], name='input_rpn_match',
@@ -53,9 +53,9 @@ def create_network_head(backbone_model, config):
 
     # Detection targets
     rois, target_class_ids, target_boxes, target_masks = DetectionTargetLayer(
-            config, name='proposal_targets')([rpn_rois, input_gt_class_ids,
-                                              groundtruth_boxes,
-                                              groundtruth_masks])
+        config, name='proposal_targets')([rpn_rois, input_gt_class_ids,
+                                          groundtruth_boxes,
+                                          groundtruth_masks])
 
     # Network heads
     mrcnn_class_logits, mrcnn_class, mrcnn_bbox = fpn_classifier_graph(

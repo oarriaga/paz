@@ -46,7 +46,7 @@ class MaskRCNN():
 
         if callable(self.get_backbone_features):
             _, C2, C3, C4, C5 = self.get_backbone_features(
-                        input_image, stage5=True, train_bn=self.TRAIN_BN)
+                input_image, stage5=True, train_bn=self.TRAIN_BN)
         else:
             _, C2, C3, C4, C5 = get_resnet_features(input_image,
                                                     self.get_backbone_features,
@@ -107,7 +107,7 @@ class MaskRCNN():
                          Select 'heads', '3+', '4+', '5+' or 'all'
             keras_model: Mask RCNN model
         """
-        
+
         if verbose > 0 and keras_model is None:
             log('Selecting layers to train')
 

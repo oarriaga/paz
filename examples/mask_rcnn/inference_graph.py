@@ -32,17 +32,17 @@ class InferenceGraph():
         rpn_class_logits, rpn_class, rpn_bbox = self.model.RPN(feature_maps)
 
         rpn_rois = ProposalLayer(
-                    proposal_count=self.POST_NMS_ROIS_INFERENCE,
-                    nms_threshold=self.RPN_NMS_THRESHOLD,
-                    name='ROI',
-                    config=self.config)([rpn_class, rpn_bbox, anchors])
+            proposal_count=self.POST_NMS_ROIS_INFERENCE,
+            nms_threshold=self.RPN_NMS_THRESHOLD,
+            name='ROI',
+            config=self.config)([rpn_class, rpn_bbox, anchors])
 
         _, classes, mrcnn_bbox = fpn_classifier_graph(rpn_rois,
                                                       feature_maps[:-1],
                                                       config=self.config,
                                                       train_bn=self.TRAIN_BN)
         detections = DetectionLayer(self.config, name='mrcnn_detection')(
-                            [rpn_rois, classes, mrcnn_bbox])
+            [rpn_rois, classes, mrcnn_bbox])
         detection_boxes = Lambda(lambda x: x[..., :4])(detections)
         mrcnn_mask = build_fpn_mask_graph(detection_boxes, feature_maps[:-1],
                                           self.config, train_bn=self.TRAIN_BN)
