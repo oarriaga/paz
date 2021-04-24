@@ -363,7 +363,8 @@ PAGES = [
             processors.WrapOutput,
             processors.Concatenate,
             processors.SelectElement,
-            processors.StochasticProcessor
+            processors.StochasticProcessor,
+            processors.Stochastic
         ]
     },
 

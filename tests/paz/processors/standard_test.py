@@ -1,5 +1,5 @@
 from paz.abstract import SequentialProcessor, Processor
-from paz.processors import ControlMap, StochasticProcessor
+from paz.processors import ControlMap, StochasticProcessor, Stochastic
 
 
 class Sum(Processor):
@@ -119,6 +119,46 @@ def test_deterministic_and_stochastic_in_sequential_processor():
     function.add(NormalAdd())
     function.add(RandomAdd(probability=1.0))
     assert function(2.0) == 4.0
+
+
+def test_stochastic_processor_with_max_probability():
+    class AddOne(Processor):
+        def __init__(self):
+            super(Processor, self).__init__()
+
+        def call(self, x):
+            return x + 1
+
+    stochastic_add_one = Stochastic(AddOne(), 1.0)
+    assert stochastic_add_one(10.0) == 11.0
+
+
+def test_stochastic_functions_with_max_probability():
+    stochastic_add_one = Stochastic(lambda x: x + 1.0, 1.0)
+    assert stochastic_add_one(10.0) == 11.0
+
+
+def test_stochastic_processor_with_min_probability():
+    class AddOne(Processor):
+        def __init__(self):
+            super(Processor, self).__init__()
+
+        def call(self, x):
+            return x + 1
+
+    stochastic_add_one = Stochastic(AddOne(), 0.0)
+    assert stochastic_add_one(10.0) == 10.0
+
+
+def test_stochastic_functions_with_min_probability():
+    stochastic_add_one = Stochastic(lambda x: x + 1.0, 0.0)
+    assert stochastic_add_one(10.0) == 10.0
+
+
+def test_stochastic_functions_with_probability():
+    stochastic_add_one = Stochastic(lambda x: x + 1.0, 0.5)
+    for arg in range(100):
+        assert stochastic_add_one(10.0) in [10.0, 11.0]
 
 
 # test_controlmap_reduction_and_selection_to_arg_1()
