@@ -92,7 +92,7 @@ class Config(object):
 
     # How many anchors per image to use for RPN training
     RPN_TRAIN_ANCHORS_PER_IMAGE = 256
-    
+
     # ROIs kept after tf.nn.top_k and before non-maximum suppression
     PRE_NMS_LIMIT = 6000
 
@@ -220,11 +220,13 @@ class Config(object):
 
         # Input image size
         if self.IMAGE_RESIZE_MODE == "crop":
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM,
-                self.IMAGE_CHANNEL_COUNT])
+            self.IMAGE_SHAPE = np.array(
+                [self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM,
+                 self.IMAGE_CHANNEL_COUNT])
         else:
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM,
-                self.IMAGE_CHANNEL_COUNT])
+            self.IMAGE_SHAPE = np.array(
+                [self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM,
+                 self.IMAGE_CHANNEL_COUNT])
 
         # Image meta data length
         # See compose_image_meta() for details
@@ -244,4 +246,3 @@ class Config(object):
             for a in dir(self):
                 if not a.startswith("__") and not callable(getattr(self, a)):
                     f.write(str(a) + getattr(self, str(a)) + '\n')
-
