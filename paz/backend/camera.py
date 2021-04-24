@@ -119,6 +119,8 @@ class VideoPlayer(object):
         self.camera.start()
         while True:
             output = self.step()
+            if output is None:
+                continue
             image = resize_image(output['image'], tuple(self.image_size))
             show_image(image, 'inference', wait=False)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -140,6 +142,8 @@ class VideoPlayer(object):
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
             output = self.step()
+            if output is None:
+                continue
             image = resize_image(output['image'], tuple(self.image_size))
             show_image(image, 'inference', wait=False)
             writer.write(image)

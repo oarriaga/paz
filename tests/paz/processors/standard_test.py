@@ -1,5 +1,5 @@
 from paz.abstract import SequentialProcessor, Processor
-from paz.processors import ControlMap
+from paz.processors import ControlMap, StochasticProcessor
 
 
 class Sum(Processor):
@@ -26,6 +26,22 @@ class MultiplyByFactor(Processor):
 
     def call(self, x):
         return self.factor * x
+
+
+class RandomAdd(StochasticProcessor):
+    def __init__(self, probability=0.5):
+        super(RandomAdd, self).__init__(probability)
+
+    def call(self, x):
+        return x + 1
+
+
+class NormalAdd(Processor):
+    def __init__(self):
+        super(NormalAdd, self).__init__()
+
+    def call(self, x):
+        return x + 1
 
 
 def test_controlmap_reduction_and_selection_to_arg_1():
@@ -72,6 +88,37 @@ def test_controlmap_reduction_and_keep():
     pipeline = SequentialProcessor()
     pipeline.add(ControlMap(Sum(), [1, 2], [1], {2: 0}))
     assert pipeline(2, 5, 10) == (10, 2, 5 + 10)
+
+
+def test_maximum_probability():
+    random_add = RandomAdd(probability=1.0)
+    assert random_add(1.0) == 2.0
+
+
+def test_minimum_probability():
+    random_add = RandomAdd(probability=0.0)
+    assert random_add(1.0) == 1.0
+
+
+def test_stochastic_in_sequential_processor():
+    function = SequentialProcessor()
+    function.add(RandomAdd(probability=1.0))
+    function.add(RandomAdd(probability=1.0))
+    assert function(2.0) == 4.0
+
+
+def test_stochastic_and_deterministic_in_sequential_processor():
+    function = SequentialProcessor()
+    function.add(RandomAdd(probability=1.0))
+    function.add(NormalAdd())
+    assert function(2.0) == 4.0
+
+
+def test_deterministic_and_stochastic_in_sequential_processor():
+    function = SequentialProcessor()
+    function.add(NormalAdd())
+    function.add(RandomAdd(probability=1.0))
+    assert function(2.0) == 4.0
 
 
 # test_controlmap_reduction_and_selection_to_arg_1()

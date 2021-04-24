@@ -174,6 +174,17 @@ PAGES = [
         ],
     },
 
+    {
+        'page': 'models/segmentation.md',
+        'functions': [
+            models.UNET_VGG16,
+            models.UNET_VGG19,
+            models.UNET_RESNET50,
+            models.UNET
+        ],
+    },
+
+
 
     {
         'page': 'models/layers.md',
@@ -193,7 +204,8 @@ PAGES = [
             datasets.FAT,
             datasets.FER,
             datasets.FERPlus,
-            datasets.OpenImages
+            datasets.OpenImages,
+            datasets.CityScapes
         ],
     },
 
@@ -213,7 +225,10 @@ PAGES = [
         'page': 'optimization/losses.md',
         'classes': [
             losses.MultiBoxLoss,
-            losses.KeypointNetLoss
+            losses.KeypointNetLoss,
+            losses.DiceLoss,
+            losses.FocalLoss,
+            losses.JaccardLoss
         ],
     },
 
@@ -347,7 +362,8 @@ PAGES = [
             processors.UnpackDictionary,
             processors.WrapOutput,
             processors.Concatenate,
-            processors.SelectElement
+            processors.SelectElement,
+            processors.StochasticProcessor
         ]
     },
 

@@ -14,7 +14,11 @@
 *.csv
 *.ipynb_checkpoints
 *.ipynb
+*tf.data*
+*tf.index*
+checkpoint
 *.coverage
+*.npy
 
 !.github/manifest.xml
 

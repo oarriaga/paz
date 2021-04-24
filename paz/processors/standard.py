@@ -342,3 +342,36 @@ class Lambda(object):
 
     def __call__(self, x):
         return self.function(x)
+
+
+class StochasticProcessor(Processor):
+    def __init__(self, probability=0.5, name=None):
+        """Adds stochasticity to the user implemented ``call`` function
+
+        # Arguments:
+            probability: Probability of calling ``call`` function
+
+        # Example:
+        ```python
+        class RandomAdd(StochasticProcessor):
+        def __init__(self, probability=0.5):
+            super(StochasticProcessor, self).__init__(probability)
+
+        def call(self, x):
+            return x + 1
+
+        random_add = RandomAdd(probability=0.5)
+        # value can be either 1.0 or 2.0
+        value = random_add(1.0)
+        ```
+        """
+        super(StochasticProcessor, self).__init__(name=name)
+        self.probability = probability
+
+    def call(self, X):
+        raise NotImplementedError
+
+    def __call__(self, X):
+        if self.probability >= np.random.rand():
+            return self.call(X)
+        return X

@@ -9,3 +9,7 @@ from .keypoint.hrnet import HRNetResidual
 from .keypoint.hrnet import HRNetDense
 from .classification import build_xception
 from .classification import MiniXception
+from .segmentation import UNET
+from .segmentation import UNET_VGG16
+from .segmentation import UNET_VGG19
+from .segmentation import UNET_RESNET50
