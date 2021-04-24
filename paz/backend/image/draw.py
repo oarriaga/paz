@@ -8,6 +8,7 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
 
+
 def draw_circle(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
 
