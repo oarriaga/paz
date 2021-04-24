@@ -52,7 +52,7 @@ class Detect(Processor):
         normalized_images, windows = self.preprocess(images)
         image_shape = normalized_images[0].shape
         anchors = self.get_anchors(image_shape)
-        anchors = np.broadcast_to(anchors, 
+        anchors = np.broadcast_to(anchors,
                                   (self.config.BATCH_SIZE,) + anchors.shape)
         detections, _, _, predicted_masks, _, _, _ =\
             self.model.predict([normalized_images, anchors])
@@ -73,7 +73,7 @@ class Detect(Processor):
                 self.config.RPN_ANCHOR_STRIDE)
             self.anchors = anchors
             self._anchor_cache[tuple(image_shape)] = norm_boxes(
-                                                    anchors, image_shape[:2])
+                anchors, image_shape[:2])
         return self._anchor_cache[tuple(image_shape)]
 
 
@@ -86,8 +86,8 @@ class PostprocessInputs(Processor):
         results = []
         for index, image in enumerate(images):
             boxes, class_ids, scores, masks = self.postprocess(
-                    detections[index], predicted_masks[index],
-                    image.shape, normalized_images[index].shape, windows[index])
+                detections[index], predicted_masks[index],
+                image.shape, normalized_images[index].shape, windows[index])
             results.append({
                 'rois': boxes,
                 'class_ids': class_ids,
@@ -102,11 +102,11 @@ class PostprocessInputs(Processor):
         N = zero_index[0] if zero_index.shape[0] > 0 else detections.shape[0]
 
         boxes, class_ids, scores, masks = self.unpack_detections(
-                        N, detections, predicted_masks)
+            N, detections, predicted_masks)
         boxes = self.normalize_boxes(boxes, window, image_shape,
                                      original_image_shape)
         boxes, class_ids, scores, masks, N = self.filter_detections(
-                    N, boxes, class_ids, scores, masks)
+            N, boxes, class_ids, scores, masks)
         full_masks = self.unmold_masks(N, boxes, masks, original_image_shape)
         return boxes, class_ids, scores, full_masks
 
