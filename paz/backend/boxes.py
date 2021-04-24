@@ -215,8 +215,6 @@ def match2(boxes, prior_boxes, iou_threshold=0.5):
     return matches
 
 
-
-
 def compute_iou(box, boxes):
     """Calculates the intersection over union between 'box' and all 'boxes'.
     Both `box` and `boxes` are in corner coordinates.
