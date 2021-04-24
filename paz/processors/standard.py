@@ -375,3 +375,38 @@ class StochasticProcessor(Processor):
         if self.probability >= np.random.rand():
             return self.call(X)
         return X
+
+
+class Stochastic(Processor):
+    def __init__(self, function, probability=0.5, name=None):
+        """Adds stochasticity to a given ``function``
+
+        # Arguments:
+            function: Callable object i.e. python function or
+                ``paz.abstract.Processor``.
+            probability: Probability of calling ``function``.
+
+        # Example:
+        ```python
+        stochastic_add_one = Stochastic(lambda x: x + 1, 0.5)
+        # value can be either 0.0 or 1.0
+        value = random_add(0.0)
+        ```
+        """
+        super(Stochastic, self).__init__(name=name)
+        self.function = function
+        self.probability = probability
+
+    @property
+    def probability(self):
+        return self._probability
+
+    @probability.setter
+    def probability(self, probability):
+        assert 0.0 <= probability <= 1.0, 'Probability must be between 0 and 1'
+        self._probability = probability
+
+    def call(self, X):
+        if self.probability >= np.random.rand():
+            return self.function(X)
+        return X
