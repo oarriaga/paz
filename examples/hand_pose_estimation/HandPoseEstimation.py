@@ -3,7 +3,7 @@ from tensorflow.keras.layers import Concatenate, Dense, Dropout
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, UpSampling2D
 
 
-def HandSegNet(image):
+def Hand_Segmentation_Net(image):
     X_1 = Conv2D(64, kernel_size=3, activation='relu', padding='same',
                  name='conv1_1')(image)
     X_2 = Conv2D(64, 3, activation='relu', padding='same', name='conv1_2')(X_1)
