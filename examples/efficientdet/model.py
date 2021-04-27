@@ -2,6 +2,8 @@ import argparse
 import tensorflow as tf
 
 import efficientnet_builder
+from efficientdet_building_blocks import ResampleFeatureMap
+from config import default_configuration
 
 # Mock input image.
 mock_input_image = tf.random.uniform((1, 224, 224, 3), dtype=tf.dtypes.float32, seed=1)
@@ -20,12 +22,21 @@ class EfficientDet(tf.keras.Model):
         # Arguments
             config: Configuration of the EfficientDet model.
             name: A string of layer name.
-            feature_only: Boolean, for building the base feature network only
         """
         super().__init__(name=name)
 
         self.config = config
         self.backbone = efficientnet_builder.build_backbone(config)
+        self.resample_layers = []
+        for level in range(6, config["max_level"] + 1):
+            self.resample_layers.append(ResampleFeatureMap(
+                feat_level=(level - config["min_level"]),
+                target_num_channels=config["fpn_num_filters"],
+                apply_bn=config["apply_bn_for_resampling"],
+                conv_after_downsample=config["conv_after_downsample"],
+                data_format=config["data_format"],
+                name='resample_p%d' % level,
+            ))
 
     def call(self, images, training=False):
         """Build EfficientDet model.
@@ -36,7 +47,12 @@ class EfficientDet(tf.keras.Model):
 
         # Efficientnet backbone features
         all_feats = self.backbone(images)
-        feats = all_feats[config["min_level"] : config["max_level"] + 1]
+
+        feats = all_feats[config["min_level"] - 1: config["max_level"] + 1]
+
+        # Build additional input features that are not from backbone.
+        for resample_layer in self.resample_layers:
+            feats.append(resample_layer(feats[-1], training, None))
 
         # BiFPN layers
         # TODO: Implement BiFPN
@@ -98,7 +114,6 @@ if __name__ == "__main__":
         "(image_height, image_width, channels), respectively",
         required=False,
     )
-
     parser.add_argument(
         "--min_level",
         default=3,
@@ -110,7 +125,6 @@ if __name__ == "__main__":
         "(640 / (2 ^ 3)) x (640 / (2 ^ 3))",
         required=False,
     )
-
     parser.add_argument(
         "--max_level",
         default=7,
@@ -124,6 +138,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     config = vars(args)
+    config.update(default_configuration)
+    print(config)
     # TODO: Add parsed user-inputs to the config and update the config
     efficientdet = EfficientDet(config=config)
     class_outputs, box_outputs = efficientdet(mock_input_image, False)
