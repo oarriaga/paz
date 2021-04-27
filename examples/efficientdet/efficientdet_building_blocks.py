@@ -1,4 +1,5 @@
 import tensorflow as tf
+from config import get_fpn_configuration
 
 
 class ResampleFeatureMap(tf.keras.layers.Layer):
@@ -91,5 +92,19 @@ class ResampleFeatureMap(tf.keras.layers.Layer):
 
 
 class FPNCells(tf.keras.layers.Layer):
+
+    def __init__(self, config, name='fpn_cells'):
+        super().__init__(name=name)
+        self.config = config
+        self.fpn_config = get_fpn_configuration(config['fpn_name'],
+                                                config['min_level'],
+                                                config['max_level'],
+                                                config['fpn_weight_method']
+                                                )
+        self.cells = [FPNCell(self.config, name='cell_%d' % repeats)
+                      for repeats in range(self.config['fpn_cell_repeats'])]
+
+
+class FPNCell(tf.keras.layers.Layer):
 
     pass
