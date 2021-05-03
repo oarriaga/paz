@@ -2,11 +2,13 @@ import argparse
 import tensorflow as tf
 
 import efficientnet_builder
-from efficientdet_building_blocks import ResampleFeatureMap
+from efficientdet_building_blocks import ResampleFeatureMap, FPNCells
 from config import default_configuration
 
 # Mock input image.
-mock_input_image = tf.random.uniform((1, 224, 224, 3), dtype=tf.dtypes.float32, seed=1)
+mock_input_image = tf.random.uniform((1, 224, 224, 3),
+                                     dtype=tf.dtypes.float32,
+                                     seed=1)
 
 
 class EfficientDet(tf.keras.Model):
@@ -37,6 +39,7 @@ class EfficientDet(tf.keras.Model):
                 data_format=config["data_format"],
                 name='resample_p%d' % level,
             ))
+        self.fpn_cells = FPNCells(config)
 
     def call(self, images, training=False):
         """Build EfficientDet model.
@@ -55,7 +58,7 @@ class EfficientDet(tf.keras.Model):
             feats.append(resample_layer(feats[-1], training, None))
 
         # BiFPN layers
-        # TODO: Implement BiFPN
+        fpn_feats = self.fpn_cells(feats, training)
 
         # Classification head
         # TODO: Implement classification head
