@@ -57,13 +57,8 @@ class EfficientDet(tf.keras.Model):
         for resample_layer in self.resample_layers:
             features.append(resample_layer(features[-1], training, None))
 
-        for i in features:
-            print('At input: ', i.shape)
-
         # BiFPN layers
         fpn_features = self.fpn_cells(features, training)
-        for i in fpn_features:
-            print('Final: ', i.shape)
 
         # Classification head
         # TODO: Implement classification head
