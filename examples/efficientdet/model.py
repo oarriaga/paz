@@ -3,7 +3,6 @@ import tensorflow as tf
 
 import efficientnet_builder
 from efficientdet_building_blocks import ResampleFeatureMap, FPNCells
-from config import default_configuration
 
 # Mock input image.
 mock_input_image = tf.random.uniform((1, 224, 224, 3),
@@ -32,7 +31,7 @@ class EfficientDet(tf.keras.Model):
         self.resample_layers = []
         for level in range(6, config["max_level"] + 1):
             self.resample_layers.append(ResampleFeatureMap(
-                feat_level=(level - config["min_level"]),
+                feature_level=(level - config["min_level"]),
                 target_num_channels=config["fpn_num_filters"],
                 apply_bn=config["apply_bn_for_resampling"],
                 conv_after_downsample=config["conv_after_downsample"],
@@ -49,16 +48,22 @@ class EfficientDet(tf.keras.Model):
         """
 
         # Efficientnet backbone features
-        all_feats = self.backbone(images)
+        all_features = self.backbone(images)
 
-        feats = all_feats[config["min_level"] - 1: config["max_level"] + 1]
+        features = all_features[config["min_level"] - 1:
+                                config["max_level"] + 1]
 
         # Build additional input features that are not from backbone.
         for resample_layer in self.resample_layers:
-            feats.append(resample_layer(feats[-1], training, None))
+            features.append(resample_layer(features[-1], training, None))
+
+        for i in features:
+            print('At input: ', i.shape)
 
         # BiFPN layers
-        fpn_feats = self.fpn_cells(feats, training)
+        fpn_features = self.fpn_cells(features, training)
+        for i in fpn_features:
+            print('Final: ', i.shape)
 
         # Classification head
         # TODO: Implement classification head
@@ -139,9 +144,65 @@ if __name__ == "__main__":
         " (640 / (2 ^ 3)) x (640 / (2 ^ 3))",
         required=False,
     )
+    parser.add_argument(
+        "--fpn_name",
+        default="BiFPN",
+        type=str,
+        help="Feature Pyramid Network name",
+        required=False,
+    )
+    parser.add_argument(
+        "--fpn_weight_method",
+        default="fastattn",
+        type=str,
+        help="FPN weight method to fuse features. "
+             "Options available: attn, fastattn",
+        required=False,
+    )
+    parser.add_argument(
+        "--fpn_num_filters",
+        default=64,
+        type=int,
+        help="Number of filters at the FPN convolutions",
+        required=False,
+    )
+    parser.add_argument(
+        "--fpn_cell_repeats",
+        default=3,
+        type=int,
+        help="Number of FPNs repeated in the FPN layer",
+        required=False,
+    )
+    parser.add_argument(
+        "--apply_bn_for_resampling",
+        default=True,
+        type=bool,
+        help="Flag to apply batch normalization after resampling features",
+        required=False,
+    )
+    parser.add_argument(
+        "--conv_after_downsample",
+        default=True,
+        type=bool,
+        help="Flag to apply convolution after downsampling features",
+        required=False,
+    )
+    parser.add_argument(
+        "--conv_bn_act_pattern",
+        default=True,
+        type=bool,
+        help="Flag to apply convolution, batch normalization and activation",
+        required=False,
+    )
+    parser.add_argument(
+        "--separable_conv",
+        default=True,
+        type=bool,
+        help="Flag to use separable convolutions",
+        required=False,
+    )
     args = parser.parse_args()
     config = vars(args)
-    config.update(default_configuration)
     print(config)
     # TODO: Add parsed user-inputs to the config and update the config
     efficientdet = EfficientDet(config=config)

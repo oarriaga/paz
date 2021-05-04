@@ -18,10 +18,10 @@ def build_backbone(config):
     backbone = efficientnet_class(weights=weight, include_top=False)
     backbone_layers = backbone.layers
     features = []
-    for layer, nlayer in zip(backbone_layers[:-1], backbone_layers[1:]):
-        if hasattr(nlayer, "strides") and nlayer.strides[0] == 2:
+    for layer, next_layer in zip(backbone_layers[:-1], backbone_layers[1:]):
+        if hasattr(next_layer, "strides") and next_layer.strides[0] == 2:
             features.append(layer)
-    features.append(nlayer)
+    features.append(next_layer)
 
     return tf.keras.Model(
         backbone.input,

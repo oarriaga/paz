@@ -2,14 +2,14 @@ import functools
 
 import tensorflow as tf
 from config import get_fpn_configuration
+from tensorflow.keras.layers import Layer
 
 
-class ResampleFeatureMap(tf.keras.layers.Layer):
+class ResampleFeatureMap(Layer):
     """Resample feature maps for downsampling or upsampling
      to create coarser or finer additional feature maps."""
-
     def __init__(self,
-                 feat_level,
+                 feature_level,
                  target_num_channels,
                  apply_bn,
                  conv_after_downsample,
@@ -22,7 +22,7 @@ class ResampleFeatureMap(tf.keras.layers.Layer):
         self.apply_bn = apply_bn
         self.data_format = data_format
         self.target_num_channels = target_num_channels
-        self.feat_level = feat_level
+        self.feature_level = feature_level
         self.conv_after_downsample = conv_after_downsample
         self.pooling_type = pooling_type or 'max'
         self.upsampling_type = upsampling_type or 'nearest'
@@ -59,56 +59,62 @@ class ResampleFeatureMap(tf.keras.layers.Layer):
                 tf.cast(inputs, tf.float32), [target_height, target_width]),
             inputs.dtype)
 
-    def _maybe_apply_1x1(self, feat, training, num_channels):
+    def _maybe_apply_1x1(self, feature, training, num_channels):
         """Apply 1x1 conv to change layer width if necessary."""
         if num_channels != self.target_num_channels:
-            feat = self.conv2d(feat)
+            feature = self.conv2d(feature)
             if self.apply_bn:
-                feat = self.bn(feat, training=training)
-        return feat
+                feature = self.bn(feature, training=training)
+        return feature
 
-    def call(self, feat, training, all_feats):
+    def call(self, feature, training, all_features):
         hwc_idx = (2, 3, 1) if self.data_format == 'channels_first' \
             else (1, 2, 3)
         height, width, num_channels = \
-            [feat.shape.as_list()[i] for i in hwc_idx]
-        if all_feats:
-            target_feat_shape = all_feats[self.feat_level].shape.as_list()
+            [feature.shape.as_list()[i] for i in hwc_idx]
+        if all_features:
+            target_feature_shape = \
+                all_features[self.feature_level].shape.as_list()
             target_height, target_width, _ = \
-                [target_feat_shape[i] for i in hwc_idx]
+                [target_feature_shape[i] for i in hwc_idx]
         else:
-            # Default to downsampling if all_feats is empty.
+            # Default to downsampling if all_features is empty.
             target_height, target_width = (height + 1) // 2, (width + 1) // 2
 
         # If conv_after_downsample is True, when downsampling, apply 1x1 after
         # downsampling for efficiency.
         if height > target_height and width > target_width:
             if not self.conv_after_downsample:
-                feat = self._maybe_apply_1x1(feat, training, num_channels)
-            feat = self._pool2d(feat,
-                                height,
-                                width,
-                                target_height,
-                                target_width)
+                feature = self._maybe_apply_1x1(feature,
+                                                training,
+                                                num_channels)
+            feature = self._pool2d(feature,
+                                   height,
+                                   width,
+                                   target_height,
+                                   target_width)
             if self.conv_after_downsample:
-                feat = self._maybe_apply_1x1(feat, training, num_channels)
+                feature = self._maybe_apply_1x1(feature,
+                                                training,
+                                                num_channels)
         elif height <= target_height and width <= target_width:
-            feat = self._maybe_apply_1x1(feat, training, num_channels)
+            feature = self._maybe_apply_1x1(feature, training, num_channels)
             if height < target_height or width < target_width:
-                feat = self._upsample2d(feat, target_height, target_width)
+                feature = self._upsample2d(feature,
+                                           target_height,
+                                           target_width)
         else:
-            raise ValueError('Incompatible Resampling : feat shape {}x{} \
+            raise ValueError('Incompatible Resampling : feature shape {}x{} \
             target_shape: {}x{}'.format(height,
                                         width,
                                         target_height,
                                         target_width))
 
-        return feat
+        return feature
 
 
-class FPNCells(tf.keras.layers.Layer):
+class FPNCells(Layer):
     """Set of FPN Cells."""
-
     def __init__(self, config, name='fpn_cells'):
         super().__init__(name=name)
         self.config = config
@@ -120,22 +126,23 @@ class FPNCells(tf.keras.layers.Layer):
         self.cells = [FPNCell(self.config, name='cell_%d' % repeats)
                       for repeats in range(self.config['fpn_cell_repeats'])]
 
-    def call(self, feats, training):
+    def call(self, features, training):
         for cell in self.cells:
-            cell_feats = cell(feats, training)
+            cell_features = cell(features, training)
             min_level = self.config['min_level']
             max_level = self.config['max_level']
 
-            feats = []
+            features = []
             for level in range(min_level, max_level + 1):
-                for i, fnode in enumerate(reversed(self.fpn_config['nodes'])):
-                    if fnode['feat_level'] == level:
-                        feats.append(cell_feats[-1 - i])
+                for fnode_arg, fnode in \
+                        enumerate(reversed(self.fpn_config['nodes'])):
+                    if fnode['feature_level'] == level:
+                        features.append(cell_features[-1 - fnode_arg])
                         break
-        return feats
+        return features
 
 
-class FPNCell(tf.keras.layers.Layer):
+class FPNCell(Layer):
     """A single FPN cell."""
     def __init__(self, config, name='fpn_cell'):
         super().__init__(name=name)
@@ -146,9 +153,9 @@ class FPNCell(tf.keras.layers.Layer):
                                                 config['fpn_weight_method']
                                                 )
         self.fnodes = []
-        for i, fnode_cfg in enumerate(self.fpn_config['nodes']):
+        for fnode_cfg_arg, fnode_cfg in enumerate(self.fpn_config['nodes']):
             fnode = FNode(
-                fnode_cfg['feat_level'] - self.config['min_level'],
+                fnode_cfg['feature_level'] - self.config['min_level'],
                 fnode_cfg['inputs_offsets'],
                 config['fpn_num_filters'],
                 config['apply_bn_for_resampling'],
@@ -158,14 +165,13 @@ class FPNCell(tf.keras.layers.Layer):
                 config['act_type'],
                 weight_method=self.config['fpn_weight_method'],
                 data_format=self.config['data_format'],
-                name='fnode%d' % i)
+                name='fnode%d' % fnode_cfg_arg)
             self.fnodes.append(fnode)
 
-    def call(self, feats, training):
-
+    def call(self, features, training):
         for fnode in self.fnodes:
-            feats = fnode(feats, training)
-        return feats
+            features = fnode(features, training)
+        return features
 
 
 def add_n(nodes):
@@ -177,11 +183,10 @@ def add_n(nodes):
         return new_node
 
 
-class FNode(tf.keras.layers.Layer):
+class FNode(Layer):
     """A keras layer implementing BiFPN node."""
-
     def __init__(self,
-                 feat_level,
+                 feature_level,
                  inputs_offsets,
                  fpn_num_filters,
                  apply_bn_for_resampling,
@@ -193,7 +198,7 @@ class FNode(tf.keras.layers.Layer):
                  data_format,
                  name='fnode'):
         super().__init__(name=name)
-        self.feat_level = feat_level
+        self.feature_level = feature_level
         self.inputs_offsets = inputs_offsets
         self.fpn_num_filters = fpn_num_filters
         self.apply_bn_for_resampling = apply_bn_for_resampling
@@ -208,14 +213,12 @@ class FNode(tf.keras.layers.Layer):
 
     def fuse_features(self, nodes):
         """Fuse features from different resolutions and return a weighted sum.
-
         # Arguments
             nodes: a list of tensorflow features at different levels.
 
         # Returns
             A tensor denoting the fused features.
         """
-
         dtype = nodes[0].dtype
 
         if self.weight_method == 'attn':
@@ -235,17 +238,21 @@ class FNode(tf.keras.layers.Layer):
 
         return new_node
 
-    def _add_wsm(self, initializer, shape=None):
-        for i, _ in enumerate(self.inputs_offsets):
-            self.vars.append(self.add_weight(initializer, shape=shape))
+    def _add_scalar_multidimensional_weights(self, initializer, shape=None):
+        for input_offset_arg, _ in enumerate(self.inputs_offsets):
+            name = 'WSM' + ('' if input_offset_arg == 0
+                            else '_' + str(input_offset_arg))
+            self.vars.append(self.add_weight(name=name,
+                                             initializer=initializer,
+                                             shape=shape))
 
-    def build(self, feats_shape):
-        for i, input_offset in enumerate(self.inputs_offsets):
-            name = 'resample_{}_{}_{}'.format(i,
+    def build(self, features_shape):
+        for input_offset_arg, input_offset in enumerate(self.inputs_offsets):
+            name = 'resample_{}_{}_{}'.format(input_offset_arg,
                                               input_offset,
-                                              len(feats_shape))
+                                              len(features_shape))
             self.resample_layers.append(ResampleFeatureMap(
-                self.feat_level,
+                self.feature_level,
                 self.fpn_num_filters,
                 self.apply_bn_for_resampling,
                 self.conv_after_downsample,
@@ -254,32 +261,34 @@ class FNode(tf.keras.layers.Layer):
             ))
 
         if self.weight_method == 'attn':
-            self._add_wsm('ones')
+            self._add_scalar_multidimensional_weights('ones')
         elif self.weight_method == 'fastattn':
-            self._add_wsm('ones')
-        self.op_after_combine = OpAfterCombine(
+            self._add_scalar_multidimensional_weights('ones')
+        self.op_after_combine = ConvolutionAfterFusion(
             self.conv_bn_act_pattern,
             self.separable_conv,
             self.fpn_num_filters,
             self.act_type,
             self.data_format,
-            name='op_after_combine{}'.format(len(feats_shape))
+            name='op_after_combine{}'.format(len(features_shape))
         )
         self.built = True
-        super().build(feats_shape)
+        super().build(features_shape)
 
-    def call(self, feats, training):
+    def call(self, features, training):
         nodes = []
-        for i, input_offset in enumerate(self.inputs_offsets):
-            input_node = feats[input_offset]
-            input_node = self.resample_layers[i](input_node, training, feats)
+        for input_offset_arg, input_offset in enumerate(self.inputs_offsets):
+            input_node = features[input_offset]
+            input_node = self.resample_layers[input_offset_arg](input_node,
+                                                                training,
+                                                                features)
             nodes.append(input_node)
         new_node = self.fuse_features(nodes)
         new_node = self.op_after_combine(new_node)
-        return feats + [new_node]
+        return features + [new_node]
 
 
-class OpAfterCombine(tf.keras.layers.Layer):
+class ConvolutionAfterFusion(Layer):
     """Operation after combining input features during feature fusion."""
     def __init__(self,
                  conv_bn_act_pattern,

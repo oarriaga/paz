@@ -1,18 +1,25 @@
 import itertools
 
-default_configuration = {'fpn_name': 'BiFPN',
-                         'fpn_weight_method': 'fastattn',
-                         'apply_bn_for_resampling': True,
-                         'fpn_num_filters': 64,
-                         'fpn_cell_repeats': 3,
-                         'conv_after_downsample': True,
-                         'conv_bn_act_pattern': True,
-                         'separable_conv': True}
-
 
 def bifpn_configuration(min_level, max_level, weight_method):
     """A dynamic bifpn configuration that can adapt to
-    different min/max levels."""
+    different min/max levels.
+    # Arguments
+        min_level: Integer. EfficientNet feature minimum level.
+        Level decides the activation map size,
+        eg: For an input image of 640 x 640,
+        the activation map resolution at level 3 is
+        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+        max_level: Integer. EfficientNet feature maximum level.
+        Level decides the activation map size,
+        eg: For an input image of 640 x 640,
+        the activation map resolution at level 3 is
+        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+        weight_method: String. FPN weighting methods for feature fusion.
+    # Returns
+        bifpn_config: Dictionary. Contains the nodes and offsets
+        for building the FPN.
+    """
     bifpn_config = dict()
     bifpn_config['weight_method'] = weight_method or 'fastattn'
 
@@ -31,47 +38,61 @@ def bifpn_configuration(min_level, max_level, weight_method):
     # feature level x, denoted by Px.
     # So output would be like:
     # [
-    #   {'feat_level': 6, 'inputs_offsets': [3, 4]},  # for P6'
-    #   {'feat_level': 5, 'inputs_offsets': [2, 5]},  # for P5'
-    #   {'feat_level': 4, 'inputs_offsets': [1, 6]},  # for P4'
-    #   {'feat_level': 3, 'inputs_offsets': [0, 7]},  # for P3"
-    #   {'feat_level': 4, 'inputs_offsets': [1, 7, 8]},  # for P4"
-    #   {'feat_level': 5, 'inputs_offsets': [2, 6, 9]},  # for P5"
-    #   {'feat_level': 6, 'inputs_offsets': [3, 5, 10]},  # for P6"
-    #   {'feat_level': 7, 'inputs_offsets': [4, 11]},  # for P7"
+    #   {'feature_level': 6, 'inputs_offsets': [3, 4]},  # for P6'
+    #   {'feature_level': 5, 'inputs_offsets': [2, 5]},  # for P5'
+    #   {'feature_level': 4, 'inputs_offsets': [1, 6]},  # for P4'
+    #   {'feature_level': 3, 'inputs_offsets': [0, 7]},  # for P3"
+    #   {'feature_level': 4, 'inputs_offsets': [1, 7, 8]},  # for P4"
+    #   {'feature_level': 5, 'inputs_offsets': [2, 6, 9]},  # for P5"
+    #   {'feature_level': 6, 'inputs_offsets': [3, 5, 10]},  # for P6"
+    #   {'feature_level': 7, 'inputs_offsets': [4, 11]},  # for P7"
     # ]
     num_levels = max_level - min_level + 1
     node_ids = {min_level + level_id: [level_id]
                 for level_id in range(num_levels)}
-
-    level_last_id = lambda level_id: node_ids[level_id][-1]
-    level_all_ids = lambda level_ids: node_ids[level_ids]
     id_count = itertools.count(num_levels)
-
     nodes = []
     # Top-down path
     for level in range(max_level - 1, min_level - 1, -1):
         nodes.append({
-            'feat_level': level,
-            'inputs_offsets': [level_last_id(level),
-                               level_last_id(level + 1)]
+            'feature_level': level,
+            'inputs_offsets': [node_ids[level][-1],
+                               node_ids[level + 1][-1]]
         })
         node_ids[level].append(next(id_count))
-
     # Bottom-up path
     for level in range(min_level + 1, max_level + 1):
         nodes.append({
-            'feat_level': level,
-            'inputs_offsets': level_all_ids(level) + [level_last_id(level - 1)]
+            'feature_level': level,
+            'inputs_offsets': node_ids[level] + [node_ids[level - 1][-1]]
         })
         node_ids[level].append(next(id_count))
-
     bifpn_config['nodes'] = nodes
-
     return bifpn_config
 
 
 def get_fpn_configuration(fpn_name, min_level, max_level, fpn_weight_method):
+    """Provides the fpn configuration that can adapt to
+    different min/max levels.
+
+    # Arguments
+        fpn_name: String. Name of the FPN, eg: BiFPN.
+        min_level: Integer. EfficientNet feature minimum level.
+        Level decides the activation map size,
+        eg: For an input image of 640 x 640,
+        the activation map resolution at level 3 is
+        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+        max_level: Integer. EfficientNet feature maximum level.
+        Level decides the activation map size,
+        eg: For an input image of 640 x 640,
+        the activation map resolution at level 3 is
+        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+        weight_method: String. FPN weighting methods for feature fusion.
+
+    # Returns
+        bifpn_config: Dictionary. Contains the nodes and offsets
+        for building the FPN.
+    """
     if fpn_name == 'BiFPN':
         return bifpn_configuration(min_level, max_level, fpn_weight_method)
     else:
