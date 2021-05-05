@@ -2,7 +2,7 @@ import argparse
 import tensorflow as tf
 
 import efficientnet_builder
-from efficientdet_building_blocks import ResampleFeatureMap, FPNCells, ClassNet
+from efficientdet_building_blocks import ResampleFeatureMap, FPNCells, ClassNet, BoxNet
 
 # Mock input image.
 mock_input_image = tf.random.uniform((1, 224, 224, 3),
@@ -56,6 +56,20 @@ class EfficientDet(tf.keras.Model):
             feature_only=config['feature_only'],
         )
 
+        self.box_net = BoxNet(
+            num_anchors=num_anchors,
+            num_filters=num_filters,
+            min_level=config['min_level'],
+            max_level=config['max_level'],
+            act_type=config['act_type'],
+            repeats=config['box_class_repeats'],
+            separable_conv=config['separable_conv'],
+            survival_prob=config['survival_prob'],
+            data_format=config['data_format'],
+            feature_only=config['feature_only'],
+        )
+
+
     def call(self, images, training=False):
         """Build EfficientDet model.
         # Arguments
@@ -80,8 +94,7 @@ class EfficientDet(tf.keras.Model):
         class_outputs = self.class_net(fpn_features, training)
 
         # Box regression head
-        # TODO: Implement box regression head
-        box_outputs = None
+        box_outputs = self.box_net(fpn_features, training)
 
         return class_outputs, box_outputs
 

@@ -402,18 +402,18 @@ class ClassNet(Layer):
         self.feature_only = feature_only
 
         conv2d_layer = self.conv2d_layer(separable_conv, data_format)
-        for repeat_args in range(self.repeats):
+        for repeats_args in range(self.repeats):
             self.conv_blocks.append(
                 conv2d_layer(self.num_filters,
                              kernel_size=3,
                              bias_initializer=tf.zeros_initializer(),
                              activation=None,
                              padding='same',
-                             name='class-%d' % repeat_args))
+                             name='class-%d' % repeats_args))
             bn_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 bn_per_level.append(tf.keras.layers.BatchNormalization(
-                    name='class-%d-bn-%d' % (repeat_args, level)))
+                    name='class-%d-bn-%d' % (repeats_args, level)))
             self.bns.append(bn_per_level)
         self.classes = self.classes_layer(conv2d_layer,
                                           num_classes,
@@ -481,3 +481,154 @@ class ClassNet(Layer):
                 -np.log((1 - 0.01) / 0.01)),
             padding='same',
             name=name)
+
+
+class BoxNet(Layer):
+    """Box regression network."""
+    def __init__(self,
+                 num_anchors=9,
+                 num_filters=32,
+                 min_level=3,
+                 max_level=7,
+                 act_type='swish',
+                 repeats=4,
+                 separable_conv=True,
+                 survival_prob=None,
+                 data_format='channels_last',
+                 name='class_net',
+                 feature_only=False,
+                 **kwargs):
+        """Initialize the BoxNet.
+
+        # Arguments
+            num_classes: Integer. Number of classes.
+            num_anchors: Integer. Number of anchors.
+            num_filters: Integer. Number of filters for intermediate layers.
+            min_level: Integer. Minimum level for features.
+            max_level: Integer. Maximum level for features.
+            act_type: String of the activation used.
+            repeats: Integer. Number of intermediate layers.
+            separable_conv: Bool. True to use separable_conv instead of Conv2D.
+            survival_prob: Float. If a value is set then drop connect
+                will be used.
+            data_format: String specifying the channel position in data.
+                'channels_first' or 'channels_last'.
+            name: String indicating the name of this layer.
+            feature_only: Bool. Build the base feature network only.
+                Excluding final class head.
+            **kwargs: other parameters
+        """
+        super().__init__(name=name, **kwargs)
+        self.num_anchors = num_anchors
+        self.num_filters = num_filters
+        self.min_level = min_level
+        self.max_level = max_level
+        self.repeats = repeats
+        self.separable_conv = separable_conv
+        self.survival_prob = survival_prob
+        self.act_type = act_type
+        self.data_format = data_format
+        self.conv_blocks = []
+        self.bns = []
+        self.feature_only = feature_only
+
+        for repeats_args in range(self.repeats):
+            # If using SeparableConv2D
+            if self.separable_conv:
+                self.conv_blocks.append(
+                    tf.keras.layers.SeparableConv2D(
+                        filters=self.num_filters,
+                        depth_multiplier=1,
+                        pointwise_initializer=tf.initializers.variance_scaling(),
+                        depthwise_initializer=tf.initializers.variance_scaling(),
+                        data_format=self.data_format,
+                        kernel_size=3,
+                        activation=None,
+                        bias_initializer=tf.zeros_initializer(),
+                        padding='same',
+                        name='box-%d' % repeats_args))
+            # If using Conv2d
+            else:
+                self.conv_blocks.append(
+                    tf.keras.layers.Conv2D(
+                        filters=self.num_filters,
+                        kernel_initializer=tf.random_normal_initializer(stddev=0.01),
+                        data_format=self.data_format,
+                        kernel_size=3,
+                        activation=None,
+                        bias_initializer=tf.zeros_initializer(),
+                        padding='same',
+                        name='box-%d' % repeats_args))
+
+            bn_per_level = []
+            for level in range(self.min_level, self.max_level + 1):
+                bn_per_level.append(
+                    tf.keras.layers.BatchNormalization(
+                        name='box-%d-bn-%d' % (repeats_args, level)))
+            self.bns.append(bn_per_level)
+
+        self.boxes = self.boxes_layer(separable_conv,
+                                      num_anchors,
+                                      data_format,
+                                      name='box-predict')
+
+    def _conv_bn_act(self, image, i, level_id, training):
+        conv_block = self.conv_blocks[i]
+        bn = self.bns[i][level_id]
+        act_type = self.act_type
+
+        def _call(image):
+            original_image = image
+            image = conv_block(image)
+            image = bn(image, training=training)
+            if self.act_type:
+                image = activation_fn(image, act_type)
+            if i > 0 and self.survival_prob:
+                image = drop_connect(image, training, self.survival_prob)
+                image = image + original_image
+            return image
+
+        return _call(image)
+
+    def call(self, inputs, training):
+        """Call boxnet."""
+        box_outputs = []
+        for level_id in range(0, self.max_level - self.min_level + 1):
+            image = inputs[level_id]
+            for i in range(self.repeats):
+                image = self._conv_bn_act(image, i, level_id, training)
+            if self.feature_only:
+                box_outputs.append(image)
+            else:
+                box_outputs.append(self.boxes(image))
+
+        return box_outputs
+
+    @classmethod
+    def boxes_layer(cls, separable_conv, num_anchors, data_format, name):
+        """Gets the conv2d layer in BoxNet class."""
+        if separable_conv:
+            return tf.keras.layers.SeparableConv2D(
+                filters=4 * num_anchors,
+                depth_multiplier=1,
+                pointwise_initializer=tf.initializers.variance_scaling(),
+                depthwise_initializer=tf.initializers.variance_scaling(),
+                data_format=data_format,
+                kernel_size=3,
+                activation=None,
+                bias_initializer=tf.zeros_initializer(),
+                padding='same',
+                name=name)
+        else:
+            return tf.keras.layers.Conv2D(
+                filters=4 * num_anchors,
+                kernel_initializer=tf.random_normal_initializer(stddev=0.01),
+                data_format=data_format,
+                kernel_size=3,
+                activation=None,
+                bias_initializer=tf.zeros_initializer(),
+                padding='same',
+                name=name)
+
+
+
