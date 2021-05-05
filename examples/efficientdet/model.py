@@ -2,7 +2,7 @@ import argparse
 import tensorflow as tf
 
 import efficientnet_builder
-from efficientdet_building_blocks import ResampleFeatureMap, FPNCells
+from efficientdet_building_blocks import ResampleFeatureMap, FPNCells, ClassNet
 
 # Mock input image.
 mock_input_image = tf.random.uniform((1, 224, 224, 3),
@@ -40,6 +40,22 @@ class EfficientDet(tf.keras.Model):
             ))
         self.fpn_cells = FPNCells(config)
 
+        num_anchors = len(config['aspect_ratios']) * config['num_scales']
+        num_filters = config['fpn_num_filters']
+        self.class_net = ClassNet(
+            num_classes=config['num_classes'],
+            num_anchors=num_anchors,
+            num_filters=num_filters,
+            min_level=config['min_level'],
+            max_level=config['max_level'],
+            act_type=config['act_type'],
+            repeats=config['box_class_repeats'],
+            separable_conv=config['separable_conv'],
+            survival_prob=config['survival_prob'],
+            data_format=config['data_format'],
+            feature_only=config['feature_only'],
+        )
+
     def call(self, images, training=False):
         """Build EfficientDet model.
         # Arguments
@@ -61,8 +77,7 @@ class EfficientDet(tf.keras.Model):
         fpn_features = self.fpn_cells(features, training)
 
         # Classification head
-        # TODO: Implement classification head
-        class_outputs = None
+        class_outputs = self.class_net(fpn_features, training)
 
         # Box regression head
         # TODO: Implement box regression head
@@ -196,6 +211,50 @@ if __name__ == "__main__":
         help="Flag to use separable convolutions",
         required=False,
     )
+    parser.add_argument(
+        "--aspect_ratios",
+        default=[1.0, 2.0, 0.5],
+        type=list,
+        action='append',
+        help="Aspect ratio of the boxes",
+        required=False,
+    )
+    parser.add_argument(
+        "--survival_prob",
+        default=None,
+        type=float,
+        help="Survival probability for drop connect",
+        required=False,
+    )
+    parser.add_argument(
+        "--num_classes",
+        default=90,
+        type=int,
+        help="Number of classes in the dataset",
+        required=False,
+    )
+    parser.add_argument(
+        "--num_scales",
+        default=3,
+        type=int,
+        help="Number of scales for the boxes",
+        required=False,
+    )
+    parser.add_argument(
+        "--box_class_repeats",
+        default=3,
+        type=int,
+        help="Number of repeated blocks in box and class net",
+        required=False,
+    )
+    parser.add_argument(
+        "--feature_only",
+        default=False,
+        type=bool,
+        help="Whether feature only is required from EfficientDet",
+        required=False,
+    )
+
     args = parser.parse_args()
     config = vars(args)
     print(config)
