@@ -2,7 +2,8 @@ import argparse
 import tensorflow as tf
 
 import efficientnet_builder
-from efficientdet_building_blocks import ResampleFeatureMap, FPNCells, ClassNet, BoxNet
+from efficientdet_building_blocks import ResampleFeatureMap, \
+    FPNCells, ClassNet, BoxNet
 
 # Mock input image.
 mock_input_image = tf.random.uniform((1, 224, 224, 3),
@@ -68,7 +69,6 @@ class EfficientDet(tf.keras.Model):
             data_format=config['data_format'],
             feature_only=config['feature_only'],
         )
-
 
     def call(self, images, training=False):
         """Build EfficientDet model.

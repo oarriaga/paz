@@ -535,30 +535,29 @@ class BoxNet(Layer):
         for repeats_args in range(self.repeats):
             # If using SeparableConv2D
             if self.separable_conv:
-                self.conv_blocks.append(
-                    tf.keras.layers.SeparableConv2D(
-                        filters=self.num_filters,
-                        depth_multiplier=1,
-                        pointwise_initializer=tf.initializers.variance_scaling(),
-                        depthwise_initializer=tf.initializers.variance_scaling(),
-                        data_format=self.data_format,
-                        kernel_size=3,
-                        activation=None,
-                        bias_initializer=tf.zeros_initializer(),
-                        padding='same',
-                        name='box-%d' % repeats_args))
+                self.conv_blocks.append(tf.keras.layers.SeparableConv2D(
+                    filters=self.num_filters,
+                    depth_multiplier=1,
+                    pointwise_initializer=tf.initializers.variance_scaling(),
+                    depthwise_initializer=tf.initializers.variance_scaling(),
+                    data_format=self.data_format,
+                    kernel_size=3,
+                    activation=None,
+                    bias_initializer=tf.zeros_initializer(),
+                    padding='same',
+                    name='box-%d' % repeats_args))
             # If using Conv2d
             else:
-                self.conv_blocks.append(
-                    tf.keras.layers.Conv2D(
-                        filters=self.num_filters,
-                        kernel_initializer=tf.random_normal_initializer(stddev=0.01),
-                        data_format=self.data_format,
-                        kernel_size=3,
-                        activation=None,
-                        bias_initializer=tf.zeros_initializer(),
-                        padding='same',
-                        name='box-%d' % repeats_args))
+                self.conv_blocks.append(tf.keras.layers.Conv2D(
+                    filters=self.num_filters,
+                    kernel_initializer=tf.random_normal_initializer(
+                        stddev=0.01),
+                    data_format=self.data_format,
+                    kernel_size=3,
+                    activation=None,
+                    bias_initializer=tf.zeros_initializer(),
+                    padding='same',
+                    name='box-%d' % repeats_args))
 
             bn_per_level = []
             for level in range(self.min_level, self.max_level + 1):
@@ -629,6 +628,3 @@ class BoxNet(Layer):
                 bias_initializer=tf.zeros_initializer(),
                 padding='same',
                 name=name)
-
-
-
