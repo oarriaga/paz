@@ -3,6 +3,99 @@ from ..backend.boxes import compute_ious
 from ..backend.image import load_image
 
 
+def get_predictions(results, class_to_arg):
+    """
+
+    Args:
+        results:
+        class_to_arg:
+
+    Returns:
+
+    """
+    boxes, class_args, scores = [], [], []
+    for box2D in results['boxes2D']:
+        scores.append(box2D.score)
+        class_args.append(class_to_arg[box2D.class_name])
+        boxes.append(list(box2D.coordinates))
+    boxes = np.array(boxes, dtype=np.float32)
+    class_args = np.array(class_args)
+    scores = np.array(scores, dtype=np.float32)
+
+    return boxes, class_args, scores
+
+
+def predictions_mask_by_class(class_arg, class_args, boxes, scores):
+    """
+
+    Args:
+        class_arg:
+        class_args:
+        boxes:
+        scores:
+
+    Returns:
+
+    """
+    # masking predictions by class
+    class_mask = class_arg == class_args
+    class_boxes = boxes[class_mask]
+    class_scores = scores[class_mask]
+
+    # sort score from maximum to minimum for masked predictions
+    sorted_args = class_scores.argsort()[::-1]
+    class_boxes = class_boxes[sorted_args]
+    class_scores = class_scores[sorted_args]
+
+    return class_boxes, class_scores
+
+
+def ground_truth_mask_by_class(class_arg, class_args, boxes, difficulties):
+    """
+
+    Args:
+        class_arg:
+        class_args:
+        boxes:
+        difficulties:
+
+    Returns:
+
+    """
+
+    # masking ground truths by class
+    class_mask = class_arg == class_args
+    class_boxes = boxes[class_mask]
+    class_difficulties = difficulties[class_mask]
+
+    return class_boxes, class_difficulties
+
+
+def get_match_value(selected, ground_truth_arg, class_difficulties):
+    """
+
+    Args:
+        selected:
+        ground_truth_arg:
+        class_difficulties:
+
+    Returns:
+
+    """
+
+    match_value = 0
+    is_selected = False
+    if ground_truth_arg >= 0:
+        if class_difficulties[ground_truth_arg]:
+            match_value = -1
+        else:
+            if not selected[ground_truth_arg]:
+                match_value = 1
+        is_selected = True
+
+    return is_selected, match_value
+
+
 def compute_matches(dataset, detector, class_to_arg, iou_thresh=0.5):
     """
     Arguments:
@@ -34,37 +127,31 @@ def compute_matches(dataset, detector, class_to_arg, iou_thresh=0.5):
         # obtaining predictions
         image = load_image(sample['image'])
         results = detector(image)
-        predicted_boxes, predicted_class_args, predicted_scores = [], [], []
-        for box2D in results['boxes2D']:
-            predicted_scores.append(box2D.score)
-            predicted_class_args.append(class_to_arg[box2D.class_name])
-            predicted_boxes.append(list(box2D.coordinates))
-        predicted_boxes = np.array(predicted_boxes, dtype=np.float32)
-        predicted_class_args = np.array(predicted_class_args)
-        predicted_scores = np.array(predicted_scores, dtype=np.float32)
+
+        predicted_boxes, predicted_class_args, predicted_scores = \
+            get_predictions(results, class_to_arg)
+
         # setting difficulties to ``Easy`` if they are None
         if difficulties is None:
             difficulties = np.zeros(len(ground_truth_boxes), dtype=bool)
+
         # iterating over each class present in the image
         class_args = np.concatenate(
             (predicted_class_args, ground_truth_class_args))
         class_args = np.unique(class_args).astype(int)
         for class_arg in class_args:
-            # masking predictions by class
-            class_mask = class_arg == predicted_class_args
-            class_predicted_boxes = predicted_boxes[class_mask]
-            class_predicted_scores = predicted_scores[class_mask]
-            # sort score from maximum to minimum for masked predictions
-            sorted_args = class_predicted_scores.argsort()[::-1]
-            class_predicted_boxes = class_predicted_boxes[sorted_args]
-            class_predicted_scores = class_predicted_scores[sorted_args]
-            # masking ground truths by class
-            class_mask = class_arg == ground_truth_class_args
-            class_ground_truth_boxes = ground_truth_boxes[class_mask]
-            class_difficulties = difficulties[class_mask]
+
+            class_predicted_boxes, class_predicted_scores = \
+                predictions_mask_by_class(class_arg, class_args,
+                                          predicted_boxes, predicted_scores)
+            class_ground_truth_boxes, class_difficulties = \
+                ground_truth_mask_by_class(class_arg, ground_truth_class_args,
+                                           ground_truth_boxes, difficulties)
+
             # the number of positives equals the number of easy boxes
             num_easy = np.logical_not(class_difficulties).sum()
             num_positives[class_arg] = num_positives[class_arg] + num_easy
+
             # add all predicted scores to scores
             score[class_arg].extend(class_predicted_scores)
             # if not predicted boxes for this class continue
@@ -88,19 +175,14 @@ def compute_matches(dataset, detector, class_to_arg, iou_thresh=0.5):
             ground_truth_args = ious.argmax(axis=1)
             # set -1 if there is no matching ground truth
             ground_truth_args[ious.max(axis=1) < iou_thresh] = -1
+
             selected = np.zeros(len(class_ground_truth_boxes), dtype=bool)
             for ground_truth_arg in ground_truth_args:
-                if ground_truth_arg >= 0:
-                    if class_difficulties[ground_truth_arg]:
-                        match[class_arg].append(-1)
-                    else:
-                        if not selected[ground_truth_arg]:
-                            match[class_arg].append(1)
-                        else:
-                            match[class_arg].append(0)
-                    selected[ground_truth_arg] = True
-                else:
-                    match[class_arg].append(0)
+                is_selected, match_value = get_match_value(
+                    selected, ground_truth_arg, class_difficulties)
+                selected[ground_truth_arg] = is_selected
+                match[class_arg].append(match_value)
+
     return num_positives, score, match
 
 
@@ -130,12 +212,11 @@ def calculate_relevance_metrics(num_positives, scores, matches):
     return precision, recall
 
 
-def calculate_average_precisions(precision, recall, use_07_metric=False):
-    """Calculate average precisions based based on PASCAL VOC evaluation
+def calculate_average_precisions_eleven_point_interpolation(precision, recall):
+    """Calculate average precisions based on PASCAL VOC evaluation 2007
     Arguments:
-        num_positives: Dict. with number of positives for each class
-        scores: Dict. with matching scores of boxes for each class
-        matches: Dict. wth match/non-match info for boxes for each class
+        precision: Dict. with precision values per class
+        recall: Dict. with recall values per class
     Returns:
     """
 
@@ -146,42 +227,59 @@ def calculate_average_precisions(precision, recall, use_07_metric=False):
             average_precisions[class_arg] = np.nan
             continue
 
-        if use_07_metric:
-            # 11 point metric
-            average_precisions[class_arg] = 0
-            for t in np.arange(0., 1.1, 0.1):
-                if np.sum(recall[class_arg] >= t) == 0:
-                    p_interpolation = 0
-                else:
-                    p_interpolation = np.max(
-                        np.nan_to_num(
-                            precision[class_arg]
-                        )[recall[class_arg] >= t]
-                    )
-                average_precision_class = average_precisions[class_arg]
-                average_precision_class = (average_precision_class +
-                                           (p_interpolation / 11))
-                average_precisions[class_arg] = average_precision_class
+        # 11 point metric
+        average_precisions[class_arg] = 0
+        for t in np.arange(0., 1.1, 0.1):
+            if np.sum(recall[class_arg] >= t) == 0:
+                p_interpolation = 0
+            else:
+                p_interpolation = np.max(
+                    np.nan_to_num(
+                        precision[class_arg]
+                    )[recall[class_arg] >= t]
+                )
+            average_precision_class = average_precisions[class_arg]
+            average_precision_class = (average_precision_class +
+                                       (p_interpolation / 11))
+            average_precisions[class_arg] = average_precision_class
 
-        else:
-            # first append sentinel values at the end
-            average_precision = np.concatenate(
-                ([0], np.nan_to_num(precision[class_arg]), [0]))
-            average_recall = np.concatenate(([0], recall[class_arg], [1]))
+    return average_precisions
 
-            average_precision = np.maximum.accumulate(
-                average_precision[::-1])[::-1]
 
-            # to calculate area under PR curve, look for points
-            # where X axis (recall) changes value
-            recall_change_arg = np.where(
-                average_recall[1:] != average_recall[:-1])[0]
+def calculate_average_precisions_every_point_interpolation(precision, recall):
+    """Calculate average precisions based on PASCAL VOC evaluation after 2010
+    Arguments:
+        precision: Dict. with precision values per class
+        recall: Dict. with recall values per class
+    Returns:
+    """
 
-            # and sum (\Delta recall) * precision
-            average_precisions[class_arg] = np.sum(
-                (average_recall[recall_change_arg + 1] -
-                 average_recall[recall_change_arg]) *
-                average_precision[recall_change_arg + 1])
+    num_classes = len(precision)
+    average_precisions = np.empty(num_classes)
+    for class_arg in range(num_classes):
+        if precision[class_arg] is None or recall[class_arg] is None:
+            average_precisions[class_arg] = np.nan
+            continue
+
+        # first append sentinel values at the end
+        average_precision = np.concatenate(
+            ([0], np.nan_to_num(precision[class_arg]), [0]))
+        average_recall = np.concatenate(([0], recall[class_arg], [1]))
+
+        average_precision = np.maximum.accumulate(
+            average_precision[::-1])[::-1]
+
+        # to calculate area under PR curve, look for points
+        # where X axis (recall) changes value
+        recall_change_arg = np.where(
+            average_recall[1:] != average_recall[:-1])[0]
+
+        # and sum (\Delta recall) * precision
+        average_precisions[class_arg] = np.sum(
+            (average_recall[recall_change_arg + 1] -
+             average_recall[recall_change_arg]) *
+            average_precision[recall_change_arg + 1])
+
     return average_precisions
 
 
@@ -195,11 +293,19 @@ def evaluateMAP(detector, dataset, class_to_arg, iou_thresh=0.5,
         class_to_arg: Dict. of class names and their id
         iou_thresh: Float indicating intersection over union threshold for
             assigning a prediction as correct.
+        use_07_metric: Boolean indicating whether to use '07 evaluation metric.
     # Returns:
     """
     positives, score, match = compute_matches(
         dataset, detector, class_to_arg, iou_thresh)
     precision, recall = calculate_relevance_metrics(positives, score, match)
-    average_precisions = calculate_average_precisions(
-        precision, recall, use_07_metric)
+    if use_07_metric:
+        average_precisions = \
+            calculate_average_precisions_eleven_point_interpolation(precision,
+                                                                    recall)
+    else:
+        average_precisions = \
+            calculate_average_precisions_every_point_interpolation(precision,
+                                                                   recall)
+
     return {'ap': average_precisions, 'map': np.nanmean(average_precisions)}
