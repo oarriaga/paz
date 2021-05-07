@@ -25,6 +25,8 @@ from .image import SubtractMeanImage
 from .image import AddMeanImage
 from .image import NormalizeImage
 from .image import DenormalizeImage
+from .image import NormalizeImageTanh
+from .image import DenormalizeImageTanh
 from .image import LoadImage
 from .image import RandomSaturation
 from .image import RandomBrightness

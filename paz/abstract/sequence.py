@@ -2,6 +2,8 @@ from tensorflow.keras.utils import Sequence
 import numpy as np
 from .processor import SequentialProcessor
 
+import matplotlib.pyplot as plt
+
 
 class SequenceExtra(Sequence):
     def __init__(self, pipeline, batch_size, as_list=False):
@@ -101,4 +103,46 @@ class GeneratingSequence(SequenceExtra):
             sample = self.pipeline()
             self._place_sample(sample['inputs'], sample_arg, inputs)
             self._place_sample(sample['labels'], sample_arg, labels)
+        return inputs, labels
+
+
+class GeneratingSequencePix2Pose(SequenceExtra):
+    """Sequence generator used for generating samples.
+
+    # Arguments
+        processor: Function used for generating and processing ``samples``.
+        batch_size: Int.
+        num_steps: Int. Number of steps for each epoch.
+        as_list: Bool, if True ``inputs`` and ``labels`` are dispatched as
+            lists. If false ``inputs`` and ``labels`` are dispatched as
+            dictionaries.
+    """
+    def __init__(self, processor, model, batch_size, num_steps, as_list=False):
+        self.num_steps = num_steps
+        self.model = model
+        super(GeneratingSequencePix2Pose, self).__init__(
+            processor, batch_size, as_list)
+
+    def __len__(self):
+        return self.num_steps
+
+    def process_batch(self, inputs, labels, batch_index):
+        input_images, samples = list(), list()
+        for sample_arg in range(self.batch_size):
+            sample = self.pipeline()
+            samples.append(sample)
+            input_image = sample['inputs'][self.ordered_input_names[0]]
+            input_images.append(input_image)
+
+        input_images = np.asarray(input_images)
+        predictions = self.model.predict(input_images)
+
+        # Calculate the errors between the target output and the predicted output
+        for sample_arg in range(self.batch_size):
+            sample = samples[sample_arg]
+            error = np.sum(predictions['color_output'][sample_arg] - sample['labels']['color_output'], axis=-1, keepdims=True)
+            sample['labels'][self.ordered_label_names[0]] = error
+            self._place_sample(sample['inputs'], sample_arg, inputs)
+            self._place_sample(sample['labels'], sample_arg, labels)
+
         return inputs, labels

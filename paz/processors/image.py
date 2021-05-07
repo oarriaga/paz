@@ -78,6 +78,26 @@ class NormalizeImage(Processor):
         return image / 255.0
 
 
+class NormalizeImageTanh(Processor):
+    """Normalize image so that the values are between -1 and 1
+    """
+    def __init__(self):
+        super(NormalizeImageTanh, self).__init__()
+
+    def call(self, image):
+        return (image/127.5)-1
+
+
+class DenormalizeImageTanh(Processor):
+    """Normalize image so that the values are between -1 and 1
+    """
+    def __init__(self):
+        super(DenormalizeImageTanh, self).__init__()
+
+    def call(self, image):
+        return (image + 1.0)*127.5
+
+
 class DenormalizeImage(Processor):
     """Denormalize image by multiplying all values by 255.0.
     """
