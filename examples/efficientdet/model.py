@@ -34,12 +34,23 @@ class EfficientDet(tf.keras.Model):
             self.resample_layers.append(ResampleFeatureMap(
                 feature_level=(level - config["min_level"]),
                 target_num_channels=config["fpn_num_filters"],
-                apply_bn=config["apply_bn_for_resampling"],
+                use_batchnorm=config["use_batchnorm_for_sampling"],
                 conv_after_downsample=config["conv_after_downsample"],
-                data_format=config["data_format"],
                 name='resample_p%d' % level,
             ))
-        self.fpn_cells = FPNCells(config)
+
+        self.fpn_cells = FPNCells(
+            fpn_name=config['fpn_name'],
+            min_level=config['min_level'],
+            max_level=config['max_level'],
+            fpn_weight_method=config['fpn_weight_method'],
+            fpn_cell_repeats=config['fpn_cell_repeats'],
+            fpn_num_filters=config['fpn_num_filters'],
+            use_batchnorm_for_sampling=config['use_batchnorm_for_sampling'],
+            conv_after_downsample=config['conv_after_downsample'],
+            conv_batchnorm_act_pattern=config['conv_batchnorm_act_pattern'],
+            separable_conv=config['separable_conv'],
+            act_type=config['act_type'])
 
         num_anchors = len(config['aspect_ratios']) * config['num_scales']
         num_filters = config['fpn_num_filters']
@@ -53,7 +64,6 @@ class EfficientDet(tf.keras.Model):
             repeats=config['box_class_repeats'],
             separable_conv=config['separable_conv'],
             survival_prob=config['survival_prob'],
-            data_format=config['data_format'],
             feature_only=config['feature_only'],
         )
 
@@ -66,7 +76,6 @@ class EfficientDet(tf.keras.Model):
             repeats=config['box_class_repeats'],
             separable_conv=config['separable_conv'],
             survival_prob=config['survival_prob'],
-            data_format=config['data_format'],
             feature_only=config['feature_only'],
         )
 
@@ -136,16 +145,6 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--data_format",
-        default="channels_last",
-        type=str,
-        help="Channels position in the data. "
-        "Two options: channels_first and channels_last for "
-        "(channels, image_height, image_width) or "
-        "(image_height, image_width, channels), respectively",
-        required=False,
-    )
-    parser.add_argument(
         "--min_level",
         default=3,
         type=int,
@@ -197,7 +196,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--apply_bn_for_resampling",
+        "--use_batchnorm_for_sampling",
         default=True,
         type=bool,
         help="Flag to apply batch normalization after resampling features",
@@ -211,7 +210,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--conv_bn_act_pattern",
+        "--conv_batchnorm_act_pattern",
         default=True,
         type=bool,
         help="Flag to apply convolution, batch normalization and activation",
