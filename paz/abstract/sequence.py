@@ -1,4 +1,5 @@
 from tensorflow.keras.utils import Sequence
+import time
 import numpy as np
 from .processor import SequentialProcessor
 
@@ -127,12 +128,16 @@ class GeneratingSequencePix2Pose(SequenceExtra):
         return self.num_steps
 
     def process_batch(self, inputs, labels, batch_index):
+        start = time.time()
         input_images, samples = list(), list()
         for sample_arg in range(self.batch_size):
             sample = self.pipeline()
             samples.append(sample)
             input_image = sample['inputs'][self.ordered_input_names[0]]
             input_images.append(input_image)
+
+        end = time.time()
+        print("Time batch generation: {}".format(end - start))
 
         input_images = np.asarray(input_images)
         predictions = self.model.predict(input_images)

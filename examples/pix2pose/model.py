@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import os
 import matplotlib.pyplot as plt
+import neptune
 
 from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense, Conv2DTranspose
 from tensorflow.keras.layers import Dropout, Input, Flatten, Reshape, LeakyReLU, BatchNormalization, Concatenate
@@ -54,10 +55,11 @@ def loss_error(real_error_image, predicted_error_image):
 
 
 class PlotImagesCallback(Callback):
-    def __init__(self, model, sequence, save_path):
+    def __init__(self, model, sequence, save_path, neptune_logging=False):
         self.save_path = save_path
         self.model = model
         self.sequence = sequence
+        self.neptune_logging = neptune_logging
 
     def on_epoch_end(self, epoch_index, logs=None):
         batch = self.sequence.__getitem__(0)
@@ -65,8 +67,8 @@ class PlotImagesCallback(Callback):
 
         original_images = (batch[0]['input_image'] * 255).astype(np.int)
         color_images = ((batch[1]['color_output'] + 1) * 127.5).astype(np.int)
-        predictions[0] = ((predictions[0] + 1) * 127.5).astype(np.int)
-        predictions[1] = ((predictions[1] + 1) * 127.5).astype(np.int)
+        predictions['color_output'] = ((predictions['color_output'] + 1) * 127.5).astype(np.int)
+        predictions['error_output'] = ((predictions['error_output'] + 1) * 127.5).astype(np.int)
         #color_images = batch[1]['color_output']
 
         fig, ax = plt.subplots(4, 4)
@@ -74,10 +76,14 @@ class PlotImagesCallback(Callback):
         for i in range(4):
             ax[i, 0].imshow(original_images[i])
             ax[i, 1].imshow(color_images[i])
-            ax[i, 2].imshow(predictions[0][i])
-            ax[i, 3].imshow(np.squeeze(predictions[1][i]))
+            ax[i, 2].imshow(predictions['color_output'][i])
+            ax[i, 3].imshow(np.squeeze(predictions['error_output'][i]))
 
         plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
+
+        if self.neptune_logging:
+            neptune.log_image('plot', fig, image_name="epoch_{}.png".format(epoch_index))
+
         plt.clf()
         plt.close(fig)
 
@@ -95,6 +101,13 @@ class PlotImagesCallback(Callback):
         plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(batch_index)))
         """
         pass
+
+
+class NeptuneLogger(Callback):
+
+    def on_epoch_end(self, epoch, logs={}):
+        for log_name, log_value in logs.items():
+            neptune.log_metric(log_name, log_value)
 
 
 def Generator():

@@ -71,6 +71,7 @@ class SingleView():
         self.scene_color.set_pose(light_color, camera_to_world)
 
     def render(self):
+        start = time.time()
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
 
         rotation = trimesh.transformations.random_quaternion()
@@ -91,6 +92,9 @@ class SingleView():
 
         #plt.imshow(image_colors)
         #plt.show()
+
+        end = time.time()
+        #print("Rendering time: {}".format(end - start))
 
         self.renderer.delete()
 

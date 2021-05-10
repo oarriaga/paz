@@ -3,6 +3,7 @@ import glob
 import json
 import argparse
 import numpy as np
+import time
 import matplotlib.pyplot as plt
 
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
@@ -13,6 +14,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model
 import tensorflow as tf
 
+import neptune
+
 from paz.backend.image import write_image
 from paz.abstract import GeneratingSequence
 from paz.abstract.sequence import GeneratingSequencePix2Pose, GeneratingSequence
@@ -22,7 +25,7 @@ from paz.pipelines import AutoEncoderPredictor
 from scenes import SingleView
 
 from pipelines import DepthImageGenerator, RendererDataGenerator, make_batch_discriminator
-from model import Generator, Discriminator, transformer_loss, loss_color, loss_error, PlotImagesCallback
+from model import Generator, Discriminator, transformer_loss, loss_color, loss_error, PlotImagesCallback, NeptuneLogger
 
 
 description = 'Training script for learning implicit orientation vector'
@@ -41,8 +44,6 @@ parser.add_argument('-bs', '--batch_size', default=4, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
-parser.add_argument('-is', '--latent_dimension', default=128, type=int,
-                    help='Latent dimension of the auto-encoder')
 parser.add_argument('-ld', '--image_size', default=128, type=int,
                     help='Size of the side of a square image e.g. 64')
 parser.add_argument('-sp', '--stop_patience', default=7, type=int,
@@ -75,12 +76,11 @@ parser.add_argument('-sa', '--save_path',
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/models'),
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-nc', '--neptune_config',
+                    type=str, help='Path to config file where Neptune Token and project name is stored')
 args = parser.parse_args()
 
-
 # setting optimizer and compiling model
-latent_dimension = args.latent_dimension
-
 dcgan_input = Input(shape=(128, 128, 3))
 discriminator = Discriminator()
 generator = Generator()
@@ -88,13 +88,12 @@ color_output, error_output = generator(dcgan_input)
 discriminator.trainable = False
 discriminator_output = discriminator(color_output)
 dcgan = Model(inputs=[dcgan_input], outputs={"color_output": color_output, "error_output": error_output, "discriminator_output": discriminator_output})
-#plot_model(dcgan, to_file='model.png', show_shapes=True, show_layer_names=True)
 
 optimizer = Adam(args.learning_rate, amsgrad=True)
 losses = {"color_output": loss_color,
           "error_output": loss_error,
           "discriminator_output": "binary_crossentropy"}
-lossWeights = {"color_output": 1.0, "error_output": 1.0, "discriminator_output": 1.0}
+lossWeights = {"color_output": 100.0, "error_output": 50.0, "discriminator_output": 1.0}
 dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights, run_eagerly=True)
 dcgan.summary()
 
@@ -111,17 +110,34 @@ renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
 
 # creating sequencer
 image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
-print(os.path.join(args.images_directory, '*.jpg'))
-print(image_paths[:10])
 processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
 sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch)
 #sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
-model_name = '_'.join([dcgan.name, str(latent_dimension), args.class_name])
+model_name = '_'.join([dcgan.name, args.class_name])
 save_path = os.path.join(args.save_path, model_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path)
+
+# set up neptune run
+if args.neptune_config is not None:
+    neptune_config_file = open(args.neptune_config)
+    neptune_config = neptune_config_file.read().split('\n')
+    neptune_token = neptune_config[0]
+    neptune_experiment_name = neptune_config[1]
+    neptune_run_name = neptune_config[2]
+
+    neptune.init(
+       api_token=neptune_token,
+       project_qualified_name=neptune_experiment_name
+    )
+
+    neptune.create_experiment(
+       name=neptune_run_name,
+       description='VOC backgrounds, complete GAN architecture, weighted losses',
+       params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
+    )
 
 # setting callbacks
 log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
@@ -134,18 +150,13 @@ model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 save = ModelCheckpoint(
     model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=False)
 save.model = dcgan
-plot = PlotImagesCallback(dcgan, sequence, save_path)
+plot = PlotImagesCallback(dcgan, sequence, save_path, args.neptune_config is not None)
 
 callbacks=[stop, log, save, plateau, plot]
 
-# setting drawing callbacks
-#images = (sequence.__getitem__(0)[0]['input_image'] * 255).astype('uint8')
-#for arg, image in enumerate(images):
-#    image_name = 'image_%03d.png' % arg
-#    image_path = os.path.join(save_path, 'original_images/' + image_name)
-#    write_image(image_path, image)
-#inferencer = AutoEncoderPredictor(model)
-#draw = DrawInferences(save_path, images, inferencer)
+if args.neptune_config is not None:
+    neptune_callback = NeptuneLogger()
+    callbacks.append(neptune_callback)
 
 # saving hyper-parameters and model summary as text files
 args.__dict__['loss'] = args.__dict__['loss'].__name__
@@ -156,8 +167,6 @@ with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
 with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     dcgan.summary(print_fn=lambda x: filer.write(x + '\n'))
 
-# Get the iterator from the sequence
-#sequence_iterator = sequence.__iter__()
 
 for callback in callbacks:
     callback.on_train_begin()
@@ -169,26 +178,40 @@ for num_epoch in range(args.max_num_epochs):
 
     for num_batch in range(args.steps_per_epoch):
         discriminator.trainable = True
+        start = time.time()
         batch = next(sequence_iterator)
+        end = time.time()
+        print("Batch generation time: {}".format(end - start))
 
+        start = time.time()
         X_discriminator_real, y_discriminator_real = make_batch_discriminator(generator, batch[0]['input_image'], batch[1]['color_output'], 1)
         loss_discriminator_real = discriminator.train_on_batch(X_discriminator_real, y_discriminator_real)
 
         X_discriminator_fake, y_discriminator_fake = make_batch_discriminator(generator, batch[0]['input_image'], batch[1]['color_output'], 0)
         loss_discriminator_fake = discriminator.train_on_batch(X_discriminator_fake, y_discriminator_fake)
-
+        end = time.time()
+        print("Train time discriminator: {}".format(end - start))
         loss_discriminator = (loss_discriminator_real + loss_discriminator_fake)/2.
 
         discriminator.trainable = False
 
-        loss_dcgan = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((4, 1))})
+        start = time.time()
+        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
+        end = time.time()
+        print("Train time DCGAN: {}".format(end - start))
 
-        print("Loss discriminator: {}, Loss DCGAN: {}".format(loss_discriminator, loss_dcgan))
+        print("Loss discriminator: {}, Loss DCGAN: {}, Loss DCGAN color output: {}, Loss DCGAN discriminator: {}, Loss error output: {}".format(loss_discriminator, loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output))
+        print("--------------------------------------")
 
     for callback in callbacks:
-        print(callback)
-        callback.on_epoch_end(num_epoch)
+        callback.on_epoch_end(num_epoch, logs={'loss_discriminator': loss_discriminator,
+                                               'loss_dcgan': loss_dcgan, 'loss_color_output': loss_color_output,
+                                               'loss_dcgan_discriminator': loss_dcgan_discriminator,
+                                               'loss_error_output': loss_error_output})
 
 
 for callback in callbacks:
     callback.on_train_end()
+
+if args.neptune_config is not None:
+    neptune.stop()
