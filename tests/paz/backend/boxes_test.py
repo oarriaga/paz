@@ -4,7 +4,7 @@ import pytest
 from paz.backend.boxes import compute_iou
 from paz.backend.boxes import compute_ious
 from paz.backend.boxes import denormalize_box
-from paz.backend.boxes import to_point_form
+from paz.backend.boxes import to_corner_form
 from paz.backend.boxes import to_center_form
 from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.boxes import encode
@@ -53,7 +53,8 @@ def boxes_with_label():
 
 @pytest.fixture
 def target_unique_matches():
-    return np.array([[238., 155., 306., 204.]])
+    # return np.array([[238., 155., 306., 204.]])
+    return np.array([[47.0, 239.0, 194.0, 370.0]])
 
 
 @pytest.fixture
@@ -120,18 +121,18 @@ def test_denormalize_box(box):
 
 def test_to_center_form_inverse(boxes):
     box_A = boxes[0]
-    assert np.all(to_point_form(to_center_form(box_A)) == box_A)
+    assert np.all(to_corner_form(to_center_form(box_A)) == box_A)
 
 
-def test_to_point_form_inverse(boxes):
+def test_to_corner_form_inverse(boxes):
     box_A = boxes[0]
-    assert np.all(to_point_form(to_center_form(box_A)) == box_A)
+    assert np.all(to_corner_form(to_center_form(box_A)) == box_A)
 
 
 def test_to_center_form(boxes):
     box_A = boxes[0]
     boxes = to_center_form(box_A)
-    boxes_A_result = to_point_form(boxes)
+    boxes_A_result = to_corner_form(boxes)
     assert(boxes_A_result.all() == box_A.all())
 
 
@@ -149,7 +150,7 @@ def test_match_box(boxes_with_label, target_unique_matches):
 def test_to_encode(boxes_with_label):
     priors = create_prior_boxes('VOC')
     matches = match(boxes_with_label, priors)
-    variances = [.1, .2]
+    variances = [0.1, 0.1, 0.2, 0.2]
     encoded_boxes = encode(matches, priors, variances)
     decoded_boxes = decode(encoded_boxes, priors, variances)
     assert np.all(np.round(decoded_boxes) == matches)
@@ -158,7 +159,7 @@ def test_to_encode(boxes_with_label):
 def test_to_decode(boxes_with_label):
     priors = create_prior_boxes('VOC')
     matches = match(boxes_with_label, priors)
-    variances = [.1, .2]
+    variances = [0.1, 0.1, 0.2, 0.2]
     encoded_boxes = encode(matches, priors, variances)
     decoded_boxes = decode(encoded_boxes, priors, variances)
     assert np.all(np.round(decoded_boxes) == matches)

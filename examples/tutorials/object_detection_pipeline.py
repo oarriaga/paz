@@ -102,7 +102,8 @@ class PreprocessBoxes(SequentialProcessor):
 # Putting everything together in a single processor:
 class AugmentDetection(SequentialProcessor):
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
-                 mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
+                 mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
+                 variances=[0.1, 0.1, 0.2, 0.2]):
         super(AugmentDetection, self).__init__()
 
         # image processors

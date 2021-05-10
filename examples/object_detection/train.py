@@ -1,10 +1,17 @@
 import os
 import argparse
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
 
+# from tensorflow.python.framework.ops import disable_eager_execution
+# disable_eager_execution()
+# import tensorflow as tf
+# tf.compat.v1.experimental.output_all_intermediates(True)
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler
-from paz.pipelines import AugmentDetection
+from detection import AugmentDetection
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
@@ -17,9 +24,7 @@ description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=32, type=int,
                     help='Batch size for training')
-parser.add_argument('-st', '--steps_per_epoch', default=1000, type=int,
-                    help='Batch size for training')
-parser.add_argument('-et', '--evaluation_period', default=1, type=int,
+parser.add_argument('-et', '--evaluation_period', default=10, type=int,
                     help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for SGD')
@@ -27,7 +32,7 @@ parser.add_argument('-m', '--momentum', default=0.9, type=float,
                     help='Momentum for SGD')
 parser.add_argument('-g', '--gamma_decay', default=0.1, type=float,
                     help='Gamma decay for learning rate scheduler')
-parser.add_argument('-e', '--num_epochs', default=120, type=int,
+parser.add_argument('-e', '--num_epochs', default=240, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
@@ -36,7 +41,7 @@ parser.add_argument('-sp', '--save_path', default='trained_models/',
 parser.add_argument('-dp', '--data_path', default='VOCdevkit/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
-                    default=[55, 76], help='Epochs for reducing learning rate')
+                    default=[110, 152], help='Epoch learning rate reduction')
 parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
                     help='Select True for multiprocessing')
 parser.add_argument('-w', '--workers', default=1, type=int,
@@ -100,9 +105,8 @@ evaluate = EvaluateMAP(
     args.AP_IOU)
 
 # training
-model.fit_generator(
+model.fit(
     sequencers[0],
-    steps_per_epoch=args.steps_per_epoch,
     epochs=args.num_epochs,
     verbose=1,
     callbacks=[checkpoint, log, schedule, evaluate],
