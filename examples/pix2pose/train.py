@@ -94,7 +94,7 @@ losses = {"color_output": loss_color,
           "error_output": loss_error,
           "discriminator_output": "binary_crossentropy"}
 lossWeights = {"color_output": 100.0, "error_output": 50.0, "discriminator_output": 1.0}
-dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights, run_eagerly=True)
+dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights, run_eagerly=True, metrics=['mse'])
 dcgan.summary()
 
 discriminator.trainable = True
@@ -155,7 +155,7 @@ plot = PlotImagesCallback(dcgan, sequence, save_path, args.neptune_config is not
 callbacks=[stop, log, save, plateau, plot]
 
 if args.neptune_config is not None:
-    neptune_callback = NeptuneLogger()
+    neptune_callback = NeptuneLogger(dcgan)
     callbacks.append(neptune_callback)
 
 # saving hyper-parameters and model summary as text files
@@ -196,7 +196,7 @@ for num_epoch in range(args.max_num_epochs):
         discriminator.trainable = False
 
         start = time.time()
-        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
+        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output, _ = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
         end = time.time()
         print("Train time DCGAN: {}".format(end - start))
 

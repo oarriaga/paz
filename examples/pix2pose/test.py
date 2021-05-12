@@ -1,7 +1,11 @@
 import os
 import argparse
 import glob
+import random
 
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from tensorflow.keras.models import load_model
 
 from paz.abstract.sequence import GeneratingSequencePix2Pose
@@ -28,7 +32,7 @@ parser.add_argument('-sh', '--top_only', default=0, choices=[0, 1], type=int, he
 args = parser.parse_args()
 
 print(args.model_path)
-model = load_model(args.model_path, custom_objects={'loss_3D': loss_color,
+model = load_model(args.model_path, custom_objects={'loss_color': loss_color,
                                                     'loss_error': loss_error})
 
 
@@ -43,4 +47,27 @@ sequence = GeneratingSequencePix2Pose(processor, model, args.batch_size, args.st
 sequence_iterator = sequence.__iter__()
 for num_batch in range(args.steps_per_epoch):
     batch = next(sequence_iterator)
-    print(len(batch))
+    predictions = model.predict(batch[0]['input_image'])
+
+    image = ((batch[1]['color_output'][0] + 1)*127.5).astype(np.int32)
+    plt.imshow(image)
+    plt.show()
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    points = list()
+    #images = batch[1]['color_output']
+    #print(images)
+    for i in range(128):
+        for j in range(128):
+            if image[i, j, 0] > 5 and image[i, j, 1] > 5 and image[i, j, 2] > 5:
+                points.append([image[i, j, 0], image[i, j, 1], image[i, j, 2]])
+    #plt.imshow(predictions['color_output'][0])
+    #plt.show()
+    print(len(points))
+    points = np.asarray(points)
+    print(points.shape)
+
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2])
+
+    plt.show()

@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import os
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import neptune
 
 from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense, Conv2DTranspose
@@ -72,12 +73,21 @@ class PlotImagesCallback(Callback):
         #color_images = batch[1]['color_output']
 
         fig, ax = plt.subplots(4, 4)
+        cols = ["Input image", "Ground truth", "Predicted image", "Predicted error"]
+
+        for i in range(4):
+            ax[0, i].set_title(cols[i])
+            for j in range(4):
+                ax[i, j].get_xaxis().set_visible(False)
+                ax[i, j].get_yaxis().set_visible(False)
 
         for i in range(4):
             ax[i, 0].imshow(original_images[i])
             ax[i, 1].imshow(color_images[i])
             ax[i, 2].imshow(predictions['color_output'][i])
             ax[i, 3].imshow(np.squeeze(predictions['error_output'][i]))
+
+        plt.tight_layout()
 
         plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
 
@@ -105,9 +115,16 @@ class PlotImagesCallback(Callback):
 
 class NeptuneLogger(Callback):
 
+    def __init__(self, model):
+        self.model = model
+
     def on_epoch_end(self, epoch, logs={}):
         for log_name, log_value in logs.items():
             neptune.log_metric(log_name, log_value)
+
+        if epoch%50 == 0:
+            self.model.save('pix2pose_dcgan.pkl')
+            neptune.log_artifact('pix2pose_dcgan.pkl')
 
 
 def Generator():
