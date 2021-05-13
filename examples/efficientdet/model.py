@@ -28,7 +28,11 @@ class EfficientDet(tf.keras.Model):
         super().__init__(name=name)
 
         self.config = config
-        self.backbone = efficientnet_builder.build_backbone(config)
+        self.backbone = efficientnet_builder.build_backbone(
+            backbone_name=config['backbone_name'],
+            activation_fn=config['act_type'],
+            survival_prob=config['survival_prob']
+            )
         self.resample_layers = []
         for level in range(6, config["max_level"] + 1):
             self.resample_layers.append(ResampleFeatureMap(
@@ -115,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m",
         "--model_name",
-        default="EfficientDetD0",
+        default="efficientdetd0",
         type=str,
         help="EfficientDet model name",
         required=False,
@@ -123,7 +127,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-b",
         "--backbone_name",
-        default="EfficientNetB0",
+        default="efficientnetb0",
         type=str,
         help="EfficientNet backbone name",
         required=False,
@@ -272,4 +276,11 @@ if __name__ == "__main__":
     print(config)
     # TODO: Add parsed user-inputs to the config and update the config
     efficientdet = EfficientDet(config=config)
+    efficientdet.build(mock_input_image.shape)
+    print(efficientdet.summary())
+    ckpt_file = '/home/deepan/Downloads/efficientdet-d0/'
+    latest = tf.train.latest_checkpoint(ckpt_file)
+    efficientdet.load_weights(latest)
+    weight_file = '/home/deepan/Downloads/efficientdet-d0.h5'
+    efficientdet.load_weights(weight_file)
     class_outputs, box_outputs = efficientdet(mock_input_image, False)
