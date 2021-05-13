@@ -8,30 +8,7 @@ from tensorflow.keras.layers import Layer, \
     SeparableConv2D, \
     MaxPooling2D, \
     AveragePooling2D
-
-
-def activation_fn(features, act_type):
-    """Apply non-linear activation function to features provided."""
-    if act_type in ('silu', 'swish'):
-        return tf.nn.swish(features)
-    elif act_type == 'relu':
-        return tf.nn.relu(features)
-    else:
-        raise ValueError('Unsupported act_type {}'.format(act_type))
-
-
-def drop_connect(features, is_training, survival_prob):
-    """Drop the entire conv with given survival probability."""
-    # Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
-    if not is_training:
-        return features
-    batch_size = tf.shape(features)[0]
-    random_tensor = survival_prob
-    random_tensor += tf.random.uniform([batch_size, 1, 1, 1],
-                                       dtype=features.dtype)
-    binary_tensor = tf.floor(random_tensor)
-    output = features / survival_prob * binary_tensor
-    return output
+from utils import get_activation_fn, get_drop_connect
 
 
 class ResampleFeatureMap(Layer):
@@ -119,6 +96,8 @@ class ResampleFeatureMap(Layer):
                                    W,
                                    H_target,
                                    W_target)
+            if feature.shape[2] < W_target:
+                feature = self._upsample2d(feature, H_target, W_target)
             if self.conv_after_downsample:
                 feature = self._apply_1x1_conv(feature,
                                                training,
@@ -419,7 +398,6 @@ class ClassNet(Layer):
                  feature_only=False,
                  **kwargs):
         """Initialize the ClassNet.
-
         # Arguments
             num_classes: Integer. Number of classes.
             num_anchors: Integer. Number of anchors.
@@ -479,9 +457,9 @@ class ClassNet(Layer):
             image = conv_block(image)
             image = batchnorm(image, training=training)
             if self.act_type:
-                image = activation_fn(image, act_type)
+                image = get_activation_fn(image, act_type)
             if level > 0 and self.survival_prob:
-                image = drop_connect(image, training, self.survival_prob)
+                image = get_drop_connect(image, training, self.survival_prob)
                 image = image + original_image
             return image
 
@@ -547,7 +525,6 @@ class BoxNet(Layer):
                  feature_only=False,
                  **kwargs):
         """Initialize the BoxNet.
-
         # Arguments
             num_classes: Integer. Number of classes.
             num_anchors: Integer. Number of anchors.
@@ -625,9 +602,9 @@ class BoxNet(Layer):
             image = conv_block(image)
             image = batchnorm(image, training=training)
             if self.act_type:
-                image = activation_fn(image, act_type)
+                image = get_activation_fn(image, act_type)
             if i > 0 and self.survival_prob:
-                image = drop_connect(image, training, self.survival_prob)
+                image = get_drop_connect(image, training, self.survival_prob)
                 image = image + original_image
             return image
 

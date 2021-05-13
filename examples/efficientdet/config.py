@@ -74,7 +74,6 @@ def bifpn_configuration(min_level, max_level, weight_method):
 def get_fpn_configuration(fpn_name, min_level, max_level, fpn_weight_method):
     """Provides the fpn configuration that can adapt to
     different min/max levels.
-
     # Arguments
         fpn_name: String. Name of the FPN, eg: BiFPN.
         min_level: Integer. EfficientNet feature minimum level.
@@ -88,7 +87,6 @@ def get_fpn_configuration(fpn_name, min_level, max_level, fpn_weight_method):
         the activation map resolution at level 3 is
         (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
         weight_method: String. FPN weighting methods for feature fusion.
-
     # Returns
         bifpn_config: Dictionary. Contains the nodes and offsets
         for building the FPN.

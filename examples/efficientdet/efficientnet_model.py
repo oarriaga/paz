@@ -78,7 +78,10 @@ def conv_kernel_initializer(shape, dtype=None, partition_info=None):
     del partition_info
     kernel_height, kernel_width, _, out_filters = shape
     fan_out = int(kernel_height * kernel_width * out_filters)
-    return tf.random.normal(shape, mean=0.0, stddev=np.sqrt(2.0 / fan_out), dtype=dtype)
+    return tf.random.normal(shape,
+                            mean=0.0,
+                            stddev=np.sqrt(2.0 / fan_out),
+                            dtype=dtype)
 
 
 def dense_kernel_initializer(shape, dtype=None, partition_info=None):
@@ -99,14 +102,18 @@ def dense_kernel_initializer(shape, dtype=None, partition_info=None):
     return tf.random.uniform(shape, -init_range, init_range, dtype=dtype)
 
 
-def superpixel_kernel_initializer(shape, dtype='float32', partition_info=None):
+def superpixel_kernel_initializer(shape,
+                                  dtype='float32',
+                                  partition_info=None):
     """Initializes superpixel kernels.
-    This is inspired by space-to-depth transformation that is mathematically
-    equivalent before and after the transformation. But we do the space-to-depth
-    via a convolution. Moreover, we make the layer trainable instead of direct
-    transform, we can initialization it this way so that the model can learn not
-    to do anything but keep it mathematically equivalent, when improving
-    performance.
+    This is inspired by space-to-depth transformation that
+    is mathematically equivalent before and after the
+    transformation. But we do the space-to-depth via a
+    convolution. Moreover, we make the layer trainable
+    instead of direct transform, we can initialization it
+    this way so that the model can learn not to do anything
+    but keep it mathematically equivalent,
+    when improving performance.
     # Arguments
       shape: shape of variable
       dtype: dtype of variable
@@ -167,7 +174,10 @@ class SE(Layer):
             )
         else:
             se_tensor = tf.reduce_mean(tensor, [h_axis, w_axis], keepdims=True)
-        se_tensor = self._se_expand(get_activation_fn(self._se_reduce(se_tensor), self._act_fn))
+        se_tensor = self._se_expand(get_activation_fn(
+            self._se_reduce(se_tensor),
+            self._act_fn)
+        )
         print('Built SE %s: %s', self.name, se_tensor.shape)
         return tf.sigmoid(se_tensor) * tensor
 
@@ -254,7 +264,9 @@ class MBConvBlock(Layer):
         else:
             self.super_pixel = None
 
-        filters = self._block_args.input_filters * self._block_args.expand_ratio
+        block_input_filters = self._block_args.input_filters
+        block_expand_ratio = self._block_args.expand_ratio
+        filters = block_input_filters * block_expand_ratio
         kernel_size = self._block_args.kernel_size
 
         if self._block_args.fused_conv:
@@ -270,7 +282,8 @@ class MBConvBlock(Layer):
                 name=get_conv_name(),
             )
         else:
-            # Expansion phase. Called if not using fused convolution and expansion
+            # Expansion phase.
+            # Called if not using fused convolution and expansion
             # phase is necessary.
             if self._block_args.expand_ratio != 1:
                 self._expand_conv = Conv2D(
@@ -288,7 +301,8 @@ class MBConvBlock(Layer):
                                                      epsilon=1e-3,
                                                      name=get_bn_name()
                                                      )
-            # Depth-wise convolution phase. Called if not using fused convolutions.
+            # Depth-wise convolution phase.
+            # Called if not using fused convolutions.
             self._depthwise_conv = DepthwiseConv2D(
                 kernel_size=[kernel_size, kernel_size],
                 strides=self._block_args.strides,
@@ -306,9 +320,13 @@ class MBConvBlock(Layer):
 
         if self._has_se:
             num_reduced_filters = max(
-                1, int(self._block_args.input_filters * self._block_args.se_ratio)
+                1,
+                int(self._block_args.input_filters * self._block_args.se_ratio)
             )
-            self._se = SE(self._global_params, num_reduced_filters, filters, name='se')
+            self._se = SE(self._global_params,
+                          num_reduced_filters,
+                          filters,
+                          name='se')
         else:
             self._se = None
 
@@ -331,15 +349,13 @@ class MBConvBlock(Layer):
 
     def call(self, tensor, training, survival_prob):
         """Implementation of call().
-
-                # Arguments
-                  inputs: the inputs tensor.
-                  training: boolean, whether the model is constructed for training.
-                  survival_prob: float, between 0 to 1, drop connect rate.
-
-                # Returns
-                  A output tensor.
-                """
+        # Arguments
+            inputs: the inputs tensor.
+            training: boolean, whether the model is constructed for training.
+            survival_prob: float, between 0 to 1, drop connect rate.
+        # Returns
+            A output tensor.
+        """
         def _call(tensor):
             print('Block %s input shape: %s', self.name, tensor.shape)
             x = tensor
@@ -355,13 +371,16 @@ class MBConvBlock(Layer):
                 x = get_activation_fn(x, self._act_fn)
                 print('Conv2D shape: %s', x.shape)
             else:
-                # Otherwise, first apply expansion and then apply depthwise conv.
+                # Otherwise, first apply expansion
+                # and then apply depthwise conv.
                 if self._block_args.expand_ratio != 1:
-                    x = self._batch_norm0(self._expand_conv(x), training=training)
+                    x = self._batch_norm0(self._expand_conv(x),
+                                          training=training)
                     x = get_activation_fn(x, self._act_fn)
                     print('Expand shape: %s', x.shape)
 
-                x = self._batch_norm1(self._depthwise_conv(x), training=training)
+                x = self._batch_norm1(self._depthwise_conv(x),
+                                      training=training)
                 x = get_activation_fn(x, self._act_fn)
                 print('DWConv shape: %s', x.shape)
 
@@ -371,8 +390,8 @@ class MBConvBlock(Layer):
             self.endpoints = {'expansion_output': x}
 
             x = self._batch_norm2(self._project_conv(x), training=training)
-            # Add identity so that quantization-aware training can insert quantization
-            # ops correctly.
+            # Add identity so that quantization-aware
+            # training can insert quantization ops correctly.
             x = tf.identity(x)
             if self._clip_projection_output:
                 x = tf.clip_by_value(x, -6, 6)
@@ -407,7 +426,8 @@ def round_filters(filters, global_params, skip=False):
 
     filters *= multiplier
     min_depth = min_depth or divisor
-    new_filters = max(min_depth, int(filters + divisor / 2) // divisor * divisor)
+    new_filters = max(min_depth,
+                      int(filters + divisor / 2) // divisor * divisor)
     if new_filters < 0.9 * filters:
         new_filters += divisor
     return int(new_filters)
@@ -438,12 +458,14 @@ class Stem(Layer):
             use_bias=False,
         )
         self._batch_norm = global_params.batch_norm(axis=-1,
-                                                   momentum=0.99,
-                                                   epsilon=1e-3)
+                                                    momentum=0.99,
+                                                    epsilon=1e-3)
         self._act_fn = global_params.act_fn
 
     def call(self, tensor, training):
-        out = self._batch_norm(self._conv_stem(tensor, training=training), training=training)
+        out = self._batch_norm(self._conv_stem(tensor,
+                                               training=training),
+                               training=training)
         out = get_activation_fn(out, self._act_fn)
         return out
 
@@ -458,7 +480,9 @@ class Head(Layer):
         self._global_params = global_params
 
         self._conv_head = Conv2D(
-            filters=round_filters(1280, global_params, global_params.fix_head_stem),
+            filters=round_filters(1280,
+                                  global_params,
+                                  global_params.fix_head_stem),
             kernel_size=[1, 1],
             strides=[1, 1],
             kernel_initializer=conv_kernel_initializer,
@@ -496,7 +520,10 @@ class Head(Layer):
             shape = outputs.get_shape().as_list()
             kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
             outputs = tf.nn.avg_pool(
-                outputs, ksize=kernel_size, strides=[1, 1, 1, 1], padding='VALID'
+                outputs,
+                ksize=kernel_size,
+                strides=[1, 1, 1, 1],
+                padding='VALID'
             )
             self.endpoints['pooled_features'] = outputs
             if not pooled_features_only:
@@ -556,7 +583,8 @@ class Model(tf.keras.Model):
         self._blocks = []
 
         # Stem part.
-        self._stem = Stem(self._global_params, self._blocks_args[0].input_filters)
+        self._stem = Stem(self._global_params,
+                          self._blocks_args[0].input_filters)
 
         # Builds blocks.
         block_id = itertools.count(0)
@@ -565,31 +593,39 @@ class Model(tf.keras.Model):
             assert block_args.num_repeat > 0
             assert block_args.super_pixel in [0, 1, 2]
             # Update block input and output filters based on depth multiplier.
-            input_filters = round_filters(block_args.input_filters, self._global_params)
+            input_filters = round_filters(block_args.input_filters,
+                                          self._global_params)
 
             output_filters = round_filters(
                 block_args.output_filters, self._global_params
             )
             kernel_size = block_args.kernel_size
-            if self._fix_head_stem and (i == 0 or i == len(self._blocks_args) - 1):
+            if self._fix_head_stem \
+                    and (i == 0 or i == len(self._blocks_args) - 1):
                 repeats = block_args.num_repeat
             else:
-                repeats = round_repeats(block_args.num_repeat, self._global_params)
+                repeats = round_repeats(block_args.num_repeat,
+                                        self._global_params)
             block_args = block_args._replace(
                 input_filters=input_filters,
                 output_filters=output_filters,
                 num_repeat=repeats,
             )
 
-            # The first block needs to take care of stride and filter size increase.
+            # The first block needs to take care of stride
+            # and filter size increase.
             conv_block = self._get_conv_block(block_args.conv_type)
             if not block_args.super_pixel:  # no super_pixel at all
                 self._blocks.append(
-                    conv_block(block_args, self._global_params, name=block_name())
+                    conv_block(block_args,
+                               self._global_params,
+                               name=block_name())
                 )
             else:
                 # if superpixel, adjust filters, kernels, and strides.
-                depth_factor = int(4 / block_args.strides[0] / block_args.strides[1])
+                block_strides_1 = block_args.strides[0]
+                block_strides_2 = block_args.strides[1]
+                depth_factor = int(4 / block_strides_1 / block_strides_2)
                 block_args = block_args._replace(
                     input_filters=block_args.input_filters * depth_factor,
                     output_filters=block_args.output_filters * depth_factor,
@@ -599,11 +635,13 @@ class Model(tf.keras.Model):
                         else block_args.kernel_size
                     ),
                 )
-                # if the first block has stride-2 and super_pixel trandformation
+                # if the first block has stride-2 and superpixel transformation
                 if block_args.strides[0] == 2 and block_args.strides[1] == 2:
                     block_args = block_args._replace(strides=[1, 1])
                     self._blocks.append(
-                        conv_block(block_args, self._global_params, name=block_name())
+                        conv_block(block_args,
+                                   self._global_params,
+                                   name=block_name())
                     )
                     block_args = block_args._replace(  # sp stops at stride-2
                         super_pixel=0,
@@ -613,35 +651,45 @@ class Model(tf.keras.Model):
                     )
                 elif block_args.super_pixel == 1:
                     self._blocks.append(
-                        conv_block(block_args, self._global_params, name=block_name())
+                        conv_block(block_args,
+                                   self._global_params,
+                                   name=block_name())
                     )
                     block_args = block_args._replace(super_pixel=2)
                 else:
                     self._blocks.append(
-                        conv_block(block_args, self._global_params, name=block_name())
+                        conv_block(block_args,
+                                   self._global_params,
+                                   name=block_name())
                     )
-            if block_args.num_repeat > 1:  # rest of blocks with the same block_arg
+            if block_args.num_repeat > 1:
+                # rest of blocks with the same block_arg
                 block_args = block_args._replace(
                     input_filters=block_args.output_filters, strides=[1, 1]
                 )
             for _ in range(block_args.num_repeat - 1):
                 self._blocks.append(
-                    conv_block(block_args, self._global_params, name=block_name())
+                    conv_block(block_args,
+                               self._global_params,
+                               name=block_name())
                 )
 
         # Head part.
         self._head = Head(self._global_params)
 
-
-    def call(self, tensor, training, features_only=None, pooled_features_only=False):
+    def call(self,
+             tensor,
+             training,
+             features_only=None,
+             pooled_features_only=False):
         """Implementation of call().
         # Arguments
             tensor: input tensors.
             training: boolean, whether the model is constructed for training.
             features_only: build the base feature network only.
-            pooled_features_only: build the base network for features extraction
-            (after 1x1 conv layer and global pooling, but before dropout and fc
-            head).
+            pooled_features_only: build the base network for
+            features extraction (after 1x1 conv layer and global
+             pooling, but before dropout and fc head).
         # Returns
           output tensors.
         """
@@ -656,14 +704,16 @@ class Model(tf.keras.Model):
 
         # Call blocks
         for idx, block in enumerate(self._blocks):
-            is_reduction = False # reduction flag for blocks after the stem layer
-            # If the first block has super-pixel (space-to-depth) layer, then stem is
-            # the first reduction point
+            is_reduction = False
+            # reduction flag for blocks after the stem layer
+            # If the first block has super-pixel (space-to-depth)
+            # layer, then stem is the first reduction point
             if block.block_args.super_pixel == 1 and idx == 0:
                 reduction_idx += 1
                 self.endpoints['reduction_%s' % reduction_idx] = outputs
 
-            elif (idx == len(self._blocks) - 1) or self._blocks[idx + 1].block_args.strides[0] > 1:
+            elif (idx == len(self._blocks) - 1) \
+                    or self._blocks[idx + 1].block_args.strides[0] > 1:
                 is_reduction = True
                 reduction_idx += 1
 
@@ -672,7 +722,9 @@ class Model(tf.keras.Model):
                 drop_rate = 1 - survival_prob
                 survival_prob = 1 - drop_rate * float(idx) / len(self._blocks)
                 print('block_%s survival prob: %s', idx, survival_prob)
-            outputs = block(outputs, training=training, survival_prob=survival_prob)
+            outputs = block(outputs,
+                            training=training,
+                            survival_prob=survival_prob)
             self.endpoints['block_%s' % idx] = outputs
             if is_reduction:
                 self.endpoints['reduction_%s' % reduction_idx] = outputs
@@ -680,7 +732,9 @@ class Model(tf.keras.Model):
                 for k, v in six.iteritems(block.endpoints):
                     self.endpoints['block_%s/%s' % (idx, k)] = v
                     if is_reduction:
-                        self.endpoints['reduction_%s/%s' % (reduction_idx, k)] = v
+                        self.endpoints[
+                            'reduction_%s/%s' % (reduction_idx, k)
+                        ] = v
         self.endpoints['features'] = outputs
 
         if not features_only:
