@@ -4,11 +4,11 @@ import pickle
 import numpy as np
 
 from backend import normalize_keypoints, to_homogeneous_coordinates, \
-    get_translation_matrix, get_transformation_matrix_x, \
-    get_transformation_matrix_y, get_one_hot, extract_hand_side, \
+    get_translation_matrix, get_one_hot, extract_hand_side, \
     get_canonical_transformations, flip_right_hand, \
     extract_dominant_hand_visibility, extract_dominant_2D_keypoints, \
-    crop_image_from_coordinates, create_multiple_gaussian_map
+    crop_image_from_coordinates, create_multiple_gaussian_map, \
+    get_geometric_entities
 from paz.abstract import Loader
 from paz.backend.image.opencv_image import load_image, resize_image
 
@@ -36,17 +36,17 @@ class HandPoseLoader(Loader):
         self.crop_size = crop_size
         self.sigma = sigma
 
-    def _load_images(self, image_path):
+    def load_images(self, image_path):
         image = load_image(image_path)
         image = resize_image(image, (self.image_size[0], self.image_size[1]))
         return image
 
-    def _extract_hand_mask(self, segmentation_label):
+    def extract_hand_mask(self, segmentation_label):
         hand_mask = np.greater(segmentation_label, 1)
         background_mask = np.logical_not(hand_mask)
         return np.stack([background_mask, hand_mask], 2)
 
-    def _process_keypoints_3D(self, keypoints_3D):
+    def process_keypoints_3D(self, keypoints_3D):
         if not self.use_wrist_coordinates:
             palm_coordinates_left = np.expand_dims(
                 0.5 * (keypoints_3D[0, :] + keypoints_3D[12, :]), 0)
@@ -57,7 +57,7 @@ class HandPoseLoader(Loader):
                  palm_coordinates_right, keypoints_3D[21:43, :]], 0)
         return keypoints_3D
 
-    def _process_keypoint_2D(self, keypoint_2D):
+    def process_keypoint_2D(self, keypoint_2D):
         if not self.use_wrist_coordinates:
             palm_coordinates_uv_left = np.expand_dims(
                 0.5 * (keypoint_2D[0, :] + keypoint_2D[12, :]), 0)
@@ -69,7 +69,7 @@ class HandPoseLoader(Loader):
                                           keypoint_2D[21:43, :]], 0)
         return keypoint_2D
 
-    def _extract_visibility_mask(self, visibility_mask):
+    def extract_visibility_mask(self, visibility_mask):
         # calculate palm visibility
         if not self.use_wrist_coordinates:
             palm_vis_left = np.expand_dims(np.logical_or(visibility_mask[0],
@@ -82,27 +82,6 @@ class HandPoseLoader(Loader):
                 [palm_vis_left, visibility_mask[1:21],
                  palm_vis_right, visibility_mask[21:43]], 0)
         return visibility_mask
-
-    def _get_geometric_entities(self, vector, transformation_matrix):
-        length_from_origin = np.linalg.norm(vector)
-        gamma = np.arctan2(vector[0, 0], vector[2, 0])
-
-        matrix_after_y_rotation = np.matmul(
-            get_transformation_matrix_y(-gamma), vector)
-        alpha = np.arctan2(-matrix_after_y_rotation[1, 0],
-                           matrix_after_y_rotation[2, 0])
-        matrix_after_x_rotation = np.matmul(get_translation_matrix(
-            -length_from_origin), np.matmul(get_transformation_matrix_x(
-            -alpha), get_transformation_matrix_y(-gamma)))
-
-        final_transformation_matrix = np.matmul(matrix_after_x_rotation,
-                                                transformation_matrix)
-
-        # make them all batched scalars
-        length_from_origin = np.reshape(length_from_origin, [-1])
-        alpha = np.reshape(alpha, [-1])
-        gamma = np.reshape(gamma, [-1])
-        return length_from_origin, alpha, gamma, final_transformation_matrix
 
     def transform_to_relative_frames(self, keypoints_3D):
         keypoints_3D = keypoints_3D.reshape([21, 3])
@@ -119,7 +98,7 @@ class HandPoseLoader(Loader):
                 Translation_matrix = get_translation_matrix(
                     np.zeros_like(keypoints_3D[0, 0]))
 
-                geometric_entities = self._get_geometric_entities(
+                geometric_entities = get_geometric_entities(
                     keypoints_residual, Translation_matrix)
                 relative_coordinates[bone_index] = np.stack(
                     geometric_entities[:3], 1)
@@ -141,7 +120,7 @@ class HandPoseLoader(Loader):
                     delta_vec[:, :3, :], 1))
 
                 # get articulation angles from bone vector
-                geometric_entities = self._get_geometric_entities(
+                geometric_entities = get_geometric_entities(
                     delta_vec, Transformation_matrix)
 
                 # save results
@@ -153,8 +132,8 @@ class HandPoseLoader(Loader):
 
         return key_point_relative_frame
 
-    def _crop_image_based_on_segmentation(self, keypoints_2D, keypoints_2D_vis,
-                                          image, camera_matrix):
+    def crop_image_based_on_segmentation(self, keypoints_2D, keypoints_2D_vis,
+                                         image, camera_matrix):
         crop_center = keypoints_2D[12, ::-1]
 
         if not np.all(np.isfinite(crop_center)):
@@ -216,7 +195,7 @@ class HandPoseLoader(Loader):
 
         return scale, np.squeeze(img_crop), keypoint_uv21, camera_matrix_cropped
 
-    def _create_score_maps(self, keypoint_2D, keypoint_vis21):
+    def create_score_maps(self, keypoint_2D, keypoint_vis21):
         keypoint_hw21 = np.stack([keypoint_2D[:, 1], keypoint_2D[:, 0]], -1)
 
         scoremap_size = self.image_size[0:2]
@@ -231,25 +210,25 @@ class HandPoseLoader(Loader):
 
         return scoremap
 
-    def _to_list_of_dictionaries(self, hands, segmentation_labels=None,
-                                 annotations=None):
+    def to_list_of_dictionaries(self, hands, segmentation_labels=None,
+                                annotations=None):
         dataset = []
         for arg in range(len(hands)):
             sample = dict()
-            sample['image'] = self._load_images(hands[arg])
+            sample['image'] = self.load_images(hands[arg])
             if segmentation_labels is not None:
-                sample['seg_label'] = self._load_images(
+                sample['seg_label'] = self.load_images(
                     segmentation_labels[arg])
-                sample['hand_mask'] = self._extract_hand_mask(
+                sample['hand_mask'] = self.extract_hand_mask(
                     sample['seg_label'])
             if annotations is not None:
-                sample['key_points_3D'] = self._process_keypoints_3D(
+                sample['key_points_3D'] = self.process_keypoints_3D(
                     annotations[arg]['xyz'])
 
-                sample['key_points_2D'] = self._process_keypoint_2D(
+                sample['key_points_2D'] = self.process_keypoint_2D(
                     annotations[arg]['uv_vis'][:, :2])
 
-                sample['key_point_visibility'] = self._extract_visibility_mask(
+                sample['key_point_visibility'] = self.extract_visibility_mask(
                     annotations[arg]['uv_vis'][:, 2] == 1)
 
                 sample['camera_matrix'] = annotations[arg]['K']
@@ -288,13 +267,13 @@ class HandPoseLoader(Loader):
                     sample['scale'], sample['image_crop'], \
                     sample['visibile_21_2Dkeypoints'], \
                     sample['camera_matrix_cropped'] = \
-                        self._crop_image_based_on_segmentation(
+                        self.crop_image_based_on_segmentation(
                             sample['visibile_21_2Dkeypoints'],
                             sample['visibility_21_3Dkeypoints'],
                             sample['image'],
                             sample['camera_matrix'])
 
-                sample['score_maps'] = self._create_score_maps(
+                sample['score_maps'] = self.create_score_maps(
                     sample['visibile_21_2Dkeypoints'],
                     sample['visibility_21_3Dkeypoints'])
 
@@ -313,10 +292,10 @@ class HandPoseLoader(Loader):
                                                    '/mask/*.png'))
             annotations = self._load_annotation(self.path + self.folder +
                                                 '/anno_training.pickle')
-            dataset = self._to_list_of_dictionaries(images, segmentation_labels,
-                                                    annotations)
+            dataset = self.to_list_of_dictionaries(images, segmentation_labels,
+                                                   annotations)
         else:
-            dataset = self._to_list_of_dictionaries(images, None, None)
+            dataset = self.to_list_of_dictionaries(images, None, None)
 
         return dataset
 
