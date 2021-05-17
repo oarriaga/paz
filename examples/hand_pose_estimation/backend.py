@@ -250,3 +250,25 @@ def create_multiple_gaussian_map(uv_coordinates, scoremap_size, sigma,
     scoremap = np.exp(-dist / np.square(sigma)) * cond
 
     return scoremap
+
+
+def get_geometric_entities(vector, transformation_matrix):
+    length_from_origin = np.linalg.norm(vector)
+    gamma = np.arctan2(vector[0, 0], vector[2, 0])
+
+    matrix_after_y_rotation = np.matmul(
+        get_transformation_matrix_y(-gamma), vector)
+    alpha = np.arctan2(-matrix_after_y_rotation[1, 0],
+                       matrix_after_y_rotation[2, 0])
+    matrix_after_x_rotation = np.matmul(get_translation_matrix(
+        -length_from_origin), np.matmul(get_transformation_matrix_x(
+        -alpha), get_transformation_matrix_y(-gamma)))
+
+    final_transformation_matrix = np.matmul(matrix_after_x_rotation,
+                                            transformation_matrix)
+
+    # make them all batched scalars
+    length_from_origin = np.reshape(length_from_origin, [-1])
+    alpha = np.reshape(alpha, [-1])
+    gamma = np.reshape(gamma, [-1])
+    return length_from_origin, alpha, gamma, final_transformation_matrix
