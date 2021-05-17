@@ -3,12 +3,14 @@ import pickle
 
 import numpy as np
 
-from paz.abstract import Loader
-from paz.backend.image.opencv_image import load_image, resize_image, crop_image
 from backend import normalize_keypoints, to_homogeneous_coordinates, \
     get_translation_matrix, get_transformation_matrix_x, \
-    get_transformation_matrix_y, get_rotation_matrix_x, get_rotation_matrix_y, \
-    get_rotation_matrix_z, get_one_hot
+    get_transformation_matrix_y, get_one_hot, extract_hand_side, \
+    get_canonical_transformations, flip_right_hand, \
+    extract_dominant_hand_visibility, extract_dominant_2D_keypoints, \
+    crop_image_from_coordinates, create_multiple_gaussian_map
+from paz.abstract import Loader
+from paz.backend.image.opencv_image import load_image, resize_image
 
 
 class HandPoseLoader(Loader):
@@ -81,36 +83,6 @@ class HandPoseLoader(Loader):
                  palm_vis_right, visibility_mask[21:43]], 0)
         return visibility_mask
 
-    def _extract_hand_side(self, hand_parts_mask, key_point_3D):
-        one_map, zero_map = np.ones_like(hand_parts_mask), np.zeros_like(
-            hand_parts_mask)
-
-        raw_mask_left = np.logical_and(np.greater(hand_parts_mask, one_map),
-                                       np.less(hand_parts_mask, one_map * 18))
-        raw_mask_right = np.greater(hand_parts_mask, one_map * 17)
-
-        hand_map_left = np.where(raw_mask_left, one_map, zero_map)
-        hand_map_right = np.where(raw_mask_right, one_map, zero_map)
-
-        num_pixels_left_hand = np.sum(hand_map_left)
-        num_pixels_right_hand = np.sum(hand_map_right)
-
-        kp_coord_xyz_left = key_point_3D[0:21, :]
-        kp_coord_xyz_right = key_point_3D[21:43, :]
-
-        dominant_hand = np.logical_and(np.ones_like(kp_coord_xyz_left,
-                                                    dtype=bool),
-                                       np.greater(num_pixels_left_hand,
-                                                  num_pixels_right_hand))
-
-        hand_side_keypoints = np.where(dominant_hand, kp_coord_xyz_left,
-                                       kp_coord_xyz_right)
-
-        hand_side = np.where(np.greater(num_pixels_left_hand,
-                                        num_pixels_right_hand), 0, 1)
-
-        return hand_side, hand_side_keypoints, dominant_hand
-
     def _get_geometric_entities(self, vector, transformation_matrix):
         length_from_origin = np.linalg.norm(vector)
         gamma = np.arctan2(vector[0, 0], vector[2, 0])
@@ -121,7 +93,7 @@ class HandPoseLoader(Loader):
                            matrix_after_y_rotation[2, 0])
         matrix_after_x_rotation = np.matmul(get_translation_matrix(
             -length_from_origin), np.matmul(get_transformation_matrix_x(
-                -alpha), get_transformation_matrix_y(-gamma)))
+            -alpha), get_transformation_matrix_y(-gamma)))
 
         final_transformation_matrix = np.matmul(matrix_after_x_rotation,
                                                 transformation_matrix)
@@ -181,101 +153,8 @@ class HandPoseLoader(Loader):
 
         return key_point_relative_frame
 
-    def _get_canonical_transformations(self, keypoints_3D):
-        keypoints = np.reshape(keypoints_3D, [21, 3])
-
-        ROOT_NODE_ID = 0
-        ALIGN_NODE_ID = 12
-        LAST_NODE_ID = 20
-
-        translation_reference = np.expand_dims(keypoints[ROOT_NODE_ID, :], 1)
-        translated_keypoints = keypoints - translation_reference.T
-
-        alignment_keypoint = translated_keypoints[ALIGN_NODE_ID, :]
-
-        alpha = np.arctan2(alignment_keypoint[0], alignment_keypoint[1])
-        rotation_matrix_z = get_rotation_matrix_z(alpha)
-        resultant_keypoints = np.matmul(translated_keypoints, rotation_matrix_z)
-
-        reference_keypoint_z_rotation = resultant_keypoints[ALIGN_NODE_ID, :]
-        beta = -np.arctan2(reference_keypoint_z_rotation[2],
-                           reference_keypoint_z_rotation[1])
-        rotation_matrix_x = get_rotation_matrix_x(beta + 3.14159)
-        resultant_keypoints = np.matmul(resultant_keypoints, rotation_matrix_x)
-
-        reference_keypoint_z_rotation = resultant_keypoints[LAST_NODE_ID, :]
-        gamma = np.arctan2(reference_keypoint_z_rotation[2],
-                           reference_keypoint_z_rotation[0])
-        rotation_matrix_y = get_rotation_matrix_y(gamma)
-        keypoints_transformed = np.matmul(resultant_keypoints,
-                                          rotation_matrix_y)
-
-        final_rotation_matrix = np.matmul(np.matmul(rotation_matrix_z,
-                                                    rotation_matrix_x),
-                                          rotation_matrix_y)
-        return np.squeeze(keypoints_transformed), \
-            np.squeeze(final_rotation_matrix)
-
-    def _flip_right_hand(self, canonical_keypoints, flip_right):
-        shape = canonical_keypoints.shape
-        expanded = False
-        if len(shape) == 2:
-            canonical_keypoints = np.expand_dims(canonical_keypoints, 0)
-            flip_right = np.expand_dims(flip_right, 0)
-            expanded = True
-        canonical_keypoints_mirrored = np.stack(
-            [canonical_keypoints[:, :, 0], canonical_keypoints[:, :, 1],
-             -canonical_keypoints[:, :, 2]], -1)
-
-        canonical_keypoints_left = np.where(flip_right,
-                                            canonical_keypoints_mirrored,
-                                            canonical_keypoints)
-        if expanded:
-            canonical_keypoints_left = np.squeeze(canonical_keypoints_left,
-                                                  axis=0)
-        return canonical_keypoints_left
-
-    def _extract_dominant_hand_visibility(self, keypoint_visibility,
-                                          dominant_hand):
-        keypoint_visibility_left = keypoint_visibility[:21]
-        keypoint_visibility_right = keypoint_visibility[-21:]
-        keypoint_visibility_21 = np.where(dominant_hand[:, 0],
-                                          keypoint_visibility_left,
-                                          keypoint_visibility_right)
-        return keypoint_visibility_21
-
-    def _extract_dominant_2D_keypoints(self, keypoint_2D_visibility,
-                                       dominant_hand):
-        keypoint_visibility_left = keypoint_2D_visibility[:21, :]
-        keypoint_visibility_right = keypoint_2D_visibility[-21:, :]
-        keypoint_visibility_2D_21 = np.where(dominant_hand[:, :2],
-                                             keypoint_visibility_left,
-                                             keypoint_visibility_right)
-        return keypoint_visibility_2D_21
-
-    def _crop_image_from_coordinates(self, image, crop_location, crop_size,
-                                     scale=0.1):
-
-        crop_size_scaled = crop_size / scale
-
-        y1 = crop_location[0] - crop_size_scaled // 2
-        y2 = crop_location[0] + crop_size_scaled // 2
-        x1 = crop_location[1] - crop_size_scaled // 2
-        x2 = crop_location[1] + crop_size_scaled // 2
-
-        box = [int(x1), int(y1), int(x2), int(y2)]
-        box = [max(min(x, 320), 0) for x in box]
-        print(box)
-
-        final_image_size = (crop_size, crop_size)
-        image_cropped = crop_image(image, box)
-
-        image_resized = resize_image(image_cropped, final_image_size)
-        return image_resized
-
     def _crop_image_based_on_segmentation(self, keypoints_2D, keypoints_2D_vis,
-                                          segmentation_mask, image,
-                                          camera_matrix):
+                                          image, camera_matrix):
         crop_center = keypoints_2D[12, ::-1]
 
         if not np.all(np.isfinite(crop_center)):
@@ -303,13 +182,13 @@ class HandPoseLoader(Loader):
         scale = np.minimum(np.maximum(scale, 1.0), 10.0)
 
         # Crop image
-        img_crop = self._crop_image_from_coordinates(image, crop_center,
-                                                     self.crop_size, scale)
+        img_crop = crop_image_from_coordinates(image, crop_center,
+                                               self.crop_size, scale)
 
         keypoint_uv21_u = (keypoints_2D[:, 0] - crop_center[1]) * scale + \
-            self.crop_size // 2
+                          self.crop_size // 2
         keypoint_uv21_v = (keypoints_2D[:, 1] - crop_center[0]) * scale + \
-            self.crop_size // 2
+                          self.crop_size // 2
         keypoint_uv21 = np.stack([keypoint_uv21_u, keypoint_uv21_v], 1)
 
         # Modify camera intrinsics
@@ -337,52 +216,6 @@ class HandPoseLoader(Loader):
 
         return scale, np.squeeze(img_crop), keypoint_uv21, camera_matrix_cropped
 
-    def _create_multiple_gaussian_map(self, uv_coordinates, scoremap_size,
-                                      sigma, valid_vec):
-        assert len(scoremap_size) == 2
-        s = uv_coordinates.shape
-        coords_uv = uv_coordinates
-        if valid_vec is not None:
-            valid_vec = np.squeeze(valid_vec)
-            cond_val = np.greater(valid_vec, 0.5)
-        else:
-            cond_val = np.ones_like(coords_uv[:, 0], dtype=np.float32)
-            cond_val = np.greater(cond_val, 0.5)
-
-        cond_1_in = np.logical_and(np.less(coords_uv[:, 0],
-                                           scoremap_size[0] - 1),
-                                   np.greater(coords_uv[:, 0], 0))
-        cond_2_in = np.logical_and(np.less(coords_uv[:, 1],
-                                           scoremap_size[1] - 1),
-                                   np.greater(coords_uv[:, 1], 0))
-        cond_in = np.logical_and(cond_1_in, cond_2_in)
-        cond = np.logical_and(cond_val, cond_in)
-
-        # create meshgrid
-        x_range = np.expand_dims(np.arange(scoremap_size[0]), 1)
-        y_range = np.expand_dims(np.arange(scoremap_size[1]), 0)
-
-        X = np.tile(x_range, [1, scoremap_size[1]])
-        Y = np.tile(y_range, [scoremap_size[0], 1])
-
-        X.reshape((scoremap_size[0], scoremap_size[1]))
-        Y.reshape((scoremap_size[0], scoremap_size[1]))
-
-        X = np.expand_dims(X, -1)
-        Y = np.expand_dims(Y, -1)
-
-        X_b = np.tile(X, [1, 1, s[0]])
-        Y_b = np.tile(Y, [1, 1, s[0]])
-
-        X_b = X_b - coords_uv[:, 0].astype('float64')
-        Y_b = Y_b - coords_uv[:, 1].astype('float64')
-
-        dist = np.square(X_b) + np.square(Y_b)
-
-        scoremap = np.exp(-dist / np.square(sigma)) * cond
-
-        return scoremap
-
     def _create_score_maps(self, keypoint_2D, keypoint_vis21):
         keypoint_hw21 = np.stack([keypoint_2D[:, 1], keypoint_2D[:, 0]], -1)
 
@@ -391,10 +224,10 @@ class HandPoseLoader(Loader):
         if self.crop_image:
             scoremap_size = (self.crop_size, self.crop_size)
 
-        scoremap = self._create_multiple_gaussian_map(keypoint_hw21,
-                                                      scoremap_size,
-                                                      self.sigma,
-                                                      valid_vec=keypoint_vis21)
+        scoremap = create_multiple_gaussian_map(keypoint_hw21,
+                                                scoremap_size,
+                                                self.sigma,
+                                                valid_vec=keypoint_vis21)
 
         return scoremap
 
@@ -403,8 +236,6 @@ class HandPoseLoader(Loader):
         dataset = []
         for arg in range(len(hands)):
             sample = dict()
-            if arg > 10:
-                break
             sample['image'] = self._load_images(hands[arg])
             if segmentation_labels is not None:
                 sample['seg_label'] = self._load_images(
@@ -424,8 +255,8 @@ class HandPoseLoader(Loader):
                 sample['camera_matrix'] = annotations[arg]['K']
 
                 hand_side, sample['dominant_3D_keypoints'], dominant_hand = \
-                    self._extract_hand_side(sample['seg_label'],
-                                            sample['key_points_3D'])
+                    extract_hand_side(sample['seg_label'],
+                                      sample['key_points_3D'])
 
                 sample['hand_side_one_hot'] = get_one_hot(hand_side, 2)
 
@@ -437,30 +268,30 @@ class HandPoseLoader(Loader):
                         sample['normalized_keypoints']))
 
                 canonical_keypoints, rotation_matrix = \
-                    self._get_canonical_transformations(
+                    get_canonical_transformations(
                         sample['keypoints_local_frame'])
 
-                sample['canonical_keypoints'] = self._flip_right_hand(
+                sample['canonical_keypoints'] = flip_right_hand(
                     canonical_keypoints, np.logical_not(self.flip_to_left))
 
                 sample['rotation_matrix'] = np.linalg.pinv(rotation_matrix)
 
                 sample['visibility_21_3Dkeypoints'] = \
-                    self._extract_dominant_hand_visibility(
+                    extract_dominant_hand_visibility(
                         sample['key_point_visibility'], dominant_hand)
 
                 sample['visibile_21_2Dkeypoints'] = \
-                    self._extract_dominant_2D_keypoints(
-                        sample['key_points_2D'], dominant_hand)
+                    extract_dominant_2D_keypoints(sample['key_points_2D'],
+                                                  dominant_hand)
 
                 if self.crop_image:
                     sample['scale'], sample['image_crop'], \
-                        sample['visibile_21_2Dkeypoints'], \
-                        sample['camera_matrix_cropped'] = \
+                    sample['visibile_21_2Dkeypoints'], \
+                    sample['camera_matrix_cropped'] = \
                         self._crop_image_based_on_segmentation(
                             sample['visibile_21_2Dkeypoints'],
                             sample['visibility_21_3Dkeypoints'],
-                            sample['seg_label'], sample['image'],
+                            sample['image'],
                             sample['camera_matrix'])
 
                 sample['score_maps'] = self._create_score_maps(
