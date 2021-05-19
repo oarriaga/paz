@@ -178,7 +178,6 @@ class SE(Layer):
             self._se_reduce(se_tensor),
             self._act_fn)
         )
-        print('Built SE %s: %s', self.name, se_tensor.shape)
         return tf.sigmoid(se_tensor) * tensor
 
 
@@ -357,19 +356,16 @@ class MBConvBlock(Layer):
             A output tensor.
         """
         def _call(tensor):
-            print('Block %s input shape: %s', self.name, tensor.shape)
             x = tensor
 
             # creates conv 2x2 kernel
             if self.super_pixel:
                 x = self.super_pixel(x, training)
-                print('SuperPixel %s: %s', self.name, x.shape)
 
             if self._block_args.fused_conv:
                 # If use fused mbconv, skip expansion and use regular conv.
                 x = self._batch_norm1(self._fused_conv(x), training=training)
                 x = get_activation_fn(x, self._act_fn)
-                print('Conv2D shape: %s', x.shape)
             else:
                 # Otherwise, first apply expansion
                 # and then apply depthwise conv.
@@ -377,12 +373,10 @@ class MBConvBlock(Layer):
                     x = self._batch_norm0(self._expand_conv(x),
                                           training=training)
                     x = get_activation_fn(x, self._act_fn)
-                    print('Expand shape: %s', x.shape)
 
                 x = self._batch_norm1(self._depthwise_conv(x),
                                       training=training)
                 x = get_activation_fn(x, self._act_fn)
-                print('DWConv shape: %s', x.shape)
 
             if self._se:
                 x = self._se(x)
@@ -406,7 +400,6 @@ class MBConvBlock(Layer):
                     if survival_prob:
                         x = get_drop_connect(x, training, survival_prob)
                     x = tf.add(x, tensor)
-            print('Project shape: %s', x.shape)
             return x
 
         return _call(tensor)
@@ -699,7 +692,6 @@ class Model(tf.keras.Model):
 
         # Calls Stem layers
         outputs = self._stem(tensor, training)
-        print('Built stem %s : %s', self._stem.name, outputs.shape)
         self.endpoints['stem'] = outputs
 
         # Call blocks
@@ -721,7 +713,6 @@ class Model(tf.keras.Model):
             if survival_prob:
                 drop_rate = 1 - survival_prob
                 survival_prob = 1 - drop_rate * float(idx) / len(self._blocks)
-                print('block_%s survival prob: %s', idx, survival_prob)
             outputs = block(outputs,
                             training=training,
                             survival_prob=survival_prob)
