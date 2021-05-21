@@ -250,15 +250,5 @@ def ColorHandPoseNet(image_shape=None, hand_side_shape=None, weight_path=None,
     return coord_xyz_rel_normed
 
 
-def check_outputs(input_shape=None):
-    if input_shape is None:
-        input_shape = [256, 256, 3]
-    image = Input(shape=input_shape, name='image')
-    HandSegNet = Hand_Segmentation_Net()
-    hand_scoremap = HandSegNet(image)
-    hand_scoremap = tf.nn.softmax(hand_scoremap)
-    mask = tf.argmax(hand_scoremap)
-
-
 if __name__ == '__main__':
-    check_outputs()
+    ColorHandPoseNet()
