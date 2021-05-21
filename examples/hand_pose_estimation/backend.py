@@ -277,7 +277,7 @@ def extract_bounding_box(binary_class_mask):
     X = tf.tile(x_range, [1, s[2]])
     Y = tf.tile(y_range, [s[1], 1])
 
-    bb_list = list()
+    bounding_box_list = list()
     center_list = list()
     crop_size_list = list()
     for i in range(s[0]):
@@ -294,7 +294,7 @@ def extract_bounding_box(binary_class_mask):
         start = tf.stack([x_min, y_min])
         end = tf.stack([x_max, y_max])
         bb = tf.stack([start, end], 1)
-        bb_list.append(bb)
+        bounding_box_list.append(bb)
 
         center_x = 0.5 * (x_max + x_min)
         center_y = 0.5 * (y_max + y_min)
@@ -315,7 +315,7 @@ def extract_bounding_box(binary_class_mask):
         crop_size.set_shape([1])
         crop_size_list.append(crop_size)
 
-    bounding_box = tf.stack(bb_list)
+    bounding_box = tf.stack(bounding_box_list)
     center = tf.stack(center_list)
     crop_size = tf.stack(crop_size_list)
 
@@ -345,6 +345,7 @@ def crop_image_from_xy(image, crop_location, crop_size, scale=1.0):
 
     crop_size = tf.cast(tf.stack([crop_size, crop_size]), tf.int32)
     box_indices = tf.range(s[0])
-    image_cropped = tf.image.crop_and_resize(tf.cast(image, tf.float32), boxes,
-                                       box_indices, crop_size, name='crop')
+    image_cropped = tf.image.crop_and_resize(tf.cast(image, tf.float32),
+                                             boxes, box_indices, crop_size,
+                                             name='crop')
     return image_cropped
