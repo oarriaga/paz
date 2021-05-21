@@ -4,9 +4,9 @@ import pickle
 import numpy as np
 
 from backend import normalize_keypoints, to_homogeneous_coordinates, \
-    get_translation_matrix, get_one_hot, extract_hand_side, \
+    get_translation_matrix, one_hot_encode, extract_hand_side, \
     get_canonical_transformations, flip_right_hand, \
-    extract_dominant_hand_visibility, extract_dominant_2D_keypoints, \
+    extract_dominant_hand_visibility, extract_dominant_keypoints2D, \
     crop_image_from_coordinates, create_multiple_gaussian_map, \
     get_geometric_entities
 from paz.abstract import Loader
@@ -94,6 +94,7 @@ class HandPoseLoader(Loader):
             if parent_key == 'root':
                 keypoints_residual = to_homogeneous_coordinates(
                     np.expand_dims(keypoints_3D[bone_index, :], 1))
+                print(keypoints_residual.shape)
 
                 Translation_matrix = get_translation_matrix(
                     np.zeros_like(keypoints_3D[0, 0]))
@@ -101,7 +102,7 @@ class HandPoseLoader(Loader):
                 geometric_entities = get_geometric_entities(
                     keypoints_residual, Translation_matrix)
                 relative_coordinates[bone_index] = np.stack(
-                    geometric_entities[:3], 1)
+                    geometric_entities[:3], 0)
                 tranformations[bone_index] = geometric_entities[3]
             else:
                 Transformation_matrix = tranformations[parent_key]
@@ -117,7 +118,7 @@ class HandPoseLoader(Loader):
                 # calculate bone vector in local coords
                 delta_vec = x_local_child - x_local_parent
                 delta_vec = to_homogeneous_coordinates(np.expand_dims(
-                    delta_vec[:, :3, :], 1))
+                    delta_vec[:, :3], 1))
 
                 # get articulation angles from bone vector
                 geometric_entities = get_geometric_entities(
@@ -125,7 +126,7 @@ class HandPoseLoader(Loader):
 
                 # save results
                 relative_coordinates[bone_index] = np.stack(
-                    geometric_entities[:3], 1)
+                    geometric_entities[:3])
                 tranformations[bone_index] = geometric_entities[3]
 
         key_point_relative_frame = np.stack(relative_coordinates, 1)
@@ -237,7 +238,7 @@ class HandPoseLoader(Loader):
                     extract_hand_side(sample['seg_label'],
                                       sample['key_points_3D'])
 
-                sample['hand_side_one_hot'] = get_one_hot(hand_side, 2)
+                sample['hand_side_one_hot'] = one_hot_encode(hand_side, 2)
 
                 sample['scale'], sample['normalized_keypoints'] = \
                     normalize_keypoints(sample['dominant_3D_keypoints'])
@@ -260,7 +261,7 @@ class HandPoseLoader(Loader):
                         sample['key_point_visibility'], dominant_hand)
 
                 sample['visibile_21_2Dkeypoints'] = \
-                    extract_dominant_2D_keypoints(sample['key_points_2D'],
+                    extract_dominant_keypoints2D(sample['key_points_2D'],
                                                   dominant_hand)
 
                 if self.crop_image:
@@ -294,6 +295,15 @@ class HandPoseLoader(Loader):
                                                 '/anno_training.pickle')
             dataset = self.to_list_of_dictionaries(images, segmentation_labels,
                                                    annotations)
+
+        elif self.split == 'val':
+            segmentation_labels = sorted(glob.glob(self.path + self.folder +
+                                                   '/mask/*.png'))
+            annotations = self._load_annotation(self.path + self.folder +
+                                                '/anno_evaluation.pickle')
+            dataset = self.to_list_of_dictionaries(images, segmentation_labels,
+                                                   annotations)
+
         else:
             dataset = self.to_list_of_dictionaries(images, None, None)
 
