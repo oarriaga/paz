@@ -6,7 +6,8 @@ from paz.backend.image.opencv_image import resize_image, crop_image
 
 def one_hot_encode(input, n_classes):
     """
-    One hot encode a list of sample labels. Return a one-hot encoded vector for each label.
+    One hot encode a list of sample labels. Return a one-hot encoded vector
+    for each label.
     : x: List of sample Labels
     : return: Numpy array of one-hot encoded labels
      """
@@ -314,11 +315,11 @@ def extract_bounding_box(binary_class_mask):
         crop_size.set_shape([1])
         crop_size_list.append(crop_size)
 
-    bb = tf.stack(bb_list)
+    bounding_box = tf.stack(bb_list)
     center = tf.stack(center_list)
     crop_size = tf.stack(crop_size_list)
 
-    return center, bb, crop_size
+    return center, bounding_box, crop_size
 
 
 def crop_image_from_xy(image, crop_location, crop_size, scale=1.0):
@@ -343,7 +344,7 @@ def crop_image_from_xy(image, crop_location, crop_size, scale=1.0):
     boxes = tf.stack([y1, x1, y2, x2], -1)
 
     crop_size = tf.cast(tf.stack([crop_size, crop_size]), tf.int32)
-    box_ind = tf.range(s[0])
-    image_c = tf.image.crop_and_resize(tf.cast(image, tf.float32), boxes,
-                                       box_ind, crop_size, name='crop')
-    return image_c
+    box_indices = tf.range(s[0])
+    image_cropped = tf.image.crop_and_resize(tf.cast(image, tf.float32), boxes,
+                                       box_indices, crop_size, name='crop')
+    return image_cropped
