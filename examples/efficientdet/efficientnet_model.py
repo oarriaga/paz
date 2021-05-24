@@ -246,17 +246,24 @@ class MBConvBlock(Layer):
     def block_args(self):
         return self._block_args
 
-    def _build(self):
-        """Builds block according to the arguments."""
-        bid = itertools.count(0)
-        get_bn_name = lambda: 'batch_normalization' + (
-            "" if not next(bid) else '_' + str(next(bid) // 2)
-        )
+    @staticmethod
+    def get_conv_name():
         cid = itertools.count(0)
-        get_conv_name = lambda: 'conv2d' + (
+        name = 'conv2d' + (
             "" if not next(cid) else '_' + str(next(cid) // 2)
         )
+        return name
 
+    @staticmethod
+    def get_bn_name():
+        bid = itertools.count(0)
+        name = 'batch_normalization' + (
+            "" if not next(bid) else '_' + str(next(bid) // 2)
+        )
+        return name
+
+    def _build(self):
+        """Builds block according to the arguments."""
         if self._block_args.super_pixel == 1:
             self.super_pixel = SuperPixel(
                 self._block_args, self._global_params, name='super_pixel'
@@ -279,7 +286,7 @@ class MBConvBlock(Layer):
                 padding='same',
                 data_format=self._data_format,
                 use_bias=False,
-                name=get_conv_name(),
+                name=self.get_conv_name(),
             )
         else:
             # Expansion phase.
@@ -294,12 +301,12 @@ class MBConvBlock(Layer):
                     padding='same',
                     data_format='channels_last',
                     use_bias=False,
-                    name=get_conv_name()
+                    name=self.get_conv_name()
                 )
                 self._batch_norm0 = self._batch_norm(axis=-1,
                                                      momentum=0.99,
                                                      epsilon=1e-3,
-                                                     name=get_bn_name()
+                                                     name=self.get_bn_name()
                                                      )
             # Depth-wise convolution phase.
             # Called if not using fused convolutions.
@@ -315,7 +322,7 @@ class MBConvBlock(Layer):
         self._batch_norm1 = self._batch_norm(axis=-1,
                                              momentum=0.99,
                                              epsilon=1e-3,
-                                             name=get_bn_name()
+                                             name=self.get_bn_name()
                                              )
 
         if self._has_se:
@@ -340,12 +347,12 @@ class MBConvBlock(Layer):
             padding='same',
             data_format='channels_last',
             use_bias=False,
-            name=get_conv_name()
+            name=self.get_conv_name()
         )
         self._batch_norm2 = self._batch_norm(axis=-1,
                                              momentum=0.99,
                                              epsilon=1e-3,
-                                             name=get_bn_name())
+                                             name=self.get_bn_name())
 
     def call(self, tensor, training, survival_prob):
         """Implementation of call().
@@ -576,6 +583,12 @@ class Model(tf.keras.Model):
         conv_block_map = {0: MBConvBlock, 1: MBConvBlockWithoutDepthwise}
         return conv_block_map[conv_type]
 
+    @staticmethod
+    def get_block_name():
+        block_id = itertools.count(0)
+        name = 'blocks_%d' % next(block_id)
+        return name
+
     def _build(self):
         """Builds a model."""
         self._blocks = []
@@ -585,8 +598,6 @@ class Model(tf.keras.Model):
                           self._blocks_args[0].input_filters)
 
         # Builds blocks.
-        block_id = itertools.count(0)
-        block_name = lambda: 'blocks_%d' % next(block_id)
         for i, block_args in enumerate(self._blocks_args):
             assert block_args.num_repeat > 0
             assert block_args.super_pixel in [0, 1, 2]
@@ -617,7 +628,7 @@ class Model(tf.keras.Model):
                 self._blocks.append(
                     conv_block(block_args,
                                self._global_params,
-                               name=block_name())
+                               name=self.get_block_name())
                 )
             else:
                 # if superpixel, adjust filters, kernels, and strides.
@@ -639,7 +650,7 @@ class Model(tf.keras.Model):
                     self._blocks.append(
                         conv_block(block_args,
                                    self._global_params,
-                                   name=block_name())
+                                   name=self.get_block_name())
                     )
                     block_args = block_args._replace(  # sp stops at stride-2
                         super_pixel=0,
@@ -651,14 +662,14 @@ class Model(tf.keras.Model):
                     self._blocks.append(
                         conv_block(block_args,
                                    self._global_params,
-                                   name=block_name())
+                                   name=self.get_block_name())
                     )
                     block_args = block_args._replace(super_pixel=2)
                 else:
                     self._blocks.append(
                         conv_block(block_args,
                                    self._global_params,
-                                   name=block_name())
+                                   name=self.get_block_name())
                     )
             if block_args.num_repeat > 1:
                 # rest of blocks with the same block_arg
@@ -669,7 +680,7 @@ class Model(tf.keras.Model):
                 self._blocks.append(
                     conv_block(block_args,
                                self._global_params,
-                               name=block_name())
+                               name=self.get_block_name())
                 )
 
         # Head part.
