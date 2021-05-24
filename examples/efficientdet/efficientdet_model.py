@@ -84,9 +84,11 @@ class EfficientDet(tf.keras.Model):
         """
 
         # Efficientnet backbone features
-        all_features = self.backbone(images)
+        all_features = self.backbone(images,
+                                     training=training,
+                                     features_only=True)
 
-        features = all_features[self.config["min_level"] - 1:
+        features = all_features[self.config["min_level"]:
                                 self.config["max_level"] + 1]
 
         # Build additional input features that are not from backbone.

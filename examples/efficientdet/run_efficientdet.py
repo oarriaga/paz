@@ -1,12 +1,6 @@
 import argparse
-import tensorflow as tf
 from efficientdet_model import EfficientDet
-
-# Mock input image.
-mock_input_image = tf.random.uniform((1, 224, 224, 3),
-                                     dtype=tf.dtypes.float32,
-                                     seed=1)
-
+from misc import mock_input_image, load_pretrained_weights
 
 if __name__ == "__main__":
 
@@ -23,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-b",
         "--backbone_name",
-        default="efficientnetb0",
+        default="efficientnet-b0",
         type=str,
         help="EfficientNet backbone name",
         required=False,
@@ -104,14 +98,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--conv_after_downsample",
-        default=True,
+        default=False,
         type=bool,
         help="Flag to apply convolution after downsampling features",
         required=False,
     )
     parser.add_argument(
         "--conv_batchnorm_act_pattern",
-        default=True,
+        default=False,
         type=bool,
         help="Flag to apply convolution, batch normalization and activation",
         required=False,
@@ -170,8 +164,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = vars(args)
     print(config)
-    # TODO: Add parsed user-inputs to the config and update the config
-    efficientdet = EfficientDet(config=config)
-    efficientdet.build(mock_input_image.shape)
-    print(efficientdet.summary())
-    class_outputs, box_outputs = efficientdet(mock_input_image, False)
+    model = EfficientDet(config=config)
+    model.build(mock_input_image.shape)
+    print(model.summary())
+    weight_file_path = '/home/deepan/Downloads/efficientdet-d0.h5'
+    model = load_pretrained_weights(model, weight_file_path)
+    print('Successfully copied weights.')
+    class_out, box_out = model(mock_input_image)
+    print(len(class_out), len(box_out))

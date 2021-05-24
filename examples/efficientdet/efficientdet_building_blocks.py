@@ -17,8 +17,8 @@ class ResampleFeatureMap(Layer):
     def __init__(self,
                  feature_level,
                  target_num_channels,
-                 use_batchnorm,
-                 conv_after_downsample,
+                 use_batchnorm=False,
+                 conv_after_downsample=False,
                  pooling_type='max',
                  upsampling_type='nearest',
                  name='resample_p0'):
@@ -29,13 +29,19 @@ class ResampleFeatureMap(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.pooling_type = pooling_type
         self.upsampling_type = upsampling_type
-        self.batchnorm = BatchNormalization(momentum=0.99,
-                                            epsilon=1e-3)
         self.conv2d = Conv2D(self.target_num_channels,
                              (1, 1),
                              padding='same',
                              data_format='channels_last',
                              name='conv2d')
+        self.batchnorm = BatchNormalization(axis=-1,
+                                            momentum=0.99,
+                                            epsilon=1e-3,
+                                            center=True,
+                                            scale=True,
+                                            beta_initializer='zeros',
+                                            gamma_initializer='ones',
+                                            name='bn')
         if pooling_type in ['max', 'average']:
             self.pooling_type = pooling_type
         else:
@@ -96,8 +102,6 @@ class ResampleFeatureMap(Layer):
                                    W,
                                    H_target,
                                    W_target)
-            if feature.shape[2] < W_target:
-                feature = self._upsample2d(feature, H_target, W_target)
             if self.conv_after_downsample:
                 feature = self._apply_1x1_conv(feature,
                                                training,
@@ -226,9 +230,11 @@ class FPNCell(Layer):
             self.fnodes.append(fnode)
 
     def call(self, features, training):
-        for fnode in self.fnodes:
-            features = fnode(features, training)
-        return features
+        def _call(features):
+            for fnode in self.fnodes:
+                features = fnode(features, training)
+            return features
+        return _call(features)
 
 
 def sum_nodes(nodes):
@@ -283,7 +289,6 @@ class FNode(Layer):
             new_node = tf.reduce_sum(nodes * normalized_weights, -1)
         elif self.weight_method == 'fastattn':
             edge_weights = []
-            # nodes = []
             for weight in self.assign_weights:
                 edge_weights.append(tf.nn.relu(tf.cast(weight, dtype=dtype)))
             weight_sum = sum_nodes(edge_weights)
@@ -298,8 +303,8 @@ class FNode(Layer):
         for input_offset_arg, _ in enumerate(self.inputs_offsets):
             name = 'WSM' + ('' if input_offset_arg == 0
                             else '_' + str(input_offset_arg))
-            self.assign_weights.append(self.add_weight(name=name,
-                                                       initializer=initializer,
+            self.assign_weights.append(self.add_weight(initializer=initializer,
+                                                       name=name,
                                                        shape=shape))
 
     def build(self, features_shape):
@@ -308,10 +313,10 @@ class FNode(Layer):
                                               input_offset,
                                               len(features_shape))
             self.resample_layers.append(ResampleFeatureMap(
-                self.feature_level,
-                self.fpn_num_filters,
-                self.use_batchnorm_for_sampling,
-                self.conv_after_downsample,
+                feature_level=self.feature_level,
+                target_num_channels=self.fpn_num_filters,
+                use_batchnorm=self.use_batchnorm_for_sampling,
+                conv_after_downsample=self.conv_after_downsample,
                 name=name
             ))
 
@@ -324,7 +329,7 @@ class FNode(Layer):
             self.separable_conv,
             self.fpn_num_filters,
             self.act_type,
-            name='conv_after_combine{}'.format(len(features_shape))
+            name='op_after_combine{}'.format(len(features_shape))
         )
         self.built = True
         super().build(features_shape)
@@ -370,7 +375,14 @@ class ConvolutionAfterFusion(Layer):
             data_format='channels_last',
             name='conv'
         )
-        self.batchnorm = BatchNormalization()
+        self.batchnorm = BatchNormalization(axis=-1,
+                                            momentum=0.99,
+                                            epsilon=1e-3,
+                                            center=True,
+                                            scale=True,
+                                            beta_initializer='zeros',
+                                            gamma_initializer='ones',
+                                            name='bn')
 
     def call(self, new_node, training):
         if not self.conv_batchnorm_act_pattern:
@@ -440,7 +452,7 @@ class ClassNet(Layer):
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(BatchNormalization(
-                    name='class-%d-batchnorm-%d' % (repeats_args, level)))
+                    name='class-%d-bn-%d' % (repeats_args, level)))
             self.batchnorms.append(batchnorm_per_level)
         self.classes = self.classes_layer(conv2d_layer,
                                           num_classes,
@@ -521,7 +533,7 @@ class BoxNet(Layer):
                  repeats=4,
                  separable_conv=True,
                  survival_prob=None,
-                 name='class_net',
+                 name='box_net',
                  feature_only=False,
                  **kwargs):
         """Initialize the BoxNet.
@@ -585,7 +597,7 @@ class BoxNet(Layer):
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(
                     BatchNormalization(
-                        name='box-%d-batchnorm-%d' % (repeats_args, level)))
+                        name='box-%d-bn-%d' % (repeats_args, level)))
             self.batchnorms.append(batchnorm_per_level)
 
         self.boxes = self.boxes_layer(separable_conv,

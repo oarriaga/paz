@@ -178,6 +178,7 @@ class SE(Layer):
             self._se_reduce(se_tensor),
             self._act_fn)
         )
+        print('Built SE %s : %s', self.name, se_tensor.shape)
         return tf.sigmoid(se_tensor) * tensor
 
 
@@ -356,16 +357,19 @@ class MBConvBlock(Layer):
             A output tensor.
         """
         def _call(tensor):
+            print('Block %s input shape: %s', self.name, tensor.shape)
             x = tensor
 
             # creates conv 2x2 kernel
             if self.super_pixel:
                 x = self.super_pixel(x, training)
+                print('SuperPixel %s: %s', self.name, x.shape)
 
             if self._block_args.fused_conv:
                 # If use fused mbconv, skip expansion and use regular conv.
                 x = self._batch_norm1(self._fused_conv(x), training=training)
                 x = get_activation_fn(x, self._act_fn)
+                print('Conv2D shape: %s', x.shape)
             else:
                 # Otherwise, first apply expansion
                 # and then apply depthwise conv.
@@ -373,10 +377,12 @@ class MBConvBlock(Layer):
                     x = self._batch_norm0(self._expand_conv(x),
                                           training=training)
                     x = get_activation_fn(x, self._act_fn)
+                    print('Expand shape: %s', x.shape)
 
                 x = self._batch_norm1(self._depthwise_conv(x),
                                       training=training)
                 x = get_activation_fn(x, self._act_fn)
+                print('DWConv shape: %s', x.shape)
 
             if self._se:
                 x = self._se(x)
@@ -400,6 +406,7 @@ class MBConvBlock(Layer):
                     if survival_prob:
                         x = get_drop_connect(x, training, survival_prob)
                     x = tf.add(x, tensor)
+            print('Project shape: %s', x.shape)
             return x
 
         return _call(tensor)
@@ -559,9 +566,7 @@ class Model(tf.keras.Model):
         self._global_params = global_params
         self._blocks_args = blocks_args
         self._act_fn = global_params.act_fn
-        self._batch_norm = global_params.batch_norm(axis=-1,
-                                                    momentum=0.99,
-                                                    epsilon=1e-3)
+        self._batch_norm = global_params.batch_norm
         self._fix_head_stem = global_params.fix_head_stem
         self.endpoints = None
 
@@ -692,6 +697,7 @@ class Model(tf.keras.Model):
 
         # Calls Stem layers
         outputs = self._stem(tensor, training)
+        print('Built stem %s : %s', self._stem.name, outputs.shape)
         self.endpoints['stem'] = outputs
 
         # Call blocks
@@ -700,12 +706,12 @@ class Model(tf.keras.Model):
             # reduction flag for blocks after the stem layer
             # If the first block has super-pixel (space-to-depth)
             # layer, then stem is the first reduction point
-            if block.block_args.super_pixel == 1 and idx == 0:
+            if (block.block_args.super_pixel == 1 and idx == 0):
                 reduction_idx += 1
                 self.endpoints['reduction_%s' % reduction_idx] = outputs
 
-            elif (idx == len(self._blocks) - 1) \
-                    or self._blocks[idx + 1].block_args.strides[0] > 1:
+            elif ((idx == len(self._blocks) - 1) or
+                    self._blocks[idx + 1].block_args.strides[0] > 1):
                 is_reduction = True
                 reduction_idx += 1
 

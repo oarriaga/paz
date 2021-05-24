@@ -48,16 +48,16 @@ def get_efficientnet_params(model_name):
     dropout_rate: dropout rate for final fully connected layers.
     """
     efficientnet_params = {
-        'efficientnetb0': (1.0, 1.0, 0.2),
-        'efficientnetb1': (1.0, 1.1, 0.2),
-        'efficientnetb2': (1.1, 1.2, 0.3),
-        'efficientnetb3': (1.2, 1.4, 0.3),
-        'efficientnetb4': (1.4, 1.8, 0.4),
-        'efficientnetb5': (1.6, 2.2, 0.4),
-        'efficientnetb6': (1.8, 2.6, 0.5),
-        'efficientnetb7': (2.0, 3.1, 0.5),
-        'efficientnetb8': (2.2, 3.6, 0.5),
-        'efficientnetl2': (4.3, 5.3, 0.5),
+        'efficientnet-b0': (1.0, 1.0, 0.2),
+        'efficientnet-b1': (1.0, 1.1, 0.2),
+        'efficientnet-b2': (1.1, 1.2, 0.3),
+        'efficientnet-b3': (1.2, 1.4, 0.3),
+        'efficientnet-b4': (1.4, 1.8, 0.4),
+        'efficientnet-b5': (1.6, 2.2, 0.4),
+        'efficientnet-b6': (1.8, 2.6, 0.5),
+        'efficientnet-b7': (2.0, 3.1, 0.5),
+        'efficientnet-b8': (2.2, 3.6, 0.5),
+        'efficientnet-l2': (4.3, 5.3, 0.5),
     }
     return efficientnet_params[model_name]
 
