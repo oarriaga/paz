@@ -169,7 +169,7 @@ class EncodeBoxes(Processor):
         prior_boxes: Numpy array of shape (num_boxes, 4).
         variances: List of two float values.
     """
-    def __init__(self, prior_boxes, variances=[.1, .2]):
+    def __init__(self, prior_boxes, variances=[0.1, 0.1, 0.2, 0.2]):
         self.prior_boxes = prior_boxes
         self.variances = variances
         super(EncodeBoxes, self).__init__()
@@ -186,7 +186,7 @@ class DecodeBoxes(Processor):
         prior_boxes: Numpy array of shape (num_boxes, 4).
         variances: List of two float values.
     """
-    def __init__(self, prior_boxes, variances=[.1, .2]):
+    def __init__(self, prior_boxes, variances=[0.1, 0.1, 0.2, 0.2]):
         self.prior_boxes = prior_boxes
         self.variances = variances
         super(DecodeBoxes, self).__init__()
