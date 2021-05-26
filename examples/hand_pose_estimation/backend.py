@@ -1,3 +1,5 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
 
@@ -8,10 +10,9 @@ def one_hot_encode(input, n_classes):
     """
     One hot encode a list of sample labels. Return a one-hot encoded vector
     for each label.
-    : x: List of sample Labels
-    : return: Numpy array of one-hot encoded labels
-     """
-    return np.eye(n_classes)[input]
+    : input: List of sample Labels
+    : return: Numpy array of one-hot encoded labels """
+    return np.eye(n_classes, dtype=int)[input]
 
 
 def normalize_keypoints(keypoints3D):
@@ -104,9 +105,8 @@ def get_canonical_transformations(keypoints3D):
     ROOT_KEYPOINT_ID = 0  #
     ALIGNED_KEYPOINT_ID = 12
     LAST_KEYPOINT_ID = 20
-    print(keypoints3D.shape)
 
-    translation_to_root = np.expand_dims(keypoints3D[ROOT_KEYPOINT_ID, :], 0)
+    translation_to_root = np.expand_dims(keypoints3D[:, ROOT_KEYPOINT_ID], 1)
     translated_keypoints3D = keypoints3D - translation_to_root
 
     alignment_keypoint = translated_keypoints3D[:, ALIGNED_KEYPOINT_ID]
