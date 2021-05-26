@@ -102,8 +102,7 @@ def test_get_affine_matrix():
     rotation_matrix = build_rotation_matrix_x(np.deg2rad(30))
     affine_rotation_matrix = get_affine_matrix(rotation_matrix)
     assert affine_rotation_matrix.shape == (4, 4)
-    assert affine_rotation_matrix[-1].all() == np.array([0, 0, 0, 1]).all(), \
-        _print_fail()
+    assert affine_rotation_matrix[-1].all() == np.array([0, 0, 0, 1]).all()
 
 
 def test_hand_side_extraction(segmentation_path, label_path):
