@@ -1,3 +1,6 @@
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 from tensorflow.keras.layers import Concatenate, Dense, Dropout, Reshape, Input
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, UpSampling2D, \
