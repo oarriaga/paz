@@ -1,3 +1,5 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import glob
 import pickle
 
@@ -17,7 +19,7 @@ class HandPoseLoader(Loader):
     def __init__(self, path, split='train', image_size=(320, 320, 3),
                  use_wrist_coordinates=True, flip_to_left=True, crop_size=256,
                  image_crop=True, sigma=25.0):
-        super().__init__(path, split, None, 'HandSegmentation')
+        super().__init__(path, split, None, 'HandPoseLoader')
         self.path = path
         self.image_size = image_size
         split_to_folder = {'train': 'training', 'val': 'evaluation',
@@ -74,10 +76,10 @@ class HandPoseLoader(Loader):
         if not self.use_wrist_coordinates:
             palm_vis_left = np.expand_dims(np.logical_or(visibility_mask[0],
                                                          visibility_mask[12]),
-                                           0)
+                                                         0)
             palm_vis_right = np.expand_dims(np.logical_or(visibility_mask[21],
                                                           visibility_mask[33]),
-                                            0)
+                                                          0)
             visibility_mask = np.concatenate(
                 [palm_vis_left, visibility_mask[1:21],
                  palm_vis_right, visibility_mask[21:43]], 0)
@@ -94,7 +96,6 @@ class HandPoseLoader(Loader):
             if parent_key == 'root':
                 keypoints_residual = to_homogeneous_coordinates(
                     np.expand_dims(keypoints_3D[bone_index, :], 1))
-                print(keypoints_residual.shape)
 
                 Translation_matrix = get_translation_matrix(
                     np.zeros_like(keypoints_3D[0, 0]))
@@ -166,9 +167,9 @@ class HandPoseLoader(Loader):
                                                self.crop_size, scale)
 
         keypoint_uv21_u = (keypoints_2D[:, 0] - crop_center[1]) * scale + \
-                          self.crop_size // 2
+            self.crop_size // 2
         keypoint_uv21_v = (keypoints_2D[:, 1] - crop_center[0]) * scale + \
-                          self.crop_size // 2
+            self.crop_size // 2
         keypoint_uv21 = np.stack([keypoint_uv21_u, keypoint_uv21_v], 1)
 
         # Modify camera intrinsics
@@ -215,6 +216,7 @@ class HandPoseLoader(Loader):
                                 annotations=None):
         dataset = []
         for arg in range(len(hands)):
+            print(arg)
             sample = dict()
             sample['image'] = self.load_images(hands[arg])
             if segmentation_labels is not None:
@@ -262,12 +264,12 @@ class HandPoseLoader(Loader):
 
                 sample['visibile_21_2Dkeypoints'] = \
                     extract_dominant_keypoints2D(sample['key_points_2D'],
-                                                  dominant_hand)
+                                                 dominant_hand)
 
                 if self.crop_image:
                     sample['scale'], sample['image_crop'], \
-                    sample['visibile_21_2Dkeypoints'], \
-                    sample['camera_matrix_cropped'] = \
+                        sample['visibile_21_2Dkeypoints'], \
+                        sample['camera_matrix_cropped'] = \
                         self.crop_image_based_on_segmentation(
                             sample['visibile_21_2Dkeypoints'],
                             sample['visibility_21_3Dkeypoints'],
@@ -312,5 +314,5 @@ class HandPoseLoader(Loader):
 
 if __name__ == '__main__':
     dataset = HandPoseLoader(
-        '/home/dfki.uni-bremen.de/jbandlamudi/DFKI_Work/RHD_published_v2/')
+        '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/')
     dataset = dataset.load_data()
