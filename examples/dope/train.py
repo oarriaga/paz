@@ -4,6 +4,7 @@ import json
 import argparse
 
 import numpy as np
+import neptune
 
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
@@ -17,7 +18,7 @@ from paz.pipelines import AutoEncoderPredictor
 from scenes import SingleView
 
 from pipelines import ImageGenerator
-from model import PoseCNN
+from model import DOPE, NeptuneLogger, PlotImagesCallback
 
 description = 'Training script for learning implicit orientation vector'
 root_path = os.path.join(os.path.expanduser('~'), '.keras/paz/')
@@ -30,9 +31,8 @@ parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
 parser.add_argument('-id', '--images_directory', type=str,
                     help='Path to directory containing background images',
-                    default=os.path.join(
-                        root_path, 'datasets/voc-backgrounds/'))
-parser.add_argument('-bs', '--batch_size', default=32, type=int,
+                    default=None)
+parser.add_argument('-bs', '--batch_size', default=2, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
@@ -70,14 +70,32 @@ parser.add_argument('-sa', '--save_path',
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/models'),
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-sf', '--scaling_factor', default=8.0, type=float,
+                    help='Downscaling factor of the images')
+parser.add_argument('-ns', '--num_stages', default=3, type=int,
+                    help='Number of stages for DOPE')
+parser.add_argument('-nc', '--neptune_config',
+                    type=str, help='Path to config file where Neptune Token and project name is stored')
+parser.add_argument('-ug', '--use_generator', default=1, choices=[0, 1], type=int,
+                    help='Use generator to generate data or use already generated data')
+parser.add_argument('-pd', '--path_data', type=str, help='Path for the training data')
+
 args = parser.parse_args()
 
 
 # setting optimizer and compiling model
 latent_dimension = args.latent_dimension
-model = PoseCNN()
+model = DOPE(num_stages=args.num_stages, image_shape=(args.image_size, args.image_size, 3))
 optimizer = Adam(args.learning_rate, amsgrad=True)
-model.compile(optimizer, args.loss, metrics=['mse'])
+
+# Add losses for all the stages
+losses = dict()
+for i in range(1, args.num_stages+1):
+    losses['belief_maps_stage_' + str(i)] = 'mse'
+    #losses['affinity_maps_stage_' + str(i)] = 'mse'
+
+print(losses)
+model.compile(optimizer, losses, metrics=['mse'])
 model.summary()
 
 # setting scene
@@ -88,8 +106,12 @@ renderer = SingleView(filepath=args.obj_path, colors=colors, viewport_size=(args
                       roll=args.roll, shift=args.shift)
 
 # creating sequencer
-image_paths = glob.glob(os.path.join(args.images_directory, '*.png'))
-processor = ImageGenerator(renderer, args.image_size, image_paths, args.num_occlusions)
+if not (args.images_directory is None):
+    image_paths = glob.glob(os.path.join(args.images_directory, '*.png'))
+else:
+    image_paths = None
+
+processor = ImageGenerator(renderer, args.image_size, int(args.image_size/args.scaling_factor), image_paths, args.num_occlusions, num_stages=3)
 
 sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
@@ -108,13 +130,15 @@ save = ModelCheckpoint(
     model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=True)
 
 # setting drawing callbacks
-images = (sequence.__getitem__(0)[0]['input_image'] * 255).astype('uint8')
+"""
+images = (sequence.__getitem__(0)[0]['input_1'] * 255).astype('uint8')
 for arg, image in enumerate(images):
     image_name = 'image_%03d.png' % arg
     image_path = os.path.join(save_path, 'original_images/' + image_name)
     write_image(image_path, image)
 inferencer = AutoEncoderPredictor(model)
 draw = DrawInferences(save_path, images, inferencer)
+"""
 
 # saving hyper-parameters and model summary as text files
 print(save_path)
@@ -123,11 +147,54 @@ with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
 with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
+callbacks=[stop, log, save, plateau]
+
+# Set up neptune run
+if args.neptune_config is not None:
+    neptune_config_file = open(args.neptune_config)
+    neptune_config = neptune_config_file.read().split('\n')
+    neptune_token = neptune_config[0]
+    neptune_experiment_name = neptune_config[1]
+    neptune_run_name = neptune_config[2]
+
+    neptune.init(
+       api_token=neptune_token,
+       project_qualified_name=neptune_experiment_name
+    )
+
+    neptune.create_experiment(
+       name=neptune_run_name,
+       description='VOC backgrounds',
+       params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
+    )
+
+    neptuneLogger = NeptuneLogger(model)
+    callbacks.append(neptuneLogger)
+
+plotCallback = PlotImagesCallback(model, sequence, neptune_logging=(args.neptune_config is not None), num_stages=args.num_stages)
+callbacks.append(plotCallback)
+
 # model optimization
-model.fit_generator(
-    sequence,
-    steps_per_epoch=args.steps_per_epoch,
-    epochs=args.max_num_epochs,
-    callbacks=[stop, log, save, plateau, draw],
-    verbose=1,
-    workers=0)
+if bool(args.use_generator):
+    model.fit_generator(
+        sequence,
+        steps_per_epoch=args.steps_per_epoch,
+        epochs=args.max_num_epochs,
+        callbacks=callbacks,
+        verbose=1,
+        workers=0)
+else:
+    images = np.load(os.path.join(args.path_data, "images_batch_1.npy"))
+    belief_maps = np.load(os.path.join(args.path_data, "belief_maps_batch_1.npy"))
+
+    # Normalize images
+    images = images.astype(np.float32)/255.
+
+    model.fit(
+        x=[images],
+        y=[belief_maps, belief_maps, belief_maps],
+        batch_size=args.batch_size,
+        epochs=args.max_num_epochs,
+        callbacks=callbacks,
+        verbose=1,
+        workers=0)

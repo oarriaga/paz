@@ -1,5 +1,7 @@
 import numpy as np
 import sys
+from PIL import Image
+from PIL import ImageDraw
 from functools import reduce
 import time
 from copy import deepcopy
@@ -11,11 +13,6 @@ from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight, Ort
 from pyrender import RenderFlags, Mesh, Scene
 import trimesh
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from mpl_toolkits.mplot3d import Axes3D
-
-#fig = plt.figure()
-#ax = Axes3D(fig)
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -30,11 +27,18 @@ def map_to_image_location(point3d, w, h, projection, view):
     return (p[0], p[1], depth)
 
 
-def get_random_translation(translation_bounds=0.2):
+def get_random_translation(translation_bounds=0.1):
     translation = np.array([np.random.uniform(-translation_bounds, translation_bounds),
                             np.random.uniform(-translation_bounds, translation_bounds),
                             np.random.uniform(-translation_bounds, translation_bounds)])
     return translation
+
+
+def normalize(v):
+    norm = np.linalg.norm(v, ord=1)
+    if norm == 0:
+        norm = np.finfo(v.dtype).eps
+    return v/norm
 
 
 def create_belief_maps(image_size, bounding_box_points, sigma=16):
@@ -50,20 +54,83 @@ def create_belief_maps(image_size, bounding_box_points, sigma=16):
     belief_maps = list()
     max_width_belief_points = int(sigma*2)
 
+    # Shuffle points to make it random which point is removed if two overlap
+    #np.random.shuffle(bounding_box_points)
+
+    #print("Bounding boxes: {}".format(bounding_box_points))
+
     for point in bounding_box_points:
         belief_map = np.zeros(image_size)
+
         # Only add a belief point if it is completely inside the image
         if point[0] - max_width_belief_points >= 0 and point[0] + max_width_belief_points < image_size[0] and \
                 point[1] - max_width_belief_points >= 0 and point[1] + max_width_belief_points < image_size[1]:
+
+            #print("Point: {}".format(point))
+            # Check if there is already a point inside the area where we want to add a new point
+            if belief_maps:
+                sum_belief_maps = np.sum(np.array(belief_maps), axis=0)
+                if np.sum(sum_belief_maps[int(point[1]) - max_width_belief_points:int(point[1]) + max_width_belief_points,\
+                                          int(point[0]) - max_width_belief_points:int(point[0]) + max_width_belief_points]) > 0:
+                    belief_maps.append(belief_map)
+                    continue
+
             # Assign a value to a pixel inside of the belief point depending on how far away it
             # is from the center of the point
             for i in range(int(point[0]) - max_width_belief_points, int(point[0]) + max_width_belief_points):
                 for j in range(int(point[1]) - max_width_belief_points, int(point[1]) + max_width_belief_points):
-                    belief_map[i, j] = np.exp(-((i - point[0])**2 + (j - point[1])**2) / (2 * (sigma**2)))
+                    belief_map[j, i] = np.exp(-((i - int(point[0]))**2 + (j - int(point[1]))**2) / (2 * (sigma**2)))
 
         belief_maps.append(belief_map)
 
     return np.asarray(belief_maps)
+
+
+def create_affinity_maps(image_size, object_center, bounding_box_points, radius=7, sigma=16):
+    """
+    Args:
+        img: (tuple) size of the image in the format (x, y)
+        bounding_box_points: list of points in the form of
+                      [num points, 2 (x,y)]
+        sigma: (int) size of the belief map point
+    return:
+        return an array of arrays representing the belief maps
+    """
+    affinity_maps = list()
+
+    # Iterate over all bounding box points
+    for bounding_box_point in bounding_box_points:
+        affinity_map = Image.new("L", image_size, "black")
+
+        # Draw an ellipse at the bounding box location
+        draw = ImageDraw.Draw(affinity_map)
+        draw.ellipse((bounding_box_point[0] - radius, bounding_box_point[1] - radius,
+                      bounding_box_point[0] + radius, bounding_box_point[1] + radius), 1)
+
+        del draw
+
+        array = np.array(affinity_map)
+
+        # Calculate distance to the center
+        center_vector = np.array(object_center) - np.array(bounding_box_point)
+        center_vector = normalize(center_vector)
+
+        # Create affinity maps for the x and y direction
+
+        # Normalize affinity maps
+        xvec = center_vector[0]
+        yvec = center_vector[1]
+
+        norms = np.sqrt(xvec * xvec + yvec * yvec)
+
+        center_vector[0] /= norms
+        center_vector[1] /= norms
+
+        affinity_maps.append(array * center_vector[0])
+        affinity_maps.append(array * center_vector[1])
+
+    return np.asarray(affinity_maps)
+
 
 class SingleView():
     """Render-ready scene composed of a single object and a single moving camera.
@@ -78,8 +145,8 @@ class SingleView():
         shift: Float, to sample [-shift, shift] to move in X, Y OpenGL axes.
     """
     def __init__(self, filepath, colors, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
-                 distance=[0.5, 0.9], light_bounds=[0.5, 30], top_only=False,
-                 roll=None, shift=None):
+                 distance=[0.9, 1.5], light_bounds=[0.5, 30], top_only=False,
+                 roll=None, shift=None, scaling_factor=8.0):
         self.distance, self.roll, self.shift = distance, roll, shift
         self.light_intensity, self.top_only = light_bounds, top_only
         self.RGBA = RenderFlags.RGBA
@@ -91,6 +158,7 @@ class SingleView():
         self.mesh_origins = list()
 
         self.world_origin = np.array([0, 0, 0])
+        self.scaling_factor = scaling_factor
 
         self._build_scene(filepath, viewport_size, light_bounds, y_fov)
 
@@ -172,7 +240,6 @@ class SingleView():
         # Important: the first point in the list is the object center!
         for i, (position, extent) in enumerate(zip(positions, extents)):
             (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
-            #object_centers.append(np.array([x, y, depth]))
             bounding_box_points[i, 0] = np.array([x, y])
 
             num_bounding_box_point = 1
@@ -188,88 +255,23 @@ class SingleView():
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
 
-        image_ambient_light, _ = self.renderer.render(self.scene_ambient_light, flags=self.RGBA)
-        image_ambient_light, _ = split_alpha_channel(image_ambient_light)
-
-        #for point in bounding_box_points[0]:
-        #    image_original = image_original.copy()
-        #    image_original[int(point[1]), int(point[0])] = np.array([255, 255, 255])
-
         self.renderer.delete()
 
+        scaled_viewport_size = (int(self.viewport_size[0]/self.scaling_factor), int(self.viewport_size[1]/self.scaling_factor))
         # Calculate the belief maps
         # Format: (num objects, num bounding box edges, image width, image height)
-        belief_maps = np.zeros((num_objects, 9, self.viewport_size[0], self.viewport_size[1]))
+        belief_maps = np.zeros((num_objects, 9, scaled_viewport_size[0], scaled_viewport_size[1]))
         for num_object in range(num_objects):
-            bm = create_belief_maps(self.viewport_size, bounding_box_points[num_object])
-            belief_maps[num_object] = create_belief_maps(self.viewport_size, bounding_box_points[num_object], sigma=5)
+            belief_maps[num_object] = create_belief_maps(scaled_viewport_size, bounding_box_points[num_object]/self.scaling_factor, sigma=1)
 
-        plt.imshow(belief_maps[0, 0])
-        plt.show()
 
-        """
-        # Generate the semantic segmentation image
-        image_masks, image_masks_3d = list(), list()
+        # Calculate the affinity maps
+        # Format: (num objects, num bounding box edges, image width, image height)
+        affinity_maps = np.zeros((num_objects, 16, scaled_viewport_size[0], scaled_viewport_size[1]))
+        for num_object in range(num_objects):
+            affinity_maps[num_object] = create_affinity_maps(scaled_viewport_size, bounding_box_points[num_object, 0]/self.scaling_factor, bounding_box_points[num_object, 1:]/self.scaling_factor, radius=1, sigma=1)
 
-        for color in self.colors:
-            image_mask = np.apply_along_axis(lambda x: int(np.array_equal(x, color)), 2, image_ambient_light)
-            image_masks.append(image_mask)
-            image_masks_3d.append(np.repeat(image_mask[:, :, np.newaxis], 3, axis=2))
-
-        distances_x_direction, distances_y_direction, depth_images = list(), list(), list()
-        # Generate the images with centers in x and y direction
-        for image_mask, object_center in zip(image_masks, object_centers):
-            image_pixel_values = np.flip(np.array(np.meshgrid(np.arange(0, self.viewport_size[0], 1), np.arange(0, self.viewport_size[1], 1))).T, axis=2)
-            image_pixel_values = image_pixel_values*np.reshape(image_mask, (self.viewport_size[0], self.viewport_size[1], 1))
-            distance_x_direction = np.apply_along_axis(lambda x: (x[0] - object_center[0])/np.linalg.norm(x - object_center[:2]), 2, image_pixel_values)*image_mask
-            distance_y_direction = np.apply_along_axis(lambda x: (x[1] - object_center[1]) / np.linalg.norm(x - object_center[:2]), 2, image_pixel_values)*image_mask
-
-            # Generate depth image
-            depth_image = image_mask*object_center[2]
-
-            distances_x_direction.append(distance_x_direction)
-            distances_y_direction.append(distance_y_direction)
-            depth_images.append(depth_image)
-
-        distance_x_direction = reduce(lambda x, y: x + y, distances_x_direction)
-        distance_y_direction = reduce(lambda x, y: x + y, distances_y_direction)
-        depth_image = reduce(lambda x, y: x + y, depth_images)
-        """
-
-        return image_original, alpha_original, bounding_box_points#, object_centers, image_masks, distance_x_direction, distance_y_direction, depth_image
-
-    def normalize(self, x, x_min, x_max):
-        return (x-x_min)/(x_max-x_min)
-
-    def color_mesh(self, mesh):
-        """ color the mesh
-        # Arguments
-            mesh: obj mesh
-        # Returns
-            mesh: colored obj mesh
-        """
-        vertices = mesh.vertices
-        x_min = mesh.vertices[:, 0].min()
-        x_max = mesh.vertices[:, 0].max()
-        y_min = mesh.vertices[:, 1].min()
-        y_max = mesh.vertices[:, 1].max()
-        z_min = mesh.vertices[:, 2].min()
-        z_max = mesh.vertices[:, 2].max()
-
-        # make vertices using RGB format
-        vertices_x = 255 * self.normalize(mesh.vertices[:, 0:1], x_min, x_max)
-        vertices_y = 255 * self.normalize(mesh.vertices[:, 1:2], y_min, y_max)
-        vertices_z = 255 * self.normalize(mesh.vertices[:, 2:3], z_min, z_max)
-
-        vertices_x = vertices_x.astype('uint8')
-        vertices_y = vertices_y.astype('uint8')
-        vertices_z = vertices_z.astype('uint8')
-        colors = np.hstack([vertices_x, vertices_y, vertices_z])
-
-        mesh.visual = mesh.visual.to_color()
-        mesh.visual.vertex_colors = colors
-
-        return mesh
+        return image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps
 
     def color_mesh_uniform(self, mesh, color):
         vertices = mesh.vertices
@@ -285,18 +287,18 @@ if __name__ == "__main__":
     num_samples = 5
     file_paths = ["/home/fabian/.keras/datasets/035_power_drill/tsdf/textured.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
     colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
-    view = SingleView(filepath=file_paths, colors=colors, viewport_size=(224, 224))
+    viewport_size = (400, 400)
 
-    image_original, alpha_original, bounding_box_points, object_centers, semantic_segmentation_images, distance_x_direction, distance_y_direction, depth_image = view.render()
+    view = SingleView(filepath=file_paths, colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
 
-    f, axs = plt.subplots(1, 5)
-    #plt.axis('off')
+    image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps = view.render()
+
+    f, axs = plt.subplots(1, 3)
+    print(affinity_maps.shape)
 
     axs[0].imshow(image_original)
-    axs[1].imshow(semantic_segmentation_images[0])
-    axs[2].imshow(distance_x_direction)
-    axs[3].imshow(distance_y_direction)
-    axs[4].imshow(depth_image)
+    axs[1].imshow(np.sum(belief_maps[0, :], axis=0))
+    axs[2].imshow(affinity_maps[0, 1])
 
     for ax in axs:
         ax.get_xaxis().set_ticks([])

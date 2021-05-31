@@ -1,5 +1,0 @@
-Start training:
-
-~/.virtualenvs/py38_paz/bin/python3.8 examples/posecnn/train.py --obj_path /home/fabian/.keras/datasets/035_power_drill/tsdf/textured.obj /home/fabian/.keras/datasets/011_banana/tsdf/textured.obj --images_directory /home/fabian/.keras/backgrounds
-
--------------------------------------------
