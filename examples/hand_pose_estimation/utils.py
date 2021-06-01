@@ -11,20 +11,20 @@ def load_pretrained_weights(weights_path, model, num_layers):
         saver.restore(sess, weights_path[:-5])
 
         # get all global variables (including model variables)
-        vars_global = tf.compat.v1.global_variables()
+        global_variables = tf.compat.v1.global_variables()
 
         # get their name and value and put them into dictionary
         sess.as_default()
 
-        model_vars = {}
-        for var in vars_global:
+        model_variables = {}
+        for variable in global_variables:
             try:
-                model_vars[var.name] = var.eval()
+                model_variables[variable.name] = variable.eval()
             except:
-                print("For var={}, an exception occurred".format(var.name))
+                print("For var={}, an exception occurred".format(variable.name))
 
         layer_count = 1  # skip Input layer
-        for key_count, weights in enumerate(model_vars.items()):
+        for key_count, weights in enumerate(model_variables.items()):
             if layer_count > num_layers:
                 break
 
@@ -39,4 +39,5 @@ def load_pretrained_weights(weights_path, model, num_layers):
                 print(bias.shape)
                 model.layers[layer_count].set_weights([kernel, bias])
                 layer_count = layer_count + 1
+
     return model
