@@ -4,6 +4,7 @@ import json
 import argparse
 
 import numpy as np
+import matplotlib.pyplot as plt
 import neptune
 
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
@@ -32,7 +33,7 @@ parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
 parser.add_argument('-id', '--images_directory', type=str,
                     help='Path to directory containing background images',
                     default=None)
-parser.add_argument('-bs', '--batch_size', default=2, type=int,
+parser.add_argument('-bs', '--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
@@ -85,7 +86,7 @@ args = parser.parse_args()
 
 # setting optimizer and compiling model
 latent_dimension = args.latent_dimension
-model = DOPE(num_stages=args.num_stages, image_shape=(args.image_size, args.image_size, 3))
+model = DOPE(num_stages=args.num_stages, image_shape=(args.image_size, args.image_size, 3), num_belief_maps=1)
 optimizer = Adam(args.learning_rate, amsgrad=True)
 
 # Add losses for all the stages
@@ -95,7 +96,7 @@ for i in range(1, args.num_stages+1):
     #losses['affinity_maps_stage_' + str(i)] = 'mse'
 
 print(losses)
-model.compile(optimizer, losses, metrics=['mse'])
+model.compile(optimizer, 'mse', metrics=['mse'])
 model.summary()
 
 # setting scene
@@ -112,7 +113,6 @@ else:
     image_paths = None
 
 processor = ImageGenerator(renderer, args.image_size, int(args.image_size/args.scaling_factor), image_paths, args.num_occlusions, num_stages=3)
-
 sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
@@ -176,6 +176,7 @@ callbacks.append(plotCallback)
 
 # model optimization
 if bool(args.use_generator):
+
     model.fit_generator(
         sequence,
         steps_per_epoch=args.steps_per_epoch,

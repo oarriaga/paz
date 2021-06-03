@@ -40,7 +40,8 @@ class ImageGeneratorProcessor(Processor):
 
         # Just works for one object (for now)
         belief_maps = np.transpose(belief_maps[0], axes=(1,2,0))
-        affinity_maps = np.transpose(create_affinity_maps[0], axes=(1,2,0))
+        #affinity_maps = np.transpose(create_affinity_maps[0], axes=(1,2,0))
+        affinity_maps = list()
 
         if self.num_stages == 1:
             return image_original, belief_maps, affinity_maps

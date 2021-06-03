@@ -182,6 +182,7 @@ class SingleView():
         #self.world_origin = mesh_original.mesh.centroid
 
         # Second scene = scene with ambient light
+        """
         loaded_trimeshes = [trimesh.load(path) for path in paths]
         self.scene_ambient_light = Scene(bg_color=[0, 0, 0, 0], ambient_light=[255, 255, 255])
         #self.camera = PerspectiveCamera(y_fov, aspectRatio=np.divide(*size))
@@ -204,6 +205,7 @@ class SingleView():
         self.scene_original.set_pose(self.light_original, camera_to_world)
 
         self.scene_ambient_light.set_pose(self.camera_ambient_light, camera_to_world)
+        """
 
     def _sample_parameters(self):
         distance = sample_uniformly(self.distance)
@@ -219,14 +221,14 @@ class SingleView():
         camera_to_world, world_to_camera = compute_modelview_matrices(
             camera_origin, self.world_origin, self.roll, self.shift)
         self.scene_original.set_pose(self.camera_original, camera_to_world)
-        self.scene_ambient_light.set_pose(self.camera_ambient_light, camera_to_world)
+        self.scene_original.set_pose(self.light_original, camera_to_world)
+        #self.scene_ambient_light.set_pose(self.camera_ambient_light, camera_to_world)
 
         positions, object_centers, extents = list(), list(), list()
 
-        for mesh_original, mesh_ambient_light, mesh_origin in zip(self.meshes_original, self.meshes_ambient_light, self.mesh_origins):
+        for mesh_original, mesh_origin in zip(self.meshes_original, self.mesh_origins):
             translation = get_random_translation()
             mesh_original.translation = translation
-            mesh_ambient_light.translation = translation
             positions.append(np.append(mesh_origin + translation, [1]))
             extents.append(mesh_original.mesh.extents)
 
@@ -234,7 +236,7 @@ class SingleView():
 
         # Stores the bounding box point locations. Format:
         # (number of objects in the scene, number of edges of the bounding box, pixel coordinates of each point)
-        bounding_box_points = np.zeros((num_objects, 9, 2))
+        bounding_box_points = np.zeros((num_objects, 1, 2))
 
         # Calculate all the bounding box points
         # Important: the first point in the list is the object center!
@@ -242,6 +244,7 @@ class SingleView():
             (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
             bounding_box_points[i, 0] = np.array([x, y])
 
+            """
             num_bounding_box_point = 1
             for x_extent in [extent[0]/2, -extent[0]/2]:
                 for y_extent in [extent[1]/2, -extent[1]/2]:
@@ -251,6 +254,7 @@ class SingleView():
                         (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
                         num_bounding_box_point += 1
+            """
 
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
@@ -262,14 +266,17 @@ class SingleView():
         # Format: (num objects, num bounding box edges, image width, image height)
         belief_maps = np.zeros((num_objects, 9, scaled_viewport_size[0], scaled_viewport_size[1]))
         for num_object in range(num_objects):
-            belief_maps[num_object] = create_belief_maps(scaled_viewport_size, bounding_box_points[num_object]/self.scaling_factor, sigma=1)
+            belief_maps[num_object] = create_belief_maps(scaled_viewport_size, bounding_box_points[num_object]/self.scaling_factor, sigma=2)
 
 
         # Calculate the affinity maps
         # Format: (num objects, num bounding box edges, image width, image height)
+        affinity_maps = list()
+        """
         affinity_maps = np.zeros((num_objects, 16, scaled_viewport_size[0], scaled_viewport_size[1]))
         for num_object in range(num_objects):
             affinity_maps[num_object] = create_affinity_maps(scaled_viewport_size, bounding_box_points[num_object, 0]/self.scaling_factor, bounding_box_points[num_object, 1:]/self.scaling_factor, radius=1, sigma=1)
+        """
 
         return image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps
 

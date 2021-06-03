@@ -49,24 +49,24 @@ class PlotImagesCallback(Callback):
         original_images = batch[0]['input_1']
 
         num_rows = 5
-        num_cols = 9
+        num_cols = 1
         fig, ax = plt.subplots(num_rows, num_cols)
         cols = ["Input image", "Ground truth", "Predicted image", "Predicted error"]
 
         for i in range(num_rows):
-            for j in range(num_cols):
-                ax[i, j].get_xaxis().set_visible(False)
-                ax[i, j].get_yaxis().set_visible(False)
+            #for j in range(num_cols):
+            ax[i].get_xaxis().set_visible(False)
+            ax[i].get_yaxis().set_visible(False)
 
         # Show original image in the first row
-        ax[0, 0].imshow(original_images[0], vmin=0.0, vmax=1.0)
-        for i in range(1, num_cols):
-            ax[0, i].axis('off')
+        ax[0].imshow(original_images[0], vmin=0.0, vmax=1.0)
+        #for i in range(1, num_cols):
+        ax[0].axis('off')
 
         # Show real belief and affinity maps of the first stage in the second row
-        ax[1, 4].set_title("Real belief maps first stage")
-        for i in range(num_cols):
-            ax[1, i].imshow(batch[1]["belief_maps_stage_1"][0, :, :, i], cmap='gray')
+        ax[1].set_title("Real belief maps first stage")
+        #for i in range(num_cols):
+        ax[1].imshow(batch[1]["belief_maps_stage_1"][0, :, :, 0], cmap='gray')
         #ax[1, 1].imshow(batch[1]["belief_maps_stage_1"][0, :, :, 1], cmap='gray')
         #ax[1, 0].imshow(batch[1]["belief_maps_stage_1"][0, :, :, 2], cmap='gray')
         #ax[1, 1].imshow(batch[1]["belief_maps_stage_1"][0, :, :, 3], cmap='gray')
@@ -74,9 +74,9 @@ class PlotImagesCallback(Callback):
         #ax[1, 3].imshow(batch[1]["affinity_maps_stage_1"][0, :, :, 1], cmap='gray', vmin=-1.0, vmax=1.0)
 
         # Show predicted belief and affinity maps of the first stage in the third row
-        ax[2, 4].set_title("Predicted belief maps first stage")
-        for i in range(num_cols):
-            ax[2, i].imshow(predictions[0][0, :, :, i], cmap='gray', vmin=0.0, vmax=1.0)
+        ax[2].set_title("Predicted belief maps first stage")
+        #for i in range(num_cols):
+        ax[2].imshow(predictions[0][0, :, :, 0], cmap='gray', vmin=0.0, vmax=1.0)
         #ax[2, 1].imshow(predictions[0][0, :, :, 1], cmap='gray', vmin=0.0, vmax=1.0)
         #ax[2, 0].imshow(predictions[0][0, :, :, 2], cmap='gray', vmin=0.0, vmax=1.0)
         #ax[2, 1].imshow(predictions[0][0, :, :, 3], cmap='gray', vmin=0.0, vmax=1.0)
@@ -84,9 +84,9 @@ class PlotImagesCallback(Callback):
         #ax[2, 3].imshow(predictions[1][0, :, :, 1], cmap='gray', vmin=-1.0, vmax=1.0)
 
         # Show real belief and affinity maps of the last stage in the third row
-        ax[3, 4].set_title("Real belief maps last stage")
-        for i in range(num_cols):
-            ax[3, i].imshow(batch[1]["belief_maps_stage_{}".format(self.num_stages)][0, :, :, i], cmap='gray')
+        ax[3].set_title("Real belief maps last stage")
+        #for i in range(num_cols):
+        ax[3].imshow(batch[1]["belief_maps_stage_{}".format(self.num_stages)][0, :, :, 0], cmap='gray')
         #ax[3, 1].imshow(batch[1]["belief_maps_stage_{}".format(self.num_stages)][0, :, :, 1], cmap='gray')
         #ax[3, 0].imshow(batch[1]["belief_maps_stage_{}".format(self.num_stages)][0, :, :, 2], cmap='gray')
         #ax[3, 1].imshow(batch[1]["belief_maps_stage_{}".format(self.num_stages)][0, :, :, 3], cmap='gray')
@@ -94,9 +94,9 @@ class PlotImagesCallback(Callback):
         #ax[3, 3].imshow(batch[1]["affinity_maps_stage_{}".format(self.num_stages)][0, :, :, 1], cmap='gray', vmin=-1.0, vmax=1.0)
 
         # Show predicted belief and affinity maps of the last stage in the fourth row
-        ax[4, 4].set_title("Predicted belief maps last stage")
-        for i in range(num_cols):
-            ax[4, i].imshow(predictions[-1][0, :, :, i], cmap='gray', vmin=0.0, vmax=1.0)
+        ax[4].set_title("Predicted belief maps last stage")
+        #for i in range(num_cols):
+        ax[4].imshow(predictions[-1][0, :, :, 0], cmap='gray', vmin=0.0, vmax=1.0)
         #ax[4, 1].imshow(predictions[-2][0, :, :, 1], cmap='gray', vmin=0.0, vmax=1.0)
         #ax[4, 0].imshow(predictions[-2][0, :, :, 2], cmap='gray', vmin=0.0, vmax=1.0)
         #ax[4, 1].imshow(predictions[-2][0, :, :, 3], cmap='gray', vmin=0.0, vmax=1.0)
@@ -146,6 +146,7 @@ def create_stage(input, out_channels, num_stage, name, activation_last_layer='si
 def DOPE(num_classes=2, num_belief_maps=9, num_affinity_maps=16, image_shape=(400, 400, 3), num_stages=1):
     # VGG-19 backend
     model_vgg19 = VGG19(weights='imagenet', include_top=False, input_shape=image_shape)
+    model_vgg19.trainable = True
 
     output_vgg19 = model_vgg19.get_layer('block4_conv3').output
 
