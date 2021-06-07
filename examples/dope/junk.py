@@ -1,19 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+import tensorflow as tf
 
-belief_maps = np.load("/media/fabian/Data/Masterarbeit/data/dope/train_data_224px/belief_maps_batch_1.npy")
-images = np.load("/media/fabian/Data/Masterarbeit/data/dope/train_data_224px/images_batch_1.npy")
+from model import custom_mse
 
-print(images.shape)
-print(belief_maps.shape)
+model = tf.keras.models.load_model('/media/fabian/Data/Masterarbeit/dope_model_epoch_75.pkl', custom_objects={'custom_mse': custom_mse })
+print(model.summary())
 
-index = 100
-
-image = images[index, :, :]
-belief_maps = np.sum(belief_maps[index, :, :, :], axis=-1)
-belief_maps_resized = np.clip(np.array(Image.fromarray(belief_maps).resize((224, 224))), a_min=0.0, a_max=1.0)
-belief_maps_resized = np.expand_dims(belief_maps_resized, axis=-1)
-
-plt.imshow(image + belief_maps_resized)
-plt.show()
+for layer in model.layers:
+    if type(layer) == tf.keras.layers.Conv2D:
+        print(layer.activation)

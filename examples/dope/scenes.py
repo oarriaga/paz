@@ -68,18 +68,21 @@ def create_belief_maps(image_size, bounding_box_points, sigma=16):
 
             #print("Point: {}".format(point))
             # Check if there is already a point inside the area where we want to add a new point
-            if belief_maps:
-                sum_belief_maps = np.sum(np.array(belief_maps), axis=0)
-                if np.sum(sum_belief_maps[int(point[1]) - max_width_belief_points:int(point[1]) + max_width_belief_points,\
-                                          int(point[0]) - max_width_belief_points:int(point[0]) + max_width_belief_points]) > 0:
-                    belief_maps.append(belief_map)
-                    continue
+            #if belief_maps:
+            #    sum_belief_maps = np.sum(np.array(belief_maps), axis=0)
+            #    if np.sum(sum_belief_maps[int(point[1]) - max_width_belief_points:int(point[1]) + max_width_belief_points,\
+            #                              int(point[0]) - max_width_belief_points:int(point[0]) + max_width_belief_points]) > 0:
+            #        belief_maps.append(belief_map)
+            #        continue
 
             # Assign a value to a pixel inside of the belief point depending on how far away it
             # is from the center of the point
             for i in range(int(point[0]) - max_width_belief_points, int(point[0]) + max_width_belief_points):
                 for j in range(int(point[1]) - max_width_belief_points, int(point[1]) + max_width_belief_points):
                     belief_map[j, i] = np.exp(-((i - int(point[0]))**2 + (j - int(point[1]))**2) / (2 * (sigma**2)))
+
+            # Normalize belief map so that the sum of all elements is 1
+            #belief_map /= np.sum(belief_map)
 
         belief_maps.append(belief_map)
 
@@ -236,7 +239,7 @@ class SingleView():
 
         # Stores the bounding box point locations. Format:
         # (number of objects in the scene, number of edges of the bounding box, pixel coordinates of each point)
-        bounding_box_points = np.zeros((num_objects, 1, 2))
+        bounding_box_points = np.zeros((num_objects, 9, 2))
 
         # Calculate all the bounding box points
         # Important: the first point in the list is the object center!
@@ -244,7 +247,6 @@ class SingleView():
             (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
             bounding_box_points[i, 0] = np.array([x, y])
 
-            """
             num_bounding_box_point = 1
             for x_extent in [extent[0]/2, -extent[0]/2]:
                 for y_extent in [extent[1]/2, -extent[1]/2]:
@@ -254,7 +256,6 @@ class SingleView():
                         (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
                         num_bounding_box_point += 1
-            """
 
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
@@ -263,11 +264,10 @@ class SingleView():
 
         scaled_viewport_size = (int(self.viewport_size[0]/self.scaling_factor), int(self.viewport_size[1]/self.scaling_factor))
         # Calculate the belief maps
-        # Format: (num objects, num bounding box edges, image width, image height)
+        # Format: (num objects, num bounding box points, image width, image height)
         belief_maps = np.zeros((num_objects, 9, scaled_viewport_size[0], scaled_viewport_size[1]))
         for num_object in range(num_objects):
             belief_maps[num_object] = create_belief_maps(scaled_viewport_size, bounding_box_points[num_object]/self.scaling_factor, sigma=2)
-
 
         # Calculate the affinity maps
         # Format: (num objects, num bounding box edges, image width, image height)

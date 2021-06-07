@@ -19,7 +19,7 @@ from paz.pipelines import AutoEncoderPredictor
 from scenes import SingleView
 
 from pipelines import ImageGenerator
-from model import DOPE, NeptuneLogger, PlotImagesCallback
+from model import DOPE, NeptuneLogger, PlotImagesCallback, custom_mse
 
 description = 'Training script for learning implicit orientation vector'
 root_path = os.path.join(os.path.expanduser('~'), '.keras/paz/')
@@ -86,17 +86,17 @@ args = parser.parse_args()
 
 # setting optimizer and compiling model
 latent_dimension = args.latent_dimension
-model = DOPE(num_stages=args.num_stages, image_shape=(args.image_size, args.image_size, 3), num_belief_maps=1)
+model = DOPE(num_stages=args.num_stages, image_shape=(args.image_size, args.image_size, 3), num_belief_maps=9)
 optimizer = Adam(args.learning_rate, amsgrad=True)
 
 # Add losses for all the stages
 losses = dict()
 for i in range(1, args.num_stages+1):
-    losses['belief_maps_stage_' + str(i)] = 'mse'
+    losses['belief_maps_stage_' + str(i)] = 'mse'#custom_mse
     #losses['affinity_maps_stage_' + str(i)] = 'mse'
 
 print(losses)
-model.compile(optimizer, 'mse', metrics=['mse'])
+model.compile(optimizer, losses, metrics=['mse'])
 model.summary()
 
 # setting scene
@@ -112,7 +112,7 @@ if not (args.images_directory is None):
 else:
     image_paths = None
 
-processor = ImageGenerator(renderer, args.image_size, int(args.image_size/args.scaling_factor), image_paths, args.num_occlusions, num_stages=3)
+processor = ImageGenerator(renderer, args.image_size, int(args.image_size/args.scaling_factor), image_paths, args.num_occlusions, num_stages=args.num_stages)
 sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
@@ -147,7 +147,7 @@ with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
 with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
-callbacks=[stop, log, save, plateau]
+callbacks = [log, save]
 
 # Set up neptune run
 if args.neptune_config is not None:
@@ -164,7 +164,8 @@ if args.neptune_config is not None:
 
     neptune.create_experiment(
        name=neptune_run_name,
-       description='VOC backgrounds',
+       description='',
+       upload_stdout=False,
        params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
     )
 
@@ -177,6 +178,8 @@ callbacks.append(plotCallback)
 # model optimization
 if bool(args.use_generator):
 
+    data = sequence.__getitem__(0)
+    bel_maps = data[1]['belief_maps_stage_1'][0].transpose(2, 0, 1)
     model.fit_generator(
         sequence,
         steps_per_epoch=args.steps_per_epoch,
