@@ -1,6 +1,10 @@
+import os
+import PIL.Image as Image
 import argparse
 from efficientdet_model import EfficientDet
-from misc import mock_input_image, load_pretrained_weights
+from misc import raw_images, load_pretrained_weights, preprocess_images
+from postprocess import get_postprocessor
+from visualize_detections import visualize_image_prediction
 
 if __name__ == "__main__":
 
@@ -147,6 +151,20 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "--anchor_scale",
+        default=4,
+        type=int,
+        help="Number of anchor scales available",
+        required=False,
+    )
+    parser.add_argument(
+        "--image_size",
+        default=512,
+        type=int,
+        help="Image size",
+        required=False,
+    )
+    parser.add_argument(
         "--box_class_repeats",
         default=3,
         type=int,
@@ -165,10 +183,30 @@ if __name__ == "__main__":
     config = vars(args)
     print(config)
     model = EfficientDet(config=config)
-    model.build(mock_input_image.shape)
+    model.build(raw_images.shape)
     print(model.summary())
     weight_file_path = '/home/deepan/Downloads/efficientdet-d0.h5'
     model = load_pretrained_weights(model, weight_file_path)
     print('Successfully copied weights.')
-    class_out, box_out = model(mock_input_image)
-    print(len(class_out), len(box_out))
+
+    image_size = (raw_images.shape[0],
+                  config['image_size'],
+                  config['image_size'],
+                  raw_images.shape[-1])
+    input_image, image_scales = preprocess_images(raw_images, image_size)
+    class_out, box_out = model(input_image)
+    postprocess_detections = get_postprocessor('global')
+    detections = postprocess_detections(config,
+                                        class_out,
+                                        box_out,
+                                        image_scales)
+    print("Detections: ", detections)
+
+    for i, prediction in enumerate(detections):
+        img = visualize_image_prediction(raw_images[i],
+                                         prediction)
+        output_image_path = os.path.join(str(i) + '.jpg')
+        Image.fromarray(img.astype('uint8')).save(output_image_path)
+        print('writing file to %s' % output_image_path)
+
+    print('task completed')
