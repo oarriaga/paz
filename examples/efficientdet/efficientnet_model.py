@@ -246,24 +246,24 @@ class MBConvBlock(Layer):
     def block_args(self):
         return self._block_args
 
-    @staticmethod
-    def get_conv_name():
-        cid = itertools.count(0)
+
+    def get_conv_name(self):
         name = 'conv2d' + (
-            "" if not next(cid) else '_' + str(next(cid) // 2)
+            "" if not next(self.cid) else '_' + str(next(self.cid) // 2)
         )
         return name
 
-    @staticmethod
-    def get_bn_name():
-        bid = itertools.count(0)
+
+    def get_bn_name(self):
         name = 'batch_normalization' + (
-            "" if not next(bid) else '_' + str(next(bid) // 2)
+            "" if not next(self.bid) else '_' + str(next(self.bid) // 2)
         )
         return name
 
     def _build(self):
         """Builds block according to the arguments."""
+        self.cid = itertools.count(0)
+        self.bid = itertools.count(0)
         if self._block_args.super_pixel == 1:
             self.super_pixel = SuperPixel(
                 self._block_args, self._global_params, name='super_pixel'
@@ -583,10 +583,8 @@ class Model(tf.keras.Model):
         conv_block_map = {0: MBConvBlock, 1: MBConvBlockWithoutDepthwise}
         return conv_block_map[conv_type]
 
-    @staticmethod
-    def get_block_name():
-        block_id = itertools.count(0)
-        name = 'blocks_%d' % next(block_id)
+    def get_block_name(self):
+        name = 'blocks_%d' % next(self.block_id)
         return name
 
     def _build(self):
@@ -596,6 +594,7 @@ class Model(tf.keras.Model):
         # Stem part.
         self._stem = Stem(self._global_params,
                           self._blocks_args[0].input_filters)
+        self.block_id = itertools.count(0)
 
         # Builds blocks.
         for i, block_args in enumerate(self._blocks_args):

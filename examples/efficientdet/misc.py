@@ -1,14 +1,11 @@
 import h5py
 import numpy as np
 import tensorflow as tf
-import cv2
+from PIL import Image
 
 # Mock input image.
-# raw_images = tf.random.uniform((1, 512, 512, 3),
-#                                      dtype=tf.dtypes.float32,
-#                                      seed=1) * 255
-raw_images = cv2.imread('/home/deepan/Downloads/000000290320.jpg')
-# raw_images = cv2.imread('./img.png')
+raw_images = Image.open('/media/deepan/externaldrive1/Gini/project_repos/paz/examples/efficientdet/img1.jpg')
+raw_images = np.asarray(raw_images)
 raw_images = raw_images[np.newaxis]
 raw_images = tf.convert_to_tensor(raw_images, dtype=tf.dtypes.float32)
 
@@ -25,34 +22,74 @@ def read_hdf5(path):
     return weights
 
 
-def load_pretrained_weights(model, weight_file_path):
+def load_pretrained_weights(model, weight_file_path, using_renamed_layers_from_hdf5=False):
     """
     A self-made manual method to copy weights from
     the official EfficientDet to this implementation.
     """
     pretrained_weights = read_hdf5(weight_file_path)
     assert len(model.weights) == len(pretrained_weights)
-    str_appender = ['efficientnet-b0/',
-                    'resample_p6/',
-                    'fpn_cells/',
-                    'class_net/',
-                    'box_net/']
+    string_appender = ['efficientnet-b0/',
+                       'resample_p6/',
+                       'fpn_cells/',
+                       'class_net/',
+                       'box_net/']
     for n, i in enumerate(model.weights):
         name = i.name
-        for appenders in str_appender:
-            if appenders in name:
-                name = '/' + appenders + name
-        if 'batch_normalization' in name:
-            name = name.replace('batch_normalization',
-                                'tpu_batch_normalization')
+        if using_renamed_layers_from_hdf5:
+            name = '/' + name
+        else:
+            for appenders in string_appender:
+                if appenders in name:
+                    name = '/' + appenders + name
+            if 'batch_normalization' in name:
+                name = name.replace('batch_normalization',
+                                    'tpu_batch_normalization')
         if name in list(pretrained_weights.keys()):
             if model.weights[n].shape == pretrained_weights[name].shape:
                 model.weights[n].assign(pretrained_weights[name])
             else:
-                ValueError('Shape mismatch for weights of same name.')
+                raise ValueError('Shape mismatch for weights of same name.')
         else:
-            ValueError("Weight with %s not found." % name)
+            print('not copying due to no name', name)
+            raise ValueError("Weight with %s not found." % name)
     return model
+
+
+def create_renamed_hdf5(path):
+    """A function to update the weights name of a h5 file.
+
+    Arguments:
+        path: Path of the hdf5 weight file [COPY].
+        This function updates layer names of the
+        passed hdf5 file directly. Therefore, make a copy.
+    """
+    keys = []
+    # Weight name substring to be searched
+    search_string = ['/box_net/box_net/',
+                     '/class_net/class_net/',
+                     '/efficientnet-b0/efficientnet-b0/',
+                     '/fpn_cells/fpn_cells/',
+                     '/resample_p6/resample_p6/',
+                     'tpu_batch_normalization']
+    # Weight name to replace the above searched substring
+    replace_string = ['box_net/',
+                     'class_net/',
+                     'efficientnet-b0/',
+                     'fpn_cells/',
+                     'resample_p6/',
+                     'batch_normalization']
+    with h5py.File(path, 'r+') as f:
+        f.visit(keys.append)
+        for i in range(len(search_string)):
+            for key_args in range(len(keys)):
+                keys = []
+                f.visit(keys.append)
+                if search_string[i] in f[keys[key_args]].name:
+                    new_key = str(f[keys[key_args]].name).replace(search_string[i], replace_string[i])
+                    f[new_key] = f[keys[key_args]]
+                    del f[keys[key_args]]
+    f.close()
 
 
 def preprocess_images(image, image_size):

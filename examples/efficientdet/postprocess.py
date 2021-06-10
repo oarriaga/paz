@@ -195,10 +195,10 @@ def generate_detections_from_nms_output(nms_boxes_bs,
                            nms_scores_bs.dtype)
     detections_bs = [
         image_ids_bs * tf.ones_like(nms_scores_bs),
-        nms_boxes_bs[:, :, 1],
         nms_boxes_bs[:, :, 0],
-        nms_boxes_bs[:, :, 3],
+        nms_boxes_bs[:, :, 1],
         nms_boxes_bs[:, :, 2],
+        nms_boxes_bs[:, :, 3],
         nms_scores_bs,
         nms_classes_bs
     ]
@@ -207,9 +207,9 @@ def generate_detections_from_nms_output(nms_boxes_bs,
 
 def postprocess_per_class(params, cls_outputs, box_outputs, image_scales):
     params['nms_config'] = {
-        'method': 'gaussian',
+        'method': 'hard',
         'iou_thresh': None,  # use the default value based on method.
-        'score_thresh': 0.001,
+        'score_thresh': 0.4,
         'sigma': None,
         'pyfunc': False,
         'max_nms_inputs': 0,
@@ -256,7 +256,7 @@ def postprocess_global(params, cls_outputs, box_outputs, image_scales):
     params['nms_config'] = {
         'method': 'hard',
         'iou_thresh': 0.5,  # use the default value based on method.
-        'score_thresh': 0.001,
+        'score_thresh': 0.4,
         'sigma': None,
         'pyfunc': False,
         'max_nms_inputs': 0,

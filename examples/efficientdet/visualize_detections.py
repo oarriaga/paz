@@ -356,7 +356,7 @@ def visualize_image(image,
                     boxes,
                     classes,
                     scores,
-                    min_score_thresh=0.01,
+                    min_score_thresh=0.4,
                     max_boxes_to_draw=1000,
                     line_thickness=2):
     label_map = coco
