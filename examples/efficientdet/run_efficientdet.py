@@ -2,7 +2,7 @@ import os
 import PIL.Image as Image
 import argparse
 from efficientdet_model import EfficientDet
-from misc import raw_images, load_pretrained_weights, preprocess_images, rename_hdf5
+from misc import raw_images, load_pretrained_weights, preprocess_images
 from postprocess import get_postprocessor
 from visualize_detections import visualize_image_prediction
 
@@ -185,8 +185,12 @@ if __name__ == "__main__":
     model = EfficientDet(config=config)
     model.build(raw_images.shape)
     print(model.summary())
-    weight_file_path = '/media/deepan/externaldrive1/Gini/project_repos/paz/examples/efficientdet/efficientdet-d0.h5'
-    model = load_pretrained_weights(model, weight_file_path)
+
+    path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
+    directory_path = 'paz/examples/efficientdet/'
+    file_name = 'efficientdet-d0.h5'
+    file_path = path_to_paz + directory_path + file_name
+    model = load_pretrained_weights(model, file_path)
     print('Successfully copied weights.')
 
     image_size = (raw_images.shape[0],
@@ -204,7 +208,7 @@ if __name__ == "__main__":
     for i, prediction in enumerate(detections):
         img = visualize_image_prediction(raw_images[i],
                                          prediction)
-        output_image_path = os.path.join(str(i) + '.jpg')
+        output_image_path = os.path.join(path_to_paz + directory_path + str(i) + '.jpg')
         Image.fromarray(img.astype('uint8')).save(output_image_path)
         print('writing file to %s' % output_image_path)
 

@@ -246,13 +246,11 @@ class MBConvBlock(Layer):
     def block_args(self):
         return self._block_args
 
-
     def get_conv_name(self):
         name = 'conv2d' + (
             "" if not next(self.cid) else '_' + str(next(self.cid) // 2)
         )
         return name
-
 
     def get_bn_name(self):
         name = 'batch_normalization' + (

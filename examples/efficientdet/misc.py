@@ -4,7 +4,11 @@ import tensorflow as tf
 from PIL import Image
 
 # Mock input image.
-raw_images = Image.open('/media/deepan/externaldrive1/Gini/project_repos/paz/examples/efficientdet/img1.jpg')
+path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
+directory_path = 'paz/examples/efficientdet/'
+file_name = 'img2.png'
+file_path = path_to_paz + directory_path + file_name
+raw_images = Image.open(file_path)
 raw_images = np.asarray(raw_images)
 raw_images = raw_images[np.newaxis]
 raw_images = tf.convert_to_tensor(raw_images, dtype=tf.dtypes.float32)
@@ -18,11 +22,14 @@ def read_hdf5(path):
         f.visit(keys.append)
         for key in keys:
             if ':' in key:
-                weights[f[key].name] = f[key][()]
+                weights[f[key].name] = \
+                    f[key][()]
     return weights
 
 
-def load_pretrained_weights(model, weight_file_path, using_renamed_layers_from_hdf5=False):
+def load_pretrained_weights(model,
+                            weight_file_path,
+                            using_renamed_layers_from_hdf5=False):
     """
     A self-made manual method to copy weights from
     the official EfficientDet to this implementation.
@@ -74,11 +81,11 @@ def create_renamed_hdf5(path):
                      'tpu_batch_normalization']
     # Weight name to replace the above searched substring
     replace_string = ['box_net/',
-                     'class_net/',
-                     'efficientnet-b0/',
-                     'fpn_cells/',
-                     'resample_p6/',
-                     'batch_normalization']
+                      'class_net/',
+                      'efficientnet-b0/',
+                      'fpn_cells/',
+                      'resample_p6/',
+                      'batch_normalization']
     with h5py.File(path, 'r+') as f:
         f.visit(keys.append)
         for i in range(len(search_string)):
@@ -86,7 +93,8 @@ def create_renamed_hdf5(path):
                 keys = []
                 f.visit(keys.append)
                 if search_string[i] in f[keys[key_args]].name:
-                    new_key = str(f[keys[key_args]].name).replace(search_string[i], replace_string[i])
+                    new_key = f[keys[key_args]].name.replace(search_string[i],
+                                                             replace_string[i])
                     f[new_key] = f[keys[key_args]]
                     del f[keys[key_args]]
     f.close()
