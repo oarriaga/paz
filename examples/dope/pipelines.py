@@ -30,7 +30,7 @@ class ImageGeneratorProcessor(Processor):
         self.num_stages = num_stages
 
     def call(self):
-        image_original, alpha_original, bounding_box_points, belief_maps, create_affinity_maps = self.render()
+        image_original, alpha_original, bounding_box_points, belief_maps, create_affinity_maps, _ = self.render()
 
         if not (self.augment is None):
             if self.split == pr.TRAIN:

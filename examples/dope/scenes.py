@@ -212,8 +212,10 @@ class SingleView():
 
     def _sample_parameters(self):
         distance = sample_uniformly(self.distance)
+        print("Distance: " + str(distance))
         camera_origin = sample_point_in_sphere(distance, self.top_only)
         camera_origin = random_perturbation(camera_origin, self.epsilon)
+        #print("Camera origin: " + str(camera_origin))
         return camera_origin
 
     def render(self):
@@ -230,9 +232,13 @@ class SingleView():
         positions, object_centers, extents = list(), list(), list()
 
         for mesh_original, mesh_origin in zip(self.meshes_original, self.mesh_origins):
+
             translation = get_random_translation()
             mesh_original.translation = translation
             positions.append(np.append(mesh_origin + translation, [1]))
+
+            print("Center in camera coords (scene): " + str(world_to_camera@np.append(translation + mesh_origin, [1])))
+
             extents.append(mesh_original.mesh.extents)
 
         num_objects = len(positions)
@@ -240,18 +246,21 @@ class SingleView():
         # Stores the bounding box point locations. Format:
         # (number of objects in the scene, number of edges of the bounding box, pixel coordinates of each point)
         bounding_box_points = np.zeros((num_objects, 9, 2))
+        bounding_box_points_3d = np.zeros((num_objects, 9, 3))
 
         # Calculate all the bounding box points
         # Important: the first point in the list is the object center!
         for i, (position, extent) in enumerate(zip(positions, extents)):
             (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
             bounding_box_points[i, 0] = np.array([x, y])
+            bounding_box_points_3d[i, 0] = position[:3]
 
             num_bounding_box_point = 1
             for x_extent in [extent[0]/2, -extent[0]/2]:
                 for y_extent in [extent[1]/2, -extent[1]/2]:
                     for z_extent in [extent[2]/2, -extent[2]/2]:
                         point_position = np.array([position[0] + x_extent, position[1] + y_extent, position[2] + z_extent, 1])
+                        bounding_box_points_3d[i, num_bounding_box_point] = point_position[:3]
 
                         (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
@@ -278,7 +287,7 @@ class SingleView():
             affinity_maps[num_object] = create_affinity_maps(scaled_viewport_size, bounding_box_points[num_object, 0]/self.scaling_factor, bounding_box_points[num_object, 1:]/self.scaling_factor, radius=1, sigma=1)
         """
 
-        return image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps
+        return image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps, bounding_box_points_3d
 
     def color_mesh_uniform(self, mesh, color):
         vertices = mesh.vertices
@@ -298,14 +307,14 @@ if __name__ == "__main__":
 
     view = SingleView(filepath=file_paths, colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
 
-    image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps = view.render()
+    image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps, _ = view.render()
 
-    f, axs = plt.subplots(1, 3)
-    print(affinity_maps.shape)
+    f, axs = plt.subplots(1, 2)
+    #print(affinity_maps.shape)
 
     axs[0].imshow(image_original)
     axs[1].imshow(np.sum(belief_maps[0, :], axis=0))
-    axs[2].imshow(affinity_maps[0, 1])
+    #axs[2].imshow(affinity_maps[0, 1])
 
     for ax in axs:
         ax.get_xaxis().set_ticks([])

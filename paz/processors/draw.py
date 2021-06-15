@@ -87,15 +87,15 @@ class DrawBoxes3D(Processor):
     def _make_points(self, class_to_dimensions):
         class_to_points = {}
         for class_name, dimensions in self.class_to_dimensions.items():
-            height, width = dimensions
-            point_1 = [+width, -height, +width]
-            point_2 = [+width, -height, -width]
-            point_3 = [-width, -height, -width]
-            point_4 = [-width, -height, +width]
-            point_5 = [+width, +height, +width]
-            point_6 = [+width, +height, -width]
-            point_7 = [-width, +height, -width]
-            point_8 = [-width, +height, +width]
+            height, width, depth = dimensions
+            point_1 = [+width, -height, +depth]
+            point_2 = [+width, -height, -depth]
+            point_3 = [-width, -height, -depth]
+            point_4 = [-width, -height, +depth]
+            point_5 = [+width, +height, +depth]
+            point_6 = [+width, +height, -depth]
+            point_7 = [-width, +height, -depth]
+            point_8 = [-width, +height, +depth]
             points = [point_1, point_2, point_3, point_4,
                       point_5, point_6, point_7, point_8]
             class_to_points[class_name] = np.array(points)

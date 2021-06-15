@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 from ..abstract import Processor, Pose6D
 from ..backend.keypoints import solve_PNP

@@ -58,6 +58,7 @@ class PlotImagesCallback(Callback):
         num_rows = self.num_stages + 2
         num_cols = 9
         fig, ax = plt.subplots(num_rows, num_cols)
+        fig.set_size_inches(18.5, 10.5)
 
         for i in range(num_rows):
             for j in range(num_cols):
@@ -82,6 +83,7 @@ class PlotImagesCallback(Callback):
                 ax[2 + i, col_number].imshow(predictions[i][0, :, :, col_number], cmap='gray', vmin=0.0, vmax=1.0)
 
         #plt.tight_layout()
+        fig.subplots_adjust(hspace=0.5)
 
         if self.neptune_logging:
             neptune.log_image('plot', fig, image_name="epoch_{}.png".format(epoch_index))
