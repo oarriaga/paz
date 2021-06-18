@@ -1,5 +1,5 @@
 from paz import processors as pr
-from paz.backend.image import show_image
+# from paz.backend.image import show_image
 from processors import LoadImage
 from paz.abstract import SequentialProcessor, Processor
 from processors import MatchBoxes
@@ -131,6 +131,7 @@ class ShowBoxes(Processor):
         image = image[..., ::-1]
         self.show_image(image)
         return image, boxes2D
+
 
 """
 class _AugmentDetection(Processor):
