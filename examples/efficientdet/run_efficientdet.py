@@ -1,10 +1,8 @@
-import os
-import PIL.Image as Image
 import argparse
 from efficientdet_model import EfficientDet
 from misc import raw_images, load_pretrained_weights, preprocess_images
 from postprocess import get_postprocessor
-from visualize_detections import visualize_image_prediction
+
 
 if __name__ == "__main__":
 
@@ -178,6 +176,23 @@ if __name__ == "__main__":
         help="Whether feature only is required from EfficientDet",
         required=False,
     )
+    parser.add_argument(
+        "--postprocessor",
+        default='paz',
+        type=str,
+        help="Which postprocessor to use. "
+             "Options: paz, pre_class_official, global_official",
+        required=False,
+    )
+    parser.add_argument(
+        "--weight_file_path",
+        default='/media/deepan/externaldrive1/Gini/project_repos/paz/'
+                'examples/efficientdet/efficientdet-d0.h5',
+        type=str,
+        help="EfficientDet model weight file path. "
+             "Options: paz, pre_class_official, global_official",
+        required=False,
+    )
 
     args = parser.parse_args()
     config = vars(args)
@@ -186,11 +201,7 @@ if __name__ == "__main__":
     model.build(raw_images.shape)
     print(model.summary())
 
-    path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
-    directory_path = 'paz/examples/efficientdet/'
-    file_name = 'efficientdet-d0.h5'
-    file_path = path_to_paz + directory_path + file_name
-    model = load_pretrained_weights(model, file_path)
+    model = load_pretrained_weights(model, config['weight_file_path'])
     print('Successfully copied weights.')
 
     image_size = (raw_images.shape[0],
@@ -199,17 +210,11 @@ if __name__ == "__main__":
                   raw_images.shape[-1])
     input_image, image_scales = preprocess_images(raw_images, image_size)
     class_out, box_out = model(input_image)
-    postprocess_detections = get_postprocessor('global')
+    postprocess_detections = get_postprocessor(config['postprocessor'])
     detections = postprocess_detections(config,
                                         class_out,
                                         box_out,
-                                        image_scales)
-
-    for i, prediction in enumerate(detections):
-        img = visualize_image_prediction(raw_images[i],
-                                         prediction)
-        output_image_path = os.path.join(path_to_paz + directory_path + str(i) + '.jpg')
-        Image.fromarray(img.astype('uint8')).save(output_image_path)
-        print('writing file to %s' % output_image_path)
-
+                                        image_scales,
+                                        raw_images=raw_images)
+    print(detections)
     print('task completed')

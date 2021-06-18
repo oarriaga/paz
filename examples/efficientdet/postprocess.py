@@ -1,5 +1,11 @@
 import tensorflow as tf
 import anchors
+import paz.processors as pr
+from paz.abstract import SequentialProcessor
+from paz.datasets.utils import get_class_names
+from paz.backend.boxes import to_center_form
+from visualize_detections import visualize_image_prediction
+from misc import save_file
 
 
 def pre_nms(params, cls_outputs, box_outputs, topk=True):
@@ -59,6 +65,7 @@ def topk_class_boxes(params, cls_outputs, box_outputs):
         box_outputs_topk = tf.gather_nd(box_outputs,
                                         tf.expand_dims(indices, 2),
                                         batch_dims=1)
+        print(box_outputs_topk.shape, cls_outputs_topk.shape)
     else:
         clas_outputs_idx = tf.math.argmax(cls_outputs,
                                           axis=-1,
@@ -205,10 +212,14 @@ def generate_detections_from_nms_output(nms_boxes_bs,
     return tf.stack(detections_bs, axis=-1, name='detections')
 
 
-def postprocess_per_class(params, cls_outputs, box_outputs, image_scales):
+def postprocess_per_class(params,
+                          cls_outputs,
+                          box_outputs,
+                          image_scales,
+                          raw_images=None):
     params['nms_config'] = {
         'method': 'hard',
-        'iou_thresh': None,  # use the default value based on method.
+        'iou_thresh': 0.5,  # use the default value based on method.
         'score_thresh': 0.4,
         'sigma': None,
         'pyfunc': False,
@@ -225,13 +236,23 @@ def postprocess_per_class(params, cls_outputs, box_outputs, image_scales):
                         scores,
                         classes,
                         image_scales)
-    return generate_detections_from_nms_output(nms_boxes_bs,
-                                               nms_classes_bs,
-                                               nms_scores_bs,
-                                               image_ids)
+    detections = generate_detections_from_nms_output(nms_boxes_bs,
+                                                     nms_classes_bs,
+                                                     nms_scores_bs,
+                                                     image_ids)
+    for i, prediction in enumerate(detections):
+        img = visualize_image_prediction(raw_images[i],
+                                         prediction)
+        file_name = str(i) + '.jpg'
+        save_file(file_name, img)
+    return detections
 
 
-def postprocess_global(params, cls_outputs, box_outputs, image_scales):
+def postprocess_global(params,
+                       cls_outputs,
+                       box_outputs,
+                       image_scales,
+                       raw_images=None):
 
     """Post processing with global NMS.
 
@@ -274,10 +295,68 @@ def postprocess_global(params, cls_outputs, box_outputs, image_scales):
     if image_scales is not None:
         scales = tf.expand_dims(tf.expand_dims(image_scales, -1), -1)
         nms_boxes = nms_boxes * tf.cast(scales, nms_boxes.dtype)
-    return generate_detections_from_nms_output(nms_boxes,
-                                               nms_classes,
-                                               nms_scores,
-                                               image_ids)
+    detections = generate_detections_from_nms_output(nms_boxes,
+                                                     nms_classes,
+                                                     nms_scores,
+                                                     image_ids)
+    for i, prediction in enumerate(detections):
+        img = visualize_image_prediction(raw_images[i],
+                                         prediction)
+        file_name = str(i) + '.jpg'
+        save_file(file_name, img)
+    return detections
+
+
+def postprocess_paz(params,
+                    cls_outputs,
+                    box_outputs,
+                    image_scales,
+                    raw_images=None):
+    params['nms_config'] = {
+        'method': 'hard',
+        'iou_thresh': 0.5,  # use the default value based on method.
+        'score_thresh': 0.5,
+        'sigma': None,
+        'pyfunc': False,
+        'max_nms_inputs': 0,
+        'max_output_size': 100,
+    }
+    coco = get_class_names('COCO')
+    prior_anchors = anchors.Anchors(params['min_level'],
+                                    params['max_level'],
+                                    params['num_scales'],
+                                    params['aspect_ratios'],
+                                    params['anchor_scale'],
+                                    params['image_size'])
+    prior_boxes = prior_anchors.boxes
+    prior_boxes = tf.expand_dims(prior_boxes, axis=0)
+    s1, s2, s3, s4 = tf.split(prior_boxes, num_or_size_splits=4, axis=2)
+    prior_boxes = tf.concat([s2, s1, s4, s3], axis=2)
+    prior_boxes = prior_boxes[0]
+    prior_boxes = to_center_form(prior_boxes)
+
+    cls_outputs, box_outputs = merge_class_box_level_outputs(
+        params, cls_outputs, box_outputs
+    )
+    s1, s2, s3, s4 = tf.split(box_outputs, num_or_size_splits=4, axis=2)
+    box_outputs = tf.concat([s2, s1, s4, s3], axis=2)
+    cls_outputs = tf.sigmoid(cls_outputs)
+    outputs = tf.concat([box_outputs, cls_outputs], axis=2)
+
+    postprocessing = SequentialProcessor(
+        [pr.Squeeze(axis=None),
+         pr.DecodeBoxes(prior_boxes, variances=[1, 1, 1, 1]),
+         pr.ScaleBox(image_scales),
+         pr.NonMaximumSuppressionPerClass(0.4),
+         pr.FilterBoxes(coco, 0.4),
+         ])
+    outputs = postprocessing(outputs)
+
+    draw_boxes2D = pr.DrawBoxes2D(coco)
+    image = draw_boxes2D(raw_images[0].numpy().astype('uint8'), outputs)
+
+    save_file('paz_postprocess.jpg', image)
+    return outputs
 
 
 def get_postprocessor(type):
@@ -285,3 +364,7 @@ def get_postprocessor(type):
         return postprocess_global
     elif type == 'per_class':
         return postprocess_per_class
+    elif type == 'paz':
+        return postprocess_paz
+    else:
+        raise NotImplementedError()

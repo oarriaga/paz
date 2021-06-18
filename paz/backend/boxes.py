@@ -88,6 +88,22 @@ def to_center_form(boxes):
                            width[:, None], height[:, None]], axis=1)
 
 
+def to_corner_form(boxes):
+    """Transform from center coordinates to corner coordinates.
+    # Arguments
+        boxes: Numpy array with shape `(num_boxes, 4)`.
+    # Returns
+        Numpy array with shape `(num_boxes, 4)`.
+    """
+    center_x, center_y = boxes[:, 0:1], boxes[:, 1:2]
+    W, H = boxes[:, 2:3], boxes[:, 3:4]
+    x_min = center_x - (W / 2.0)
+    x_max = center_x + (W / 2.0)
+    y_min = center_y - (H / 2.0)
+    y_max = center_y + (H / 2.0)
+    return np.concatenate([x_min, y_min, x_max, y_max], axis=1)
+
+
 def encode(matched, priors, variances):
     """Encode the variances from the priorbox layers into the ground truth boxes
     we have matched (based on jaccard overlap) with the prior boxes.
@@ -114,25 +130,24 @@ def encode(matched, priors, variances):
     return np.concatenate([g_cxcy, g_wh, matched[:, 4:]], 1)  # [num_priors,4]
 
 
-def decode(predictions, priors, variances):
+def decode(predictions, priors, variances=[0.1, 0.1, 0.2, 0.2]):
     """Decode default boxes into the ground truth boxes
-
     # Arguments
         loc: Numpy array of shape `(num_priors, 4)`.
         priors: Numpy array of shape `(num_priors, 4)`.
         variances: List of two floats. Variances of prior boxes.
-
     # Returns
         decoded boxes: Numpy array of shape `(num_priors, 4)`.
     """
-
-    boxes = np.concatenate((
-        priors[:, :2] + predictions[:, :2] * variances[0] * priors[:, 2:4],
-        priors[:, 2:4] * np.exp(predictions[:, 2:4] * variances[1])), 1)
-    boxes[:, :2] = boxes[:, :2] - (boxes[:, 2:4] / 2.0)
-    boxes[:, 2:4] = boxes[:, 2:4] + boxes[:, :2]
+    center_x = predictions[:, 0:1] * priors[:, 2:3] * variances[0]
+    center_x = center_x + priors[:, 0:1]
+    center_y = predictions[:, 1:2] * priors[:, 3:4] * variances[1]
+    center_y = center_y + priors[:, 1:2]
+    W = priors[:, 2:3] * np.exp(predictions[:, 2:3] * variances[2])
+    H = priors[:, 3:4] * np.exp(predictions[:, 3:4] * variances[3])
+    boxes = np.concatenate([center_x, center_y, W, H], axis=1)
+    boxes = to_corner_form(boxes)
     return np.concatenate([boxes, predictions[:, 4:]], 1)
-    return boxes
 
 
 def reversed_argmax(array, axis):
@@ -277,7 +292,7 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     output = np.zeros((num_classes, top_k, 5))
 
     # skip the background class (start counter in 1)
-    for class_arg in range(1, num_classes):
+    for class_arg in range(0, num_classes):
         conf_mask = class_predictions[:, class_arg] >= conf_thresh
         scores = class_predictions[:, class_arg][conf_mask]
         if len(scores) == 0:
@@ -448,3 +463,20 @@ def to_normalized_coordinates(boxes, image):
     normalized_boxes[:, 1] = boxes[:, 1] / height
     normalized_boxes[:, 3] = boxes[:, 3] / height
     return normalized_boxes
+
+
+def scale_box(predictions, image_scales=None):
+    """
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
+    # Returns
+        Numpy array of shape `[num_boxes, N]`.
+    """
+
+    if image_scales is not None:
+        boxes = predictions[:, :4]
+        scales = image_scales[np.newaxis][np.newaxis]
+        boxes = boxes * scales
+        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
+    return predictions

@@ -1,3 +1,4 @@
+import os
 import h5py
 import numpy as np
 import tensorflow as tf
@@ -133,3 +134,11 @@ def preprocess_images(image, image_size):
     image = tf.cast(output_image, tf.float32)
     image_scale = 1 / image_scale
     return image, image_scale
+
+
+def save_file(file_name, image):
+    path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
+    directory_path = 'paz/examples/efficientdet/'
+    save_file_path = os.path.join(path_to_paz + directory_path + file_name)
+    Image.fromarray(image.astype('uint8')).save(save_file_path)
+    print('writing file to %s' % save_file_path)
