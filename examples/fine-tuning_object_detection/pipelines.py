@@ -212,7 +212,7 @@ if __name__ == "__main__":
     path = 'datasets/solar_panel/BoundingBox.txt'
     class_names = ['background', 'solar_panel']
     data_manager = CSVLoader(path, class_names)
-    dataset = data_manager.load()
+    dataset = data_manager.load_data()
     home = os.path.expanduser('~')
     bkg_path = os.path.join(home, '.keras/paz/datasets/voc-backgrounds/')
     wild_card = bkg_path + '*.png'
