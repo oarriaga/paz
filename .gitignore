@@ -19,6 +19,8 @@
 checkpoint
 *.coverage
 *.npy
+*.p
+*.zip
 
 !.github/manifest.xml
 
