@@ -1,6 +1,5 @@
 from paz.abstract import Processor
-from boxes import match
-from backend import load_image
+from backend import load_image, match
 
 
 class LoadImage(Processor):
