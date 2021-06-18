@@ -17,7 +17,7 @@ class CSVLoader(Loader):
         args = list(range(len(class_names)))
         return dict(zip(args, class_names))
 
-    def load(self):
+    def load_data(self):
         file = open(self.path, 'r')
         csv_reader = csv.reader(file, delimiter=',')
         dataset = []
@@ -41,4 +41,4 @@ if __name__ == "__main__":
     path = 'datasets/solar_panel/BoundingBox.txt'
     class_names = ['background', 'solar_panel']
     data_manager = CSVLoader(path, class_names)
-    dataset = data_manager.load()
+    dataset = data_manager.load_data()
