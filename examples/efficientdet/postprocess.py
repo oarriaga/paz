@@ -360,9 +360,9 @@ def postprocess_paz(params,
 
 
 def get_postprocessor(type):
-    if type == 'global':
+    if type == 'global_official':
         return postprocess_global
-    elif type == 'per_class':
+    elif type == 'pre_class_official':
         return postprocess_per_class
     elif type == 'paz':
         return postprocess_paz
