@@ -26,10 +26,19 @@ class DrawBoxes2D(Processor):
         self.colors = colors
         self.weighted = weighted
         self.scale = scale
+
+        if (self.class_names is not None and
+                not isinstance(self.class_names, list)):
+            raise TypeError("Class name should be of type 'List of strings'")
+
+        if (self.colors is not None and
+                not all(isinstance(color, list) for color in self.colors)):
+            raise TypeError("Colors should be of type 'List of lists'")
+
         if self.colors is None:
             self.colors = lincolor(len(self.class_names))
 
-        if class_names is not None:
+        if self.class_names is not None:
             self.class_to_color = dict(zip(self.class_names, self.colors))
         else:
             self.class_to_color = {None: self.colors, '': self.colors}
@@ -46,6 +55,9 @@ class DrawBoxes2D(Processor):
             put_text(image, text, (x_min, y_min - 10), self.scale, color, 1)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return image
+
+    def check(self):
+        print('check')
 
 
 class DrawKeypoints2D(Processor):
@@ -124,3 +136,4 @@ class DrawRandomPolygon(Processor):
 
     def call(self, image):
         return draw_random_polygon(image)
+
