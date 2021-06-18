@@ -16,7 +16,8 @@ from pipelines import AugmentDetection
 from paz.models import SSD300
 from data_manager import CSVLoader
 from paz.optimization import MultiBoxLoss
-from paz.abstract import ProcessingSequence
+# from paz.abstract import ProcessingSequence
+from sequencer import ProcessingSequence
 from paz.optimization.callbacks import EvaluateMAP
 from paz.pipelines import DetectSingleShot
 from paz.processors import TRAIN, VAL
@@ -89,9 +90,11 @@ for split in [TRAIN, VAL]:
     augmentators.append(augmentator)
 
 # setting sequencers
+num_steps = 100
 sequencers = []
 for data, augmentator in zip(datasets, augmentators):
-    sequencer = ProcessingSequence(augmentator, args.batch_size, data)
+    sequencer = ProcessingSequence(
+        augmentator, args.batch_size, data, num_steps)
     sequencers.append(sequencer)
 
 # setting callbacks
@@ -108,7 +111,7 @@ schedule = LearningRateScheduler(
 model.fit_generator(
     sequencers[0],
     epochs=args.num_epochs,
-    steps_per_epoch=100,
+    # steps_per_epoch=100,
     verbose=1,
     callbacks=[checkpoint, log, schedule],
     # validation_data=sequencers[1],
