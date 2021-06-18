@@ -56,9 +56,6 @@ class DrawBoxes2D(Processor):
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return image
 
-    def check(self):
-        print('check')
-
 
 class DrawKeypoints2D(Processor):
     """Draws keypoints into image.
