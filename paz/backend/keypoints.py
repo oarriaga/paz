@@ -86,6 +86,33 @@ def solve_PNP(points3D, points2D, camera, solver):
                         camera.distortion, None, None, False, solver)
 
 
+def solve_PNP_Ransac(points3D, points2D, camera, solver):
+    """Calculates 6D pose from 3D points and 2D keypoints correspondences.
+
+    # Arguments
+        points3D: Numpy array of shape ``(num_points, 3)``.
+            3D points known in advance.
+        points2D: Numpy array of shape ``(num_points, 2)``.
+            Predicted 2D keypoints of object.
+        camera: Instance of ''paz.backend.Camera'' containing as properties
+            the ''camera_intrinsics'' a Numpy array of shape ''(3, 3)''
+            usually calculated from the openCV ''calibrateCamera'' function,
+            and the ''distortion'' a Numpy array of shape ''(5)'' in which the
+            elements are usually obtained from the openCV
+            ''calibrateCamera'' function.
+        solver: Flag from e.g openCV.SOLVEPNP_UPNP.
+        distortion: Numpy array of shape of 5 elements calculated from
+            the openCV calibrateCamera function.
+
+    # Returns
+        A list containing success flag, rotation and translation components
+        of the 6D pose.
+    """
+    return cv2.solvePnPRansac(points3D, points2D, camera.intrinsics,
+                        camera.distortion, None, flags=cv2.SOLVEPNP_EPNP,
+                        reprojectionError=1, iterationsCount=10000)
+
+
 def project_points3D(points3D, pose6D, camera):
     """Projects 3D points into a specific pose.
 

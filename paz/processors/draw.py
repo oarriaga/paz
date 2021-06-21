@@ -87,15 +87,15 @@ class DrawBoxes3D(Processor):
     def _make_points(self, class_to_dimensions):
         class_to_points = {}
         for class_name, dimensions in self.class_to_dimensions.items():
-            height, width = dimensions
-            point_1 = [+width, -height, +width]
-            point_2 = [+width, -height, -width]
-            point_3 = [-width, -height, -width]
-            point_4 = [-width, -height, +width]
-            point_5 = [+width, +height, +width]
-            point_6 = [+width, +height, -width]
-            point_7 = [-width, +height, -width]
-            point_8 = [-width, +height, +width]
+            height, width, depth = dimensions
+            point_1 = [+width, -height, +depth]
+            point_2 = [+width, -height, -depth]
+            point_3 = [-width, -height, -depth]
+            point_4 = [-width, -height, +depth]
+            point_5 = [+width, +height, +depth]
+            point_6 = [+width, +height, -depth]
+            point_7 = [-width, +height, -depth]
+            point_8 = [-width, +height, +depth]
             points = [point_1, point_2, point_3, point_4,
                       point_5, point_6, point_7, point_8]
             class_to_points[class_name] = np.array(points)
@@ -105,7 +105,7 @@ class DrawBoxes3D(Processor):
         points3D = self.class_to_points[pose6D.class_name]
         args = (points3D, pose6D, self.camera)
         points2D = project_points3D(*args).astype(np.int32)
-        draw_cube(image, points2D, thickness=self.thickness)
+        draw_cube(image, points2D, thickness=self.thickness, radius=2)
         return image
 
 

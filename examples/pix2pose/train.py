@@ -94,7 +94,7 @@ losses = {"color_output": loss_color,
           "error_output": loss_error,
           "discriminator_output": "binary_crossentropy"}
 lossWeights = {"color_output": 100.0, "error_output": 50.0, "discriminator_output": 1.0}
-dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights, run_eagerly=True, metrics=['mse'])
+dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights)
 dcgan.summary()
 
 discriminator.trainable = True
@@ -111,7 +111,7 @@ renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
 # creating sequencer
 image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
 processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
-sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch)
+sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch*2)
 #sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
@@ -135,6 +135,8 @@ if args.neptune_config is not None:
 
     neptune.create_experiment(
        name=neptune_run_name,
+       upload_stdout=False,
+       upload_source_files=["train.py", "scenes.py", "predict.py", "pipelines.py", "model.py"],
        description='VOC backgrounds, complete GAN architecture, weighted losses',
        params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
     )
@@ -150,7 +152,9 @@ model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
 save = ModelCheckpoint(
     model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=False)
 save.model = dcgan
-plot = PlotImagesCallback(dcgan, sequence, save_path, args.neptune_config is not None)
+
+plot = PlotImagesCallback(dcgan, sequence, save_path, args.obj_path, args.image_size, args.y_fov, args.depth, args.light,
+                 args.top_only, args.roll, args.shift, args.images_directory, args.batch_size, args.steps_per_epoch, args.neptune_config is not None)
 
 callbacks=[stop, log, save, plateau, plot]
 
@@ -196,7 +200,11 @@ for num_epoch in range(args.max_num_epochs):
         discriminator.trainable = False
 
         start = time.time()
-        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output, _ = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
+        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
+
+        batch_test = next(sequence_iterator)
+        loss_dcgan_test, loss_color_output_test, loss_dcgan_discriminator_test, loss_error_output_test = dcgan.test_on_batch(batch_test[0]['input_image'], {"color_output": batch_test[1]['color_output'], "error_output": batch_test[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
+
         end = time.time()
         print("Train time DCGAN: {}".format(end - start))
 
@@ -207,7 +215,11 @@ for num_epoch in range(args.max_num_epochs):
         callback.on_epoch_end(num_epoch, logs={'loss_discriminator': loss_discriminator,
                                                'loss_dcgan': loss_dcgan, 'loss_color_output': loss_color_output,
                                                'loss_dcgan_discriminator': loss_dcgan_discriminator,
-                                               'loss_error_output': loss_error_output})
+                                               'loss_error_output': loss_error_output,
+                                               'loss_dcgan_test': loss_dcgan_test, 'loss_color_output_test': loss_color_output_test,
+                                               'loss_dcgan_discriminator_test': loss_dcgan_discriminator_test,
+                                               'loss_error_output_test': loss_error_output_test
+                                               })
 
 
 for callback in callbacks:

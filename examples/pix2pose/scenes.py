@@ -7,11 +7,13 @@ from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
 from paz.backend.render import compute_modelview_matrices
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight
-from pyrender import RenderFlags, Mesh, Scene
+from pyrender import RenderFlags, Mesh, Scene, Material
+import pyrender
 import trimesh
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from mpl_toolkits.mplot3d import Axes3D
+
 
 #fig = plt.figure()
 #ax = Axes3D(fig)
@@ -59,16 +61,15 @@ class SingleView():
         self.scene_original.set_pose(light_original, camera_to_world)
 
         loaded_trimesh = trimesh.load(path)
-        self.scene_color = Scene(bg_color=[0, 0, 0, 0])
-        light_color = self.scene_color.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
+        self.scene_color = Scene(bg_color=[0, 0, 0, 0], ambient_light=[1.0, 1.0, 1.0, 1.0])
+        #light_color.light.intensity = 30.
         camera = self.scene_color.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
         self.color_mesh(loaded_trimesh)
-        self.mesh_color = self.scene_color.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
+        #self.color_mesh_uniform(loaded_trimesh, np.array([30, 0, 255]))
+        self.mesh_color = self.scene_color.add(Mesh.from_trimesh(loaded_trimesh, smooth=False))
         self.world_origin = self.mesh_color.mesh.centroid
-        #camera_to_world, world_to_camera = compute_modelview_matrices(np.array([.4, .4, .4]), self.world_origin, self.roll, self.shift)
-        light_color.light.intensity = 5.0
         self.scene_color.set_pose(camera, camera_to_world)
-        self.scene_color.set_pose(light_color, camera_to_world)
+        #self.scene_color.set_pose(light_color, camera_to_world)
 
     def render(self):
         start = time.time()
@@ -85,13 +86,7 @@ class SingleView():
         image_original, alpha_original = split_alpha_channel(image_original)
 
         self.mesh_color.rotation = rotation
-        image_colors, _ = self.renderer.render(self.scene_color)
-
-        #plt.imshow(image_original)
-        #plt.show()
-
-        #plt.imshow(image_colors)
-        #plt.show()
+        image_colors, _ = self.renderer.render(self.scene_color, flags=pyrender.constants.RenderFlags.FLAT)
 
         end = time.time()
         #print("Rendering time: {}".format(end - start))
@@ -111,6 +106,7 @@ class SingleView():
             mesh: colored obj mesh
         """
         vertices = mesh.vertices
+
         x_min = mesh.vertices[:, 0].min()
         x_max = mesh.vertices[:, 0].max()
         y_min = mesh.vertices[:, 1].min()
@@ -128,6 +124,11 @@ class SingleView():
         vertices_z = vertices_z.astype('uint8')
         colors = np.hstack([vertices_x, vertices_y, vertices_z])
 
+        #fig = plt.figure()
+        #ax = fig.add_subplot(111, projection='3d')
+        #ax.scatter(colors[:, 0], colors[:, 1], colors[:, 2], c=colors/255.)
+        #plt.show()
+
         mesh.visual = mesh.visual.to_color()
         mesh.visual.vertex_colors = colors
 
@@ -141,6 +142,15 @@ class SingleView():
         mesh.visual.vertex_colors = colors
 
         return mesh
+
+    def color_mesh_uniform_vertices(self, mesh, color):
+        vertices = mesh.vertices
+        colors = np.tile(color, (len(vertices), 1))
+
+        mesh.visual = mesh.visual.to_color()
+        mesh.visual.vertex_colors = colors
+
+        return vertices, colors
 
 
 if __name__ == "__main__":

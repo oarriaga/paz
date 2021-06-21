@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import glob
 import os
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -11,6 +12,10 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
 import tensorflow as tf
+
+from scenes import SingleView
+from pipelines import DepthImageGenerator
+from paz.abstract.sequence import GeneratingSequencePix2Pose
 
 
 def transformer_loss(real_depth_image, predicted_depth_image):
@@ -56,14 +61,36 @@ def loss_error(real_error_image, predicted_error_image):
 
 
 class PlotImagesCallback(Callback):
-    def __init__(self, model, sequence, save_path, neptune_logging=False):
+    def __init__(self, model, sequence, save_path, obj_path, image_size, y_fov, depth, light,
+                 top_only, roll, shift, images_directory, batch_size, steps_per_epoch, neptune_logging=False):
         self.save_path = save_path
         self.model = model
         self.sequence = sequence
         self.neptune_logging = neptune_logging
+        self.obj_path = obj_path
+        self.image_size = image_size
+        self.y_fov = y_fov
+        self.depth = depth
+        self.light = light
+        self.top_only = top_only
+        self.roll = roll
+        self.shift = shift
+        self.images_directory = images_directory
+        self.batch_size = batch_size
+        self.steps_per_epoch = steps_per_epoch
 
     def on_epoch_end(self, epoch_index, logs=None):
-        batch = self.sequence.__getitem__(0)
+        renderer = SingleView(self.obj_path, (self.image_size, self.image_size),
+                              self.y_fov, self.depth, self.light, bool(self.top_only),
+                              self.roll, self.shift)
+
+        # creating sequencer
+        image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
+        processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
+        sequence = GeneratingSequencePix2Pose(processor, self.model, self.batch_size, self.steps_per_epoch * 2)
+
+        sequence_iterator = sequence.__iter__()
+        batch = next(sequence_iterator)
         predictions = self.model.predict(batch[0]['input_image'])
 
         original_images = (batch[0]['input_image'] * 255).astype(np.int)
@@ -123,8 +150,8 @@ class NeptuneLogger(Callback):
             neptune.log_metric(log_name, log_value)
 
         if epoch%50 == 0:
-            self.model.save('pix2pose_dcgan.pkl')
-            neptune.log_artifact('pix2pose_dcgan.pkl')
+            self.model.save('pix2pose_dcgan_{}.h5'.format(epoch))
+            neptune.log_artifact('pix2pose_dcgan_{}.h5'.format(epoch))
 
 
 def Generator():

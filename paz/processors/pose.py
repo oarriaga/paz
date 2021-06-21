@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..abstract import Processor, Pose6D
-from ..backend.keypoints import solve_PNP
+from ..backend.keypoints import solve_PNP, solve_PNP_Ransac
 from ..backend.keypoints import LEVENBERG_MARQUARDT
 
 
@@ -35,7 +35,7 @@ class SolvePNP(Processor):
         keypoints = keypoints.astype(np.float64)
         keypoints = keypoints.reshape((self.num_keypoints, 1, 2))
 
-        (success, rotation, translation) = solve_PNP(
+        (success, rotation, translation, inliners) = solve_PNP_Ransac(
             self.points3D, keypoints, self.camera, self.solver)
 
         return Pose6D.from_rotation_vector(rotation, translation)
