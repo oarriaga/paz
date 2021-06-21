@@ -102,6 +102,9 @@ def make_single_prediction(model, renderer, plot=True):
 
     predicted_bounding_box_points = np.asarray(predicted_bounding_box_points)
 
+    print("Predicted bounding box points: " + str(predicted_bounding_box_points))
+    print("Real bounding box points: " + str(bounding_box_points))
+
     # Create a paz camera object
     camera = Camera()
 
