@@ -5,7 +5,7 @@ import tensorflow as tf
 from PIL import Image
 
 # Mock input image.
-path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
+path_to_paz = '/media/deepan/externaldrive1/project_repos/'
 directory_path = 'paz/examples/efficientdet/'
 file_name = 'img2.png'
 file_path = path_to_paz + directory_path + file_name
@@ -137,7 +137,7 @@ def preprocess_images(image, image_size):
 
 
 def save_file(file_name, image):
-    path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
+    path_to_paz = '/media/deepan/externaldrive1/project_repos/'
     directory_path = 'paz/examples/efficientdet/'
     save_file_path = os.path.join(path_to_paz + directory_path + file_name)
     Image.fromarray(image.astype('uint8')).save(save_file_path)

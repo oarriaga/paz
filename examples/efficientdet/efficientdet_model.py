@@ -12,7 +12,30 @@ class EfficientDet(tf.keras.Model):
         https://github.com/google/automl/tree/master/efficientdet)
     """
 
-    def __init__(self, config, name=""):
+    def __init__(self,
+                 model_name='efficientdetd0',
+                 backbone='efficientnet-b0',
+                 backbone_weight='imagenet',
+                 act_type='swish',
+                 image_size=512,
+                 min_level=3,
+                 max_level=7,
+                 fpn_name='BiFPN',
+                 fpn_weight_method='fastattn',
+                 fpn_num_filters=64,
+                 fpn_cell_repeats=3,
+                 box_class_repeats=3,
+                 num_classes=90,
+                 num_scales=3,
+                 anchor_scale=4,
+                 aspect_ratios=[1.0, 2.0, 0.5],
+                 conv_batchnorm_act_pattern=False,
+                 use_batchnorm_for_sampling=True,
+                 conv_after_downsample=False,
+                 separable_conv=True,
+                 survival_prob=None,
+                 feature_only=False,
+                 name=""):
         """Initialize model.
         # Arguments
             config: Configuration of the EfficientDet model.
@@ -20,60 +43,62 @@ class EfficientDet(tf.keras.Model):
         """
         super().__init__(name=name)
 
-        self.config = config
+        self.min_level = min_level
+        self.max_level = max_level
+        self.num_levels = max_level - min_level + 1
         self.backbone = efficientnet_builder.build_backbone(
-            backbone_name=config['backbone_name'],
-            activation_fn=config['act_type'],
-            survival_prob=config['survival_prob']
+            backbone_name=backbone,
+            activation_fn=act_type,
+            survival_prob=survival_prob
             )
         self.resample_layers = []
-        for level in range(6, config["max_level"] + 1):
+        for level in range(6, max_level + 1):
             self.resample_layers.append(ResampleFeatureMap(
-                feature_level=(level - config["min_level"]),
-                target_num_channels=config["fpn_num_filters"],
-                use_batchnorm=config["use_batchnorm_for_sampling"],
-                conv_after_downsample=config["conv_after_downsample"],
+                feature_level=(level - min_level),
+                target_num_channels=fpn_num_filters,
+                use_batchnorm=use_batchnorm_for_sampling,
+                conv_after_downsample=conv_after_downsample,
                 name='resample_p%d' % level,
             ))
 
         self.fpn_cells = FPNCells(
-            fpn_name=config['fpn_name'],
-            min_level=config['min_level'],
-            max_level=config['max_level'],
-            fpn_weight_method=config['fpn_weight_method'],
-            fpn_cell_repeats=config['fpn_cell_repeats'],
-            fpn_num_filters=config['fpn_num_filters'],
-            use_batchnorm_for_sampling=config['use_batchnorm_for_sampling'],
-            conv_after_downsample=config['conv_after_downsample'],
-            conv_batchnorm_act_pattern=config['conv_batchnorm_act_pattern'],
-            separable_conv=config['separable_conv'],
-            act_type=config['act_type'])
+            fpn_name=fpn_name,
+            min_level=min_level,
+            max_level=max_level,
+            fpn_weight_method=fpn_weight_method,
+            fpn_cell_repeats=fpn_cell_repeats,
+            fpn_num_filters=fpn_num_filters,
+            use_batchnorm_for_sampling=use_batchnorm_for_sampling,
+            conv_after_downsample=conv_after_downsample,
+            conv_batchnorm_act_pattern=conv_batchnorm_act_pattern,
+            separable_conv=separable_conv,
+            act_type=act_type)
 
-        num_anchors = len(config['aspect_ratios']) * config['num_scales']
-        num_filters = config['fpn_num_filters']
+        num_anchors = len(aspect_ratios) * num_scales
+        num_filters = fpn_num_filters
         self.class_net = ClassNet(
-            num_classes=config['num_classes'],
+            num_classes=num_classes,
             num_anchors=num_anchors,
             num_filters=num_filters,
-            min_level=config['min_level'],
-            max_level=config['max_level'],
-            act_type=config['act_type'],
-            repeats=config['box_class_repeats'],
-            separable_conv=config['separable_conv'],
-            survival_prob=config['survival_prob'],
-            feature_only=config['feature_only'],
+            min_level=min_level,
+            max_level=max_level,
+            act_type=act_type,
+            repeats=box_class_repeats,
+            separable_conv=separable_conv,
+            survival_prob=survival_prob,
+            feature_only=feature_only,
         )
 
         self.box_net = BoxNet(
             num_anchors=num_anchors,
             num_filters=num_filters,
-            min_level=config['min_level'],
-            max_level=config['max_level'],
-            act_type=config['act_type'],
-            repeats=config['box_class_repeats'],
-            separable_conv=config['separable_conv'],
-            survival_prob=config['survival_prob'],
-            feature_only=config['feature_only'],
+            min_level=min_level,
+            max_level=max_level,
+            act_type=act_type,
+            repeats=box_class_repeats,
+            separable_conv=separable_conv,
+            survival_prob=survival_prob,
+            feature_only=feature_only,
         )
 
     def call(self, images, training=False):
@@ -88,8 +113,8 @@ class EfficientDet(tf.keras.Model):
                                      training=training,
                                      features_only=True)
 
-        features = all_features[self.config["min_level"]:
-                                self.config["max_level"] + 1]
+        features = all_features[self.min_level:
+                                self.max_level + 1]
 
         # Build additional input features that are not from backbone.
         for resample_layer in self.resample_layers:
