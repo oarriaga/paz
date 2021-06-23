@@ -1,6 +1,6 @@
 from paz import processors as pr
 # from paz.backend.image import show_image
-from processors import LoadImage
+from processors import LoadImage, BlendRandomCroppedBackground
 from paz.abstract import SequentialProcessor, Processor
 from processors import MatchBoxes
 import numpy as np
@@ -59,7 +59,7 @@ class AugmentImage(SequentialProcessor):
         super(AugmentImage, self).__init__()
         # self.add(LoadImage(4))
         self.add(pr.ResizeImage(shape))
-        self.add(pr.BlendRandomCroppedBackground(bkg_paths))
+        self.add(BlendRandomCroppedBackground(bkg_paths))
         self.add(pr.RandomContrast())
         self.add(pr.RandomBrightness())
         self.add(pr.RandomSaturation(0.7))
