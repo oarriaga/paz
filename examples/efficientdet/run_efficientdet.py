@@ -9,7 +9,8 @@ if __name__ == "__main__":
     model.build(raw_images.shape)
     print(model.summary())
 
-    WEIGHT = '/media/deepan/externaldrive1/project_repos/paz/examples/efficientdet/efficientdet-d0.h5'
+    WEIGHT = '/media/deepan/externaldrive1/project_repos/' \
+             'paz/examples/efficientdet/efficientdet-d0.h5'
     infer_on_image_size = 512
     model = load_pretrained_weights(model, WEIGHT)
     print('Successfully copied weights.')

@@ -6,7 +6,11 @@ from paz.datasets.utils import get_class_names
 from paz.backend.boxes import to_center_form
 from misc import save_file
 
-def merge_class_box_level_outputs(cls_outputs, box_outputs, num_levels, num_classes):
+
+def merge_class_box_level_outputs(cls_outputs,
+                                  box_outputs,
+                                  num_levels,
+                                  num_classes):
     cls_outputs_all, box_outputs_all = [], []
     batch_size = tf.shape(cls_outputs[0])[0]
     for level in range(0, num_levels):
@@ -19,6 +23,7 @@ def merge_class_box_level_outputs(cls_outputs, box_outputs, num_levels, num_clas
             [batch_size, -1, 4]
         ))
     return tf.concat(cls_outputs_all, 1), tf.concat(box_outputs_all, 1)
+
 
 def postprocess_paz(cls_outputs,
                     box_outputs,
