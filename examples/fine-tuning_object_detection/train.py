@@ -69,7 +69,7 @@ for data_split in zip(data_splits):
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = SSD300(num_classes, base_weights='VGG', head_weights=None,
+model = SSD300(num_classes, base_weights='VOC', head_weights=None,
                trainable_base=False)
 model.summary()
 
@@ -102,8 +102,9 @@ model_path = os.path.join(args.save_path, model.name)
 if not os.path.exists(model_path):
     os.makedirs(model_path)
 log = CSVLogger(os.path.join(model_path, model.name + '-optimization.log'))
-save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
-checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
+save_path = os.path.join(model_path, 'weights.{epoch:02d}-{loss:.2f}.hdf5')
+checkpoint = ModelCheckpoint(
+    save_path, 'loss', verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
