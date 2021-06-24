@@ -90,7 +90,7 @@ for split in [TRAIN, VAL]:
     augmentators.append(augmentator)
 
 # setting sequencers
-num_steps = 100
+num_steps = 1000
 sequencers = []
 for data, augmentator in zip(datasets, augmentators):
     sequencer = ProcessingSequence(

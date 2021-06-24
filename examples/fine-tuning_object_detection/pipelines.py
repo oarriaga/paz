@@ -1,6 +1,4 @@
 from paz import processors as pr
-# from paz.backend.image import show_image
-from processors import LoadImage, BlendRandomCroppedBackground
 from paz.abstract import SequentialProcessor, Processor
 from processors import MatchBoxes
 import numpy as np
@@ -59,7 +57,7 @@ class AugmentImage(SequentialProcessor):
         super(AugmentImage, self).__init__()
         # self.add(LoadImage(4))
         self.add(pr.ResizeImage(shape))
-        self.add(BlendRandomCroppedBackground(bkg_paths))
+        self.add(pr.BlendRandomCroppedBackground(bkg_paths))
         self.add(pr.RandomContrast())
         self.add(pr.RandomBrightness())
         self.add(pr.RandomSaturation(0.7))
@@ -80,15 +78,6 @@ class AugmentBoxes(SequentialProcessor):
         self.add(pr.RandomSampleCrop())
         self.add(pr.RandomFlipBoxesLeftRight())
         self.add(pr.ToNormalizedBoxCoordinates())
-
-
-"""
-class DrawBoxData2D(SequentialProcessor):
-    def __init__(self, class_names, colors=None):
-        super(DrawBoxData2D, self).__init__()
-        self.add(pr.ControlMap(pr.ToBoxes2D(class_names), [1], [1]))
-        self.add(pr.DrawBoxes2D(class_names, colors))
-"""
 
 
 class DrawBoxData2D(Processor):
@@ -133,27 +122,6 @@ class ShowBoxes(Processor):
         return image, boxes2D
 
 
-"""
-class _AugmentDetection(Processor):
-    def __init__(self, prior_boxes, bkg_paths, split=pr.TRAIN, num_classes=2,
-                 size=300, mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
-                 variances=[0.1, 0.1, 0.2, 0.2]):
-        super(_AugmentDetection, self).__init__()
-        self.augment_image = AugmentImage((size, size), bkg_paths, mean)
-        self.augment_boxes = AugmentBoxes()
-        self.preprocess_image = PreprocessImage((size, size))
-        self.preprocess_boxes = PreprocessBoxes(
-            num_classes, prior_boxes, IOU, variances)
-
-    def call(self, image, boxes):
-        image = self.augment_image(image)
-        image, boxes = self.augment_boxes(image, boxes)
-        image = self.preprocess_image(image)
-        boxes = self.preprocess_boxes(boxes)
-        return image, boxes
-"""
-
-
 class AugmentDetection(SequentialProcessor):
     """Augment boxes and images for object detection.
 
@@ -185,7 +153,7 @@ class AugmentDetection(SequentialProcessor):
 
         # pipeline
         self.add(pr.UnpackDictionary(['image', 'boxes']))
-        self.add(pr.ControlMap(LoadImage(4), [0], [0]))
+        self.add(pr.ControlMap(pr.LoadImage(4), [0], [0]))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_image, [0], [0]))
             self.add(pr.ControlMap(self.augment_boxes, [0, 1], [0, 1]))

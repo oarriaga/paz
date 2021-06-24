@@ -1,32 +1,5 @@
-from paz.backend.image.opencv_image import _CHANNELS_TO_FLAG
-from paz.backend.image import convert_color_space
-from paz.backend.image import BGR2RGB
-import cv2
 import numpy as np
 from paz.backend.boxes import compute_ious, to_corner_form
-
-BGRA2RGBA = cv2.COLOR_BGRA2RGBA
-
-
-def load_image(filepath, num_channels=3):
-    """Load image from a ''filepath''.
-
-    # Arguments
-        filepath: String indicating full path to the image.
-        num_channels: Int.
-
-    # Returns
-        Numpy array.
-    """
-    image = cv2.imread(filepath, _CHANNELS_TO_FLAG[num_channels])
-    if num_channels == 1:
-        return image
-    elif num_channels == 3:
-        return convert_color_space(image, BGR2RGB)
-    elif num_channels == 4:
-        return convert_color_space(image, BGRA2RGBA)
-    else:
-        raise ValueError('Invalid number of channels: ', num_channels)
 
 
 def match(boxes, prior_boxes, iou_threshold=0.5):
@@ -65,24 +38,3 @@ def match(boxes, prior_boxes, iou_threshold=0.5):
     matches = boxes[per_prior_which_box_arg]
     matches[per_prior_which_box_iou < iou_threshold, 4] = 0
     return matches
-
-
-def random_shape_crop(image, shape):
-    """Randomly crops an image of the given ``shape``.
-
-    # Arguments
-        image: Numpy array.
-        shape: List of two ints ''(H, W)''.
-
-    # Returns
-        Numpy array of cropped image.
-    """
-    H, W = image.shape[:2]
-    if (shape[0] >= H) or (shape[1] >= W):
-        return None
-    x_min = np.random.randint(0, W - shape[1])
-    y_min = np.random.randint(0, H - shape[0])
-    x_max = int(x_min + shape[1])
-    y_max = int(y_min + shape[0])
-    cropped_image = image[y_min:y_max, x_min:x_max]
-    return cropped_image
