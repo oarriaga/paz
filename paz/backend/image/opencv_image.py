@@ -4,6 +4,7 @@ import os
 
 RGB2BGR = cv2.COLOR_RGB2BGR
 BGR2RGB = cv2.COLOR_BGR2RGB
+BGRA2RGBA = cv2.COLOR_BGRA2RGBA
 RGB2GRAY = cv2.COLOR_RGB2GRAY
 RGB2HSV = cv2.COLOR_RGB2HSV
 HSV2RGB = cv2.COLOR_HSV2RGB
@@ -84,8 +85,14 @@ def load_image(filepath, num_channels=3):
     # Returns
         Numpy array.
     """
+    if num_channels not in [1, 3, 4]:
+        raise ValueError('Invalid number of channels')
+
     image = cv2.imread(filepath, _CHANNELS_TO_FLAG[num_channels])
-    image = convert_color_space(image, BGR2RGB)
+    if num_channels == 3:
+        image = convert_color_space(image, BGR2RGB)
+    elif num_channels == 4:
+        image = convert_color_space(image, BGRA2RGBA)
     return image
 
 
