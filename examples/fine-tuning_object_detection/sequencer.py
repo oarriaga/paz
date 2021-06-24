@@ -19,6 +19,9 @@ class ProcessingSequence(SequenceExtra):
             processor, batch_size, as_list)
         self.data = data
 
+    def _num_batches(self):
+        return int(np.ceil(len(self.data) / float(self.batch_size)))
+
     def __len__(self):
         return self.num_steps
 
@@ -32,6 +35,7 @@ class ProcessingSequence(SequenceExtra):
         return inputs, labels
 
     def _get_unprocessed_batch(self, data, batch_index):
+        # batch_index = np.random.randint(0, self._num_batches())
         batch_index = 0
         batch_arg_A = self.batch_size * (batch_index)
         batch_arg_B = self.batch_size * (batch_index + 1)
