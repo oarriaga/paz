@@ -1,30 +1,17 @@
-import os
-import argparse
 import numpy as np
 import processors as pe
-from paz.abstract import Loader
 from paz import processors as pr
 from paz.pipelines import HaarCascadeFrontalFace
 from paz.abstract import SequentialProcessor, Processor
-from paz.backend.image import load_image
-
-description = 'Eigenfaces demo pipeline'
-parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-e', '--experiments_path', type=str,
-                    default='experiments',
-                    help='Directory for writing and loading experiments')
-args = parser.parse_args()
-
-database = np.load(os.path.join(args.experiments_path, 'database.npy'),
-                   allow_pickle=True).item()
 
 
 class DetectEigenFaces(Processor):
-    def __init__(self, weights_data_base, parameters, offsets=[0, 0]):
+    def __init__(self, weights_database, parameters, project,
+                 mean_face, offsets=[0, 0]):
         super(DetectEigenFaces, self).__init__()
         self.offsets = offsets
-        self.colors = colors
-        # self.class_names = class_names
+        self.colors = parameters['colors']
+        self.class_names = parameters['class_names']
         self.croped_images = None
         # detection
         self.detect = HaarCascadeFrontalFace()
@@ -33,9 +20,8 @@ class DetectEigenFaces(Processor):
         self.square.add(pr.OffsetBoxes2D(offsets))
         self.clip = pr.ClipBoxes2D()
         self.crop = pr.CropBoxes2D()
-        self.class_names = parameters['class_names']
-        self.face_detector = EigenFaceDetector(weights_data_base, parameters)
-
+        self.face_detector = EigenFaceDetector(weights_database, parameters,
+                                               project, mean_face)
         # drawing and wrapping
         self.draw = pr.DrawBoxes2D(self.class_names, self.colors, True)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
@@ -55,9 +41,9 @@ class DetectEigenFaces(Processor):
 
 
 class EigenFaceDetector(Processor):
-    def __init__(self, weights_data_base, parameters):
+    def __init__(self, weights_data_base, parameters, project, mean_face):
         self.weights_data_base = weights_data_base
-        self.calculate_weights = CalculateFaceWeights(parameters)
+        self.calculate_weights = CalculateTestFaceWeights(project, mean_face)
         self.query = QueryFace(parameters)
         super(EigenFaceDetector, self).__init__()
 
@@ -68,51 +54,6 @@ class EigenFaceDetector(Processor):
         test_weight = self.calculate_weights(self.test_data)
         similar_face = self.query(test_weight, self.weights_data_base)
         return similar_face
-
-
-class LoadTestData(Loader):
-    def __init__(self, path, label, image_size=(48, 48)):
-        self.images_path = path
-        self.image_size = image_size
-        self.label = label
-        self.crop = pe.CropFrontalFace()
-        super(LoadTestData, self).__init__(path, label, None, None)
-
-    def load_data(self):
-        data = []
-        for filename in os.listdir(self.images_path):
-            face = load_image(os.path.join(self.images_path, filename))
-            face = self.crop(face)
-            sample = {'image': face, 'label': self.label}
-            data.append(sample)
-        return data
-
-
-class Database():
-    def __init__(self, path, label, parameters):
-        self.path = path
-        self.label = label
-        self.data = LoadTestData(self.path, self.label)
-        self.calculate_weights = CalculateFaceWeights(parameters)
-
-    def add_to_database(self):
-        data = self.data.load_data()
-        for sample in data:
-            image, label = sample['image'], sample['label']
-            weight = self.calculate_weights(image)
-            weight = np.array(weight[np.newaxis].T)
-            # self.new_data_array = {label: np.array(weight)}
-            updated_database = update_dictionary(database, label, weight)
-        # np.save(os.path.join(args.experiments_path, 'database.npy'), updated_database)
-        return updated_database
-
-
-def update_dictionary(dictionary, key, values):
-    if key not in dictionary:
-        dictionary[key] = values
-    else:
-        dictionary[key] = np.hstack((dictionary[key], values))
-    return dictionary
 
 
 class QueryFace(Processor):
@@ -129,7 +70,7 @@ class QueryFace(Processor):
         for sample in database:
             weight = database[sample].T
             weight_norm = self.norm((weight - test_face_weight),
-                                     ord=self.norm_order, axis=1)
+                                    ord=self.norm_order, axis=1)
             weights_difference.append(np.min(weight_norm))
 
         if np.min(weights_difference) < self.threshold:
@@ -139,17 +80,14 @@ class QueryFace(Processor):
         return list(database.keys())[most_similar_face_arg]
 
 
-class CalculateFaceWeights(pr.Processor):
-    def __init__(self, parameters):
-        super(CalculateFaceWeights, self).__init__()
-        self.project = parameters['project']
-        self.norm = np.linalg.norm
-        self.norm_order = parameters['norm_order']
-        self.mean_face = parameters['mean_face']
-        self.image_shape = parameters['image_shape']
+class CalculateTestFaceWeights(pr.Processor):
+    def __init__(self, project, mean_face, shape=(48, 48)):
+        super(CalculateTestFaceWeights, self).__init__()
+        self.project = project
+        self.mean_face = mean_face
         self.convert_to_gray = pr.ConvertColorSpace(pr.RGB2GRAY)
         self.preprocess = pr.SequentialProcessor()
-        self.preprocess.add(pr.ResizeImage(self.image_shape))
+        self.preprocess.add(pr.ResizeImage(shape))
         self.preprocess.add(pr.ExpandDims(-1))
         self.subtract = pe.SubtractMeanFace()
 
@@ -162,5 +100,3 @@ class CalculateFaceWeights(pr.Processor):
         face = self.subtract(face, self.mean_face)
         weights = self.project(face)
         return weights
-
-
