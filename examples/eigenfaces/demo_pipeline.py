@@ -20,8 +20,7 @@ database = np.load(os.path.join(args.experiments_path, 'database.npy'),
 
 
 class DetectEigenFaces(Processor):
-    def __init__(self, weights_data_base, parameters, offsets=[0, 0],
-                 colors=[[255, 0, 0], [0, 255, 0]]):
+    def __init__(self, weights_data_base, parameters, offsets=[0, 0]):
         super(DetectEigenFaces, self).__init__()
         self.offsets = offsets
         self.colors = colors
@@ -98,17 +97,14 @@ class Database():
 
     def add_to_database(self):
         data = self.data.load_data()
-        new_database = []
         for sample in data:
             image, label = sample['image'], sample['label']
             weight = self.calculate_weights(image)
-            # weight = np.array(weight[np.newaxis].T)
-            self.new_data = {'label': label, 'weight': weight}
+            weight = np.array(weight[np.newaxis].T)
             # self.new_data_array = {label: np.array(weight)}
-            new_database.append(self.new_data)
-            # u_database = update_dictionary(database, label, weight)
-        # np.save(os.path.join(args.experiments_path, 'database.npy'), u_database)
-        return new_database
+            updated_database = update_dictionary(database, label, weight)
+        # np.save(os.path.join(args.experiments_path, 'database.npy'), updated_database)
+        return updated_database
 
 
 def update_dictionary(dictionary, key, values):
@@ -131,16 +127,16 @@ class QueryFace(Processor):
         self.database = database
         weights_difference = []
         for sample in database:
-            weight = sample['weight']
+            weight = database[sample].T
             weight_norm = self.norm((weight - test_face_weight),
-                                     ord=self.norm_order)
-            weights_difference.append(weight_norm)
+                                     ord=self.norm_order, axis=1)
+            weights_difference.append(np.min(weight_norm))
 
         if np.min(weights_difference) < self.threshold:
             return None
         else:
             most_similar_face_arg = np.argmin(weights_difference)
-        return database[most_similar_face_arg]["label"]
+        return list(database.keys())[most_similar_face_arg]
 
 
 class CalculateFaceWeights(pr.Processor):
