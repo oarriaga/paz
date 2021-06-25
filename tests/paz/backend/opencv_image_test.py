@@ -1,4 +1,6 @@
 import numpy as np
+import os
+from tensorflow.keras.utils import get_file
 import pytest
 
 from paz.backend.image import opencv_image
@@ -105,3 +107,35 @@ def test_alpha_blend(load_image, image_shape, rgb):
     alpha_blend_image = opencv_image.blend_alpha_channel(
         image, background_image)
     assert np.all(alpha_blend_image == test_image)
+
+
+@pytest.fixture
+def image_with_face_fullpath():
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download'
+           '/v0.9.1/image_with_face.jpg')
+    filename = os.path.basename(URL)
+    fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+    return fullpath
+
+
+def test_load_image_shape_with_1_channel(image_with_face_fullpath):
+    image = opencv_image.load_image(image_with_face_fullpath, 1)
+    assert len(image.shape) == 2
+
+
+def test_load_image_shape_with_3_channels(image_with_face_fullpath):
+    image = opencv_image.load_image(image_with_face_fullpath, 3)
+    assert len(image.shape) == 3
+    assert image.shape[-1] == 3
+
+
+def test_load_image_shape_with_4_channels(image_with_face_fullpath):
+    image = opencv_image.load_image(image_with_face_fullpath, 4)
+    assert len(image.shape) == 3
+    assert image.shape[-1] == 4
+
+
+def test_passes(image_with_face_fullpath):
+    with pytest.raises(Exception):
+        opencv_image.load_image(image_with_face_fullpath, 2)
+        opencv_image.load_image(image_with_face_fullpath, 5)
