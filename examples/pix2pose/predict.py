@@ -80,7 +80,7 @@ def make_single_prediction(model, renderer, plot=True):
     image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
     print(image_paths)
     processor = DepthImageGenerator(renderer, image_size[0], image_paths, num_occlusions=0)
-    sequence = GeneratingSequencePix2Pose(processor, model, 16, 20)
+    sequence = GeneratingSequencePix2Pose(processor, model, 4, 2)
 
     sequence_iterator = sequence.__iter__()
     batch = next(sequence_iterator)

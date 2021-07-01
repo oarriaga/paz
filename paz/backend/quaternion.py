@@ -34,3 +34,22 @@ def quarternion_to_rotation_matrix(q):
                                 [2*(q[0]*q[2] - q[3]*q[1]), 2*(q[3]*q[0] + q[1]*q[2]), 1 - 2*(q[0]**2 + q[1]**2)]])
 
     return np.squeeze(rotation_matrix)
+
+
+def quaternion_to_euler(quaternion):
+    # Code taken from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Quaternion_to_Euler_angles_conversion
+    x, y, z, w = quaternion
+    phi = np.arctan2(2*(w*x + y*z), 1-2*(x**2 + y**2))
+    theta = np.arcsin(2*(w*y - z*x))
+    psi = np.arctan2(2*(w*z + x*y), 1-2*(y**2 + z**2))
+    return (phi, theta, psi)
+
+
+def quaternion_multiply(quaternion1, quaternion0):
+    # Code taken from https://stackoverflow.com/questions/39000758/how-to-multiply-two-quaternions-by-python-or-numpy
+    x0, y0, z0, w0 = quaternion0
+    x1, y1, z1, w1 = quaternion1
+    return np.array([x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+                     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0,
+                     -x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0], dtype=np.float64)

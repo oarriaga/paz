@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
 from paz.backend.render import compute_modelview_matrices
+from paz.backend.quaternion import quarternion_to_rotation_matrix, rotation_vector_to_quaternion, quaternion_multiply, quaternion_to_euler
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight
 from pyrender import RenderFlags, Mesh, Scene, Material
 import pyrender
@@ -71,29 +72,31 @@ class SingleView():
         self.scene_color.set_pose(camera, camera_to_world)
         #self.scene_color.set_pose(light_color, camera_to_world)
 
-    def render(self):
-        start = time.time()
-        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        #print(camera_to_world)
+        #self.cylinder = self.scene_original.add(Mesh.from_trimesh(trimesh.creation.cylinder(radius=0.01, height=0.5)))
+        #self.sphere = self.scene_original.add(Mesh.from_trimesh(trimesh.creation.icosphere(subdivisions=3, radius=0.05)))
 
+    def render(self):
+        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
         rotation = trimesh.transformations.random_quaternion()
-        translation_bounds = 0.05
-        translation = np.array([np.random.uniform(-translation_bounds, translation_bounds),
-                                np.random.uniform(-translation_bounds, translation_bounds),
-                                np.random.uniform(-translation_bounds, translation_bounds)])
+
+        angle = np.pi
+        vertical_rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+
+        # Combine the random rotation with the symmetry rotation
+        #final_rotation = quaternion_multiply(rotation, vertical_rotation)
+        #final_rotation /= np.linalg.norm(final_rotation)
 
         self.mesh_original.rotation = rotation
+        self.mesh_color.rotation = rotation
+
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
 
-        self.mesh_color.rotation = rotation
         image_colors, _ = self.renderer.render(self.scene_color, flags=pyrender.constants.RenderFlags.FLAT)
-
-        end = time.time()
-        #print("Rendering time: {}".format(end - start))
-
         self.renderer.delete()
 
-        return image_original, image_colors, alpha_original
+        return image_original, image_colors, alpha_original, None
 
     def normalize(self, x, x_min, x_max):
         return (x-x_min)/(x_max-x_min)
@@ -123,11 +126,15 @@ class SingleView():
         vertices_y = vertices_y.astype('uint8')
         vertices_z = vertices_z.astype('uint8')
         colors = np.hstack([vertices_x, vertices_y, vertices_z])
-
-        #fig = plt.figure()
-        #ax = fig.add_subplot(111, projection='3d')
-        #ax.scatter(colors[:, 0], colors[:, 1], colors[:, 2], c=colors/255.)
-        #plt.show()
+        color_copy = deepcopy(colors)
+        # Rotate the object
+        angle = np.pi
+        for i in range(colors.shape[0]):
+            colors[i] = quarternion_to_rotation_matrix(np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)]))@colors[i]
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(colors[:5000, 0]/255., colors[:5000, 1]/255., colors[:5000, 2]/255., c=color_copy[:5000]/255.)
+        plt.show()
 
         mesh.visual = mesh.visual.to_color()
         mesh.visual.vertex_colors = colors
@@ -156,10 +163,11 @@ class SingleView():
 if __name__ == "__main__":
     num_samples = 5
     list_images = list()
-    view = SingleView(filepath="/home/fabian/.keras/datasets/035_power_drill/tsdf/textured.obj")
+    #view = SingleView(filepath="/home/fabian/.keras/datasets/036_wood_block/textured_edited.obj")
+    view = SingleView(filepath="/home/fabian/.keras/datasets/001_chips_can/tsdf/textured_edited.obj")
 
     for _ in range(num_samples):
-        image_original, image_colors = view.render()
+        image_original, image_colors, alpha_original, rotation = view.render()
         list_images.append((image_original, image_colors))
 
     fig = plt.figure(constrained_layout=False)
