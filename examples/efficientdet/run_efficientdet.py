@@ -24,6 +24,7 @@ if __name__ == "__main__":
     detections = postprocess_paz(class_out,
                                  box_out,
                                  image_scales,
-                                 raw_images=raw_images)
+                                 raw_images=raw_images,
+                                 image_size=infer_on_image_size)
     print(detections)
     print('task completed')

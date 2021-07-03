@@ -95,3 +95,117 @@ def get_fpn_configuration(fpn_name, min_level, max_level, fpn_weight_method):
         return bifpn_configuration(min_level, max_level, fpn_weight_method)
     else:
         raise NotImplementedError('FPN name not found.')
+
+
+def get_efficientdet_default_params(model_name):
+    efficientdet_model_param_dict = {
+        'efficientdet-d0':
+            dict(
+                backbone_name='efficientnet-b0',
+                image_size=512,
+                fpn_num_filters=64,
+                fpn_cell_repeats=3,
+                box_class_repeats=3,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='fastattn',
+            ),
+        'efficientdet-d1':
+            dict(
+                backbone_name='efficientnet-b1',
+                image_size=640,
+                fpn_num_filters=88,
+                fpn_cell_repeats=4,
+                box_class_repeats=3,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='fastattn',
+            ),
+        'efficientdet-d2':
+            dict(
+                backbone_name='efficientnet-b2',
+                image_size=768,
+                fpn_num_filters=112,
+                fpn_cell_repeats=5,
+                box_class_repeats=3,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='fastattn',
+            ),
+        'efficientdet-d3':
+            dict(
+                backbone_name='efficientnet-b3',
+                image_size=896,
+                fpn_num_filters=160,
+                fpn_cell_repeats=6,
+                box_class_repeats=4,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='fastattn',
+            ),
+        'efficientdet-d4':
+            dict(
+                backbone_name='efficientnet-b4',
+                image_size=1024,
+                fpn_num_filters=224,
+                fpn_cell_repeats=7,
+                box_class_repeats=4,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='fastattn',
+            ),
+        'efficientdet-d5':
+            dict(
+                backbone_name='efficientnet-b5',
+                image_size=1280,
+                fpn_num_filters=288,
+                fpn_cell_repeats=7,
+                box_class_repeats=4,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='fastattn',
+            ),
+        'efficientdet-d6':
+            dict(
+                backbone_name='efficientnet-b6',
+                image_size=1280,
+                fpn_num_filters=384,
+                fpn_cell_repeats=8,
+                box_class_repeats=5,
+                anchor_scale=5.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='sum',  # Use unweighted sum for stability.
+            ),
+        'efficientdet-d7':
+            dict(
+                backbone_name='efficientnet-b6',
+                image_size=1536,
+                fpn_num_filters=384,
+                fpn_cell_repeats=8,
+                box_class_repeats=5,
+                anchor_scale=5.0,
+                min_level=3,
+                max_level=7,
+                fpn_weight_method='sum',  # Use unweighted sum for stability.
+            ),
+        'efficientdet-d7x':
+            dict(
+                backbone_name='efficientnet-b7',
+                image_size=1536,
+                fpn_num_filters=384,
+                fpn_cell_repeats=8,
+                box_class_repeats=5,
+                anchor_scale=4.0,
+                min_level=3,
+                max_level=8,
+                fpn_weight_method='sum',  # Use unweighted sum for stability.
+            ),
+    }
+    return efficientdet_model_param_dict[model_name]

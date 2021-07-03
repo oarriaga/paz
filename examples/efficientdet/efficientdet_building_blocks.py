@@ -1,4 +1,3 @@
-import functools
 import numpy as np
 import tensorflow as tf
 from config import get_fpn_configuration
@@ -362,19 +361,25 @@ class ConvolutionAfterFusion(Layer):
         self.act_type = act_type
 
         if self.separable_conv:
-            conv2d_layer = functools.partial(SeparableConv2D,
-                                             depth_multiplier=1)
+            conv2d_layer = SeparableConv2D(
+                filters=fpn_num_filters,
+                kernel_size=(3, 3),
+                padding='same',
+                use_bias=not self.conv_batchnorm_act_pattern,
+                data_format='channels_last',
+                name='conv',
+                depth_multiplier=1)
         else:
-            conv2d_layer = Conv2D
+            conv2d_layer = Conv2D(
+                filters=fpn_num_filters,
+                kernel_size=(3, 3),
+                padding='same',
+                use_bias=not self.conv_batchnorm_act_pattern,
+                data_format='channels_last',
+                name='conv'
+            )
 
-        self.conv_op = conv2d_layer(
-            filters=fpn_num_filters,
-            kernel_size=(3, 3),
-            padding='same',
-            use_bias=not self.conv_batchnorm_act_pattern,
-            data_format='channels_last',
-            name='conv'
-        )
+        self.conv_op = conv2d_layer
         self.batchnorm = BatchNormalization(axis=-1,
                                             momentum=0.99,
                                             epsilon=1e-3,
@@ -440,24 +445,29 @@ class ClassNet(Layer):
         self.batchnorms = []
         self.feature_only = feature_only
 
-        conv2d_layer = self.conv2d_layer(separable_conv)
         for repeats_args in range(self.repeats):
             self.conv_blocks.append(
-                conv2d_layer(self.num_filters,
-                             kernel_size=3,
-                             bias_initializer=tf.zeros_initializer(),
-                             activation=None,
-                             padding='same',
-                             name='class-%d' % repeats_args))
+                self.conv2d_layer(separable_conv,
+                                  self.num_filters,
+                                  kernel_size=3,
+                                  bias_initializer=tf.zeros_initializer(),
+                                  activation=None,
+                                  padding='same',
+                                  name='class-%d' % repeats_args))
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(BatchNormalization(
                     name='class-%d-bn-%d' % (repeats_args, level)))
             self.batchnorms.append(batchnorm_per_level)
-        self.classes = self.classes_layer(conv2d_layer,
-                                          num_classes,
-                                          num_anchors,
-                                          name='class-predict')
+        self.classes = self.conv2d_layer(
+            separable_conv,
+            num_filters=num_classes*num_anchors,
+            kernel_size=3,
+            bias_initializer=tf.constant_initializer(
+                -np.log((1 - 0.01) / 0.01)),
+            activation=None,
+            padding='same',
+            name='class-predict')
 
     def _conv_batchnorm_act(self, image, level, level_id, training):
         conv_block = self.conv_blocks[level]
@@ -494,32 +504,41 @@ class ClassNet(Layer):
         return class_outputs
 
     @classmethod
-    def conv2d_layer(cls, separable_conv):
+    def conv2d_layer(cls,
+                     separable_conv,
+                     num_filters,
+                     kernel_size,
+                     bias_initializer,
+                     activation,
+                     padding,
+                     name
+                     ):
         """Gets the conv2d layer in ClassNet class."""
         if separable_conv:
-            conv2d_layer = functools.partial(
-                SeparableConv2D,
+            conv2d_layer = SeparableConv2D(
+                filters=num_filters,
+                kernel_size=kernel_size,
+                bias_initializer=bias_initializer,
+                activation=activation,
+                padding=padding,
+                name=name,
                 depth_multiplier=1,
                 data_format='channels_last',
                 pointwise_initializer=tf.initializers.variance_scaling(),
-                depthwise_initializer=tf.initializers.variance_scaling())
+                depthwise_initializer=tf.initializers.variance_scaling()
+            )
         else:
-            conv2d_layer = functools.partial(
-                Conv2D,
+            conv2d_layer = Conv2D(
+                filters=num_filters,
+                kernel_size=kernel_size,
+                bias_initializer=bias_initializer,
+                activation=activation,
+                padding=padding,
+                name=name,
                 data_format='channels_last',
-                kernel_initializer=tf.random_normal_initializer(stddev=0.01))
+                kernel_initializer=tf.random_normal_initializer(stddev=0.01)
+            )
         return conv2d_layer
-
-    @classmethod
-    def classes_layer(cls, conv2d_layer, num_classes, num_anchors, name):
-        """Gets the classes layer in ClassNet class."""
-        return conv2d_layer(
-            num_classes * num_anchors,
-            kernel_size=3,
-            bias_initializer=tf.constant_initializer(
-                -np.log((1 - 0.01) / 0.01)),
-            padding='same',
-            name=name)
 
 
 class BoxNet(Layer):

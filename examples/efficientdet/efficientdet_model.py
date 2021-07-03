@@ -2,6 +2,7 @@ import tensorflow as tf
 import efficientnet_builder
 from efficientdet_building_blocks import ResampleFeatureMap, \
     FPNCells, ClassNet, BoxNet
+from config import get_efficientdet_default_params
 
 
 class EfficientDet(tf.keras.Model):
@@ -13,21 +14,12 @@ class EfficientDet(tf.keras.Model):
     """
 
     def __init__(self,
-                 model_name='efficientdetd0',
-                 backbone='efficientnet-b0',
+                 model_name='efficientdet-d0',
                  backbone_weight='imagenet',
                  act_type='swish',
-                 image_size=512,
-                 min_level=3,
-                 max_level=7,
                  fpn_name='BiFPN',
-                 fpn_weight_method='fastattn',
-                 fpn_num_filters=64,
-                 fpn_cell_repeats=3,
-                 box_class_repeats=3,
                  num_classes=90,
                  num_scales=3,
-                 anchor_scale=4,
                  aspect_ratios=[1.0, 2.0, 0.5],
                  conv_batchnorm_act_pattern=False,
                  use_batchnorm_for_sampling=True,
@@ -42,12 +34,19 @@ class EfficientDet(tf.keras.Model):
             name: A string of layer name.
         """
         super().__init__(name=name)
-
+        params = get_efficientdet_default_params(model_name)
+        backbone_name = params['backbone_name']
+        fpn_num_filters = params['fpn_num_filters']
+        fpn_cell_repeats = params['fpn_cell_repeats']
+        box_class_repeats = params['box_class_repeats']
+        min_level = params['min_level']
+        max_level = params['max_level']
+        fpn_weight_method = params['fpn_weight_method']
         self.min_level = min_level
         self.max_level = max_level
         self.num_levels = max_level - min_level + 1
         self.backbone = efficientnet_builder.build_backbone(
-            backbone_name=backbone,
+            backbone_name=backbone_name,
             activation_fn=act_type,
             survival_prob=survival_prob
             )
