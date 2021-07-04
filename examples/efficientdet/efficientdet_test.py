@@ -2,11 +2,12 @@ from PIL import Image
 import numpy as np
 import tensorflow as tf
 from efficientdet_model import EfficientDet
+from config import get_efficientdet_default_params
 
 
 def efficient_model_configuration():
     config = dict()
-    config['model_name'] = 'efficientdetd0'
+    config['model_name'] = 'efficientdet-d0'
     config['backbone_name'] = 'efficientnet-b0'
     config['backbone_weight'] = 'imagenet'
     config['act_type'] = 'swish'
@@ -32,15 +33,8 @@ def efficient_model_configuration():
 
 
 def get_test_image():
-    path_to_paz = '/media/deepan/externaldrive1/Gini/project_repos/'
-    directory_path = 'paz/examples/efficientdet/'
-    file_name = 'img2.png'
-    file_path = path_to_paz + directory_path + file_name
-    raw_image = Image.open(file_path)
-    raw_image = np.asarray(raw_image)
-    raw_image = raw_image[np.newaxis]
-    raw_image = tf.convert_to_tensor(raw_image, dtype=tf.dtypes.float32)
-    return raw_image
+    image = tf.zeros((1, 512, 512, 3), dtype=tf.float32)
+    return image
 
 
 def assert_model_outputs(detector, image, config):
@@ -54,10 +48,21 @@ def assert_model_outputs(detector, image, config):
 def test_efficientdet_model():
     config = efficient_model_configuration()
     image = get_test_image()
-    detector = EfficientDet(config=config)
+    detector = EfficientDet()
     assert_model_outputs(detector,
                          image,
                          config)
 
 
+def test_efficientdet_default_params():
+    param_names = ['backbone_name', 'image_size',
+                   'fpn_num_filters', 'fpn_cell_repeats',
+                   'box_class_repeats', 'anchor_scale',
+                   'min_level', 'max_level', 'fpn_weight_method'
+                   ]
+    params = get_efficientdet_default_params('efficientdet-d5')
+    assert list(params.keys()) == param_names
+
+
 test_efficientdet_model()
+test_efficientdet_default_params()

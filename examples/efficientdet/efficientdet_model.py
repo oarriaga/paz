@@ -15,7 +15,6 @@ class EfficientDet(tf.keras.Model):
 
     def __init__(self,
                  model_name='efficientdet-d0',
-                 backbone_weight='imagenet',
                  act_type='swish',
                  fpn_name='BiFPN',
                  num_classes=90,
