@@ -539,17 +539,17 @@ class Head(Layer):
                     outputs = tf.squeeze(outputs, [self.h_axis, self.w_axis])
                     outputs = self._fc(outputs)
                 self.endpoints['head'] = outputs
-            else:
-                outputs = self._avg_pooling(outputs)
-                self.endpoints['pooled_features'] = outputs
-                if not pooled_features_only:
-                    if self._dropout:
-                        outputs = self._dropout(outputs, training=training)
-                    self.endpoints['global_pool'] = outputs
-                    if self._fc:
-                        outputs = self._fc(outputs)
-                    self.endpoints['head'] = outputs
-            return outputs
+        else:
+            outputs = self._avg_pooling(outputs)
+            self.endpoints['pooled_features'] = outputs
+            if not pooled_features_only:
+                if self._dropout:
+                    outputs = self._dropout(outputs, training=training)
+                self.endpoints['global_pool'] = outputs
+                if self._fc:
+                    outputs = self._fc(outputs)
+                self.endpoints['head'] = outputs
+        return outputs
 
 
 class Model(tf.keras.Model):
