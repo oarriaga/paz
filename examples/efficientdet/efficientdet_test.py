@@ -1,4 +1,5 @@
 import tensorflow as tf
+from efficientnet_builder import build_backbone
 from efficientdet_model import EfficientDet
 from config import get_efficientdet_default_params
 from postprocess import merge_class_box_level_outputs
@@ -50,6 +51,18 @@ def test_efficientdet_merge_outputs():
         'Merged box outputs not matching'
 
 
+def test_efficientnet_model():
+    backbone = build_backbone(backbone_name='efficientnet-b0',
+                              activation_fn='swish',
+                              survival_prob=None)
+    image = get_test_image(512)
+    features = backbone(image,
+                        training=False,
+                        features_only=True)
+    assert len(features) == 6
+
+
 test_efficientdet_model()
 test_efficientdet_default_params()
 test_efficientdet_merge_outputs()
+test_efficientnet_model()
