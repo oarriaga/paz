@@ -164,6 +164,7 @@ class SingleView():
         self.scaling_factor = scaling_factor
 
         self._build_scene(filepath, viewport_size, light_bounds, y_fov)
+        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
 
     def _build_scene(self, paths, size, light, y_fov, rotation_matrix=np.eye(4), translation=np.zeros(3)):
         # Load the object
@@ -220,7 +221,6 @@ class SingleView():
 
     def render(self):
         start = time.time()
-        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
 
         camera_origin = self._sample_parameters()
         camera_to_world, world_to_camera = compute_modelview_matrices(
