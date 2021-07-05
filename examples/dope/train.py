@@ -77,6 +77,8 @@ parser.add_argument('-ns', '--num_stages', default=3, type=int,
                     help='Number of stages for DOPE')
 parser.add_argument('-nc', '--neptune_config',
                     type=str, help='Path to config file where Neptune Token and project name is stored')
+parser.add_argument('-ni', '--neptune_log_interval',
+                    type=int, help='How long (in epochs) to wait for the next Neptune logging')
 parser.add_argument('-ug', '--use_generator', default=1, choices=[0, 1], type=int,
                     help='Use generator to generate data or use already generated data')
 parser.add_argument('-pd', '--path_data', type=str, help='Path for the training data')
@@ -169,7 +171,7 @@ if args.neptune_config is not None:
        params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
     )
 
-    neptuneLogger = NeptuneLogger(model)
+    neptuneLogger = NeptuneLogger(model, args.neptune_log_interval)
     callbacks.append(neptuneLogger)
 
 plotCallback = PlotImagesCallback(model, sequence, neptune_logging=(args.neptune_config is not None), num_stages=args.num_stages)

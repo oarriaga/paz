@@ -29,14 +29,15 @@ class LogSoftmax(Layer):
 
 class NeptuneLogger(Callback):
 
-    def __init__(self, model):
+    def __init__(self, model, log_interval):
         self.model = model
+        self.log_interval = log_interval
 
     def on_epoch_end(self, epoch, logs={}):
         for log_name, log_value in logs.items():
             neptune.log_metric(log_name, log_value)
 
-        if epoch%25 == 0:
+        if epoch%self.log_interval == 0:
             self.model.save('dope_model_epoch_{}.pkl'.format(epoch))
             neptune.log_artifact('dope_model_epoch_{}.pkl'.format(epoch))
 
