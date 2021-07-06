@@ -58,14 +58,14 @@ parser.add_argument('-r', '--roll', default=3.14159, type=float,
 parser.add_argument('-s', '--shift', default=0.05, type=float,
                     help='Threshold of random shift of camera')
 parser.add_argument('-d', '--depth', nargs='+', type=float,
-                    default=[0.3, 0.5],
+                    default=[0.5, 1.0],
                     help='Distance from camera to origin in meters')
 parser.add_argument('-fv', '--y_fov', default=3.14159 / 4.0, type=float,
                     help='Field of view angle in radians')
 parser.add_argument('-l', '--light', nargs='+', type=float,
-                    default=[.5, 30],
+                    default=[0.5, 30],
                     help='Light intensity from poseur')
-parser.add_argument('-oc', '--num_occlusions', default=2, type=int,
+parser.add_argument('-oc', '--num_occlusions', default=0, type=int,
                     help='Number of occlusions')
 parser.add_argument('-sa', '--save_path',
                     default=os.path.join(
@@ -110,7 +110,7 @@ renderer = SingleView(filepath=args.obj_path, colors=colors, viewport_size=(args
 
 # creating sequencer
 if not (args.images_directory is None):
-    image_paths = glob.glob(os.path.join(args.images_directory, '*.png'))
+    image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
 else:
     image_paths = None
 
@@ -181,7 +181,8 @@ callbacks.append(plotCallback)
 if bool(args.use_generator):
 
     data = sequence.__getitem__(0)
-    bel_maps = data[1]['belief_maps_stage_1'][0].transpose(2, 0, 1)
+    plt.imshow(data[0]['input_1'][0])
+    plt.show()
     model.fit_generator(
         sequence,
         steps_per_epoch=args.steps_per_epoch,

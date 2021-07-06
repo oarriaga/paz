@@ -148,7 +148,7 @@ class SingleView():
         shift: Float, to sample [-shift, shift] to move in X, Y OpenGL axes.
     """
     def __init__(self, filepath, colors, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
-                 distance=[0.9, 1.5], light_bounds=[0.5, 30], top_only=False,
+                 distance=[2, 3], light_bounds=[0.5, 30], top_only=False,
                  roll=None, shift=None, scaling_factor=8.0):
         self.distance, self.roll, self.shift = distance, roll, shift
         self.light_intensity, self.top_only = light_bounds, top_only
@@ -164,7 +164,7 @@ class SingleView():
         self.scaling_factor = scaling_factor
 
         self._build_scene(filepath, viewport_size, light_bounds, y_fov)
-        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        #self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
 
     def _build_scene(self, paths, size, light, y_fov, rotation_matrix=np.eye(4), translation=np.zeros(3)):
         # Load the object
@@ -172,13 +172,13 @@ class SingleView():
 
         # First scene = original scene
         self.scene_original = Scene(bg_color=[0, 0, 0, 0])
-        self.light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
-        #self.camera = PerspectiveCamera(y_fov, aspectRatio=np.divide(*size))
-        self.camera = OrthographicCamera(0.3, 0.3)
+        self.camera = PerspectiveCamera(y_fov, aspectRatio=np.divide(*size))
+        #self.camera = OrthographicCamera(0.3, 0.3)
         self.camera_original = self.scene_original.add(self.camera)
+        self.light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
 
         for loaded_trimesh in loaded_trimeshes:
-            self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
+            #self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
             mesh_original = self.scene_original.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
             self.meshes_original.append(mesh_original)
             self.mesh_origins.append(mesh_original.mesh.centroid)
@@ -216,18 +216,21 @@ class SingleView():
         print("Distance: " + str(distance))
         camera_origin = sample_point_in_sphere(distance, self.top_only)
         camera_origin = random_perturbation(camera_origin, self.epsilon)
+        light_intensity = sample_uniformly(self.light_intensity)
         #print("Camera origin: " + str(camera_origin))
-        return camera_origin
+        return camera_origin, light_intensity
 
     def render(self):
         start = time.time()
-
-        camera_origin = self._sample_parameters()
+        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        
+        camera_origin, light_intensity = self._sample_parameters()
         camera_to_world, world_to_camera = compute_modelview_matrices(
             camera_origin, self.world_origin, self.roll, self.shift)
+
+        self.light_original.light.intensity = light_intensity
         self.scene_original.set_pose(self.camera_original, camera_to_world)
         self.scene_original.set_pose(self.light_original, camera_to_world)
-        #self.scene_ambient_light.set_pose(self.camera_ambient_light, camera_to_world)
 
         positions, object_centers, extents = list(), list(), list()
 
@@ -266,6 +269,7 @@ class SingleView():
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
                         num_bounding_box_point += 1
 
+
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
 
@@ -301,11 +305,11 @@ class SingleView():
 
 if __name__ == "__main__":
     num_samples = 5
-    file_paths = ["/home/fabian/.keras/datasets/035_power_drill/tsdf/textured.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
+    file_paths = ["/home/fabian/.keras/datasets/035_power_drill/tsdf/textured_blender.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
     colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
     viewport_size = (400, 400)
 
-    view = SingleView(filepath=file_paths, colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
+    view = SingleView(filepath=file_paths, distance=[0.5, 1.0], colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
 
     image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps, _ = view.render()
 
