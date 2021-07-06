@@ -4,7 +4,6 @@ import numpy as np
 from paz.backend.camera import VideoPlayer
 from paz.backend.camera import Camera
 from demo_pipeline import DetectEigenFaces
-from pipelines import CalculateFaceWeights
 
 
 if __name__ == "__main__":
@@ -20,22 +19,15 @@ if __name__ == "__main__":
 
     eigenfaces = np.load(os.path.join(args.experiments_path, 'eigenfaces.npy'))
     mean_face = np.load(os.path.join(args.experiments_path, 'mean_face.npy'))
-    project = CalculateFaceWeights(eigenfaces, mean_face, with_crop=False)
 
     database_path = os.path.join(args.experiments_path, 'database.npy')
-    weights_database = np.load(database_path, allow_pickle=True).item()
-
-    class_names = list(weights_database.keys())
-    colors = [[255, 0, 0], [0, 255, 0], [0, 255, 255], [0, 0, 255]]
+    weights = np.load(database_path, allow_pickle=True).item()
 
     # user defined parameters
-    parameters = {'norm_order': 2,
-                  'threshold': 1e-3,
-                  'class_names': class_names,
-                  'colors': colors
-                 }
+    norm_order = 2
+    thresh = 1e6
 
-    pipeline = DetectEigenFaces(weights_database, parameters, project,
+    pipeline = DetectEigenFaces(weights, norm_order, thresh, eigenfaces,
                                 mean_face, [args.offset, args.offset])
     camera = Camera(args.camera_id)
     player = VideoPlayer((640, 480), pipeline, camera)
