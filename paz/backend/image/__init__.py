@@ -1,5 +1,6 @@
 from .opencv_image import RGB2BGR
 from .opencv_image import BGR2RGB
+from .opencv_image import BGRA2RGBA
 from .opencv_image import RGB2HSV
 from .opencv_image import HSV2RGB
 from .opencv_image import RGB2GRAY

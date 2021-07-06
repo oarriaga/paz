@@ -4,6 +4,7 @@ import os
 
 RGB2BGR = cv2.COLOR_RGB2BGR
 BGR2RGB = cv2.COLOR_BGR2RGB
+BGRA2RGBA = cv2.COLOR_BGRA2RGBA
 RGB2GRAY = cv2.COLOR_RGB2GRAY
 RGB2HSV = cv2.COLOR_RGB2HSV
 HSV2RGB = cv2.COLOR_HSV2RGB
@@ -65,8 +66,14 @@ def load_image(filepath, num_channels=3):
     # Returns
         Numpy array.
     """
+    if num_channels not in [1, 3, 4]:
+        raise ValueError('Invalid number of channels')
+
     image = cv2.imread(filepath, _CHANNELS_TO_FLAG[num_channels])
-    image = convert_color_space(image, BGR2RGB)
+    if num_channels == 3:
+        image = convert_color_space(image, BGR2RGB)
+    elif num_channels == 4:
+        image = convert_color_space(image, BGRA2RGBA)
     return image
 
 
@@ -219,10 +226,9 @@ def random_shape_crop(image, shape):
     """
     H, W = image.shape[:2]
     if (shape[0] >= H) or (shape[1] >= W):
-        print('WARNING: Image is smaller than crop shape', H, W, shape)
         return None
-    x_min = np.random.randint(0, (W - 1) - shape[1])
-    y_min = np.random.randint(0, (H - 1) - shape[0])
+    x_min = np.random.randint(0, W - shape[1])
+    y_min = np.random.randint(0, H - shape[0])
     x_max = int(x_min + shape[1])
     y_max = int(y_min + shape[0])
     cropped_image = image[y_min:y_max, x_min:x_max]
