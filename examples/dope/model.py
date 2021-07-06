@@ -183,7 +183,7 @@ def DOPE(num_classes=2, num_belief_maps=9, num_affinity_maps=16, image_shape=(40
 
     # Create the fourth stage
     concatenate_stage04 = Concatenate()([conv_out, belief_map_stage03])
-    belief_map_stage04 = create_stage(concatenate_stage04, num_belief_maps, num_stage=4, name="belief_maps", activation_last_layer='softmax')
+    belief_map_stage04 = create_stage(concatenate_stage04, num_belief_maps, num_stage=4, name="belief_maps", activation_last_layer='linear')
     affinity_map_stage04 = create_stage(concatenate_stage04, num_affinity_maps, num_stage=4, name="affinity_maps", activation_last_layer='sigmoid')
 
     if num_stages == 4:
@@ -194,7 +194,7 @@ def DOPE(num_classes=2, num_belief_maps=9, num_affinity_maps=16, image_shape=(40
 
     # Create the fifth stage
     concatenate_stage05 = Concatenate()([conv_out, belief_map_stage04])
-    belief_map_stage05 = create_stage(concatenate_stage05, num_belief_maps, num_stage=5, name="belief_maps", activation_last_layer='softmax')
+    belief_map_stage05 = create_stage(concatenate_stage05, num_belief_maps, num_stage=5, name="belief_maps", activation_last_layer='linear')
     affinity_map_stage05 = create_stage(concatenate_stage05, num_affinity_maps, num_stage=5, name="affinity_maps", activation_last_layer='sigmoid')
 
     if num_stages == 5:
@@ -204,7 +204,7 @@ def DOPE(num_classes=2, num_belief_maps=9, num_affinity_maps=16, image_shape=(40
 
     # Create the sixth stage
     concatenate_stage06 = Concatenate()([conv_out, belief_map_stage05])
-    belief_map_stage06 = create_stage(concatenate_stage06, num_belief_maps, num_stage=6, name="belief_maps", activation_last_layer='softmax')
+    belief_map_stage06 = create_stage(concatenate_stage06, num_belief_maps, num_stage=6, name="belief_maps", activation_last_layer='linear')
     affinity_map_stage06 = create_stage(concatenate_stage06, num_affinity_maps, num_stage=6, name="affinity_maps", activation_last_layer='sigmoid')
 
     if num_stages == 6:
