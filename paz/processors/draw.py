@@ -21,10 +21,11 @@ class DrawBoxes2D(Processor):
         scale: Float. Scale of drawn text.
     """
     def __init__(self, class_names=None, colors=None,
-                 weighted=False, scale=0.7):
+                 weighted=False, scale=0.7, with_score=True):
         self.class_names = class_names
         self.colors = colors
         self.weighted = weighted
+        self.with_score = with_score
         self.scale = scale
         if self.colors is None:
             self.colors = lincolor(len(self.class_names))
@@ -42,7 +43,10 @@ class DrawBoxes2D(Processor):
             color = self.class_to_color[class_name]
             if self.weighted:
                 color = [int(channel * box2D.score) for channel in color]
-            text = '{:0.2f}, {}'.format(box2D.score, class_name)
+            if self.with_score:
+                text = '{:0.2f}, {}'.format(box2D.score, class_name)
+            if not self.with_score:
+                text = '{}'.format(class_name)
             put_text(image, text, (x_min, y_min - 10), self.scale, color, 1)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return image
