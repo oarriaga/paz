@@ -305,7 +305,7 @@ class SingleView():
 
 if __name__ == "__main__":
     num_samples = 5
-    file_paths = ["/home/fabian/.keras/datasets/035_power_drill/tsdf/textured_blender.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
+    file_paths = ["/home/fabian/.keras/datasets/tless_obj/obj_000014.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
     colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
     viewport_size = (400, 400)
 

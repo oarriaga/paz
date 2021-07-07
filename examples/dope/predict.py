@@ -1,14 +1,16 @@
 import argparse
 import os
-
+import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import cv2
+from tqdm import tqdm
 
 from tensorflow.keras.models import load_model
 
 from paz.abstract import SequentialProcessor
+from paz.pipelines import RandomizeRenderedImage
 from paz import processors as pr
 from paz.backend.camera import Camera
 from paz.backend.quaternion import quarternion_to_rotation_matrix
@@ -31,6 +33,9 @@ parser.add_argument('-mp', '--model_path', type=str, help='Path of the TensorFlo
                     default=os.path.join(
                         root_path,
                         'datasets/ycb/models/035_power_drill/textured.obj'))
+parser.add_argument('-id', '--images_directory', type=str,
+                    help='Path to directory containing background images',
+                    default=None)
 parser.add_argument('-ld', '--image_size', default=128, type=int, nargs='+',
                     help='Size of the side of a square image e.g. 64')
 parser.add_argument('-sh', '--top_only', default=0, choices=[0, 1], type=int,
@@ -40,7 +45,7 @@ parser.add_argument('-r', '--roll', default=3.14159, type=float,
 parser.add_argument('-s', '--shift', default=0.05, type=float,
                     help='Threshold of random shift of camera')
 parser.add_argument('-d', '--depth', nargs='+', type=float,
-                    default=[0.3, 0.5],
+                    default=[0.5, 1.0],
                     help='Distance from camera to origin in meters')
 parser.add_argument('-fv', '--y_fov', default=3.14159 / 4.0, type=float,
                     help='Field of view angle in radians')
@@ -53,6 +58,45 @@ parser.add_argument('-sf', '--scaling_factor', default=8.0, type=float,
 args = parser.parse_args()
 image_size = tuple(args.image_size)
 
+
+def plot_belief_maps(image_original, real_belief_maps, predicted_belief_maps):
+    num_rows = 3
+    num_cols = 9
+    fig, ax = plt.subplots(num_rows, num_cols)
+    fig.set_size_inches(12, 10)
+
+    ax[0, 0].imshow(image_original)
+    for i in range(1, num_cols):
+        ax[0, i].axis('off')
+
+    for i in range(num_rows):
+        for j in range(num_cols):
+            ax[i, j].get_xaxis().set_visible(False)
+            ax[i, j].get_yaxis().set_visible(False)
+
+    # Show real belief maps
+    for i in range(num_cols):
+        ax[1, i].imshow(real_belief_maps[i], cmap='gray', vmin=0.0, vmax=1.0)
+
+    # Show the predicted belief maps
+    for i in range(num_cols):
+        ax[2, i].imshow(predicted_belief_maps[i], cmap='gray', vmin=0.0, vmax=1.0)
+
+    # plt.tight_layout()
+    #fig.subplots_adjust(hspace=0.5)
+    plt.show()
+
+def make_multiple_predictions(num_predictions, model, renderer):
+    add_values = list()
+    for i in tqdm(range(num_predictions)):
+        add_value, image_original = make_single_prediction(model, renderer, plot=False)
+        add_values.append(add_value)
+
+        #print(add_value)
+        #plt.imshow(image_original)
+        #plt.show()
+
+    print(sorted(add_values))
 
 def make_single_prediction(model, renderer, plot=True):
     # Known bounding box points for the drill
@@ -69,11 +113,15 @@ def make_single_prediction(model, renderer, plot=True):
     extent_drill = [0.121925/2., 0.1631425/2., 0.17933717/2]
 
     # Generate image
-    image_original, _, bounding_box_points, _, _, bounding_box_points_3d_real = renderer.render()
+    image_original, alpha_original, bounding_box_points, belief_maps, _, bounding_box_points_3d_real = renderer.render()
 
     real_bounding_box_points = bounding_box_points[0]
 
     # Prepare image for the network
+    image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
+    augment = RandomizeRenderedImage(image_paths, 0)
+    image_original = augment(image_original, alpha_original)
+
     preprocessors_input = [pr.NormalizeImage()]
     preprocess_input = SequentialProcessor(preprocessors_input)
     preprocessed_image = preprocess_input(image_original)
@@ -83,14 +131,17 @@ def make_single_prediction(model, renderer, plot=True):
     prediction = model.predict(preprocessed_image)
 
     # Get prediction of the last layer
-    belief_maps = prediction[-1][0]
+    predicted_belief_maps = prediction[-1][0]
 
     # Transpose belief maps
-    belief_maps = np.transpose(belief_maps, [2, 0, 1])
+    predicted_belief_maps = np.transpose(predicted_belief_maps, [2, 0, 1])
+
+    if plot:
+        plot_belief_maps(image_original, belief_maps[0], predicted_belief_maps)
 
     predicted_bounding_box_points = list()
 
-    for belief_map in belief_maps:
+    for belief_map in predicted_belief_maps:
         # Normalize belief map
         belief_map /= np.sum(belief_map)
 
@@ -102,8 +153,9 @@ def make_single_prediction(model, renderer, plot=True):
 
     predicted_bounding_box_points = np.asarray(predicted_bounding_box_points)
 
-    print("Predicted bounding box points: " + str(predicted_bounding_box_points))
-    print("Real bounding box points: " + str(bounding_box_points))
+    if plot:
+        print("Predicted bounding box points: " + str(predicted_bounding_box_points))
+        print("Real bounding box points: " + str(bounding_box_points))
 
     # Create a paz camera object
     camera = Camera()
@@ -142,6 +194,7 @@ def make_single_prediction(model, renderer, plot=True):
                       center[0] + circle_size, center[1] + circle_size,),
                      fill='yellow', outline='yellow')
 
+    #if plot:
     print("Real pose: " + str(pose6D_real))
     print("Predicted pose: " + str(pose6D_predicted))
 
@@ -153,16 +206,20 @@ def make_single_prediction(model, renderer, plot=True):
 
     iou_value = evaluateIoU(real_bounding_box_points_3d, predicted_bounding_box_points_3d,
                             pose6D_real, pose6D_predicted, np.asarray([0.1631425/2., 0.121925/2., 0.17933717/2]), num_sampled_points=1000)
-    print("IoU: " + str(iou_value))
+    if plot:
+        print("IoU: " + str(iou_value))
 
     add_value = evaluateADD(real_bounding_box_points_3d, predicted_bounding_box_points_3d)
-    print("ADD: " + str(add_value))
+    if plot:
+        print("ADD: " + str(add_value))
 
     mssd_value = evaluateMSSD(real_bounding_box_points_3d, predicted_bounding_box_points_3d)
-    print("MSSD: " + str(mssd_value))
+    if plot:
+        print("MSSD: " + str(mssd_value))
 
     mspd_value = evaluateMSPD(real_bounding_box_points, predicted_bounding_box_points, renderer.viewport_size)
-    print("MSPD: " + str(mspd_value))
+    if plot:
+        print("MSPD: " + str(mspd_value))
 
     if plot:
         fig = plt.figure()
@@ -174,6 +231,8 @@ def make_single_prediction(model, renderer, plot=True):
         ax.scatter(predicted_bounding_box_points_3d[:, 0], predicted_bounding_box_points_3d[:, 1], predicted_bounding_box_points_3d[:, 2])
         plt.show()
 
+    return add_value, image_original
+
 
 if __name__ == "__main__":
     model = load_model(args.model_path, custom_objects={'custom_mse': custom_mse })
@@ -182,4 +241,5 @@ if __name__ == "__main__":
                           y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
                           roll=args.roll, shift=args.shift)
 
-    make_single_prediction(model, renderer, plot=True)
+    #make_single_prediction(model, renderer, plot=True)
+    make_multiple_predictions(50, model, renderer)
