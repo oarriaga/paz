@@ -106,13 +106,10 @@ renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
                       args.y_fov, args.depth, args.light, bool(args.top_only),
                       args.roll, args.shift)
 
-#generator = RendererDataGenerator(renderer=renderer, steps_per_epoch=args.steps_per_epoch, batch_size=128)
-
 # creating sequencer
 image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
 processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
 sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch*2)
-#sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
 model_name = '_'.join([dcgan.name, args.class_name])
@@ -181,6 +178,7 @@ for num_epoch in range(args.max_num_epochs):
         callback.on_epoch_begin(num_epoch)
 
     for num_batch in range(args.steps_per_epoch):
+        # Train the discriminator
         discriminator.trainable = True
         start = time.time()
         batch = next(sequence_iterator)
@@ -197,11 +195,13 @@ for num_epoch in range(args.max_num_epochs):
         print("Train time discriminator: {}".format(end - start))
         loss_discriminator = (loss_discriminator_real + loss_discriminator_fake)/2.
 
+        # Train the generator
         discriminator.trainable = False
 
         start = time.time()
         loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
 
+        # Test the network
         batch_test = next(sequence_iterator)
         loss_dcgan_test, loss_color_output_test, loss_dcgan_discriminator_test, loss_error_output_test = dcgan.test_on_batch(batch_test[0]['input_image'], {"color_output": batch_test[1]['color_output'], "error_output": batch_test[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
 

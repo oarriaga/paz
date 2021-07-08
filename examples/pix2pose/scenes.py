@@ -41,15 +41,15 @@ class SingleView():
         self.distance, self.roll, self.shift = distance, roll, shift
         self.light_intensity, self.top_only = light_bounds, top_only
         self._build_scene(filepath, viewport_size, light_bounds, y_fov, colors=False)
-        #self.renderer = OffscreenRenderer(viewport_size[0], viewport_size[1])
         self.RGBA = RenderFlags.RGBA
         self.epsilon = 0.01
         self.viewport_size = viewport_size
 
     def _build_scene(self, path, size, light, y_fov, colors=True, rotation_matrix=np.eye(4), translation=np.zeros(3)):
-        # Load the object
-        loaded_trimesh = trimesh.load(path)
         # Create two scenes: one for the colored objcet one for the error object
+        # In the second scene we do not need a light because we use flat rendering
+
+        loaded_trimesh = trimesh.load(path)
         self.scene_original = Scene(bg_color=[0, 0, 0, 0])
         light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
         camera = self.scene_original.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
@@ -63,29 +63,16 @@ class SingleView():
 
         loaded_trimesh = trimesh.load(path)
         self.scene_color = Scene(bg_color=[0, 0, 0, 0], ambient_light=[1.0, 1.0, 1.0, 1.0])
-        #light_color.light.intensity = 30.
         camera = self.scene_color.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
+        # Encode the 3D locations in colors
         self.color_mesh(loaded_trimesh)
-        #self.color_mesh_uniform(loaded_trimesh, np.array([30, 0, 255]))
         self.mesh_color = self.scene_color.add(Mesh.from_trimesh(loaded_trimesh, smooth=False))
         self.world_origin = self.mesh_color.mesh.centroid
         self.scene_color.set_pose(camera, camera_to_world)
-        #self.scene_color.set_pose(light_color, camera_to_world)
-
-        #print(camera_to_world)
-        #self.cylinder = self.scene_original.add(Mesh.from_trimesh(trimesh.creation.cylinder(radius=0.01, height=0.5)))
-        #self.sphere = self.scene_original.add(Mesh.from_trimesh(trimesh.creation.icosphere(subdivisions=3, radius=0.05)))
 
     def render(self):
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
         rotation = trimesh.transformations.random_quaternion()
-
-        angle = np.pi
-        vertical_rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
-
-        # Combine the random rotation with the symmetry rotation
-        #final_rotation = quaternion_multiply(rotation, vertical_rotation)
-        #final_rotation /= np.linalg.norm(final_rotation)
 
         self.mesh_original.rotation = rotation
         self.mesh_color.rotation = rotation
@@ -96,7 +83,7 @@ class SingleView():
         image_colors, _ = self.renderer.render(self.scene_color, flags=pyrender.constants.RenderFlags.FLAT)
         self.renderer.delete()
 
-        return image_original, image_colors, alpha_original, None
+        return image_original, image_colors, alpha_original
 
     def normalize(self, x, x_min, x_max):
         return (x-x_min)/(x_max-x_min)
@@ -126,15 +113,6 @@ class SingleView():
         vertices_y = vertices_y.astype('uint8')
         vertices_z = vertices_z.astype('uint8')
         colors = np.hstack([vertices_x, vertices_y, vertices_z])
-        color_copy = deepcopy(colors)
-        # Rotate the object
-        angle = np.pi
-        for i in range(colors.shape[0]):
-            colors[i] = quarternion_to_rotation_matrix(np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)]))@colors[i]
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(colors[:5000, 0]/255., colors[:5000, 1]/255., colors[:5000, 2]/255., c=color_copy[:5000]/255.)
-        plt.show()
 
         mesh.visual = mesh.visual.to_color()
         mesh.visual.vertex_colors = colors
@@ -164,7 +142,7 @@ if __name__ == "__main__":
     num_samples = 5
     list_images = list()
     #view = SingleView(filepath="/home/fabian/.keras/datasets/036_wood_block/textured_edited.obj")
-    view = SingleView(filepath="/home/fabian/.keras/datasets/001_chips_can/tsdf/textured_edited.obj")
+    view = SingleView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000014.obj")
 
     for _ in range(num_samples):
         image_original, image_colors, alpha_original, rotation = view.render()

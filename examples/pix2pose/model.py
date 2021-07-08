@@ -36,6 +36,10 @@ def loss_color(real_color_image, predicted_color_image):
     mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(real_color_image), axis=-1), axis=-1), repeats=3, axis=-1)
     mask_background = tf.ones(tf.shape(mask_object)) - mask_object
 
+    print(tf.shape(real_color_image))
+    real_color_image_rotated = tf.einsum('ij,mklj->mkli', tf.convert_to_tensor(np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]), dtype=tf.float32), real_color_image)
+    print("Success!!")
+
     # Get the number of pixels
     num_pixels = tf.math.reduce_prod(tf.shape(real_color_image)[1:3])
     beta = 3
@@ -46,7 +50,6 @@ def loss_color(real_color_image, predicted_color_image):
 
     # Calculate the total loss
     loss_colors = tf.cast((1/num_pixels), dtype=tf.float32)*(beta*tf.math.reduce_sum(diff_object, axis=[1, 2, 3]) + tf.math.reduce_sum(diff_background, axis=[1, 2, 3]))
-    #print(loss_colors)
 
     return loss_colors
 
@@ -55,7 +58,6 @@ def loss_error(real_error_image, predicted_error_image):
     # Get the number of pixels
     num_pixels = tf.math.reduce_prod(tf.shape(real_error_image)[1:3])
     loss_error = tf.cast((1/num_pixels), dtype=tf.float32)*(tf.math.reduce_sum(tf.math.square(predicted_error_image - tf.clip_by_value(tf.math.abs(real_error_image), tf.float32.min, 1.)), axis=[1, 2, 3]))
-    #print(loss_error)
 
     return loss_error
 
@@ -124,21 +126,6 @@ class PlotImagesCallback(Callback):
         plt.clf()
         plt.close(fig)
 
-    def on_train_batch_end(self, batch_index, logs=None):
-        """
-        batch = self.sequence.__getitem__(0)
-        predictions = self.model.predict(batch[0]['input_image'])
-
-        fig, ax = plt.subplots(len(batch[0]['input_image']), 2)
-
-        for i in range(len(batch[0]['input_image'])):
-            ax[i, 0].imshow(batch[1]['color_output'][i])
-            ax[i, 1].imshow(predictions[0][i])
-
-        plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(batch_index)))
-        """
-        pass
-
 
 class NeptuneLogger(Callback):
 
@@ -155,18 +142,6 @@ class NeptuneLogger(Callback):
 
 
 def Generator():
-
-    """Auto-encoder model for latent-pose reconstruction.
-    # Arguments
-        input_shape: List of integers, indicating the initial tensor shape.
-        latent_dimension: Integer, value of the latent vector dimension.
-        mode: String {`full`, `encoder`, `decoder`}.
-            If `full` both encoder-decoder parts are returned as a single model
-            If `encoder` only the encoder part is returned as a single model
-            If `decoder` only the decoder part is returned as a single model
-        dropout_rate: Float between [0, 1], indicating the dropout rate of the
-            latent vector.
-    """
     bn_axis = 3
 
     input = Input((128, 128, 3), name='input_image')
@@ -313,11 +288,6 @@ def Discriminator():
     output = Dense(1, activation='sigmoid', name='discriminator_output')(flatten)
     discriminator_model = Model(inputs=input, outputs=[output])
     return discriminator_model
-
-
-class GAN():
-    def __init__(self):
-        pass
 
 
 if __name__ == '__main__':
