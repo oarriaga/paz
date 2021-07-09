@@ -25,7 +25,7 @@ from paz.pipelines import AutoEncoderPredictor
 from scenes import SingleView
 
 from pipelines import DepthImageGenerator, RendererDataGenerator, make_batch_discriminator
-from model import Generator, Discriminator, transformer_loss, loss_color, loss_error, PlotImagesCallback, NeptuneLogger
+from model import Generator, Discriminator, transformer_loss, loss_color_wrapped, loss_error, PlotImagesCallback, NeptuneLogger
 
 
 description = 'Training script for learning implicit orientation vector'
@@ -78,6 +78,8 @@ parser.add_argument('-sa', '--save_path',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-nc', '--neptune_config',
                     type=str, help='Path to config file where Neptune Token and project name is stored')
+parser.add_argument('-rm', '--rotation_matrices',
+                    type=str, help='Path to npy file with a list of rotation matrices')
 args = parser.parse_args()
 
 # setting optimizer and compiling model
@@ -88,6 +90,9 @@ color_output, error_output = generator(dcgan_input)
 discriminator.trainable = False
 discriminator_output = discriminator(color_output)
 dcgan = Model(inputs=[dcgan_input], outputs={"color_output": color_output, "error_output": error_output, "discriminator_output": discriminator_output})
+
+rotation_matrices = np.load(args.rotation_matrices)
+loss_color = loss_color_wrapped(rotation_matrices)
 
 optimizer = Adam(args.learning_rate, amsgrad=True)
 losses = {"color_output": loss_color,
