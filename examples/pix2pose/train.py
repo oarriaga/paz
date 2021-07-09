@@ -78,6 +78,8 @@ parser.add_argument('-sa', '--save_path',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-nc', '--neptune_config',
                     type=str, help='Path to config file where Neptune Token and project name is stored')
+parser.add_argument('-ni', '--neptune_log_interval',
+                    type=int, default=100, help='How long (in epochs) to wait for the next Neptune logging')
 parser.add_argument('-rm', '--rotation_matrices',
                     type=str, help='Path to npy file with a list of rotation matrices')
 args = parser.parse_args()
@@ -161,7 +163,7 @@ plot = PlotImagesCallback(dcgan, sequence, save_path, args.obj_path, args.image_
 callbacks=[stop, log, save, plateau, plot]
 
 if args.neptune_config is not None:
-    neptune_callback = NeptuneLogger(dcgan)
+    neptune_callback = NeptuneLogger(dcgan, log_interval=args.neptune_log_interval)
     callbacks.append(neptune_callback)
 
 # saving hyper-parameters and model summary as text files
