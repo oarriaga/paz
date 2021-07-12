@@ -4,10 +4,11 @@ from paz.backend.image import lincolor
 from paz.pipelines import HaarCascadeFrontalFace
 from paz.abstract import SequentialProcessor, Processor
 from pipelines import CalculateFaceWeights
+from processors import MeasureSimilarity
 
 
 class DetectEigenFaces(Processor):
-    def __init__(self, weights, norm_order, thresh, eigenfaces,
+    def __init__(self, weights, measure, thresh, eigenfaces,
                  mean_face, offsets=[0, 0]):
         super(DetectEigenFaces, self).__init__()
         self.offsets = offsets
@@ -21,7 +22,7 @@ class DetectEigenFaces(Processor):
         self.square.add(pr.OffsetBoxes2D(offsets))
         self.clip = pr.ClipBoxes2D()
         self.crop = pr.CropBoxes2D()
-        self.face_detector = EigenFaceDetector(weights, norm_order, thresh,
+        self.face_detector = EigenFaceDetector(weights, measure, thresh,
                                                eigenfaces, mean_face)
         # drawing and wrapping
         self.draw = pr.DrawBoxes2D(self.class_names, self.colors,
@@ -40,12 +41,12 @@ class DetectEigenFaces(Processor):
 
 
 class EigenFaceDetector(Processor):
-    def __init__(self, weights_data_base, norm_order, thresh,
+    def __init__(self, weights_data_base, measure, thresh,
                  eigenfaces, mean_face):
         self.weights_data_base = weights_data_base
         self.calculate_weights = CalculateFaceWeights(eigenfaces, mean_face,
                                                       with_crop=False)
-        self.query = QueryFace(norm_order, thresh)
+        self.query = QueryFace(measure, thresh)
         super(EigenFaceDetector, self).__init__()
 
     def call(self, image):
@@ -55,10 +56,16 @@ class EigenFaceDetector(Processor):
 
 
 class QueryFace(Processor):
-    def __init__(self, norm_order, thresh):
-        self.norm = np.linalg.norm
-        self.norm_order = norm_order
-        self.threshold = thresh
+    """Identify the most similar face in the database
+
+    # Properties
+        measure: Similarity measurement metric
+        thresh: Float. Threshold for the similarity between two images
+    """
+
+    def __init__(self, measure, thresh):
+        self.thresh = thresh
+        self.measure_distance = MeasureSimilarity(measure)
         super(QueryFace).__init__()
 
     def call(self, test_face_weight, database):
@@ -66,11 +73,10 @@ class QueryFace(Processor):
         weights_difference = []
         for sample in database:
             weight = database[sample].T
-            weight_norm = self.norm((weight - test_face_weight),
-                                    ord=self.norm_order, axis=1)
+            weight_norm = self.measure_distance(weight, test_face_weight)
             weights_difference.append(np.min(weight_norm))
 
-        if np.min(weights_difference) > self.threshold:
+        if np.min(weights_difference) > self.thresh:
             return 'Face not found'
         else:
             most_similar_face_arg = np.argmin(weights_difference)
