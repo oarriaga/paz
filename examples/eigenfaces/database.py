@@ -8,6 +8,18 @@ from pipelines import CalculateFaceWeights
 
 
 class Database():
+    """Load images and updates the database with their weights value
+
+    # Properties
+        path: String. Path of the image directory
+        label: String. label for the images
+
+    # Methods
+        load_data()
+        update_dictionary()
+        add_to_database()
+    """
+
     def __init__(self, path, label, database, eigenfaces, mean_face):
         self.path = path
         self.label = label
@@ -51,18 +63,18 @@ if __name__ == "__main__":
                         default='experiments',
                         help='Directory for writing and loading experiments')
     parser.add_argument('-d', '--database_path', type=str,
-                        default='image_database',
-                        help='Directory for all the images')
+                        default='database',
+                        help='Directory for the database')
     args = parser.parse_args()
 
     eigenfaces = np.load(os.path.join(args.experiments_path, 'eigenfaces.npy'))
     mean_face = np.load(os.path.join(args.experiments_path, 'mean_face.npy'))
 
-    database_path = os.path.join(args.experiments_path, 'database.npy')
+    database_path = os.path.join(args.database_path, 'database.npy')
     database = np.load(database_path, allow_pickle=True).item()
 
-    data_path = {'Octavio': os.path.join(args.database_path, 'octavio'),
-                 'Proneet': os.path.join(args.database_path, 'proneet')
+    data_path = {'Octavio': os.path.join(args.database_path, 'images/octavio'),
+                 'Proneet': os.path.join(args.database_path, 'images/proneet')
                  }
 
     write_to_file = False
