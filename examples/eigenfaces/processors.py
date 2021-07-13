@@ -159,3 +159,35 @@ class CropFrontalFace(pr.Processor):
         if len(boxes2D) == 1:
             image = self.crop(image, boxes2D)[0]
         return image
+
+
+class MeasureSimilarity(pr.Processor):
+    def __init__(self, measure):
+        super(MeasureSimilarity, self).__init__()
+        self.measure = measure
+
+    def call(self, vector_1, vector_2):
+        similarity = self.measure(vector_1, vector_2)
+        return similarity
+
+
+class CalculateNorm(pr.Processor):
+    def __init__(self, norm_order):
+        super(CalculateNorm, self).__init__()
+        self.order = norm_order
+        self.norm = np.linalg.norm
+
+    def call(self, vector_1, vector_2):
+        distance = self.norm((vector_1 - vector_2), ord=self.order, axis=1)
+        return distance
+
+
+class CalculateCosineSimilarity(pr.Processor):
+    def __init__(self):
+        super(CalculateCosineSimilarity, self).__init__()
+        self.norm = np.linalg.norm
+
+    def call(self, vector_1, vector_2):
+        distance = np.dot(vector_1, vector_2) / (self.norm(vector_1) *
+                                                 self.norm(vector_2))
+        return distance
