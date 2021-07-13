@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import glob
 import os
+import pickle
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import neptune
@@ -32,22 +33,32 @@ def transformer_loss(real_depth_image, predicted_depth_image):
 
 
 def loss_color_wrapped(rotation_matrices):
-    def loss_color_unwrapped(real_color_image, predicted_color_image):
-        # Calculate masks for the object and the background (they are independent of the rotation)
-        mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(real_color_image), axis=-1), axis=-1), repeats=3, axis=-1)
-        mask_background = tf.ones(tf.shape(mask_object)) - mask_object
-
-        # Add a small epsilon value to avoid the discontinuity problem
-        real_color_image = real_color_image + tf.ones_like(real_color_image) * 0.0001
-
+    def loss_color_unwrapped(color_image, predicted_color_image):
         min_loss = tf.float32.max
 
         # Iterate over all possible rotations
         for rotation_matrix in rotation_matrices:
+
+            real_color_image = tf.identity(color_image)
+
+            # Bring the image in the range between 0 and 1
+            real_color_image = (real_color_image+1)*0.5
+
+            # Calculate masks for the object and the background (they are independent of the rotation)
+            mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(real_color_image), axis=-1), axis=-1), repeats=3, axis=-1)
+            mask_background = tf.ones(tf.shape(mask_object)) - mask_object
+
+            # Add a small epsilon value to avoid the discontinuity problem
+            real_color_image = real_color_image + tf.ones_like(real_color_image) * 0.0001
+
             # Rotate the object
             real_color_image = tf.einsum('ij,mklj->mkli', tf.convert_to_tensor(np.array(rotation_matrix), dtype=tf.float32), real_color_image)
             real_color_image = tf.where(tf.math.less(real_color_image, 0), tf.ones_like(real_color_image) + real_color_image, real_color_image)
+
             real_color_image = real_color_image*mask_object
+
+            # Bring the image again in the range between -1 and 1
+            real_color_image = (real_color_image*2)-1
 
             # Get the number of pixels
             num_pixels = tf.math.reduce_prod(tf.shape(real_color_image)[1:3])
@@ -60,29 +71,18 @@ def loss_color_wrapped(rotation_matrices):
             # Calculate the total loss
             loss_colors = tf.cast((1/num_pixels), dtype=tf.float32)*(beta*tf.math.reduce_sum(diff_object, axis=[1, 2, 3]) + tf.math.reduce_sum(diff_background, axis=[1, 2, 3]))
             min_loss = tf.math.minimum(loss_colors, min_loss)
-
         return min_loss
 
     return loss_color_unwrapped
 
 
 def loss_error(real_error_image, predicted_error_image):
+
     # Get the number of pixels
     num_pixels = tf.math.reduce_prod(tf.shape(real_error_image)[1:3])
     loss_error = tf.cast((1/num_pixels), dtype=tf.float32)*(tf.math.reduce_sum(tf.math.square(predicted_error_image - tf.clip_by_value(tf.math.abs(real_error_image), tf.float32.min, 1.)), axis=[1, 2, 3]))
 
     return loss_error
-
-
-def rotate_image(image, rotation_matrix):
-    mask_image = (np.sum(image, axis=-1) != 0).astype(float)
-    mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
-    image_colors_rotated = image + np.ones_like(image) * 0.0001
-    image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrix, image_colors_rotated)
-    image_colors_rotated = np.where(np.less(image_colors_rotated, 0), np.ones_like(image_colors_rotated) + image_colors_rotated, image_colors_rotated)
-    image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
-    image_colors_rotated = image_colors_rotated * mask_image
-    return image_colors_rotated
 
 
 class PlotImagesCallback(Callback):
@@ -114,7 +114,7 @@ class PlotImagesCallback(Callback):
         # creating sequencer
         image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
         processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
-        sequence = GeneratingSequencePix2Pose(processor, self.model, self.batch_size, self.steps_per_epoch * 2)
+        sequence = GeneratingSequencePix2Pose(processor, self.model, self.batch_size, self.steps_per_epoch * 2, rotation_matrices=self.rotation_matrices)
 
         sequence_iterator = sequence.__iter__()
         batch = next(sequence_iterator)
@@ -122,6 +122,7 @@ class PlotImagesCallback(Callback):
 
         original_images = (batch[0]['input_image'] * 255).astype(np.int)
         color_images = ((batch[1]['color_output'] + 1) * 127.5).astype(np.int)
+        color_images = color_images.astype(np.float)/255.
         predictions['color_output'] = ((predictions['color_output'] + 1) * 127.5).astype(np.int)
         predictions['error_output'] = ((predictions['error_output'] + 1) * 127.5).astype(np.int)
         #color_images = batch[1]['color_output']
@@ -133,6 +134,7 @@ class PlotImagesCallback(Callback):
             num_columns = 3 + len(self.rotation_matrices)
 
         fig, ax = plt.subplots(4, num_columns)
+        fig.set_size_inches(10, 6)
 
         cols = ["Input image", "Predicted image", "Predicted error", "Ground truth"]
 
@@ -147,11 +149,11 @@ class PlotImagesCallback(Callback):
             ax[i, 1].imshow(predictions['color_output'][i])
             ax[i, 2].imshow(np.squeeze(predictions['error_output'][i]))
             # Plot all the possible rotations
-            for j, rotation_matrix in self.rotation_matrices:
+            for j, rotation_matrix in enumerate(self.rotation_matrices):
                 ax[i, 3 + j].imshow(rotate_image(color_images[i], rotation_matrix))
 
         plt.tight_layout()
-
+        plt.show()
         plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
 
         if self.neptune_logging:

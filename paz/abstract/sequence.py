@@ -118,14 +118,32 @@ class GeneratingSequencePix2Pose(SequenceExtra):
             lists. If false ``inputs`` and ``labels`` are dispatched as
             dictionaries.
     """
-    def __init__(self, processor, model, batch_size, num_steps, as_list=False):
+    def __init__(self, processor, model, batch_size, num_steps, as_list=False, rotation_matrices=None):
         self.num_steps = num_steps
         self.model = model
+        self.rotation_matrices = rotation_matrices
         super(GeneratingSequencePix2Pose, self).__init__(
             processor, batch_size, as_list)
 
     def __len__(self):
         return self.num_steps
+
+    def rotate_image(self, image, rotation_matrix):
+        # Bring the image in the range between 0 and 1
+        image = (image + 1) * 0.5
+
+        mask_image = (np.sum(image, axis=-1) != 0).astype(float)
+        mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
+        image_colors_rotated = image + np.ones_like(image) * 0.0001
+        image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrix, image_colors_rotated)
+        image_colors_rotated = np.where(np.less(image_colors_rotated, 0),
+                                        np.ones_like(image_colors_rotated) + image_colors_rotated, image_colors_rotated)
+        image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
+        image_colors_rotated = image_colors_rotated * mask_image
+
+        # Bring the image again in the range between -1 and 1
+        image_colors_rotated = (image_colors_rotated * 2) - 1
+        return image_colors_rotated
 
     def process_batch(self, inputs, labels, batch_index):
         start = time.time()
@@ -145,8 +163,20 @@ class GeneratingSequencePix2Pose(SequenceExtra):
         # Calculate the errors between the target output and the predicted output
         for sample_arg in range(self.batch_size):
             sample = samples[sample_arg]
-            error = np.sum(predictions['color_output'][sample_arg] - sample['labels']['color_output'], axis=-1, keepdims=True)
-            sample['labels'][self.ordered_label_names[0]] = error
+
+            # List of tuples of the form (error, error_image)
+            stored_errors = []
+
+            # Iterate over all rotation matrices to find the object position
+            # with the smallest error
+            for rotation_matrix in self.rotation_matrices:
+                color_image_rotated = self.rotate_image(sample['labels']['color_output'], rotation_matrix)
+                error_image = np.sum(predictions['color_output'][sample_arg] - color_image_rotated, axis=-1, keepdims=True)
+                error_value = np.sum(np.abs(error_image))
+                stored_errors.append((error_value, error_image))
+
+            minimal_error_pair = min(stored_errors, key=lambda t: t[0])
+            sample['labels'][self.ordered_label_names[0]] = minimal_error_pair[1]
             self._place_sample(sample['inputs'], sample_arg, inputs)
             self._place_sample(sample['labels'], sample_arg, labels)
 

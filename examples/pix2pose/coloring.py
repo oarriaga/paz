@@ -8,7 +8,7 @@ from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight
 from pyrender import Mesh, Scene, RenderFlags
 
 from paz.backend.render import compute_modelview_matrices
-from paz.backend.quaternion import quarternion_to_rotation_matrix
+from paz.backend.quaternion import quarternion_to_rotation_matrix, quarternion_to_rotation_matrix, quaternion_multiply
 
 
 def normalize(x, x_min, x_max):
@@ -40,33 +40,8 @@ def color_object(path):
     vertices_z = vertices_z.astype('uint8')
     colors = np.hstack([vertices_x, vertices_y, vertices_z])
 
-    print(len(vertices))
-    print(len(np.unique(vertices, axis=0)))
-    print(np.where((vertices_selected == vertices_selected[0]).all(axis=1)))
-
-    # Rotate the object
-    #angle = np.pi/10
-    #colors_rotated = list()
-    #for i in range(colors.shape[0]):
-    #for vertex in mesh.vertices:
-    #    print("Quaternion: {}".format(quarternion_to_rotation_matrix(np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)]))))
-    #    colors_rotated.append(quarternion_to_rotation_matrix(np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)]))@vertex)
-
-    #colors_rotated_array = np.asarray(colors_rotated)
-    #fig = plt.figure()
-    #ax = fig.add_subplot(111, projection='3d')
-    #ax.scatter(colors_rotated_array[:, 0] / 255., colors_rotated_array[:, 1] / 255., colors_rotated_array[:, 2] / 255., c=colors_rotated_array[:] / 255.)
-    #ax.scatter(colors[:10000, 0], colors[:10000, 1], colors[:10000, 2])
-    #plt.show()
-
-    #colors = np.concatenate((colors, colors))
-    #colors = np.concatenate(((colors, np.expand_dims(np.ones(len(colors))*255, axis=-1))), axis=-1)
-
     mesh.visual = mesh.visual.to_color()
     mesh.visual.vertex_colors = colors
-    #mesh.visual.vertex_colors[np.invert(vertices[:, 2] >= 0)] = colors[:2858]
-
-    #trimesh.points.PointCloud(vertices_selected, colors=colors).export("./color_mesh.ply", file_type='ply')
 
     angle = np.pi/5
     mesh_rotated = deepcopy(mesh)
@@ -75,8 +50,57 @@ def color_object(path):
     return mesh, mesh_rotated
 
 
+def color_object_two_colors(path):
+    mesh = trimesh.load(path)
+    vertices = mesh.vertices
+
+    # Slice the object along one symmetry axis
+    # print(vertices[:, 2] >= 0)
+    vertices_selected = vertices
+
+    x_min = vertices_selected[:, 0].min()
+    x_max = vertices_selected[:, 0].max()
+    y_min = vertices_selected[:, 1].min()
+    y_max = vertices_selected[:, 1].max()
+    z_min = vertices_selected[:, 2].min()
+    z_max = vertices_selected[:, 2].max()
+
+    # make vertices using RGB format
+    vertices_x = 255 * np.ones_like(vertices_selected[:, 0:1])
+    vertices_y = 255 * normalize(vertices_selected[:, 1:2], y_min, y_max)
+    vertices_z = 255 * normalize(vertices_selected[:, 2:3], z_min, z_max)
+
+    vertices_x = vertices_x.astype('uint8')
+    vertices_y = vertices_y.astype('uint8')
+    vertices_z = vertices_z.astype('uint8')
+    colors = np.hstack([vertices_x, vertices_y, vertices_z])
+
+    mesh.visual = mesh.visual.to_color()
+    mesh.visual.vertex_colors = colors
+
+    angle = np.pi / 5
+    mesh_rotated = deepcopy(mesh)
+    mesh_rotated.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+
+    return mesh, mesh_rotated
+
+
+def calculate_canonical_pose_cylinder(mesh):
+    # Calculate canonical pose for cylindrical object, idea taken from here: https://arxiv.org/abs/1908.07640
+    angle = np.pi*5.9
+    mesh.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+    rotation_matrix = quarternion_to_rotation_matrix(mesh.rotation)
+    print("Rotation matrix: {}".format(quarternion_to_rotation_matrix(mesh.rotation)))
+
+    angle_backrotation = np.arctan2(rotation_matrix[0, 2]-rotation_matrix[2, 0], rotation_matrix[0, 0]+rotation_matrix[2, 2])
+    angle_backrotation = np.round(angle_backrotation, 4)
+    print("Angle backrotation: {}".format(angle_backrotation))
+    quaternion = quaternion_multiply(np.array([0, -np.sin(angle_backrotation / 2), 0, np.cos(angle_backrotation / 2)]), mesh.rotation)
+    mesh.rotation = quaternion
+
+
 if __name__ == "__main__":
-    scene = Scene(bg_color=[100, 100, 100])
+    scene = Scene(bg_color=[0, 0, 0])
     y_fov = 3.14159/4.0
     distance = [0.3, 0.5]
     light_bounds = [0.5, 30]
@@ -84,18 +108,21 @@ if __name__ == "__main__":
 
     light = scene.add(DirectionalLight([1.0, 1.0, 1.0], 10))
     camera = scene.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-    camera_to_world, world_to_camera = compute_modelview_matrices(np.array([.4, .4, .4]), [0.0, 0.0, 0.0], np.pi*2, 0.05)
+    camera_to_world, world_to_camera = compute_modelview_matrices(np.array([.4, .4, .4]), [0.0, 0.0, 0.0], None, None)
 
+    print("Camera to world: {}".format(camera_to_world))
     scene.set_pose(camera, camera_to_world)
     scene.set_pose(light, camera_to_world)
 
     #mesh = trimesh.load("/home/fabian/.keras/datasets/custom_objects/symmetry_z_2_object.obj")
-    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/custom_objects/symmetric_object_half.obj")
+    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/custom_objects/cylinder_object.obj")
 
-    scene.add(Mesh.from_trimesh(mesh, smooth=False))
-    mesh_rotated = scene.add(Mesh.from_trimesh(mesh_rotated, smooth=False))
-    angle = np.pi
-    mesh_rotated.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+    mesh = scene.add(Mesh.from_trimesh(mesh, smooth=False))
+    calculate_canonical_pose_cylinder(mesh)
+    print("Mesh rotation: {}".format(mesh.rotation))
+    #mesh_rotated = scene.add(Mesh.from_trimesh(mesh_rotated, smooth=False))
+    #angle = np.pi
+    #mesh_rotated.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
 
     renderer = OffscreenRenderer(size[0], size[1])
     image_original, depth_original = renderer.render(scene, flags=RenderFlags.FLAT)

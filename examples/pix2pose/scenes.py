@@ -53,7 +53,7 @@ class SingleView():
         self.scene_original = Scene(bg_color=[0, 0, 0, 0])
         light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
         camera = self.scene_original.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-        self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
+        #self.color_mesh(loaded_trimesh)
         self.mesh_original = self.scene_original.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
         self.world_origin = self.mesh_original.mesh.centroid
         camera_to_world, world_to_camera = compute_modelview_matrices(np.array([.4, .4, .4]), self.world_origin, self.roll, self.shift)

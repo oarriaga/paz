@@ -116,7 +116,7 @@ renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
 # creating sequencer
 image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
 processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
-sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch*2)
+sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch*2, rotation_matrices=rotation_matrices)
 
 # making directory for saving model weights and logs
 model_name = '_'.join([dcgan.name, args.class_name])
@@ -158,7 +158,7 @@ save = ModelCheckpoint(
 save.model = dcgan
 
 plot = PlotImagesCallback(dcgan, sequence, save_path, args.obj_path, args.image_size, args.y_fov, args.depth, args.light,
-                 args.top_only, args.roll, args.shift, args.images_directory, args.batch_size, args.steps_per_epoch, args.neptune_config is not None)
+                 args.top_only, args.roll, args.shift, args.images_directory, args.batch_size, args.steps_per_epoch, args.neptune_config is not None, rotation_matrices=rotation_matrices)
 
 callbacks=[stop, log, save, plateau, plot]
 
@@ -193,6 +193,7 @@ for num_epoch in range(args.max_num_epochs):
         print("Batch generation time: {}".format(end - start))
 
         start = time.time()
+
         X_discriminator_real, y_discriminator_real = make_batch_discriminator(generator, batch[0]['input_image'], batch[1]['color_output'], 1)
         loss_discriminator_real = discriminator.train_on_batch(X_discriminator_real, y_discriminator_real)
 
