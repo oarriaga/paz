@@ -4,30 +4,6 @@ import tensorflow as tf
 from PIL import Image
 
 
-def get_activation_fn(features, act_type):
-    """Apply non-linear activation function to features provided."""
-    if act_type in ('silu', 'swish'):
-        return tf.nn.swish(features)
-    elif act_type == 'relu':
-        return tf.nn.relu(features)
-    else:
-        raise ValueError('Unsupported act_type {}'.format(act_type))
-
-
-def get_drop_connect(features, is_training, survival_prob):
-    """Drop the entire conv with given survival probability."""
-    # Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
-    if not is_training:
-        return features
-    batch_size = tf.shape(features)[0]
-    random_tensor = survival_prob
-    random_tensor += tf.random.uniform([batch_size, 1, 1, 1],
-                                       dtype=features.dtype)
-    binary_tensor = tf.floor(random_tensor)
-    output = features / survival_prob * binary_tensor
-    return output
-
-
 # Mock input image.
 path_to_paz = '/media/deepan/externaldrive1/project_repos/'
 directory_path = 'paz/examples/efficientdet/'
@@ -39,7 +15,62 @@ raw_images = raw_images[np.newaxis]
 raw_images = tf.convert_to_tensor(raw_images, dtype=tf.dtypes.float32)
 
 
+def get_activation_fn(features, act_type):
+    """Apply non-linear activation function to features provided.
+    # Arguments
+        features: Tensor, representing an input feature map
+        to be pass through an activation function.
+        act_type: A string specifying the activation function
+        type.
+    # Returns
+        activation function: features transformed by the
+        activation function.
+    """
+    if act_type in ('silu', 'swish'):
+        return tf.nn.swish(features)
+    elif act_type == 'relu':
+        return tf.nn.relu(features)
+    else:
+        raise ValueError('Unsupported act_type {}'.format(act_type))
+
+
+def get_drop_connect(features, is_training, survival_prob):
+    """Drop the entire conv with given survival probability.
+    Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
+    # Arguments
+        features: Tensor, input feature map to undergo
+        drop connection.
+        is_training: Bool specifying the training phase.
+        survival_prob: Float, survival probability to drop
+        input convolution features.
+    # Returns
+        output: Tensor, output feature map after drop connect.
+    """
+    if not is_training:
+        return features
+    batch_size = tf.shape(features)[0]
+    random_tensor = survival_prob
+    random_tensor += tf.random.uniform([batch_size, 1, 1, 1],
+                                       dtype=features.dtype)
+    binary_tensor = tf.floor(random_tensor)
+    output = features / survival_prob * binary_tensor
+    return output
+
+
 def preprocess_images(image, image_size):
+    """
+    Preprocess image for EfficientDet model.
+    # Arguments
+        image: Tensor, raw input image to be preprocessed
+        of shape [bs, h, w, c]
+        image_size: Tensor, size to resize the raw image
+        of shape [bs, new_h, new_w, c]
+    # Returns
+        image: Tensor, resized and preprocessed image
+        image_scale: Tensor, scale to reconstruct each of
+        the raw images to original size from the resized
+        image.
+    """
     mean_rgb = [0.485 * 255, 0.456 * 255, 0.406 * 255]  # imagenet rgb mean
     std_rgb = [0.229 * 255, 0.224 * 255, 0.225 * 255]  # imagenet rgb std
     image = tf.cast(image, dtype=tf.float32)

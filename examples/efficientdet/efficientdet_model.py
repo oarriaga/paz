@@ -35,10 +35,47 @@ class EfficientDet(tf.keras.Model):
                  survival_prob=None,
                  feature_only=False,
                  name=""):
-        """Initialize model.
+        """ Initializes EfficientDet model.
         # Arguments
-            config: Configuration of the EfficientDet model.
-            name: A string of layer name.
+                model_name: A string of EfficientDet model name.
+                backbone: A string of EfficientNet backbone name used
+                in EfficientDet.
+                image_size: Int, size of the input image.
+                fpn_num_filters: Int, FPN filter output size.
+                fpn_cell_repeats: Int, Number of consecutive FPN block.
+                box_class_repeats: Int, Number of consective regression
+                and classification blocks.
+                anchor_scale: Int, specifying the number of anchor
+                scales.
+                min_level: Int, minimum level for features.
+                max_level: Int, maximum level for features.
+                fpn_weight_method: A string specifying the feature
+                fusion weighting method in fpn.
+                act_type: A string specifying the activation function.
+                fpn_name: A string specifying the feature fusion FPN
+                layer.
+                num_classes: Int, specifying the number of class in the
+                output.
+                num_scales: Int, specifying the number of scales in the
+                anchor boxes.
+                aspect_ratios: List, specifying the aspect ratio of the
+                default anchor boxes. Computed with k-mean on COCO dataset.
+                conv_batchnorm_act_pattern: Bool, specifying the presence
+                of convolution - batch normalization - activation function
+                patter in the EfficientDet building blocks.
+                use_batchnorm_for_sampling: Bool, specifying the presense
+                of batch normalization for resampling layers in feature
+                extaction.
+                conv_after_downsample: Bool, specifying the presence of
+                convolution layer after downsampling.
+                separable_conv: Bool, specifying the usage of separable
+                convolution layers in EfficientDet
+                survival_prob: Float, specifying the survival probability
+                feature_only: Bool, indicating the usage of features only
+                from EfficientDet
+                name=""):
+        # Returns
+                model: EfficientDet model specified in model_name
         """
         super().__init__(name=name)
         self.model_name = model_name

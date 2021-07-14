@@ -1,7 +1,9 @@
 from efficientdet_model import EfficientDet
 
 
-WEIGHT_PATH = '/media/deepan/externaldrive1/project_repos/paz/paz_efficientdet_weights/'
+WEIGHT_PATH = '/media/deepan/externaldrive1/project_repos/' \
+              'paz/paz_efficientdet_weights/'
+
 
 def get_EFFICIENTDET(
         model_name,
@@ -14,6 +16,26 @@ def get_EFFICIENTDET(
         min_level,
         max_level,
         fpn_weight_method):
+    """ Generates an EfficientDet model with the parameter
+    values passed as argument.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet model
+    """
 
     model = EfficientDet(model_name,
                          backbone,
@@ -42,6 +64,26 @@ def EFFICIENTDET_D0(model_name='efficientdet-d0',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='fastattn'):
+    """ Instantiates EfficientDet-D0 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D0 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -65,6 +107,26 @@ def EFFICIENTDET_D1(model_name='efficientdet-d1',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='fastattn'):
+    """ Instantiates EfficientDet-D1 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D1 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -88,6 +150,26 @@ def EFFICIENTDET_D2(model_name='efficientdet-d2',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='fastattn'):
+    """ Instantiates EfficientDet-D2 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D2 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -111,6 +193,26 @@ def EFFICIENTDET_D3(model_name='efficientdet-d3',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='fastattn'):
+    """ Instantiates EfficientDet-D3 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D3 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -134,6 +236,26 @@ def EFFICIENTDET_D4(model_name='efficientdet-d4',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='fastattn'):
+    """ Instantiates EfficientDet-D4 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D4 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -157,6 +279,26 @@ def EFFICIENTDET_D5(model_name='efficientdet-d5',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='fastattn'):
+    """ Instantiates EfficientDet-D5 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D5 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -180,6 +322,26 @@ def EFFICIENTDET_D6(model_name='efficientdet-d6',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='sum'):
+    """ Instantiates EfficientDet-D6 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D6 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -203,6 +365,26 @@ def EFFICIENTDET_D7(model_name='efficientdet-d3',
                     min_level=3,
                     max_level=7,
                     fpn_weight_method='sum'):
+    """ Instantiates EfficientDet-D7 model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D7 model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
@@ -226,6 +408,26 @@ def EFFICIENTDET_D7x(model_name='efficientdet-d7x',
                      min_level=3,
                      max_level=8,
                      fpn_weight_method='sum'):
+    """ Instantiates EfficientDet-D7x model with the default
+    setting provided in the official implementation.
+    # Arguments
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
+        image_size: Int, size of the input image
+        fpn_num_filters: Int, FPN filter output size
+        fpn_cell_repeats: Int, Number of consecutive FPN block
+        box_class_repeats: Int, Number of consective regression
+        and classification blocks
+        anchor_scale: Int, specifying the number of anchor
+        scales
+        min_level: Int, minimum level for features.
+        max_level: Int, maximum level for features.
+        fpn_weight_method: A string specifying the feature
+        fusion weighting method in fpn
+    # Returns
+        model: EfficientDet-D7x model
+    """
     model = get_EFFICIENTDET(model_name,
                              backbone,
                              image_size,
