@@ -294,6 +294,8 @@ class FNode(Layer):
             for i in range(len(nodes)):
                 nodes[i] = nodes[i] * edge_weights[i] / (weight_sum + 0.0001)
             new_node = sum_nodes(nodes)
+        elif self.weight_method == 'sum':
+            new_node = sum_nodes(nodes)
         else:
             raise ValueError('unknown weight_method %s' % self.weight_method)
         return new_node

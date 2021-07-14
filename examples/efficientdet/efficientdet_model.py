@@ -1,8 +1,7 @@
 import tensorflow as tf
 import efficientnet_builder
-from efficientdet_building_blocks import ResampleFeatureMap, \
+from efficientdet_blocks import ResampleFeatureMap, \
     FPNCells, ClassNet, BoxNet
-from config import get_efficientdet_default_params
 
 
 class EfficientDet(tf.keras.Model):
@@ -14,7 +13,16 @@ class EfficientDet(tf.keras.Model):
     """
 
     def __init__(self,
-                 model_name='efficientdet-d0',
+                 model_name,
+                 backbone,
+                 image_size,
+                 fpn_num_filters,
+                 fpn_cell_repeats,
+                 box_class_repeats,
+                 anchor_scale,
+                 min_level,
+                 max_level,
+                 fpn_weight_method,
                  act_type='swish',
                  fpn_name='BiFPN',
                  num_classes=90,
@@ -33,70 +41,81 @@ class EfficientDet(tf.keras.Model):
             name: A string of layer name.
         """
         super().__init__(name=name)
-        params = get_efficientdet_default_params(model_name)
-        backbone_name = params['backbone_name']
-        fpn_num_filters = params['fpn_num_filters']
-        fpn_cell_repeats = params['fpn_cell_repeats']
-        box_class_repeats = params['box_class_repeats']
-        min_level = params['min_level']
-        max_level = params['max_level']
-        fpn_weight_method = params['fpn_weight_method']
+        self.model_name = model_name
+        self.backbone = backbone
+        self.image_size = image_size
+        self.fpn_num_filters = fpn_num_filters
+        self.fpn_cell_repeats = fpn_cell_repeats
+        self.box_class_repeats = box_class_repeats
+        self.anchor_scale = anchor_scale
         self.min_level = min_level
         self.max_level = max_level
+        self.fpn_weight_method = fpn_weight_method
         self.num_levels = max_level - min_level + 1
+        self.act_type = act_type
+        self.fpn_name = fpn_name
+        self.num_classes = num_classes
+        self.num_scales = num_scales
+        self.aspect_ratios = aspect_ratios
+        self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
+        self.use_batchnorm_for_sampling = use_batchnorm_for_sampling
+        self.conv_after_downsample = conv_after_downsample
+        self.separable_conv = separable_conv
+        self.survival_prob = survival_prob
+        self.feature_only = feature_only
         self.backbone = efficientnet_builder.build_backbone(
-            backbone_name=backbone_name,
-            activation_fn=act_type,
-            survival_prob=survival_prob
+            backbone_name=self.backbone,
+            activation_fn=self.act_type,
+            survival_prob=self.survival_prob
             )
         self.resample_layers = []
-        for level in range(6, max_level + 1):
+        for level in range(6, self.max_level + 1):
             self.resample_layers.append(ResampleFeatureMap(
-                feature_level=(level - min_level),
-                target_num_channels=fpn_num_filters,
-                use_batchnorm=use_batchnorm_for_sampling,
-                conv_after_downsample=conv_after_downsample,
+                feature_level=(level - self.min_level),
+                target_num_channels=self.fpn_num_filters,
+                use_batchnorm=self.use_batchnorm_for_sampling,
+                conv_after_downsample=self.conv_after_downsample,
                 name='resample_p%d' % level,
             ))
 
         self.fpn_cells = FPNCells(
-            fpn_name=fpn_name,
-            min_level=min_level,
-            max_level=max_level,
-            fpn_weight_method=fpn_weight_method,
-            fpn_cell_repeats=fpn_cell_repeats,
-            fpn_num_filters=fpn_num_filters,
-            use_batchnorm_for_sampling=use_batchnorm_for_sampling,
-            conv_after_downsample=conv_after_downsample,
-            conv_batchnorm_act_pattern=conv_batchnorm_act_pattern,
-            separable_conv=separable_conv,
-            act_type=act_type)
+            fpn_name=self.fpn_name,
+            min_level=self.min_level,
+            max_level=self.max_level,
+            fpn_weight_method=self.fpn_weight_method,
+            fpn_cell_repeats=self.fpn_cell_repeats,
+            fpn_num_filters=self.fpn_num_filters,
+            use_batchnorm_for_sampling=self.use_batchnorm_for_sampling,
+            conv_after_downsample=self.conv_after_downsample,
+            conv_batchnorm_act_pattern=self.conv_batchnorm_act_pattern,
+            separable_conv=self.separable_conv,
+            act_type=self.act_type)
 
-        num_anchors = len(aspect_ratios) * num_scales
-        num_filters = fpn_num_filters
+        self.num_anchors = len(self.aspect_ratios) * self.num_scales
+        self.num_filters = self.fpn_num_filters
         self.class_net = ClassNet(
-            num_classes=num_classes,
-            num_anchors=num_anchors,
-            num_filters=num_filters,
-            min_level=min_level,
-            max_level=max_level,
-            act_type=act_type,
-            repeats=box_class_repeats,
-            separable_conv=separable_conv,
-            survival_prob=survival_prob,
-            feature_only=feature_only,
+            num_classes=self.num_classes,
+            num_anchors=self.num_anchors,
+            num_filters=self.num_filters,
+            min_level=self.min_level,
+            max_level=self.max_level,
+            act_type=self.act_type,
+            repeats=self.box_class_repeats,
+            separable_conv=self.separable_conv,
+            survival_prob=self.survival_prob,
+            feature_only=self.feature_only,
         )
 
         self.box_net = BoxNet(
-            num_anchors=num_anchors,
-            num_filters=num_filters,
-            min_level=min_level,
-            max_level=max_level,
-            act_type=act_type,
-            repeats=box_class_repeats,
-            separable_conv=separable_conv,
-            survival_prob=survival_prob,
-            feature_only=feature_only,
+            num_anchors=self.num_anchors,
+            num_filters=self.num_filters,
+            min_level=self.min_level,
+            max_level=self.max_level,
+            act_type=self.act_type,
+            repeats=self.box_class_repeats,
+            separable_conv=self.separable_conv,
+            survival_prob=self.survival_prob,
+            feature_only=self.feature_only,
         )
 
     def call(self, images, training=False):
