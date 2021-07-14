@@ -4,7 +4,7 @@ import paz.processors as pr
 from paz.abstract import SequentialProcessor
 from paz.datasets.utils import get_class_names
 from paz.backend.boxes import to_center_form
-from misc import save_file
+from utils import save_file
 
 
 def merge_class_box_level_outputs(cls_outputs,
