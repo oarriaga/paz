@@ -17,13 +17,13 @@ _DEFAULT_BLOCKS_ARGS = [
 def efficientnet(width_coefficient=None,
                  depth_coefficient=None,
                  dropout_rate=0.2,
-                 survival_prob=0.8):
+                 survival_rate=0.8):
     """Creates efficientnet model."""
     global_params = efficientnet_model.GlobalParams(
         blocks_args=_DEFAULT_BLOCKS_ARGS,
         batch_norm=BatchNormalization,
         dropout_rate=dropout_rate,
-        survival_prob=survival_prob,
+        survival_rate=survival_rate,
         data_format='channels_last',
         num_classes=90,
         width_coefficient=width_coefficient,
@@ -145,7 +145,7 @@ def build_model_base(model_name, params=None):
         When params has invalid fields, raises ValueError.
     """
     if params and params.get('drop_connect_rate', None):
-        params['survival_prob'] = 1 - params['drop_connect_rate']
+        params['survival_rate'] = 1 - params['drop_connect_rate']
     blocks_args, global_params = get_model_params(model_name, params)
     model = efficientnet_model.Model(blocks_args, global_params, model_name)
     return model
@@ -153,7 +153,7 @@ def build_model_base(model_name, params=None):
 
 def build_backbone(backbone_name,
                    activation_fn,
-                   survival_prob):
+                   survival_rate):
     """
     Build backbone model.
     # Arguments
@@ -167,9 +167,9 @@ def build_backbone(backbone_name,
             'act_fn': activation_fn
         }
         if 'b0' in backbone_name:
-            params['survival_prob'] = 0.0
+            params['survival_rate'] = 0.0
         else:
-            params['survival_prob'] = survival_prob
+            params['survival_rate'] = survival_rate
         model = build_model_base(backbone_name, params)
     else:
         raise ValueError('backbone model {} is not supported.'.format(

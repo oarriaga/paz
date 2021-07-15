@@ -9,13 +9,10 @@ import math
 import numpy as np
 import six
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, \
-    Conv2D, \
-    GlobalAveragePooling2D, \
-    Dense, \
-    DepthwiseConv2D
-from utils import get_activation_fn, \
-    get_drop_connect
+from tensorflow.keras.layers import Layer, DepthwiseConv2D
+from tensorflow.keras.layers import Conv2D, Dense
+from tensorflow.keras.layers import GlobalAveragePooling2D
+from utils import get_activation_fn, get_drop_connect
 
 
 GlobalParams = collections.namedtuple(
@@ -28,7 +25,7 @@ GlobalParams = collections.namedtuple(
         'depth_coefficient',
         'depth_divisor',
         'min_depth',
-        'survival_prob',
+        'survival_rate',
         'act_fn',
         'batch_norm',
         'use_se',
@@ -352,12 +349,12 @@ class MBConvBlock(Layer):
                                              epsilon=1e-3,
                                              name=self.get_bn_name())
 
-    def call(self, tensor, training, survival_prob):
+    def call(self, tensor, training, survival_rate):
         """Implementation of call().
         # Arguments
             inputs: the inputs tensor.
             training: boolean, whether the model is constructed for training.
-            survival_prob: float, between 0 to 1, drop connect rate.
+            survival_rate: float, between 0 to 1, drop connect rate.
         # Returns
             A output tensor.
         """
@@ -408,8 +405,8 @@ class MBConvBlock(Layer):
                     == self._block_args.output_filters
                 ):
                     # Apply only if skip connection presents.
-                    if survival_prob:
-                        x = get_drop_connect(x, training, survival_prob)
+                    if survival_rate:
+                        x = get_drop_connect(x, training, survival_rate)
                     x = tf.add(x, tensor)
             print('Project shape: %s', x.shape)
             return x
@@ -723,13 +720,13 @@ class Model(tf.keras.Model):
                 is_reduction = True
                 reduction_idx += 1
 
-            survival_prob = self._global_params.survival_prob
-            if survival_prob:
-                drop_rate = 1 - survival_prob
-                survival_prob = 1 - drop_rate * float(idx) / len(self._blocks)
+            survival_rate = self._global_params.survival_rate
+            if survival_rate:
+                drop_rate = 1 - survival_rate
+                survival_rate = 1 - drop_rate * float(idx) / len(self._blocks)
             outputs = block(outputs,
                             training=training,
-                            survival_prob=survival_prob)
+                            survival_rate=survival_rate)
             self.endpoints['block_%s' % idx] = outputs
             if is_reduction:
                 self.endpoints['reduction_%s' % reduction_idx] = outputs

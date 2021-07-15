@@ -1,11 +1,11 @@
-from efficientdet import EFFICIENTDET_D0
+from efficientdet import EFFICIENTDETD0
 from utils import raw_images, preprocess_images
 from postprocess import postprocess_paz
 
 
 if __name__ == "__main__":
 
-    model = EFFICIENTDET_D0()
+    model = EFFICIENTDETD0()
     infer_on_image_size = model.image_size
     image_size = (raw_images.shape[0],
                   infer_on_image_size,

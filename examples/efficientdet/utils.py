@@ -15,33 +15,33 @@ raw_images = raw_images[np.newaxis]
 raw_images = tf.convert_to_tensor(raw_images, dtype=tf.dtypes.float32)
 
 
-def get_activation_fn(features, act_type):
+def get_activation_fn(features, activation_fn):
     """Apply non-linear activation function to features provided.
     # Arguments
         features: Tensor, representing an input feature map
         to be pass through an activation function.
-        act_type: A string specifying the activation function
+        activation_fn: A string specifying the activation function
         type.
     # Returns
         activation function: features transformed by the
         activation function.
     """
-    if act_type in ('silu', 'swish'):
+    if activation_fn in ('silu', 'swish'):
         return tf.nn.swish(features)
-    elif act_type == 'relu':
+    elif activation_fn == 'relu':
         return tf.nn.relu(features)
     else:
-        raise ValueError('Unsupported act_type {}'.format(act_type))
+        raise ValueError('Unsupported activation fn {}'.format(activation_fn))
 
 
-def get_drop_connect(features, is_training, survival_prob):
+def get_drop_connect(features, is_training, survival_rate):
     """Drop the entire conv with given survival probability.
     Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
     # Arguments
         features: Tensor, input feature map to undergo
         drop connection.
         is_training: Bool specifying the training phase.
-        survival_prob: Float, survival probability to drop
+        survival_rate: Float, survival probability to drop
         input convolution features.
     # Returns
         output: Tensor, output feature map after drop connect.
@@ -49,11 +49,11 @@ def get_drop_connect(features, is_training, survival_prob):
     if not is_training:
         return features
     batch_size = tf.shape(features)[0]
-    random_tensor = survival_prob
+    random_tensor = survival_rate
     random_tensor += tf.random.uniform([batch_size, 1, 1, 1],
                                        dtype=features.dtype)
     binary_tensor = tf.floor(random_tensor)
-    output = features / survival_prob * binary_tensor
+    output = features / survival_rate * binary_tensor
     return output
 
 

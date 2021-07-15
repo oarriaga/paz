@@ -59,7 +59,7 @@ def test_efficientdet_merge_outputs():
 def test_efficientnet_model():
     backbone = build_backbone(backbone_name='efficientnet-b0',
                               activation_fn='swish',
-                              survival_prob=None)
+                              survival_rate=None)
     params = get_efficientdet_default_params('efficientdet-d0')
     image_size = params['image_size']
     images = get_test_images(image_size)

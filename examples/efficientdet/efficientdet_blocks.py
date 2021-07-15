@@ -1,12 +1,9 @@
 import itertools
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, \
-    BatchNormalization, \
-    Conv2D, \
-    SeparableConv2D, \
-    MaxPooling2D, \
-    AveragePooling2D
+from tensorflow.keras.layers import Layer, BatchNormalization
+from tensorflow.keras.layers import Conv2D, SeparableConv2D
+from tensorflow.keras.layers import MaxPooling2D, AveragePooling2D
 from utils import get_activation_fn, get_drop_connect
 
 
@@ -229,7 +226,7 @@ class FPNCells(Layer):
                  conv_after_downsample,
                  conv_batchnorm_act_pattern,
                  separable_conv,
-                 act_type,
+                 activation_fn,
                  name='fpn_cells'):
         super().__init__(name=name)
         self.fpn_name = fpn_name
@@ -242,7 +239,7 @@ class FPNCells(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
         self.separable_conv = separable_conv
-        self.act_type = act_type
+        self.activation_fn = activation_fn
         self.fpn_config = get_fpn_configuration(self.fpn_name,
                                                 self.min_level,
                                                 self.max_level,
@@ -260,7 +257,7 @@ class FPNCells(Layer):
                 conv_after_downsample=self.conv_after_downsample,
                 conv_batchnorm_act_pattern=self.conv_batchnorm_act_pattern,
                 separable_conv=self.separable_conv,
-                act_type=self.act_type,
+                activation_fn=self.activation_fn,
                 name='cell_%d' % repeats)
             for repeats in range(self.fpn_cell_repeats)]
 
@@ -290,7 +287,7 @@ class FPNCell(Layer):
                  conv_after_downsample,
                  conv_batchnorm_act_pattern,
                  separable_conv,
-                 act_type,
+                 activation_fn,
                  name='fpn_cell'):
         super().__init__(name=name)
         self.fpn_name = fpn_name
@@ -303,7 +300,7 @@ class FPNCell(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
         self.separable_conv = separable_conv
-        self.act_type = act_type
+        self.activation_fn = activation_fn
         self.fpn_config = get_fpn_configuration(self.fpn_name,
                                                 self.min_level,
                                                 self.max_level,
@@ -319,7 +316,7 @@ class FPNCell(Layer):
                 self.conv_after_downsample,
                 self.conv_batchnorm_act_pattern,
                 self.separable_conv,
-                self.act_type,
+                self.activation_fn,
                 weight_method=self.fpn_weight_method,
                 name='fnode%d' % fnode_cfg_arg)
             self.fnodes.append(fnode)
@@ -350,7 +347,7 @@ class FNode(Layer):
                  conv_after_downsample,
                  conv_batchnorm_act_pattern,
                  separable_conv,
-                 act_type,
+                 activation_fn,
                  weight_method,
                  name='fnode'):
         super().__init__(name=name)
@@ -361,7 +358,7 @@ class FNode(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
         self.separable_conv = separable_conv
-        self.act_type = act_type
+        self.activation_fn = activation_fn
         self.weight_method = weight_method
         self.resample_layers = []
         self.assign_weights = []
@@ -425,7 +422,7 @@ class FNode(Layer):
             self.conv_batchnorm_act_pattern,
             self.separable_conv,
             self.fpn_num_filters,
-            self.act_type,
+            self.activation_fn,
             name='op_after_combine{}'.format(len(features_shape))
         )
         self.built = True
@@ -450,13 +447,13 @@ class ConvolutionAfterFusion(Layer):
                  conv_batchnorm_act_pattern,
                  separable_conv,
                  fpn_num_filters,
-                 act_type,
+                 activation_fn,
                  name='op_after_combine'):
         super().__init__(name=name)
         self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
         self.separable_conv = separable_conv
         self.fpn_num_filters = fpn_num_filters
-        self.act_type = act_type
+        self.activation_fn = activation_fn
 
         if self.separable_conv:
             conv2d_layer = SeparableConv2D(
@@ -505,10 +502,10 @@ class ClassNet(Layer):
                  num_filters=32,
                  min_level=3,
                  max_level=7,
-                 act_type='swish',
+                 activation_fn='swish',
                  repeats=4,
                  separable_conv=True,
-                 survival_prob=None,
+                 survival_rate=None,
                  name='class_net',
                  feature_only=False,
                  **kwargs):
@@ -519,10 +516,10 @@ class ClassNet(Layer):
             num_filters: Integer. Number of filters for intermediate layers.
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
-            act_type: String of the activation used.
+            activation_fn: String of the activation used.
             repeats: Integer. Number of intermediate layers.
             separable_conv: Bool. True to use separable_conv instead of Conv2D.
-            survival_prob: Float. If a value is set then drop connect
+            survival_rate: Float. If a value is set then drop connect
                 will be used.
             name: String indicating the name of this layer.
             feature_only: Bool. Build the base feature network only.
@@ -537,8 +534,8 @@ class ClassNet(Layer):
         self.max_level = max_level
         self.repeats = repeats
         self.separable_conv = separable_conv
-        self.survival_prob = survival_prob
-        self.act_type = act_type
+        self.survival_rate = survival_rate
+        self.activation_fn = activation_fn
         self.conv_blocks = []
         self.batchnorms = []
         self.feature_only = feature_only
@@ -570,16 +567,16 @@ class ClassNet(Layer):
     def _conv_batchnorm_act(self, image, level, level_id, training):
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
-        act_type = self.act_type
+        activation_fn = self.activation_fn
 
         def _call(image):
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
-            if self.act_type:
-                image = get_activation_fn(image, act_type)
-            if level > 0 and self.survival_prob:
-                image = get_drop_connect(image, training, self.survival_prob)
+            if self.activation_fn:
+                image = get_activation_fn(image, activation_fn)
+            if level > 0 and self.survival_rate:
+                image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image
             return image
 
@@ -646,10 +643,10 @@ class BoxNet(Layer):
                  num_filters=32,
                  min_level=3,
                  max_level=7,
-                 act_type='swish',
+                 activation_fn='swish',
                  repeats=4,
                  separable_conv=True,
-                 survival_prob=None,
+                 survival_rate=None,
                  name='box_net',
                  feature_only=False,
                  **kwargs):
@@ -660,10 +657,10 @@ class BoxNet(Layer):
             num_filters: Integer. Number of filters for intermediate layers.
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
-            act_type: String of the activation used.
+            activation_fn: String of the activation used.
             repeats: Integer. Number of intermediate layers.
             separable_conv: Bool. True to use separable_conv instead of Conv2D.
-            survival_prob: Float. If a value is set then drop connect
+            survival_rate: Float. If a value is set then drop connect
                 will be used.
             name: String indicating the name of this layer.
             feature_only: Bool. Build the base feature network only.
@@ -677,8 +674,8 @@ class BoxNet(Layer):
         self.max_level = max_level
         self.repeats = repeats
         self.separable_conv = separable_conv
-        self.survival_prob = survival_prob
-        self.act_type = act_type
+        self.survival_rate = survival_rate
+        self.activation_fn = activation_fn
         self.conv_blocks = []
         self.batchnorms = []
         self.feature_only = feature_only
@@ -724,16 +721,16 @@ class BoxNet(Layer):
     def _conv_batchnorm_act(self, image, i, level_id, training):
         conv_block = self.conv_blocks[i]
         batchnorm = self.batchnorms[i][level_id]
-        act_type = self.act_type
+        activation_fn = self.activation_fn
 
         def _call(image):
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
-            if self.act_type:
-                image = get_activation_fn(image, act_type)
-            if i > 0 and self.survival_prob:
-                image = get_drop_connect(image, training, self.survival_prob)
+            if self.activation_fn:
+                image = get_activation_fn(image, activation_fn)
+            if i > 0 and self.survival_rate:
+                image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image
             return image
 
