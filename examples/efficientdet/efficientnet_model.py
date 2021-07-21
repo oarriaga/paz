@@ -77,10 +77,7 @@ def conv_kernel_initializer(shape, dtype=None, partition_info=None):
     del partition_info
     kernel_height, kernel_width, _, out_filters = shape
     fan_out = int(kernel_height * kernel_width * out_filters)
-    return tf.random.normal(shape,
-                            mean=0.0,
-                            stddev=np.sqrt(2.0 / fan_out),
-                            dtype=dtype)
+    return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_out), dtype)
 
 
 def dense_kernel_initializer(shape, dtype=None, partition_info=None):
@@ -103,9 +100,7 @@ def dense_kernel_initializer(shape, dtype=None, partition_info=None):
     return tf.random.uniform(shape, -init_range, init_range, dtype=dtype)
 
 
-def superpixel_kernel_initializer(shape,
-                                  dtype='float32',
-                                  partition_info=None):
+def superpixel_kernel_initializer(shape, dtype='float32', partition_info=None):
     """Initializes superpixel kernels.
     This is inspired by space-to-depth transformation that
     is mathematically equivalent before and after the
@@ -200,9 +195,8 @@ class SuperPixel(Layer):
             use_bias=False,
             name='conv2d'
         )
-        self._batch_norm_superpixel = global_params.batch_norm(axis=-1,
-                                                               momentum=0.99,
-                                                               epsilon=1e-3)
+        self._batch_norm_superpixel = global_params.batch_norm(
+            axis=-1, momentum=0.99, epsilon=1e-3)
         self._activation = global_params.activation
 
     def call(self, tensor, training):
@@ -531,11 +525,7 @@ class Head(Layer):
             shape = outputs.get_shape().as_list()
             kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
             outputs = tf.nn.avg_pool(
-                outputs,
-                ksize=kernel_size,
-                strides=[1, 1, 1, 1],
-                padding='VALID'
-            )
+                outputs, kernel_size, [1, 1, 1, 1], 'VALID')
             self.endpoints['pooled_features'] = outputs
             if not pooled_features_only:
                 if self._dropout:
@@ -618,8 +608,8 @@ class Model(tf.keras.Model):
                     and (i == 0 or i == len(self._blocks_args) - 1):
                 repeats = block_args.num_repeat
             else:
-                repeats = round_repeats(block_args.num_repeat,
-                                        self._global_params)
+                repeats = round_repeats(
+                    block_args.num_repeat, self._global_params)
             block_args = block_args._replace(
                 input_filters=input_filters,
                 output_filters=output_filters,
@@ -691,10 +681,7 @@ class Model(tf.keras.Model):
         # Head part.
         self._head = Head(self._global_params)
 
-    def call(self,
-             tensor,
-             training,
-             return_base=None,
+    def call(self, tensor, training, return_base=None,
              pooled_features_only=False):
         """Implementation of call().
 

@@ -430,10 +430,8 @@ class FNode(Layer):
         elif self.weight_method == 'fastattn':
             self._add_bifpn_weights('ones')
         self.conv_after_fusion = ConvolutionAfterFusion(
-            self.conv_batchnorm_activation_block,
-            self.with_separable_conv,
-            self.fpn_num_filters,
-            self.activation,
+            self.conv_batchnorm_activation_block, self.with_separable_conv,
+            self.fpn_num_filters, self.activation,
             name='op_after_combine{}'.format(len(features_shape))
         )
         self.built = True
