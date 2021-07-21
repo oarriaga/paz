@@ -1,30 +1,133 @@
-import itertools
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer, BatchNormalization
 from tensorflow.keras.layers import Conv2D, SeparableConv2D
 from tensorflow.keras.layers import MaxPooling2D, AveragePooling2D
-from utils import get_activation_fn, get_drop_connect
+from utils import get_activation, get_drop_connect
+
+
+def get_top_down_path(min_level, max_level, node_ids):
+    """Provides the config for top-down path.
+
+    # Arguments
+       min_level: Integer. EfficientNet feature minimum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       max_level: Integer. EfficientNet feature maximum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       node_ids: Dictionary.
+       Keys are the feature levels and values are the respective nodes.
+
+    # Returns
+        bottom_up_path_nodes: List.
+        Hold all the feature levels, offsets for bottom up path.
+        node_ids: Dictionary.
+        Keys are the feature levels and values are the respective nodes.
+        Updated feature level and the nodes corresponding to that level.
+    """
+    id_count = max_level - min_level + 1
+    top_down_path_nodes = []
+    for level in range(max_level - 1, min_level - 1, -1):
+        top_down_path_nodes.append({
+            'feature_level': level,
+            'inputs_offsets': [node_ids[level][-1],
+                               node_ids[level + 1][-1]]
+        })
+        node_ids[level].append(id_count)
+        id_count += 1
+
+    return top_down_path_nodes, node_ids
+
+
+def get_bottom_up_path(min_level, max_level, node_ids):
+    """Provides the config for bottom-up path.
+
+    # Arguments
+       min_level: Integer. EfficientNet feature minimum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       max_level: Integer. EfficientNet feature maximum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       node_ids: Dictionary.
+       Keys are the feature levels and values are the respective nodes.
+
+    # Returns
+        bottom_up_path_nodes: List.
+        Hold all the feature levels, offsets for bottom up path.
+        node_ids: Dictionary.
+        Keys are the feature levels and values are the respective nodes.
+        Updated feature level and the nodes corresponding to that level.
+    """
+    min_key = min(node_ids.keys())
+    id_count = node_ids[min_key][-1] + 1
+    bottom_up_path_nodes = []
+    for level in range(min_level + 1, max_level + 1):
+        bottom_up_path_nodes.append({
+            'feature_level': level,
+            'inputs_offsets': node_ids[level] + [node_ids[level - 1][-1]]
+        })
+        node_ids[level].append(id_count)
+        id_count += 1
+
+    return bottom_up_path_nodes, node_ids
+
+
+def get_initial_node_ids(min_level, max_level):
+    """Provides the initial nodes associated to a feature level.
+
+    # Arguments
+       min_level: Integer. EfficientNet feature minimum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       max_level: Integer. EfficientNet feature maximum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+
+    # Returns
+       node_ids: Dictionary.
+       Keys are the feature levels and values are the respective nodes.
+    """
+    node_ids = dict()
+    for level in range(max_level - min_level + 1):
+        node_ids[min_level + level] = [level]
+
+    return node_ids
 
 
 def bifpn_configuration(min_level, max_level, weight_method):
     """A dynamic bifpn configuration that can adapt to
-    different min/max levels.
+       different min/max levels.
+
     # Arguments
-        min_level: Integer. EfficientNet feature minimum level.
-        Level decides the activation map size,
-        eg: For an input image of 640 x 640,
-        the activation map resolution at level 3 is
-        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
-        max_level: Integer. EfficientNet feature maximum level.
-        Level decides the activation map size,
-        eg: For an input image of 640 x 640,
-        the activation map resolution at level 3 is
-        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
-        weight_method: String. FPN weighting methods for feature fusion.
+       min_level: Integer. EfficientNet feature minimum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       max_level: Integer. EfficientNet feature maximum level.
+       Level decides the activation map size,
+       eg: For an input image of 640 x 640,
+       the activation map resolution at level 3 is
+       (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
+       weight_method: String. FPN weighting methods for feature fusion.
+
     # Returns
-        bifpn_config: Dictionary. Contains the nodes and offsets
-        for building the FPN.
+       bifpn_config: Dictionary. Contains the nodes and offsets
+       for building the FPN.
     """
     bifpn_config = dict()
     bifpn_config['weight_method'] = weight_method or 'fastattn'
@@ -53,66 +156,21 @@ def bifpn_configuration(min_level, max_level, weight_method):
     #   {'feature_level': 6, 'inputs_offsets': [3, 5, 10]},  # for P6"
     #   {'feature_level': 7, 'inputs_offsets': [4, 11]},  # for P7"
     # ]
-    num_levels = max_level - min_level + 1
-    node_ids = {min_level + level_id: [level_id]
-                for level_id in range(num_levels)}
-    id_count = itertools.count(num_levels)
-    nodes = []
-    # Top-down path
-    for level in range(max_level - 1, min_level - 1, -1):
-        nodes.append({
-            'feature_level': level,
-            'inputs_offsets': [node_ids[level][-1],
-                               node_ids[level + 1][-1]]
-        })
-        node_ids[level].append(next(id_count))
-    # Bottom-up path
-    for level in range(min_level + 1, max_level + 1):
-        nodes.append({
-            'feature_level': level,
-            'inputs_offsets': node_ids[level] + [node_ids[level - 1][-1]]
-        })
-        node_ids[level].append(next(id_count))
-    bifpn_config['nodes'] = nodes
+    node_ids = get_initial_node_ids(min_level, max_level)
+    top_down_path_nodes, node_ids = get_top_down_path(
+        min_level, max_level, node_ids)
+    bottom_up_path_nodes, node_ids = get_bottom_up_path(
+        min_level, max_level, node_ids)
+    bifpn_config['nodes'] = top_down_path_nodes + bottom_up_path_nodes
     return bifpn_config
-
-
-def get_fpn_configuration(fpn_name, min_level, max_level, fpn_weight_method):
-    """Provides the fpn configuration that can adapt to
-    different min/max levels.
-    # Arguments
-        fpn_name: String. Name of the FPN, eg: BiFPN.
-        min_level: Integer. EfficientNet feature minimum level.
-        Level decides the activation map size,
-        eg: For an input image of 640 x 640,
-        the activation map resolution at level 3 is
-        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
-        max_level: Integer. EfficientNet feature maximum level.
-        Level decides the activation map size,
-        eg: For an input image of 640 x 640,
-        the activation map resolution at level 3 is
-        (640 / (2 ^ 3)) x (640 / (2 ^ 3)).
-        weight_method: String. FPN weighting methods for feature fusion.
-    # Returns
-        bifpn_config: Dictionary. Contains the nodes and offsets
-        for building the FPN.
-    """
-    if fpn_name == 'BiFPN':
-        return bifpn_configuration(min_level, max_level, fpn_weight_method)
-    else:
-        raise NotImplementedError('FPN name not found.')
 
 
 class ResampleFeatureMap(Layer):
     """Resample feature maps for downsampling or upsampling
      to create coarser or finer additional feature maps."""
-    def __init__(self,
-                 feature_level,
-                 target_num_channels,
-                 use_batchnorm=False,
-                 conv_after_downsample=False,
-                 pooling_type='max',
-                 upsampling_type='nearest',
+    def __init__(self, feature_level, target_num_channels,
+                 use_batchnorm=False, conv_after_downsample=False,
+                 pooling_type='max', upsampling_type='nearest',
                  name='resample_p0'):
         super().__init__(name=name)
         self.feature_level = feature_level
@@ -121,19 +179,10 @@ class ResampleFeatureMap(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.pooling_type = pooling_type
         self.upsampling_type = upsampling_type
-        self.conv2d = Conv2D(self.target_num_channels,
-                             (1, 1),
-                             padding='same',
-                             data_format='channels_last',
-                             name='conv2d')
-        self.batchnorm = BatchNormalization(axis=-1,
-                                            momentum=0.99,
-                                            epsilon=1e-3,
-                                            center=True,
-                                            scale=True,
-                                            beta_initializer='zeros',
-                                            gamma_initializer='ones',
-                                            name='bn')
+        self.conv2d = Conv2D(self.target_num_channels, (1, 1), (1, 1),
+                             'same', 'channels_last', name='conv2d')
+        self.batchnorm = BatchNormalization(-1, 0.99, 1e-3, True, True,
+                                            'zeros', 'ones', name='bn')
         if pooling_type in ['max', 'average']:
             self.pooling_type = pooling_type
         else:
@@ -145,17 +194,13 @@ class ResampleFeatureMap(Layer):
         H_stride = int((H - 1) // H_target + 1)
         W_stride = int((W - 1) // W_target + 1)
         if self.pooling_type == 'max':
-            return MaxPooling2D(
-                pool_size=[H_stride + 1, W_stride + 1],
-                strides=[H_stride, W_stride],
-                padding='SAME',
-                data_format='channels_last')(features)
+            return MaxPooling2D([H_stride + 1, W_stride + 1],
+                                [H_stride, W_stride], 'SAME',
+                                'channels_last')(features)
         if self.pooling_type == 'average':
-            return AveragePooling2D(
-                pool_size=[H_stride + 1, W_stride + 1],
-                strides=[H_stride, W_stride],
-                padding='SAME',
-                data_format='channels_last')(features)
+            return AveragePooling2D([H_stride + 1, W_stride + 1],
+                                    [H_stride, W_stride], 'SAME',
+                                    'channels_last')(features)
 
     def _upsample2d(self, features, H_target, W_target):
         return tf.cast(
@@ -224,9 +269,9 @@ class FPNCells(Layer):
                  fpn_num_filters,
                  use_batchnorm_for_sampling,
                  conv_after_downsample,
-                 conv_batchnorm_act_pattern,
-                 separable_conv,
-                 activation_fn,
+                 conv_batchnorm_activation_block,
+                 with_separable_conv,
+                 activation,
                  name='fpn_cells'):
         super().__init__(name=name)
         self.fpn_name = fpn_name
@@ -237,29 +282,23 @@ class FPNCells(Layer):
         self.fpn_num_filters = fpn_num_filters
         self.use_batchnorm_for_sampling = use_batchnorm_for_sampling
         self.conv_after_downsample = conv_after_downsample
-        self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
-        self.separable_conv = separable_conv
-        self.activation_fn = activation_fn
-        self.fpn_config = get_fpn_configuration(self.fpn_name,
-                                                self.min_level,
-                                                self.max_level,
-                                                self.fpn_weight_method
-                                                )
-        self.cells = [
-            FPNCell(
-                fpn_name=self.fpn_name,
-                min_level=self.min_level,
-                max_level=self.max_level,
-                fpn_weight_method=self.fpn_weight_method,
-                fpn_cell_repeats=self.fpn_cell_repeats,
-                fpn_num_filters=self.fpn_num_filters,
-                use_batchnorm_for_sampling=self.use_batchnorm_for_sampling,
-                conv_after_downsample=self.conv_after_downsample,
-                conv_batchnorm_act_pattern=self.conv_batchnorm_act_pattern,
-                separable_conv=self.separable_conv,
-                activation_fn=self.activation_fn,
-                name='cell_%d' % repeats)
-            for repeats in range(self.fpn_cell_repeats)]
+        self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
+        self.with_separable_conv = with_separable_conv
+        self.activation = activation
+        self.fpn_config = bifpn_configuration(self.min_level,
+                                              self.max_level,
+                                              self.fpn_weight_method
+                                              )
+        self.cells = []
+        for repeats in range(self.fpn_cell_repeats):
+            self.cells.append(FPNCell(
+                self.fpn_name, self.min_level, self.max_level,
+                self.fpn_weight_method, self.fpn_cell_repeats,
+                self.fpn_num_filters, self.use_batchnorm_for_sampling,
+                self.conv_after_downsample,
+                self.conv_batchnorm_activation_block,
+                self.with_separable_conv, self.activation,
+                'cell_%d' % repeats))
 
     def call(self, features, training):
         for cell in self.cells:
@@ -285,9 +324,9 @@ class FPNCell(Layer):
                  fpn_num_filters,
                  use_batchnorm_for_sampling,
                  conv_after_downsample,
-                 conv_batchnorm_act_pattern,
-                 separable_conv,
-                 activation_fn,
+                 conv_batchnorm_activation_block,
+                 with_separable_conv,
+                 activation,
                  name='fpn_cell'):
         super().__init__(name=name)
         self.fpn_name = fpn_name
@@ -298,14 +337,13 @@ class FPNCell(Layer):
         self.fpn_num_filters = fpn_num_filters
         self.use_batchnorm_for_sampling = use_batchnorm_for_sampling
         self.conv_after_downsample = conv_after_downsample
-        self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
-        self.separable_conv = separable_conv
-        self.activation_fn = activation_fn
-        self.fpn_config = get_fpn_configuration(self.fpn_name,
-                                                self.min_level,
-                                                self.max_level,
-                                                self.fpn_weight_method
-                                                )
+        self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
+        self.with_separable_conv = with_separable_conv
+        self.activation = activation
+        self.fpn_config = bifpn_configuration(self.min_level,
+                                              self.max_level,
+                                              self.fpn_weight_method
+                                              )
         self.fnodes = []
         for fnode_cfg_arg, fnode_cfg in enumerate(self.fpn_config['nodes']):
             fnode = FNode(
@@ -314,9 +352,9 @@ class FPNCell(Layer):
                 self.fpn_num_filters,
                 self.use_batchnorm_for_sampling,
                 self.conv_after_downsample,
-                self.conv_batchnorm_act_pattern,
-                self.separable_conv,
-                self.activation_fn,
+                self.conv_batchnorm_activation_block,
+                self.with_separable_conv,
+                self.activation,
                 weight_method=self.fpn_weight_method,
                 name='fnode%d' % fnode_cfg_arg)
             self.fnodes.append(fnode)
@@ -345,9 +383,9 @@ class FNode(Layer):
                  fpn_num_filters,
                  use_batchnorm_for_sampling,
                  conv_after_downsample,
-                 conv_batchnorm_act_pattern,
-                 separable_conv,
-                 activation_fn,
+                 conv_batchnorm_activation_block,
+                 with_separable_conv,
+                 activation,
                  weight_method,
                  name='fnode'):
         super().__init__(name=name)
@@ -356,15 +394,16 @@ class FNode(Layer):
         self.fpn_num_filters = fpn_num_filters
         self.use_batchnorm_for_sampling = use_batchnorm_for_sampling
         self.conv_after_downsample = conv_after_downsample
-        self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
-        self.separable_conv = separable_conv
-        self.activation_fn = activation_fn
+        self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
+        self.with_separable_conv = with_separable_conv
+        self.activation = activation
         self.weight_method = weight_method
         self.resample_layers = []
         self.assign_weights = []
 
     def fuse_features(self, nodes):
         """Fuse features from different resolutions and return a weighted sum.
+
         # Arguments
             nodes: a list of tensorflow features at different levels.
 
@@ -393,36 +432,33 @@ class FNode(Layer):
             raise ValueError('unknown weight_method %s' % self.weight_method)
         return new_node
 
-    def _add_scalar_multidimensional_weights(self, initializer, shape=None):
+    def _add_bifpn_weights(self, initializer, shape=None):
         for input_offset_arg, _ in enumerate(self.inputs_offsets):
-            name = 'WSM' + ('' if input_offset_arg == 0
-                            else '_' + str(input_offset_arg))
-            self.assign_weights.append(self.add_weight(initializer=initializer,
-                                                       name=name,
-                                                       shape=shape))
+            if input_offset_arg == 0:
+                name = 'WSM'
+            else:
+                name = 'WSM' + '_' + str(input_offset_arg)
+            self.assign_weights.append(self.add_weight(
+                name, shape, initializer=initializer))
 
     def build(self, features_shape):
         for input_offset_arg, input_offset in enumerate(self.inputs_offsets):
-            name = 'resample_{}_{}_{}'.format(input_offset_arg,
-                                              input_offset,
-                                              len(features_shape))
+            name = 'resample_{}_{}_{}'.format(
+                input_offset_arg, input_offset, len(features_shape))
             self.resample_layers.append(ResampleFeatureMap(
-                feature_level=self.feature_level,
-                target_num_channels=self.fpn_num_filters,
-                use_batchnorm=self.use_batchnorm_for_sampling,
-                conv_after_downsample=self.conv_after_downsample,
-                name=name
-            ))
+                self.feature_level, self.fpn_num_filters,
+                self.use_batchnorm_for_sampling, self.conv_after_downsample,
+                name=name))
 
         if self.weight_method == 'attn':
-            self._add_scalar_multidimensional_weights('ones')
+            self._add_bifpn_weights('ones')
         elif self.weight_method == 'fastattn':
-            self._add_scalar_multidimensional_weights('ones')
+            self._add_bifpn_weights('ones')
         self.conv_after_fusion = ConvolutionAfterFusion(
-            self.conv_batchnorm_act_pattern,
-            self.separable_conv,
+            self.conv_batchnorm_activation_block,
+            self.with_separable_conv,
             self.fpn_num_filters,
-            self.activation_fn,
+            self.activation,
             name='op_after_combine{}'.format(len(features_shape))
         )
         self.built = True
@@ -432,9 +468,8 @@ class FNode(Layer):
         nodes = []
         for input_offset_arg, input_offset in enumerate(self.inputs_offsets):
             input_node = features[input_offset]
-            input_node = self.resample_layers[input_offset_arg](input_node,
-                                                                training,
-                                                                features)
+            input_node = self.resample_layers[input_offset_arg](
+                input_node, training, features)
             nodes.append(input_node)
         new_node = self.fuse_features(nodes)
         new_node = self.conv_after_fusion(new_node)
@@ -444,86 +479,64 @@ class FNode(Layer):
 class ConvolutionAfterFusion(Layer):
     """Operation after combining input features during feature fusion."""
     def __init__(self,
-                 conv_batchnorm_act_pattern,
-                 separable_conv,
+                 conv_batchnorm_activation_block,
+                 with_separable_conv,
                  fpn_num_filters,
-                 activation_fn,
+                 activation,
                  name='op_after_combine'):
         super().__init__(name=name)
-        self.conv_batchnorm_act_pattern = conv_batchnorm_act_pattern
-        self.separable_conv = separable_conv
+        self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
+        self.with_separable_conv = with_separable_conv
         self.fpn_num_filters = fpn_num_filters
-        self.activation_fn = activation_fn
+        self.activation = activation
 
-        if self.separable_conv:
+        if self.with_separable_conv:
             conv2d_layer = SeparableConv2D(
-                filters=fpn_num_filters,
-                kernel_size=(3, 3),
-                padding='same',
-                use_bias=not self.conv_batchnorm_act_pattern,
-                data_format='channels_last',
-                name='conv',
-                depth_multiplier=1)
+                fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
+                (1, 1), 1, None, not self.conv_batchnorm_activation_block,
+                name='conv')
         else:
             conv2d_layer = Conv2D(
-                filters=fpn_num_filters,
-                kernel_size=(3, 3),
-                padding='same',
-                use_bias=not self.conv_batchnorm_act_pattern,
-                data_format='channels_last',
-                name='conv'
-            )
+                fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
+                use_bias=not self.conv_batchnorm_activation_block, name='conv')
 
         self.conv_op = conv2d_layer
-        self.batchnorm = BatchNormalization(axis=-1,
-                                            momentum=0.99,
-                                            epsilon=1e-3,
-                                            center=True,
-                                            scale=True,
-                                            beta_initializer='zeros',
-                                            gamma_initializer='ones',
-                                            name='bn')
+        self.batchnorm = BatchNormalization(-1, 0.99, 1e-3, True, True,
+                                            'zeros', 'ones', name='bn')
 
     def call(self, new_node, training):
-        if not self.conv_batchnorm_act_pattern:
+        if not self.conv_batchnorm_activation_block:
             new_node = tf.nn.swish(new_node)
         new_node = self.conv_op(new_node)
         new_node = self.batchnorm(new_node, training=training)
-        if self.conv_batchnorm_act_pattern:
+        if self.conv_batchnorm_activation_block:
             new_node = tf.nn.swish(new_node)
         return new_node
 
 
 class ClassNet(Layer):
     """Object class prediction network."""
-    def __init__(self,
-                 num_classes=90,
-                 num_anchors=9,
-                 num_filters=32,
-                 min_level=3,
-                 max_level=7,
-                 activation_fn='swish',
-                 repeats=4,
-                 separable_conv=True,
-                 survival_rate=None,
-                 name='class_net',
-                 feature_only=False,
-                 **kwargs):
+    def __init__(self, num_classes=90, num_anchors=9, num_filters=32,
+                 min_level=3, max_level=7, activation='swish',
+                 repeats=4, with_separable_conv=True, survival_rate=None,
+                 feature_only=False, name='class_net', **kwargs):
         """Initialize the ClassNet.
+
         # Arguments
             num_classes: Integer. Number of classes.
             num_anchors: Integer. Number of anchors.
             num_filters: Integer. Number of filters for intermediate layers.
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
-            activation_fn: String of the activation used.
+            activation: String of the activation used.
             repeats: Integer. Number of intermediate layers.
-            separable_conv: Bool. True to use separable_conv instead of Conv2D.
-            survival_rate: Float. If a value is set then drop connect
-                will be used.
+            with_separable_conv: Bool.
+            True to use separable_conv instead of Conv2D.
+            survival_rate: Float.
+            If a value is set then drop connect will be used.
             name: String indicating the name of this layer.
-            feature_only: Bool. Build the base feature network only.
-                Excluding final class head.
+            feature_only: Bool.
+            Build the base feature network only. Excluding final class head.
             **kwargs: other parameters
         """
         super().__init__(name=name, **kwargs)
@@ -533,48 +546,39 @@ class ClassNet(Layer):
         self.min_level = min_level
         self.max_level = max_level
         self.repeats = repeats
-        self.separable_conv = separable_conv
+        self.with_separable_conv = with_separable_conv
         self.survival_rate = survival_rate
-        self.activation_fn = activation_fn
+        self.activation = activation
         self.conv_blocks = []
         self.batchnorms = []
         self.feature_only = feature_only
 
         for repeats_args in range(self.repeats):
-            self.conv_blocks.append(
-                self.conv2d_layer(separable_conv,
-                                  self.num_filters,
-                                  kernel_size=3,
-                                  bias_initializer=tf.zeros_initializer(),
-                                  activation=None,
-                                  padding='same',
-                                  name='class-%d' % repeats_args))
+            self.conv_blocks.append(self.conv2d_layer(
+                with_separable_conv, self.num_filters, 3,
+                tf.zeros_initializer(), None, 'same',
+                'class-%d' % repeats_args))
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(BatchNormalization(
                     name='class-%d-bn-%d' % (repeats_args, level)))
             self.batchnorms.append(batchnorm_per_level)
         self.classes = self.conv2d_layer(
-            separable_conv,
-            num_filters=num_classes*num_anchors,
-            kernel_size=3,
-            bias_initializer=tf.constant_initializer(
-                -np.log((1 - 0.01) / 0.01)),
-            activation=None,
-            padding='same',
-            name='class-predict')
+            with_separable_conv, num_classes*num_anchors, 3,
+            tf.constant_initializer(-np.log((1 - 0.01) / 0.01)), None, 'same',
+            'class-predict')
 
-    def _conv_batchnorm_act(self, image, level, level_id, training):
+    def _conv_batchnorm_activation(self, image, level, level_id, training):
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
-        activation_fn = self.activation_fn
+        activation = self.activation
 
         def _call(image):
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
-            if self.activation_fn:
-                image = get_activation_fn(image, activation_fn)
+            if self.activation:
+                image = get_activation(image, activation)
             if level > 0 and self.survival_rate:
                 image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image
@@ -588,10 +592,8 @@ class ClassNet(Layer):
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
             for repeat_args in range(self.repeats):
-                image = self._conv_batchnorm_act(image,
-                                                 repeat_args,
-                                                 level_id,
-                                                 training)
+                image = self._conv_batchnorm_activation(
+                    image, repeat_args, level_id, training)
             if self.feature_only:
                 class_outputs.append(image)
             else:
@@ -599,72 +601,48 @@ class ClassNet(Layer):
         return class_outputs
 
     @classmethod
-    def conv2d_layer(cls,
-                     separable_conv,
-                     num_filters,
-                     kernel_size,
-                     bias_initializer,
-                     activation,
-                     padding,
-                     name
-                     ):
+    def conv2d_layer(cls, with_separable_conv, num_filters, kernel_size,
+                     bias_initializer, activation, padding, name):
         """Gets the conv2d layer in ClassNet class."""
-        if separable_conv:
+        if with_separable_conv:
             conv2d_layer = SeparableConv2D(
-                filters=num_filters,
-                kernel_size=kernel_size,
-                bias_initializer=bias_initializer,
-                activation=activation,
-                padding=padding,
-                name=name,
-                depth_multiplier=1,
-                data_format='channels_last',
-                pointwise_initializer=tf.initializers.variance_scaling(),
-                depthwise_initializer=tf.initializers.variance_scaling()
-            )
+                num_filters, kernel_size, (1, 1), padding, 'channels_last',
+                (1, 1), 1, activation, True,
+                tf.initializers.variance_scaling(),
+                tf.initializers.variance_scaling(), bias_initializer,
+                name=name)
         else:
             conv2d_layer = Conv2D(
-                filters=num_filters,
-                kernel_size=kernel_size,
-                bias_initializer=bias_initializer,
-                activation=activation,
-                padding=padding,
-                name=name,
-                data_format='channels_last',
-                kernel_initializer=tf.random_normal_initializer(stddev=0.01)
-            )
+                num_filters, kernel_size, (1, 1), padding, 'channels_last',
+                (1, 1), 1, activation, True,
+                tf.random_normal_initializer(stddev=0.01), bias_initializer,
+                name=name)
         return conv2d_layer
 
 
 class BoxNet(Layer):
     """Box regression network."""
-    def __init__(self,
-                 num_anchors=9,
-                 num_filters=32,
-                 min_level=3,
-                 max_level=7,
-                 activation_fn='swish',
-                 repeats=4,
-                 separable_conv=True,
-                 survival_rate=None,
-                 name='box_net',
-                 feature_only=False,
+    def __init__(self, num_anchors=9, num_filters=32, min_level=3, max_level=7,
+                 activation='swish', repeats=4, with_separable_conv=True,
+                 survival_rate=None, feature_only=False, name='box_net',
                  **kwargs):
         """Initialize the BoxNet.
+
         # Arguments
             num_classes: Integer. Number of classes.
             num_anchors: Integer. Number of anchors.
             num_filters: Integer. Number of filters for intermediate layers.
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
-            activation_fn: String of the activation used.
+            activation: String of the activation used.
             repeats: Integer. Number of intermediate layers.
-            separable_conv: Bool. True to use separable_conv instead of Conv2D.
-            survival_rate: Float. If a value is set then drop connect
-                will be used.
+            with_separable_conv: Bool.
+            True to use separable_conv instead of Conv2D.
+            survival_rate: Float.
+            If a value is set then drop connect will be used.
             name: String indicating the name of this layer.
-            feature_only: Bool. Build the base feature network only.
-                Excluding final class head.
+            feature_only: Bool.
+            Build the base feature network only. Excluding final class head.
             **kwargs: other parameters
         """
         super().__init__(name=name, **kwargs)
@@ -673,39 +651,28 @@ class BoxNet(Layer):
         self.min_level = min_level
         self.max_level = max_level
         self.repeats = repeats
-        self.separable_conv = separable_conv
+        self.with_separable_conv = with_separable_conv
         self.survival_rate = survival_rate
-        self.activation_fn = activation_fn
+        self.activation = activation
         self.conv_blocks = []
         self.batchnorms = []
         self.feature_only = feature_only
 
         for repeats_args in range(self.repeats):
             # If using SeparableConv2D
-            if self.separable_conv:
+            if self.with_separable_conv:
                 self.conv_blocks.append(SeparableConv2D(
-                    filters=self.num_filters,
-                    depth_multiplier=1,
-                    pointwise_initializer=tf.initializers.variance_scaling(),
-                    depthwise_initializer=tf.initializers.variance_scaling(),
-                    data_format='channels_last',
-                    kernel_size=3,
-                    activation=None,
-                    bias_initializer=tf.zeros_initializer(),
-                    padding='same',
-                    name='box-%d' % repeats_args))
+                    self.num_filters, 3, (1, 1), 'same', 'channels_last',
+                    (1, 1), 1, None, True, tf.initializers.variance_scaling(),
+                    tf.initializers.variance_scaling(),
+                    tf.zeros_initializer(), name='box-%d' % repeats_args))
             # If using Conv2d
             else:
                 self.conv_blocks.append(Conv2D(
-                    filters=self.num_filters,
-                    kernel_initializer=tf.random_normal_initializer(
-                        stddev=0.01),
-                    data_format='channels_last',
-                    kernel_size=3,
-                    activation=None,
-                    bias_initializer=tf.zeros_initializer(),
-                    padding='same',
-                    name='box-%d' % repeats_args))
+                    self.num_filters, 3, (1, 1), 'same', 'channels_last',
+                    (1, 1), 1, None, True,
+                    tf.random_normal_initializer(stddev=0.01),
+                    tf.zeros_initializer(), name='box-%d' % repeats_args))
 
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
@@ -714,21 +681,20 @@ class BoxNet(Layer):
                         name='box-%d-bn-%d' % (repeats_args, level)))
             self.batchnorms.append(batchnorm_per_level)
 
-        self.boxes = self.boxes_layer(separable_conv,
-                                      num_anchors,
-                                      name='box-predict')
+        self.boxes = self.boxes_layer(
+            with_separable_conv, num_anchors, name='box-predict')
 
-    def _conv_batchnorm_act(self, image, i, level_id, training):
+    def _conv_batchnorm_activation(self, image, i, level_id, training):
         conv_block = self.conv_blocks[i]
         batchnorm = self.batchnorms[i][level_id]
-        activation_fn = self.activation_fn
+        activation = self.activation
 
         def _call(image):
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
-            if self.activation_fn:
-                image = get_activation_fn(image, activation_fn)
+            if self.activation:
+                image = get_activation(image, activation)
             if i > 0 and self.survival_rate:
                 image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image
@@ -742,7 +708,8 @@ class BoxNet(Layer):
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
             for i in range(self.repeats):
-                image = self._conv_batchnorm_act(image, i, level_id, training)
+                image = self._conv_batchnorm_activation(
+                    image, i, level_id, training)
             if self.feature_only:
                 box_outputs.append(image)
             else:
@@ -751,27 +718,17 @@ class BoxNet(Layer):
         return box_outputs
 
     @classmethod
-    def boxes_layer(cls, separable_conv, num_anchors, name):
+    def boxes_layer(cls, with_separable_conv, num_anchors, name):
         """Gets the conv2d layer in BoxNet class."""
-        if separable_conv:
+        if with_separable_conv:
             return SeparableConv2D(
-                filters=4 * num_anchors,
-                depth_multiplier=1,
-                pointwise_initializer=tf.initializers.variance_scaling(),
-                depthwise_initializer=tf.initializers.variance_scaling(),
-                data_format='channels_last',
-                kernel_size=3,
-                activation=None,
-                bias_initializer=tf.zeros_initializer(),
-                padding='same',
-                name=name)
+                4 * num_anchors, 3, (1, 1), 'same', 'channels_last',
+                (1, 1), 1, None, True, tf.initializers.variance_scaling(),
+                tf.initializers.variance_scaling(),
+                tf.zeros_initializer(), name=name)
         else:
             return Conv2D(
-                filters=4 * num_anchors,
-                kernel_initializer=tf.random_normal_initializer(stddev=0.01),
-                data_format='channels_last',
-                kernel_size=3,
-                activation=None,
-                bias_initializer=tf.zeros_initializer(),
-                padding='same',
-                name=name)
+                4 * num_anchors, 3, (1, 1), 'same', 'channels_last',
+                (1, 1), 1, None, True,
+                tf.random_normal_initializer(stddev=0.01),
+                tf.zeros_initializer(), name=name)

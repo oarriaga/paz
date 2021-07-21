@@ -12,7 +12,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer, DepthwiseConv2D
 from tensorflow.keras.layers import Conv2D, Dense
 from tensorflow.keras.layers import GlobalAveragePooling2D
-from utils import get_activation_fn, get_drop_connect
+from utils import get_activation, get_drop_connect
 
 
 GlobalParams = collections.namedtuple(
@@ -26,7 +26,7 @@ GlobalParams = collections.namedtuple(
         'depth_divisor',
         'min_depth',
         'survival_rate',
-        'act_fn',
+        'activation',
         'batch_norm',
         'use_se',
         'local_pooling',
@@ -65,10 +65,12 @@ def conv_kernel_initializer(shape, dtype=None, partition_info=None):
     standard deviation, whereas here we use a normal distribution. Similarly,
     tf.initializers.variance_scaling uses a truncated normal with
     a corrected standard deviation.
+
     # Arguments
       shape: shape of variable
       dtype: dtype of variable
       partition_info: unused
+
     # Returns
       an initialization for the variable
     """
@@ -87,10 +89,12 @@ def dense_kernel_initializer(shape, dtype=None, partition_info=None):
       tf.variance_scaling_initializer(scale=1.0/3.0, mode='fan_out',
                                       distribution='uniform').
     It is written out explicitly here for clarity.
+
     # Arguments
       shape: shape of variable
       dtype: dtype of variable
       partition_info: unused
+
     # Returns
       an initialization for the variable
     """
@@ -111,10 +115,12 @@ def superpixel_kernel_initializer(shape,
     this way so that the model can learn not to do anything
     but keep it mathematically equivalent,
     when improving performance.
+
     # Arguments
       shape: shape of variable
       dtype: dtype of variable
       partition_info: unused
+
     # Returns
       an initialization for the variable
     """
@@ -136,7 +142,7 @@ class SE(Layer):
         super().__init__(name=name)
 
         self._local_pooling = global_params.local_pooling
-        self._act_fn = global_params.act_fn
+        self._activation = global_params.activation
 
         # Squeeze and Excitation layer.
         self._se_reduce = Conv2D(
@@ -171,9 +177,9 @@ class SE(Layer):
             )
         else:
             se_tensor = tf.reduce_mean(tensor, [h_axis, w_axis], keepdims=True)
-        se_tensor = self._se_expand(get_activation_fn(
+        se_tensor = self._se_expand(get_activation(
             self._se_reduce(se_tensor),
-            self._act_fn)
+            self._activation)
         )
         print('Built SE %s : %s', self.name, se_tensor.shape)
         return tf.sigmoid(se_tensor) * tensor
@@ -197,17 +203,18 @@ class SuperPixel(Layer):
         self._batch_norm_superpixel = global_params.batch_norm(axis=-1,
                                                                momentum=0.99,
                                                                epsilon=1e-3)
-        self._act_fn = global_params.act_fn
+        self._activation = global_params.activation
 
     def call(self, tensor, training):
         out = self._superpixel(tensor)
         out = self._batch_norm_superpixel(out, training)
-        out = get_activation_fn(out, self._act_fn)
+        out = get_activation(out, self._activation)
         return out
 
 
 class MBConvBlock(Layer):
     """A class of MBConv: Mobile Inverted Residual Bottleneck.
+
     # Attributes
         endpoints: dict. A list of internal tensors.
     """
@@ -226,7 +233,7 @@ class MBConvBlock(Layer):
         self._local_pooling = global_params.local_pooling
         self._batch_norm = global_params.batch_norm
         self._condconv_num_experts = global_params.condconv_num_experts
-        self._act_fn = global_params.act_fn
+        self._activation = global_params.activation
         self._has_se = (global_params.use_se
                         and self._block_args.se_ratio is not None
                         and 0 < self._block_args.se_ratio <= 1
@@ -351,10 +358,12 @@ class MBConvBlock(Layer):
 
     def call(self, tensor, training, survival_rate):
         """Implementation of call().
+
         # Arguments
             inputs: the inputs tensor.
             training: boolean, whether the model is constructed for training.
             survival_rate: float, between 0 to 1, drop connect rate.
+
         # Returns
             A output tensor.
         """
@@ -370,7 +379,7 @@ class MBConvBlock(Layer):
             if self._block_args.fused_conv:
                 # If use fused mbconv, skip expansion and use regular conv.
                 x = self._batch_norm1(self._fused_conv(x), training=training)
-                x = get_activation_fn(x, self._act_fn)
+                x = get_activation(x, self._activation)
                 print('Conv2D shape: %s', x.shape)
             else:
                 # Otherwise, first apply expansion
@@ -378,12 +387,12 @@ class MBConvBlock(Layer):
                 if self._block_args.expand_ratio != 1:
                     x = self._batch_norm0(self._expand_conv(x),
                                           training=training)
-                    x = get_activation_fn(x, self._act_fn)
+                    x = get_activation(x, self._activation)
                     print('Expand shape: %s', x.shape)
 
                 x = self._batch_norm1(self._depthwise_conv(x),
                                       training=training)
-                x = get_activation_fn(x, self._act_fn)
+                x = get_activation(x, self._activation)
                 print('DWConv shape: %s', x.shape)
 
             if self._se:
@@ -462,13 +471,13 @@ class Stem(Layer):
         self._batch_norm = global_params.batch_norm(axis=-1,
                                                     momentum=0.99,
                                                     epsilon=1e-3)
-        self._act_fn = global_params.act_fn
+        self._activation = global_params.activation
 
     def call(self, tensor, training):
         out = self._batch_norm(self._conv_stem(tensor,
                                                training=training),
                                training=training)
-        out = get_activation_fn(out, self._act_fn)
+        out = get_activation(out, self._activation)
         return out
 
 
@@ -497,7 +506,7 @@ class Head(Layer):
         self._batch_norm = global_params.batch_norm(axis=-1,
                                                     momentum=0.99,
                                                     epsilon=1e-3)
-        self._act_fn = global_params.act_fn
+        self._activation = global_params.activation
         self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
         if global_params.num_classes:
             self._fc = Dense(global_params.num_classes,
@@ -515,7 +524,7 @@ class Head(Layer):
     def call(self, tensor, training, pooled_features_only):
         """Call the head layer."""
         outputs = self._batch_norm(self._conv_head(tensor), training=training)
-        outputs = get_activation_fn(outputs, self._act_fn)
+        outputs = get_activation(outputs, self._activation)
         self.endpoints['head_1x1'] = outputs
 
         if self._global_params.local_pooling:
@@ -554,10 +563,12 @@ class Model(tf.keras.Model):
 
     def __init__(self, blocks_args=None, global_params=None, name=None):
         """Initializes an 'Model' instance.
+
         # Arguments
             blocks_args: A list of BlockArgs to construct block modules.
             global_params: GlobalParams, a set of global parameters.
             name: A string of layer name.
+
         # Raises
             ValueError: when blocks_args is not specified as list.
         """
@@ -567,7 +578,7 @@ class Model(tf.keras.Model):
             raise ValueError('blocks_args should be a list.')
         self._global_params = global_params
         self._blocks_args = blocks_args
-        self._act_fn = global_params.act_fn
+        self._activation = global_params.activation
         self._batch_norm = global_params.batch_norm
         self._fix_head_stem = global_params.fix_head_stem
         self.endpoints = None
@@ -686,6 +697,7 @@ class Model(tf.keras.Model):
              features_only=None,
              pooled_features_only=False):
         """Implementation of call().
+
         # Arguments
             tensor: input tensors.
             training: boolean, whether the model is constructed for training.
@@ -693,6 +705,7 @@ class Model(tf.keras.Model):
             pooled_features_only: build the base network for
             features extraction (after 1x1 conv layer and global
              pooling, but before dropout and fc head).
+
         # Returns
           output tensors.
         """

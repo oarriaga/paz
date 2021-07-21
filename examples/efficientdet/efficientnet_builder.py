@@ -30,7 +30,7 @@ def efficientnet(width_coefficient=None,
         depth_coefficient=depth_coefficient,
         depth_divisor=8,
         min_depth=None,
-        act_fn='swish',
+        activation='swish',
         use_se=True,
         clip_projection_output=False,
     )
@@ -41,11 +41,18 @@ def get_efficientnet_params(model_name):
     """Default efficientnet scaling coefficients and
     image name based on model name.
     The value of each model name in the key represents:
-    (width_coefficient, depth_coefficient, image_resolution, dropout_rate).
+    (width_coefficient, depth_coefficient, dropout_rate).
     with_coefficient: scaling coefficient for network width.
     depth_coefficient: scaling coefficient for network depth.
-    image_resolution: input image resolution.
     dropout_rate: dropout rate for final fully connected layers.
+
+    # Arguments
+        model_name: String, name of the EfficientNet backbone
+        params: Dictionary, parameters for building the model
+
+    # Returns:
+        efficientnetparams: Dictionary, parameters corresponding to
+        width coefficient, depth coefficient, dropout rate
     """
     efficientnet_params = {
         'efficientnet-b0': (1.0, 1.0, 0.2),
@@ -97,8 +104,10 @@ class BlockDecoder(object):
     def decode(self, string_list):
         """Decodes a list of string notations to specify blocks
         inside the network.
+
         # Arguments
             string_list: a list of strings, each string is a notation of block.
+
         # Returns
             A list of namedtuples to represent block arguments.
         """
@@ -133,12 +142,14 @@ def get_model_params(model_name, params):
 
 def build_model_base(model_name, params=None):
     """Create a base feature network and return the features before pooling.
+
     # Arguments
-        model_name:
-        params:
+        model_name: String, name of the EfficientNet backbone
+        params: Dictionary, parameters for building the model
+
     # Returns:
-        features:
-        endpoints:
+        model: EfficientNet model
+
     # Raises
         When model_name specified an undefined model,
         raises NotImplementedError.
@@ -152,19 +163,21 @@ def build_model_base(model_name, params=None):
 
 
 def build_backbone(backbone_name,
-                   activation_fn,
+                   activation,
                    survival_rate):
     """
     Build backbone model.
+
     # Arguments
         config: Configuration of the EfficientDet model.
+
     # Returns
         EfficientNet model with intermediate feature levels.
     """
     if 'efficientnet' in backbone_name:
         params = {
             'batch_norm': BatchNormalization,
-            'act_fn': activation_fn
+            'activation': activation
         }
         if 'b0' in backbone_name:
             params['survival_rate'] = 0.0

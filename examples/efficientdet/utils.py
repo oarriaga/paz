@@ -15,34 +15,38 @@ raw_images = raw_images[np.newaxis]
 raw_images = tf.convert_to_tensor(raw_images, dtype=tf.dtypes.float32)
 
 
-def get_activation_fn(features, activation_fn):
+def get_activation(features, activation):
     """Apply non-linear activation function to features provided.
+
     # Arguments
         features: Tensor, representing an input feature map
         to be pass through an activation function.
-        activation_fn: A string specifying the activation function
+        activation: A string specifying the activation function
         type.
+
     # Returns
         activation function: features transformed by the
         activation function.
     """
-    if activation_fn in ('silu', 'swish'):
+    if activation in ('silu', 'swish'):
         return tf.nn.swish(features)
-    elif activation_fn == 'relu':
+    elif activation == 'relu':
         return tf.nn.relu(features)
     else:
-        raise ValueError('Unsupported activation fn {}'.format(activation_fn))
+        raise ValueError('Unsupported activation fn {}'.format(activation))
 
 
 def get_drop_connect(features, is_training, survival_rate):
     """Drop the entire conv with given survival probability.
     Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
+
     # Arguments
         features: Tensor, input feature map to undergo
         drop connection.
         is_training: Bool specifying the training phase.
         survival_rate: Float, survival probability to drop
         input convolution features.
+
     # Returns
         output: Tensor, output feature map after drop connect.
     """
@@ -60,11 +64,13 @@ def get_drop_connect(features, is_training, survival_rate):
 def preprocess_images(image, image_size):
     """
     Preprocess image for EfficientDet model.
+
     # Arguments
         image: Tensor, raw input image to be preprocessed
         of shape [bs, h, w, c]
         image_size: Tensor, size to resize the raw image
         of shape [bs, new_h, new_w, c]
+
     # Returns
         image: Tensor, resized and preprocessed image
         image_scale: Tensor, scale to reconstruct each of
