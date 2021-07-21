@@ -179,10 +179,11 @@ class ResampleFeatureMap(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.pooling_type = pooling_type
         self.upsampling_type = upsampling_type
-        self.conv2d = Conv2D(self.target_num_channels, (1, 1), (1, 1),
-                             'same', 'channels_last', name='conv2d')
-        self.batchnorm = BatchNormalization(-1, 0.99, 1e-3, True, True,
-                                            'zeros', 'ones', name='bn')
+        self.conv2d = Conv2D(
+            self.target_num_channels, (1, 1), (1, 1), 'same',
+            'channels_last', name='conv2d')
+        self.batchnorm = BatchNormalization(
+            -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
         if pooling_type in ['max', 'average']:
             self.pooling_type = pooling_type
         else:
@@ -260,19 +261,10 @@ class ResampleFeatureMap(Layer):
 
 class FPNCells(Layer):
     """Set of FPN Cells."""
-    def __init__(self,
-                 fpn_name,
-                 min_level,
-                 max_level,
-                 fpn_weight_method,
-                 fpn_cell_repeats,
-                 fpn_num_filters,
-                 use_batchnorm_for_sampling,
-                 conv_after_downsample,
-                 conv_batchnorm_activation_block,
-                 with_separable_conv,
-                 activation,
-                 name='fpn_cells'):
+    def __init__(self, fpn_name, min_level, max_level, fpn_weight_method,
+                 fpn_cell_repeats, fpn_num_filters, use_batchnorm_for_sampling,
+                 conv_after_downsample, conv_batchnorm_activation_block,
+                 with_separable_conv, activation, name='fpn_cells'):
         super().__init__(name=name)
         self.fpn_name = fpn_name
         self.min_level = min_level
@@ -290,7 +282,7 @@ class FPNCells(Layer):
                                               self.fpn_weight_method
                                               )
         self.cells = []
-        for repeats in range(self.fpn_cell_repeats):
+        for repeat_arg in range(self.fpn_cell_repeats):
             self.cells.append(FPNCell(
                 self.fpn_name, self.min_level, self.max_level,
                 self.fpn_weight_method, self.fpn_cell_repeats,
@@ -298,7 +290,7 @@ class FPNCells(Layer):
                 self.conv_after_downsample,
                 self.conv_batchnorm_activation_block,
                 self.with_separable_conv, self.activation,
-                'cell_%d' % repeats))
+                'cell_%d' % repeat_arg))
 
     def call(self, features, training):
         for cell in self.cells:
@@ -315,19 +307,11 @@ class FPNCells(Layer):
 
 class FPNCell(Layer):
     """A single FPN cell."""
-    def __init__(self,
-                 fpn_name,
-                 min_level,
-                 max_level,
-                 fpn_weight_method,
-                 fpn_cell_repeats,
-                 fpn_num_filters,
-                 use_batchnorm_for_sampling,
-                 conv_after_downsample,
-                 conv_batchnorm_activation_block,
-                 with_separable_conv,
-                 activation,
-                 name='fpn_cell'):
+    def __init__(self, fpn_name, min_level, max_level, fpn_weight_method,
+                 fpn_cell_repeats, fpn_num_filters,
+                 use_batchnorm_for_sampling, conv_after_downsample,
+                 conv_batchnorm_activation_block, with_separable_conv,
+                 activation, name='fpn_cell'):
         super().__init__(name=name)
         self.fpn_name = fpn_name
         self.min_level = min_level
@@ -340,10 +324,8 @@ class FPNCell(Layer):
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
         self.activation = activation
-        self.fpn_config = bifpn_configuration(self.min_level,
-                                              self.max_level,
-                                              self.fpn_weight_method
-                                              )
+        self.fpn_config = bifpn_configuration(
+            self.min_level, self.max_level, self.fpn_weight_method)
         self.fnodes = []
         for fnode_cfg_arg, fnode_cfg in enumerate(self.fpn_config['nodes']):
             fnode = FNode(
@@ -377,17 +359,10 @@ def sum_nodes(nodes):
 
 class FNode(Layer):
     """A keras layer implementing BiFPN node."""
-    def __init__(self,
-                 feature_level,
-                 inputs_offsets,
-                 fpn_num_filters,
-                 use_batchnorm_for_sampling,
-                 conv_after_downsample,
-                 conv_batchnorm_activation_block,
-                 with_separable_conv,
-                 activation,
-                 weight_method,
-                 name='fnode'):
+    def __init__(self, feature_level, inputs_offsets, fpn_num_filters,
+                 use_batchnorm_for_sampling, conv_after_downsample,
+                 conv_batchnorm_activation_block, with_separable_conv,
+                 activation, weight_method, name='fnode'):
         super().__init__(name=name)
         self.feature_level = feature_level
         self.inputs_offsets = inputs_offsets
@@ -478,12 +453,8 @@ class FNode(Layer):
 
 class ConvolutionAfterFusion(Layer):
     """Operation after combining input features during feature fusion."""
-    def __init__(self,
-                 conv_batchnorm_activation_block,
-                 with_separable_conv,
-                 fpn_num_filters,
-                 activation,
-                 name='op_after_combine'):
+    def __init__(self, conv_batchnorm_activation_block, with_separable_conv,
+                 fpn_num_filters, activation, name='op_after_combine'):
         super().__init__(name=name)
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
@@ -501,8 +472,8 @@ class ConvolutionAfterFusion(Layer):
                 use_bias=not self.conv_batchnorm_activation_block, name='conv')
 
         self.conv_op = conv2d_layer
-        self.batchnorm = BatchNormalization(-1, 0.99, 1e-3, True, True,
-                                            'zeros', 'ones', name='bn')
+        self.batchnorm = BatchNormalization(
+            -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
 
     def call(self, new_node, training):
         if not self.conv_batchnorm_activation_block:
@@ -518,8 +489,8 @@ class ClassNet(Layer):
     """Object class prediction network."""
     def __init__(self, num_classes=90, num_anchors=9, num_filters=32,
                  min_level=3, max_level=7, activation='swish',
-                 repeats=4, with_separable_conv=True, survival_rate=None,
-                 feature_only=False, name='class_net', **kwargs):
+                 num_repeats=4, with_separable_conv=True, survival_rate=None,
+                 return_base=False, name='class_net', **kwargs):
         """Initialize the ClassNet.
 
         # Arguments
@@ -529,13 +500,13 @@ class ClassNet(Layer):
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
             activation: String of the activation used.
-            repeats: Integer. Number of intermediate layers.
+            num_repeats: Integer. Number of intermediate layers.
             with_separable_conv: Bool.
             True to use separable_conv instead of Conv2D.
             survival_rate: Float.
             If a value is set then drop connect will be used.
             name: String indicating the name of this layer.
-            feature_only: Bool.
+            return_base: Bool.
             Build the base feature network only. Excluding final class head.
             **kwargs: other parameters
         """
@@ -545,23 +516,23 @@ class ClassNet(Layer):
         self.num_filters = num_filters
         self.min_level = min_level
         self.max_level = max_level
-        self.repeats = repeats
+        self.num_repeats = num_repeats
         self.with_separable_conv = with_separable_conv
         self.survival_rate = survival_rate
         self.activation = activation
         self.conv_blocks = []
         self.batchnorms = []
-        self.feature_only = feature_only
+        self.return_base = return_base
 
-        for repeats_args in range(self.repeats):
+        for repeat_args in range(self.num_repeats):
             self.conv_blocks.append(self.conv2d_layer(
                 with_separable_conv, self.num_filters, 3,
                 tf.zeros_initializer(), None, 'same',
-                'class-%d' % repeats_args))
+                'class-%d' % repeat_args))
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(BatchNormalization(
-                    name='class-%d-bn-%d' % (repeats_args, level)))
+                    name='class-%d-bn-%d' % (repeat_args, level)))
             self.batchnorms.append(batchnorm_per_level)
         self.classes = self.conv2d_layer(
             with_separable_conv, num_classes*num_anchors, 3,
@@ -591,10 +562,10 @@ class ClassNet(Layer):
         class_outputs = []
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
-            for repeat_args in range(self.repeats):
+            for repeat_args in range(self.num_repeats):
                 image = self._conv_batchnorm_activation(
                     image, repeat_args, level_id, training)
-            if self.feature_only:
+            if self.return_base:
                 class_outputs.append(image)
             else:
                 class_outputs.append(self.classes(image))
@@ -623,8 +594,8 @@ class ClassNet(Layer):
 class BoxNet(Layer):
     """Box regression network."""
     def __init__(self, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-                 activation='swish', repeats=4, with_separable_conv=True,
-                 survival_rate=None, feature_only=False, name='box_net',
+                 activation='swish', num_repeats=4, with_separable_conv=True,
+                 survival_rate=None, return_base=False, name='box_net',
                  **kwargs):
         """Initialize the BoxNet.
 
@@ -635,13 +606,13 @@ class BoxNet(Layer):
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
             activation: String of the activation used.
-            repeats: Integer. Number of intermediate layers.
+            num_repeats: Integer. Number of intermediate layers.
             with_separable_conv: Bool.
             True to use separable_conv instead of Conv2D.
             survival_rate: Float.
             If a value is set then drop connect will be used.
             name: String indicating the name of this layer.
-            feature_only: Bool.
+            return_base: Bool.
             Build the base feature network only. Excluding final class head.
             **kwargs: other parameters
         """
@@ -650,35 +621,35 @@ class BoxNet(Layer):
         self.num_filters = num_filters
         self.min_level = min_level
         self.max_level = max_level
-        self.repeats = repeats
+        self.num_repeats = num_repeats
         self.with_separable_conv = with_separable_conv
         self.survival_rate = survival_rate
         self.activation = activation
         self.conv_blocks = []
         self.batchnorms = []
-        self.feature_only = feature_only
+        self.return_base = return_base
 
-        for repeats_args in range(self.repeats):
+        for repeat_args in range(self.num_repeats):
             # If using SeparableConv2D
             if self.with_separable_conv:
                 self.conv_blocks.append(SeparableConv2D(
                     self.num_filters, 3, (1, 1), 'same', 'channels_last',
                     (1, 1), 1, None, True, tf.initializers.variance_scaling(),
                     tf.initializers.variance_scaling(),
-                    tf.zeros_initializer(), name='box-%d' % repeats_args))
+                    tf.zeros_initializer(), name='box-%d' % repeat_args))
             # If using Conv2d
             else:
                 self.conv_blocks.append(Conv2D(
                     self.num_filters, 3, (1, 1), 'same', 'channels_last',
                     (1, 1), 1, None, True,
                     tf.random_normal_initializer(stddev=0.01),
-                    tf.zeros_initializer(), name='box-%d' % repeats_args))
+                    tf.zeros_initializer(), name='box-%d' % repeat_args))
 
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(
                     BatchNormalization(
-                        name='box-%d-bn-%d' % (repeats_args, level)))
+                        name='box-%d-bn-%d' % (repeat_args, level)))
             self.batchnorms.append(batchnorm_per_level)
 
         self.boxes = self.boxes_layer(
@@ -707,10 +678,10 @@ class BoxNet(Layer):
         box_outputs = []
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
-            for i in range(self.repeats):
+            for i in range(self.num_repeats):
                 image = self._conv_batchnorm_activation(
                     image, i, level_id, training)
-            if self.feature_only:
+            if self.return_base:
                 box_outputs.append(image)
             else:
                 box_outputs.append(self.boxes(image))

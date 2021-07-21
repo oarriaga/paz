@@ -694,14 +694,14 @@ class Model(tf.keras.Model):
     def call(self,
              tensor,
              training,
-             features_only=None,
+             return_base=None,
              pooled_features_only=False):
         """Implementation of call().
 
         # Arguments
             tensor: input tensors.
             training: boolean, whether the model is constructed for training.
-            features_only: build the base feature network only.
+            return_base: build the base feature network only.
             pooled_features_only: build the base network for
             features extraction (after 1x1 conv layer and global
              pooling, but before dropout and fc head).
@@ -752,7 +752,7 @@ class Model(tf.keras.Model):
                         ] = v
         self.endpoints['features'] = outputs
 
-        if not features_only:
+        if not return_base:
             # Calls final layers and returns logits.
             outputs = self._head(outputs, training, pooled_features_only)
             self.endpoints.update(self._head.endpoints)

@@ -20,7 +20,7 @@ class EfficientDet(tf.keras.Model):
                  conv_batchnorm_activation_block=False,
                  use_batchnorm_for_sampling=True,
                  conv_after_downsample=False,
-                 separable_conv=True, survival_rate=None, feature_only=False,
+                 separable_conv=True, survival_rate=None, return_base=False,
                  name=""):
         """ Initializes EfficientDet model.
 
@@ -59,7 +59,7 @@ class EfficientDet(tf.keras.Model):
             separable_conv: Bool, specifying the usage of separable
             convolution layers in EfficientDet
             survival_rate: Float, specifying the survival probability
-            feature_only: Bool, indicating the usage of features only
+            return_base: Bool, indicating the usage of features only
             from EfficientDet
             name: Module name
 
@@ -88,7 +88,7 @@ class EfficientDet(tf.keras.Model):
         self.conv_after_downsample = conv_after_downsample
         self.separable_conv = separable_conv
         self.survival_rate = survival_rate
-        self.feature_only = feature_only
+        self.return_base = return_base
         self.backbone = efficientnet_builder.build_backbone(
             self.backbone, self.activation, self.survival_rate)
         self.resample_layers = []
@@ -111,12 +111,12 @@ class EfficientDet(tf.keras.Model):
             self.num_classes, self.num_anchors, self.num_filters,
             self.min_level, self.max_level, self.activation,
             self.box_class_repeats, self.separable_conv,
-            self.survival_rate, self.feature_only)
+            self.survival_rate, self.return_base)
 
         self.box_net = BoxNet(
             self.num_anchors, self.num_filters, self.min_level,
             self.max_level, self.activation, self.box_class_repeats,
-            self.separable_conv, self.survival_rate, self.feature_only)
+            self.separable_conv, self.survival_rate, self.return_base)
 
     def call(self, images, training=False):
         """Build EfficientDet model.
@@ -126,17 +126,17 @@ class EfficientDet(tf.keras.Model):
         """
 
         # Efficientnet backbone features
-        all_features = self.backbone(images, training, True)
+        branch_tensors = self.backbone(images, training, True)
 
-        features = all_features[self.min_level:
-                                self.max_level + 1]
+        feature_levels = branch_tensors[self.min_level:self.max_level + 1]
 
         # Build additional input features that are not from backbone.
         for resample_layer in self.resample_layers:
-            features.append(resample_layer(features[-1], training, None))
+            feature_levels.append(resample_layer(
+                feature_levels[-1], training, None))
 
         # BiFPN layers
-        fpn_features = self.fpn_cells(features, training)
+        fpn_features = self.fpn_cells(feature_levels, training)
 
         # Classification head
         class_outputs = self.class_net(fpn_features, training)

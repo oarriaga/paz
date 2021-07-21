@@ -123,9 +123,8 @@ def get_model_params(model_name, params):
     if model_name.startswith('efficientnet'):
         efficientnet_param = get_efficientnet_params(model_name)
         width_coefficient, depth_coefficient, dropout_rate = efficientnet_param
-        global_params = efficientnet(width_coefficient,
-                                     depth_coefficient,
-                                     dropout_rate)
+        global_params = efficientnet(
+            width_coefficient, depth_coefficient, dropout_rate)
     else:
         raise NotImplementedError('model name is not pre-defined: %s' %
                                   model_name)
