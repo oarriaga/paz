@@ -277,10 +277,8 @@ class FPNCells(Layer):
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
         self.activation = activation
-        self.fpn_config = bifpn_configuration(self.min_level,
-                                              self.max_level,
-                                              self.fpn_weight_method
-                                              )
+        self.fpn_config = bifpn_configuration(
+            self.min_level, self.max_level, self.fpn_weight_method)
         self.cells = []
         for repeat_arg in range(self.fpn_cell_repeats):
             self.cells.append(FPNCell(
@@ -292,16 +290,20 @@ class FPNCells(Layer):
                 self.with_separable_conv, self.activation,
                 'cell_%d' % repeat_arg))
 
+    def get_cell_features(self, cell_features):
+        features = []
+        for level in range(self.min_level, self.max_level + 1):
+            for node in enumerate(reversed(self.fpn_config['nodes'])):
+                node_feature_arg, node_feature = node
+                if node_feature['feature_level'] == level:
+                    features.append(cell_features[-1 - node_feature_arg])
+                    break
+        return features
+
     def call(self, features, training):
         for cell in self.cells:
             cell_features = cell(features, training)
-            features = []
-            for level in range(self.min_level, self.max_level + 1):
-                for fnode_arg, fnode in \
-                        enumerate(reversed(self.fpn_config['nodes'])):
-                    if fnode['feature_level'] == level:
-                        features.append(cell_features[-1 - fnode_arg])
-                        break
+            features = self.get_cell_features(cell_features)
         return features
 
 
@@ -376,6 +378,25 @@ class FNode(Layer):
         self.resample_layers = []
         self.assign_weights = []
 
+    def attn_weighting_method(self, nodes, dtype):
+        edge_weights = []
+        for weight in self.assign_weights:
+            edge_weights.append(tf.cast(weight, dtype=dtype))
+        normalized_weights = tf.nn.softmax(tf.stack(edge_weights))
+        nodes = tf.stack(nodes, axis=-1)
+        new_node = tf.reduce_sum(nodes * normalized_weights, -1)
+        return new_node
+
+    def fastattn_weighting_method(self, nodes, dtype):
+        edge_weights = []
+        for weight in self.assign_weights:
+            edge_weights.append(tf.nn.relu(tf.cast(weight, dtype=dtype)))
+        weight_sum = sum_nodes(edge_weights)
+        for i in range(len(nodes)):
+            nodes[i] = nodes[i] * edge_weights[i] / (weight_sum + 0.0001)
+        new_node = sum_nodes(nodes)
+        return new_node
+
     def fuse_features(self, nodes):
         """Fuse features from different resolutions and return a weighted sum.
 
@@ -387,20 +408,9 @@ class FNode(Layer):
         """
         dtype = nodes[0].dtype
         if self.weight_method == 'attn':
-            edge_weights = []
-            for weight in self.assign_weights:
-                edge_weights.append(tf.cast(weight, dtype=dtype))
-            normalized_weights = tf.nn.softmax(tf.stack(edge_weights))
-            nodes = tf.stack(nodes, axis=-1)
-            new_node = tf.reduce_sum(nodes * normalized_weights, -1)
+            new_node = self.attn_weighting_method(nodes, dtype)
         elif self.weight_method == 'fastattn':
-            edge_weights = []
-            for weight in self.assign_weights:
-                edge_weights.append(tf.nn.relu(tf.cast(weight, dtype=dtype)))
-            weight_sum = sum_nodes(edge_weights)
-            for i in range(len(nodes)):
-                nodes[i] = nodes[i] * edge_weights[i] / (weight_sum + 0.0001)
-            new_node = sum_nodes(nodes)
+            new_node = self.fastattn_weighting_method(nodes, dtype)
         elif self.weight_method == 'sum':
             new_node = sum_nodes(nodes)
         else:
