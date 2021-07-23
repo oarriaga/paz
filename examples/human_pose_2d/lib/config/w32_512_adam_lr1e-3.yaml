@@ -1,8 +1,8 @@
 AUTO_RESUME: True
 DATA_DIR: ''
 GPUS: (0,)
-LOG_DIR: '/home/kashmira/KiMMI_SF/HigherHRNet-TF2.0/log'
-OUTPUT_DIR: '/home/kashmira/KiMMI_SF/HigherHRNet-TF2.0/output'
+LOG_DIR: log
+OUTPUT_DIR: output
 PRINT_FREQ: 1
 CUDNN:
   BENCHMARK: True
@@ -23,8 +23,8 @@ DATASET:
   MAX_TRANSLATE: 40
   MIN_SCALE: 0.75
   NUM_JOINTS: 17
-  ROOT: '/home/kashmira/KiMMI_SF/HigherHRNet-Human-Pose-Estimation/data/coco/'
-  TEST: trial #val2017
+  ROOT: 'data/coco'
+  TEST: val2017
   TRAIN: train2017
 DEBUG:
   DEBUG: True
