@@ -51,11 +51,11 @@ def main():
     logger, final_output_dir, tb_log_dir = create_logger(cfg, args.cfg, 'valid')
     logger.info(pprint.pformat(args))
 
-    model = tf.keras.models.load_model('/home/kashmira/KiMMI_SF/HigherHRNet-TF2.0/models_weights_tf/HigherHRNet')
+    model = tf.keras.models.load_model('.../models_weights_tf/HigherHRNet')
     # model.summary()
     print(f"\n==> Model loaded!\n")
 
-    img_path = '/home/kashmira/KiMMI_SF/HigherHRNet-Human-Pose-Estimation/data/coco/images/trial/05.jpg'
+    img_path = '.../img.jpg'
     img = np.array(PIL.Image.open(img_path, 'r')).astype(np.uint8)
 
     parser = HeatmapParser(cfg)
@@ -78,10 +78,7 @@ def main():
             cfg, model, image_resized, cfg.TEST.FLIP_TEST,
             cfg.TEST.PROJECT2IMAGE, base_size
         )
-        # tags are also two, one for normal o/p and one for flip-unflip len(tags) is 2 each of size [1, 17, 512, w]
-
-        # outputs [1, 34, 128, 192] | heatmaps [1, 17, 512, 768] | tags [1, 17, 512, 768]
-
+       
         final_heatmaps, tags_list = aggregate_results(cfg, s, final_heatmaps, tags_list, heatmaps, tags)
         final_heatmaps = final_heatmaps / float(len(cfg.TEST.SCALE_FACTOR))
         final_heatmaps = tf.transpose(final_heatmaps, [0, 3, 1, 2])
@@ -90,14 +87,14 @@ def main():
         grouped, scores = parser.parse(final_heatmaps, tags, cfg.TEST.ADJUST, cfg.TEST.REFINE)
         final_results = get_final_preds(grouped, center, scale,
                                         [final_heatmaps.get_shape()[3], final_heatmaps.get_shape()[2]]
-                                        )                         # final_results shape (num_persons, 17, 5) 17 joints per person and 5 values per joint
+                                        )                        
 
         prefix = '{}_'.format(os.path.join(final_output_dir, 'result_valid_3'))
         save_valid_image(img, final_results, '{}.jpg'.format(prefix), dataset='COCO')
         print(f"image {'{}.jpg'.format(prefix)} saved!")
 
-        all_preds.append(final_results)             # all_preds has all results means preds of each image in dataset
-        all_scores.append(scores)                   # scores means values
+        all_preds.append(final_results)            
+        all_scores.append(scores)                  
 
 
 if __name__ == '__main__':
