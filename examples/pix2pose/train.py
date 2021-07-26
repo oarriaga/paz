@@ -24,7 +24,7 @@ from paz.pipelines import AutoEncoderPredictor
 
 from scenes import SingleView
 
-from pipelines import DepthImageGenerator, RendererDataGenerator, make_batch_discriminator
+from pipelines import DepthImageGenerator, GeneratedImageGenerator, RendererDataGenerator, make_batch_discriminator
 from model import Generator, Discriminator, transformer_loss, loss_color_wrapped, loss_error, PlotImagesCallback, NeptuneLogger
 
 
@@ -37,8 +37,11 @@ parser.add_argument('-op', '--obj_path', type=str, help='Path of 3D OBJ model',
                         'datasets/035_power_drill/tsdf/textured.obj'))
 parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
-parser.add_argument('-id', '--images_directory', type=str,
+parser.add_argument('-id', '--background_images_directory', type=str,
                     help='Path to directory containing background images',
+                    default="/media/fabian/Data/Masterarbeit/data/VOCdevkit/VOC2012/JPEGImages")
+parser.add_argument('-pi', '--images_directory', type=str,
+                    help='Path to pre-generated images (npy format)',
                     default="/media/fabian/Data/Masterarbeit/data/VOCdevkit/VOC2012/JPEGImages")
 parser.add_argument('-bs', '--batch_size', default=4, type=int,
                     help='Batch size for training')
@@ -82,6 +85,8 @@ parser.add_argument('-ni', '--neptune_log_interval',
                     type=int, default=100, help='How long (in epochs) to wait for the next Neptune logging')
 parser.add_argument('-rm', '--rotation_matrices',
                     type=str, help='Path to npy file with a list of rotation matrices')
+parser.add_argument('-de', '--description',
+                    type=str, help='Description of the model')
 args = parser.parse_args()
 
 # setting optimizer and compiling model
@@ -114,9 +119,12 @@ renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
                       args.roll, args.shift)
 
 # creating sequencer
-image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
-processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
-sequence = GeneratingSequencePix2Pose(processor, dcgan, args.batch_size, args.steps_per_epoch*2, rotation_matrices=rotation_matrices)
+background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
+#processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
+processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "train"), args.image_size, background_image_paths, num_occlusions=0)
+processor_test = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), args.image_size, background_image_paths, num_occlusions=0)
+sequence_train = GeneratingSequencePix2Pose(processor_train, dcgan, args.batch_size, args.steps_per_epoch, rotation_matrices=rotation_matrices)
+sequence_test = GeneratingSequencePix2Pose(processor_test, dcgan, args.batch_size, args.steps_per_epoch, rotation_matrices=rotation_matrices)
 
 # making directory for saving model weights and logs
 model_name = '_'.join([dcgan.name, args.class_name])
@@ -141,7 +149,7 @@ if args.neptune_config is not None:
        name=neptune_run_name,
        upload_stdout=False,
        upload_source_files=["train.py", "scenes.py", "predict.py", "pipelines.py", "model.py"],
-       description='VOC backgrounds, complete GAN architecture, weighted losses',
+       description=args.description,
        params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
     )
 
@@ -157,13 +165,14 @@ save = ModelCheckpoint(
     model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=False)
 save.model = dcgan
 
-plot = PlotImagesCallback(dcgan, sequence, save_path, args.obj_path, args.image_size, args.y_fov, args.depth, args.light,
-                 args.top_only, args.roll, args.shift, args.images_directory, args.batch_size, args.steps_per_epoch, args.neptune_config is not None, rotation_matrices=rotation_matrices)
+plot = PlotImagesCallback(dcgan, sequence_train, save_path, args.obj_path, args.image_size, args.y_fov, args.depth, args.light,
+                          args.top_only, args.roll, args.shift, args.batch_size, args.steps_per_epoch, args.neptune_config is not None,
+                          rotation_matrices=rotation_matrices, processor=processor_test)
 
 callbacks=[stop, log, save, plateau, plot]
 
 if args.neptune_config is not None:
-    neptune_callback = NeptuneLogger(dcgan, log_interval=args.neptune_log_interval)
+    neptune_callback = NeptuneLogger(dcgan, log_interval=args.neptune_log_interval, save_path=args.save_path)
     callbacks.append(neptune_callback)
 
 # saving hyper-parameters and model summary as text files
@@ -180,7 +189,8 @@ for callback in callbacks:
     callback.on_train_begin()
 
 for num_epoch in range(args.max_num_epochs):
-    sequence_iterator = sequence.__iter__()
+    sequence_iterator_train = sequence_train.__iter__()
+    sequence_iterator_test = sequence_test.__iter__()
     for callback in callbacks:
         callback.on_epoch_begin(num_epoch)
 
@@ -188,7 +198,7 @@ for num_epoch in range(args.max_num_epochs):
         # Train the discriminator
         discriminator.trainable = True
         start = time.time()
-        batch = next(sequence_iterator)
+        batch = next(sequence_iterator_train)
         end = time.time()
         print("Batch generation time: {}".format(end - start))
 
@@ -210,7 +220,7 @@ for num_epoch in range(args.max_num_epochs):
         loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
 
         # Test the network
-        batch_test = next(sequence_iterator)
+        batch_test = next(sequence_iterator_test)
         loss_dcgan_test, loss_color_output_test, loss_dcgan_discriminator_test, loss_error_output_test = dcgan.test_on_batch(batch_test[0]['input_image'], {"color_output": batch_test[1]['color_output'], "error_output": batch_test[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
 
         end = time.time()

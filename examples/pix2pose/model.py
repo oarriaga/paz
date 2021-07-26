@@ -87,8 +87,8 @@ def loss_error(real_error_image, predicted_error_image):
 
 class PlotImagesCallback(Callback):
     def __init__(self, model, sequence, save_path, obj_path, image_size, y_fov, depth, light,
-                 top_only, roll, shift, images_directory, batch_size, steps_per_epoch, neptune_logging=False,
-                 rotation_matrices=None):
+                 top_only, roll, shift, batch_size, steps_per_epoch, neptune_logging=False,
+                 rotation_matrices=None, processor=None):
         self.save_path = save_path
         self.model = model
         self.sequence = sequence
@@ -101,10 +101,10 @@ class PlotImagesCallback(Callback):
         self.top_only = top_only
         self.roll = roll
         self.shift = shift
-        self.images_directory = images_directory
         self.batch_size = batch_size
         self.steps_per_epoch = steps_per_epoch
         self.rotation_matrices = rotation_matrices
+        self.processor = processor
 
     def on_epoch_end(self, epoch_index, logs=None):
         renderer = SingleView(self.obj_path, (self.image_size, self.image_size),
@@ -113,8 +113,8 @@ class PlotImagesCallback(Callback):
 
         # creating sequencer
         image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
-        processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
-        sequence = GeneratingSequencePix2Pose(processor, self.model, self.batch_size, self.steps_per_epoch * 2, rotation_matrices=self.rotation_matrices)
+        #processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
+        sequence = GeneratingSequencePix2Pose(self.processor, self.model, self.batch_size, self.steps_per_epoch * 2, rotation_matrices=self.rotation_matrices)
 
         sequence_iterator = sequence.__iter__()
         batch = next(sequence_iterator)
@@ -165,16 +165,17 @@ class PlotImagesCallback(Callback):
 
 class NeptuneLogger(Callback):
 
-    def __init__(self, model, log_interval):
+    def __init__(self, model, log_interval, save_path):
         self.model = model
         self.log_interval = log_interval
+        self.save_path = save_path
 
     def on_epoch_end(self, epoch, logs={}):
         for log_name, log_value in logs.items():
             neptune.log_metric(log_name, log_value)
 
         if epoch%self.log_interval == 0:
-            self.model.save('pix2pose_dcgan_{}.h5'.format(epoch))
+            self.model.save(os.path.join(self.save_path, 'pix2pose_dcgan_{}.h5'.format(epoch)))
             neptune.log_artifact('pix2pose_dcgan_{}.h5'.format(epoch))
 
 

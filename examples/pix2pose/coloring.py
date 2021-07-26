@@ -3,6 +3,8 @@ from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
 import trimesh
+import random
+from PIL import Image
 
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight
 from pyrender import Mesh, Scene, RenderFlags
@@ -66,9 +68,9 @@ def color_object_two_colors(path):
     z_max = vertices_selected[:, 2].max()
 
     # make vertices using RGB format
-    vertices_x = 255 * np.ones_like(vertices_selected[:, 0:1])
+    vertices_x = 255 * normalize(vertices_selected[:, 0:1], y_min, y_max)
     vertices_y = 255 * normalize(vertices_selected[:, 1:2], y_min, y_max)
-    vertices_z = 255 * normalize(vertices_selected[:, 2:3], z_min, z_max)
+    vertices_z = 255 * np.ones_like(vertices_selected[:, 2:3])
 
     vertices_x = vertices_x.astype('uint8')
     vertices_y = vertices_y.astype('uint8')
@@ -87,16 +89,33 @@ def color_object_two_colors(path):
 
 def calculate_canonical_pose_cylinder(mesh):
     # Calculate canonical pose for cylindrical object, idea taken from here: https://arxiv.org/abs/1908.07640
-    angle = np.pi*5.9
-    mesh.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
     rotation_matrix = quarternion_to_rotation_matrix(mesh.rotation)
-    print("Rotation matrix: {}".format(quarternion_to_rotation_matrix(mesh.rotation)))
 
     angle_backrotation = np.arctan2(rotation_matrix[0, 2]-rotation_matrix[2, 0], rotation_matrix[0, 0]+rotation_matrix[2, 2])
     angle_backrotation = np.round(angle_backrotation, 4)
-    print("Angle backrotation: {}".format(angle_backrotation))
     quaternion = quaternion_multiply(np.array([0, -np.sin(angle_backrotation / 2), 0, np.cos(angle_backrotation / 2)]), mesh.rotation)
     mesh.rotation = quaternion
+
+
+def calculate_canonical_pose_two_symmetries(mesh):
+    # Calculate canonical pose for an object with 180° symmetry, idea taken from here: https://arxiv.org/abs/1908.07640
+    angle = np.pi * 1.8
+    mesh.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+    rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
+    rotation_matrix_r = quarternion_to_rotation_matrix(mesh.rotation)
+
+    norm_pairs = list()
+    # Iterate over all rotation matrices
+    for i, rotation_matrix_s in enumerate(rotation_matrices):
+        matrix_norm = np.linalg.norm(np.dot(np.linalg.inv(rotation_matrix_s), rotation_matrix_r) - np.identity(3))
+        norm_pairs.append((i, matrix_norm))
+
+    # Only change the rotation if the choosen matrix is not the identity matrix
+    min_norm_pair = min(norm_pairs, key=lambda t: t[1])
+    print(min_norm_pair)
+
+    if min_norm_pair[0] == 1:
+        mesh.rotation = quaternion_multiply(np.array([0, -np.sin(np.pi / 2), 0, np.cos(np.pi / 2)]), mesh.rotation)
 
 
 if __name__ == "__main__":
@@ -104,28 +123,38 @@ if __name__ == "__main__":
     y_fov = 3.14159/4.0
     distance = [0.3, 0.5]
     light_bounds = [0.5, 30]
-    size = (400, 400)
+    size = (128, 128)
 
     light = scene.add(DirectionalLight([1.0, 1.0, 1.0], 10))
     camera = scene.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-    camera_to_world, world_to_camera = compute_modelview_matrices(np.array([.4, .4, .4]), [0.0, 0.0, 0.0], None, None)
+    camera_to_world, world_to_camera = compute_modelview_matrices(np.array([0., .4, .4]), [0.0, 0.0, 0.0], None, None)
 
     print("Camera to world: {}".format(camera_to_world))
     scene.set_pose(camera, camera_to_world)
     scene.set_pose(light, camera_to_world)
 
     #mesh = trimesh.load("/home/fabian/.keras/datasets/custom_objects/symmetry_z_2_object.obj")
-    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/custom_objects/cylinder_object.obj")
+    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/custom_objects/simple_symmetry_object.obj")
 
     mesh = scene.add(Mesh.from_trimesh(mesh, smooth=False))
-    calculate_canonical_pose_cylinder(mesh)
-    print("Mesh rotation: {}".format(mesh.rotation))
     #mesh_rotated = scene.add(Mesh.from_trimesh(mesh_rotated, smooth=False))
-    #angle = np.pi
-    #mesh_rotated.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+
+    angle = -np.pi/4
+    mesh.rotation = np.array([0, np.sin(angle/2), 0, np.cos(angle/2)])
+    #angle = -np.pi/4 + np.pi
+    #mesh_rotated.rotation = np.array([0, np.sin(angle/2), 0, np.cos(angle/2)])
+    #calculate_canonical_pose_cylinder(mesh)
+    print("Mesh rotation: {}".format(mesh.rotation))
 
     renderer = OffscreenRenderer(size[0], size[1])
     image_original, depth_original = renderer.render(scene, flags=RenderFlags.FLAT)
 
     plt.imshow(image_original)
     plt.show()
+    #plt.tight_layout()
+    #plt.axis('off')
+    #plt.savefig("./image.png", bbox_inches='tight', pad_inches=0)
+    #plt.savefig("./image.png", pad_inches=0)
+
+    im = Image.fromarray(image_original)
+    im.save('test.png')
