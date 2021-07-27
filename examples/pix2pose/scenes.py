@@ -77,45 +77,40 @@ class SingleView():
         self.epsilon = 0.01
         self.viewport_size = viewport_size
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        self.object_rotations = list()
 
     def _build_scene(self, path, size, light, y_fov, colors=True, rotation_matrix=np.eye(4), translation=np.zeros(3)):
+        self.object_rotations = list()
         # Create two scenes: one for the colored objcet one for the error object
         # In the second scene we do not need a light because we use flat rendering
 
         loaded_trimesh = trimesh.load(path)
         self.scene_original = Scene(bg_color=[0, 0, 0, 0])
         light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
-        camera = self.scene_original.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-        #camera = self.scene_original.add(OrthographicCamera(0.3, 0.3))
-        #camera = IntrinsicsCamera(fx=100., fy=100., cx=64., cy=64.)
-        #camera = self.scene_original.add(camera)
+        self.camera_original = self.scene_original.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
         self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
         self.mesh_original = self.scene_original.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
         self.world_origin = self.mesh_original.mesh.centroid
         self.camera_translation = np.array([0., 0., 0.69])
         camera_to_world, world_to_camera = compute_modelview_matrices(self.camera_translation, self.world_origin, self.roll, self.shift)
         light_original.light.intensity = 5.0
-        self.scene_original.set_pose(camera, camera_to_world)
+        self.scene_original.set_pose(self.camera_original, camera_to_world)
         self.scene_original.set_pose(light_original, camera_to_world)
         print("World to camera: {}".format(world_to_camera))
 
-
         loaded_trimesh = trimesh.load(path)
         self.scene_color = Scene(bg_color=[0, 0, 0, 0], ambient_light=[1.0, 1.0, 1.0, 1.0])
-        #camera = OrthographicCamera(0.3, 0.3)
-        #camera = self.scene_color.add(OrthographicCamera(0.3, 0.3))
-        camera = self.scene_color.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-        #camera = self.scene_color.add(camera)
-        #self.camera = self.scene_color.add(IntrinsicsCamera(fx=100., fy=100., cx=64., cy=64.))
+        self.camera_color = self.scene_color.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
         # Encode the 3D locations in colors
         self.color_mesh(loaded_trimesh)
         self.mesh_color = self.scene_color.add(Mesh.from_trimesh(loaded_trimesh, smooth=False))
         self.world_origin = self.mesh_color.mesh.centroid
-        self.scene_color.set_pose(camera, camera_to_world)
+        self.scene_color.set_pose(self.camera_color, camera_to_world)
         self.camera_to_world = camera_to_world
         self.world_to_camera = world_to_camera
 
     def _build_scene_custom_coloring(self, path_full_object, path_half_object, size, light, y_fov, colors=True, rotation_matrix=np.eye(4), translation=np.zeros(3)):
+        self.object_rotations = list()
         # Create two scenes: one for the colored objcet one for the error object
         # In the second scene we do not need a light because we use flat rendering
 
@@ -143,32 +138,31 @@ class SingleView():
 
     def render(self):
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        #camera_translation_z = random.uniform(0.3, 1.5)
+        camera_translation_z = 0.69
+        # Random rotation and translation for the object
         rotation = trimesh.transformations.random_quaternion()
-        translation = np.array([0., 0., 0.])#get_random_translation()
+
+        translation = np.array([0., 0., 0.]) #get_random_translation(0.1)*(camera_translation_z + 0.7)
+
+        # Random translation of the camera
+        camera_translation = np.array([0., 0., camera_translation_z])
+        camera_to_world, world_to_camera = compute_modelview_matrices(camera_translation, self.world_origin, self.roll, self.shift)
+        self.scene_original.set_pose(self.camera_original, camera_to_world)
+        self.scene_color.set_pose(self.camera_color, camera_to_world)
+        self.camera_to_world = camera_to_world
+        self.world_to_camera = world_to_camera
 
         rotation_inverse = -rotation
         rotation_inverse[-1] = -rotation_inverse[-1]
         self.mesh_original.rotation = rotation
         self.mesh_color.rotation = rotation
-        self.mesh_color.translation = translation
-        self.mesh_color.translation = translation
-
-        world_to_camera = self.world_to_camera[:3, :3]
+        #self.mesh_original.translation = translation
+        #self.mesh_color.translation = translation
 
         self.rotation_object = rotation_inverse
+        self.object_rotations.append(rotation_inverse)
         self.object_to_world = quarternion_to_rotation_matrix(rotation_inverse)
-
-        # Somehow the axis are different in the PnP result, so we need to change that
-        #object_to_world = np.dot(object_to_world, np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]]))
-        #object_to_world = object_to_world.T
-
-        object_to_camera = np.dot(self.object_to_world, world_to_camera)
-
-        #print("Object rotation: {}".format(self.object_to_world))
-        #print("Object space --> world space --> camera space: {}".format(object_to_camera))
-        #print("Object space --> world space --> camera space eul: {}".format(trimesh.transformations.euler_from_matrix(object_to_camera)))
-        rot_vector_object, _ = cv2.Rodrigues(self.object_to_world)
-        #print("Object rotation rot vector: {}".format(rot_vector_object))
 
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
@@ -179,26 +173,38 @@ class SingleView():
         return image_original, image_colors, alpha_original
 
     def render_no_ambiguities(self):
+        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        camera_translation_z = random.uniform(0.3, 1.5)
+        # Random rotation and translation for the object
         rotation = trimesh.transformations.random_quaternion()
-        #angle = np.random.uniform(low=0.0, high=2.0)*np.pi
-        #rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
-        #translation = get_random_translation()
+        translation = get_random_translation(0.15)*(camera_translation_z + 0.7)
 
+        # Random translation of the camera
+        camera_translation = np.array([0., 0., camera_translation_z])
+        camera_to_world, world_to_camera = compute_modelview_matrices(camera_translation, self.world_origin, self.roll, self.shift)
+        self.scene_original.set_pose(self.camera_original, camera_to_world)
+        self.scene_color.set_pose(self.camera_color, camera_to_world)
+        self.camera_to_world = camera_to_world
+        self.world_to_camera = world_to_camera
+
+        rotation_inverse = -rotation
+        rotation_inverse[-1] = -rotation_inverse[-1]
         self.mesh_original.rotation = rotation
         self.mesh_color.rotation = rotation
+        self.mesh_original.translation = translation
+        self.mesh_color.translation = translation
 
-        #self.mesh_original.translation = translation
-        #self.mesh_color.translation = translation
+        self.rotation_object = rotation_inverse
+        self.object_to_world = quarternion_to_rotation_matrix(rotation_inverse)
 
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
 
-        image_colors, _ = self.renderer.render(self.scene_color, flags=pyrender.constants.RenderFlags.FLAT)
-
         calculate_canonical_pose_two_symmetries(self.mesh_color)
-        image_colors_no_ambiguities, _ = self.renderer.render(self.scene_color, flags=pyrender.constants.RenderFlags.FLAT)
+        image_colors, _ = self.renderer.render(self.scene_color, flags=pyrender.constants.RenderFlags.FLAT)
+        self.renderer.delete()
 
-        return image_original, image_colors, alpha_original, image_colors_no_ambiguities
+        return image_original, image_colors, alpha_original
 
     def render_custom_coloring(self):
         rotation = trimesh.transformations.random_quaternion()

@@ -99,8 +99,8 @@ def calculate_canonical_pose_cylinder(mesh):
 
 def calculate_canonical_pose_two_symmetries(mesh):
     # Calculate canonical pose for an object with 180° symmetry, idea taken from here: https://arxiv.org/abs/1908.07640
-    angle = np.pi * 1.8
-    mesh.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+    #angle = np.pi * 1.8
+    #mesh.rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
     rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
     rotation_matrix_r = quarternion_to_rotation_matrix(mesh.rotation)
 
@@ -127,23 +127,23 @@ if __name__ == "__main__":
 
     light = scene.add(DirectionalLight([1.0, 1.0, 1.0], 10))
     camera = scene.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-    camera_to_world, world_to_camera = compute_modelview_matrices(np.array([0., .4, .4]), [0.0, 0.0, 0.0], None, None)
+    camera_to_world, world_to_camera = compute_modelview_matrices(np.array([0., 0., .7]), [0.0, 0.0, 0.0], None, None)
 
     print("Camera to world: {}".format(camera_to_world))
     scene.set_pose(camera, camera_to_world)
     scene.set_pose(light, camera_to_world)
 
     #mesh = trimesh.load("/home/fabian/.keras/datasets/custom_objects/symmetry_z_2_object.obj")
-    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/custom_objects/simple_symmetry_object.obj")
+    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/tless_obj/obj_000005.obj")
 
     mesh = scene.add(Mesh.from_trimesh(mesh, smooth=False))
     #mesh_rotated = scene.add(Mesh.from_trimesh(mesh_rotated, smooth=False))
 
-    angle = -np.pi/4
+    angle = -np.pi
     mesh.rotation = np.array([0, np.sin(angle/2), 0, np.cos(angle/2)])
     #angle = -np.pi/4 + np.pi
     #mesh_rotated.rotation = np.array([0, np.sin(angle/2), 0, np.cos(angle/2)])
-    #calculate_canonical_pose_cylinder(mesh)
+    calculate_canonical_pose_two_symmetries(mesh)
     print("Mesh rotation: {}".format(mesh.rotation))
 
     renderer = OffscreenRenderer(size[0], size[1])
@@ -156,5 +156,5 @@ if __name__ == "__main__":
     #plt.savefig("./image.png", bbox_inches='tight', pad_inches=0)
     #plt.savefig("./image.png", pad_inches=0)
 
-    im = Image.fromarray(image_original)
-    im.save('test.png')
+    #im = Image.fromarray(image_original)
+    #im.save('test.png')

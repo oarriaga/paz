@@ -19,6 +19,7 @@ from paz.evaluation import evaluateIoU, evaluateADD, evaluateMSSD, evaluateMSPD
 from paz.abstract.sequence import GeneratingSequencePix2Pose
 from paz.backend.image.draw import draw_dot, draw_cube
 from paz.backend.keypoints import project_points3D
+from paz.abstract.messages import Box2D, Pose6D
 
 from pipelines import DepthImageGenerator, RendererDataGenerator, make_batch_discriminator
 from scenes import SingleView
@@ -63,7 +64,159 @@ args = parser.parse_args()
 image_size = tuple(args.image_size)
 
 
-def make_single_prediction(model, renderer, plot=True, rotation_matrices=None):
+def initialize_values(renderer, model, batch_size=16):
+    # Create a paz camera object
+    camera = Camera()
+
+    focal_length = 179  # image_size[1]
+    image_center = (image_size[1] / 2.0, image_size[0] / 2.0)
+
+    # building camera parameters
+    camera.distortion = np.zeros((4, 1))
+    camera.intrinsics = np.array([[focal_length, 0, image_center[0]],
+                                  [0, focal_length, image_center[1]],
+                                  [0, 0, 1]])
+
+    rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])]
+    image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
+    processor = DepthImageGenerator(renderer, image_size[0], image_paths, num_occlusions=0)
+    sequence = GeneratingSequencePix2Pose(processor, model, batch_size, 1, rotation_matrices=rotation_matrices)
+
+    sequence_iterator = sequence.__iter__()
+    batch = next(sequence_iterator)
+    predictions = model.predict(batch[0]['input_image'])
+
+    # Get all the necessary images
+    original_images = (batch[0]['input_image'] * 255).astype(np.int)
+    color_images = ((batch[1]['color_output'] + 1) * 127.5).astype(np.int)
+    predictions['color_output'] = ((predictions['color_output'] + 1) * 127.5).astype(np.int)
+
+    return camera, original_images, predictions['color_output'], predictions['error_output'], renderer.object_rotations
+
+
+def predict_pose(camera, color_image, error_image, real_rotation):
+    # Just take the pixels from the color image where the error is not too high
+    error_threshold = 0.15
+    error_mask = np.ones_like(error_image)
+    error_mask[error_image > error_threshold] = 0
+    predicted_color_image = (color_image * error_mask).astype(int)
+
+    # Get the pose from the predicted color image
+    predicted_non_zero_pixels = np.argwhere(np.sum(predicted_color_image, axis=2))
+    predicted_color_points = predicted_color_image[predicted_non_zero_pixels[:, 0], predicted_non_zero_pixels[:, 1]]
+    solve_PNP = pr.SolvePNP((predicted_color_points / 127.5 - 1) * np.array([0.2, 0.15, 0.1]) / 2, camera)
+    pose6D_predicted = solve_PNP(predicted_non_zero_pixels)
+
+    # Transform the predicted rotation matrix to have the same format as the real one
+    predicted_rotation_matrix = quarternion_to_rotation_matrix(pose6D_predicted.quaternion)
+    predicted_rotation_matrix = predicted_rotation_matrix[[1, 0, 2]]
+    predicted_rotation_matrix *= np.array([[1., -1., -1.], [1., -1., -1], [-1., 1., 1.]])
+    predicted_translation = pose6D_predicted.translation
+
+    # Somehow the rotations have a different sign when using predictPoints
+    object_rotation = real_rotation * np.array([-1, 1, 1, 1])
+    real_rotation_matrix = quarternion_to_rotation_matrix(object_rotation)
+    # TODO: this is not a permanent solution!
+    real_translation = pose6D_predicted.translation
+
+    return real_rotation_matrix, real_translation, predicted_rotation_matrix, predicted_translation
+
+
+def predict_points(points_object_coords, rotation_matrix, translation, world_to_camera_rotation_vector, camera):
+    # Calculate the real pixel locations of the bounding box points
+    points3D = np.asarray([np.dot(rotation_matrix, point_object_coords) for point_object_coords in points_object_coords])
+    # Axis are swapped on the predicted points
+    points3D = points3D[:, [1, 0, 2]]
+    points2D, _ = cv2.projectPoints(np.asarray(points3D), world_to_camera_rotation_vector,
+                                         -np.squeeze(translation), camera.intrinsics, camera.distortion)
+    # x- and y-coordinates are switched with the predicted points
+    points2D = points2D[:, :, [1, 0]]
+    return points2D, points3D
+
+
+def plot_predictions(renderer, model):
+    camera, original_images, predicted_color_images, predicted_error_images, object_rotations = initialize_values(renderer, model)
+    images_bounding_boxes = list()
+
+    for original_image, predicted_color_image, predicted_error_image, object_rotation in zip(original_images, predicted_color_images, predicted_error_images, object_rotations):
+        # Make the predictions
+        real_rotation_matrix, real_translation, predicted_rotation_matrix, predicted_translation = predict_pose(camera, predicted_color_image, predicted_error_image, object_rotation)
+        print("Real rotation matrix: {}".format(real_rotation_matrix))
+        print("Predicted rotation matrix: {}".format(predicted_rotation_matrix))
+
+        # Define the bounding box points
+        world_to_camera_rotation_vector, _ = cv2.Rodrigues(renderer.world_to_camera[:3, :3])
+        object_extent = renderer.mesh_original.mesh.extents/2.
+        bounding_box_points = [np.array([object_extent[0], -object_extent[1], object_extent[2]]),
+                               np.array([object_extent[0], -object_extent[1], -object_extent[2]]),
+                               np.array([-object_extent[0], -object_extent[1], -object_extent[2]]),
+                               np.array([-object_extent[0], -object_extent[1], object_extent[2]]),
+                               np.array([object_extent[0], object_extent[1], object_extent[2]]),
+                               np.array([object_extent[0], object_extent[1], -object_extent[2]]),
+                               np.array([-object_extent[0], object_extent[1], -object_extent[2]]),
+                               np.array([-object_extent[0], object_extent[1], object_extent[2]])]
+
+        # Get the 2D and 3D bounding box positions from rotation and translation
+        points2D_real, points3D_real = predict_points(bounding_box_points, real_rotation_matrix, real_translation, world_to_camera_rotation_vector, camera)
+        points2D_predicted, points3D_predicted = predict_points(bounding_box_points, predicted_rotation_matrix, predicted_translation, world_to_camera_rotation_vector, camera)
+
+        # Draw the real and predicted cube
+        image_bounding_boxes = draw_cube(original_image.astype("uint8"), points2D_predicted.astype(int), radius=1, thickness=1, color=(255, 0, 0))
+        image_bounding_boxes = draw_cube(image_bounding_boxes.astype("uint8"), points2D_real.astype(int), radius=1, thickness=1, color=(0, 255, 0))
+
+        images_bounding_boxes.append(image_bounding_boxes)
+
+    fig, axs = plt.subplots(4, 4)
+    axs = axs.flatten()
+
+    for i, ax in enumerate(axs):
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        ax.imshow(images_bounding_boxes[i])
+
+    plt.show()
+
+
+def calculate_error(renderer, model, rotation_matrices):
+    world_to_camera_rotation_vector, _ = cv2.Rodrigues(renderer.world_to_camera[:3, :3])
+    camera, original_images, predicted_color_images, predicted_error_images, object_rotations = initialize_values(renderer, model, batch_size=100)
+    points3D_object_coords = renderer.mesh_original.mesh.primitives[0].positions
+
+    add_values = list()
+
+    for original_image, predicted_color_image, predicted_error_image, object_rotation in zip(original_images, predicted_color_images, predicted_error_images, object_rotations):
+        real_rotation_matrix, real_translation, predicted_rotation_matrix, predicted_translation = predict_pose(camera, predicted_color_image, predicted_error_image, object_rotation)
+
+        # Iterate over all rotation matrices to find the smallest possible error
+        min_add_value = np.iinfo(np.uint64).max
+        for rotation_matrix in rotation_matrices:
+            real_points2D, real_points3D = predict_points(points3D_object_coords, real_rotation_matrix, real_translation, world_to_camera_rotation_vector, camera)
+
+            predicted_rotation_matrix = np.dot(predicted_rotation_matrix, rotation_matrix)
+            predicted_points2D, predicted_points3D = predict_points(points3D_object_coords, predicted_rotation_matrix, predicted_translation, world_to_camera_rotation_vector, camera)
+
+            add_value = evaluateADD(real_points3D, predicted_points3D)
+            if add_value < min_add_value:
+                min_add_value = add_value
+
+        add_values.append(min_add_value)
+
+    print("ADD values: {}".format(add_values))
+
+
+if __name__ == "__main__":
+    rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])]
+    model = load_model(args.model_path, custom_objects={'loss_color_unwrapped': loss_color_wrapped(rotation_matrices), 'loss_error': loss_error})
+    renderer = SingleView(filepath=args.obj_path, viewport_size=image_size,
+                          y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
+                          roll=None, shift=None)
+
+    rotation_matrices_error = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
+    plot_predictions(renderer, model)
+    #calculate_error(renderer, model, rotation_matrices_error)
+
+
+"""def make_single_prediction_old(model, renderer, plot=True, rotation_matrices=None):
     # Prepare image for the network
     image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
     processor = DepthImageGenerator(renderer, image_size[0], image_paths, num_occlusions=0)
@@ -125,12 +278,7 @@ def make_single_prediction(model, renderer, plot=True, rotation_matrices=None):
     # Perform the PnP algorithm on the real color image
     solve_PNP = pr.SolvePNP((real_color_points/127.5-1) * np.array([0.2, 0.15, 0.1])/2, camera)
     pose6D_real = solve_PNP(real_non_zero_pixels)
-    real_pose_rotated = np.dot(np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]]), quarternion_to_rotation_matrix(pose6D_real.quaternion)).T
-    object_to_world = np.dot(quarternion_to_rotation_matrix(pose6D_real.quaternion), renderer.camera_to_world[:3, :3])
     print("Real pose: {}".format(pose6D_real))
-    print("Real pose eul: {}".format(trimesh.transformations.euler_from_quaternion(pose6D_real.quaternion)))
-    print("Real rotation matrix: {}".format(object_to_world))
-    print("Real pose rotated: {}".format(real_pose_rotated))
 
     plt.imshow(np.abs(predicted_color_image.astype(float)/255. - real_color_image.astype(float)/255.))
     plt.show()
@@ -153,8 +301,6 @@ def make_single_prediction(model, renderer, plot=True, rotation_matrices=None):
     predicted_color_points = predicted_color_image[predicted_non_zero_pixels[:, 0], predicted_non_zero_pixels[:, 1]]
     solve_PNP = pr.SolvePNP((predicted_color_points/127.5-1) * np.array([0.2, 0.15, 0.1])/2, camera)
     pose6D_predicted = solve_PNP(predicted_non_zero_pixels)
-    print("Predicted pose: {}".format(pose6D_predicted))
-    print("Predicted rotation matrix: {}".format(quarternion_to_rotation_matrix(pose6D_predicted.quaternion)))
 
     # Points in object coordinates
     object_bounding_box_points = [np.array([0.1, -0.075, 0.05]), np.array([0.1, -0.075, -0.05]), np.array([-0.1, -0.075, -0.05]),
@@ -183,6 +329,9 @@ def make_single_prediction(model, renderer, plot=True, rotation_matrices=None):
     predicted_rotation_matrix *= np.array([[1., -1., -1.], [1., -1., -1], [-1., 1., 1.]])
     for bounding_box_point in object_bounding_box_points:
         predicted_points_world_coords.append(np.dot(predicted_rotation_matrix, bounding_box_point))
+
+    print("Predicted pose: {}".format(pose6D_predicted))
+    print("Predicted rotation matrix: {}".format(predicted_rotation_matrix))
 
     print("real_points_world_coords: {}".format(real_points_world_coords))
     print("predicted_points_world_coords: {}".format(predicted_points_world_coords))
@@ -220,8 +369,7 @@ def make_single_prediction(model, renderer, plot=True, rotation_matrices=None):
     real_points_3d = np.asarray([real_rotation_matrix@point + np.squeeze(pose6D_real.translation) for point in mesh_points_3d])
     predicted_points_3d = np.asarray([predicted_rotation_matrix@point + np.squeeze(pose6D_predicted.translation) for point in mesh_points_3d])
 
-    iou_value = evaluateIoU(real_points_3d, predicted_points_3d,
-                            pose6D_real, pose6D_predicted, np.asarray([0.1631425/2., 0.121925/2., 0.17933717/2]), num_sampled_points=1000)
+    iou_value = evaluateIoU(pose6D_real, pose6D_predicted, np.asarray([0.2/2., 0.15/2., 0.1/2]), num_sampled_points=1000)
     print("IoU: " + str(iou_value))
 
     add_value = evaluateADD(real_points_3d, predicted_points_3d)
@@ -232,14 +380,4 @@ def make_single_prediction(model, renderer, plot=True, rotation_matrices=None):
 
     #mspd_value = evaluateMSPD(points2D_real, points2D_predicted, renderer.viewport_size)
     #print("MSPD: " + str(mspd_value))
-
-
-if __name__ == "__main__":
-    rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])]
-    model = load_model(args.model_path, custom_objects={'loss_color_unwrapped': loss_color_wrapped(rotation_matrices), 'loss_error': loss_error})
-    print(image_size)
-    renderer = SingleView(filepath=args.obj_path, viewport_size=image_size,
-                          y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
-                          roll=None, shift=None)
-
-    make_single_prediction(model, renderer, plot=True, rotation_matrices=rotation_matrices)
+"""

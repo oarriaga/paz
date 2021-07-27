@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from paz.backend.quaternion import quarternion_to_rotation_matrix
 
@@ -38,7 +39,7 @@ def evaluateADD(real_box, predicted_box):
     return np.mean(distances)
 
 
-def evaluateIoU(real_box, predicted_box, real_box_pose, predicted_box_pose, box_extents, num_sampled_points=1000):
+def evaluateIoU(real_box_pose, predicted_box_pose, box_extents, num_sampled_points=1000):
     """Calculates the 3D intersection over union between 'real_box' and all 'predicted_box'.
     Both `box` and `boxes` are in corner coordinates.
     # Arguments
@@ -55,6 +56,11 @@ def evaluateIoU(real_box, predicted_box, real_box_pose, predicted_box_pose, box_
     sampled_points_rotated = np.asarray([quarternion_to_rotation_matrix(real_box_pose.quaternion) @ bb_point + np.squeeze(real_box_pose.translation) for bb_point in sampled_points])
     # Rotate and move the points back (predicted pose)
     sampled_points_back_rotated = np.asarray([quarternion_to_rotation_matrix(predicted_box_pose.quaternion).T @ (bb_point - np.squeeze(predicted_box_pose.translation)) for bb_point in sampled_points_rotated])
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(sampled_points_back_rotated[:, 0], sampled_points_back_rotated[:, 1], sampled_points_back_rotated[:, 2])
+    plt.show()
 
     num_points_inside = 0
     for i, sampled_point_rotated in enumerate(sampled_points_back_rotated):
