@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
 from paz.backend.render import compute_modelview_matrices
+from paz.backend.quaternion import quarternion_to_rotation_matrix
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight, OrthographicCamera
 from pyrender import RenderFlags, Mesh, Scene
 import trimesh
@@ -21,6 +22,16 @@ def map_to_image_location(point3d, w, h, projection, view):
     # code taken from https://stackoverflow.com/questions/67517809/mapping-3d-vertex-to-pixel-using-pyreder-pyglet-opengl/67534695#67534695
     depth = -(view@point3d.T)[2]
     p = projection@view@point3d.T
+    p = p / p[3]
+    p[0] = (w / 2 * p[0] + w / 2)
+    p[1] = h - (h / 2 * p[1] + h / 2)
+    return (p[0], p[1], depth)
+
+
+def map_to_image_location_old(point3d, w, h, projection):
+    # code taken from https://stackoverflow.com/questions/67517809/mapping-3d-vertex-to-pixel-using-pyreder-pyglet-opengl/67534695#67534695
+    depth = -(point3d.T)[2]
+    p = projection@point3d.T
     p = p / p[3]
     p[0] = (w / 2 * p[0] + w / 2)
     p[1] = h - (h / 2 * p[1] + h / 2)
@@ -164,9 +175,13 @@ class SingleView():
         self.scaling_factor = scaling_factor
 
         self._build_scene(filepath, viewport_size, light_bounds, y_fov)
+        self.camera_rotations = list()
+        self.object_translations = list()
         #self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
 
     def _build_scene(self, paths, size, light, y_fov, rotation_matrix=np.eye(4), translation=np.zeros(3)):
+        self.camera_rotations = list()
+        self.object_translations = list()
         # Load the object
         loaded_trimeshes = [trimesh.load(path) for path in paths]
 
@@ -177,6 +192,13 @@ class SingleView():
         self.camera_original = self.scene_original.add(self.camera)
         self.light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
 
+        camera_to_world, world_to_camera = compute_modelview_matrices(np.array([0., 0., 0.7]), self.world_origin, self.roll, self.shift)
+        self.camera_to_world = camera_to_world
+        self.world_to_camera = world_to_camera
+
+        self.scene_original.set_pose(self.camera_original, camera_to_world)
+        self.scene_original.set_pose(self.light_original, camera_to_world)
+
         for loaded_trimesh in loaded_trimeshes:
             #self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
             mesh_original = self.scene_original.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
@@ -184,6 +206,7 @@ class SingleView():
             self.mesh_origins.append(mesh_original.mesh.centroid)
 
         #self.world_origin = mesh_original.mesh.centroid
+        print("Centroid: {}".format(mesh_original.mesh.centroid))
 
         # Second scene = scene with ambient light
         """
@@ -215,7 +238,7 @@ class SingleView():
         distance = sample_uniformly(self.distance)
         print("Distance: " + str(distance))
         camera_origin = sample_point_in_sphere(distance, self.top_only)
-        camera_origin = random_perturbation(camera_origin, self.epsilon)
+        #camera_origin = random_perturbation(camera_origin, self.epsilon)
         light_intensity = sample_uniformly(self.light_intensity)
         #print("Camera origin: " + str(camera_origin))
         return camera_origin, light_intensity
@@ -225,8 +248,9 @@ class SingleView():
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
         
         camera_origin, light_intensity = self._sample_parameters()
-        camera_to_world, world_to_camera = compute_modelview_matrices(
-            camera_origin, self.world_origin, self.roll, self.shift)
+        camera_to_world, world_to_camera = compute_modelview_matrices(camera_origin, self.world_origin, self.roll, self.shift)
+        print("World to camera: {}".format(world_to_camera))
+        print("Camera to world: {}".format(camera_to_world))
 
         self.light_original.light.intensity = light_intensity
         self.scene_original.set_pose(self.camera_original, camera_to_world)
@@ -236,13 +260,22 @@ class SingleView():
 
         for mesh_original, mesh_origin in zip(self.meshes_original, self.mesh_origins):
 
-            translation = get_random_translation()
+            translation = get_random_translation(0.15)
+            rotation = trimesh.transformations.random_quaternion()
             mesh_original.translation = translation
+            print("Real translation: {}".format(translation))
+            print("Translation rotated: {}".format(world_to_camera[:3, :3]@(translation.T + mesh_original.mesh.centroid)))
+
             positions.append(np.append(mesh_origin + translation, [1]))
 
-            print("Center in camera coords (scene): " + str(world_to_camera@np.append(translation + mesh_origin, [1])))
 
             extents.append(mesh_original.mesh.extents)
+
+        # Transform data to use for prediction
+        self.camera_rotations.append(world_to_camera)
+        translation_object = world_to_camera[:3, :3]@(translation.T + mesh_original.mesh.centroid) + world_to_camera[:3, 3]
+        translation_object[[1, 2]] = -translation_object[[1, 2]]
+        self.object_translations.append(translation_object)
 
         num_objects = len(positions)
 
@@ -253,8 +286,9 @@ class SingleView():
 
         # Calculate all the bounding box points
         # Important: the first point in the list is the object center!
+        rotation_matrix = quarternion_to_rotation_matrix(rotation)
         for i, (position, extent) in enumerate(zip(positions, extents)):
-            (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
+            (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[1], self.camera.get_projection_matrix(400, 400), world_to_camera)
             bounding_box_points[i, 0] = np.array([x, y])
             bounding_box_points_3d[i, 0] = position[:3]
 
@@ -262,10 +296,11 @@ class SingleView():
             for x_extent in [extent[0]/2, -extent[0]/2]:
                 for y_extent in [extent[1]/2, -extent[1]/2]:
                     for z_extent in [extent[2]/2, -extent[2]/2]:
-                        point_position = np.array([position[0] + x_extent, position[1] + y_extent, position[2] + z_extent, 1])
+                        point_position = np.array([position[0] + x_extent, position[1] + y_extent, position[2] + z_extent])
+                        point_position = np.append(point_position, 1)
                         bounding_box_points_3d[i, num_bounding_box_point] = point_position[:3]
 
-                        (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(128, 128), world_to_camera)
+                        (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[1], self.camera.get_projection_matrix(400, 400), world_to_camera)
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
                         num_bounding_box_point += 1
 
