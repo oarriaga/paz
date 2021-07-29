@@ -150,7 +150,7 @@ def predict_pose(camera, original_image, belief_maps, camera_rotation, object_tr
     real_rotation_matrix[[1, 2]] = -real_rotation_matrix[[1, 2]]
     real_translation = object_translation
 
-    return real_rotation_matrix, real_translation, predicted_rotation_matrix, pose6D_predicted.translation
+    return real_rotation_matrix, real_translation, predicted_rotation_matrix, np.squeeze(pose6D_predicted.translation)
 
 
 def plot_predictions(model, renderer):
@@ -188,10 +188,75 @@ def plot_predictions(model, renderer):
         image_bounding_box = draw_cube(image_bounding_box.astype("uint8"), points2D_real_cube.astype(int), radius=2, thickness=2, color=(0, 255, 0))
         image_bounding_box = draw_cube(image_bounding_box.astype("uint8"), points2D_predicted_cube.astype(int), radius=2, thickness=2, color=(255, 0, 0))
 
-        plt.imshow(image_bounding_box)
-        plt.show()
+        images_bounding_boxes.append(image_bounding_box)
+
+    fig, axs = plt.subplots(4, 4)
+    axs = axs.flatten()
+
+    for i, ax in enumerate(axs):
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        ax.imshow(images_bounding_boxes[i])
+
+    plt.show()
 
 
+def calculate_error(model, renderer, rotation_matrices):
+    world_to_camera_rotation_vector, _ = cv2.Rodrigues(renderer.world_to_camera[:3, :3])
+    camera, original_images, belief_maps_batch, camera_rotations = initialize_values(model, renderer, batch_size=30)
+    points3D_object_coords = renderer.meshes_original[0].mesh.primitives[0].positions
+    object_extent = renderer.meshes_original[0].mesh.extents/2
+    bounding_box_points_3d = np.array([[0., 0., 0.],
+                                       [object_extent[0], object_extent[1], object_extent[2]],
+                                       [object_extent[0], object_extent[1], -object_extent[2]],
+                                       [object_extent[0], -object_extent[1], object_extent[2]],
+                                       [object_extent[0], -object_extent[1], -object_extent[2]],
+                                       [-object_extent[0], object_extent[1], object_extent[2]],
+                                       [-object_extent[0], object_extent[1], -object_extent[2]],
+                                       [-object_extent[0], -object_extent[1], object_extent[2]],
+                                       [-object_extent[0], -object_extent[1], -object_extent[2]]])
+
+    add_values = list()
+
+    for  original_image, belief_maps, camera_rotation, object_translation in zip(original_images, belief_maps_batch, camera_rotations, renderer.object_translations):
+        real_rotation_matrix, real_translation, predicted_rotation_matrix, predicted_translation = predict_pose(camera, original_image, belief_maps, camera_rotation, object_translation, bounding_box_points_3d)
+
+        # Iterate over all rotation matrices to find the smallest possible error
+        min_add_value = np.iinfo(np.uint64).max
+        for rotation_matrix in rotation_matrices:
+
+            real_points3D = np.array([np.dot(real_rotation_matrix, point) + real_translation for point in points3D_object_coords])
+
+            predicted_rotation_matrix_new = np.dot(predicted_rotation_matrix, rotation_matrix)
+            predicted_points3D = np.array([np.dot(predicted_rotation_matrix_new, point) + predicted_translation for point in points3D_object_coords])
+
+            add_value = evaluateADD(real_points3D, predicted_points3D)
+            if add_value < min_add_value:
+                min_add_value = add_value
+
+        add_values.append(min_add_value)
+
+    add_values.sort()
+    print("ADD values: {}".format(add_values))
+
+
+if __name__ == "__main__":
+    model = load_model(args.model_path, custom_objects={'custom_mse': custom_mse })
+    colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
+    renderer = SingleView(filepath=args.obj_path, colors=colors, viewport_size=(args.image_size, args.image_size),
+                          y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
+                          roll=None, shift=None)
+
+    #make_single_prediction(model, renderer, plot=True)
+    #make_multiple_predictions(50, model, renderer)
+
+    plot_predictions(model, renderer)
+
+    rotation_matrices_error = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]),
+                               np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
+    calculate_error(model, renderer, rotation_matrices_error)
+
+"""
 def make_multiple_predictions(num_predictions, model, renderer):
     add_values = list()
     for i in tqdm(range(num_predictions)):
@@ -203,6 +268,7 @@ def make_multiple_predictions(num_predictions, model, renderer):
         #plt.show()
 
     print(sorted(add_values))
+
 
 def make_single_prediction(model, renderer, plot=True):
     # Known bounding box points for the drill
@@ -340,16 +406,4 @@ def make_single_prediction(model, renderer, plot=True):
         plt.show()
 
     return add_value, image_original
-
-
-if __name__ == "__main__":
-    model = load_model(args.model_path, custom_objects={'custom_mse': custom_mse })
-    colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
-    renderer = SingleView(filepath=args.obj_path, colors=colors, viewport_size=(args.image_size, args.image_size),
-                          y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
-                          roll=None, shift=None)
-
-    #make_single_prediction(model, renderer, plot=True)
-    #make_multiple_predictions(50, model, renderer)
-
-    plot_predictions(model, renderer)
+"""
