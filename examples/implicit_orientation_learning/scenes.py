@@ -1,8 +1,9 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
 from paz.backend.render import compute_modelview_matrices
-from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight
+from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight, SpotLight
 from pyrender import RenderFlags, Mesh, Scene
 import trimesh
 
@@ -80,6 +81,7 @@ class DictionaryView():
             trimesh.load(filepath), smooth=True))
         self.world_origin = self.mesh.mesh.centroid
         self.light = self.scene.add(DirectionalLight([1.0, 1.0, 1.0], light))
+        #self.light = self.scene.add(SpotLight())
         self.distance = distance
         # 0.1 values are to avoid gimbal lock
         theta_max = np.pi / 2.0 if top_only else np.pi
@@ -111,3 +113,19 @@ class DictionaryView():
                           'depth': depth, 'matrices': matrices}
                 dictionary_data.append(sample)
         return dictionary_data
+
+if __name__ == "__main__":
+    """
+    renderer = SingleView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj", light=[10, 20], distance=[0.6, 1.5])
+    image, alpha = renderer.render()
+
+    plt.imshow(image)
+    plt.show()
+    """
+
+    renderer = DictionaryView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj")
+    dictionary_data = renderer.render()
+
+    for data in dictionary_data:
+        plt.imshow(data['image'])
+        plt.show()
