@@ -339,8 +339,8 @@ class FPNCell(Layer):
 def sum_nodes(nodes):
     """A customized function to add up a list of tensors."""
     new_node = nodes[0]
-    for n in nodes[1:]:
-        new_node = new_node + n
+    for node in nodes[1:]:
+        new_node = new_node + node
     return new_node
 
 
@@ -377,8 +377,9 @@ class FeatureNode(Layer):
         for weight in self.assign_weights:
             edge_weights.append(tf.nn.relu(tf.cast(weight, dtype=dtype)))
         weight_sum = sum_nodes(edge_weights)
-        for i in range(len(nodes)):
-            nodes[i] = nodes[i] * edge_weights[i] / (weight_sum + 0.0001)
+        for node_arg in range(len(nodes)):
+            numerator = nodes[node_arg] * edge_weights[node_arg]
+            nodes[node_arg] = numerator / (weight_sum + 0.0001)
         new_node = sum_nodes(nodes)
         return new_node
 
@@ -671,9 +672,9 @@ class BoxNet(Layer):
         box_outputs = []
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
-            for i in range(self.num_repeats):
+            for repeat_arg in range(self.num_repeats):
                 image = self._conv_batchnorm_activation(
-                    image, i, level_id, training)
+                    image, repeat_arg, level_id, training)
             if self.return_base:
                 box_outputs.append(image)
             else:
