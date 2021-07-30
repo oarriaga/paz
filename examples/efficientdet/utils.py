@@ -6,7 +6,7 @@ from PIL import Image
 
 # Mock input image.
 path_to_paz = '/media/deepan/externaldrive1/project_repos/'
-directory_path = 'paz/examples/efficientdet/'
+directory_path = 'paz_versions/paz_efficientdet/examples/efficientdet/'
 file_name = 'img2.png'
 file_path = path_to_paz + directory_path + file_name
 raw_images = Image.open(file_path)
@@ -113,7 +113,7 @@ def preprocess_images(image, image_size):
 
 def save_file(file_name, image):
     path_to_paz = '/media/deepan/externaldrive1/project_repos/'
-    directory_path = 'paz/examples/efficientdet/'
+    directory_path = 'paz_versions/paz_efficientdet/examples/efficientdet/'
     save_file_path = os.path.join(path_to_paz + directory_path + file_name)
     Image.fromarray(image.astype('uint8')).save(save_file_path)
     print('writing file to %s' % save_file_path)

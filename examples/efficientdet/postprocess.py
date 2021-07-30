@@ -36,7 +36,7 @@ def postprocess_paz(cls_outputs,
                     image_size=512,
                     num_classes=90,
                     raw_images=None):
-    coco = get_class_names('COCO')
+    coco = get_class_names('COCO_OFFICIAL')
     prior_anchors = anchors.Anchors(min_level,
                                     max_level,
                                     num_scales,

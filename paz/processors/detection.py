@@ -11,6 +11,7 @@ from ..backend.boxes import clip
 from ..backend.boxes import nms_per_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
+from ..backend.boxes import scale_box
 
 
 class SquareBoxes2D(Processor):
@@ -254,3 +255,15 @@ class CropImage(Processor):
     def call(self, image, box2D):
         x_min, y_min, x_max, y_max = box2D.coordinates
         return image[y_min:y_max, x_min:x_max]
+
+
+class ScaleBox(Processor):
+    """Scale box coordinates of the prediction.
+    """
+    def __init__(self, scales):
+        super(ScaleBox, self).__init__()
+        self.scales = scales
+
+    def call(self, boxes):
+        boxes = scale_box(boxes, self.scales)
+        return boxes

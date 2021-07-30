@@ -504,3 +504,20 @@ def to_normalized_coordinates(boxes, image):
     normalized_boxes[:, 1] = boxes[:, 1] / height
     normalized_boxes[:, 3] = boxes[:, 3] / height
     return normalized_boxes
+
+
+def scale_box(predictions, image_scales=None):
+    """
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
+    # Returns
+        Numpy array of shape `[num_boxes, N]`.
+    """
+
+    if image_scales is not None:
+        boxes = predictions[:, :4]
+        scales = image_scales[np.newaxis][np.newaxis]
+        boxes = boxes * scales
+        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
+    return predictions
