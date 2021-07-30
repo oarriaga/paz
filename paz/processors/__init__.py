@@ -89,6 +89,7 @@ from .standard import WrapOutput
 from .standard import Concatenate
 from .standard import SelectElement
 from .standard import StochasticProcessor
+from .standard import Stochastic
 
 from .pose import SolvePNP
 

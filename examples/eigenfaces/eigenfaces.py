@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 from paz.datasets import FERPlus
-from paz.backend.image import show_image, resize_image, make_mosaic
+from paz.backend.image import resize_image, make_mosaic
 
 from pipelines import CalculateEigenFaces, PostrocessEigenFace
 from pipelines import CalculateFaceWeights
@@ -19,20 +19,45 @@ parser.add_argument('-tr', '--train_split', type=str, default='train',
                     help='Split for training data')
 parser.add_argument('-v', '--total_variance', type=float, default=0.95,
                     help='Total variance for selecting number of eigenfaces')
+parser.add_argument('-e', '--experiments_path', type=str,
+                    default='experiments',
+                    help='Directory for writing and loading experiments')
 args = parser.parse_args()
 
 # extract dataset
+print('loading dataset...')
 data_manager = FERPlus(args.data_path, args.train_split)
 data = data_manager.load_data()
 faces = ExtractFaces()(data)
 
 # calculate eigenfaces
-calculate_eigenfaces = CalculateEigenFaces(args.total_variance)
-eigenvalues, eigenfaces, mean_face = calculate_eigenfaces(faces)
+if not os.path.exists(args.experiments_path):
+    os.makedirs(args.experiments_path)
+
+# looking if eigenvalues, eigenfaces and mean face is already computed
+needed_files = ['eigenvalues.npy', 'eigenfaces.npy', 'mean_face.npy']
+if set(os.listdir(args.experiments_path)) == set(needed_files):
+    eigenfaces = np.load(os.path.join(args.experiments_path, 'eigenfaces.npy'))
+    mean_face = np.load(os.path.join(args.experiments_path, 'mean_face.npy'))
+    eigenvalues_path = os.path.join(args.experiments_path, 'eigenvalues.npy')
+    eigenvalues = np.load(eigenvalues_path)
+else:
+    # if it nos already computed when compute them and write them
+    print('computing eigenfaces...')
+    calculate_eigenfaces = CalculateEigenFaces(args.total_variance)
+    eigenvalues, eigenfaces, mean_face = calculate_eigenfaces(faces)
+    np.save(os.path.join(args.experiments_path, 'eigenfaces.npy'), eigenfaces)
+    np.save(os.path.join(args.experiments_path, 'mean_face.npy'), mean_face)
+    eigenvalues_path = os.path.join(args.experiments_path, 'eigenvalues.npy')
+    np.save(eigenvalues_path, eigenvalues)
 
 # plot eigenvalues
-show_image(mean_face.astype('uint8'))
+plt.imshow(mean_face.astype('uint8'))
+plt.title('mean face')
+plt.show()
+
 plt.plot(eigenvalues[:30])
+plt.title('eigenvalues')
 plt.show()
 
 # plot post-processed eigenfaces
@@ -41,7 +66,9 @@ postprocessed_eigenfaces = np.zeros((len(eigenfaces), 48, 48, 1))
 for arg, eigenface in enumerate(eigenfaces):
     postprocessed_eigenfaces[arg, :, :, 0] = postprocess(eigenface)
 mosaic = make_mosaic(postprocessed_eigenfaces[:80], (10, 8))
-show_image(mosaic)
+plt.imshow(mosaic)
+plt.title('first 80 eigenfaces')
+plt.show()
 
 # project new images to eigenspace
 faces, num_projected_faces = np.expand_dims(np.moveaxis(faces, -1, 0), -1), 100
@@ -54,4 +81,5 @@ for face_arg, face in enumerate(faces[:num_projected_faces]):
 # plot embeddings
 plot = PlotEmbeddings(epsilon=0)
 plot(weights[:, :2], images)
+plt.title('embeddings projections')
 plt.show()

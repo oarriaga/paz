@@ -21,15 +21,25 @@ class DrawBoxes2D(Processor):
         scale: Float. Scale of drawn text.
     """
     def __init__(self, class_names=None, colors=None,
-                 weighted=False, scale=0.7):
+                 weighted=False, scale=0.7, with_score=True):
         self.class_names = class_names
         self.colors = colors
         self.weighted = weighted
+        self.with_score = with_score
         self.scale = scale
+
+        if (self.class_names is not None and
+                not isinstance(self.class_names, list)):
+            raise TypeError("Class name should be of type 'List of strings'")
+
+        if (self.colors is not None and
+                not all(isinstance(color, list) for color in self.colors)):
+            raise TypeError("Colors should be of type 'List of lists'")
+
         if self.colors is None:
             self.colors = lincolor(len(self.class_names))
 
-        if class_names is not None:
+        if self.class_names is not None:
             self.class_to_color = dict(zip(self.class_names, self.colors))
         else:
             self.class_to_color = {None: self.colors, '': self.colors}
@@ -42,7 +52,10 @@ class DrawBoxes2D(Processor):
             color = self.class_to_color[class_name]
             if self.weighted:
                 color = [int(channel * box2D.score) for channel in color]
-            text = '{:0.2f}, {}'.format(box2D.score, class_name)
+            if self.with_score:
+                text = '{:0.2f}, {}'.format(box2D.score, class_name)
+            if not self.with_score:
+                text = '{}'.format(class_name)
             put_text(image, text, (x_min, y_min - 10), self.scale, color, 1)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         return image
