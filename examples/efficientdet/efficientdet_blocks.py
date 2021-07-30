@@ -199,14 +199,13 @@ class ResampleFeatureMap(Layer):
                                 [H_stride, W_stride], 'SAME',
                                 'channels_last')(features)
         if self.pooling_type == 'average':
-            return AveragePooling2D([H_stride + 1, W_stride + 1],
-                                    [H_stride, W_stride], 'SAME',
-                                    'channels_last')(features)
+            return AveragePooling2D(
+                [H_stride + 1, W_stride + 1], [H_stride, W_stride], 'SAME',
+                'channels_last')(features)
 
     def _upsample2d(self, features, H_target, W_target):
-        return tf.cast(
-            tf.compat.v1.image.resize_nearest_neighbor(
-                tf.cast(features, tf.float32), [H_target, W_target]),
+        return tf.cast(tf.compat.v1.image.resize_nearest_neighbor(
+            tf.cast(features, tf.float32), [H_target, W_target]),
             features.dtype)
 
     def _apply_1x1_conv(self, feature, training, num_channels):
@@ -218,12 +217,9 @@ class ResampleFeatureMap(Layer):
         return feature
 
     def call(self, feature, training, all_features):
-        hwc_idx = (1, 2, 3)
-        H, W, num_channels = [feature.shape.as_list()[i] for i in hwc_idx]
+        H, W, num_channels = feature.shape[1:]
         if all_features:
-            target_feature_shape = \
-                all_features[self.feature_level].shape.as_list()
-            H_target, W_target, _ = [target_feature_shape[i] for i in hwc_idx]
+            H_target, W_target, _ = all_features[self.feature_level].shape[1:]
         else:
             # Default to downsampling if all_features is empty.
             H_target, W_target = (H + 1) // 2, (W + 1) // 2
@@ -232,30 +228,17 @@ class ResampleFeatureMap(Layer):
         # downsampling for efficiency.
         if H > H_target and W > W_target:
             if not self.conv_after_downsample:
-                feature = self._apply_1x1_conv(feature,
-                                               training,
-                                               num_channels)
-            feature = self._pool2d(feature,
-                                   H,
-                                   W,
-                                   H_target,
-                                   W_target)
+                feature = self._apply_1x1_conv(feature, training, num_channels)
+            feature = self._pool2d(feature, H, W, H_target, W_target)
             if self.conv_after_downsample:
-                feature = self._apply_1x1_conv(feature,
-                                               training,
-                                               num_channels)
+                feature = self._apply_1x1_conv(feature, training, num_channels)
         elif H <= H_target and W <= W_target:
             feature = self._apply_1x1_conv(feature, training, num_channels)
             if H < H_target or W < W_target:
-                feature = self._upsample2d(feature,
-                                           H_target,
-                                           W_target)
+                feature = self._upsample2d(feature, H_target, W_target)
         else:
             raise ValueError('Incompatible Resampling : feature shape {}x{} \
-            target_shape: {}x{}'.format(H,
-                                        W,
-                                        H_target,
-                                        W_target))
+            target_shape: {}x{}'.format(H, W, H_target, W_target))
         return feature
 
 
@@ -279,6 +262,9 @@ class FPNCells(Layer):
         self.activation = activation
         self.fpn_config = bifpn_configuration(
             self.min_level, self.max_level, self.fpn_weight_method)
+        self.create_fpn_cell_repeats()
+
+    def create_fpn_cell_repeats(self):
         self.cells = []
         for repeat_arg in range(self.fpn_cell_repeats):
             self.cells.append(FPNCell(
@@ -328,25 +314,24 @@ class FPNCell(Layer):
         self.activation = activation
         self.fpn_config = bifpn_configuration(
             self.min_level, self.max_level, self.fpn_weight_method)
-        self.fnodes = []
-        for fnode_cfg_arg, fnode_cfg in enumerate(self.fpn_config['nodes']):
-            fnode = FNode(
-                fnode_cfg['feature_level'] - self.min_level,
-                fnode_cfg['inputs_offsets'],
-                self.fpn_num_filters,
-                self.use_batchnorm_for_sampling,
-                self.conv_after_downsample,
-                self.conv_batchnorm_activation_block,
-                self.with_separable_conv,
-                self.activation,
-                weight_method=self.fpn_weight_method,
-                name='fnode%d' % fnode_cfg_arg)
-            self.fnodes.append(fnode)
+        self.create_node_features()
+
+    def create_node_features(self):
+        self.node_features = []
+        for node_cfg_arg, node_cfg in enumerate(self.fpn_config['nodes']):
+            node_feature = FeatureNode(
+                node_cfg['feature_level'] - self.min_level,
+                node_cfg['inputs_offsets'], self.fpn_num_filters,
+                self.use_batchnorm_for_sampling, self.conv_after_downsample,
+                self.conv_batchnorm_activation_block, self.with_separable_conv,
+                self.activation, self.fpn_weight_method,
+                'fnode%d' % node_cfg_arg)
+            self.node_features.append(node_feature)
 
     def call(self, features, training):
         def _call(features):
-            for fnode in self.fnodes:
-                features = fnode(features, training)
+            for node_feature in self.node_features:
+                features = node_feature(features, training)
             return features
         return _call(features)
 
@@ -359,7 +344,7 @@ def sum_nodes(nodes):
     return new_node
 
 
-class FNode(Layer):
+class FeatureNode(Layer):
     """A keras layer implementing BiFPN node."""
     def __init__(self, feature_level, inputs_offsets, fpn_num_filters,
                  use_batchnorm_for_sampling, conv_after_downsample,
@@ -479,14 +464,14 @@ class ConvolutionAfterFusion(Layer):
                 fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
                 use_bias=not self.conv_batchnorm_activation_block, name='conv')
 
-        self.conv_op = conv2d_layer
+        self.convolution = conv2d_layer
         self.batchnorm = BatchNormalization(
             -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
 
     def call(self, new_node, training):
         if not self.conv_batchnorm_activation_block:
             new_node = tf.nn.swish(new_node)
-        new_node = self.conv_op(new_node)
+        new_node = self.convolution(new_node)
         new_node = self.batchnorm(new_node, training=training)
         if self.conv_batchnorm_activation_block:
             new_node = tf.nn.swish(new_node)
