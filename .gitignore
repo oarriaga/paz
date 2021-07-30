@@ -18,6 +18,9 @@
 *tf.index*
 checkpoint
 *.coverage
+*.npy
+*.p
+*.zip
 
 !.github/manifest.xml
 
@@ -25,8 +28,6 @@ dist/*
 build/*
 pypaz.egg-info/
 .pytest_cache/
-venv/
-.idea/
 
 docs/site/*
 docs/sources/*

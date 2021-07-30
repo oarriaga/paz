@@ -11,7 +11,7 @@ from ..backend.boxes import clip
 from ..backend.boxes import nms_per_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
-from ..backend.boxes import scale_box
+
 
 class SquareBoxes2D(Processor):
     """Transforms bounding rectangular boxes into square bounding boxes.
@@ -230,7 +230,7 @@ class FilterBoxes(Processor):
     def call(self, boxes):
         num_classes = boxes.shape[0]
         boxes2D = []
-        for class_arg in range(0, num_classes):
+        for class_arg in range(1, num_classes):
             class_detections = boxes[class_arg, :]
             confidence_mask = np.squeeze(
                 class_detections[:, -1] >= self.conf_thresh)
@@ -239,7 +239,7 @@ class FilterBoxes(Processor):
                 continue
             class_name = self.arg_to_class[class_arg]
             for confident_class_detection in confident_class_detections:
-                coordinates = confident_class_detection[:4].astype('int')
+                coordinates = confident_class_detection[:4]
                 score = confident_class_detection[4]
                 boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D
@@ -254,15 +254,3 @@ class CropImage(Processor):
     def call(self, image, box2D):
         x_min, y_min, x_max, y_max = box2D.coordinates
         return image[y_min:y_max, x_min:x_max]
-
-
-class ScaleBox(Processor):
-    """Scale box coordinates of the prediction.
-    """
-    def __init__(self, scales):
-        super(ScaleBox, self).__init__()
-        self.scales = scales
-
-    def call(self, boxes):
-        boxes = scale_box(boxes, self.scales)
-        return boxes
