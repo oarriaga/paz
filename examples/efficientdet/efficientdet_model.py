@@ -1,5 +1,6 @@
 import tensorflow as tf
 import efficientnet_builder
+from utils import get_prior_boxes, process_outputs
 from efficientdet_blocks import ResampleFeatureMap
 from efficientdet_blocks import FPNCells, ClassNet, BoxNet
 
@@ -15,13 +16,12 @@ class EfficientDet(tf.keras.Model):
     def __init__(self, image_size, num_classes, fpn_num_filters,
                  fpn_cell_repeats, box_class_repeats, anchor_scale,
                  min_level, max_level, fpn_weight_method,
-                 model_name, backbone, activation='swish',
+                 model_name, backbone, return_base=False, activation='swish',
                  fpn_name='BiFPN', num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
                  conv_batchnorm_activation_block=False,
                  use_batchnorm_for_sampling=True,
                  conv_after_downsample=False,
-                 separable_conv=True, survival_rate=None, return_base=False,
-                 name=""):
+                 separable_conv=True, survival_rate=None, name=""):
         """ Initializes EfficientDet model.
 
         # Arguments
@@ -89,6 +89,10 @@ class EfficientDet(tf.keras.Model):
         self.separable_conv = separable_conv
         self.survival_rate = survival_rate
         self.return_base = return_base
+        self.num_levels = max_level - min_level + 1
+        self.prior_boxes = get_prior_boxes(
+            min_level, max_level, num_scales, aspect_ratios, anchor_scale,
+            image_size)
         self.backbone = efficientnet_builder.build_backbone(
             self.backbone, self.activation, self.survival_rate)
         self.resample_layers = []
@@ -144,4 +148,10 @@ class EfficientDet(tf.keras.Model):
         # Box regression head
         box_outputs = self.box_net(fpn_features, training)
 
-        return class_outputs, box_outputs
+        if self.return_base:
+            return class_outputs, box_outputs
+
+        else:
+            outputs = process_outputs(
+                class_outputs, box_outputs, self.num_levels, self.num_classes)
+            return outputs
