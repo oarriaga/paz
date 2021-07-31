@@ -123,9 +123,21 @@ class EfficientDet(tf.keras.Model):
 
     def call(self, images, training=False):
         """Build EfficientDet model.
+
         # Arguments
             images: Tensor, indicating the image input to the architecture.
             training: Bool, whether EfficientDet architecture is trained.
+
+        # Returns
+            class_outputs: Tensor, returned only when the return_base flag
+            is True. Logits for all classes corresponding to the features
+            associated with the box coordinates.
+            box_outputs: Tensor, returned only when the return_base flag
+            is True. Box coordinate offsets for the corresponding prior boxes.
+            outputs: Tensor, returned only when the return_base flag is false.
+            Processed outputs by merging the features at all levels. Each row
+            corresponds to box coordinate offsets and sigmoid of the class
+            logits.
         """
 
         # Efficientnet backbone features

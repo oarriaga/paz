@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def get_feat_sizes(image_size, max_level):
+def get_feature_sizes(image_size, max_level):
     feat_sizes = [{'height': image_size[0], 'width': image_size[1]}]
     feat_size = image_size
     for _ in range(1, max_level + 1):
@@ -12,13 +12,8 @@ def get_feat_sizes(image_size, max_level):
 
 
 class Anchors():
-    def __init__(self,
-                 min_level,
-                 max_level,
-                 num_scales,
-                 aspect_ratios,
-                 anchor_scale,
-                 image_size):
+    def __init__(self, min_level, max_level, num_scales, aspect_ratios,
+                 anchor_scale, image_size):
         self.min_level = min_level
         self.max_level = max_level
         self.num_scales = num_scales  # scale octave, how many P**2 available.
@@ -30,7 +25,7 @@ class Anchors():
             self.anchor_scales = anchor_scale
         else:
             self.anchor_scales = [anchor_scale] * (max_level - min_level + 1)
-        self.feat_sizes = get_feat_sizes(self.image_size, max_level)
+        self.feat_sizes = get_feature_sizes(self.image_size, max_level)
         self.config = self._generate_configs()
         self.boxes = self._generate_boxes()
 
@@ -86,21 +81,3 @@ class Anchors():
 
     def get_anchors_per_location(self):
         return self.num_scales * len(self.aspect_ratios)
-
-
-def decode_box_outputs(pred_boxes, anchor_boxes):
-    anchor_boxes = tf.cast(anchor_boxes, pred_boxes.dtype)
-    ycenter_a = (anchor_boxes[..., 0] + anchor_boxes[..., 2]) / 2
-    xcenter_a = (anchor_boxes[..., 1] + anchor_boxes[..., 3]) / 2
-    ha = anchor_boxes[..., 2] - anchor_boxes[..., 0]
-    wa = anchor_boxes[..., 3] - anchor_boxes[..., 1]
-    ty, tx, th, tw = tf.unstack(pred_boxes, num=4, axis=-1)
-    w = tf.math.exp(tw) * wa
-    h = tf.math.exp(th) * ha
-    ycenter = ty * ha + ycenter_a
-    xcenter = tx * wa + xcenter_a
-    ymin = ycenter - h / 2.
-    xmin = xcenter - w / 2.
-    ymax = ycenter + h / 2.
-    xmax = xcenter + w / 2.
-    return tf.stack([ymin, xmin, ymax, xmax], axis=-1)
