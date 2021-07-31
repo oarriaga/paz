@@ -115,12 +115,10 @@ def get_model_params(model_name, params):
     else:
         raise NotImplementedError('model name is not pre-defined: %s' %
                                   model_name)
-
     if params:
         # ValueError will be raised here if params has fields
         # not in global_params
         global_params = global_params._replace(**params)
-
     decoder = BlockDecoder()
     block_args = decoder.decode(global_params.blocks_args)
     return block_args, global_params

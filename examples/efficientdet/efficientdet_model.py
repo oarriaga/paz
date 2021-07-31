@@ -15,12 +15,11 @@ class EfficientDet(tf.keras.Model):
 
     def __init__(self, image_size, num_classes, fpn_num_filters,
                  fpn_cell_repeats, box_class_repeats, anchor_scale,
-                 min_level, max_level, fpn_weight_method,
-                 model_name, backbone, return_base=False, activation='swish',
-                 fpn_name='BiFPN', num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
+                 min_level, max_level, fpn_weight_method, return_base,
+                 model_name, backbone, activation='swish', fpn_name='BiFPN',
+                 num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
                  conv_batchnorm_activation_block=False,
-                 use_batchnorm_for_sampling=True,
-                 conv_after_downsample=False,
+                 use_batchnorm_for_sampling=True, conv_after_downsample=False,
                  separable_conv=True, survival_rate=None, name=""):
         """ Initializes EfficientDet model.
 
@@ -115,12 +114,12 @@ class EfficientDet(tf.keras.Model):
             self.num_classes, self.num_anchors, self.num_filters,
             self.min_level, self.max_level, self.activation,
             self.box_class_repeats, self.separable_conv,
-            self.survival_rate, self.return_base)
+            self.survival_rate)
 
         self.box_net = BoxNet(
             self.num_anchors, self.num_filters, self.min_level,
             self.max_level, self.activation, self.box_class_repeats,
-            self.separable_conv, self.survival_rate, self.return_base)
+            self.separable_conv, self.survival_rate)
 
     def call(self, images, training=False):
         """Build EfficientDet model.

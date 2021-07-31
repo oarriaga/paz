@@ -2,7 +2,7 @@ import tensorflow as tf
 import efficientnet_model
 from efficientnet_builder import build_backbone
 from efficientdet import EFFICIENTDETD0
-from efficientdet_postprocess import merge_class_box_level_outputs
+from utils import merge_level_outputs
 
 
 def get_test_images(image_size, batch_size=1):
@@ -11,7 +11,7 @@ def get_test_images(image_size, batch_size=1):
 
 
 def test_efficientdet_model():
-    detector = EFFICIENTDETD0()
+    detector = EFFICIENTDETD0(return_base=True)
     image_size = detector.image_size
     images = get_test_images(image_size)
     max_level = detector.max_level
@@ -23,7 +23,7 @@ def test_efficientdet_model():
 
 
 def test_efficientdet_merge_outputs():
-    detector = EFFICIENTDETD0()
+    detector = EFFICIENTDETD0(return_base=True)
     image_size = detector.image_size
     images = get_test_images(image_size)
     max_level = detector.max_level
@@ -33,7 +33,7 @@ def test_efficientdet_merge_outputs():
     class_outs, box_outs = detector(images)
     class_outs_expected = tf.zeros((1, 49104, num_classes), dtype=tf.float32)
     box_outs_expected = tf.zeros((1, 49104, 4), dtype=tf.float32)
-    class_outs, box_outs = merge_class_box_level_outputs(
+    class_outs, box_outs = merge_level_outputs(
         class_outs, box_outs, num_levels, num_classes)
     assert class_outs_expected.shape == class_outs.shape, \
         'Merged class outputs not matching'

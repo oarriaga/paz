@@ -40,7 +40,6 @@ def get_top_down_path(min_level, max_level, node_ids):
         })
         node_ids[level].append(id_count)
         id_count += 1
-
     return top_down_path_nodes, node_ids
 
 
@@ -78,7 +77,6 @@ def get_bottom_up_path(min_level, max_level, node_ids):
         })
         node_ids[level].append(id_count)
         id_count += 1
-
     return bottom_up_path_nodes, node_ids
 
 
@@ -104,7 +102,6 @@ def get_initial_node_ids(min_level, max_level):
     node_ids = dict()
     for level in range(max_level - min_level + 1):
         node_ids[min_level + level] = [level]
-
     return node_ids
 
 
@@ -683,7 +680,6 @@ class BoxNet(Layer):
                 box_outputs.append(image)
             else:
                 box_outputs.append(self.boxes(image))
-
         return box_outputs
 
     @classmethod
