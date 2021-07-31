@@ -1,7 +1,6 @@
 import paz.processors as pr
 from paz.abstract import SequentialProcessor
 from paz.datasets.utils import get_class_names
-from utils import save_file
 
 
 def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
@@ -14,5 +13,4 @@ def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
 
     draw_boxes2D = pr.DrawBoxes2D(get_class_names('COCO_OFFICIAL'))
     image = draw_boxes2D(raw_images[0].numpy().astype('uint8'), outputs)
-    save_file('paz_postprocess.jpg', image)
-    return outputs
+    return image, outputs

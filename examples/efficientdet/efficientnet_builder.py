@@ -3,37 +3,26 @@ import efficientnet_model
 import re
 
 
-_DEFAULT_BLOCKS_ARGS = [
-    'r1_k3_s11_e1_i32_o16_se0.25',
-    'r2_k3_s22_e6_i16_o24_se0.25',
-    'r2_k5_s22_e6_i24_o40_se0.25',
-    'r3_k3_s22_e6_i40_o80_se0.25',
-    'r3_k5_s11_e6_i80_o112_se0.25',
-    'r4_k5_s22_e6_i112_o192_se0.25',
-    'r1_k3_s11_e6_i192_o320_se0.25',
-]
+_DEFAULT_BLOCKS_ARGS = ['r1_k3_s11_e1_i32_o16_se0.25',
+                        'r2_k3_s22_e6_i16_o24_se0.25',
+                        'r2_k5_s22_e6_i24_o40_se0.25',
+                        'r3_k3_s22_e6_i40_o80_se0.25',
+                        'r3_k5_s11_e6_i80_o112_se0.25',
+                        'r4_k5_s22_e6_i112_o192_se0.25',
+                        'r1_k3_s11_e6_i192_o320_se0.25']
 
 
-def efficientnet(width_coefficient=None,
-                 depth_coefficient=None,
-                 dropout_rate=0.2,
-                 survival_rate=0.8):
+def efficientnet(width_coefficient=None, depth_coefficient=None,
+                 dropout_rate=0.2, survival_rate=0.8):
     """Creates efficientnet model."""
     global_params = efficientnet_model.GlobalParams(
-        blocks_args=_DEFAULT_BLOCKS_ARGS,
-        batch_norm=BatchNormalization,
-        dropout_rate=dropout_rate,
-        survival_rate=survival_rate,
-        data_format='channels_last',
-        num_classes=90,
+        blocks_args=_DEFAULT_BLOCKS_ARGS, batch_norm=BatchNormalization,
+        dropout_rate=dropout_rate, survival_rate=survival_rate,
+        data_format='channels_last', num_classes=90,
         width_coefficient=width_coefficient,
         depth_coefficient=depth_coefficient,
-        depth_divisor=8,
-        min_depth=None,
-        activation='swish',
-        use_se=True,
-        clip_projection_output=False,
-    )
+        depth_divisor=8, min_depth=None, activation='swish',
+        use_se=True, clip_projection_output=False)
     return global_params
 
 
@@ -54,18 +43,16 @@ def get_efficientnet_params(model_name):
         efficientnetparams: Dictionary, parameters corresponding to
         width coefficient, depth coefficient, dropout rate
     """
-    efficientnet_params = {
-        'efficientnet-b0': (1.0, 1.0, 0.2),
-        'efficientnet-b1': (1.0, 1.1, 0.2),
-        'efficientnet-b2': (1.1, 1.2, 0.3),
-        'efficientnet-b3': (1.2, 1.4, 0.3),
-        'efficientnet-b4': (1.4, 1.8, 0.4),
-        'efficientnet-b5': (1.6, 2.2, 0.4),
-        'efficientnet-b6': (1.8, 2.6, 0.5),
-        'efficientnet-b7': (2.0, 3.1, 0.5),
-        'efficientnet-b8': (2.2, 3.6, 0.5),
-        'efficientnet-l2': (4.3, 5.3, 0.5),
-    }
+    efficientnet_params = {'efficientnet-b0': (1.0, 1.0, 0.2),
+                           'efficientnet-b1': (1.0, 1.1, 0.2),
+                           'efficientnet-b2': (1.1, 1.2, 0.3),
+                           'efficientnet-b3': (1.2, 1.4, 0.3),
+                           'efficientnet-b4': (1.4, 1.8, 0.4),
+                           'efficientnet-b5': (1.6, 2.2, 0.4),
+                           'efficientnet-b6': (1.8, 2.6, 0.5),
+                           'efficientnet-b7': (2.0, 3.1, 0.5),
+                           'efficientnet-b8': (2.2, 3.6, 0.5),
+                           'efficientnet-l2': (4.3, 5.3, 0.5)}
     return efficientnet_params[model_name]
 
 
@@ -161,9 +148,7 @@ def build_model_base(model_name, params=None):
     return model
 
 
-def build_backbone(backbone_name,
-                   activation,
-                   survival_rate):
+def build_backbone(backbone_name, activation, survival_rate):
     """
     Build backbone model.
 
@@ -174,10 +159,7 @@ def build_backbone(backbone_name,
         EfficientNet model with intermediate feature levels.
     """
     if 'efficientnet' in backbone_name:
-        params = {
-            'batch_norm': BatchNormalization,
-            'activation': activation
-        }
+        params = {'batch_norm': BatchNormalization, 'activation': activation}
         if 'b0' in backbone_name:
             params['survival_rate'] = 0.0
         else:

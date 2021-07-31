@@ -318,7 +318,8 @@ class FPNCell(Layer):
 
     def create_node_features(self):
         self.node_features = []
-        for node_cfg_arg, node_cfg in enumerate(self.fpn_config['nodes']):
+        for node in enumerate(self.fpn_config['nodes']):
+            node_cfg_arg, node_cfg = node
             node_feature = FeatureNode(
                 node_cfg['feature_level'] - self.min_level,
                 node_cfg['inputs_offsets'], self.fpn_num_filters,
@@ -404,7 +405,8 @@ class FeatureNode(Layer):
         return new_node
 
     def _add_bifpn_weights(self, initializer, shape=None):
-        for input_offset_arg, _ in enumerate(self.inputs_offsets):
+        for offsets in enumerate(self.inputs_offsets):
+            input_offset_arg, _ = offsets
             if input_offset_arg == 0:
                 name = 'WSM'
             else:
@@ -413,7 +415,8 @@ class FeatureNode(Layer):
                 name, shape, initializer=initializer))
 
     def build(self, features_shape):
-        for input_offset_arg, input_offset in enumerate(self.inputs_offsets):
+        for offsets in enumerate(self.inputs_offsets):
+            input_offset_arg, input_offset = offsets
             name = 'resample_{}_{}_{}'.format(
                 input_offset_arg, input_offset, len(features_shape))
             self.resample_layers.append(ResampleFeatureMap(
@@ -435,7 +438,8 @@ class FeatureNode(Layer):
 
     def call(self, features, training):
         nodes = []
-        for input_offset_arg, input_offset in enumerate(self.inputs_offsets):
+        for offsets in enumerate(self.inputs_offsets):
+            input_offset_arg, input_offset = offsets
             input_node = features[input_offset]
             input_node = self.resample_layers[input_offset_arg](
                 input_node, training, features)
