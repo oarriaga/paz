@@ -17,44 +17,18 @@ from utils import get_activation, get_drop_connect
 
 GlobalParams = collections.namedtuple(
     'GlobalParams',
-    [
-        'dropout_rate',
-        'data_format',
-        'num_classes',
-        'width_coefficient',
-        'depth_coefficient',
-        'depth_divisor',
-        'min_depth',
-        'survival_rate',
-        'activation',
-        'batch_norm',
-        'use_se',
-        'local_pooling',
-        'condconv_num_experts',
-        'clip_projection_output',
-        'blocks_args',
-        'fix_head_stem'
-    ]
-)
+    ['dropout_rate', 'data_format', 'num_classes', 'width_coefficient',
+     'depth_coefficient', 'depth_divisor', 'min_depth', 'survival_rate',
+     'activation', 'batch_norm', 'use_se', 'local_pooling',
+     'condconv_num_experts', 'clip_projection_output', 'blocks_args',
+     'fix_head_stem'])
 GlobalParams.__new__.__defaults__ = (None,) * len(GlobalParams._fields)
 
 BlockArgs = collections.namedtuple(
     'BlockArgs',
-    [
-        'kernel_size',
-        'num_repeat',
-        'input_filters',
-        'output_filters',
-        'expand_ratio',
-        'id_skip',
-        'strides',
-        'se_ratio',
-        'conv_type',
-        'fused_conv',
-        'super_pixel',
-        'condconv'
-    ]
-)
+    ['kernel_size', 'num_repeat', 'input_filters', 'output_filters',
+     'expand_ratio', 'id_skip', 'strides', 'se_ratio', 'conv_type',
+     'fused_conv', 'super_pixel', 'condconv'])
 BlockArgs.__new__.__defaults__ = (None,) * len(BlockArgs._fields)
 
 
@@ -515,7 +489,7 @@ class Head(Layer):
 
         self.h_axis, self.w_axis = ([1, 2])
 
-    def call(self, tensor, training, pooled_features_only):
+    def call(self, tensor, training, pool_features):
         """Call the head layer."""
         outputs = self._batch_norm(self._conv_head(tensor), training=training)
         outputs = get_activation(outputs, self._activation)
@@ -527,7 +501,7 @@ class Head(Layer):
             outputs = tf.nn.avg_pool(
                 outputs, kernel_size, [1, 1, 1, 1], 'VALID')
             self.endpoints['pooled_features'] = outputs
-            if not pooled_features_only:
+            if not pool_features:
                 if self._dropout:
                     outputs = self._dropout(outputs, training=training)
                 self.endpoints['global_pool'] = outputs
@@ -538,7 +512,7 @@ class Head(Layer):
         else:
             outputs = self._avg_pooling(outputs)
             self.endpoints['pooled_features'] = outputs
-            if not pooled_features_only:
+            if not pool_features:
                 if self._dropout:
                     outputs = self._dropout(outputs, training=training)
                 self.endpoints['global_pool'] = outputs
@@ -681,15 +655,14 @@ class Model(tf.keras.Model):
         # Head part.
         self._head = Head(self._global_params)
 
-    def call(self, tensor, training, return_base=None,
-             pooled_features_only=False):
+    def call(self, tensor, training, return_base=None, pool_features=False):
         """Implementation of call().
 
         # Arguments
             tensor: input tensors.
             training: boolean, whether the model is constructed for training.
             return_base: build the base feature network only.
-            pooled_features_only: build the base network for
+            pool_features: build the base network for
             features extraction (after 1x1 conv layer and global
              pooling, but before dropout and fc head).
 
@@ -741,7 +714,7 @@ class Model(tf.keras.Model):
 
         if not return_base:
             # Calls final layers and returns logits.
-            outputs = self._head(outputs, training, pooled_features_only)
+            outputs = self._head(outputs, training, pool_features)
             self.endpoints.update(self._head.endpoints)
 
         return [outputs] + list(
