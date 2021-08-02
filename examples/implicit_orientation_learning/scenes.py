@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
@@ -114,18 +115,28 @@ class DictionaryView():
                 dictionary_data.append(sample)
         return dictionary_data
 
+
+def render_images_normal_no_ambiguities(save_path, renderer, num_images=1000):
+    for i in tqdm(range(num_images)):
+        image_original, alpha_original = renderer.render()
+
+        np.save(os.path.join(save_path, "image_original/image_original_{}.npy".format(str(i).zfill(7))), image_original)
+        np.save(os.path.join(save_path, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7))), alpha_original)
+
+
 if __name__ == "__main__":
-    """
-    renderer = SingleView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj", light=[10, 20], distance=[0.6, 1.5])
-    image, alpha = renderer.render()
+    #renderer = SingleView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj", light=[10, 20], distance=[0.6, 1.5])
+    #image, alpha = renderer.render()
 
-    plt.imshow(image)
-    plt.show()
-    """
+    #plt.imshow(image)
+    #plt.show()
 
-    renderer = DictionaryView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj")
-    dictionary_data = renderer.render()
+    #renderer = DictionaryView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj")
+    #dictionary_data = renderer.render()
 
-    for data in dictionary_data:
-        plt.imshow(data['image'])
-        plt.show()
+    #for data in dictionary_data:
+    #    plt.imshow(data['image'])
+    #    plt.show()
+
+    renderer = SingleView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000005.obj", light=[5, 5], distance=[0.5, 0.8])
+    render_images_normal_no_ambiguities("", renderer, num_images=100)
