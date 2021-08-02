@@ -66,21 +66,23 @@ class SingleView():
         roll: Float, to sample [-roll, roll] rolls of the Z OpenGL camera axis.
         shift: Float, to sample [-shift, shift] to move in X, Y OpenGL axes.
     """
-    def __init__(self, filepath, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
+    def __init__(self, filepath, filepath_half_object, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
                  distance=[0.3, 0.5], light_bounds=[0.5, 30], top_only=False,
                  roll=None, shift=None):
         self.distance, self.roll, self.shift = distance, roll, shift
         self.light_intensity, self.top_only = light_bounds, top_only
         self._build_scene(filepath, viewport_size, light_bounds, y_fov, colors=False)
-        #self._build_scene(filepath, viewport_size, light_bounds, y_fov, colors=False)
+        #self._build_scene_custom_coloring(filepath, filepath_half_object, viewport_size, light_bounds, y_fov)
         self.RGBA = RenderFlags.RGBA
         self.epsilon = 0.01
         self.viewport_size = viewport_size
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
         self.object_rotations = list()
+        self.camera_translations = list()
 
     def _build_scene(self, path, size, light, y_fov, colors=True, rotation_matrix=np.eye(4), translation=np.zeros(3)):
         self.object_rotations = list()
+        self.camera_translations = list()
         # Create two scenes: one for the colored objcet one for the error object
         # In the second scene we do not need a light because we use flat rendering
 
@@ -88,7 +90,7 @@ class SingleView():
         self.scene_original = Scene(bg_color=[0, 0, 0, 0])
         light_original = self.scene_original.add(DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
         self.camera_original = self.scene_original.add(PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-        self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
+        #self.color_mesh_uniform(loaded_trimesh, np.array([255, 0, 0]))
         self.mesh_original = self.scene_original.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
         self.world_origin = self.mesh_original.mesh.centroid
         self.camera_translation = np.array([0., 0., 0.69])
@@ -121,7 +123,7 @@ class SingleView():
         #self.color_mesh(loaded_trimesh)
         self.mesh_original = self.scene_original.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
         self.world_origin = self.mesh_original.mesh.centroid
-        camera_to_world, world_to_camera = compute_modelview_matrices(np.array([0., 0.4, .4]), self.world_origin, self.roll, self.shift)
+        camera_to_world, world_to_camera = compute_modelview_matrices(np.array([0., 0., 0.4]), self.world_origin, self.roll, self.shift)
         light_original.light.intensity = 5.0
         self.scene_original.set_pose(camera, camera_to_world)
         self.scene_original.set_pose(light_original, camera_to_world)
@@ -136,14 +138,16 @@ class SingleView():
         self.world_origin = self.mesh_color01.mesh.centroid
         self.scene_color.set_pose(camera, camera_to_world)
 
+        self.world_to_camera = world_to_camera
+
     def render(self):
         self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
-        #camera_translation_z = random.uniform(0.3, 1.5)
-        camera_translation_z = 0.69
+        camera_translation_z = random.uniform(0.5, 0.8)
+        #camera_translation_z = 0.69
         # Random rotation and translation for the object
         rotation = trimesh.transformations.random_quaternion()
 
-        translation = np.array([0., 0., 0.]) #get_random_translation(0.1)*(camera_translation_z + 0.7)
+        translation = get_random_translation(0.05)
 
         # Random translation of the camera
         camera_translation = np.array([0., 0., camera_translation_z])
@@ -153,12 +157,16 @@ class SingleView():
         self.camera_to_world = camera_to_world
         self.world_to_camera = world_to_camera
 
+        self.camera_translations.append(camera_to_world[:3, 3] + translation)
+        print("Camera translation: {}".format(camera_to_world[:3, 3] + translation))
+
         rotation_inverse = -rotation
         rotation_inverse[-1] = -rotation_inverse[-1]
         self.mesh_original.rotation = rotation
         self.mesh_color.rotation = rotation
-        #self.mesh_original.translation = translation
-        #self.mesh_color.translation = translation
+        self.mesh_original.translation = translation
+        self.mesh_color.translation = translation
+
 
         self.rotation_object = rotation_inverse
         self.object_rotations.append(rotation_inverse)
@@ -208,14 +216,24 @@ class SingleView():
 
     def render_custom_coloring(self):
         rotation = trimesh.transformations.random_quaternion()
-        #angle = np.random.uniform(low=0.0, high=2.0)*np.pi
-        #rotation = np.array([0, np.sin(angle / 2), 0, np.cos(angle / 2)])
+        angle = np.random.uniform(low=0.0, high=2.0)*np.pi
+        #angle = np.pi
+        #rotation = np.array([np.sin(angle / 2), 0, 0, np.cos(angle / 2)])
+        #rotation /= np.linalg.norm(rotation)
         #translation = get_random_translation()
 
         self.mesh_original.rotation = rotation
+        print("True rotation: {}".format(rotation))
+        print("True rotation01: {}".format(quarternion_to_rotation_matrix(rotation)))
+        print("True euler01: {}".format(trimesh.transformations.euler_from_matrix(quarternion_to_rotation_matrix(rotation))))
+
+        self.rotation_inverse = -rotation
+        self.rotation_inverse[-1] = -self.rotation_inverse[-1]
+
         self.mesh_color01.rotation = rotation
         self.mesh_color02.rotation = quaternion_multiply(rotation, np.array([0, np.sin(np.pi/2), 0, np.cos(np.pi/2)]))
-
+        print("True rotation02: {}".format(quarternion_to_rotation_matrix(quaternion_multiply(rotation, np.array([0, np.sin(np.pi/2), 0, np.cos(np.pi/2)])))))
+        print("True euler02: {}".format(trimesh.transformations.euler_from_matrix(quarternion_to_rotation_matrix(quaternion_multiply(rotation, np.array([0, np.sin(np.pi/2), 0, np.cos(np.pi/2)]))))))
         #self.mesh_original.translation = translation
         #self.mesh_color.translation = translation
 
@@ -281,7 +299,7 @@ def render_images(save_path, object_path, num_images=1000):
     view = SingleView(filepath=object_path)
 
     for i in tqdm(range(num_images)):
-        image_original, image_colors, alpha_original, image_colors_no_ambiguities = view.render_no_ambiguities()
+        image_original, image_colors, alpha_original = view.render()
 
         plt.imshow(image_original)
         plt.show()
@@ -332,5 +350,5 @@ if __name__ == "__main__":
 
     plt.show()
     """
-    #render_images("/media/fabian/Data/Masterarbeit/renders/simple_symmetric_object", "/home/fabian/.keras/datasets/custom_objects/simple_symmetry_object.obj", num_images=2)
-    render_images_custom_coloring("/media/fabian/Data/Masterarbeit/renders/simple_symmetric_object", "/home/fabian/.keras/datasets/custom_objects/simple_symmetry_object.obj", "/home/fabian/.keras/datasets/custom_objects/symmetric_object_half.obj", num_images=2)
+    render_images("/media/fabian/Data/Masterarbeit/renders/simple_symmetric_object", "/home/fabian/.keras/datasets/tless_obj/obj_000005.obj", num_images=20)
+    #render_images_custom_coloring("/media/fabian/Data/Masterarbeit/renders/simple_symmetric_object", "/home/fabian/.keras/datasets/custom_objects/simple_symmetry_object.obj", "/home/fabian/.keras/datasets/custom_objects/symmetric_object_half.obj", num_images=2)
