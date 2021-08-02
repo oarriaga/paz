@@ -15,6 +15,7 @@ from paz.backend.image import write_image
 from paz.abstract import GeneratingSequence
 from paz.optimization.callbacks import DrawInferences
 from paz.pipelines import AutoEncoderPredictor
+from pipelines import GeneratedImageGenerator
 
 from scenes import SingleView
 
@@ -30,9 +31,12 @@ parser.add_argument('-op', '--obj_path', nargs='+', type=str, help='Paths of 3D 
                         'datasets/ycb/models/035_power_drill/textured.obj'))
 parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
-parser.add_argument('-id', '--images_directory', type=str,
+parser.add_argument('-id', '--background_images_directory', type=str,
                     help='Path to directory containing background images',
                     default=None)
+parser.add_argument('-pi', '--images_directory', type=str,
+                    help='Path to pre-generated images (npy format)',
+                    default="/media/fabian/Data/Masterarbeit/data/VOCdevkit/VOC2012/JPEGImages")
 parser.add_argument('-bs', '--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
@@ -79,8 +83,6 @@ parser.add_argument('-nc', '--neptune_config',
                     type=str, help='Path to config file where Neptune Token and project name is stored')
 parser.add_argument('-ni', '--neptune_log_interval',
                     type=int, help='How long (in epochs) to wait for the next Neptune logging')
-parser.add_argument('-ug', '--use_generator', default=1, choices=[0, 1], type=int,
-                    help='Use generator to generate data or use already generated data')
 parser.add_argument('-pd', '--path_data', type=str, help='Path for the training data')
 
 args = parser.parse_args()
@@ -104,32 +106,41 @@ model.summary()
 # setting scene
 print(args.obj_path)
 colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
-renderer = SingleView(filepath=args.obj_path, colors=colors, viewport_size=(args.image_size, args.image_size),
-                      y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
-                      roll=args.roll, shift=args.shift)
+#renderer = SingleView(filepath=args.obj_path, colors=colors, viewport_size=(args.image_size, args.image_size),
+#                      y_fov=args.y_fov, distance=args.depth, light_bounds=args.light, top_only=bool(args.top_only),
+#                      roll=args.roll, shift=args.shift)
 
 # creating sequencer
-if not (args.images_directory is None):
-    image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
-else:
-    image_paths = None
+#if not (args.images_directory is None):
+#    image_paths = glob.glob(os.path.join(args.images_directory, '*.jpg'))
+#else:
+#    image_paths = None
 
-processor = ImageGenerator(renderer, args.image_size, int(args.image_size/args.scaling_factor), image_paths, args.num_occlusions, num_stages=args.num_stages)
-sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
+#processor = ImageGenerator(renderer, args.image_size, int(args.image_size/args.scaling_factor), image_paths, args.num_occlusions, num_stages=args.num_stages)
+#sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
+# creating sequencer
+
+background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
+
+processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, num_occlusions=0, image_size_input=args.image_size, image_size_output=int(args.image_size/args.scaling_factor), num_stages=args.num_stages)
+processor_test = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, num_occlusions=0, image_size_input=args.image_size, image_size_output=int(args.image_size/args.scaling_factor), num_stages=args.num_stages)
+sequence_train = GeneratingSequence(processor_train, args.batch_size, args.steps_per_epoch)
+sequence_test = GeneratingSequence(processor_test, args.batch_size, args.steps_per_epoch)
+
 
 # making directory for saving model weights and logs
-model_name = '_'.join([model.name, str(latent_dimension), args.class_name])
-save_path = os.path.join(args.save_path, model_name)
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
+#model_name = '_'.join([model.name, str(latent_dimension), args.class_name])
+#save_path = os.path.join(args.save_path, model_name)
+#if not os.path.exists(save_path):
+#    os.makedirs(save_path)
 
 # setting callbacks
-log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
+#log = CSVLogger(os.path.join(save_path, '%s.log' % model_name))
 stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
 plateau = ReduceLROnPlateau('loss', patience=args.plateau_patience, verbose=1)
-model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
-save = ModelCheckpoint(
-    model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=True)
+#model_path = os.path.join(save_path, '%s_weights.hdf5' % model_name)
+#save = ModelCheckpoint(
+#    model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=True)
 
 # setting drawing callbacks
 """
@@ -143,13 +154,14 @@ draw = DrawInferences(save_path, images, inferencer)
 """
 
 # saving hyper-parameters and model summary as text files
-print(save_path)
-with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
-    json.dump(args.__dict__, filer, indent=4)
-with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
-    model.summary(print_fn=lambda x: filer.write(x + '\n'))
+#print(save_path)
+#with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
+#    json.dump(args.__dict__, filer, indent=4)
+#with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
+#    model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
-callbacks = [log, save]
+#callbacks = [log, save]
+callbacks = list()
 
 # Set up neptune run
 if args.neptune_config is not None:
@@ -174,34 +186,14 @@ if args.neptune_config is not None:
     neptuneLogger = NeptuneLogger(model, args.neptune_log_interval)
     callbacks.append(neptuneLogger)
 
-plotCallback = PlotImagesCallback(model, sequence, neptune_logging=(args.neptune_config is not None), num_stages=args.num_stages)
+plotCallback = PlotImagesCallback(model, sequence_test, neptune_logging=(args.neptune_config is not None), num_stages=args.num_stages)
 callbacks.append(plotCallback)
 
-# model optimization
-if bool(args.use_generator):
 
-    data = sequence.__getitem__(0)
-    plt.imshow(data[0]['input_1'][0])
-    plt.show()
-    model.fit_generator(
-        sequence,
-        steps_per_epoch=args.steps_per_epoch,
-        epochs=args.max_num_epochs,
-        callbacks=callbacks,
-        verbose=1,
-        workers=0)
-else:
-    images = np.load(os.path.join(args.path_data, "images_batch_1.npy"))
-    belief_maps = np.load(os.path.join(args.path_data, "belief_maps_batch_1.npy"))
-
-    # Normalize images
-    images = images.astype(np.float32)/255.
-
-    model.fit(
-        x=[images],
-        y=[belief_maps, belief_maps, belief_maps],
-        batch_size=args.batch_size,
-        epochs=args.max_num_epochs,
-        callbacks=callbacks,
-        verbose=1,
-        workers=0)
+model.fit_generator(
+    sequence_train,
+    steps_per_epoch=args.steps_per_epoch,
+    epochs=args.max_num_epochs,
+    callbacks=callbacks,
+    verbose=1,
+    workers=0)

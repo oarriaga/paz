@@ -39,7 +39,7 @@ class NeptuneLogger(Callback):
 
         if epoch%self.log_interval == 0:
             self.model.save('dope_model_epoch_{}.pkl'.format(epoch))
-            neptune.log_artifact('dope_model_epoch_{}.pkl'.format(epoch))
+            #neptune.log_artifact('dope_model_epoch_{}.pkl'.format(epoch))
 
 
 class PlotImagesCallback(Callback):

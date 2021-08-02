@@ -1,3 +1,6 @@
+import os
+os.environ["PYOPENGL_PLATFORM"] = "egl"
+
 import numpy as np
 import sys
 from PIL import Image
@@ -9,7 +12,7 @@ import matplotlib.pyplot as plt
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
 from paz.backend.render import compute_modelview_matrices
-from paz.backend.quaternion import quarternion_to_rotation_matrix
+from paz.backend.quaternion import quarternion_to_rotation_matrix, quaternion_multiply
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight, OrthographicCamera
 from pyrender import RenderFlags, Mesh, Scene
 import trimesh
@@ -146,6 +149,27 @@ def create_affinity_maps(image_size, object_center, bounding_box_points, radius=
     return np.asarray(affinity_maps)
 
 
+def calculate_canonical_pose_two_symmetries(rotation):
+    # Calculate canonical pose for an object with 180° symmetry, idea taken from here: https://arxiv.org/abs/1908.07640
+    rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
+    rotation_matrix_r = quarternion_to_rotation_matrix(rotation)
+
+    norm_pairs = list()
+    # Iterate over all rotation matrices
+    for i, rotation_matrix_s in enumerate(rotation_matrices):
+        matrix_norm = np.linalg.norm(np.dot(np.linalg.inv(rotation_matrix_s), rotation_matrix_r) - np.identity(3))
+        norm_pairs.append((i, matrix_norm))
+
+    # Only change the rotation if the choosen matrix is not the identity matrix
+    min_norm_pair = min(norm_pairs, key=lambda t: t[1])
+
+    if min_norm_pair[0] == 1:
+        print("Ambiguity detected!")
+        rotation = quaternion_multiply(np.array([0, -np.sin(np.pi / 2), 0, np.cos(np.pi / 2)]), rotation)
+
+    return rotation
+
+
 class SingleView():
     """Render-ready scene composed of a single object and a single moving camera.
     # Arguments
@@ -177,7 +201,7 @@ class SingleView():
         self._build_scene(filepath, viewport_size, light_bounds, y_fov)
         self.camera_rotations = list()
         self.object_translations = list()
-        #self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
 
     def _build_scene(self, paths, size, light, y_fov, rotation_matrix=np.eye(4), translation=np.zeros(3)):
         self.camera_rotations = list()
@@ -239,18 +263,16 @@ class SingleView():
         print("Distance: " + str(distance))
         camera_origin = sample_point_in_sphere(distance, self.top_only)
         #camera_origin = random_perturbation(camera_origin, self.epsilon)
-        light_intensity = sample_uniformly(self.light_intensity)
+        light_intensity = 5.0
         #print("Camera origin: " + str(camera_origin))
         return camera_origin, light_intensity
 
-    def render(self):
+    def render(self, no_ambiguities=False):
         start = time.time()
-        self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
+        #self.renderer = OffscreenRenderer(self.viewport_size[0], self.viewport_size[1])
         
         camera_origin, light_intensity = self._sample_parameters()
         camera_to_world, world_to_camera = compute_modelview_matrices(camera_origin, self.world_origin, self.roll, self.shift)
-        print("World to camera: {}".format(world_to_camera))
-        print("Camera to world: {}".format(camera_to_world))
 
         self.light_original.light.intensity = light_intensity
         self.scene_original.set_pose(self.camera_original, camera_to_world)
@@ -260,15 +282,13 @@ class SingleView():
 
         for mesh_original, mesh_origin in zip(self.meshes_original, self.mesh_origins):
 
-            translation = get_random_translation(0.15)
+            translation = get_random_translation(0.08)
             rotation = trimesh.transformations.random_quaternion()
             mesh_original.translation = translation
             print("Real translation: {}".format(translation))
             print("Translation rotated: {}".format(world_to_camera[:3, :3]@(translation.T + mesh_original.mesh.centroid)))
 
             positions.append(np.append(mesh_origin + translation, [1]))
-
-
             extents.append(mesh_original.mesh.extents)
 
         # Transform data to use for prediction
@@ -300,6 +320,11 @@ class SingleView():
                         point_position = np.append(point_position, 1)
                         bounding_box_points_3d[i, num_bounding_box_point] = point_position[:3]
 
+                        # Apply so that there are no ambiguities https://arxiv.org/abs/1908.07640
+                        if no_ambiguities:
+                            rotation_no_ambiguities = calculate_canonical_pose_two_symmetries(rotation)
+                            bounding_box_points_3d[i] = [np.dot(quarternion_to_rotation_matrix(rotation_no_ambiguities), bounding_box_point_3d) for bounding_box_point_3d in bounding_box_points_3d[i]]
+
                         (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[1], self.camera.get_projection_matrix(400, 400), world_to_camera)
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
                         num_bounding_box_point += 1
@@ -308,7 +333,7 @@ class SingleView():
         image_original, depth_original = self.renderer.render(self.scene_original, flags=self.RGBA)
         image_original, alpha_original = split_alpha_channel(image_original)
 
-        self.renderer.delete()
+        #self.renderer.delete()
 
         scaled_viewport_size = (int(self.viewport_size[0]/self.scaling_factor), int(self.viewport_size[1]/self.scaling_factor))
         # Calculate the belief maps
@@ -338,25 +363,29 @@ class SingleView():
         return mesh
 
 
+def render_images_normal(save_path, renderer, num_images=1000):
+    for i in range(num_images):
+        image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps, _ = renderer.render(no_ambiguities=False)
+
+        np.save(os.path.join(save_path, "image_original/image_original_{}.npy".format(str(i).zfill(7))), image_original)
+        np.save(os.path.join(save_path, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7))), alpha_original)
+        np.save(os.path.join(save_path, "belief_maps/belief_maps_{}.npy".format(str(i).zfill(7))), belief_maps)
+
+
+def render_images_normal_no_ambiguities(save_path, renderer, num_images=1000):
+    for i in range(num_images):
+        image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps, _ = renderer.render(no_ambiguities=True)
+
+        np.save(os.path.join(save_path, "image_original/image_original_{}.npy".format(str(i).zfill(7))), image_original)
+        np.save(os.path.join(save_path, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7))), alpha_original)
+        np.save(os.path.join(save_path, "belief_maps_no_ambiguities/belief_maps_no_ambiguities_{}.npy".format(str(i).zfill(7))), belief_maps)
+
+
 if __name__ == "__main__":
     num_samples = 5
-    file_paths = ["/home/fabian/.keras/datasets/tless_obj/obj_000014.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
+    file_paths = ["/home/fabian/.keras/datasets/tless_obj/obj_000005.obj"]#, "/home/fabian/.keras/datasets/011_banana/tsdf/textured.obj"]
     colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
     viewport_size = (400, 400)
 
-    view = SingleView(filepath=file_paths, distance=[0.5, 1.0], colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
-
-    image_original, alpha_original, bounding_box_points, belief_maps, affinity_maps, _ = view.render()
-
-    f, axs = plt.subplots(1, 2)
-    #print(affinity_maps.shape)
-
-    axs[0].imshow(image_original)
-    axs[1].imshow(np.sum(belief_maps[0, :], axis=0))
-    #axs[2].imshow(affinity_maps[0, 1])
-
-    for ax in axs:
-        ax.get_xaxis().set_ticks([])
-        ax.get_yaxis().set_ticks([])
-
-    plt.show()
+    view = SingleView(filepath=file_paths, distance=[0.5, 0.8], colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
+    render_images_normal(renderer=view, save_path="/home/fabian/.keras/misc", num_images=10)
