@@ -122,7 +122,7 @@ colors = [np.array([255, 0, 0]), np.array([0, 255, 0])]
 
 background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
 
-processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, num_occlusions=0, image_size_input=args.image_size, image_size_output=int(args.image_size/args.scaling_factor), num_stages=args.num_stages)
+processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "train"), background_image_paths, num_occlusions=0, image_size_input=args.image_size, image_size_output=int(args.image_size/args.scaling_factor), num_stages=args.num_stages)
 processor_test = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, num_occlusions=0, image_size_input=args.image_size, image_size_output=int(args.image_size/args.scaling_factor), num_stages=args.num_stages)
 sequence_train = GeneratingSequence(processor_train, args.batch_size, args.steps_per_epoch)
 sequence_test = GeneratingSequence(processor_test, args.batch_size, args.steps_per_epoch)
@@ -183,7 +183,7 @@ if args.neptune_config is not None:
        params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
     )
 
-    neptuneLogger = NeptuneLogger(model, args.neptune_log_interval)
+    neptuneLogger = NeptuneLogger(model, args.neptune_log_interval, args.save_path)
     callbacks.append(neptuneLogger)
 
 plotCallback = PlotImagesCallback(model, sequence_test, neptune_logging=(args.neptune_config is not None), num_stages=args.num_stages)

@@ -1,5 +1,5 @@
 import os
-os.environ["PYOPENGL_PLATFORM"] = "egl"
+#os.environ["PYOPENGL_PLATFORM"] = "egl"
 
 import numpy as np
 import sys
@@ -15,8 +15,10 @@ from paz.backend.render import compute_modelview_matrices
 from paz.backend.quaternion import quarternion_to_rotation_matrix, quaternion_multiply
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight, OrthographicCamera
 from pyrender import RenderFlags, Mesh, Scene
+import pyrender
 import trimesh
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -68,26 +70,12 @@ def create_belief_maps(image_size, bounding_box_points, sigma=16):
     belief_maps = list()
     max_width_belief_points = int(sigma*2)
 
-    # Shuffle points to make it random which point is removed if two overlap
-    #np.random.shuffle(bounding_box_points)
-
-    #print("Bounding boxes: {}".format(bounding_box_points))
-
     for point in bounding_box_points:
         belief_map = np.zeros(image_size)
 
         # Only add a belief point if it is completely inside the image
         if point[0] - max_width_belief_points >= 0 and point[0] + max_width_belief_points < image_size[0] and \
                 point[1] - max_width_belief_points >= 0 and point[1] + max_width_belief_points < image_size[1]:
-
-            #print("Point: {}".format(point))
-            # Check if there is already a point inside the area where we want to add a new point
-            #if belief_maps:
-            #    sum_belief_maps = np.sum(np.array(belief_maps), axis=0)
-            #    if np.sum(sum_belief_maps[int(point[1]) - max_width_belief_points:int(point[1]) + max_width_belief_points,\
-            #                              int(point[0]) - max_width_belief_points:int(point[0]) + max_width_belief_points]) > 0:
-            #        belief_maps.append(belief_map)
-            #        continue
 
             # Assign a value to a pixel inside of the belief point depending on how far away it
             # is from the center of the point
@@ -149,10 +137,9 @@ def create_affinity_maps(image_size, object_center, bounding_box_points, radius=
     return np.asarray(affinity_maps)
 
 
-def calculate_canonical_pose_two_symmetries(rotation):
+def calculate_canonical_rotation_matrix_two_symmetries(rotation_matrix_r):
     # Calculate canonical pose for an object with 180° symmetry, idea taken from here: https://arxiv.org/abs/1908.07640
     rotation_matrices = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
-    rotation_matrix_r = quarternion_to_rotation_matrix(rotation)
 
     norm_pairs = list()
     # Iterate over all rotation matrices
@@ -163,11 +150,11 @@ def calculate_canonical_pose_two_symmetries(rotation):
     # Only change the rotation if the choosen matrix is not the identity matrix
     min_norm_pair = min(norm_pairs, key=lambda t: t[1])
 
-    if min_norm_pair[0] == 1:
-        print("Ambiguity detected!")
-        rotation = quaternion_multiply(np.array([0, -np.sin(np.pi / 2), 0, np.cos(np.pi / 2)]), rotation)
+    #if min_norm_pair[0] == 1:
+    #    print("Ambiguity detected!")
+    #    rotation_matrix_r = np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])@rotation_matrix_r
 
-    return rotation
+    return rotation_matrices[min_norm_pair[0]]
 
 
 class SingleView():
@@ -274,6 +261,12 @@ class SingleView():
         camera_origin, light_intensity = self._sample_parameters()
         camera_to_world, world_to_camera = compute_modelview_matrices(camera_origin, self.world_origin, self.roll, self.shift)
 
+        # Change the camera origin so that there are no ambiguities
+        if no_ambiguities:
+            no_ambiguities_rotation_matrix = calculate_canonical_rotation_matrix_two_symmetries(camera_to_world[:3, :3])
+            new_camera_origin = no_ambiguities_rotation_matrix@camera_origin
+            camera_to_world, world_to_camera = compute_modelview_matrices(new_camera_origin, self.world_origin, self.roll, self.shift)
+
         self.light_original.light.intensity = light_intensity
         self.scene_original.set_pose(self.camera_original, camera_to_world)
         self.scene_original.set_pose(self.light_original, camera_to_world)
@@ -283,7 +276,7 @@ class SingleView():
         for mesh_original, mesh_origin in zip(self.meshes_original, self.mesh_origins):
 
             translation = get_random_translation(0.08)
-            rotation = trimesh.transformations.random_quaternion()
+
             mesh_original.translation = translation
             print("Real translation: {}".format(translation))
             print("Translation rotated: {}".format(world_to_camera[:3, :3]@(translation.T + mesh_original.mesh.centroid)))
@@ -306,7 +299,6 @@ class SingleView():
 
         # Calculate all the bounding box points
         # Important: the first point in the list is the object center!
-        rotation_matrix = quarternion_to_rotation_matrix(rotation)
         for i, (position, extent) in enumerate(zip(positions, extents)):
             (x, y, depth) = map_to_image_location(position, self.viewport_size[0], self.viewport_size[1], self.camera.get_projection_matrix(400, 400), world_to_camera)
             bounding_box_points[i, 0] = np.array([x, y])
@@ -319,11 +311,6 @@ class SingleView():
                         point_position = np.array([position[0] + x_extent, position[1] + y_extent, position[2] + z_extent])
                         point_position = np.append(point_position, 1)
                         bounding_box_points_3d[i, num_bounding_box_point] = point_position[:3]
-
-                        # Apply so that there are no ambiguities https://arxiv.org/abs/1908.07640
-                        if no_ambiguities:
-                            rotation_no_ambiguities = calculate_canonical_pose_two_symmetries(rotation)
-                            bounding_box_points_3d[i] = [np.dot(quarternion_to_rotation_matrix(rotation_no_ambiguities), bounding_box_point_3d) for bounding_box_point_3d in bounding_box_points_3d[i]]
 
                         (x, y, depth) = map_to_image_location(point_position, self.viewport_size[0], self.viewport_size[1], self.camera.get_projection_matrix(400, 400), world_to_camera)
                         bounding_box_points[i, num_bounding_box_point] = np.array([x, y])
@@ -378,7 +365,7 @@ def render_images_normal_no_ambiguities(save_path, renderer, num_images=1000):
 
         np.save(os.path.join(save_path, "image_original/image_original_{}.npy".format(str(i).zfill(7))), image_original)
         np.save(os.path.join(save_path, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7))), alpha_original)
-        np.save(os.path.join(save_path, "belief_maps_no_ambiguities/belief_maps_no_ambiguities_{}.npy".format(str(i).zfill(7))), belief_maps)
+        np.save(os.path.join(save_path, "belief_maps/belief_maps_{}.npy".format(str(i).zfill(7))), belief_maps)
 
 
 if __name__ == "__main__":
@@ -388,4 +375,4 @@ if __name__ == "__main__":
     viewport_size = (400, 400)
 
     view = SingleView(filepath=file_paths, distance=[0.5, 0.8], colors=colors, viewport_size=viewport_size, scaling_factor=8.0)
-    render_images_normal(renderer=view, save_path="/home/fabian/.keras/misc", num_images=10)
+    render_images_normal_no_ambiguities(renderer=view, save_path="/home/fabian/.keras/misc", num_images=100)
