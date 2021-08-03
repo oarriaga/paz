@@ -3,9 +3,9 @@ from backend import one_hot_encode, normalize_keypoints, \
     build_rotation_matrix_x, build_rotation_matrix_y, build_rotation_matrix_z, \
     get_affine_matrix, extract_hand_side, get_canonical_transformations
 
-from data_loaders import HandPoseLoader
+from hand_keypoints_loader import RenderedHandLoader
 
-data_loader = HandPoseLoader(
+data_loader = RenderedHandLoader(
     '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/')
 
 import numpy as np
