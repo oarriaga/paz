@@ -69,7 +69,10 @@ def Hand_Segmentation_Net(input_shape=None, load_pretrained=True):
     raw_segmented_image = Conv2D(2, 1, padding='same', activation=None,
                                  name='conv1_16')(X_18)
 
-    segmentation_net = Model(inputs=image, outputs=raw_segmented_image,
+    segmentation_net = Model(inputs={'image': image},
+                             outputs={'image': image,
+                                      'raw_segmentation_map':
+                                          raw_segmented_image},
                              name='HandSegNet')
 
     if load_pretrained:
@@ -191,7 +194,8 @@ def PoseNet(input_shape=None, load_pretrained=True):
     score_maps = Conv2D(21, kernel_size=1, name='conv2_31')(X_35)
     scoremap_list.append(score_maps)
 
-    PoseNet = Model(inputs=cropped_image, outputs=scoremap_list, name='PoseNet')
+    PoseNet = Model(inputs={'cropped_image': cropped_image},
+                    outputs={'score_maps': scoremap_list}, name='PoseNet')
 
     if load_pretrained:
         weight_path = PoseNet.name + '-pretrained_weights.h5'
@@ -200,13 +204,13 @@ def PoseNet(input_shape=None, load_pretrained=True):
     return PoseNet
 
 
-def PosePriorNet(score_maps_shape=None, hand_side_shape=None,
+def PosePriorNet(keypoint_heatmaps_shape=None, hand_side_shape=None,
                  num_keypoints=21, load_pretrained=True):
     if hand_side_shape is None:
         hand_side_shape = [2]
-    if score_maps_shape is None:
-        score_maps_shape = [32, 32, 21]
-    score_maps = Input(shape=score_maps_shape, name='score_maps')
+    if keypoint_heatmaps_shape is None:
+        keypoint_heatmaps_shape = [32, 32, 21]
+    score_maps = Input(shape=keypoint_heatmaps_shape, name='keypoint_heatmaps')
     hand_side = Input(shape=hand_side_shape, name='hand_side')
 
     X_1 = Conv2D(32, 3, padding='same', name='conv3_1')(score_maps)
@@ -241,7 +245,9 @@ def PosePriorNet(score_maps_shape=None, hand_side_shape=None,
     X_10 = Dense(num_keypoints * 3, name='dense3_3')(X_9)
 
     hand_keypoints = Reshape((21, 3), name='reshape3_1')(X_10)
-    PosePriorNet = Model([score_maps, hand_side], hand_keypoints,
+    PosePriorNet = Model(inputs={'keypoint_heatmaps': score_maps,
+                                 'hand_side': hand_side},
+                         outputs={'canonical_coordinates': hand_keypoints},
                          name='PosePriorNet')
     if load_pretrained:
         weight_path = PosePriorNet.name + '-pretrained_weights.h5'
@@ -256,11 +262,11 @@ def ViewPointNet(keypoint_heat_maps_shape=None, hand_side_shape=None,
         hand_side_shape = [2]
     if keypoint_heat_maps_shape is None:
         keypoint_heat_maps_shape = [32, 32, 21]
-    keypoint_heat_maps = Input(shape=keypoint_heat_maps_shape,
-                               name='score_maps')
+    keypoint_heatmaps = Input(shape=keypoint_heat_maps_shape,
+                              name='keypoint_heatmaps')
     hand_side = Input(shape=hand_side_shape, name='hand_side')
 
-    X_1 = Conv2D(64, 3, padding='same')(keypoint_heat_maps)
+    X_1 = Conv2D(64, 3, padding='same')(keypoint_heatmaps)
     X_1 = LeakyReLU(alpha=0.01)(X_1)
 
     X_2 = Conv2D(64, 3, strides=2, padding='same')(X_1)
@@ -292,8 +298,11 @@ def ViewPointNet(keypoint_heat_maps_shape=None, hand_side_shape=None,
 
     axis_angles = Concatenate(axis=1)([ux, uy, uz])
 
-    ViewPointNet = Model(inputs=[keypoint_heat_maps, hand_side],
-                         outputs=axis_angles, name='ViewPointNet')
+    ViewPointNet = Model(inputs={'keypoint_heatmaps': keypoint_heatmaps,
+                                 'hand_side': hand_side},
+                         outputs={'rotation_parameters': axis_angles,
+                                  'hand_side': hand_side},
+                         name='ViewPointNet')
     if load_pretrained:
         weight_path = ViewPointNet.name + '-pretrained_weights.h5'
         ViewPointNet.load_weights(weight_path)
@@ -326,7 +335,7 @@ def ColorHandPoseNet(image_shape=None, hand_side_shape=None,
     else:
         num_keypoints = num_keypoints
 
-    raw_segmented_image = HandSegNet(image)
+    raw_segmented_image = HandSegNet({'image': image})
     hand_scoremap = tf.image.resize(raw_segmented_image,
                                     (image_shape[0], image_shape[1]))
     hand_mask = object_scoremap(hand_scoremap)
@@ -335,7 +344,7 @@ def ColorHandPoseNet(image_shape=None, hand_side_shape=None,
     scale_crop = tf.minimum(tf.maximum(crop_size / crop_size_best, 0.25), 5.0)
     image_crop = crop_image_from_xy(image, center, crop_size, scale=scale_crop)
 
-    keypoints_scoremap = HandPoseNet(image_crop)
+    keypoints_scoremap = HandPoseNet({'cropped_image': image_crop})
 
     canonical_coordinates = HandPosePriorNet(
         {'score_maps': keypoints_scoremap[-1], 'hand_side': hand_side})

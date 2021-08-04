@@ -8,7 +8,7 @@ from backend import extract_hand_segment, keypoints_to_wrist_coordinates
 from backend import get_canonical_transformations, flip_right_hand
 from backend import normalize_keypoints, transform_to_relative_frames
 from backend import transform_visibility_mask, extract_hand_side
-from backend import detect_keypoints
+from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
 from paz.backend.image.tensorflow_image import resize
 from paz.abstract import Processor
 
@@ -209,9 +209,9 @@ class CropImage(Processor):
                                            scale)
 
 
-class GetRotationParameters(Processor):
+class GetRotationMatrix(Processor):
     def __init__(self):
-        super(GetRotationParameters, self).__init__()
+        super(GetRotationMatrix, self).__init__()
 
     def call(self, rotation_angles):
         return get_rotation_matrix(rotation_angles)
@@ -249,3 +249,24 @@ class Resize_image(Processor):
 
     def call(self, image):
         return resize(image, self.size)
+
+
+class Wrap_to_Dictionary(Processor):
+    def __init__(self, keys):
+        super(Wrap_to_Dictionary, self).__init__()
+        if not isinstance(keys, list):
+            keys = list(keys)
+        self.keys = keys
+
+    def call(self, values):
+        if not isinstance(values, list):
+            values = list(values)
+        return wrap_dictionary(self.keys, values)
+
+
+class Merge_Dictionaries(Processor):
+    def __init__(self):
+        super(Merge_Dictionaries, self).__init__()
+
+    def call(self, dict1, dict2):
+        return merge_dictionaries(dict1, dict2)

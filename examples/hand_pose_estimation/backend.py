@@ -627,7 +627,16 @@ def detect_keypoints(scoremaps):
 
     keypoint_coords = np.zeros((scoremaps_shape[2], 2))
     for i in range(scoremaps_shape[2]):
-        v, u = np.unravel_index(np.argmax(scoremaps[:, :, i]), (scoremaps_shape[0], scoremaps_shape[1]))
+        v, u = np.unravel_index(np.argmax(scoremaps[:, :, i]),
+                                (scoremaps_shape[0], scoremaps_shape[1]))
         keypoint_coords[i, 0] = v
         keypoint_coords[i, 1] = u
     return keypoint_coords
+
+
+def wrap_dictionary(keys, values):
+    return dict(zip(keys, values))
+
+
+def merge_dictionaries(dict1, dict2):
+    return dict1.update(dict2)
