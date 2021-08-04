@@ -3,6 +3,8 @@ import glob
 import json
 import argparse
 
+import neptune
+
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
@@ -14,8 +16,8 @@ from paz.pipelines import AutoEncoderPredictor
 
 from scenes import SingleView
 
-from pipelines import DomainRandomization
-from model import AutoEncoder
+from pipelines import DomainRandomization, GeneratedImages
+from model import AutoEncoder, PlotImagesCallback, NeptuneLogger
 
 description = 'Training script for learning implicit orientation vector'
 root_path = os.path.join(os.path.expanduser('~'), '.keras/paz/')
@@ -26,8 +28,12 @@ parser.add_argument('-op', '--obj_path', type=str, help='Path of 3D OBJ model',
                         'datasets/ycb/models/035_power_drill/textured.obj'))
 parser.add_argument('-cl', '--class_name', default='035_power_drill', type=str,
                     help='Class name to be added to model save path')
-parser.add_argument('-id', '--images_directory', type=str,
+parser.add_argument('-bi', '--background_images_directory', type=str,
                     help='Path to directory containing background images',
+                    default=os.path.join(
+                        root_path, 'datasets/voc-backgrounds/'))
+parser.add_argument('-id', '--images_directory', type=str,
+                    help='Path to directory containing images to train on',
                     default=os.path.join(
                         root_path, 'datasets/voc-backgrounds/'))
 parser.add_argument('-bs', '--batch_size', default=32, type=int,
@@ -68,6 +74,13 @@ parser.add_argument('-sa', '--save_path',
                     default=os.path.join(
                         os.path.expanduser('~'), '.keras/paz/models'),
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-gi', '--use_generator', default=0, choices=[0, 1], type=int,
+                    help='Use pre-generated images or generate images on the fly')
+parser.add_argument('-nc', '--neptune_config',
+                    type=str, help='Path to config file where Neptune Token and project name is stored')
+parser.add_argument('-ni', '--neptune_log_interval',
+                    type=int, default=100, help='How long (in epochs) to wait for the next Neptune logging')
+
 args = parser.parse_args()
 
 
@@ -78,17 +91,21 @@ optimizer = Adam(args.learning_rate, amsgrad=True)
 model.compile(optimizer, args.loss, metrics=['mse'])
 model.summary()
 
-# setting scene
-renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
-                      args.y_fov, args.depth, args.light, bool(args.top_only),
-                      args.roll, args.shift)
-
 # creating sequencer
-image_paths = glob.glob(os.path.join(args.images_directory, '*.png'))
-processor = DomainRandomization(
-    renderer, args.image_size, image_paths, args.num_occlusions)
+background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
 
-sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
+if args.use_generator:
+    processor_train = GeneratedImages(os.path.join(args.images_directory, "train"), background_image_paths, args.image_size, num_occlusions=0)
+    processor_test = GeneratedImages(os.path.join(args.images_directory, "test"), background_image_paths, args.image_size, num_occlusions=0)
+    sequence_train = GeneratingSequence(processor_train, args.batch_size, args.steps_per_epoch)
+    sequence_test = GeneratingSequence(processor_test, args.batch_size, args.steps_per_epoch)
+else:
+    # setting scene
+    renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
+                          args.y_fov, args.depth, args.light, bool(args.top_only),
+                          args.roll, args.shift)
+    processor = DomainRandomization(renderer, args.image_size, background_image_paths, args.num_occlusions)
+    sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
 # making directory for saving model weights and logs
 model_name = '_'.join([model.name, str(latent_dimension), args.class_name])
@@ -105,13 +122,13 @@ save = ModelCheckpoint(
     model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=True)
 
 # setting drawing callbacks
-images = (sequence.__getitem__(0)[0]['input_image'] * 255).astype('uint8')
-for arg, image in enumerate(images):
-    image_name = 'image_%03d.png' % arg
-    image_path = os.path.join(save_path, 'original_images/' + image_name)
-    write_image(image_path, image)
-inferencer = AutoEncoderPredictor(model)
-draw = DrawInferences(save_path, images, inferencer)
+#images = (sequence.__getitem__(0)[0]['input_image'] * 255).astype('uint8')
+#for arg, image in enumerate(images):
+#    image_name = 'image_%03d.png' % arg
+#    image_path = os.path.join(save_path, 'original_images/' + image_name)
+#    write_image(image_path, image)
+#inferencer = AutoEncoderPredictor(model)
+#draw = DrawInferences(save_path, images, inferencer)
 
 # saving hyper-parameters and model summary as text files
 print(save_path)
@@ -120,11 +137,48 @@ with open(os.path.join(save_path, 'hyperparameters.json'), 'w') as filer:
 with open(os.path.join(save_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
+callbacks = list()
+
+plotCallback = PlotImagesCallback(model, sequence_test, "", batch_size=8, neptune_logging=(args.neptune_config is not None))
+callbacks.append(plotCallback)
+
+# set up neptune run
+if args.neptune_config is not None:
+    neptune_config_file = open(args.neptune_config)
+    neptune_config = neptune_config_file.read().split('\n')
+    neptune_token = neptune_config[0]
+    neptune_experiment_name = neptune_config[1]
+    neptune_run_name = neptune_config[2]
+
+    neptune.init(
+       api_token=neptune_token,
+       project_qualified_name=neptune_experiment_name
+    )
+
+    neptune.create_experiment(
+       name=neptune_run_name,
+       upload_stdout=False,
+       params={'batch_size': args.batch_size, 'learning_rate': args.learning_rate, 'steps_per_epoch': args.steps_per_epoch}
+    )
+
+    neptuneCallback = NeptuneLogger(model, args.neptune_log_interval, args.save_path)
+    callbacks.append(neptuneCallback)
+
 # model optimization
-model.fit_generator(
-    sequence,
-    steps_per_epoch=args.steps_per_epoch,
-    epochs=args.max_num_epochs,
-    callbacks=[stop, log, save, plateau, draw],
-    verbose=1,
-    workers=0)
+if args.use_generator:
+    model.fit_generator(
+        sequence_train,
+        steps_per_epoch=args.steps_per_epoch,
+        epochs=args.max_num_epochs,
+        callbacks=callbacks,
+        verbose=1,
+        workers=0)
+
+else:
+    model.fit_generator(
+        sequence,
+        steps_per_epoch=args.steps_per_epoch,
+        epochs=args.max_num_epochs,
+        callbacks=callbacks,
+        verbose=1,
+        workers=0)

@@ -1,3 +1,8 @@
+import glob
+import os
+import numpy as np
+import random
+
 from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines import EncoderPredictor, DecoderPredictor
 from paz.pipelines import RandomizeRenderedImage
@@ -54,6 +59,46 @@ class DomainRandomization(SequentialProcessor):
         super(DomainRandomization, self).__init__()
         self.add(DomainRandomizationProcessor(
             renderer, image_paths, num_occlusions, split))
+        self.add(pr.SequenceWrapper(
+            {0: {'input_image': [size, size, 3]}},
+            {1: {'label_image': [size, size, 3]}}))
+
+
+class GeneratedImagesProcessor(Processor):
+    def __init__(self, path_images, background_images_path, num_occlusions, split=pr.TRAIN):
+        super(GeneratedImagesProcessor, self).__init__()
+        self.copy = pr.Copy()
+        self.augment = RandomizeRenderedImage(background_images_path, num_occlusions)
+        preprocessors = [pr.ConvertColorSpace(pr.RGB2BGR), pr.NormalizeImage()]
+        self.preprocess = SequentialProcessor(preprocessors)
+        self.split = split
+
+        # Total number of images
+        self.num_images = len(glob.glob(os.path.join(path_images, "image_original/*")))
+
+        # Load all images into memory to save time
+        self.images_original = [np.load(os.path.join(path_images, "image_original/image_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+        self.alpha_original = [np.load(os.path.join(path_images, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+
+    def call(self):
+        index = random.randint(0, self.num_images - 1)
+        input_image = self.images_original[index]
+        alpha_mask = self.alpha_original[index]
+
+        label_image = self.copy(input_image)
+        if self.split == pr.TRAIN:
+            input_image = self.augment(input_image, alpha_mask)
+        input_image = self.preprocess(input_image)
+        label_image = self.preprocess(label_image)
+        return input_image, label_image
+
+
+class GeneratedImages(SequentialProcessor):
+    def __init__(self, path_images, background_images_path, size,
+                 num_occlusions, split=pr.TRAIN):
+        super(GeneratedImages, self).__init__()
+        self.add(GeneratedImagesProcessor(
+            path_images, background_images_path, num_occlusions, split))
         self.add(pr.SequenceWrapper(
             {0: {'input_image': [size, size, 3]}},
             {1: {'label_image': [size, size, 3]}}))
