@@ -10,7 +10,7 @@ from processors import HandSegmentationMap, ExtractBoundingbox, Resize_image
 from processors import Wrap_to_Dictionary, Merge_Dictionaries, GetRotationMatrix
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_path', type=str, help='Path to labels')
+parser.add_argument('--data_path', type=str, help='Path to dataset')
 args = parser.parse_args()
 
 data_manager = RenderedHandLoader(args.data_path, 'test')

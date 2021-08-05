@@ -1,12 +1,7 @@
-import os
-
 import glob
 import pickle
 
-import numpy as np
-
 from paz.abstract import Loader
-
 
 kinematic_chain_dict = {0: 'root',
                         4: 'root', 3: 4, 2: 3, 1: 2,

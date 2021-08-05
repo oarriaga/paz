@@ -14,9 +14,9 @@ from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from tensorflow.keras.losses import CategoricalCrossentropy
 
 from paz.abstract import ProcessingSequence
-from pipelines import PreprocessSegmentation
+from pipelines import AugmentHandSegmentation
 from HandPoseEstimation import Hand_Segmentation_Net
-from data_loaders import RenderedHandLoader
+from hand_keypoints_loader import RenderedHandLoader
 from utils import load_pretrained_weights
 
 description = 'Training script for semantic segmentation'
@@ -72,9 +72,8 @@ for split in splits:
 sequencers = {}
 for split in splits:
     data_manager = data_managers[split]
-    num_classes = data_manager.num_classes
     image_shape = (args.image_size, args.image_size)
-    processor = PreprocessSegmentation(image_shape, num_classes)
+    processor = AugmentHandSegmentation(image_shape)
     sequencers[split] = ProcessingSequence(
         processor, args.batch_size, datasets[split])
 
