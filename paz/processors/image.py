@@ -24,6 +24,9 @@ from ..backend.image import gaussian_image_blur
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
 RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
+B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3 , 57.1, 58.4
+BGR_IMAGENET_STDEV = (B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV)
+RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
 
 
 class CastImage(Processor):
@@ -432,3 +435,54 @@ class RandomImageCrop(Processor):
         y_max = y_min + H_crop
         cropped_image = image[int(x_min):int(x_max), int(y_min):int(y_max), :]
         return cropped_image
+
+
+class DivideStandardDeviationImage(Processor):
+    """Divide channel-wise standard deviation to image.
+
+    # Arguments
+        mean: List of length 3, containing the channel-wise mean.
+    """
+    def __init__(self, standard_deviation):
+        self.standard_deviation = standard_deviation
+        super(DivideStandardDeviationImage, self).__init__()
+
+    def call(self, image):
+        return image / self.standard_deviation
+
+
+class ScaledResize(Processor):
+    """Resizes image by returning the scales to original image.
+
+    # Arguments
+        crop_factor: Float between ``[0, 1]``.
+        probability: Float between ``[0, 1]``.
+    """
+    def __init__(self, image_size):
+        self.image_size = image_size
+        super(ScaledResize, self).__init__()
+
+    def call(self, image):
+        crop_offset_y = np.array(0)
+        crop_offset_x = np.array(0)
+        height = np.array(image.shape[0]).astype('float32')
+        width = np.array(image.shape[1]).astype('float32')
+        image_scale_y = np.array(self.image_size).astype('float32') / height
+        image_scale_x = np.array(self.image_size).astype('float32') / width
+        image_scale = np.minimum(image_scale_x, image_scale_y)
+        scaled_height = (height * image_scale).astype('int32')
+        scaled_width = (width * image_scale).astype('int32')
+        scaled_image = resize_image(image, (scaled_width, scaled_height))
+        scaled_image = scaled_image[
+                       crop_offset_y: crop_offset_y + self.image_size,
+                       crop_offset_x: crop_offset_x + self.image_size,
+                       :]
+        output_images = np.zeros((self.image_size,
+                                  self.image_size,
+                                  image.shape[2]))
+        output_images[:scaled_image.shape[0],
+        :scaled_image.shape[1],
+        :scaled_image.shape[2]] = scaled_image
+        image_scale = 1 / image_scale
+        output_images = output_images[np.newaxis]
+        return output_images, image_scale
