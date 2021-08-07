@@ -46,9 +46,13 @@ from .image import MakeRandomPlainImage
 from .image import ConcatenateAlphaMask
 from .image import BlendRandomCroppedBackground
 from .image import AddOcclusion
+from .image import DivideStandardDeviationImage
+from .image import ScaledResize
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
+from .image import RGB_IMAGENET_STDEV
+from .image import BGR_IMAGENET_STDEV
 
 from .renderer import Render
 

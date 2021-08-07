@@ -1,9 +1,12 @@
 import os
 import cv2
-import numpy as np
 import tensorflow as tf
 import anchors
 from paz.backend.boxes import to_center_form
+import paz.processors as pr
+from paz.abstract import SequentialProcessor
+from paz.processors.image import LoadImage
+from paz.processors.image import RGB_IMAGENET_MEAN, RGB_IMAGENET_STDEV
 
 
 # Mock input image.
@@ -11,10 +14,31 @@ path_to_paz = '/media/deepan/externaldrive1/project_repos/'
 directory_path = 'paz_versions/paz_efficientdet/examples/efficientdet/'
 file_name = 'img2.png'
 file_path = path_to_paz + directory_path + file_name
-raw_images = cv2.imread(file_path)
-raw_images = cv2.cvtColor(raw_images, cv2.COLOR_BGR2RGB)
-raw_images = raw_images[np.newaxis]
-raw_images = tf.convert_to_tensor(raw_images, dtype=tf.dtypes.float32)
+loader = LoadImage()
+raw_images = loader(file_path)
+
+
+class_names = ['person', 'bicycle', 'car', 'motorcycle',
+               'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+               'fire hydrant', '0', 'stop sign', 'parking meter', 'bench',
+               'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant',
+               'bear', 'zebra', 'giraffe', '0', 'backpack', 'umbrella', '0',
+               '0', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis',
+               'snowboard', 'sports ball', 'kite', 'baseball bat',
+               'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+               'bottle', '0', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
+               'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli',
+               'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+               'potted plant', 'bed', '0', 'dining table', '0', '0', 'toilet',
+               '0', 'tv', 'laptop', 'mouse', 'remote', 'keyboard',
+               'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+               'refrigerator', '0', 'book', 'clock', 'vase', 'scissors',
+               'teddy bear', 'hair drier', 'toothbrush']
+
+
+def get_class_name_efficientdet(dataset_name):
+    if dataset_name == 'COCO':
+        return class_names
 
 
 def get_activation(features, activation):
@@ -162,33 +186,14 @@ def preprocess_images(image, image_size):
         the raw images to original size from the resized
         image.
     """
-    mean_rgb = [0.485 * 255, 0.456 * 255, 0.406 * 255]  # imagenet rgb mean
-    std_rgb = [0.229 * 255, 0.224 * 255, 0.225 * 255]  # imagenet rgb std
-    image = tf.cast(image, dtype=tf.float32)
-    image -= tf.constant(mean_rgb, shape=(1, 1, 3), dtype=tf.float32)
-    image /= tf.constant(std_rgb, shape=(1, 1, 3), dtype=tf.float32)
 
-    crop_offset_y = tf.constant(0)
-    crop_offset_x = tf.constant(0)
-    height = tf.cast(tf.shape(image)[1], tf.float32)
-    width = tf.cast(tf.shape(image)[2], tf.float32)
-    image_scale_y = tf.cast(image_size[1], tf.float32) / height
-    image_scale_x = tf.cast(image_size[2], tf.float32) / width
-    image_scale = tf.minimum(image_scale_x, image_scale_y)
-
-    scaled_height = tf.cast(height * image_scale, tf.int32)
-    scaled_width = tf.cast(width * image_scale, tf.int32)
-    scaled_image = tf.image.resize(image, [scaled_height, scaled_width],
-                                   method=tf.image.ResizeMethod.BILINEAR)
-    scaled_image = scaled_image[
-                   :,
-                   crop_offset_y: crop_offset_y + image_size[1],
-                   crop_offset_x: crop_offset_x + image_size[2],
-                   :]
-    output_image = tf.image.pad_to_bounding_box(
-        scaled_image, 0, 0, image_size[1], image_size[2])
-    image = tf.cast(output_image, tf.float32)
-    image_scale = 1 / image_scale
+    preprocessing = SequentialProcessor([
+        pr.CastImage(float),
+        pr.SubtractMeanImage(mean=RGB_IMAGENET_MEAN),
+        pr.DivideStandardDeviationImage(standard_deviation=RGB_IMAGENET_STDEV),
+        pr.ScaledResize(image_size=image_size),
+        ])
+    image, image_scale = preprocessing(image)
     return image, image_scale
 
 

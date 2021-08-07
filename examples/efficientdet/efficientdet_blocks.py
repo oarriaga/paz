@@ -127,7 +127,7 @@ def bifpn_configuration(min_level, max_level, weight_method):
        for building the FPN.
     """
     bifpn_config = dict()
-    bifpn_config['weight_method'] = weight_method or 'fastattn'
+    bifpn_config['weight_method'] = weight_method or 'fastattention'
 
     # Node id starts from the input features and monotically
     # increase whenever a new node is added.
@@ -361,7 +361,7 @@ class FeatureNode(Layer):
         self.resample_layers = []
         self.assign_weights = []
 
-    def attn_weighting_method(self, nodes, dtype):
+    def attention_weighting_method(self, nodes, dtype):
         edge_weights = []
         for weight in self.assign_weights:
             edge_weights.append(tf.cast(weight, dtype=dtype))
@@ -370,7 +370,7 @@ class FeatureNode(Layer):
         new_node = tf.reduce_sum(nodes * normalized_weights, -1)
         return new_node
 
-    def fastattn_weighting_method(self, nodes, dtype):
+    def fastattention_weighting_method(self, nodes, dtype):
         edge_weights = []
         for weight in self.assign_weights:
             edge_weights.append(tf.nn.relu(tf.cast(weight, dtype=dtype)))
@@ -391,10 +391,10 @@ class FeatureNode(Layer):
             A tensor denoting the fused features.
         """
         dtype = nodes[0].dtype
-        if self.weight_method == 'attn':
-            new_node = self.attn_weighting_method(nodes, dtype)
-        elif self.weight_method == 'fastattn':
-            new_node = self.fastattn_weighting_method(nodes, dtype)
+        if self.weight_method == 'attention':
+            new_node = self.attention_weighting_method(nodes, dtype)
+        elif self.weight_method == 'fastattention':
+            new_node = self.fastattention_weighting_method(nodes, dtype)
         elif self.weight_method == 'sum':
             new_node = sum_nodes(nodes)
         else:
@@ -421,9 +421,9 @@ class FeatureNode(Layer):
                 self.use_batchnorm_for_sampling, self.conv_after_downsample,
                 name=name))
 
-        if self.weight_method == 'attn':
+        if self.weight_method == 'attention':
             self._add_bifpn_weights('ones')
-        elif self.weight_method == 'fastattn':
+        elif self.weight_method == 'fastattention':
             self._add_bifpn_weights('ones')
         self.conv_after_fusion = ConvolutionAfterFusion(
             self.conv_batchnorm_activation_block, self.with_separable_conv,

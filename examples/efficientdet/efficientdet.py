@@ -43,7 +43,7 @@ def EFFICIENTDET(image_size, num_classes, fpn_num_filters,
 
 def EFFICIENTDETD0(image_size=512, num_classes=90, fpn_num_filters=64,
                    fpn_cell_repeats=3, box_class_repeats=3, anchor_scale=4.0,
-                   min_level=3, max_level=7, fpn_weight_method='fastattn',
+                   min_level=3, max_level=7, fpn_weight_method='fastattention',
                    return_base=False, model_name='efficientdet-d0',
                    BACKBONE='efficientnet-b0'):
     """ Instantiates EfficientDet-D0 model with the default
@@ -75,7 +75,7 @@ def EFFICIENTDETD0(image_size=512, num_classes=90, fpn_num_filters=64,
 
 def EFFICIENTDETD1(image_size=640, num_classes=90,  fpn_num_filters=88,
                    fpn_cell_repeats=4, box_class_repeats=3, anchor_scale=4.0,
-                   min_level=3, max_level=7, fpn_weight_method='fastattn',
+                   min_level=3, max_level=7, fpn_weight_method='fastattention',
                    return_base=False, model_name='efficientdet-d1',
                    BACKBONE='efficientnet-b1'):
     """ Instantiates EfficientDet-D1 model with the default
@@ -107,7 +107,7 @@ def EFFICIENTDETD1(image_size=640, num_classes=90,  fpn_num_filters=88,
 
 def EFFICIENTDETD2(image_size=768, num_classes=90, fpn_num_filters=112,
                    fpn_cell_repeats=5, box_class_repeats=3, anchor_scale=4.0,
-                   min_level=3, max_level=7, fpn_weight_method='fastattn',
+                   min_level=3, max_level=7, fpn_weight_method='fastattention',
                    return_base=False, model_name='efficientdet-d2',
                    BACKBONE='efficientnet-b2'):
     """ Instantiate EfficientDet-D2 model with the default
@@ -139,7 +139,7 @@ def EFFICIENTDETD2(image_size=768, num_classes=90, fpn_num_filters=112,
 
 def EFFICIENTDETD3(image_size=896, num_classes=90, fpn_num_filters=160,
                    fpn_cell_repeats=6, box_class_repeats=4, anchor_scale=4.0,
-                   min_level=3, max_level=7, fpn_weight_method='fastattn',
+                   min_level=3, max_level=7, fpn_weight_method='fastattention',
                    return_base=False, model_name='efficientdet-d3',
                    BACKBONE='efficientnet-b3'):
     """ Instantiates EfficientDet-D3 model with the default
@@ -171,7 +171,7 @@ def EFFICIENTDETD3(image_size=896, num_classes=90, fpn_num_filters=160,
 
 def EFFICIENTDETD4(image_size=1024, num_classes=90, fpn_num_filters=224,
                    fpn_cell_repeats=7, box_class_repeats=4, anchor_scale=4.0,
-                   min_level=3, max_level=7, fpn_weight_method='fastattn',
+                   min_level=3, max_level=7, fpn_weight_method='fastattention',
                    return_base=False, model_name='efficientdet-d4',
                    BACKBONE='efficientnet-b4'):
     """ Instantiates EfficientDet-D4 model with the default
@@ -203,7 +203,7 @@ def EFFICIENTDETD4(image_size=1024, num_classes=90, fpn_num_filters=224,
 
 def EFFICIENTDETD5(image_size=1280, num_classes=90, fpn_num_filters=288,
                    fpn_cell_repeats=7, box_class_repeats=4, anchor_scale=4.0,
-                   min_level=3, max_level=7, fpn_weight_method='fastattn',
+                   min_level=3, max_level=7, fpn_weight_method='fastattention',
                    return_base=False, model_name='efficientdet-d5',
                    BACKBONE='efficientnet-b5'):
     """ Instantiates EfficientDet-D5 model with the default
@@ -281,8 +281,7 @@ def EFFICIENTDETD7(image_size=1536, num_classes=90, fpn_num_filters=384,
         fpn_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
-        anchor_scale: Int, specifying the number of anchor
-        scales
+        anchor_scale: Int, specifying the number of anchor scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
