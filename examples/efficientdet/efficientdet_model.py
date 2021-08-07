@@ -1,6 +1,6 @@
 import tensorflow as tf
 import efficientnet_builder
-from utils import get_prior_boxes, process_outputs
+from anchors import get_prior_boxes
 from efficientdet_blocks import ResampleFeatureMap
 from efficientdet_blocks import FPNCells, ClassNet, BoxNet
 
@@ -129,15 +129,10 @@ class EfficientDet(tf.keras.Model):
             training: Bool, whether EfficientDet architecture is trained.
 
         # Returns
-            class_outputs: Tensor, returned only when the return_base flag
-            is True. Logits for all classes corresponding to the features
-            associated with the box coordinates.
-            box_outputs: Tensor, returned only when the return_base flag
-            is True. Box coordinate offsets for the corresponding prior boxes.
-            outputs: Tensor, returned only when the return_base flag is false.
-            Processed outputs by merging the features at all levels. Each row
-            corresponds to box coordinate offsets and sigmoid of the class
-            logits.
+            class_outputs: Tensor, Logits for all classes corresponding to
+            the features associated with the box coordinates.
+            box_outputs: Tensor,  Box coordinate offsets for the
+            corresponding prior boxes.
         """
 
         # Efficientnet backbone features
@@ -159,10 +154,4 @@ class EfficientDet(tf.keras.Model):
         # Box regression head
         box_outputs = self.box_net(fpn_features, training)
 
-        if self.return_base:
-            return class_outputs, box_outputs
-
-        else:
-            outputs = process_outputs(
-                class_outputs, box_outputs, self.num_levels, self.num_classes)
-            return outputs
+        return class_outputs, box_outputs

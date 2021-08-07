@@ -1,5 +1,5 @@
 import numpy as np
-import tensorflow as tf
+from paz.backend.boxes import to_center_form
 
 
 def get_feature_sizes(image_size, max_level):
@@ -76,8 +76,35 @@ class Anchors():
             boxes_level = np.concatenate(boxes_level, axis=1)
             boxes_all.append(boxes_level.reshape([-1, 4]))
         anchor_boxes = np.vstack(boxes_all)
-        anchor_boxes = tf.convert_to_tensor(anchor_boxes, dtype=tf.float32)
+        anchor_boxes = anchor_boxes.astype('float32')
         return anchor_boxes
 
     def get_anchors_per_location(self):
         return self.num_scales * len(self.aspect_ratios)
+
+
+def get_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
+                    anchor_scale, image_size):
+    """
+    Function to generate prior boxes.
+
+    # Arguments
+    min_level: Int, minimum level for features.
+    max_level: Int, maximum level for features.
+    num_scales: Int, specifying the number of scales in the anchor boxes.
+    aspect_ratios: List, specifying the aspect ratio of the
+    default anchor boxes. Computed with k-mean on COCO dataset.
+    num_classes: Int, specifying the number of class in the output.
+    image_size: Int, size of the input image.
+
+    # Returns
+    prior_boxes: Numpy, Prior anchor boxes corresponding to the
+    feature map size of each feature level.
+    """
+    prior_anchors = Anchors(min_level, max_level, num_scales,
+                            aspect_ratios, anchor_scale, image_size)
+    prior_boxes = prior_anchors.boxes
+    a1, a2, a3, a4 = np.hsplit(prior_boxes, 4)
+    prior_boxes = np.concatenate([a2, a1, a4, a3], axis=1)
+    prior_boxes = to_center_form(prior_boxes)
+    return prior_boxes
