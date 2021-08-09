@@ -338,8 +338,8 @@ if __name__ == "__main__":
                           roll=None, shift=None)
 
     rotation_matrices_error = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
-    #plot_predictions(renderer, model)
-    calculate_error(renderer, model, rotation_matrices_error)
+    plot_predictions(renderer, model)
+    #calculate_error(renderer, model, rotation_matrices_error)
 
     #renderer = SingleView(filepath=args.obj_path,
     #                      filepath_half_object="/home/fabian/.keras/datasets/custom_objects/symmetric_object_half.obj",
