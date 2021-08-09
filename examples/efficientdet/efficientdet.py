@@ -268,8 +268,8 @@ def EFFICIENTDETD6(image_size=1280, num_classes=90, fpn_num_filters=384,
 def EFFICIENTDETD7(image_size=1536, num_classes=90, fpn_num_filters=384,
                    fpn_cell_repeats=8, box_class_repeats=5, anchor_scale=5.0,
                    min_level=3, max_level=7, fpn_weight_method='sum',
-                   return_base=False, model_name='efficientdet-d3',
-                   BACKBONE='efficientnet-b7'):
+                   return_base=False, model_name='efficientdet-d7',
+                   BACKBONE='efficientnet-b6'):
     """ Instantiates EfficientDet-D7 model with the default
     setting provided in the official implementation.
     # Arguments
