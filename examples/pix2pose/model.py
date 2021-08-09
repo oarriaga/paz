@@ -11,12 +11,15 @@ from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense, Con
 from tensorflow.keras.layers import Dropout, Input, Flatten, Reshape, LeakyReLU, BatchNormalization, Concatenate
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.utils import plot_model
 import tensorflow.keras.backend as K
 import tensorflow as tf
 
 from scenes import SingleView
 from pipelines import DepthImageGenerator
 from paz.abstract.sequence import GeneratingSequencePix2Pose
+
+#tf.config.run_functions_eagerly(True)
 
 
 def transformer_loss(real_depth_image, predicted_depth_image):
@@ -76,6 +79,31 @@ def loss_color_wrapped(rotation_matrices):
     return loss_color_unwrapped
 
 
+def loss_color(color_image, predicted_color_image):
+
+        real_color_image = tf.identity(color_image)
+
+        # Bring the image in the range between 0 and 1
+        real_color_image = (real_color_image+1)*0.5
+
+        # Calculate masks for the object and the background (they are independent of the rotation)
+        mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(real_color_image), axis=-1), axis=-1), repeats=3, axis=-1)
+        mask_background = tf.ones(tf.shape(mask_object)) - mask_object
+
+        # Get the number of pixels
+        num_pixels = tf.math.reduce_prod(tf.shape(real_color_image)[1:3])
+        beta = 3
+
+        # Calculate the difference between the real and predicted images including the mask
+        diff_object = tf.math.abs(predicted_color_image*mask_object - real_color_image*mask_object)
+        diff_background = tf.math.abs(predicted_color_image*mask_background - real_color_image*mask_background)
+
+        # Calculate the total loss
+        loss_colors = tf.cast((1/num_pixels), dtype=tf.float32)*(beta*tf.math.reduce_sum(diff_object, axis=[1, 2, 3]) + tf.math.reduce_sum(diff_background, axis=[1, 2, 3]))
+
+        return loss_colors
+
+
 def loss_error(real_error_image, predicted_error_image):
 
     # Get the number of pixels
@@ -86,78 +114,64 @@ def loss_error(real_error_image, predicted_error_image):
 
 
 class PlotImagesCallback(Callback):
-    def __init__(self, model, sequence, save_path, obj_path, image_size, y_fov, depth, light,
-                 top_only, roll, shift, batch_size, steps_per_epoch, neptune_logging=False,
-                 rotation_matrices=None, processor=None):
+    def __init__(self, model, sequence, save_path, obj_path, image_size, multipleHypotheses, neptune_logging=False):
         self.save_path = save_path
         self.model = model
         self.sequence = sequence
         self.neptune_logging = neptune_logging
         self.obj_path = obj_path
         self.image_size = image_size
-        self.y_fov = y_fov
-        self.depth = depth
-        self.light = light
-        self.top_only = top_only
-        self.roll = roll
-        self.shift = shift
-        self.batch_size = batch_size
-        self.steps_per_epoch = steps_per_epoch
-        self.rotation_matrices = rotation_matrices
-        self.processor = processor
+        self.multipleHypotheses = multipleHypotheses
 
     def on_epoch_end(self, epoch_index, logs=None):
-        renderer = SingleView(self.obj_path, (self.image_size, self.image_size),
-                              self.y_fov, self.depth, self.light, bool(self.top_only),
-                              self.roll, self.shift)
-
-        # creating sequencer
-        image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
-        #processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
-        sequence = GeneratingSequencePix2Pose(self.processor, self.model, self.batch_size, self.steps_per_epoch * 2, rotation_matrices=self.rotation_matrices)
-
-        sequence_iterator = sequence.__iter__()
+        sequence_iterator = self.sequence.__iter__()
         batch = next(sequence_iterator)
         predictions = self.model.predict(batch[0]['input_image'])
 
         original_images = (batch[0]['input_image'] * 255).astype(np.int)
         color_images = ((batch[1]['color_output'] + 1) * 127.5).astype(np.int)
         color_images = color_images.astype(np.float)/255.
-        predictions['color_output'] = ((predictions['color_output'] + 1) * 127.5).astype(np.int)
-        predictions['error_output'] = ((predictions['error_output'] + 1) * 127.5).astype(np.int)
-        #color_images = batch[1]['color_output']
 
-        num_columns = 0
-        if self.rotation_matrices is None:
-            num_columns = 4
-        else:
-            num_columns = 3 + len(self.rotation_matrices)
+        for color_output_layer_name in self.multipleHypotheses.names_hypotheses_layers['color_output']:
+            predictions[color_output_layer_name] = ((predictions[color_output_layer_name] + 1) * 127.5).astype(np.int)
 
-        fig, ax = plt.subplots(4, num_columns)
+        for error_output_layer_name in self.multipleHypotheses.names_hypotheses_layers['error_output']:
+            predictions[error_output_layer_name] = ((predictions[error_output_layer_name] + 1) * 127.5).astype(np.int)
+
+        num_columns = self.multipleHypotheses.M
+        row_list = list(range(0, 6, 3))
+
+        # Three time the number of rows:
+        # First row: Original image, real color image
+        # Second row: All predicted color outputs
+        # Third row: All predicted error outputs
+        fig, ax = plt.subplots(len(row_list)*3, num_columns)
         fig.set_size_inches(10, 6)
 
-        cols = ["Input image", "Predicted image", "Predicted error", "Ground truth"]
+        for num_row in range(len(row_list)*3):
+            for num_column in range(num_columns):
+                ax[num_row, num_column].get_xaxis().set_visible(False)
+                ax[num_row, num_column].get_yaxis().set_visible(False)
 
-        for i in range(4):
-            ax[0, i].set_title(cols[i])
-            for j in range(num_columns):
-                ax[i, j].get_xaxis().set_visible(False)
-                ax[i, j].get_yaxis().set_visible(False)
+        for i, row in enumerate(row_list):
+            # First row: original image, real color image, real error image
+            ax[row, 0].imshow(original_images[i])
+            ax[row, 1].imshow(color_images[i])
 
-        for i in range(4):
-            ax[i, 0].imshow(original_images[i])
-            ax[i, 1].imshow(predictions['color_output'][i])
-            ax[i, 2].imshow(np.squeeze(predictions['error_output'][i]))
-            # Plot all the possible rotations
-            for j, rotation_matrix in enumerate(self.rotation_matrices):
-                ax[i, 3 + j].imshow(rotate_image(color_images[i], rotation_matrix))
+            # Second row: All predicted color outputs
+            for num_color_layer, color_output_layer_name in enumerate(self.multipleHypotheses.names_hypotheses_layers['color_output']):
+                ax[row+1, num_color_layer].imshow(predictions[color_output_layer_name][i])
+
+            # Third row: All predicted error outputs
+            for num_error_layer, error_output_layer_name in enumerate(self.multipleHypotheses.names_hypotheses_layers['error_output']):
+                ax[row+2, num_error_layer].imshow(predictions[error_output_layer_name][i])
 
         plt.tight_layout()
         plt.show()
-        plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
+        #plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
 
-        if self.neptune_logging:
-            neptune.log_image('plot', fig, image_name="epoch_{}.png".format(epoch_index))
+        #if self.neptune_logging:
+        #    neptune.log_image('plot', fig, image_name="epoch_{}.png".format(epoch_index))
 
         plt.clf()
         plt.close(fig)
@@ -179,7 +193,7 @@ class NeptuneLogger(Callback):
             neptune.log_artifact('pix2pose_dcgan_{}.h5'.format(epoch))
 
 
-def Generator():
+def Generator(multipleHypotheses=None):
     bn_axis = 3
 
     input = Input((128, 128, 3), name='input_image')
@@ -269,16 +283,25 @@ def Generator():
     d4_1 = LeakyReLU()(d4_1)
 
     # Define the two outputs
-    color_output = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(d4_1)
-    color_output = Activation('tanh', name='color_output')(color_output)
+    if multipleHypotheses:
+        output_layers_list = multipleHypotheses.multiple_hypotheses_output(d4_1, {
+            'color_output': Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same', activation='tanh'),
+            'error_output': Conv2DTranspose(1, (5, 5), strides=(2, 2), padding='same', activation='sigmoid')})
+        print(output_layers_list)
+        model = Model(inputs=[input], outputs=output_layers_list)
+    else:
+        color_output = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(d4_1)
+        color_output = Activation('tanh', name='color_output')(color_output)
 
-    error_output = Conv2DTranspose(1, (5, 5), strides=(2, 2), padding='same')(d4_1)
-    error_output = Activation('sigmoid', name='error_output')(error_output)
+        error_output = Conv2DTranspose(1, (5, 5), strides=(2, 2), padding='same')(d4_1)
+        error_output = Activation('sigmoid', name='error_output')(error_output)
 
-    # Define model
-    model = Model(inputs=[input], outputs=[color_output, error_output])
+        # Define model
+        model = Model(inputs=[input], outputs=[color_output, error_output])
+
     #model.compile(optimizer='adam', loss=transformer_loss)
-    #model.summary()
+    model.summary()
+    plot_model(model, "model.png")
     return model
 
 
@@ -329,5 +352,4 @@ def Discriminator():
 
 
 if __name__ == '__main__':
-    disc = Discriminator()
-    print(disc.summary())
+    Generator()

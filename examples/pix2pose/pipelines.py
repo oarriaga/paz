@@ -52,12 +52,12 @@ class GeneratedImageProcessor(Processor):
         self.num_images = len(glob.glob(os.path.join(path_images, "image_original/*")))
 
         # Load all images into memory to save time
-        self.images_original = [np.load(os.path.join(path_images, "image_original/images_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+        self.images_original = [np.load(os.path.join(path_images, "image_original/image_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
 
         if no_ambiguities:
-            self.images_colors = [np.load(os.path.join(path_images, "image_colors_no_ambiguities/image_colors_no_ambiguities_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+            self.images_colors = [np.load(os.path.join(path_images, "image_color_no_ambiguities/image_color_no_ambiguities_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
         else:
-            self.images_colors = [np.load(os.path.join(path_images, "image_colors/images_colors_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+            self.images_colors = [np.load(os.path.join(path_images, "image_color/image_colors_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
 
         self.alpha_original = [np.load(os.path.join(path_images, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
 
