@@ -166,7 +166,7 @@ def plot_predictions(renderer, model):
         points2D_predicted, points3D_predicted = predict_points(bounding_box_points, predicted_rotation_matrix, predicted_translation, world_to_camera_rotation_vector, camera)
 
         # Draw the real and predicted cube
-        image_bounding_boxes = draw_cube(original_image.astype("uint8"), points2D_predicted.astype(int), radius=1, thickness=1, color=(255, 0, 0))
+        image_bounding_boxes = draw_cube(predicted_color_image.astype("uint8"), points2D_predicted.astype(int), radius=1, thickness=1, color=(255, 0, 0))
         image_bounding_boxes = draw_cube(image_bounding_boxes.astype("uint8"), points2D_real.astype(int), radius=1, thickness=1, color=(0, 255, 0))
 
         images_bounding_boxes.append(image_bounding_boxes)
@@ -338,8 +338,8 @@ if __name__ == "__main__":
                           roll=None, shift=None)
 
     rotation_matrices_error = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
-    #plot_predictions(renderer, model)
-    calculate_error(renderer, model, rotation_matrices_error)
+    plot_predictions(renderer, model)
+    #calculate_error(renderer, model, rotation_matrices_error)
 
     #renderer = SingleView(filepath=args.obj_path,
     #                      filepath_half_object="/home/fabian/.keras/datasets/custom_objects/symmetric_object_half.obj",
