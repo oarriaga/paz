@@ -455,14 +455,23 @@ class ScaledResize(Processor):
     """Resizes image by returning the scales to original image.
 
     # Arguments
-        crop_factor: Float between ``[0, 1]``.
-        probability: Float between ``[0, 1]``.
+        image_size: Int, desired size of the model input.
+
+    # Returns
+        output_images: Numpy array, image resized to match
+        image size.
+        image_scales: Numpy array, scale to reconstruct the
+        raw image from the output_images.
     """
     def __init__(self, image_size):
         self.image_size = image_size
         super(ScaledResize, self).__init__()
 
     def call(self, image):
+        """
+        # Arguments
+            image: Numpy array, raw input image.
+        """
         crop_offset_y = np.array(0)
         crop_offset_x = np.array(0)
         height = np.array(image.shape[0]).astype('float32')
