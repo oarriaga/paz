@@ -4,7 +4,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
 
-from paz.backend.image.opencv_image import crop_image
 from hand_keypoints_loader import kinematic_chain_dict, kinematic_chain_list
 
 
@@ -446,12 +445,13 @@ def get_transformation_parameters(keypoint3D, transformation_matrix):
 
 
 def extract_bounding_box(binary_class_mask):
-    binary_class_mask = np.cast(binary_class_mask, tf.int32)
+    binary_class_mask = binary_class_mask.numpy()
+    binary_class_mask = binary_class_mask.astype(np.int)
     binary_class_mask = np.equal(binary_class_mask, 1)
-    shape = binary_class_mask.shape.as_list()
+    shape = binary_class_mask.shape
 
     if len(shape) == 4:
-        binary_class_mask = np.squeeze(binary_class_mask, [3])
+        binary_class_mask = np.squeeze(binary_class_mask, axis=3)
 
     s = binary_class_mask.shape
 
@@ -468,9 +468,10 @@ def extract_bounding_box(binary_class_mask):
     crop_size_list = list()
 
     for i in range(s[0]):
-        X_masked = np.cast(X[binary_class_mask[i, :, :]], np.float32)
-        Y_masked = np.cast(Y[binary_class_mask[i, :, :]], np.float32)
-
+        X_masked = X[binary_class_mask[i, :, :]].numpy()
+        Y_masked = Y[binary_class_mask[i, :, :]].numpy()
+        X_masked = X_masked.astype(np.float)
+        Y_masked = Y_masked.astype(np.float)
         x_min = np.min(X_masked)
         x_max = np.max(X_masked)
         y_min = np.min(Y_masked)
@@ -493,7 +494,8 @@ def extract_bounding_box(binary_class_mask):
 
         crop_size_x = x_max - x_min
         crop_size_y = y_max - y_min
-        crop_size = np.expand_dims(np.max(crop_size_x, crop_size_y), 0)
+        crop_maximum_value = np.maximum(crop_size_x, crop_size_y)
+        crop_size = np.expand_dims(crop_maximum_value, 0)
 
         if not np.all(np.isfinite(crop_size)):
             crop_size = np.array([100])
@@ -521,23 +523,24 @@ def convert_location_to_box(location, size, shape):
 
 
 def crop_image_from_coordinates(image, crop_location, crop_size, scale=1.0):
-    image_dimensions = image.shape()
+    image_dimensions = image.shape
     scale = np.reshape(scale, [-1])
-    crop_location = np.cast(crop_location, np.float32)
+    crop_location = crop_location.astype(np.float)
     crop_location = np.reshape(crop_location, [image_dimensions[0], 2])
-    crop_size = np.cast(crop_size, np.float32)
+    crop_size = float(crop_size)
 
     crop_size_scaled = crop_size / scale
 
     boxes = convert_location_to_box(crop_location, crop_size_scaled,
                                     image_dimensions)
 
-    crop_size = np.cast(np.stack([crop_size, crop_size]), np.int32)
-    box_indices = np.range(image_dimensions[0])
+    crop_size = np.stack([crop_size, crop_size])
+    crop_size = crop_size.astype(np.float)
+    box_indices = np.arange(image_dimensions[0])
     image_cropped = tf.image.crop_and_resize(tf.cast(image, tf.float32),
                                              boxes, box_indices, crop_size,
                                              name='crop')
-    return image_cropped
+    return image_cropped.numpy()
 
 
 def find_max_location(scoremap):
@@ -546,21 +549,22 @@ def find_max_location(scoremap):
     s = scoremap.shape
     assert len(s) == 3, "Scoremap must be 3D."
 
-    x_range = np.expand_dims(np.range(s[1]), 1)
-    y_range = np.expand_dims(np.range(s[2]), 0)
+    x_range = np.expand_dims(np.arange(s[1]), 1)
+    y_range = np.expand_dims(np.arange(s[2]), 0)
     X = np.tile(x_range, [1, s[2]])
     Y = np.tile(y_range, [s[1], 1])
 
     x_vec = np.reshape(X, [-1])
     y_vec = np.reshape(Y, [-1])
     scoremap_vec = np.reshape(scoremap, [s[0], -1])
-    max_ind_vec = np.cast(np.argmax(scoremap_vec, axis=1), np.int32)
+    max_ind_vec = np.argmax(scoremap_vec, axis=1)
+    max_ind_vec = max_ind_vec.astype(np.int)
 
     xy_loc = list()
     for i in range(s[0]):
         x_loc = np.reshape(x_vec[max_ind_vec[i]], [1])
         y_loc = np.reshape(y_vec[max_ind_vec[i]], [1])
-        xy_loc.append(np.concat([x_loc, y_loc], 0))
+        xy_loc.append(np.concatenate([x_loc, y_loc], 0))
 
     xy_loc = np.stack(xy_loc, 0)
     return xy_loc
@@ -568,7 +572,7 @@ def find_max_location(scoremap):
 
 def object_scoremap(scoremap):
     filter_size = 21
-    s = scoremap.shape()
+    s = scoremap.shape
     assert len(s) == 4, "Scoremap must be 4D."
 
     scoremap_softmax = tf.nn.softmax(scoremap)
@@ -605,7 +609,7 @@ def object_scoremap(scoremap):
 
 
 def get_rotation_matrix(rot_params):
-    theta = np.norm(rot_params)
+    theta = np.linalg.norm(rot_params)
 
     sine_theta = np.sin(theta)
     cos_theta = np.cos(theta)
@@ -631,7 +635,7 @@ def get_rotation_matrix(rot_params):
 
 
 def create_score_maps(keypoint_2D, keypoint_vis21, image_size, crop_size,
-                      sigma):
+                      sigma, crop_image=True):
     keypoint_hw21 = np.stack([keypoint_2D[:, 1], keypoint_2D[:, 0]], -1)
 
     scoremap_size = image_size[0:2]
@@ -670,5 +674,8 @@ def wrap_dictionary(keys, values):
     return dict(zip(keys, values))
 
 
-def merge_dictionaries(dict1, dict2):
-    return dict1.update(dict2)
+def merge_dictionaries(dicts):
+    result = {}
+    for dict in dicts:
+        result.update(dict)
+    return result

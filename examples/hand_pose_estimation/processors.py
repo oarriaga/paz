@@ -268,5 +268,5 @@ class Merge_Dictionaries(Processor):
     def __init__(self):
         super(Merge_Dictionaries, self).__init__()
 
-    def call(self, dict1, dict2):
-        return merge_dictionaries(dict1, dict2)
+    def call(self, dicts):
+        return merge_dictionaries(dicts)

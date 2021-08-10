@@ -30,7 +30,7 @@ class RenderedHandLoader(Loader):
         dataset = []
         for arg in range(len(hands)):
             sample = dict()
-            sample['image'] = hands[arg]
+            sample['image_path'] = hands[arg]
             sample['segmentation_label'] = segmentation_labels[arg]
             sample['annotations'] = annotations[arg]
             dataset.append(sample)

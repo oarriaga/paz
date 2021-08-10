@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 
 from HandPoseEstimation import Hand_Segmentation_Net, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
@@ -13,29 +14,41 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, help='Path to dataset')
 args = parser.parse_args()
 
-data_manager = RenderedHandLoader(args.data_path, 'test')
+data_manager = RenderedHandLoader(args.data_path, 'val')
 data = data_manager.load_data()
 
 
-class PostprocessSegmentation(SequentialProcessor):
-    def __init__(self, HandSegNet, PoseNet, image_size=320, crop_size=256):
-        super(PostprocessSegmentation, self).__init__()
+class preprocess_image(SequentialProcessor):
+    def __init__(self, image_size=320):
+        super(preprocess_image, self).__init__()
         self.add(pr.UnpackDictionary(['image_path']))
         self.add(pr.LoadImage())
-        self.add(pr.ResizeImage(HandSegNet.input_shape[1:3]))
+        self.add(pr.ResizeImage((image_size, image_size)))
         self.add(pr.ConvertColorSpace(pr.RGB2BGR))
         self.add(pr.SubtractMeanImage(pr.BGR_IMAGENET_MEAN))
         self.add(pr.ExpandDims(0))
+
+
+class PostprocessSegmentation(SequentialProcessor):
+    def __init__(self, HandSegNet, image_size=320, crop_size=256):
+        super(PostprocessSegmentation, self).__init__()
         self.add(pr.Predict(HandSegNet))
         self.add(pr.UnpackDictionary(['image', 'raw_segmentation_map']))
         self.add(pr.ControlMap(Resize_image(size=(image_size, image_size)),
                                [1], [1]))
         self.add(pr.ControlMap(HandSegmentationMap(), [1], [1]))
-        self.add(pr.ControlMap(ExtractBoundingbox(), [1], [2, 3, 4]))
+        self.add(pr.ControlMap(ExtractBoundingbox(), [1], [2, 3, 4],
+                               keep={1: 1}))
         self.add(pr.ControlMap(AdjustCropSize(), [4], [3]))
-        self.add(pr.ControlMap(CropImage(), [0, 2, 3], [1]))
-        self.add(pr.CastImage('uint8'))
-        self.add(Wrap_to_Dictionary(PoseNet.input_names[0]))
+        self.add(pr.ControlMap(CropImage(crop_size=crop_size), [0, 2, 3],
+                               [0]))
+        self.add(pr.ControlMap(pr.CastImage('uint8'), [0], [0]))
+
+
+class Process2DKeypoints(SequentialProcessor):
+    def __init__(self, PoseNet):
+        super(Process2DKeypoints, self).__init__()
+        self.add(pr.Predict(PoseNet))
 
 
 class PostProcessKeypoints(SequentialProcessor):
@@ -54,18 +67,19 @@ HandPoseNet = PoseNet(load_pretrained=use_pretrained)
 HandPosePriorNet = PosePriorNet(load_pretrained=use_pretrained)
 HandViewPointNet = ViewPointNet(load_pretrained=use_pretrained)
 
-hand_localization = PostprocessSegmentation(HandSegNet, HandPoseNet)
+hand_localization = PostprocessSegmentation(HandSegNet)
 postprocess_keypoints = PostProcessKeypoints()
 
-for sample in data:
-    hand_crop = hand_localization(sample)
-    score_maps = pr.Predict(HandPoseNet)(hand_crop)
-    canonical_coordinates = pr.Predict(HandPosePriorNet)(score_maps)
-    viewpoints = pr.Predict(HandViewPointNet)(score_maps)
-    canonical_keypoints = Merge_Dictionaries()(canonical_coordinates,
-                                               viewpoints)
-    relative_keypoints = postprocess_keypoints(canonical_keypoints)
-
-
-
-
+# for sample in data:
+image = preprocess_image()(data[0])
+hand_crop, _, _ = hand_localization(image)
+score_maps = Process2DKeypoints(HandPoseNet)(hand_crop)
+print(np.shape(score_maps['score_maps']))
+hand_side = {'hand_side': np.array([[1.0, 0.0]])}
+score_maps = Merge_Dictionaries()([score_maps, hand_side])
+canonical_coordinates = pr.Predict(HandPosePriorNet)(score_maps)
+viewpoints = pr.Predict(HandViewPointNet)(score_maps)
+canonical_keypoints = Merge_Dictionaries()([canonical_coordinates,
+                                            viewpoints])
+relative_keypoints = postprocess_keypoints(canonical_keypoints)
+print("Keypoints are :", relative_keypoints[0].shape)

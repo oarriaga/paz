@@ -5,8 +5,9 @@ import tensorflow as tf
 from tensorflow.keras.layers import Concatenate, Dense, Dropout, Reshape, Input
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, LeakyReLU
 from tensorflow.keras import Model
-from backend import extract_bounding_box, crop_image_from_xy, flip_right_hand, \
-    object_scoremap, get_rotation_matrix
+from backend import extract_bounding_box, flip_right_hand
+from backend import crop_image_from_coordinates, object_scoremap
+from backend import get_rotation_matrix
 
 
 def Hand_Segmentation_Net(input_shape=None, load_pretrained=True):
@@ -195,7 +196,7 @@ def PoseNet(input_shape=None, load_pretrained=True):
     scoremap_list.append(score_maps)
 
     PoseNet = Model(inputs={'cropped_image': cropped_image},
-                    outputs={'score_maps': scoremap_list}, name='PoseNet')
+                    outputs={'score_maps': scoremap_list[-1]}, name='PoseNet')
 
     if load_pretrained:
         weight_path = PoseNet.name + '-pretrained_weights.h5'
@@ -210,8 +211,8 @@ def PosePriorNet(keypoint_heatmaps_shape=None, hand_side_shape=None,
         hand_side_shape = [2]
     if keypoint_heatmaps_shape is None:
         keypoint_heatmaps_shape = [32, 32, 21]
-    score_maps = Input(shape=keypoint_heatmaps_shape, name='keypoint_heatmaps')
-    hand_side = Input(shape=hand_side_shape, name='hand_side')
+    score_maps = Input(shape=keypoint_heatmaps_shape)
+    hand_side = Input(shape=hand_side_shape)
 
     X_1 = Conv2D(32, 3, padding='same', name='conv3_1')(score_maps)
     X_1 = LeakyReLU(alpha=0.01)(X_1)
@@ -245,7 +246,7 @@ def PosePriorNet(keypoint_heatmaps_shape=None, hand_side_shape=None,
     X_10 = Dense(num_keypoints * 3, name='dense3_3')(X_9)
 
     hand_keypoints = Reshape((21, 3), name='reshape3_1')(X_10)
-    PosePriorNet = Model(inputs={'keypoint_heatmaps': score_maps,
+    PosePriorNet = Model(inputs={'score_maps': score_maps,
                                  'hand_side': hand_side},
                          outputs={'canonical_coordinates': hand_keypoints},
                          name='PosePriorNet')
@@ -262,11 +263,11 @@ def ViewPointNet(keypoint_heat_maps_shape=None, hand_side_shape=None,
         hand_side_shape = [2]
     if keypoint_heat_maps_shape is None:
         keypoint_heat_maps_shape = [32, 32, 21]
-    keypoint_heatmaps = Input(shape=keypoint_heat_maps_shape,
-                              name='keypoint_heatmaps')
+    score_maps = Input(shape=keypoint_heat_maps_shape,
+                              name='score_maps')
     hand_side = Input(shape=hand_side_shape, name='hand_side')
 
-    X_1 = Conv2D(64, 3, padding='same')(keypoint_heatmaps)
+    X_1 = Conv2D(64, 3, padding='same')(score_maps)
     X_1 = LeakyReLU(alpha=0.01)(X_1)
 
     X_2 = Conv2D(64, 3, strides=2, padding='same')(X_1)
@@ -298,7 +299,7 @@ def ViewPointNet(keypoint_heat_maps_shape=None, hand_side_shape=None,
 
     axis_angles = Concatenate(axis=1)([ux, uy, uz])
 
-    ViewPointNet = Model(inputs={'keypoint_heatmaps': keypoint_heatmaps,
+    ViewPointNet = Model(inputs={'score_maps': score_maps,
                                  'hand_side': hand_side},
                          outputs={'rotation_parameters': axis_angles,
                                   'hand_side': hand_side},
@@ -342,7 +343,8 @@ def ColorHandPoseNet(image_shape=None, hand_side_shape=None,
     center, _, crop_size_best = extract_bounding_box(hand_mask)
     crop_size_best *= 1.25
     scale_crop = tf.minimum(tf.maximum(crop_size / crop_size_best, 0.25), 5.0)
-    image_crop = crop_image_from_xy(image, center, crop_size, scale=scale_crop)
+    image_crop = crop_image_from_coordinates(image, center, crop_size,
+                                             scale=scale_crop)
 
     keypoints_scoremap = HandPoseNet({'cropped_image': image_crop})
 
