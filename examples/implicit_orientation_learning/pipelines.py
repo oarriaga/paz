@@ -2,6 +2,7 @@ import glob
 import os
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines import EncoderPredictor, DecoderPredictor
@@ -22,35 +23,42 @@ class ImplicitRotationPredictor(Processor):
         self.encoder.add(pr.ExpandDims(0))
         self.encoder.add(MeasureSimilarity(self.dictionary, measure))
         self.decoder = DecoderPredictor(decoder)
-        outputs = ['image', 'latent_vector', 'latent_image', 'decoded_image']
+        outputs = ['image', 'latent_vector', 'latent_image', 'decoded_image', 'matrices']
         self.wrap = pr.WrapOutput(outputs)
 
     def call(self, image):
-        latent_vector, closest_image = self.encoder(image)
-        self.show_closest_image(closest_image)
+        latent_vector, closest_image, matrices = self.encoder(image)
+        #self.show_closest_image(closest_image)
         decoded_image = self.decoder(latent_vector)
-        self.show_decoded_image(decoded_image)
-        return self.wrap(image, latent_vector, closest_image, decoded_image)
+        #self.show_decoded_image(decoded_image)
+        return self.wrap(image, latent_vector, closest_image, decoded_image, matrices)
 
 
 class DomainRandomizationProcessor(Processor):
     def __init__(self, renderer, image_paths, num_occlusions, split=pr.TRAIN):
         super(DomainRandomizationProcessor, self).__init__()
         self.copy = pr.Copy()
+        self.renderer = renderer
         self.render = pr.Render(renderer)
         self.augment = RandomizeRenderedImage(image_paths, num_occlusions)
         preprocessors = [pr.ConvertColorSpace(pr.RGB2BGR), pr.NormalizeImage()]
         self.preprocess = SequentialProcessor(preprocessors)
+        self.preprocess_predict = pr.ConvertColorSpace(pr.RGB2BGR)
         self.split = split
 
     def call(self):
-        input_image, alpha_mask = self.render()
+        input_image, alpha_mask, matrices = self.render()
         label_image = self.copy(input_image)
         if self.split == pr.TRAIN:
             input_image = self.augment(input_image, alpha_mask)
-        input_image = self.preprocess(input_image)
-        label_image = self.preprocess(label_image)
-        return input_image, label_image
+            input_image = self.preprocess(input_image)
+            label_image = self.preprocess(label_image)
+            return input_image, label_image
+        else:
+            input_image = self.augment(input_image, alpha_mask)
+            input_image = self.preprocess_predict(input_image)
+            label_image = self.preprocess_predict(label_image)
+            return input_image, label_image, matrices
 
 
 class DomainRandomization(SequentialProcessor):

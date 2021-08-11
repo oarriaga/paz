@@ -68,13 +68,13 @@ class DrawKeypoints2D(Processor):
 
 
 class DrawBoxes3D(Processor):
-    def __init__(self, camera, class_to_dimensions, thickness=1):
+    def __init__(self, camera, class_to_dimensions, thickness=1, radius=2):
         """Draw boxes 3D of multiple objects
 
         # Arguments
             camera: Instance of ``paz.backend.camera.Camera''.
             class_to_dimensions: Dictionary that has as keys the
-                class names and as value a list [model_height, model_width]
+                class names and as value a list [model_height, model_width, model_depth]
             thickness: Int. Thickness of 3D box
         """
         # model_height=.1, model_width=0.08):
@@ -83,29 +83,30 @@ class DrawBoxes3D(Processor):
         self.class_to_dimensions = class_to_dimensions
         self.class_to_points = self._make_points(self.class_to_dimensions)
         self.thickness = thickness
+        self.radius = radius
 
     def _make_points(self, class_to_dimensions):
         class_to_points = {}
         for class_name, dimensions in self.class_to_dimensions.items():
-            height, width = dimensions
-            point_1 = [+width, -height, +width]
-            point_2 = [+width, -height, -width]
-            point_3 = [-width, -height, -width]
-            point_4 = [-width, -height, +width]
-            point_5 = [+width, +height, +width]
-            point_6 = [+width, +height, -width]
-            point_7 = [-width, +height, -width]
-            point_8 = [-width, +height, +width]
+            height, width, depth = dimensions
+            point_1 = [+width, -height, +depth]
+            point_2 = [+width, -height, -depth]
+            point_3 = [-width, -height, -depth]
+            point_4 = [-width, -height, +depth]
+            point_5 = [+width, +height, +depth]
+            point_6 = [+width, +height, -depth]
+            point_7 = [-width, +height, -depth]
+            point_8 = [-width, +height, +depth]
             points = [point_1, point_2, point_3, point_4,
                       point_5, point_6, point_7, point_8]
             class_to_points[class_name] = np.array(points)
         return class_to_points
 
-    def call(self, image, pose6D):
+    def call(self, image, pose6D, color=(0, 255, 0)):
         points3D = self.class_to_points[pose6D.class_name]
         args = (points3D, pose6D, self.camera)
         points2D = project_points3D(*args).astype(np.int32)
-        draw_cube(image, points2D, thickness=self.thickness)
+        draw_cube(image, points2D, color, thickness=self.thickness, radius=self.radius)
         return image
 
 

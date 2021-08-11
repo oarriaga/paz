@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot

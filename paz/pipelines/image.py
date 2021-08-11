@@ -80,7 +80,7 @@ class DecoderPredictor(SequentialProcessor):
     def __init__(self, decoder):
         self.decoder = decoder
         super(DecoderPredictor, self).__init__()
-        self.add(pr.Predict(decoder, pr.ExpandDims(0), pr.Squeeze(0)))
+        self.add(pr.Predict(decoder, preprocess=None, postprocess=pr.Squeeze(0)))
         self.add(pr.DenormalizeImage())
         self.add(pr.CastImage('uint8'))
         self.add(pr.ConvertColorSpace(pr.BGR2RGB))

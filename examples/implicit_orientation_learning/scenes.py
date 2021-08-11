@@ -56,9 +56,14 @@ class SingleView():
         self.light.light.intensity = intensity
         self.scene.set_pose(self.camera, camera_to_world)
         self.scene.set_pose(self.light, camera_to_world)
+
+        camera_to_world = camera_to_world.flatten()
+        world_to_camera = world_to_camera.flatten()
+        matrices = np.vstack([world_to_camera, camera_to_world])
+
         image, depth = self.renderer.render(self.scene, flags=self.RGBA)
         image, alpha = split_alpha_channel(image)
-        return image, alpha
+        return image, alpha, matrices
 
 
 class DictionaryView():

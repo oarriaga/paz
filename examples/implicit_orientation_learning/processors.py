@@ -13,11 +13,14 @@ class MakeDictionary(Processor):
         data = self.renderer.render()
         dictionary = {}
         latent_vectors = np.zeros((len(data), self.latent_dimension))
+        matrices = np.zeros((len(data), 2, 16))
         for sample_arg, sample in enumerate(data):
             image = sample['image']
             latent_vectors[sample_arg] = self.encoder(image)
+            matrices[sample_arg] = sample['matrices']
             dictionary[sample_arg] = image
         dictionary['latent_vectors'] = latent_vectors
+        dictionary['matrices'] = matrices
         return dictionary
 
 
@@ -31,4 +34,5 @@ class MeasureSimilarity(Processor):
         latent_vectors = self.dictionary['latent_vectors']
         measurements = self.measure(latent_vectors, latent_vector)
         closest_image = self.dictionary[np.argmax(measurements)]
-        return latent_vector, closest_image
+        matrices = self.dictionary['matrices'][np.argmax(measurements)]
+        return latent_vector, closest_image, matrices

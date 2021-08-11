@@ -92,6 +92,7 @@ from .standard import Stochastic
 
 from .pose import SolvePNP
 
+from .plot import PlotErrorCurve
 
 from ..backend.image.opencv_image import RGB2BGR
 from ..backend.image.opencv_image import BGR2RGB
