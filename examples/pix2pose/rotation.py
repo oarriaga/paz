@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from copy import deepcopy
 from paz.backend.quaternion import quarternion_to_rotation_matrix
 
 import tensorflow as tf
@@ -58,9 +59,23 @@ def loss_color(real_color_image, predicted_color_image, rotation_matrix):
 
     return loss_colors
 
+
+def generate_rotation_matrices_continuous_symmetry(num_matrices=10):
+    angles = np.linspace(0, np.pi*2, num_matrices)
+    rotation_matrices = list()
+
+    for angle in angles:
+        rotation_matrix = np.array([[np.cos(angle), 0, np.sin(angle)],
+                                    [0, 1, 0],
+                                    [-np.sin(angle), 0, np.cos(angle)]])
+        rotation_matrices.append(rotation_matrix)
+
+    return rotation_matrices
+
+
 num_samples = 5
 list_images = list()
-view = SingleView(filepath="/home/fabian/.keras/datasets/custom_objects/simple_symmetry_object.obj")
+view = SingleView(filepath="/home/fabian/.keras/datasets/tless_obj/obj_000014.obj")
 
 image_original, image_colors, alpha_original = view.render()
 image_colors = image_colors.copy()
@@ -70,26 +85,42 @@ image_colors = image_colors/255.
 epsilon = 0.0001
 #rotation_matrix = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, -1]])
 #rotation_matrix = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-rotation_matrices = np.load("./rotation_matrices/simple_symmetry_object_two_matrices.npy")
+rotation_matrices = np.load("./rotation_matrices/2_fold_symmetry_rotation_matrices.npy")
 
 image_colors_copy = np.expand_dims(image_colors, axis=0)
-#loss_color(tf.convert_to_tensor(image_colors_copy/255., dtype=tf.float32), tf.convert_to_tensor(image_colors_copy/255., dtype=tf.float32), tf.convert_to_tensor(rotation_matrices[0], dtype=tf.float32))
 
 # Applying the rotation to the image (easy way)
-plt.imshow(image_colors)
-plt.show()
+num_matrices = 10
+images_rotated = list()
+rotation_matrices = generate_rotation_matrices_continuous_symmetry(num_matrices)
 mask_image = (np.sum(image_colors, axis=-1) != 0).astype(float)
-mask_image = np.repeat(mask_image[...,np.newaxis], 3, axis=-1)
-image_colors_rotated = image_colors + np.ones_like(image_colors)*0.0001
-image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrices[0], image_colors_rotated)
-image_colors_rotated = np.where(np.less(image_colors_rotated, 0), 1 * np.ones_like(image_colors_rotated) + image_colors_rotated, image_colors_rotated)
-image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
-image_colors_rotated = image_colors_rotated*mask_image
+mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
 
-plt.imshow(mask_image)
-plt.show()
+image_colors = (image_colors*2)-1
 
-plt.imshow(image_colors_rotated)
+print(rotation_matrices)
+for rotation_matrix in rotation_matrices:
+    image_colors_rotated = image_colors + np.ones_like(image_colors)*0.0001
+    image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrix, image_colors_rotated)
+    #images_rotated.append(image_colors_rotated[:, :, 0])
+    #image_colors_rotated = np.where(np.less(image_colors_rotated, 0), 1 * np.ones_like(image_colors_rotated) + image_colors_rotated, image_colors_rotated)
+    #image_colors_rotated = np.abs(image_colors_rotated)
+    image_colors_rotated = (image_colors_rotated + 1) / 2
+    image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
+    image_colors_rotated *= mask_image
+    images_rotated.append(image_colors_rotated)
+
+    #image_colors = deepcopy(image_colors_rotated)
+
+f, axs = plt.subplots(2, 5)
+#f, axs = plt.subplots(1, 2)
+axs = axs.flatten()
+for i, ax in enumerate(axs):
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    ax.imshow(images_rotated[i])
+
 plt.show()
 
 # Applying the rotation to the image (complicated way)

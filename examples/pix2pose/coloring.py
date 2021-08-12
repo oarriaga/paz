@@ -93,7 +93,13 @@ def calculate_canonical_pose_cylinder(mesh):
 
     angle_backrotation = np.arctan2(rotation_matrix[0, 2]-rotation_matrix[2, 0], rotation_matrix[0, 0]+rotation_matrix[2, 2])
     angle_backrotation = np.round(angle_backrotation, 4)
-    quaternion = quaternion_multiply(np.array([0, -np.sin(angle_backrotation / 2), 0, np.cos(angle_backrotation / 2)]), mesh.rotation)
+    rotation_matrix_around_y = np.array([[np.cos(angle_backrotation), 0, np.sin(angle_backrotation)],
+                                         [0, 1, 0],
+                                         [-np.sin(angle_backrotation), 0, np.cos(angle_backrotation)]])
+    rotation_matrix_around_y = np.linalg.inv(rotation_matrix_around_y)
+    quaternion_rotation_around_y = trimesh.transformations.quaternion_from_matrix(rotation_matrix_around_y)
+    quaternion_rotation_around_y = quaternion_rotation_around_y[[1, 2, 3, 0]]
+    quaternion = quaternion_multiply(mesh.rotation, quaternion_rotation_around_y)
     mesh.rotation = quaternion
 
 
@@ -133,17 +139,28 @@ if __name__ == "__main__":
     scene.set_pose(camera, camera_to_world)
     scene.set_pose(light, camera_to_world)
 
-    #mesh = trimesh.load("/home/fabian/.keras/datasets/custom_objects/symmetry_z_2_object.obj")
-    mesh, mesh_rotated = color_object("/home/fabian/.keras/datasets/tless_obj/obj_000005.obj")
-
+    mesh, _ = color_object("/home/fabian/.keras/datasets/tless_obj/obj_000014.obj")
     mesh = scene.add(Mesh.from_trimesh(mesh, smooth=False))
-    #mesh_rotated = scene.add(Mesh.from_trimesh(mesh_rotated, smooth=False))
 
-    angle = -np.pi
-    mesh.rotation = np.array([0, np.sin(angle/2), 0, np.cos(angle/2)])
-    #angle = -np.pi/4 + np.pi
-    #mesh_rotated.rotation = np.array([0, np.sin(angle/2), 0, np.cos(angle/2)])
-    calculate_canonical_pose_two_symmetries(mesh)
+    angle = np.pi*1.4
+    #rotation_matrix_around_y = np.array([[np.cos(angle), 0, np.sin(angle)], [0, 1, 0], [-np.sin(angle), 0, np.cos(angle)]])
+    #rotation = trimesh.transformations.quaternion_from_matrix(rotation_matrix_around_y)
+    #print("Quaternion: {}".format(rotation))
+    #rotation = rotation[[1, 2, 3, 0]]
+    #rotation = np.array([0, np.random.random()*2, 0, np.cos(angle/2)])
+    #rotation = rotation/np.linalg.norm(rotation)
+    #mesh.rotation = rotation
+    random_quaternion = trimesh.transformations.random_quaternion()
+    random_quaternion = random_quaternion[[1, 2, 3, 0]]
+    mesh.rotation = random_quaternion
+
+    renderer = OffscreenRenderer(size[0], size[1])
+    image_original, depth_original = renderer.render(scene, flags=RenderFlags.FLAT)
+
+    plt.imshow(image_original)
+    plt.show()
+
+    calculate_canonical_pose_cylinder(mesh)
     print("Mesh rotation: {}".format(mesh.rotation))
 
     renderer = OffscreenRenderer(size[0], size[1])

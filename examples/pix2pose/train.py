@@ -106,7 +106,7 @@ losses = {"color_output": loss_color,
           "error_output": loss_error,
           "discriminator_output": "binary_crossentropy"}
 lossWeights = {"color_output": 100.0, "error_output": 50.0, "discriminator_output": 1.0}
-dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights)
+dcgan.compile(optimizer=optimizer, loss=losses, loss_weights=lossWeights, run_eagerly=True)
 dcgan.summary()
 
 discriminator.trainable = True
@@ -114,14 +114,14 @@ discriminator.compile(loss=['binary_crossentropy'], optimizer=optimizer)
 discriminator.summary()
 
 # setting scene
-renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
-                      args.y_fov, args.depth, args.light, bool(args.top_only),
-                      args.roll, args.shift)
+#renderer = SingleView(args.obj_path, (args.image_size, args.image_size),
+#                      args.y_fov, args.depth, args.light, bool(args.top_only),
+#                      args.roll, args.shift)
 
 # creating sequencer
 background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
 #processor = DepthImageGenerator(renderer, args.image_size, image_paths, num_occlusions=0)
-processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "train"), args.image_size, background_image_paths, num_occlusions=0)
+processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), args.image_size, background_image_paths, num_occlusions=0)
 processor_test = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), args.image_size, background_image_paths, num_occlusions=0)
 sequence_train = GeneratingSequencePix2Pose(processor_train, dcgan, args.batch_size, args.steps_per_epoch, rotation_matrices=rotation_matrices)
 sequence_test = GeneratingSequencePix2Pose(processor_test, dcgan, args.batch_size, args.steps_per_epoch, rotation_matrices=rotation_matrices)

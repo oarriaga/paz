@@ -66,7 +66,7 @@ class SingleView():
         roll: Float, to sample [-roll, roll] rolls of the Z OpenGL camera axis.
         shift: Float, to sample [-shift, shift] to move in X, Y OpenGL axes.
     """
-    def __init__(self, filepath, filepath_half_object, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
+    def __init__(self, filepath, filepath_half_object="", viewport_size=(128, 128), y_fov=3.14159 / 4.0,
                  distance=[0.3, 0.5], light_bounds=[0.5, 30], top_only=False,
                  roll=None, shift=None):
         self.distance, self.roll, self.shift = distance, roll, shift
@@ -146,6 +146,7 @@ class SingleView():
         #camera_translation_z = 0.69
         # Random rotation and translation for the object
         rotation = trimesh.transformations.random_quaternion()
+        #rotation = np.array([0, 0, 0, 1])
 
         translation = get_random_translation(0.05)
 

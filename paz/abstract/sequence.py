@@ -129,21 +129,18 @@ class GeneratingSequencePix2Pose(SequenceExtra):
         return self.num_steps
 
     def rotate_image(self, image, rotation_matrix):
-        # Bring the image in the range between 0 and 1
-        image = (image + 1) * 0.5
-
         mask_image = (np.sum(image, axis=-1) != 0).astype(float)
         mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
-        image_colors_rotated = image + np.ones_like(image) * 0.0001
-        image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrix, image_colors_rotated)
-        image_colors_rotated = np.where(np.less(image_colors_rotated, 0),
-                                        np.ones_like(image_colors_rotated) + image_colors_rotated, image_colors_rotated)
-        image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
-        image_colors_rotated = image_colors_rotated * mask_image
+        mask_background = np.ones_like(mask_image) - mask_image
 
-        # Bring the image again in the range between -1 and 1
-        image_colors_rotated = (image_colors_rotated * 2) - 1
-        return image_colors_rotated
+        image = image + np.ones_like(image) * 0.0001
+
+        # Rotate the object
+        image_rotated = np.einsum('ij,klj->kli', rotation_matrix, image)
+        image_rotated *= mask_image
+        image_rotated += (mask_background * -1.)
+
+        return image_rotated
 
     def process_batch(self, inputs, labels, batch_index):
         start = time.time()

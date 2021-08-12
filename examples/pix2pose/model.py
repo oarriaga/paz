@@ -32,33 +32,51 @@ def transformer_loss(real_depth_image, predicted_depth_image):
     return K.mean(K.square(predicted_depth_image - real_depth_image), axis=-1)
 
 
+def rotate_image(image, rotation_matrix):
+    mask_image = (np.sum(image, axis=-1) != 0).astype(float)
+    mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
+
+    image_colors = (image * 2) - 1
+
+    image_colors_rotated = image_colors + np.ones_like(image_colors) * 0.0001
+    image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrix, image_colors_rotated)
+    image_colors_rotated = (image_colors_rotated + 1) / 2
+    image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
+    image_colors_rotated *= mask_image
+
+    return image_colors_rotated
+
+
 def loss_color_wrapped(rotation_matrices):
     def loss_color_unwrapped(color_image, predicted_color_image):
         min_loss = tf.float32.max
+
+        # Bring the image in the range between 0 and 1
+        color_image = (color_image + 1) * 0.5
+
+        # Calculate masks for the object and the background (they are independent of the rotation)
+        mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(color_image), axis=-1), axis=-1),
+                                repeats=3, axis=-1)
+        mask_background = tf.ones(tf.shape(mask_object)) - mask_object
+
+        # Bring the image again in the range between -1 and 1
+        color_image = (color_image * 2) - 1
 
         # Iterate over all possible rotations
         for rotation_matrix in rotation_matrices:
 
             real_color_image = tf.identity(color_image)
 
-            # Bring the image in the range between 0 and 1
-            real_color_image = (real_color_image+1)*0.5
-
-            # Calculate masks for the object and the background (they are independent of the rotation)
-            mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(real_color_image), axis=-1), axis=-1), repeats=3, axis=-1)
-            mask_background = tf.ones(tf.shape(mask_object)) - mask_object
-
             # Add a small epsilon value to avoid the discontinuity problem
             real_color_image = real_color_image + tf.ones_like(real_color_image) * 0.0001
 
             # Rotate the object
             real_color_image = tf.einsum('ij,mklj->mkli', tf.convert_to_tensor(np.array(rotation_matrix), dtype=tf.float32), real_color_image)
-            real_color_image = tf.where(tf.math.less(real_color_image, 0), tf.ones_like(real_color_image) + real_color_image, real_color_image)
+            #real_color_image = tf.where(tf.math.less(real_color_image, 0), tf.ones_like(real_color_image) + real_color_image, real_color_image)
 
-            real_color_image = real_color_image*mask_object
-
-            # Bring the image again in the range between -1 and 1
-            real_color_image = (real_color_image*2)-1
+            # Set the background to be all -1
+            real_color_image *= mask_object
+            real_color_image += (mask_background*tf.constant(-1.))
 
             # Get the number of pixels
             num_pixels = tf.math.reduce_prod(tf.shape(real_color_image)[1:3])
@@ -107,12 +125,12 @@ class PlotImagesCallback(Callback):
         self.processor = processor
 
     def on_epoch_end(self, epoch_index, logs=None):
-        renderer = SingleView(self.obj_path, (self.image_size, self.image_size),
-                              self.y_fov, self.depth, self.light, bool(self.top_only),
-                              self.roll, self.shift)
+        #renderer = SingleView(self.obj_path, (self.image_size, self.image_size),
+        #                      self.y_fov, self.depth, self.light, bool(self.top_only),
+        #                      self.roll, self.shift)
 
         # creating sequencer
-        image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
+        #image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
         #processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
         sequence = GeneratingSequencePix2Pose(self.processor, self.model, self.batch_size, self.steps_per_epoch * 2, rotation_matrices=self.rotation_matrices)
 
@@ -154,7 +172,7 @@ class PlotImagesCallback(Callback):
 
         plt.tight_layout()
         plt.show()
-        plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
+        #plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
 
         if self.neptune_logging:
             neptune.log_image('plot', fig, image_name="epoch_{}.png".format(epoch_index))
@@ -176,7 +194,7 @@ class NeptuneLogger(Callback):
 
         if epoch%self.log_interval == 0:
             self.model.save(os.path.join(self.save_path, 'pix2pose_dcgan_{}.h5'.format(epoch)))
-            neptune.log_artifact('pix2pose_dcgan_{}.h5'.format(epoch))
+            #neptune.log_artifact('pix2pose_dcgan_{}.h5'.format(epoch))
 
 
 def Generator():
