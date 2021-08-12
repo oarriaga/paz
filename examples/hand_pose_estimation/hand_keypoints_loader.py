@@ -11,6 +11,10 @@ kinematic_chain_dict = {0: 'root',
                         20: 'root', 19: 20, 18: 19, 17: 18}
 kinematic_chain_list = list(kinematic_chain_dict.keys())
 
+ROOT_KEYPOINT_ID = 0
+ALIGNED_KEYPOINT_ID = 12
+LAST_KEYPOINT_ID = 20
+
 
 class RenderedHandLoader(Loader):
     def __init__(self, path, split='train'):

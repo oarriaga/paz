@@ -8,7 +8,7 @@ from paz import processors as pr
 from paz.abstract import SequentialProcessor
 from processors import AdjustCropSize, CropImage, CanonicaltoRelativeFrame
 from processors import HandSegmentationMap, ExtractBoundingbox, Resize_image
-from processors import Wrap_to_Dictionary, Merge_Dictionaries, GetRotationMatrix
+from processors import Merge_Dictionaries, GetRotationMatrix
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, help='Path to dataset')
@@ -74,7 +74,6 @@ postprocess_keypoints = PostProcessKeypoints()
 image = preprocess_image()(data[0])
 hand_crop, _, _ = hand_localization(image)
 score_maps = Process2DKeypoints(HandPoseNet)(hand_crop)
-print(np.shape(score_maps['score_maps']))
 hand_side = {'hand_side': np.array([[1.0, 0.0]])}
 score_maps = Merge_Dictionaries()([score_maps, hand_side])
 canonical_coordinates = pr.Predict(HandPosePriorNet)(score_maps)
@@ -82,4 +81,4 @@ viewpoints = pr.Predict(HandViewPointNet)(score_maps)
 canonical_keypoints = Merge_Dictionaries()([canonical_coordinates,
                                             viewpoints])
 relative_keypoints = postprocess_keypoints(canonical_keypoints)
-print("Keypoints are :", relative_keypoints[0].shape)
+
