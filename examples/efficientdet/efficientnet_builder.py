@@ -14,15 +14,28 @@ _DEFAULT_BLOCKS_ARGS = ['r1_k3_s11_e1_i32_o16_se0.25',
 
 def efficientnet(width_coefficient=None, depth_coefficient=None,
                  dropout_rate=0.2, survival_rate=0.8):
-    """Creates efficientnet model."""
-    global_params = efficientnet_model.GlobalParams(
-        blocks_args=_DEFAULT_BLOCKS_ARGS, batch_norm=BatchNormalization,
-        dropout_rate=dropout_rate, survival_rate=survival_rate,
-        data_format='channels_last', num_classes=90,
-        width_coefficient=width_coefficient,
-        depth_coefficient=depth_coefficient,
-        depth_divisor=8, min_depth=None, activation='swish',
-        use_se=True, clip_projection_output=False)
+    """Creates efficientnet model.
+    # Arguments
+    width_coefficient: Bool,
+
+    # Returns
+
+    """
+    global_params = efficientnet_model.GlobalParams
+    global_params["blocks_args"] = _DEFAULT_BLOCKS_ARGS
+    global_params["batch_norm"] = BatchNormalization
+    global_params["dropout_rate"] = dropout_rate
+    global_params["survival_rate"] = survival_rate
+    global_params["data_format"] = 'channels_last'
+    global_params["num_classes"] = 90
+    global_params["width_coefficient"] = width_coefficient
+    global_params["depth_coefficient"] = depth_coefficient
+    global_params["depth_divisor"] = 8
+    global_params["min_depth"] = None
+    global_params["activation"] = 'swish'
+    global_params["use_se"] = True
+    global_params["clip_projection_output"] = False
+
     return global_params
 
 
@@ -39,7 +52,7 @@ def get_efficientnet_params(model_name):
         model_name: String, name of the EfficientNet backbone
         params: Dictionary, parameters for building the model
 
-    # Returns:
+    # Returns
         efficientnetparams: Dictionary, parameters corresponding to
         width coefficient, depth coefficient, dropout rate
     """
@@ -72,6 +85,21 @@ class BlockDecoder(object):
 
         if 's' not in options or len(options['s']) != 2:
             raise ValueError('Strides options should be a pair of integers.')
+        # block_args = efficientnet_model.BlockArgs
+        # block_args["kernel_size"] = int(options['k'])
+        # block_args["num_repeat"] = int(options['r'])
+        # block_args["input_filters"] = int(options['i'])
+        # block_args["output_filters"] = int(options['o'])
+        # block_args["expand_ratio"] = int(options['e'])
+        # block_args["id_skip"] = ('noskip' not in block_string)
+        # block_args["se_ratio"] = float(options['se']) if 'se' in options else None
+        # block_args["strides"] = [int(options['s'][0]), int(options['s'][1])]
+        # block_args["conv_type"] = int(options['c']) if 'c' in options else 0
+        # block_args["fused_conv"] = int(options['f']) if 'f' in options else 0
+        # block_args["super_pixel"] = int(options['p']) if 'p' in options else 0
+        # block_args["condconv"] = ('cc' in block_string)
+        #
+        # return block_args
 
         return efficientnet_model.BlockArgs(
             kernel_size=int(options['k']),
@@ -116,11 +144,9 @@ def get_model_params(model_name, params):
         raise NotImplementedError('model name is not pre-defined: %s' %
                                   model_name)
     if params:
-        # ValueError will be raised here if params has fields
-        # not in global_params
-        global_params = global_params._replace(**params)
+        global_params.update(params)
     decoder = BlockDecoder()
-    block_args = decoder.decode(global_params.blocks_args)
+    block_args = decoder.decode(global_params["blocks_args"])
     return block_args, global_params
 
 

@@ -15,14 +15,12 @@ from tensorflow.keras.layers import GlobalAveragePooling2D
 from utils import get_activation, get_drop_connect
 
 
-GlobalParams = collections.namedtuple(
-    'GlobalParams',
-    ['dropout_rate', 'data_format', 'num_classes', 'width_coefficient',
+GlobalParams_arg = ['dropout_rate', 'data_format', 'num_classes', 'width_coefficient',
      'depth_coefficient', 'depth_divisor', 'min_depth', 'survival_rate',
      'activation', 'batch_norm', 'use_se', 'local_pooling',
      'condconv_num_experts', 'clip_projection_output', 'blocks_args',
-     'fix_head_stem'])
-GlobalParams.__new__.__defaults__ = (None,) * len(GlobalParams._fields)
+     'fix_head_stem']
+GlobalParams = dict.fromkeys(GlobalParams_arg, None)
 
 BlockArgs = collections.namedtuple(
     'BlockArgs',
@@ -110,8 +108,8 @@ class SE(Layer):
     def __init__(self, global_params, se_filters, output_filters, name=None):
         super().__init__(name=name)
 
-        self._local_pooling = global_params.local_pooling
-        self._activation = global_params.activation
+        self._local_pooling = global_params["local_pooling"]
+        self._activation = global_params["activation"]
 
         # Squeeze and Excitation layer.
         self._se_reduce = Conv2D(
@@ -169,9 +167,9 @@ class SuperPixel(Layer):
             use_bias=False,
             name='conv2d'
         )
-        self._batch_norm_superpixel = global_params.batch_norm(
+        self._batch_norm_superpixel = global_params["batch_norm"](
             axis=-1, momentum=0.99, epsilon=1e-3)
-        self._activation = global_params.activation
+        self._activation = global_params["activation"]
 
     def call(self, tensor, training):
         out = self._superpixel(tensor)
@@ -198,15 +196,15 @@ class MBConvBlock(Layer):
         super().__init__(name=name)
         self._block_args = block_args
         self._global_params = global_params
-        self._local_pooling = global_params.local_pooling
-        self._batch_norm = global_params.batch_norm
-        self._condconv_num_experts = global_params.condconv_num_experts
-        self._activation = global_params.activation
-        self._has_se = (global_params.use_se
+        self._local_pooling = global_params["local_pooling"]
+        self._batch_norm = global_params["batch_norm"]
+        self._condconv_num_experts = global_params["condconv_num_experts"]
+        self._activation = global_params["activation"]
+        self._has_se = (global_params["use_se"]
                         and self._block_args.se_ratio is not None
                         and 0 < self._block_args.se_ratio <= 1
                         )
-        self._clip_projection_output = global_params.clip_projection_output
+        self._clip_projection_output = global_params["clip_projection_output"]
         self.endpoints = None
         if self._block_args.condconv:
             raise ValueError('Condconv is not supported')
@@ -397,9 +395,9 @@ class MBConvBlockWithoutDepthwise(MBConvBlock):
 
 def round_filters(filters, global_params, skip=False):
     """Round number of filters based on depth multiplier."""
-    multiplier = global_params.width_coefficient
-    divisor = global_params.depth_divisor
-    min_depth = global_params.min_depth
+    multiplier = global_params["width_coefficient"]
+    divisor = global_params["depth_divisor"]
+    min_depth = global_params["min_depth"]
     if skip or not multiplier:
         return filters
 
@@ -414,7 +412,7 @@ def round_filters(filters, global_params, skip=False):
 
 def round_repeats(repeats, global_params, skip=False):
     """Round number of filters based on depth multiplier."""
-    multiplier = global_params.depth_coefficient
+    multiplier = global_params["depth_coefficient"]
     if skip or not multiplier:
         return repeats
     return int(math.ceil(multiplier * repeats))
@@ -427,7 +425,7 @@ class Stem(Layer):
         super().__init__(name=name)
         self._conv_stem = Conv2D(
             filters=round_filters(
-                stem_filters, global_params, global_params.fix_head_stem
+                stem_filters, global_params, global_params["fix_head_stem"]
             ),
             kernel_size=[3, 3],
             strides=[2, 2],
@@ -436,10 +434,10 @@ class Stem(Layer):
             data_format='channels_last',
             use_bias=False,
         )
-        self._batch_norm = global_params.batch_norm(axis=-1,
+        self._batch_norm = global_params["batch_norm"](axis=-1,
                                                     momentum=0.99,
                                                     epsilon=1e-3)
-        self._activation = global_params.activation
+        self._activation = global_params["activation"]
 
     def call(self, tensor, training):
         out = self._batch_norm(self._conv_stem(tensor,
@@ -461,7 +459,7 @@ class Head(Layer):
         self._conv_head = Conv2D(
             filters=round_filters(1280,
                                   global_params,
-                                  global_params.fix_head_stem),
+                                  global_params["fix_head_stem"]),
             kernel_size=[1, 1],
             strides=[1, 1],
             kernel_initializer=conv_kernel_initializer,
@@ -471,19 +469,19 @@ class Head(Layer):
             name='conv2d'
         )
 
-        self._batch_norm = global_params.batch_norm(axis=-1,
+        self._batch_norm = global_params["batch_norm"](axis=-1,
                                                     momentum=0.99,
                                                     epsilon=1e-3)
-        self._activation = global_params.activation
+        self._activation = global_params["activation"]
         self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
-        if global_params.num_classes:
-            self._fc = Dense(global_params.num_classes,
+        if global_params["num_classes"]:
+            self._fc = Dense(global_params["num_classes"],
                              kernel_initializer=dense_kernel_initializer)
         else:
             self._fc = None
 
-        if global_params.dropout_rate > 0:
-            self._dropout = tf.keras.layers.Dropout(global_params.dropout_rate)
+        if global_params["dropout_rate"] > 0:
+            self._dropout = tf.keras.layers.Dropout(global_params["dropout_rate"])
         else:
             self._dropout = None
 
@@ -495,7 +493,7 @@ class Head(Layer):
         outputs = get_activation(outputs, self._activation)
         self.endpoints['head_1x1'] = outputs
 
-        if self._global_params.local_pooling:
+        if self._global_params["local_pooling"]:
             shape = outputs.get_shape().as_list()
             kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
             outputs = tf.nn.avg_pool(
@@ -542,9 +540,9 @@ class Model(tf.keras.Model):
             raise ValueError('blocks_args should be a list.')
         self._global_params = global_params
         self._blocks_args = blocks_args
-        self._activation = global_params.activation
-        self._batch_norm = global_params.batch_norm
-        self._fix_head_stem = global_params.fix_head_stem
+        self._activation = global_params["activation"]
+        self._batch_norm = global_params["batch_norm"]
+        self._fix_head_stem = global_params["fix_head_stem"]
         self.endpoints = None
 
         self._build()
@@ -693,7 +691,7 @@ class Model(tf.keras.Model):
                 is_reduction = True
                 reduction_idx += 1
 
-            survival_rate = self._global_params.survival_rate
+            survival_rate = self._global_params["survival_rate"]
             if survival_rate:
                 drop_rate = 1 - survival_rate
                 survival_rate = 1 - drop_rate * float(idx) / len(self._blocks)
