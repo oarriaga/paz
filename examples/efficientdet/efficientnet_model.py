@@ -436,9 +436,8 @@ class Stem(Layer):
         self._activation = global_params["activation"]
 
     def call(self, tensor, training):
-        out = self._batch_norm(self._conv_stem(tensor,
-                                               training=training),
-                               training=training)
+        out = self._batch_norm(
+            self._conv_stem(tensor, training=training), training=training)
         out = get_activation(out, self._activation)
         return out
 
@@ -451,19 +450,11 @@ class Head(Layer):
 
         self.endpoints = {}
         self._global_params = global_params
-
+        conv_filters = round_filters(
+            1280, global_params, global_params["fix_head_stem"])
         self._conv_head = Conv2D(
-            filters=round_filters(1280,
-                                  global_params,
-                                  global_params["fix_head_stem"]),
-            kernel_size=[1, 1],
-            strides=[1, 1],
-            kernel_initializer=conv_kernel_initializer,
-            padding='same',
-            data_format='channels_last',
-            use_bias=False,
-            name='conv2d'
-        )
+            conv_filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1,
+            None, False, conv_kernel_initializer, name='conv2d')
 
         self._batch_norm = global_params["batch_norm"](-1, 0.99, 1e-3)
         self._activation = global_params["activation"]
@@ -566,10 +557,8 @@ class Model(tf.keras.Model):
             # Update block input and output filters based on depth multiplier.
             input_filters = round_filters(block_args["input_filters"],
                                           self._global_params)
-
             output_filters = round_filters(
                 block_args["output_filters"], self._global_params)
-            kernel_size = block_args["kernel_size"]
             blocks_repeat_limit = len(self._blocks_args) - 1
             if self._fix_head_stem and (i == 0 or i == blocks_repeat_limit):
                 repeats = block_args["num_repeat"]
