@@ -85,36 +85,24 @@ class BlockDecoder(object):
 
         if 's' not in options or len(options['s']) != 2:
             raise ValueError('Strides options should be a pair of integers.')
-        # block_args = efficientnet_model.BlockArgs
-        # block_args["kernel_size"] = int(options['k'])
-        # block_args["num_repeat"] = int(options['r'])
-        # block_args["input_filters"] = int(options['i'])
-        # block_args["output_filters"] = int(options['o'])
-        # block_args["expand_ratio"] = int(options['e'])
-        # block_args["id_skip"] = ('noskip' not in block_string)
-        # block_args["se_ratio"] = float(options['se']) if 'se' in options else None
-        # block_args["strides"] = [int(options['s'][0]), int(options['s'][1])]
-        # block_args["conv_type"] = int(options['c']) if 'c' in options else 0
-        # block_args["fused_conv"] = int(options['f']) if 'f' in options else 0
-        # block_args["super_pixel"] = int(options['p']) if 'p' in options else 0
-        # block_args["condconv"] = ('cc' in block_string)
-        #
-        # return block_args
+        block_args = efficientnet_model.BlockArgs
+        block_args["kernel_size"] = int(options['k'])
+        block_args["num_repeat"] = int(options['r'])
+        block_args["input_filters"] = int(options['i'])
+        block_args["output_filters"] = int(options['o'])
+        block_args["expand_ratio"] = int(options['e'])
+        block_args["id_skip"] = ('noskip' not in block_string)
+        block_args["strides"] = [int(options['s'][0]), int(options['s'][1])]
+        block_args["conv_type"] = int(options['c']) if 'c' in options else 0
+        block_args["fused_conv"] = int(options['f']) if 'f' in options else 0
+        block_args["super_pixel"] = int(options['p']) if 'p' in options else 0
+        block_args["condconv"] = ('cc' in block_string)
+        if 'se' in options:
+            block_args["se_ratio"] = float(options['se'])
+        else:
+            block_args["se_ratio"] = None
 
-        return efficientnet_model.BlockArgs(
-            kernel_size=int(options['k']),
-            num_repeat=int(options['r']),
-            input_filters=int(options['i']),
-            output_filters=int(options['o']),
-            expand_ratio=int(options['e']),
-            id_skip=('noskip' not in block_string),
-            se_ratio=float(options['se']) if 'se' in options else None,
-            strides=[int(options['s'][0]), int(options['s'][1])],
-            conv_type=int(options['c']) if 'c' in options else 0,
-            fused_conv=int(options['f']) if 'f' in options else 0,
-            super_pixel=int(options['p']) if 'p' in options else 0,
-            condconv=('cc' in block_string)
-        )
+        return block_args
 
     def decode(self, string_list):
         """Decodes a list of string notations to specify blocks
@@ -129,7 +117,7 @@ class BlockDecoder(object):
         assert isinstance(string_list, list)
         block_args = []
         for block_string in string_list:
-            block_args.append(self._decode_block_string(block_string))
+            block_args.append((self._decode_block_string(block_string)).copy())
         return block_args
 
 
