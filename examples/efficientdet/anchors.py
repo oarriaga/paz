@@ -3,6 +3,15 @@ from paz.backend.boxes import to_center_form
 
 
 def get_feature_sizes(image_size, max_level):
+    """
+    # Arguments
+        max_level: Int, maximum level for features.
+        image_size: Tuple, (Height, Width) of the input image.
+
+    # Returns
+        feat_sizes: List, feature sizes with height and width values
+        for a given image size and max level.
+    """
     feat_sizes = [{'height': image_size[0], 'width': image_size[1]}]
     feat_size = image_size
     for _ in range(1, max_level + 1):
@@ -12,8 +21,20 @@ def get_feature_sizes(image_size, max_level):
 
 
 class Anchors():
+    """Generates anchors at different feature levels."""
     def __init__(self, min_level, max_level, num_scales, aspect_ratios,
                  anchor_scale, image_size):
+        """
+        # Arguments
+            min_level: Int, minimum level for features.
+            max_level: Int, maximum level for features.
+            num_scales: Int, specifying the number of scales in the anchor boxes.
+            aspect_ratios: List, specifying the aspect ratio of the
+            default anchor boxes. Computed with k-mean on COCO dataset.
+            anchor_scale: float number representing the scale of size of the base
+            anchor to the feature stride 2^level. Or a list, one value per layer.
+            image_size: Int, size of the input image.
+        """
         self.min_level = min_level
         self.max_level = max_level
         self.num_scales = num_scales  # scale octave, how many P**2 available.
@@ -94,7 +115,8 @@ def get_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
     num_scales: Int, specifying the number of scales in the anchor boxes.
     aspect_ratios: List, specifying the aspect ratio of the
     default anchor boxes. Computed with k-mean on COCO dataset.
-    num_classes: Int, specifying the number of class in the output.
+    anchor_scale: float number representing the scale of size of the base
+    anchor to the feature stride 2^level. Or a list, one value per layer.
     image_size: Int, size of the input image.
 
     # Returns

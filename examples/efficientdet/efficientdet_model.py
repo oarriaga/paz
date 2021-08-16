@@ -56,7 +56,7 @@ class EfficientDet(tf.keras.Model):
             conv_after_downsample: Bool, specifying the presence of
             convolution layer after downsampling.
             separable_conv: Bool, specifying the usage of separable
-            convolution layers in EfficientDet
+            convolution layers in EfficientDet.
             survival_rate: Float, specifying the survival probability
             return_base: Bool, indicating the usage of features only
             from EfficientDet

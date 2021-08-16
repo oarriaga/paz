@@ -15,10 +15,16 @@ _DEFAULT_BLOCKS_ARGS = ['r1_k3_s11_e1_i32_o16_se0.25',
 def efficientnet(width_coefficient=None, depth_coefficient=None,
                  dropout_rate=0.2, survival_rate=0.8):
     """Creates efficientnet model.
+
     # Arguments
-    width_coefficient: Bool,
+        width_coefficient: Float, scaling coefficient for network width.
+        depth_coefficient: Float, scaling coefficient for network depth.
+        dropout_rate: Float, dropout rate for final fully connected layers.
+        survival_rate: Float, survival rate of nodes in the fully conncected
+        layers.
 
     # Returns
+        global_params: GlobalParams, a set of global parameters.
 
     """
     global_params = efficientnet_model.GlobalParams
@@ -50,7 +56,6 @@ def get_efficientnet_params(model_name):
 
     # Arguments
         model_name: String, name of the EfficientNet backbone
-        params: Dictionary, parameters for building the model
 
     # Returns
         efficientnetparams: Dictionary, parameters corresponding to
@@ -73,7 +78,11 @@ class BlockDecoder(object):
     """Block Decoder for readability."""
 
     def _decode_block_string(self, block_string):
-        """Gets a block through a string notation of arguments."""
+        """Gets a block through a string notation of arguments.
+
+        # Arguments
+            block_string: String, denoting the efficientnet block parameters.
+        """
         assert isinstance(block_string, str)
         ops = block_string.split('_')
         options = {}
@@ -122,7 +131,16 @@ class BlockDecoder(object):
 
 
 def get_model_params(model_name, params):
-    """Get the block args and global params for a given model."""
+    """Get the block args and global params for a given model.
+
+    # Arguments
+        model_name: String, name of the EfficientNet backbone
+        params: Dictionary, parameters for building the model
+
+    Returns
+        block_args: BlockArgs, arguments to create a Block.
+        global_params: GlobalParams, a set of global parameters.
+    """
     if model_name.startswith('efficientnet'):
         efficientnet_param = get_efficientnet_params(model_name)
         width_coefficient, depth_coefficient, dropout_rate = efficientnet_param

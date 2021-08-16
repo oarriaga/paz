@@ -39,7 +39,7 @@ def get_top_down_path(min_level, max_level, node_ids):
                                node_ids[level + 1][-1]]
         })
         node_ids[level].append(id_count)
-        id_count += 1
+        id_count = id_count + 1
     return top_down_path_nodes, node_ids
 
 
@@ -76,7 +76,7 @@ def get_bottom_up_path(min_level, max_level, node_ids):
             'inputs_offsets': node_ids[level] + [node_ids[level - 1][-1]]
         })
         node_ids[level].append(id_count)
-        id_count += 1
+        id_count = id_count + 1
     return bottom_up_path_nodes, node_ids
 
 
@@ -169,6 +169,16 @@ class ResampleFeatureMap(Layer):
                  use_batchnorm=False, conv_after_downsample=False,
                  pooling_type='max', upsampling_type='nearest',
                  name='resample_p0'):
+        """
+        # Arguments
+            feature_level: Int, level of feature to resample.
+            target_num_channels: Int, Number of target channels.
+            use_batchnorm: Bool, use batch normalization layer.
+            conv_after_downsample: Bool, use convolution after downsampling.
+            pooling_type: String, denoting the pooling type.
+            upsampling_type: String, denoting the upsampling type.
+            name: String, layer name.
+        """
         super().__init__(name=name)
         self.feature_level = feature_level
         self.target_num_channels = target_num_channels
@@ -188,7 +198,17 @@ class ResampleFeatureMap(Layer):
                              format(pooling_type))
 
     def _pool2d(self, features, H, W, H_target, W_target):
-        """Pool the inputs to target height and width."""
+        """Pool the inputs to target height and width.
+        # Arguments
+            features: Tensor, features for pooling.
+            H: Int, Height of the feature.
+            W: Int, Width of the feature.
+            H_target: Int, Target height after pooling features.
+            W_target: Int, Target width after pooling features.
+
+        # Returns
+            pooled_features: Tensor, features pooled to target size.
+        """
         H_stride = int((H - 1) // H_target + 1)
         W_stride = int((W - 1) // W_target + 1)
         if self.pooling_type == 'max':
@@ -201,12 +221,29 @@ class ResampleFeatureMap(Layer):
                 'channels_last')(features)
 
     def _upsample2d(self, features, H_target, W_target):
+        """
+        # Arguments
+            features: Tensor, features for upsampling.
+            H_target: Int, Target height after upsampling features.
+            W_target: Int, Target width after upsampling features.
+
+        # Returns
+            upsampled_features: Tensor, features upsampled to target size.
+        """
         return tf.cast(tf.compat.v1.image.resize_nearest_neighbor(
             tf.cast(features, tf.float32), [H_target, W_target]),
             features.dtype)
 
     def _apply_1x1_conv(self, feature, training, num_channels):
-        """Apply 1x1 conv to change layer width if necessary."""
+        """Apply 1x1 conv to change layer width if necessary.
+        # Arguments
+            features: Tensor, features to undergo 1x1 convolution.
+            training: Bool, mode of using the network.
+            num_channels: Int, target feature map channels.
+
+        # Returns
+            features: Tensor, features after 1x1 convolution.
+        """
         if num_channels != self.target_num_channels:
             feature = self.conv2d(feature)
             if self.use_batchnorm:
@@ -214,6 +251,15 @@ class ResampleFeatureMap(Layer):
         return feature
 
     def call(self, feature, training, all_features):
+        """
+        # Arguments
+            features: Tensor, features of a particular level.
+            training: Bool, mode of using the network.
+            all_features: Tensor, all the features irrespective of the level.
+
+        # Returns
+            features: Tensor, Particular level features after resampling.
+        """
         H, W, num_channels = feature.shape[1:]
         if all_features:
             H_target, W_target, _ = all_features[self.feature_level].shape[1:]
@@ -245,6 +291,28 @@ class FPNCells(Layer):
                  fpn_cell_repeats, fpn_num_filters, use_batchnorm_for_sampling,
                  conv_after_downsample, conv_batchnorm_activation_block,
                  with_separable_conv, activation, name='fpn_cells'):
+        """
+        # Arguments
+            fpn_name: A string specifying the feature fusion FPN layer.
+            min_level: Int, minimum level for features.
+            max_level: Int, maximum level for features.
+            fpn_weight_method: A string specifying the feature
+            fusion weighting method in fpn.
+            fpn_num_filters: Int, FPN filter output size.
+            fpn_cell_repeats: Int, Number of consecutive FPN block.
+            use_batchnorm_for_sampling: Bool, specifying the presense
+            of batch normalization for resampling layers in feature
+            extaction.
+            conv_after_downsample: Bool, specifying the presence of
+            convolution layer after downsampling.
+            conv_batchnorm_activation_block: Bool, specifying the presence
+            of convolution - batch normalization - activation function
+            patter in the EfficientDet building blocks.
+            with_separable_conv: Bool, specifying the usage of separable
+            convolution layers in EfficientDet.
+            activation: A string specifying the activation function.
+            name: Module name.
+        """
         super().__init__(name=name)
         self.fpn_name = fpn_name
         self.min_level = min_level
@@ -274,6 +342,13 @@ class FPNCells(Layer):
                 'cell_%d' % repeat_arg))
 
     def get_cell_features(self, cell_features):
+        """
+        # Arguments
+            cell_features: Tensor, collect features of a cell.
+
+        # Returns
+            features: Tensor, features pertaining to the selected levels.
+        """
         features = []
         for level in range(self.min_level, self.max_level + 1):
             for node in enumerate(reversed(self.fpn_config['nodes'])):
@@ -284,6 +359,14 @@ class FPNCells(Layer):
         return features
 
     def call(self, features, training):
+        """
+        # Arguments
+            features: Tensor, features of FPN cells.
+            training: Bool, mode of using the network.
+
+        # Returns
+            features: Tensor, processed features at the FPN cells.
+        """
         for cell in self.cells:
             cell_features = cell(features, training)
             features = self.get_cell_features(cell_features)
@@ -297,6 +380,28 @@ class FPNCell(Layer):
                  use_batchnorm_for_sampling, conv_after_downsample,
                  conv_batchnorm_activation_block, with_separable_conv,
                  activation, name='fpn_cell'):
+        """
+        # Arguments
+            fpn_name: A string specifying the feature fusion FPN layer.
+            min_level: Int, minimum level for features.
+            max_level: Int, maximum level for features.
+            fpn_weight_method: A string specifying the feature
+            fusion weighting method in fpn.
+            fpn_num_filters: Int, FPN filter output size.
+            fpn_cell_repeats: Int, Number of consecutive FPN block.
+            use_batchnorm_for_sampling: Bool, specifying the presense
+            of batch normalization for resampling layers in feature
+            extaction.
+            conv_after_downsample: Bool, specifying the presence of
+            convolution layer after downsampling.
+            conv_batchnorm_activation_block: Bool, specifying the presence
+            of convolution - batch normalization - activation function
+            patter in the EfficientDet building blocks.
+            with_separable_conv: Bool, specifying the usage of separable
+            convolution layers in EfficientDet.
+            activation: A string specifying the activation function.
+            name: Module name.
+        """
         super().__init__(name=name)
         self.fpn_name = fpn_name
         self.min_level = min_level
@@ -327,6 +432,14 @@ class FPNCell(Layer):
             self.node_features.append(node_feature)
 
     def call(self, features, training):
+        """
+        # Arguments
+            features: Tensor, input features of FPN cell.
+            training: Bool, mode of using the network.
+
+        # Returns
+            features: Tensor, processed features at the FPN cell.
+        """
         def _call(features):
             for node_feature in self.node_features:
                 features = node_feature(features, training)
@@ -335,7 +448,14 @@ class FPNCell(Layer):
 
 
 def sum_nodes(nodes):
-    """A customized function to add up a list of tensors."""
+    """A customized function to add up a list of tensors.
+
+    # Arguments
+        nodes: Tensor, features of all nodes in a FPN Cell.
+
+    # Returns
+        new_nodes: Tensor, sum of features at all nodes.
+    """
     new_node = nodes[0]
     for node in nodes[1:]:
         new_node = new_node + node
@@ -348,6 +468,25 @@ class FeatureNode(Layer):
                  use_batchnorm_for_sampling, conv_after_downsample,
                  conv_batchnorm_activation_block, with_separable_conv,
                  activation, weight_method, name='fnode'):
+        """
+        # Arguments
+            feature_level: Int, Feature level of the features.
+            input_offsets: List, Offsets of the respective feature level.
+            fpn_num_filters: Int, FPN filter output size.
+            use_batchnorm_for_sampling: Bool, specifying the presense
+            of batch normalization for resampling layers in feature
+            extaction.
+            conv_after_downsample: Bool, specifying the presence of
+            convolution layer after downsampling.
+            conv_batchnorm_activation_block: Bool, specifying the presence
+            of convolution - batch normalization - activation function
+            patter in the EfficientDet building blocks.
+            with_separable_conv: Bool, specifying the usage of separable
+            convolution layers in EfficientDet.
+            activation: A string specifying the activation function.
+            name: Module name.
+        """
+
         super().__init__(name=name)
         self.feature_level = feature_level
         self.inputs_offsets = inputs_offsets
@@ -362,6 +501,14 @@ class FeatureNode(Layer):
         self.assign_weights = []
 
     def attention_weighting_method(self, nodes, dtype):
+        """
+        # Arguments
+            nodes: List, containing tensorflow features at different levels.
+            dtype: Tensorflow Datatype for the weighting.
+
+        # Returns
+            new_nodes: Tensor, Weighted combination of node features.
+        """
         edge_weights = []
         for weight in self.assign_weights:
             edge_weights.append(tf.cast(weight, dtype=dtype))
@@ -371,6 +518,14 @@ class FeatureNode(Layer):
         return new_node
 
     def fastattention_weighting_method(self, nodes, dtype):
+        """
+        # Arguments
+            nodes: List, containing tensorflow features at different levels.
+            dtype: Tensorflow Datatype for the weighting.
+
+        # Returns
+            new_nodes: Tensor, Weighted combination of node features.
+        """
         edge_weights = []
         for weight in self.assign_weights:
             edge_weights.append(tf.nn.relu(tf.cast(weight, dtype=dtype)))
@@ -385,7 +540,7 @@ class FeatureNode(Layer):
         """Fuse features from different resolutions and return a weighted sum.
 
         # Arguments
-            nodes: a list of tensorflow features at different levels.
+            nodes: List, containing tensorflow features at different levels.
 
         # Returns
             A tensor denoting the fused features.
@@ -402,6 +557,11 @@ class FeatureNode(Layer):
         return new_node
 
     def _add_bifpn_weights(self, initializer, shape=None):
+        """
+        # Arguments
+            initializer: String, initializer value type.
+            shape: Tuple, shape of tensor to be initialized.
+        """
         for offsets in enumerate(self.inputs_offsets):
             input_offset_arg, _ = offsets
             if input_offset_arg == 0:
@@ -412,6 +572,10 @@ class FeatureNode(Layer):
                 name, shape, initializer=initializer))
 
     def build(self, features_shape):
+        """
+        # Arguments
+            features_shape: List, containing shape of all features.
+        """
         for offsets in enumerate(self.inputs_offsets):
             input_offset_arg, input_offset = offsets
             name = 'resample_{}_{}_{}'.format(
@@ -434,6 +598,15 @@ class FeatureNode(Layer):
         super().build(features_shape)
 
     def call(self, features, training):
+        """
+        # Arguments
+            features: List, input features to be fused
+            by weighting in the neck.
+            training: Bool, mode of using the network.
+
+        # Returns
+            features: List, features resampled and combined by weighting.
+        """
         nodes = []
         for offsets in enumerate(self.inputs_offsets):
             input_offset_arg, input_offset = offsets
@@ -450,6 +623,17 @@ class ConvolutionAfterFusion(Layer):
     """Operation after combining input features during feature fusion."""
     def __init__(self, conv_batchnorm_activation_block, with_separable_conv,
                  fpn_num_filters, activation, name='op_after_combine'):
+        """
+        # Arguments
+            fpn_num_filters: Int, FPN filter output size.
+            conv_batchnorm_activation_block: Bool, specifying the presence
+            of convolution - batch normalization - activation function
+            patter in the EfficientDet building blocks.
+            with_separable_conv: Bool, specifying the usage of separable
+            convolution layers in EfficientDet.
+            activation: A string specifying the activation function.
+            name: Module name.
+        """
         super().__init__(name=name)
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
@@ -471,6 +655,15 @@ class ConvolutionAfterFusion(Layer):
             -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
 
     def call(self, new_node, training):
+        """
+        # Arguments
+            new_node: Tensor, feature to be convolved and
+            followed by batch normalization.
+            training: Bool, mode of using the network.
+
+        # Returns
+            new_node: Tensor, convolved, batch normalized features.
+        """
         if not self.conv_batchnorm_activation_block:
             new_node = tf.nn.swish(new_node)
         new_node = self.convolution(new_node)
@@ -535,11 +728,25 @@ class ClassNet(Layer):
             'class-predict')
 
     def _conv_batchnorm_activation(self, image, level, level_id, training):
+        """
+        # Arguments
+            image: Tensor, image features.
+            level: Int, feature level.
+            level_id: Int, level ID of the feature level.
+            training: Bool, mode of using the network.
+        """
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
         activation = self.activation
 
         def _call(image):
+            """
+            # Arguments
+                image: Tensor, features of the image.
+
+            # Returns
+                image: Tensor, processed image tensor.
+            """
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
@@ -553,7 +760,15 @@ class ClassNet(Layer):
         return _call(image)
 
     def call(self, features, training, **kwargs):
-        """Call ClassNet."""
+        """Call ClassNet.
+
+        # Arguments
+            features: List, feature to be processed by ClassNet head.
+            training: Bool, mode of using the network.
+
+        # Returns
+            class_outputs: List, ClassNet output logits for each level.
+        """
         class_outputs = []
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
@@ -650,18 +865,32 @@ class BoxNet(Layer):
         self.boxes = self.boxes_layer(
             with_separable_conv, num_anchors, name='box-predict')
 
-    def _conv_batchnorm_activation(self, image, i, level_id, training):
-        conv_block = self.conv_blocks[i]
-        batchnorm = self.batchnorms[i][level_id]
+    def _conv_batchnorm_activation(self, image, level, level_id, training):
+        """
+        # Arguments
+            image: Tensor, image features.
+            level: Int, feature level.
+            level_id: Int, level ID of the feature level.
+            training: Bool, mode of using the network.
+        """
+        conv_block = self.conv_blocks[level]
+        batchnorm = self.batchnorms[level][level_id]
         activation = self.activation
 
         def _call(image):
+            """
+            # Arguments
+                image: Tensor, features of the image.
+
+            # Returns
+                image: Tensor, processed image tensor.
+            """
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
             if self.activation:
                 image = get_activation(image, activation)
-            if i > 0 and self.survival_rate:
+            if level > 0 and self.survival_rate:
                 image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image
             return image
@@ -669,7 +898,14 @@ class BoxNet(Layer):
         return _call(image)
 
     def call(self, features, training):
-        """Call boxnet."""
+        """Call boxnet.
+        # Arguments
+            features: List, feature to be processed by BoxNet head.
+            training: Bool, mode of using the network.
+
+        # Returns
+            class_outputs: List, BoxNet output offsets for each level.
+        """
         box_outputs = []
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
@@ -684,7 +920,18 @@ class BoxNet(Layer):
 
     @classmethod
     def boxes_layer(cls, with_separable_conv, num_anchors, name):
-        """Gets the conv2d layer in BoxNet class."""
+        """Gets the conv2d layer in BoxNet class.
+
+        # Arguments
+            with_separable_conv: Bool.
+            True to use separable_conv instead of Conv2D.
+            num_anchors: Int, number of anchors in the feature map.
+            name: String, module name.
+
+        # Returns
+            convolution_block: TF layer type. Separable conv or Classical
+            conv block.
+        """
         if with_separable_conv:
             return SeparableConv2D(
                 4 * num_anchors, 3, (1, 1), 'same', 'channels_last',

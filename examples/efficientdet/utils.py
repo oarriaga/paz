@@ -73,8 +73,8 @@ def get_drop_connect(features, is_training, survival_rate):
         return features
     batch_size = tf.shape(features)[0]
     random_tensor = survival_rate
-    random_tensor += tf.random.uniform([batch_size, 1, 1, 1],
-                                       dtype=features.dtype)
+    random_tensor = random_tensor + tf.random.uniform(
+        [batch_size, 1, 1, 1], dtype=features.dtype)
     binary_tensor = tf.floor(random_tensor)
     output = features / survival_rate * binary_tensor
     return output
