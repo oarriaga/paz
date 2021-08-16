@@ -28,11 +28,15 @@ class Anchors():
         # Arguments
             min_level: Int, minimum level for features.
             max_level: Int, maximum level for features.
-            num_scales: Int, specifying the number of scales in the anchor boxes.
+            num_scales: Int, specifying the number of scales
+            in the anchor boxes.
             aspect_ratios: List, specifying the aspect ratio of the
-            default anchor boxes. Computed with k-mean on COCO dataset.
-            anchor_scale: float number representing the scale of size of the base
-            anchor to the feature stride 2^level. Or a list, one value per layer.
+            default anchor boxes. Computed with k-mean on
+            COCO dataset.
+            anchor_scale: float number representing the scale
+            of size of the base
+            anchor to the feature stride 2^level. Or a list, one
+            value per layer.
             image_size: Int, size of the input image.
         """
         self.min_level = min_level

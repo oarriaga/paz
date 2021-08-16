@@ -151,7 +151,7 @@ class SuperPixel(Layer):
     def __init__(self, block_args, global_params, name=None):
         """
         # Arguments
-            block_args: BlockArgs, arguments to create a Block.
+            block_args: Dictionary of BlockArgs to construct block modules.
             global_params: GlobalParams, a set of global parameters.
             name: layer name.
         """
@@ -191,7 +191,7 @@ class MBConvBlock(Layer):
         """Initializes a MBConv block.
 
         # Arguments
-            block_args: BlockArgs, arguments to create a Block.
+            block_args: Dictionary of BlockArgs to construct block modules.
             global_params: GlobalParams, a set of global parameters.
             name: layer name.
         """
@@ -209,7 +209,6 @@ class MBConvBlock(Layer):
         self.endpoints = None
         if self._block_args["condconv"]:
             raise ValueError('Condconv is not supported')
-
         # Builds the block according to arguments.
         self._build()
 
@@ -227,18 +226,34 @@ class MBConvBlock(Layer):
                                         else '_' + str(next(self.bid) // 2))
         return name
 
-    def _build(self):
-        """Builds block according to the arguments."""
-        self.cid = itertools.count(0)
-        self.bid = itertools.count(0)
+    def build_se(self, filters):
+        """
+        Builds Squeeze-and-excitation block.
+
+        # Arguments
+            filters: Int, output filters of squeeze and excite block.
+        """
+        if self._has_se:
+            input_filters = self._block_args["input_filters"]
+            se_ratio = self._block_args["se_ratio"]
+            num_reduced_filters = max(1, int(input_filters * se_ratio))
+            self._se = SE(self._global_params, num_reduced_filters, filters,
+                          name='se')
+        else:
+            self._se = None
+
+    def build_super_pixel(self):
         if self._block_args["super_pixel"] == 1:
             self.super_pixel = SuperPixel(
                 self._block_args, self._global_params, name='super_pixel')
         else:
             self.super_pixel = None
-        block_input_filters = self._block_args["input_filters"]
-        block_expand_ratio = self._block_args["expand_ratio"]
-        filters = block_input_filters * block_expand_ratio
+
+    def build_fused_conv(self, filters):
+        """
+        # Arguments
+            filters: Int, output filters of fused conv block.
+        """
         kernel_size = self._block_args["kernel_size"]
         if self._block_args["fused_conv"]:
             # Fused expansion phase. Called if using fused convolutions.
@@ -264,18 +279,19 @@ class MBConvBlock(Layer):
                 [kernel_size, kernel_size], self._block_args["strides"],
                 'same', 1, 'channels_last', (1, 1), None, False,
                 conv_kernel_initializer, name='depthwise_conv2d')
+
+    def _build(self):
+        """Builds block according to the arguments."""
+        self.cid = itertools.count(0)
+        self.bid = itertools.count(0)
+        self.build_super_pixel()
+        block_input_filters = self._block_args["input_filters"]
+        block_expand_ratio = self._block_args["expand_ratio"]
+        filters = block_input_filters * block_expand_ratio
+        self.build_fused_conv(filters)
         self._batch_norm1 = self._batch_norm(
             -1, 0.99, 1e-3, name=self.get_bn_name())
-
-        if self._has_se:
-            input_filters = self._block_args["input_filters"]
-            se_ratio = self._block_args["se_ratio"]
-            num_reduced_filters = max(1, int(input_filters * se_ratio))
-            self._se = SE(self._global_params, num_reduced_filters, filters,
-                          name='se')
-        else:
-            self._se = None
-
+        self.build_se(filters)
         # Output phase.
         filters = self._block_args["output_filters"]
         self._project_conv = Conv2D(
@@ -510,7 +526,7 @@ class Model(tf.keras.Model):
         """Initializes an 'Model' instance.
 
         # Arguments
-            blocks_args: A list of BlockArgs to construct block modules.
+            blocks_args: Dictionary of BlockArgs to construct block modules.
             global_params: GlobalParams, a set of global parameters.
             name: A string of layer name.
 
@@ -547,6 +563,135 @@ class Model(tf.keras.Model):
         name = 'blocks_%d' % next(self.block_id)
         return name
 
+    def update_block_repeats(self, block_args, block_num):
+        """Update block repeats based on depth multiplier.
+        # Arguments
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules.
+            block_num: Int, Block index.
+
+        # Returns
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules with updated repeats of block.
+        """
+        blocks_repeat_limit = len(self._blocks_args) - 1
+        block_flag = (block_num == 0 or block_num == blocks_repeat_limit)
+        if self._fix_head_stem and block_flag:
+            repeats = block_args["num_repeat"]
+        else:
+            repeats = round_repeats(
+                block_args["num_repeat"], self._global_params)
+        params = {"num_repeat": repeats}
+        block_args.update(params)
+        return block_args
+
+    def add_repeat_blocks(self, block_args):
+        """
+        # Arguments
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules.
+        """
+        conv_block = self._get_conv_block(block_args["conv_type"])
+        if block_args["num_repeat"] > 1:
+            # rest of blocks with the same block_arg
+            block_args.update({
+                "input_filters": block_args["output_filters"],
+                "strides": [1, 1]})
+        for _ in range(block_args["num_repeat"] - 1):
+            self._blocks.append(conv_block(
+                block_args.copy(), self._global_params,
+                name=self.get_block_name()))
+
+    def build_super_pixel_blocks(self, block_args,
+                                 input_filters, output_filters):
+        """
+        # Arguments
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules.
+            input_filters: Int, Input filters for the blocks to construct.
+            output_filters: Int, Output filters for the blocks to construct.
+
+        # Returns
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules with updated parameters.
+        """
+        conv_block = self._get_conv_block(block_args["conv_type"])
+        # if superpixel, adjust filters, kernels, and strides.
+        block_strides_1 = block_args["strides"][0]
+        block_strides_2 = block_args["strides"][1]
+        depth_factor = int(4 / block_strides_1 / block_strides_2)
+        if depth_factor > 1:
+            kernel_size = (block_args["kernel_size"] + 1) // 2
+        else:
+            kernel_size = block_args["kernel_size"]
+        filter_depth_in = block_args["input_filters"] * depth_factor
+        filter_depth_out = block_args["output_filters"] * depth_factor
+        params = {"input_filters": filter_depth_in,
+                  "output_filters": filter_depth_out,
+                  "kernel_size": kernel_size}
+        block_args = block_args.update(params)
+        # if the first block has stride-2 and superpixel transformation
+        if block_strides_1 == 2 and block_strides_2 == 2:
+            block_args.update({"strides": [1, 1]})
+            self._blocks.append(conv_block(
+                block_args.copy(), self._global_params,
+                name=self.get_block_name()))
+            block_args.update({
+                "super_pixel": 0, "input_filters": input_filters,
+                "output_filters": output_filters,
+                "kernel_size": kernel_size})
+        elif block_args["super_pixel"] == 1:
+            self._blocks.append(conv_block(
+                block_args.copy(), self._global_params,
+                name=self.get_block_name())
+            )
+            block_args.update({"super_pixel": 2})
+        else:
+            self._blocks.append(conv_block(
+                block_args.copy(), self._global_params,
+                name=self.get_block_name())
+            )
+        return block_args
+
+    def build_blocks(self, block_args, input_filters, output_filters):
+        """
+        # Arguments
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules.
+            input_filters: Int, Input filters for the blocks to construct.
+            output_filters: Int, Output filters for the blocks to construct.
+        """
+
+        # The first block needs to take care of stride
+        # and filter size increase.
+        conv_block = self._get_conv_block(block_args["conv_type"])
+        if not block_args["super_pixel"]:  # no super_pixel at all
+            self._blocks.append(conv_block(
+                block_args.copy(), self._global_params,
+                name=self.get_block_name()))
+        else:
+            block_args = self.build_super_pixel_blocks(
+                block_args, input_filters, output_filters)
+        self.add_repeat_blocks(block_args)
+
+    def update_filters(self, block_args):
+        """Update block input and output filters based on depth multiplier.
+        # Arguments
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules.
+
+        # Returns
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules with updated filter counts.
+        """
+        input_filters = round_filters(
+            block_args["input_filters"], self._global_params)
+        output_filters = round_filters(
+            block_args["output_filters"], self._global_params)
+        block_args.update({"input_filters": input_filters,
+                           "output_filters": output_filters})
+        return block_args
+
     def _build(self):
         """Builds a model."""
         self._blocks = []
@@ -557,76 +702,13 @@ class Model(tf.keras.Model):
         self.block_id = itertools.count(0)
 
         # Builds blocks.
-        for i, block_args in enumerate(self._blocks_args):
+        for block_num, block_args in enumerate(self._blocks_args):
             assert block_args["num_repeat"] > 0
             assert block_args["super_pixel"] in [0, 1, 2]
-            # Update block input and output filters based on depth multiplier.
-            input_filters = round_filters(
-                block_args["input_filters"], self._global_params)
-            output_filters = round_filters(
-                block_args["output_filters"], self._global_params)
-            blocks_repeat_limit = len(self._blocks_args) - 1
-            if self._fix_head_stem and (i == 0 or i == blocks_repeat_limit):
-                repeats = block_args["num_repeat"]
-            else:
-                repeats = round_repeats(
-                    block_args["num_repeat"], self._global_params)
-            params = {"input_filters": input_filters,
-                      "output_filters": output_filters, "num_repeat": repeats}
-            block_args.update(params)
-            # The first block needs to take care of stride
-            # and filter size increase.
-            conv_block = self._get_conv_block(block_args["conv_type"])
-            if not block_args["super_pixel"]:  # no super_pixel at all
-                self._blocks.append(conv_block(
-                    block_args.copy(), self._global_params,
-                    name=self.get_block_name()))
-            else:
-                # if superpixel, adjust filters, kernels, and strides.
-                block_strides_1 = block_args["strides"][0]
-                block_strides_2 = block_args["strides"][1]
-                depth_factor = int(4 / block_strides_1 / block_strides_2)
-                if depth_factor > 1:
-                    kernel_size = (block_args["kernel_size"] + 1) // 2
-                else:
-                    kernel_size = block_args["kernel_size"]
-                filter_depth_in = block_args["input_filters"] * depth_factor
-                filter_depth_out = block_args["output_filters"] * depth_factor
-                params = {"input_filters": filter_depth_in,
-                          "output_filters": filter_depth_out,
-                          "kernel_size": kernel_size}
-                block_args = block_args.update(params)
-                # if the first block has stride-2 and superpixel transformation
-
-                if block_strides_1 == 2 and block_strides_2 == 2:
-                    block_args.update({"strides": [1, 1]})
-                    self._blocks.append(conv_block(
-                        block_args.copy(), self._global_params,
-                        name=self.get_block_name()))
-                    block_args.update({
-                        "super_pixel": 0, "input_filters": input_filters,
-                        "output_filters": output_filters,
-                        "kernel_size": kernel_size})
-                elif block_args["super_pixel"] == 1:
-                    self._blocks.append(conv_block(
-                        block_args.copy(), self._global_params,
-                        name=self.get_block_name())
-                    )
-                    block_args.update({"super_pixel": 2})
-                else:
-                    self._blocks.append(conv_block(
-                        block_args.copy(), self._global_params,
-                        name=self.get_block_name())
-                    )
-            if block_args["num_repeat"] > 1:
-                # rest of blocks with the same block_arg
-                block_args.update({
-                    "input_filters": block_args["output_filters"],
-                    "strides": [1, 1]})
-            for _ in range(block_args["num_repeat"] - 1):
-                self._blocks.append(conv_block(
-                    block_args.copy(), self._global_params,
-                    name=self.get_block_name()))
+            block_args = self.update_filters(block_args)
+            block_args = self.update_block_repeats(block_args, block_num)
+            self.build_blocks(block_args, block_args["input_filters"],
+                              block_args["output_filters"])
         # Head part.
         self._head = Head(self._global_params)
 
@@ -639,7 +721,7 @@ class Model(tf.keras.Model):
             return_base: build the base feature network only.
             pool_features: build the base network for
             features extraction (after 1x1 conv layer and global
-             pooling, but before dropout and fc head).
+            pooling, but before dropout and fc head).
 
         # Returns
             output tensors: Tensor, output from the efficientnet backbone.
