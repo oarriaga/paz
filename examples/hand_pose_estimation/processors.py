@@ -7,7 +7,7 @@ from backend import extract_dominant_keypoints2D, crop_image_using_mask
 from backend import extract_hand_segment, keypoints_to_wrist_coordinates
 from backend import get_canonical_transformations, flip_right_hand
 from backend import normalize_keypoints, transform_to_relative_frames
-from backend import transform_visibility_mask, extract_hand_side
+from backend import transform_visibility_mask, get_hand_side_and_keypooints
 from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
 from paz.backend.image.tensorflow_image import resize
 from paz.abstract import Processor
@@ -54,7 +54,7 @@ class ExtractHandSide(Processor):
         super(ExtractHandSide, self).__init__()
 
     def call(self, hand_parts_mask, keypoints3D):
-        return extract_hand_side(hand_parts_mask, keypoints3D)
+        return get_hand_side_and_keypooints(hand_parts_mask, keypoints3D)
 
 
 class NormalizeKeypoints(Processor):

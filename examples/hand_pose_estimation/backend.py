@@ -5,8 +5,13 @@ import numpy as np
 import tensorflow as tf
 
 from hand_keypoints_loader import kinematic_chain_dict, kinematic_chain_list
-from hand_keypoints_loader import ROOT_KEYPOINT_ID, ALIGNED_KEYPOINT_ID
-from hand_keypoints_loader import LAST_KEYPOINT_ID
+from hand_keypoints_loader import LEFT_ROOT_KEYPOINT_ID
+from hand_keypoints_loader import LEFT_ALIGNED_KEYPOINT_ID
+from hand_keypoints_loader import LEFT_LAST_KEYPOINT_ID
+
+from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
+from hand_keypoints_loader import RIGHT_ALIGNED_KEYPOINT_ID
+from hand_keypoints_loader import RIGHT_LAST_KEYPOINT_ID
 
 
 def extract_hand_segment(segmentation_label):
@@ -16,12 +21,14 @@ def extract_hand_segment(segmentation_label):
 
 
 def transform_visibility_mask(visibility_mask):
-    # calculate palm visibility
-    palm_visibility_left = np.expand_dims(np.logical_or(visibility_mask[0],
-                                                        visibility_mask[12]), 0)
-    palm_visibility_right = np.expand_dims(np.logical_or(visibility_mask[21],
-                                                         visibility_mask[33]),
-                                           0)
+    palm_visibility_left = np.logical_or(
+        visibility_mask[LEFT_ROOT_KEYPOINT_ID],
+        visibility_mask[LEFT_ALIGNED_KEYPOINT_ID])
+    palm_visibility_left = np.expand_dims(palm_visibility_left, 0)
+    palm_visibility_right = np.logical_or(
+        visibility_mask[RIGHT_ROOT_KEYPOINT_ID],
+        visibility_mask[RIGHT_ALIGNED_KEYPOINT_ID])
+    palm_visibility_right = np.expand_dims(palm_visibility_right, 0)
     visibility_mask = np.concatenate([palm_visibility_left,
                                       visibility_mask[1:21],
                                       palm_visibility_right,
@@ -31,12 +38,17 @@ def transform_visibility_mask(visibility_mask):
 
 def keypoints_to_wrist_coordinates(keypoints):
     palm_coordinates_left = np.expand_dims(
-        0.5 * (keypoints[0, :] + keypoints[12, :]), 0)
+        0.5 * (keypoints[LEFT_ROOT_KEYPOINT_ID, :] +
+               keypoints[LEFT_ALIGNED_KEYPOINT_ID, :]), 0)
     palm_coordinates_right = np.expand_dims(
-        0.5 * (keypoints[21, :] + keypoints[33, :]), 0)
+        0.5 * (keypoints[RIGHT_ROOT_KEYPOINT_ID, :] +
+               keypoints[RIGHT_ALIGNED_KEYPOINT_ID, :]), 0)
     keypoints = np.concatenate(
-        [palm_coordinates_left, keypoints[1:21, :],
-         palm_coordinates_right, keypoints[21:43, :]], 0)
+        [palm_coordinates_left,
+         keypoints[LEFT_ROOT_KEYPOINT_ID + 1:LEFT_LAST_KEYPOINT_ID + 1, :],
+         palm_coordinates_right,
+         keypoints[RIGHT_ROOT_KEYPOINT_ID + 1:RIGHT_LAST_KEYPOINT_ID + 1, :]],
+        0)
     return keypoints
 
 
@@ -52,8 +64,9 @@ def one_hot_encode(inputs, n_classes):
 def normalize_keypoints(keypoints3D):
     keypoint3D_root = keypoints3D[0, :]
     relative_keypoint3D = keypoints3D - keypoint3D_root
-    keypoint_scale = np.linalg.norm(relative_keypoint3D[12, :] -
-                                    relative_keypoint3D[11, :])
+    keypoint_scale = np.linalg.norm(
+        relative_keypoint3D[LEFT_ALIGNED_KEYPOINT_ID, :] -
+        relative_keypoint3D[LEFT_ALIGNED_KEYPOINT_ID - 1, :])
 
     keypoint_normalized = relative_keypoint3D / keypoint_scale
     return keypoint_scale, keypoint_normalized
@@ -64,18 +77,29 @@ def to_homogeneous_coordinates(vector):
     return vector
 
 
-def get_translation_matrix(translation_vector):
-    transformation_matrix = np.array([[1, 0, 0, 0],
-                                      [0, 1, 0, 0],
-                                      [0, 0, 1, translation_vector],
+def build_4D_translation_matrix(translation_vector):
+    transformation_matrix = np.array([[1, 0, 0, translation_vector[0]],
+                                      [0, 1, 0, translation_vector[1]],
+                                      [0, 0, 1, translation_vector[2]],
                                       [0, 0, 0, 1]])
-    transformation_matrix = np.expand_dims(transformation_matrix, 0)
+    return transformation_matrix
 
+
+def get_translation_matrix(translation_vector):
+    if len(translation_vector) == 1:
+        transformation_matrix = np.array([[1, 0, 0, 0],
+                                          [0, 1, 0, 0],
+                                          [0, 0, 1, translation_vector],
+                                          [0, 0, 0, 1]])
+    else:
+        transformation_matrix = build_4D_translation_matrix(translation_vector)
+
+    transformation_matrix = np.expand_dims(transformation_matrix, 0)
     return transformation_matrix
 
 
 def get_affine_matrix(matrix):
-    t = np.array([0, 0, 0]).reshape(3, 1)
+    t = np.array([0, 0, 0]).reshape(3, 1)  # rename
     affine_matrix = np.hstack([matrix, t])
     affine_matrix = np.vstack((affine_matrix, [0, 0, 0, 1]))
     return affine_matrix
@@ -116,17 +140,25 @@ def extract_hand_masks(hand_parts_mask, right_hand_mask_limit=17):
     return hand_mask_left, hand_mask_right
 
 
-def extract_dominanthand_mask(keypoints3D, dominant_hand):
-    keypoint3D_left = keypoints3D[0:21, :]
-    keypoint3D_right = keypoints3D[21:43, :]
-    keyppoints_mask = np.ones_like(keypoint3D_left, dtype=bool)
-    dominant_hand_mask = np.logical_and(keyppoints_mask, dominant_hand)
+def extract_dominant_hand_mask(keypoints3D, dominant_hand):  # Function name
+    keypoint3D_left = keypoints3D[
+                      LEFT_ROOT_KEYPOINT_ID:LEFT_LAST_KEYPOINT_ID, :]
+    keypoints_mask = np.ones_like(keypoint3D_left, dtype=bool)
+    dominant_hand_mask = np.logical_and(keypoints_mask, dominant_hand)
+    return dominant_hand_mask
+
+
+def extract_hand_side_keypooints(keypoints3D, dominant_hand_mask):
+    keypoint3D_left = keypoints3D[
+                      LEFT_ROOT_KEYPOINT_ID:LEFT_LAST_KEYPOINT_ID + 1, :]
+    keypoint3D_right = keypoints3D[
+                       RIGHT_ROOT_KEYPOINT_ID:RIGHT_LAST_KEYPOINT_ID + 1, :]
     hand_side_keypoints = np.where(dominant_hand_mask, keypoint3D_left,
                                    keypoint3D_right)
-    return dominant_hand_mask, hand_side_keypoints
+    return hand_side_keypoints
 
 
-def extract_hand_side(hand_parts_mask, keypoints3D):
+def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
     hand_map_left, hand_map_right = extract_hand_masks(hand_parts_mask)
 
     num_pixels_hand_left = np.sum(hand_map_left)
@@ -134,8 +166,9 @@ def extract_hand_side(hand_parts_mask, keypoints3D):
 
     dominant_hand = np.greater(num_pixels_hand_left, num_pixels_hand_right)
 
-    dominant_hand_mask, hand_side_keypoints = extract_dominanthand_mask(
-        keypoints3D, dominant_hand)
+    dominant_hand_mask = extract_dominant_hand_mask(keypoints3D, dominant_hand)
+    hand_side_keypoints = extract_hand_side_keypooints(keypoints3D,
+                                                       dominant_hand_mask)
 
     hand_side = np.where(dominant_hand, 0, 1)
 
@@ -210,7 +243,7 @@ def get_keypoints_relative_frame(keypoints_3D):
         parent_key = kinematic_chain_dict[bone_index]
         if parent_key == 'root':
             transformations, relative_coordinates = get_root_transformations(
-                keypoints_3D, transformations)
+                keypoints_3D, bone_index, relative_coordinates, transformations)
         else:
             transformations, relative_coordinates = get_child_transformations(
                 keypoints_3D, bone_index, parent_key, relative_coordinates,
@@ -236,7 +269,7 @@ def get_keypoints_z_rotation(alignment_keypoint, translated_keypoints3D):
                                       rotation_matrix_z)
 
     reference_keypoint_z_rotation = resultant_keypoints3D[
-                                    ALIGNED_KEYPOINT_ID, :]
+                                    LEFT_ALIGNED_KEYPOINT_ID, :]
     return reference_keypoint_z_rotation, resultant_keypoints3D, \
            rotation_matrix_z
 
@@ -247,7 +280,7 @@ def get_keypoints_x_rotation(keypoints3D, rotation_matrix):
 
     resultant_keypoints3D = np.matmul(keypoints3D, rotation_matrix_x)
 
-    resultant_keypoint = resultant_keypoints3D[LAST_KEYPOINT_ID, :]
+    resultant_keypoint = resultant_keypoints3D[LEFT_LAST_KEYPOINT_ID, :]
     return resultant_keypoint, rotation_matrix_x, resultant_keypoints3D
 
 
@@ -261,9 +294,10 @@ def get_keypoints_y_rotation(keypoints3D, reference_keypoint_z_rotation):
 
 
 def get_canonical_transformations(keypoints3D):
-    reference_keypoint = np.expand_dims(keypoints3D[:, ROOT_KEYPOINT_ID], 1)
+    reference_keypoint = np.expand_dims(keypoints3D[:, LEFT_ROOT_KEYPOINT_ID],
+                                        1)
     translated_keypoints3D = keypoints3D - reference_keypoint
-    alignment_keypoint = translated_keypoints3D[:, ALIGNED_KEYPOINT_ID]
+    alignment_keypoint = translated_keypoints3D[:, LEFT_ALIGNED_KEYPOINT_ID]
 
     reference_keypoint_z_rotation, resultant_keypoints3D, rotation_matrix_z = \
         get_keypoints_z_rotation(alignment_keypoint, translated_keypoints3D)
