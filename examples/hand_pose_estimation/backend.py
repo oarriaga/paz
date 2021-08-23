@@ -4,6 +4,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
 
+
 from hand_keypoints_loader import kinematic_chain_dict, kinematic_chain_list
 from hand_keypoints_loader import LEFT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import LEFT_ALIGNED_KEYPOINT_ID
@@ -12,6 +13,7 @@ from hand_keypoints_loader import LEFT_LAST_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_ALIGNED_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_LAST_KEYPOINT_ID
+from paz.backend.image.draw import lincolor
 
 
 def extract_hand_segment(segmentation_label):
@@ -345,12 +347,12 @@ def get_scale_translation_matrix(crop_center, crop_size, scale):
     trans1 = np.reshape(trans1, [1, ])
     trans2 = np.reshape(trans2, [1, ])
 
-    trans_matrix = np.array([1.0, 0.0, -trans2,
-                             0.0, 1.0, -trans1,
-                             0.0, 0.0, 1.0])
+    transformation_matrix = np.array([1.0, 0.0, -trans2,
+                                      0.0, 1.0, -trans1,
+                                      0.0, 0.0, 1.0])
 
-    trans_matrix = np.reshape(trans_matrix, [3, 3])
-    return trans_matrix
+    transformation_matrix = np.reshape(transformation_matrix, [3, 3])
+    return transformation_matrix
 
 
 def extract_coordinate_limits(keypoints_2D, keypoints_2D_vis, image_size):
@@ -580,7 +582,7 @@ def get_crop_list(xy_limit, crop_size_list):
 
 
 def get_bounding_box_features(X, Y, binary_class_mask, shape):
-    bounding_box_list, center_list, crop_size_list = list()
+    bounding_box_list, center_list, crop_size_list = list(), list(), list()
     for i in range(shape[0]):
         X_masked = X[binary_class_mask[i, :, :]].numpy().astype(np.float)
         Y_masked = Y[binary_class_mask[i, :, :]].numpy().astype(np.float)
@@ -598,6 +600,10 @@ def extract_bounding_box(binary_class_mask):
     binary_class_mask = binary_class_mask.numpy().astype(np.int)
     binary_class_mask = np.equal(binary_class_mask, 1)
     shape = binary_class_mask.shape
+
+    if len(shape) == 4:
+        binary_class_mask = np.squeeze(binary_class_mask, axis=-1)
+        shape = binary_class_mask.shape
 
     assert len(shape) == 3, "binary_class_mask must be 3D."
 
@@ -647,31 +653,45 @@ def crop_image_from_coordinates(image, crop_location, crop_size, scale=1.0):
     return image_cropped.numpy()
 
 
-def find_max_location(scoremap):
-    """ Returns the coordinates of the given scoremap with maximum value. """
-
-    s = scoremap.shape
-    assert len(s) == 3, "Scoremap must be 3D."
-
-    x_range = np.expand_dims(np.arange(s[1]), 1)
-    y_range = np.expand_dims(np.arange(s[2]), 0)
-    X = np.tile(x_range, [1, s[2]])
-    Y = np.tile(y_range, [s[1], 1])
-
-    x_vec = np.reshape(X, [-1])
-    y_vec = np.reshape(Y, [-1])
-    scoremap_vec = np.reshape(scoremap, [s[0], -1])
+def extract_scoremap_indices(scoremap):
+    shape = scoremap.shape
+    scoremap_vec = np.reshape(scoremap, [shape[0], -1])
     max_ind_vec = np.argmax(scoremap_vec, axis=1)
     max_ind_vec = max_ind_vec.astype(np.int)
+    return max_ind_vec
 
+
+def extract_keypoints_XY(x_vec, y_vec, max_ind_vec, batch_size):
     xy_loc = list()
-    for i in range(s[0]):
+    for i in range(batch_size):
         x_loc = np.reshape(x_vec[max_ind_vec[i]], [1])
         y_loc = np.reshape(y_vec[max_ind_vec[i]], [1])
         xy_loc.append(np.concatenate([x_loc, y_loc], 0))
+    keypoints_2D = np.stack(xy_loc, 0)
+    return keypoints_2D
 
-    xy_loc = np.stack(xy_loc, 0)
-    return xy_loc
+
+def extract_2D_grids(shape):
+    x_range = np.expand_dims(np.arange(shape[1]), 1)
+    y_range = np.expand_dims(np.arange(shape[2]), 0)
+    X = np.tile(x_range, [1, shape[2]])
+    Y = np.tile(y_range, [shape[1], 1])
+
+    x_vec = np.reshape(X, [-1])
+    y_vec = np.reshape(Y, [-1])
+    return x_vec, y_vec
+
+
+def find_max_location(scoremap):
+    """ Returns the coordinates of the given scoremap with maximum value. """
+    shape = scoremap.shape
+    assert len(shape) == 3, "Scoremap must be 3D."
+    x_vec, y_vec = extract_2D_grids(shape)
+
+    max_ind_vec = extract_scoremap_indices(scoremap)
+    keypoints_2D = extract_keypoints_XY(x_vec, y_vec, max_ind_vec, shape[0])
+
+    return keypoints_2D
 
 
 def object_scoremap(scoremap):
@@ -747,10 +767,8 @@ def create_score_maps(keypoint_2D, keypoint_vis21, image_size, crop_size,
     if crop_image:
         scoremap_size = (crop_size, crop_size)
 
-    scoremap = create_multiple_gaussian_map(keypoint_hw21,
-                                            scoremap_size,
-                                            sigma,
-                                            valid_vec=keypoint_vis21)
+    scoremap = create_multiple_gaussian_map(keypoint_hw21, scoremap_size,
+                                            sigma, valid_vec=keypoint_vis21)
 
     return scoremap
 
@@ -783,3 +801,74 @@ def merge_dictionaries(dicts):
     for dict in dicts:
         result.update(dict)
     return result
+
+
+def get_bone_connections_and_colors(colors):
+    num_fingers = 5
+    num_bones = 4
+    bone_to_color_mapping = []
+    for finger in range(num_fingers):
+        base = (0, num_bones + finger * num_bones)
+        for bone in range(num_bones):
+            bone_to_color_mapping.append((base, colors[finger*num_bones+bone]))
+            base = (base[1], base[1] - 1)
+    return bone_to_color_mapping
+
+
+def plot_hand(keypoints_2D, axis, color_fixed=None, linewidth='1'):
+    """ Plots a hand stick figure into a matplotlib figure. """
+    colors = lincolor(num_colors=21)
+
+    # define connections and colors of the bones
+    bones = get_bone_connections_and_colors(colors=colors)
+
+    for connection, color in bones:
+        coord1 = keypoints_2D[connection[0], :]
+        coord2 = keypoints_2D[connection[1], :]
+        coords = np.stack([coord1, coord2])
+        if color_fixed is None:
+            axis.plot(coords[:, 1], coords[:, 0], color=color,
+                      linewidth=linewidth)
+        else:
+            axis.plot(coords[:, 1], coords[:, 0], color_fixed,
+                      linewidth=linewidth)
+
+
+def plot_hand_3d(coords_xyz, axis, color_fixed=None, linewidth='1'):
+    """ Plots a hand stick figure into a matplotlib figure. """
+    colors = lincolor(num_colors=21)
+
+    # define connections and colors of the bones
+    bones = get_bone_connections_and_colors(colors=colors)
+
+    for connection, color in bones:
+        coord1 = coords_xyz[connection[0], :]
+        coord2 = coords_xyz[connection[1], :]
+        coords = np.stack([coord1, coord2])
+        if color_fixed is None:
+            axis.plot(coords[:, 0], coords[:, 1], coords[:, 2], color=color,
+                      linewidth=linewidth)
+        else:
+            axis.plot(coords[:, 0], coords[:, 1], coords[:, 2], color_fixed,
+                      linewidth=linewidth)
+
+    axis.view_init(azim=-45., elev=45.)
+
+
+def plot_hand_poses():
+    fig = plt.figure(1, figsize=(16, 16))
+    ax1 = fig.add_subplot(221)
+    ax2 = fig.add_subplot(222)
+    ax3 = fig.add_subplot(223, projection='3d')
+    ax4 = fig.add_subplot(224, projection='3d')
+    ax1.imshow(np.squeeze(img))
+    plot_hand(keypoint_coords, ax1)
+    ax2.imshow(np.squeeze(image_crop))
+    plot_hand(keypoint_coords_crop, ax2)
+
+    plot_hand_3d(keypoint_coords3d, ax3)
+    ax3.view_init(azim=-90.0,
+                  elev=-90.0)  # aligns the 3d coord with the camera view
+    plot_hand_3d(keypoint_coords3d, ax4)
+    ax4.view_init(azim=45.0, elev=45.0)
+    plt.show()

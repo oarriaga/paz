@@ -9,6 +9,7 @@ from processors import MatrixInverse, ExtractDominantHandVisibility
 from processors import TransformVisibilityMask, NormalizeKeypoints
 from processors import TransformtoRelativeFrame, GetCanonicalTransformation
 from processors import Resize_image
+from processors import Merge_Dictionaries, GetRotationMatrix
 
 
 class PreprocessKeypoints(SequentialProcessor):
@@ -134,3 +135,46 @@ class AugmentHandPose(SequentialProcessor):
                                      7: {'hand_side': [2]}},
                                     {2: {'keypoints3D_can': [21, 3]},
                                      10: {'rotation_matrix': [3, 3]}}))
+
+
+class preprocess_image(SequentialProcessor):
+    def __init__(self, image_size=320):
+        super(preprocess_image, self).__init__()
+        self.add(pr.UnpackDictionary(['image_path']))
+        self.add(pr.LoadImage())
+        self.add(pr.ResizeImage((image_size, image_size)))
+        self.add(pr.ConvertColorSpace(pr.RGB2BGR))
+        self.add(pr.SubtractMeanImage(pr.BGR_IMAGENET_MEAN))
+        self.add(pr.ExpandDims(0))
+
+
+class PostprocessSegmentation(SequentialProcessor):
+    def __init__(self, HandSegNet, image_size=320, crop_size=256):
+        super(PostprocessSegmentation, self).__init__()
+        self.add(pr.Predict(HandSegNet))
+        self.add(pr.UnpackDictionary(['image', 'raw_segmentation_map']))
+        self.add(pr.ControlMap(Resize_image(size=(image_size, image_size)),
+                               [1], [1]))
+        self.add(pr.ControlMap(HandSegmentationMap(), [1], [1]))
+        self.add(pr.ControlMap(ExtractBoundingbox(), [1], [2, 3, 4],
+                               keep={1: 1}))
+        self.add(pr.ControlMap(AdjustCropSize(), [4], [3]))
+        self.add(pr.ControlMap(CropImage(crop_size=crop_size), [0, 2, 3],
+                               [0]))
+        self.add(pr.ControlMap(pr.CastImage('uint8'), [0], [0]))
+
+
+class Process2DKeypoints(SequentialProcessor):
+    def __init__(self, PoseNet):
+        super(Process2DKeypoints, self).__init__()
+        self.add(pr.Predict(PoseNet))
+
+
+class PostProcessKeypoints(SequentialProcessor):
+    def __init__(self, number_of_keypoints=21):
+        super(PostProcessKeypoints, self).__init__()
+        self.add(pr.UnpackDictionary(['canonical_coordinates',
+                                      'rotation_parameters', 'hand_side']))
+        self.add(pr.ControlMap(GetRotationMatrix(), [1], [1]))
+        self.add(pr.ControlMap(CanonicaltoRelativeFrame(number_of_keypoints),
+                               [0, 1, 2], [0]))

@@ -9,6 +9,8 @@ from backend import get_canonical_transformations, flip_right_hand
 from backend import normalize_keypoints, transform_to_relative_frames
 from backend import transform_visibility_mask, get_hand_side_and_keypooints
 from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
+from backend import get_bone_connections_and_colors, find_max_location
+from paz.backend.image.draw import lincolor
 from paz.backend.image.tensorflow_image import resize
 from paz.abstract import Processor
 
@@ -270,3 +272,22 @@ class Merge_Dictionaries(Processor):
 
     def call(self, dicts):
         return merge_dictionaries(dicts)
+
+
+class Get_Bone_Color_Encoding(Processor):
+    def __init__(self):
+        super(Get_Bone_Color_Encoding, self).__init__()
+
+    def call(self, num_keypoints=21):
+        colors = lincolor(num_colors=num_keypoints)
+        return get_bone_connections_and_colors(colors=colors)
+
+
+class Extract_2D_Keypoint(Processor):
+    def __init__(self):
+        super(Extract_2D_Keypoint, self).__init__()
+
+    def call(self, scoremaps):
+        keypoints_2D = find_max_location(scoremaps)
+
+
