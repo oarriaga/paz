@@ -853,22 +853,3 @@ def plot_hand_3d(coords_xyz, axis, color_fixed=None, linewidth='1'):
                       linewidth=linewidth)
 
     axis.view_init(azim=-45., elev=45.)
-
-
-def plot_hand_poses():
-    fig = plt.figure(1, figsize=(16, 16))
-    ax1 = fig.add_subplot(221)
-    ax2 = fig.add_subplot(222)
-    ax3 = fig.add_subplot(223, projection='3d')
-    ax4 = fig.add_subplot(224, projection='3d')
-    ax1.imshow(np.squeeze(img))
-    plot_hand(keypoint_coords, ax1)
-    ax2.imshow(np.squeeze(image_crop))
-    plot_hand(keypoint_coords_crop, ax2)
-
-    plot_hand_3d(keypoint_coords3d, ax3)
-    ax3.view_init(azim=-90.0,
-                  elev=-90.0)  # aligns the 3d coord with the camera view
-    plot_hand_3d(keypoint_coords3d, ax4)
-    ax4.view_init(azim=45.0, elev=45.0)
-    plt.show()
