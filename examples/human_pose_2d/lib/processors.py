@@ -450,3 +450,95 @@ class WarpAffine(pr.Processor):
         return image_resized
 
 
+class UpSampling2D(pr.Processor):
+    def __init__(self, size, interpolation):
+        super(UpSampling2D, self).__init__()
+        self.size = size
+        self.interpolation = interpolation
+
+    def call(self, x):
+        x = [tf.keras.layers.UpSampling2D(size=self.size, 
+             interpolation=self.interpolation)(each) for each in x]
+        return x
+         
+
+class UpdateHeatmapAverage(pr.Processor):
+    def __init__(self):
+        super(UpdateHeatmapAverage, self).__init__()
+
+    def call(self, heatmaps_average, output, indices, num_joints, with_flip=False):
+        if not with_flip:
+            heatmaps_average += output[:, :, :, :num_joints]
+
+        else:
+            temp = output[:, :, :, :num_joints]
+            heatmaps_average += tf.gather(temp, indices, axis=-1)
+        return heatmaps_average
+
+
+class IncrementByOne(pr.Processor):
+    def __init__(self):
+        super(IncrementByOne, self).__init__()
+
+    def call(self, x):
+        x += 1
+        return x
+        
+
+class UpdateTags(pr.Processor):
+    def __init__(self, tag_per_joint):
+        super(UpdateTags, self).__init__()
+        self.tag_per_joint = tag_per_joint
+        
+    def call(self, tags, output, offset, indices, with_flip=False):
+        tags.append(output[:, :, :, offset:])
+        if with_flip and self.tag_per_joint:
+            tags[-1] = tf.gather(tags[-1], indices, axis=-1)
+        return tags
+        
+
+class UpdateHeatmaps(pr.Processor):
+    def __init__(self):
+        super(UpdateHeatmaps, self).__init__()
+        
+    def call(self, heatmaps, heatmap_average, num_heatmaps):
+        heatmaps.append(heatmap_average/num_heatmaps)
+        return heatmaps
+
+
+class CalculateOffset(pr.Processor):
+    def __init__(self, num_joints, loss_with_heatmap_loss):
+        super(CalculateOffset, self).__init__()
+        self.num_joints = num_joints
+        self.loss_with_heatmap_loss = loss_with_heatmap_loss
+
+    def call(self, idx):
+        if self.loss_with_heatmap_loss[idx]:
+            offset = self.num_joints
+        else:
+            offset = 0
+        return offset
+
+
+class FlipJointOrder(pr.Processor):
+    def __init__(self, with_center):
+        super(FlipJointOrder, self).__init__()
+        self.with_center = with_center
+        
+    def call(self):
+        if not self.with_center:
+            idx = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15]
+        else:
+            idx = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 17]
+        return idx
+
+
+class RemoveLastElement(pr.Processor):
+    def __init__(self):
+        super(RemoveLastElement, self).__init__()
+
+    def call(self, nested_list):
+        return [each_list[:, :-1] for each_list in nested_list]
+
+        
+        
