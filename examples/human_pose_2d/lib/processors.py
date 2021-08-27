@@ -3,6 +3,7 @@ import tensorflow as tf
 from paz import processors as pr
 from munkres import Munkres
 import cv2
+import PIL
 
 
 class LoadModel(pr.Processor):
@@ -13,24 +14,15 @@ class LoadModel(pr.Processor):
         return tf.keras.models.load_model(model_path)
 
 
-class CreateDirectory(pr.Processor):
+class LoadImage(pr.Processor):
     def __init__(self):
-        super(CreateDirectory, self).__init__()
+        super(LoadImage, self).__init__()
 
-    def call(self, directory):
-        print('=> creating {}'.format(directory))
-        directory.mkdir(parents=True, exist_ok=True)
-
-
-class ReplaceText(pr.Processor):
-    def __init__(self, text):
-        super(ReplaceText, self).__init__()
-        self.text = text
-
-    def call(self, oldvalue, newvalue):
-        return self.text.replace(oldvalue, newvalue)
+    def call(self, image_path):
+        return np.array(PIL.Image.open(image_path, 'r')).astype(np.uint8)
 
 
+# det - detection
 class NonMaximumSuppression(pr.Processor):
     def __init__(self, permutes, pool_size, strides, padding='same'):
         super(NonMaximumSuppression, self).__init__()
@@ -47,6 +39,7 @@ class NonMaximumSuppression(pr.Processor):
         return det
 
 
+# groups tags corresponding to the number of people detected
 class MatchByTag(pr.Processor):
     def __init__(self, num_joints, joint_order, detection_thresh,
                  max_num_people, ignore_too_much, use_detection_val,
@@ -90,15 +83,9 @@ class MatchByTag(pr.Processor):
 
     def call(self, input_):
         tag_k, loc_k, val_k = input_.values()
-        # print('tag_k_shape:', tag_k.shape)
-        # print('loc_k_shape:', loc_k.shape)
-        # print('val_k_shape:', val_k.shape)
         tag_k = tag_k[0, :, :, :]
         loc_k = loc_k[0, :, :, :]
         val_k = val_k[0, :, :]
-        # print('tag_k_shape:', tag_k.shape)
-        # print('loc_k_shape:', loc_k.shape)
-        # print('val_k_shape:', val_k.shape)
 
         default = np.zeros((self.num_joints, tag_k.shape[2] + 3))
         for i in range(self.num_joints):
@@ -174,6 +161,7 @@ class TorchGather(pr.Processor):
         return tf.reshape(gathered, indices.shape)
 
 
+#
 class Top_K(pr.Processor):
     def __init__(self, max_num_people, num_joints, tag_per_joint):
         super(Top_K, self).__init__()
@@ -182,12 +170,6 @@ class Top_K(pr.Processor):
         self.tag_per_joint = tag_per_joint
         self.torch_gather = TorchGather(2)
         self.nms = NonMaximumSuppression([0, 2, 3, 1], 3, 1)
-        # det = self.nms(det)
-        # self.det = tf.transpose(det, [0, 3, 1, 2])
-        # self.num_images = det.get_shape()[0]
-        # self.num_joints = det.get_shape()[1]
-        # self.h = det.get_shape()[2]
-        # self.w = det.get_shape()[3]
 
     def call(self, det, tag):
         det = self.nms(det)
@@ -197,6 +179,7 @@ class Top_K(pr.Processor):
         H = det.get_shape()[2]
         W = det.get_shape()[3]
         det = tf.reshape(det, [num_images, num_joints, -1])
+        # limit the detection to 30 people
         val_k, indices = tf.math.top_k(det, self.max_num_people)
         tag = tf.reshape(tag, [tag.get_shape()[0],
                          tag.get_shape()[1], W*H, -1])
@@ -215,6 +198,7 @@ class Top_K(pr.Processor):
         x = tf.cast((indices % W), dtype=tf.int64)
         y = tf.cast((indices / W), dtype=tf.int64)
 
+        # indices corresponding to top 30 people
         ind_k = tf.stack((x, y), axis=3)
         ans = {
             'tag_k': tag_k.cpu().numpy(),
@@ -320,6 +304,8 @@ class GetScores(pr.Processor):
         return [i[:, 2].mean() for i in ans]
 
 
+# tensor to cpu
+# tensor to numpy
 class TensorToNumpy(pr.Processor):
     def __init__(self):
         super(TensorToNumpy, self).__init__()
@@ -327,15 +313,15 @@ class TensorToNumpy(pr.Processor):
     def call(self, tensor):
         return tensor.cpu().numpy()
 
-# tile array
-# reps
-class TiledArray(pr.Processor):
-    def __init__(self, reps):
-        super(TiledArray, self).__init__()
-        self.reps = reps
+
+class TileArray(pr.Processor):
+    def __init__(self, repetitions):
+        super(TileArray, self).__init__()
+        self.repetitions = repetitions
 
     def call(self, array):
-        return np.tile(array, self.reps)
+        return np.tile(array, self.repetitions)
+
 
 # put constants in init
 class ResizeDimensions(pr.Processor):
@@ -344,7 +330,7 @@ class ResizeDimensions(pr.Processor):
         self.min_scale = min_scale
 
     def call(self, current_scale, min_input_size, D1, D2):
-        D1_resized = int(min_input_size * current_scale / self.min_scale)
+        D1_resized = int(min_input_size * current_scale / self.min_scale) # resize to 512
         D2_resized = int(int((min_input_size / D1*D2 + 63) // 64*64) *
                          current_scale/self.min_scale)
         scale_D1 = D1 / 200.0
@@ -353,15 +339,15 @@ class ResizeDimensions(pr.Processor):
 
 
 class GetImageCenter(pr.Processor):
-    def __init__(self):
+    def __init__(self, offset=0.5):
         super(GetImageCenter, self).__init__()
+        self.offset = offset
 
     def call(self, image):
-        # input.shape[:2]
-        H, W, _ = image.shape
-        # create variable center_W and H
-        # seperation of variables
-        return np.array([int((W / 2.0) + 0.5), int((H / 2.0) + 0.5)])
+        H, W = image.shape[:2]
+        center_W = int((W / 2.0) + self.offset)
+        center_H = int((H / 2.0) + self.offset)
+        return np.array([center_W, center_H])
 
 
 class MinInputSize(pr.Processor):
@@ -380,24 +366,20 @@ class GetDirection(pr.Processor):
         super(GetDirection, self).__init__()
         self.rotation_angle = rotation_angle
 
-    def call(self, point):
-    # def call(self, point2D):
+    def call(self, point2D):
         sn, cs = np.sin(self.rotation_angle), np.cos(self.rotation_angle)
-        result = [0, 0]
-        # x_rotated, y_rotated
-        result[0] = point[0] * cs - point[1] * sn
-        result[1] = point[0] * sn + point[1] * cs
-        return result
+        x_rotated = point2D[0] * cs - point2D[1] * sn
+        y_rotated = point2D[0] * sn + point2D[1] * cs
+        return [x_rotated, y_rotated]
 
 
 class Get3rdPoint(pr.Processor):
     def __init__(self):
         super(Get3rdPoint, self).__init__()
 
-    def call(self, p1, p2):
-    # def call(self, point2D_a, point2D_b):
-        difference = p1 - p2
-        return p2 + np.array([-difference[1], difference[0]], dtype=np.float32)
+    def call(self, point2D_a, point2D_b):
+        diff = point2D_a - point2D_b
+        return point2D_a + np.array([-diff[1], diff[0]], dtype=np.float32)
 
 
 class UpdateSRCMatrix(pr.Processor):
@@ -421,17 +403,16 @@ class UpdateDSTMatrix(pr.Processor):
         self.get_3rd_point = Get3rdPoint()
 
     def call(self, output_size):
-        dst_W = output_size[0]
-        dst_H = output_size[1]
-        dst_dir = np.array([0, dst_W * -0.5], np.float32)
+        W = output_size[0]
+        H = output_size[1]
+        dst_dir = np.array([0, W * -0.5], np.float32)
         dst = np.zeros((3, 2), dtype=np.float32)
-        dst[0, :] = [dst_W * 0.5, dst_H * 0.5]
-        dst[1, :] = np.array([dst_W * 0.5, dst_H * 0.5]) + dst_dir
+        dst[0, :] = [W * 0.5, H * 0.5]
+        dst[1, :] = np.array([W * 0.5, H * 0.5]) + dst_dir
         dst[2:, :] = self.get_3rd_point(dst[0, :], dst[1, :])
         return dst
 
 
-# cv2 functions inside the processor
 class GetAffineTransform(pr.Processor):
     def __init__(self):
         super(GetAffineTransform, self).__init__()
@@ -457,19 +438,33 @@ class UpSampling2D(pr.Processor):
         self.interpolation = interpolation
 
     def call(self, x):
-        x = [tf.keras.layers.UpSampling2D(size=self.size, 
-             interpolation=self.interpolation)(each) for each in x]
+        if isinstance(x, list):
+            x = [tf.keras.layers.UpSampling2D(size=self.size,
+                 interpolation=self.interpolation)(each) for each in x]
+        else:
+            x = \
+             tf.keras.layers.UpSampling2D(size=self.size,
+                                          interpolation=self.interpolation)(x)
         return x
-         
+
+
+class CalculateHeatmapAverage(pr.Processor):
+    def __init__(self):
+        super(CalculateHeatmapAverage, self).__init__()
+
+    def call(self, heatmaps):
+        heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
+        return heatmaps_average
+
 
 class UpdateHeatmapAverage(pr.Processor):
     def __init__(self):
         super(UpdateHeatmapAverage, self).__init__()
 
-    def call(self, heatmaps_average, output, indices, num_joints, with_flip=False):
+    def call(self, heatmaps_average, output, indices,
+             num_joints, with_flip=False):
         if not with_flip:
             heatmaps_average += output[:, :, :, :num_joints]
-
         else:
             temp = output[:, :, :, :num_joints]
             heatmaps_average += tf.gather(temp, indices, axis=-1)
@@ -483,24 +478,24 @@ class IncrementByOne(pr.Processor):
     def call(self, x):
         x += 1
         return x
-        
+
 
 class UpdateTags(pr.Processor):
     def __init__(self, tag_per_joint):
         super(UpdateTags, self).__init__()
         self.tag_per_joint = tag_per_joint
-        
+
     def call(self, tags, output, offset, indices, with_flip=False):
         tags.append(output[:, :, :, offset:])
         if with_flip and self.tag_per_joint:
             tags[-1] = tf.gather(tags[-1], indices, axis=-1)
         return tags
-        
+
 
 class UpdateHeatmaps(pr.Processor):
     def __init__(self):
         super(UpdateHeatmaps, self).__init__()
-        
+
     def call(self, heatmaps, heatmap_average, num_heatmaps):
         heatmaps.append(heatmap_average/num_heatmaps)
         return heatmaps
@@ -524,12 +519,14 @@ class FlipJointOrder(pr.Processor):
     def __init__(self, with_center):
         super(FlipJointOrder, self).__init__()
         self.with_center = with_center
-        
+
     def call(self):
         if not self.with_center:
-            idx = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15]
+            idx = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10,
+                   9, 12, 11, 14, 13, 16, 15]
         else:
-            idx = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 17]
+            idx = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10,
+                   9, 12, 11, 14, 13, 16, 15, 17]
         return idx
 
 
@@ -540,5 +537,33 @@ class RemoveLastElement(pr.Processor):
     def call(self, nested_list):
         return [each_list[:, :-1] for each_list in nested_list]
 
-        
-        
+
+class PostProcessHeatmaps(pr.Processor):
+    def __init__(self, test_scale_factor):
+        super(PostProcessHeatmaps, self).__init__()
+        self.test_scale_factor = test_scale_factor
+
+    def call(self, heatmaps):
+        heatmaps = heatmaps/float(len(self.test_scale_factor))
+        heatmaps = tf.transpose(heatmaps, [0, 3, 1, 2])
+        return heatmaps
+
+
+class PostProcessTags(pr.Processor):
+    def __init__(self):
+        super(PostProcessTags, self).__init__()
+
+    def call(self, tags):
+        tags = tf.concat(tags, axis=4)
+        tags = tf.transpose(tags, [0, 3, 1, 2, 4])
+        return tags
+
+
+class AffineTransformPoint(pr.Processor):
+    def __init__(self):
+        super(AffineTransformPoint, self).__init__()
+
+    def call(self, point, transform):
+        point = np.array([point[0], point[1], 1.]).T
+        point_transformed = np.dot(transform, point)
+        return point_transformed[:2]
