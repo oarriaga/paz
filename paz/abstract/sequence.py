@@ -118,9 +118,10 @@ class GeneratingSequencePix2Pose(SequenceExtra):
             lists. If false ``inputs`` and ``labels`` are dispatched as
             dictionaries.
     """
-    def __init__(self, processor, model, batch_size, num_steps, as_list=False, rotation_matrices=None):
+    def __init__(self, processor, model, batch_size, num_steps, color_loss_fn, as_list=False, rotation_matrices=None):
         self.num_steps = num_steps
         self.model = model
+        self.color_loss_fn = color_loss_fn
         self.rotation_matrices = rotation_matrices
         super(GeneratingSequencePix2Pose, self).__init__(
             processor, batch_size, as_list)
@@ -172,7 +173,7 @@ class GeneratingSequencePix2Pose(SequenceExtra):
             for rotation_matrix in self.rotation_matrices:
                 color_image_rotated = self.rotate_image(sample['labels']['color_output'], rotation_matrix)
                 error_image = np.sum(predictions['color_output_0'][sample_arg] - color_image_rotated, axis=-1, keepdims=True)
-                error_value = np.sum(np.abs(error_image))
+                error_value = self.color_loss_fn(np.expand_dims(color_image_rotated, axis=0).astype(np.single), np.expand_dims(predictions['color_output_0'][sample_arg], axis=0).astype(np.single))
                 stored_errors.append((error_value, error_image))
 
             minimal_error_pair = min(stored_errors, key=lambda t: t[0])

@@ -218,7 +218,7 @@ def calculate_error(model, renderer, rotation_matrices):
 
     add_values = list()
 
-    for  original_image, belief_maps, camera_rotation, object_translation in zip(original_images, belief_maps_batch, camera_rotations, renderer.object_translations):
+    for original_image, belief_maps, camera_rotation, object_translation in zip(original_images, belief_maps_batch, camera_rotations, renderer.object_translations):
         real_rotation_matrix, real_translation, predicted_rotation_matrix, predicted_translation = predict_pose(camera, original_image, belief_maps, camera_rotation, object_translation, bounding_box_points_3d)
 
         # Iterate over all rotation matrices to find the smallest possible error
