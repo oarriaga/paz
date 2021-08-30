@@ -17,15 +17,15 @@ from utils import get_activation, get_drop_connect
 GlobalParams_arg = ['dropout_rate', 'data_format', 'num_classes',
                     'width_coefficient', 'depth_coefficient',
                     'depth_divisor', 'min_depth', 'survival_rate',
-                    'activation', 'batch_norm', 'use_se', 'local_pooling',
-                    'condconv_num_experts', 'clip_projection_output',
-                    'blocks_args', 'fix_head_stem']
+                    'activation', 'batch_norm', 'use_squeeze_excitation',
+                    'local_pooling', 'condconv_num_experts',
+                    'clip_projection_output', 'blocks_args', 'fix_head_stem']
 GlobalParams = dict.fromkeys(GlobalParams_arg, None)
 
 BlockArgs_arg = ['kernel_size', 'num_repeat', 'input_filters',
                  'output_filters', 'expand_ratio', 'id_skip',
-                 'strides', 'se_ratio', 'conv_type', 'fused_conv',
-                 'super_pixel', 'condconv']
+                 'strides', 'squeeze_excititation_ratio', 'conv_type',
+                 'fused_conv', 'super_pixel', 'condconv']
 BlockArgs = dict.fromkeys(BlockArgs_arg, None)
 
 
@@ -102,14 +102,16 @@ def superpixel_kernel_initializer(shape, dtype='float32', partition_info=None):
     return filters
 
 
-class SE(Layer):
+class Squeeze_Excitation(Layer):
     """Squeeze-and-excitation layer."""
-    def __init__(self, global_params, se_filters, output_filters, name=None):
+    def __init__(self, global_params, filters, output_filters, name=None):
         """
         # Arguments
             global_params: GlobalParams, a set of global parameters.
-            se_filters: Int, Number of input filters of the SE layer.
-            output_filters: Int, Number of output filters of the SE layer.
+            filters: Int, Number of input filters of the Squeeze Excitation
+            layer.
+            output_filters: Int, Number of output filters of the Squeeze
+            Excitation layer.
         """
         super().__init__(name=name)
 
@@ -117,12 +119,12 @@ class SE(Layer):
         self._activation = global_params["activation"]
 
         # Squeeze and Excitation layer.
-        self._se_reduce = Conv2D(se_filters, [1, 1], [1, 1], 'same',
-                                 'channels_last', (1, 1), 1, None, True,
-                                 conv_kernel_initializer, name='conv2d')
-        self._se_expand = Conv2D(output_filters, [1, 1], [1, 1], 'same',
-                                 'channels_last', (1, 1), 1, None, True,
-                                 conv_kernel_initializer, name='conv2d_1')
+        self._reduce = Conv2D(filters, [1, 1], [1, 1], 'same',
+                              'channels_last', (1, 1), 1, None, True,
+                              conv_kernel_initializer, name='conv2d')
+        self._expand = Conv2D(output_filters, [1, 1], [1, 1], 'same',
+                              'channels_last', (1, 1), 1, None, True,
+                              conv_kernel_initializer, name='conv2d_1')
 
     def call(self, tensor):
         """
@@ -134,15 +136,17 @@ class SE(Layer):
         """
         h_axis, w_axis = [1, 2]
         if self._local_pooling:
-            se_tensor = tf.nn.avg_pool(
+            squeeze_excitation_tensor = tf.nn.avg_pool(
                 tensor, [1, tensor.shape[h_axis], tensor.shape[w_axis], 1],
                 [1, 1, 1, 1], 'VALID')
         else:
-            se_tensor = tf.reduce_mean(tensor, [h_axis, w_axis], keepdims=True)
-        se_tensor = self._se_expand(get_activation(
-            self._se_reduce(se_tensor), self._activation))
-        print('Built SE %s : %s', self.name, se_tensor.shape)
-        return tf.sigmoid(se_tensor) * tensor
+            squeeze_excitation_tensor = tf.reduce_mean(
+                tensor, [h_axis, w_axis], keepdims=True)
+        squeeze_excitation_tensor = self._expand(get_activation(
+            self._reduce(squeeze_excitation_tensor), self._activation))
+        print('Built Squeeze Excitation %s : %s',
+              self.name, squeeze_excitation_tensor.shape)
+        return tf.sigmoid(squeeze_excitation_tensor) * tensor
 
 
 class SuperPixel(Layer):
@@ -202,9 +206,10 @@ class MBConvBlock(Layer):
         self._batch_norm = global_params["batch_norm"]
         self._condconv_num_experts = global_params["condconv_num_experts"]
         self._activation = global_params["activation"]
-        self._has_se = (global_params["use_se"]
-                        and self._block_args["se_ratio"] is not None
-                        and 0 < self._block_args["se_ratio"] <= 1)
+        self._has_squeeze_excitation = (
+                global_params["use_squeeze_excitation"]
+                and self._block_args["squeeze_excite_ratio"] is not None
+                and 0 < self._block_args["squeeze_excite_ratio"] <= 1)
         self._clip_projection_output = global_params["clip_projection_output"]
         self.endpoints = None
         if self._block_args["condconv"]:
@@ -227,21 +232,22 @@ class MBConvBlock(Layer):
             else '_' + str(next(self.batch_norm_id) // 2))
         return name
 
-    def build_se(self, filters):
+    def build_squeeze_excitation(self, filters):
         """
         Builds Squeeze-and-excitation block.
 
         # Arguments
             filters: Int, output filters of squeeze and excite block.
         """
-        if self._has_se:
+        if self._has_squeeze_excitation:
             input_filters = self._block_args["input_filters"]
-            se_ratio = self._block_args["se_ratio"]
-            num_reduced_filters = max(1, int(input_filters * se_ratio))
-            self._se = SE(self._global_params, num_reduced_filters, filters,
-                          name='se')
+            squeeze_excite_ratio = self._block_args["squeeze_excite_ratio"]
+            num_reduced_filters = max(
+                1, int(input_filters * squeeze_excite_ratio))
+            self._squeeze_excitation = Squeeze_Excitation(
+                self._global_params, num_reduced_filters, filters, name='se')
         else:
-            self._se = None
+            self._squeeze_excitation = None
 
     def build_super_pixel(self):
         if self._block_args["super_pixel"] == 1:
@@ -292,7 +298,7 @@ class MBConvBlock(Layer):
         self.build_fused_conv(filters)
         self._batch_norm1 = self._batch_norm(
             -1, 0.99, 1e-3, name=self.get_batch_norm_name())
-        self.build_se(filters)
+        self.build_squeeze_excitation(filters)
         # Output phase.
         filters = self._block_args["output_filters"]
         self._project_conv = Conv2D(
@@ -347,8 +353,8 @@ class MBConvBlock(Layer):
                 x = get_activation(x, self._activation)
                 print('DWConv shape: %s', x.shape)
 
-            if self._se:
-                x = self._se(x)
+            if self._squeeze_excitation:
+                x = self._squeeze_excitation(x)
 
             self.endpoints = {'expansion_output': x}
 
@@ -471,8 +477,9 @@ class Head(Layer):
         self._activation = global_params["activation"]
         self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
         if global_params["num_classes"]:
-            self._fully_connected = Dense(global_params["num_classes"],
-                             kernel_initializer=dense_kernel_initializer)
+            self._fully_connected = Dense(
+                global_params["num_classes"],
+                kernel_initializer=dense_kernel_initializer)
         else:
             self._fully_connected = None
         if global_params["dropout_rate"] > 0:

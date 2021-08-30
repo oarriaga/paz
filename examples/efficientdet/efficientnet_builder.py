@@ -39,7 +39,7 @@ def efficientnet(width_coefficient=None, depth_coefficient=None,
     global_params["depth_divisor"] = 8
     global_params["min_depth"] = None
     global_params["activation"] = 'swish'
-    global_params["use_se"] = True
+    global_params["use_squeeze_excitation"] = True
     global_params["clip_projection_output"] = False
 
     return global_params
@@ -107,9 +107,9 @@ class BlockDecoder(object):
         block_args["super_pixel"] = int(options['p']) if 'p' in options else 0
         block_args["condconv"] = ('cc' in block_string)
         if 'se' in options:
-            block_args["se_ratio"] = float(options['se'])
+            block_args["squeeze_excite_ratio"] = float(options['se'])
         else:
-            block_args["se_ratio"] = None
+            block_args["squeeze_excite_ratio"] = None
 
         return block_args
 
