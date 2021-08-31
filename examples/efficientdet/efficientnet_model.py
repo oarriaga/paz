@@ -132,8 +132,6 @@ class Squeeze_Excitation(Layer):
                 tensor, [h_axis, w_axis], keepdims=True)
         squeeze_excitation_tensor = self._expand(get_activation(
             self._reduce(squeeze_excitation_tensor), self._activation))
-        print('Built Squeeze Excitation %s : %s',
-              self.name, squeeze_excitation_tensor.shape)
         return tf.sigmoid(squeeze_excitation_tensor) * tensor
 
 
@@ -329,19 +327,16 @@ class MBConvBlock(Layer):
             # Returns
                 tensor: Tensor, output Mobile Bottleneck block processed.
             """
-            print('Block %s input shape: %s', self.name, tensor.shape)
             x = tensor
 
             # creates conv 2x2 kernel
             if self.super_pixel:
                 x = self.super_pixel(x, training)
-                print('SuperPixel %s: %s', self.name, x.shape)
 
             if self._block_args["fused_conv"]:
                 # If use fused mbconv, skip expansion and use regular conv.
                 x = self._batch_norm1(self._fused_conv(x), training=training)
                 x = get_activation(x, self._activation)
-                print('Conv2D shape: %s', x.shape)
             else:
                 # Otherwise, first apply expansion
                 # and then apply depthwise conv.
@@ -349,12 +344,10 @@ class MBConvBlock(Layer):
                     x = self._batch_norm0(
                         self._expand_conv(x), training=training)
                     x = get_activation(x, self._activation)
-                    print('Expand shape: %s', x.shape)
 
                 x = self._batch_norm1(
                     self._depthwise_conv(x), training=training)
                 x = get_activation(x, self._activation)
-                print('DWConv shape: %s', x.shape)
 
             if self._squeeze_excitation:
                 x = self._squeeze_excitation(x)
@@ -375,7 +368,6 @@ class MBConvBlock(Layer):
                     if survival_rate:
                         x = get_drop_connect(x, training, survival_rate)
                     x = tf.add(x, tensor)
-            print('Project shape: %s', x.shape)
             return x
 
         return _call(tensor)
@@ -845,7 +837,6 @@ class EfficientNet(tf.keras.Model):
 
         # Calls Stem layers
         outputs = self._stem(tensor, training)
-        print('Built stem %s : %s', self._stem.name, outputs.shape)
         self.endpoints['stem'] = outputs
 
         # Call blocks
