@@ -129,11 +129,9 @@ class GeneratingSequencePix2Pose(SequenceExtra):
         return self.num_steps
 
     def rotate_image(self, image, rotation_matrix):
-        mask_image = (np.sum(image, axis=-1) != 0).astype(float)
+        mask_image = np.ma.masked_not_equal(np.sum(image, axis=-1), -1.*3).mask.astype(float)
         mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
         mask_background = np.ones_like(mask_image) - mask_image
-
-        image = image + np.ones_like(image) * 0.0001
 
         # Rotate the object
         image_rotated = np.einsum('ij,klj->kli', rotation_matrix, image)
@@ -167,8 +165,15 @@ class GeneratingSequencePix2Pose(SequenceExtra):
             # Iterate over all rotation matrices to find the object position
             # with the smallest error
             for rotation_matrix in self.rotation_matrices:
+                plt.imshow((sample['labels']['color_output']+1.)/2)
+                plt.show()
+
                 color_image_rotated = self.rotate_image(sample['labels']['color_output'], rotation_matrix)
                 error_image = np.sum(predictions['color_output'][sample_arg] - color_image_rotated, axis=-1, keepdims=True)
+
+                plt.imshow((color_image_rotated+1.)/2.)
+                plt.show()
+
                 error_value = np.sum(np.abs(error_image))
                 stored_errors.append((error_value, error_image))
 
