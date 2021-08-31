@@ -238,79 +238,180 @@ class MBConvBlock(Layer):
         # Arguments
             filters: Int, output filters of squeeze and excite block.
         """
+        batch_norm = self._batch_norm(
+            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
         if self._has_squeeze_excitation:
             input_filters = self._block_args["input_filters"]
             squeeze_excite_ratio = self._block_args["squeeze_excite_ratio"]
             num_reduced_filters = max(
                 1, int(input_filters * squeeze_excite_ratio))
-            self._squeeze_excitation = Squeeze_Excitation(
+            squeeze_excitation = Squeeze_Excitation(
                 self._local_pooling, self._activation, num_reduced_filters,
                 filters, name='se')
         else:
-            self._squeeze_excitation = None
+            squeeze_excitation = None
+        return batch_norm, squeeze_excitation
 
     def build_super_pixel(self):
         if self._block_args["super_pixel"] == 1:
-            self.super_pixel = SuperPixel(
+            super_pixel = SuperPixel(
                 self._block_args, self._batch_norm,
                 self._activation, name='super_pixel')
         else:
-            self.super_pixel = None
+            super_pixel = None
+        return super_pixel
 
-    def build_fused_conv(self, filters):
+    def build_fused_convolution(self, filters, kernel_size):
         """
         # Arguments
             filters: Int, output filters of fused conv block.
+            kernel: Int, size of the convolution filter.
+
+        # Returns
+            fused_conv_block: TF Layers. Convolution layers for
+            fused convolution block type.
         """
-        kernel_size = self._block_args["kernel_size"]
-        if self._block_args["fused_conv"]:
-            # Fused expansion phase. Called if using fused convolutions.
-            self._fused_conv = tf.keras.layers.Conv2D(
-                filters, [kernel_size, kernel_size],
-                self._block_args["strides"], 'same', 'channels_last',
+        fused_conv = tf.keras.layers.Conv2D(
+            filters, [kernel_size, kernel_size],
+            self._block_args["strides"], 'same', 'channels_last',
+            (1, 1), 1, None, False, conv_kernel_initializer,
+            name=self.get_conv_name())
+        return fused_conv
+
+    def build_expanded_convolution(self, filters, kernel_size):
+        """
+        # Arguments
+            filters: Int, output filters of expansion conv block.
+            kernel: Int, size of the convolution filter.
+
+        # Returns
+            expand_conv_block: Tuple of TF layers. Convolution
+            layers for expanded convolution block type.
+        """
+        expand_conv = None
+        batch_norm0 = None
+        if self._block_args["expand_ratio"] != 1:
+            expand_conv = Conv2D(
+                filters, [1, 1], [1, 1], 'same', 'channels_last',
                 (1, 1), 1, None, False, conv_kernel_initializer,
                 name=self.get_conv_name())
+            batch_norm0 = self._batch_norm(
+                -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        depthwise_conv = DepthwiseConv2D(
+            [kernel_size, kernel_size], self._block_args["strides"],
+            'same', 1, 'channels_last', (1, 1), None, False,
+            conv_kernel_initializer, name='depthwise_conv2d')
+        return expand_conv, batch_norm0, depthwise_conv
+
+    def build_conv_layers(self, filters):
+        """
+        # Arguments
+            filters: Int, output filters of fused conv block.
+
+        # Returns
+            fused_conv_block: TF Layers. Convolution layers for
+            fused convolution block type.
+            expand_conv_block: Tuple of TF layers. Convolution
+            layers for expanded convolution block type.
+        """
+        fused_conv_block = None
+        expand_conv_block = (None,) * 3
+        kernel_size = self._block_args["kernel_size"]
+        if self._block_args["fused_conv"]:
+            fused_conv_block = self.build_fused_convolution(
+                filters, kernel_size)
         else:
-            # Expansion phase.
-            # Called if not using fused convolution and expansion
-            # phase is necessary.
-            if self._block_args["expand_ratio"] != 1:
-                self._expand_conv = Conv2D(
-                    filters, [1, 1], [1, 1], 'same', 'channels_last',
-                    (1, 1), 1, None, False, conv_kernel_initializer,
-                    name=self.get_conv_name())
-                self._batch_norm0 = self._batch_norm(
-                    -1, 0.99, 1e-3, name=self.get_batch_norm_name())
-            # Depth-wise convolution phase.
-            # Called if not using fused convolutions.
-            self._depthwise_conv = DepthwiseConv2D(
-                [kernel_size, kernel_size], self._block_args["strides"],
-                'same', 1, 'channels_last', (1, 1), None, False,
-                conv_kernel_initializer, name='depthwise_conv2d')
+            expand_conv_block = self.build_expanded_convolution(
+                filters, kernel_size)
+        return fused_conv_block, expand_conv_block
+
+    def get_updated_filters(self):
+        """Updates filter count depending on the expand ratio.
+        # Returns:
+        filter: Int, filters count in the successive layers.
+        """
+        block_input_filters = self._block_args["input_filters"]
+        block_expand_ratio = self._block_args["expand_ratio"]
+        filters = block_input_filters * block_expand_ratio
+        return filters
+
+    def build_output_processors(self):
+        filters = self._block_args["output_filters"]
+        project_conv = Conv2D(
+            filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1, None,
+            False, conv_kernel_initializer, name=self.get_conv_name())
+        batch_norm = self._batch_norm(
+            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        return project_conv, batch_norm
 
     def _build(self):
         """Builds block according to the arguments."""
         self.conv_id = itertools.count(0)
         self.batch_norm_id = itertools.count(0)
-        self.build_super_pixel()
-        block_input_filters = self._block_args["input_filters"]
-        block_expand_ratio = self._block_args["expand_ratio"]
-        filters = block_input_filters * block_expand_ratio
-        self.build_fused_conv(filters)
-        self._batch_norm1 = self._batch_norm(
-            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
-        self.build_squeeze_excitation(filters)
-        # Output phase.
-        filters = self._block_args["output_filters"]
-        self._project_conv = Conv2D(
-            filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1, None,
-            False, conv_kernel_initializer, name=self.get_conv_name())
-        self._batch_norm2 = self._batch_norm(
-            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        self.super_pixel = self.build_super_pixel()
+        filters = self.get_updated_filters()
+        fused_conv_block, expand_conv_block = self.build_conv_layers(filters)
+        self._fused_conv = fused_conv_block
+        self._expand_conv = expand_conv_block[0]
+        self._batch_norm0 = expand_conv_block[1]
+        self._depthwise_conv = expand_conv_block[2]
+        squeeze_block = self.build_squeeze_excitation(filters)
+        self._batch_norm1 = squeeze_block[0]
+        self._squeeze_excitation = squeeze_block[1]
+        output_block = self.build_output_processors()
+        self._project_conv = output_block[0]
+        self._batch_norm2 = output_block[1]
+
+    def call_conv_layers(self, tensor, training):
+        """
+        # Arguments
+            tensor: Tensor, the input tensor to the body layers of
+            MBConv block.
+            training: boolean, whether the model is constructed for training.
+        """
+        if self._block_args["fused_conv"]:
+            tensor = self._batch_norm1(
+                self._fused_conv(tensor), training=training)
+            tensor = get_activation(tensor, self._activation)
+        else:
+            if self._block_args["expand_ratio"] != 1:
+                tensor = self._batch_norm0(
+                    self._expand_conv(tensor), training=training)
+                tensor = get_activation(tensor, self._activation)
+
+            tensor = self._batch_norm1(
+                self._depthwise_conv(tensor), training=training)
+            tensor = get_activation(tensor, self._activation)
+        return tensor
+
+    def call_output_processors(self, tensor, training,
+                               survival_rate, initial_tensor):
+        """
+        # Arguments
+            tensor: Tensor, the input tensor to be output processed.
+            training: boolean, whether the model is constructed for training.
+            survival_rate: float, between 0 to 1, drop connect rate.
+            initial_tensor: Tensor, the input tensor to the MBConvBlock.
+
+        # Returns
+            A output tensor.
+        """
+        tensor = self._batch_norm2(
+            self._project_conv(tensor), training=training)
+        tensor = tf.identity(tensor)
+        if self._clip_projection_output:
+            tensor = tf.clip_by_value(tensor, -6, 6)
+        if self._block_args["id_skip"]:
+            if (all(s == 1 for s in self._block_args["strides"])
+                    and self._block_args["input_filters"]
+                    == self._block_args["output_filters"]):
+                if survival_rate:
+                    tensor = get_drop_connect(tensor, training, survival_rate)
+                tensor = tf.add(tensor, initial_tensor)
+        return tensor
 
     def call(self, tensor, training, survival_rate):
         """Implementation of call().
-
         # Arguments
             tensor: Tensor, the inputs tensor.
             training: boolean, whether the model is constructed for training.
@@ -319,58 +420,15 @@ class MBConvBlock(Layer):
         # Returns
             A output tensor.
         """
-        def _call(tensor):
-            """
-            # Arguments
-                tensor: Tensor, the inputs tensor.
-
-            # Returns
-                tensor: Tensor, output Mobile Bottleneck block processed.
-            """
-            x = tensor
-
-            # creates conv 2x2 kernel
-            if self.super_pixel:
-                x = self.super_pixel(x, training)
-
-            if self._block_args["fused_conv"]:
-                # If use fused mbconv, skip expansion and use regular conv.
-                x = self._batch_norm1(self._fused_conv(x), training=training)
-                x = get_activation(x, self._activation)
-            else:
-                # Otherwise, first apply expansion
-                # and then apply depthwise conv.
-                if self._block_args["expand_ratio"] != 1:
-                    x = self._batch_norm0(
-                        self._expand_conv(x), training=training)
-                    x = get_activation(x, self._activation)
-
-                x = self._batch_norm1(
-                    self._depthwise_conv(x), training=training)
-                x = get_activation(x, self._activation)
-
-            if self._squeeze_excitation:
-                x = self._squeeze_excitation(x)
-
-            self.endpoints = {'expansion_output': x}
-
-            x = self._batch_norm2(self._project_conv(x), training=training)
-            # Add identity so that quantization-aware
-            # training can insert quantization ops correctly.
-            x = tf.identity(x)
-            if self._clip_projection_output:
-                x = tf.clip_by_value(x, -6, 6)
-            if self._block_args["id_skip"]:
-                if (all(s == 1 for s in self._block_args["strides"])
-                        and self._block_args["input_filters"]
-                        == self._block_args["output_filters"]):
-                    # Apply only if skip connection presents.
-                    if survival_rate:
-                        x = get_drop_connect(x, training, survival_rate)
-                    x = tf.add(x, tensor)
-            return x
-
-        return _call(tensor)
+        x = tensor
+        if self.super_pixel:
+            x = self.super_pixel(x, training)
+        x = self.call_conv_layers(x, training)
+        if self._squeeze_excitation:
+            x = self._squeeze_excitation(x)
+        self.endpoints = {'expansion_output': x}
+        x = self.call_output_processors(x, training, survival_rate, tensor)
+        return x
 
 
 class MBConvBlockWithoutDepthwise(MBConvBlock):
@@ -502,41 +560,70 @@ class Head(Layer):
         self.h_axis, self.w_axis = ([1, 2])
         self._local_pooling = local_pooling
 
+    def call_local_pooling_head(self, tensor, training, pool_features):
+        """
+        # Arguments
+            tensor: Tensor, the inputs tensor.
+            training: boolean, whether the model is constructed for training.
+            pool_features: Bool, flag to decide feature pooling from tensor.
+
+        # Returns
+            tensor: Tensor, local pooled head output tensor.
+        """
+        shape = tensor.get_shape().as_list()
+        kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
+        tensor = tf.nn.avg_pool(
+            tensor, kernel_size, [1, 1, 1, 1], 'VALID')
+        self.endpoints['pooled_features'] = tensor
+        if not pool_features:
+            if self._dropout:
+                tensor = self._dropout(tensor, training=training)
+            self.endpoints['global_pool'] = tensor
+            if self._fully_connected:
+                tensor = tf.squeeze(tensor, [self.h_axis, self.w_axis])
+                tensor = self._fully_connected(tensor)
+            self.endpoints['head'] = tensor
+        return tensor
+
+    def call_avg_pooling_head(self, tensor, training, pool_features):
+        """
+        # Arguments
+            tensor: Tensor, the inputs tensor.
+            training: boolean, whether the model is constructed for training.
+            pool_features: Bool, flag to decide feature pooling from tensor.
+
+        # Returns
+            tensor: Tensor, average pooled head output tensor.
+        """
+        tensor = self._avg_pooling(tensor)
+        self.endpoints['pooled_features'] = tensor
+        if not pool_features:
+            if self._dropout:
+                tensor = self._dropout(tensor, training=training)
+            self.endpoints['global_pool'] = tensor
+            if self._fully_connected:
+                tensor = self._fully_connected(tensor)
+            self.endpoints['head'] = tensor
+        return tensor
+
     def call(self, tensor, training, pool_features):
         """Call the head layer.
         # Arguments
             tensor: Tensor, the inputs tensor.
             training: boolean, whether the model is constructed for training.
             pool_features: Bool, flag to decide feature pooling from tensor.
+        # Returns
+            tensor: Tensor, Pooled head output tensor.
         """
         outputs = self._batch_norm(self._conv_head(tensor), training=training)
         outputs = get_activation(outputs, self._activation)
         self.endpoints['head_1x1'] = outputs
-
         if self._local_pooling:
-            shape = outputs.get_shape().as_list()
-            kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
-            outputs = tf.nn.avg_pool(
-                outputs, kernel_size, [1, 1, 1, 1], 'VALID')
-            self.endpoints['pooled_features'] = outputs
-            if not pool_features:
-                if self._dropout:
-                    outputs = self._dropout(outputs, training=training)
-                self.endpoints['global_pool'] = outputs
-                if self._fully_connected:
-                    outputs = tf.squeeze(outputs, [self.h_axis, self.w_axis])
-                    outputs = self._fully_connected(outputs)
-                self.endpoints['head'] = outputs
+            outputs = self.call_local_pooling_head(
+                outputs, training, pool_features)
         else:
-            outputs = self._avg_pooling(outputs)
-            self.endpoints['pooled_features'] = outputs
-            if not pool_features:
-                if self._dropout:
-                    outputs = self._dropout(outputs, training=training)
-                self.endpoints['global_pool'] = outputs
-                if self._fully_connected:
-                    outputs = self._fully_connected(outputs)
-                self.endpoints['head'] = outputs
+            outputs = self.call_avg_pooling_head(
+                outputs, training, pool_features)
         return outputs
 
 
