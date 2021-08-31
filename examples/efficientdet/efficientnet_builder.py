@@ -12,40 +12,6 @@ _DEFAULT_BLOCKS_ARGS = ['r1_k3_s11_e1_i32_o16_se0.25',
                         'r1_k3_s11_e6_i192_o320_se0.25']
 
 
-def get_efficientnet_globalparams(
-        width_coefficient=None, depth_coefficient=None, dropout_rate=0.2,
-        survival_rate=0.8):
-    """Creates efficientnet model.
-
-    # Arguments
-        width_coefficient: Float, scaling coefficient for network width.
-        depth_coefficient: Float, scaling coefficient for network depth.
-        dropout_rate: Float, dropout rate for final fully connected layers.
-        survival_rate: Float, survival rate of nodes in the fully conncected
-        layers.
-
-    # Returns
-        global_params: GlobalParams, a set of global parameters.
-
-    """
-    global_params = efficientnet_model.GlobalParams
-    global_params["blocks_args"] = _DEFAULT_BLOCKS_ARGS
-    global_params["batch_norm"] = BatchNormalization
-    global_params["dropout_rate"] = dropout_rate
-    global_params["survival_rate"] = survival_rate
-    global_params["data_format"] = 'channels_last'
-    global_params["num_classes"] = 90
-    global_params["width_coefficient"] = width_coefficient
-    global_params["depth_coefficient"] = depth_coefficient
-    global_params["depth_divisor"] = 8
-    global_params["min_depth"] = None
-    global_params["activation"] = 'swish'
-    global_params["use_squeeze_excitation"] = True
-    global_params["clip_projection_output"] = False
-
-    return global_params
-
-
 def get_efficientnet_params(model_name):
     """Default efficientnet scaling coefficients and
     image name based on model name.
@@ -131,27 +97,11 @@ class BlockDecoder(object):
         return block_args
 
 
-def get_model_params(model_name, params):
-    """Get the block args and global params for a given model.
-
-    # Arguments
-        model_name: String, name of the EfficientNet backbone
-        params: Dictionary, parameters for building the model
-
-    Returns
-        block_args: BlockArgs, arguments to create a Block.
-        global_params: GlobalParams, a set of global parameters.
-    """
-    efficientnet_param = get_efficientnet_params(model_name)
-    width_coefficient, depth_coefficient, dropout_rate = efficientnet_param
-    global_params = get_efficientnet_globalparams(
-        width_coefficient, depth_coefficient, dropout_rate)
-
-    if params:
-        global_params.update(params)
+def get_blocks_args():
+    blocks_args_string = _DEFAULT_BLOCKS_ARGS
     decoder = BlockDecoder()
-    block_args = decoder.decode(global_params["blocks_args"])
-    return block_args, global_params
+    blocks_args = decoder.decode(blocks_args_string)
+    return blocks_args
 
 
 def build_model_base(model_name, params=None):
@@ -171,8 +121,27 @@ def build_model_base(model_name, params=None):
     """
     if params and params.get('drop_connect_rate', None):
         params['survival_rate'] = 1 - params['drop_connect_rate']
-    blocks_args, global_params = get_model_params(model_name, params)
-    model = efficientnet_model.Model(blocks_args, global_params, model_name)
+    efficientnet_param = get_efficientnet_params(model_name)
+    width_coefficient, depth_coefficient, dropout_rate = efficientnet_param
+    data_format = 'channels_last'
+    num_classes = 90
+    depth_divisor = 8
+    min_depth = None
+    survival_rate = 1 - dropout_rate
+    activation = 'swish'
+    batch_norm = BatchNormalization
+    use_squeeze_excitation = True
+    local_pooling = None
+    condconv_num_experts = None
+    clip_projection_output = False
+    fix_head_stem = None
+    blocks_args = get_blocks_args()
+    model = efficientnet_model.EfficientNet(
+        blocks_args, dropout_rate, data_format, num_classes,
+        width_coefficient, depth_coefficient, depth_divisor, min_depth,
+        survival_rate, activation, batch_norm, use_squeeze_excitation,
+        local_pooling, condconv_num_experts, clip_projection_output,
+        fix_head_stem, model_name)
     return model
 
 

@@ -14,14 +14,6 @@ from tensorflow.keras.layers import GlobalAveragePooling2D
 from utils import get_activation, get_drop_connect
 
 
-GlobalParams_arg = ['dropout_rate', 'data_format', 'num_classes',
-                    'width_coefficient', 'depth_coefficient',
-                    'depth_divisor', 'min_depth', 'survival_rate',
-                    'activation', 'batch_norm', 'use_squeeze_excitation',
-                    'local_pooling', 'condconv_num_experts',
-                    'clip_projection_output', 'blocks_args', 'fix_head_stem']
-GlobalParams = dict.fromkeys(GlobalParams_arg, None)
-
 BlockArgs_arg = ['kernel_size', 'num_repeat', 'input_filters',
                  'output_filters', 'expand_ratio', 'id_skip',
                  'strides', 'squeeze_excititation_ratio', 'conv_type',
@@ -98,10 +90,12 @@ def superpixel_kernel_initializer(shape, dtype='float32'):
 
 class Squeeze_Excitation(Layer):
     """Squeeze-and-excitation layer."""
-    def __init__(self, global_params, filters, output_filters, name=None):
+    def __init__(self, local_pooling, activation, filters,
+                 output_filters, name=None):
         """
         # Arguments
-            global_params: GlobalParams, a set of global parameters.
+            local_pooling: bool, flag to use local pooling of features.
+            activation: String, activation function name.
             filters: Int, Number of input filters of the Squeeze Excitation
             layer.
             output_filters: Int, Number of output filters of the Squeeze
@@ -109,8 +103,8 @@ class Squeeze_Excitation(Layer):
         """
         super().__init__(name=name)
 
-        self._local_pooling = global_params["local_pooling"]
-        self._activation = global_params["activation"]
+        self._local_pooling = local_pooling
+        self._activation = activation
 
         # Squeeze and Excitation layer.
         self._reduce = Conv2D(filters, [1, 1], [1, 1], 'same',
@@ -146,11 +140,12 @@ class Squeeze_Excitation(Layer):
 class SuperPixel(Layer):
     """Super pixel layer."""
 
-    def __init__(self, block_args, global_params, name=None):
+    def __init__(self, block_args, batch_norm, activation, name=None):
         """
         # Arguments
             block_args: Dictionary of BlockArgs to construct block modules.
-            global_params: GlobalParams, a set of global parameters.
+            batch_norm: TF BatchNormalization layer.
+            activation: String, activation function name.
             name: layer name.
         """
 
@@ -159,9 +154,8 @@ class SuperPixel(Layer):
                                   'same', 'channels_last', (1, 1), 1, None,
                                   False, superpixel_kernel_initializer,
                                   name='conv2d')
-        self._batch_norm_superpixel = global_params["batch_norm"](
-            -1, 0.99, 1e-3)
-        self._activation = global_params["activation"]
+        self._batch_norm_superpixel = batch_norm(-1, 0.99, 1e-3)
+        self._activation = activation
 
     def call(self, tensor, training):
         """
@@ -185,26 +179,34 @@ class MBConvBlock(Layer):
         endpoints: dict. A list of internal tensors.
     """
 
-    def __init__(self, block_args, global_params, name=None):
+    def __init__(self, block_args, local_pooling, batch_norm,
+                 condconv_num_experts, activation, use_squeeze_excitation,
+                 clip_projection_output, name=None):
         """Initializes a MBConv block.
 
         # Arguments
             block_args: Dictionary of BlockArgs to construct block modules.
-            global_params: GlobalParams, a set of global parameters.
+            local_pooling: bool, flag to use local pooling of features.
+            batch_norm: TF BatchNormalization layer.
+            condconv_num_experts: Int, conditional convolution number of
+            operations.
+            activation: String, activation function name.
+            use_squeeze_excitation: bool, flag to use squeeze and excitation
+            layer.
+            clip_projection_output: String, flag to clip output.
             name: layer name.
         """
         super().__init__(name=name)
         self._block_args = block_args
-        self._global_params = global_params
-        self._local_pooling = global_params["local_pooling"]
-        self._batch_norm = global_params["batch_norm"]
-        self._condconv_num_experts = global_params["condconv_num_experts"]
-        self._activation = global_params["activation"]
+        self._local_pooling = local_pooling
+        self._batch_norm = batch_norm
+        self._condconv_num_experts = condconv_num_experts
+        self._activation = activation
         self._has_squeeze_excitation = (
-                global_params["use_squeeze_excitation"]
+                use_squeeze_excitation
                 and self._block_args["squeeze_excite_ratio"] is not None
                 and 0 < self._block_args["squeeze_excite_ratio"] <= 1)
-        self._clip_projection_output = global_params["clip_projection_output"]
+        self._clip_projection_output = clip_projection_output
         self.endpoints = None
         if self._block_args["condconv"]:
             raise ValueError('Condconv is not supported')
@@ -244,14 +246,16 @@ class MBConvBlock(Layer):
             num_reduced_filters = max(
                 1, int(input_filters * squeeze_excite_ratio))
             self._squeeze_excitation = Squeeze_Excitation(
-                self._global_params, num_reduced_filters, filters, name='se')
+                self._local_pooling, self._activation, num_reduced_filters,
+                filters, name='se')
         else:
             self._squeeze_excitation = None
 
     def build_super_pixel(self):
         if self._block_args["super_pixel"] == 1:
             self.super_pixel = SuperPixel(
-                self._block_args, self._global_params, name='super_pixel')
+                self._block_args, self._batch_norm,
+                self._activation, name='super_pixel')
         else:
             self.super_pixel = None
 
@@ -381,67 +385,75 @@ class MBConvBlockWithoutDepthwise(MBConvBlock):
     pass
 
 
-def round_filters(filters, global_params, skip=False):
+def round_filters(filters, width_coefficient, depth_divisor,
+                  min_depth, skip=False):
     """Round number of filters based on depth multiplier.
     # Arguments
         filters: Int, filters to be rounded based on depth multiplier.
-        global_params: GlobalParams, a set of global parameters.
+        with_coefficient: Float, scaling coefficient for network width.
+        depth_divisor: Int, multiplier for the depth of the network.
+        min_depth: Int, minimum depth of the network.
         skip: Bool, skip rounding filters based on multiplier.
 
     # Returns
         new_filters: Int, rounded filters based on depth multiplier.
     """
-    multiplier = global_params["width_coefficient"]
-    divisor = global_params["depth_divisor"]
-    min_depth = global_params["min_depth"]
-    if skip or not multiplier:
+    if skip or not width_coefficient:
         return filters
-    filters = filters * multiplier
-    min_depth = min_depth or divisor
-    threshold_depth = int(filters + divisor / 2) // divisor * divisor
-    new_filters = max(min_depth, threshold_depth)
+    filters = filters * width_coefficient
+    min_depth = min_depth or depth_divisor
+    half_depth = depth_divisor / 2
+    threshold = int(filters + half_depth) // depth_divisor * depth_divisor
+    new_filters = max(min_depth, threshold)
     if new_filters < 0.9 * filters:
-        new_filters = new_filters + divisor
+        new_filters = new_filters + depth_divisor
     new_filters = int(new_filters)
     return new_filters
 
 
-def round_repeats(repeats, global_params, skip=False):
+def round_repeats(repeats, depth_coefficient, skip=False):
     """Round number of filters based on depth multiplier.
 
     # Arguments
         repeats: Int, number of repeats of multiplier blocks.
-        global_params: GlobalParams, a set of global parameters.
+        depth_coefficient: Float, scaling coefficient for network depth.
         skip: Bool, skip rounding filters based on multiplier.
 
     # Returns
         new_repeats: Int, repeats of blocks based on multiplier.
     """
-    multiplier = global_params["depth_coefficient"]
-    if skip or not multiplier:
+    if skip or not depth_coefficient:
         return repeats
-    new_repeats = int(math.ceil(multiplier * repeats))
+    new_repeats = int(math.ceil(depth_coefficient * repeats))
     return new_repeats
 
 
 class Stem(Layer):
     """Stem layer at the beginning of the network."""
 
-    def __init__(self, global_params, stem_filters, name=None):
+    def __init__(self, width_coefficient, depth_divisor, min_depth,
+                 fix_head_stem, batch_norm, activation, stem_filters,
+                 name=None):
         """
         # Arguments
-            global_params: GlobalParams, a set of global parameters.
+            with_coefficient: Float, scaling coefficient for network width.
+            depth_divisor: Int, multiplier for the depth of the network.
+            min_depth: Int, minimum depth of the network.
+            fix_head_stem: bool, flag to fix head and stem branches.
+            batch_norm: TF BatchNormalization layer.
+            activation: String, activation function name.
             stem_filters: Int, filter count for the stem block.
             name: String, layer name.
         """
         super().__init__(name=name)
         filters = round_filters(
-            stem_filters, global_params, global_params["fix_head_stem"])
+            stem_filters, width_coefficient, depth_divisor, min_depth,
+            fix_head_stem)
         self._conv_stem = Conv2D(filters, [3, 3], [2, 2], 'same',
                                  'channels_last', (1, 1), 1, None, False,
                                  conv_kernel_initializer)
-        self._batch_norm = global_params["batch_norm"](-1, 0.99, 1e-3)
-        self._activation = global_params["activation"]
+        self._batch_norm = batch_norm(-1, 0.99, 1e-3)
+        self._activation = activation
 
     def call(self, tensor, training):
         """
@@ -458,35 +470,45 @@ class Stem(Layer):
 class Head(Layer):
     """Head layer for network outputs."""
 
-    def __init__(self, global_params, name=None):
+    def __init__(self, width_coefficient, depth_divisor, min_depth,
+                 fix_head_stem, batch_norm, activation, num_classes,
+                 dropout_rate, local_pooling, name=None):
         """
         # Arguments
-            global_params: GlobalParams, a set of global parameters.
+            with_coefficient: Float, scaling coefficient for network width.
+            depth_divisor: Int, multiplier for the depth of the network.
+            min_depth: Int, minimum depth of the network.
+            fix_head_stem: bool, flag to fix head and stem branches.
+            batch_norm: TF BatchNormalization layer.
+            activation: String, activation function name.
+            num_classes: Int, specifying the number of class in the
+            output.
+            dropout_rate: Float, dropout rate for final fully connected layers.
+            local_pooling: bool, flag to use local pooling of features.
+            name: String, layer name.
         """
         super().__init__(name=name)
 
         self.endpoints = {}
-        self._global_params = global_params
         conv_filters = round_filters(
-            1280, global_params, global_params["fix_head_stem"])
+            1280, width_coefficient, depth_divisor, min_depth, fix_head_stem)
         self._conv_head = Conv2D(
             conv_filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1,
             None, False, conv_kernel_initializer, name='conv2d')
-        self._batch_norm = global_params["batch_norm"](-1, 0.99, 1e-3)
-        self._activation = global_params["activation"]
+        self._batch_norm = batch_norm(-1, 0.99, 1e-3)
+        self._activation = activation
         self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
-        if global_params["num_classes"]:
+        if num_classes:
             self._fully_connected = Dense(
-                global_params["num_classes"],
-                kernel_initializer=dense_kernel_initializer)
+                num_classes, kernel_initializer=dense_kernel_initializer)
         else:
             self._fully_connected = None
-        if global_params["dropout_rate"] > 0:
-            self._dropout = tf.keras.layers.Dropout(
-                global_params["dropout_rate"])
+        if dropout_rate > 0:
+            self._dropout = tf.keras.layers.Dropout(dropout_rate)
         else:
             self._dropout = None
         self.h_axis, self.w_axis = ([1, 2])
+        self._local_pooling = local_pooling
 
     def call(self, tensor, training, pool_features):
         """Call the head layer.
@@ -499,7 +521,7 @@ class Head(Layer):
         outputs = get_activation(outputs, self._activation)
         self.endpoints['head_1x1'] = outputs
 
-        if self._global_params["local_pooling"]:
+        if self._local_pooling:
             shape = outputs.get_shape().as_list()
             kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
             outputs = tf.nn.avg_pool(
@@ -526,15 +548,38 @@ class Head(Layer):
         return outputs
 
 
-class Model(tf.keras.Model):
+class EfficientNet(tf.keras.Model):
     """A class implementing tf.keras.Model for EfficientNet."""
 
-    def __init__(self, blocks_args=None, global_params=None, name=None):
+    def __init__(self, blocks_args, dropout_rate, data_format, num_classes,
+                 width_coefficient, depth_coefficient, depth_divisor,
+                 min_depth, survival_rate, activation, batch_norm,
+                 use_squeeze_excitation, local_pooling, condconv_num_experts,
+                 clip_projection_output, fix_head_stem, name):
         """Initializes an 'Model' instance.
 
         # Arguments
             blocks_args: Dictionary of BlockArgs to construct block modules.
-            global_params: GlobalParams, a set of global parameters.
+            dropout_rate: Float, dropout rate for final fully connected layers.
+            data_format: String, Data format 'channels_first' or
+            'channels_last'.
+            num_classes: Int, specifying the number of class in the
+            output.
+            with_coefficient: Float, scaling coefficient for network width.
+            depth_coefficient: Float, scaling coefficient for network depth.
+            depth_divisor: Int, multiplier for the depth of the network.
+            min_depth: Int, minimum depth of the network.
+            survival_rate: Float, survival of the final fully connected layer
+            units.
+            activation: String, activation function name.
+            batch_norm: TF BatchNormalization layer.
+            use_squeeze_excitation: bool, flag to use squeeze and excitation
+            layer.
+            local_pooling: bool, flag to use local pooling of features.
+            condconv_num_experts: Int, conditional convolution number of
+            operations.
+            clip_projection_output: String, flag to clip output.
+            fix_head_stem: bool, flag to fix head and stem branches.
             name: A string of layer name.
 
         # Raises
@@ -544,11 +589,23 @@ class Model(tf.keras.Model):
 
         if not isinstance(blocks_args, list):
             raise ValueError('blocks_args should be a list.')
-        self._global_params = global_params
         self._blocks_args = blocks_args
-        self._activation = global_params["activation"]
-        self._batch_norm = global_params["batch_norm"]
-        self._fix_head_stem = global_params["fix_head_stem"]
+        self._activation = activation
+        self._batch_norm = batch_norm
+        self._fix_head_stem = fix_head_stem
+        self._width_coefficient = width_coefficient
+        self._depth_coefficient = depth_coefficient
+        self._dropout_rate = dropout_rate
+        self._data_format = data_format
+        self._num_classes = num_classes
+        self._depth_divisor = depth_divisor
+        self._min_depth = min_depth
+        self._survival_rate = survival_rate
+        self._use_squeeze_excitation = use_squeeze_excitation
+        self._local_pooling = local_pooling
+        self._condconv_num_experts = condconv_num_experts
+        self._clip_projection_output = clip_projection_output
+        self._fix_head_stem = fix_head_stem
         self.endpoints = None
 
         self._build()
@@ -587,7 +644,7 @@ class Model(tf.keras.Model):
             repeats = block_args["num_repeat"]
         else:
             repeats = round_repeats(
-                block_args["num_repeat"], self._global_params)
+                block_args["num_repeat"], self._depth_coefficient)
         params = {"num_repeat": repeats}
         block_args.update(params)
         return block_args
@@ -606,8 +663,10 @@ class Model(tf.keras.Model):
                 "strides": [1, 1]})
         for _ in range(block_args["num_repeat"] - 1):
             self._blocks.append(conv_block(
-                block_args.copy(), self._global_params,
-                name=self.get_block_name()))
+                block_args.copy(), self._local_pooling, self._batch_norm,
+                self._condconv_num_experts, self._activation,
+                self._use_squeeze_excitation, self._clip_projection_output,
+                self.get_block_name()))
 
     def update_block_depth(self, block_args,
                            block_strides_1, block_strides_2):
@@ -651,7 +710,9 @@ class Model(tf.keras.Model):
         kernel_size = block_args["kernel_size"]
         block_args.update({"strides": [1, 1]})
         self._blocks.append(conv_block(
-            block_args.copy(), self._global_params,
+            block_args.copy(), self._local_pooling, self._batch_norm,
+            self._condconv_num_experts, self._activation,
+            self._use_squeeze_excitation, self._clip_projection_output,
             name=self.get_block_name()))
         block_args.update({
             "super_pixel": 0, "input_filters": input_filters,
@@ -684,15 +745,17 @@ class Model(tf.keras.Model):
                 block_args, input_filters, output_filters)
         elif block_args["super_pixel"] == 1:
             self._blocks.append(conv_block(
-                block_args.copy(), self._global_params,
-                name=self.get_block_name())
-            )
+                block_args.copy(), self._local_pooling, self._batch_norm,
+                self._condconv_num_experts, self._activation,
+                self._use_squeeze_excitation, self._clip_projection_output,
+                self.get_block_name()))
             block_args.update({"super_pixel": 2})
         else:
             self._blocks.append(conv_block(
-                block_args.copy(), self._global_params,
-                name=self.get_block_name())
-            )
+                block_args.copy(), self._local_pooling, self._batch_norm,
+                self._condconv_num_experts, self._activation,
+                self._use_squeeze_excitation, self._clip_projection_output,
+                self.get_block_name()))
         return block_args
 
     def build_blocks(self, block_args, input_filters, output_filters):
@@ -709,8 +772,10 @@ class Model(tf.keras.Model):
         conv_block = self._get_conv_block(block_args["conv_type"])
         if not block_args["super_pixel"]:  # no super_pixel at all
             self._blocks.append(conv_block(
-                block_args.copy(), self._global_params,
-                name=self.get_block_name()))
+                block_args.copy(), self._local_pooling, self._batch_norm,
+                self._condconv_num_experts, self._activation,
+                self._use_squeeze_excitation, self._clip_projection_output,
+                self.get_block_name()))
         else:
             block_args = self.build_super_pixel_blocks(
                 block_args, input_filters, output_filters)
@@ -727,9 +792,11 @@ class Model(tf.keras.Model):
             block modules with updated filter counts.
         """
         input_filters = round_filters(
-            block_args["input_filters"], self._global_params)
+            block_args["input_filters"], self._width_coefficient,
+            self._depth_divisor, self._min_depth)
         output_filters = round_filters(
-            block_args["output_filters"], self._global_params)
+            block_args["output_filters"], self._width_coefficient,
+            self._depth_divisor, self._min_depth)
         block_args.update({"input_filters": input_filters,
                            "output_filters": output_filters})
         return block_args
@@ -739,8 +806,10 @@ class Model(tf.keras.Model):
         self._blocks = []
 
         # Stem part.
-        self._stem = Stem(self._global_params,
-                          self._blocks_args[0]["input_filters"])
+        self._stem = Stem(
+            self._width_coefficient, self._depth_divisor, self._min_depth,
+            self._fix_head_stem, self._batch_norm, self._activation,
+            self._blocks_args[0]["input_filters"])
         self.block_id = itertools.count(0)
 
         # Builds blocks.
@@ -752,7 +821,10 @@ class Model(tf.keras.Model):
             self.build_blocks(block_args, block_args["input_filters"],
                               block_args["output_filters"])
         # Head part.
-        self._head = Head(self._global_params)
+        self._head = Head(
+            self._width_coefficient, self._depth_divisor, self._min_depth,
+            self._fix_head_stem, self._batch_norm, self._activation,
+            self._num_classes, self._dropout_rate, self._local_pooling)
 
     def call(self, tensor, training, return_base=None, pool_features=False):
         """Implementation of call().
@@ -791,7 +863,7 @@ class Model(tf.keras.Model):
                 is_reduction = True
                 reduction_arg = reduction_arg + 1
 
-            survival_rate = self._global_params["survival_rate"]
+            survival_rate = self._survival_rate
             if survival_rate:
                 drop_rate = 1 - survival_rate
                 drop_rate_changer = float(block_arg) / len(self._blocks)
