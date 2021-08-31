@@ -29,7 +29,7 @@ BlockArgs_arg = ['kernel_size', 'num_repeat', 'input_filters',
 BlockArgs = dict.fromkeys(BlockArgs_arg, None)
 
 
-def conv_kernel_initializer(shape, dtype=None, partition_info=None):
+def conv_kernel_initializer(shape, dtype=None):
     """Initialization for convolutional kernels.
     The main difference with tf.variance_scaling_initializer is that
     tf.variance_scaling_initializer uses a truncated normal with an uncorrected
@@ -40,18 +40,16 @@ def conv_kernel_initializer(shape, dtype=None, partition_info=None):
     # Arguments
         shape: shape of variable
         dtype: dtype of variable
-        partition_info: unused
 
     # Returns
         an initialization for the variable
     """
-    del partition_info
     kernel_height, kernel_width, _, output_filters = shape
     fan_output = int(kernel_height * kernel_width * output_filters)
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
-def dense_kernel_initializer(shape, dtype=None, partition_info=None):
+def dense_kernel_initializer(shape, dtype=None):
     """Initialization for dense kernels.
     This initialization is equal to
       tf.variance_scaling_initializer(scale=1.0/3.0, mode='fan_output',
@@ -61,17 +59,15 @@ def dense_kernel_initializer(shape, dtype=None, partition_info=None):
     # Arguments
         shape: shape of variable
         dtype: dtype of variable
-        partition_info: unused
 
     # Returns
         an initialization for the variable
     """
-    del partition_info
     span = 1.0 / np.sqrt(shape[1])
     return tf.random.uniform(shape, -span, span, dtype=dtype)
 
 
-def superpixel_kernel_initializer(shape, dtype='float32', partition_info=None):
+def superpixel_kernel_initializer(shape, dtype='float32'):
     """Initializes superpixel kernels.
     This is inspired by space-to-depth transformation that
     is mathematically equivalent before and after the
@@ -85,12 +81,10 @@ def superpixel_kernel_initializer(shape, dtype='float32', partition_info=None):
     # Arguments
         shape: shape of variable
         dtype: dtype of variable
-        partition_info: unused
 
     # Returns
         an initialization for the variable
     """
-    del partition_info
     #  use input depth to make superpixel kernel.
     depth = shape[-2]
     filters = np.zeros([2, 2, depth, 4 * depth], dtype=dtype)
@@ -222,14 +216,19 @@ class MBConvBlock(Layer):
         return self._block_args
 
     def get_conv_name(self):
-        name = 'conv2d' + ("" if not next(self.conv_id)
-                           else '_' + str(next(self.conv_id) // 2))
+        if not next(self.conv_id):
+            name_appender = ""
+        else:
+            name_appender = '_' + str(next(self.conv_id) // 2)
+        name = 'conv2d' + name_appender
         return name
 
     def get_batch_norm_name(self):
-        name = 'batch_normalization' + (
-            "" if not next(self.batch_norm_id)
-            else '_' + str(next(self.batch_norm_id) // 2))
+        if not next(self.batch_norm_id):
+            name_appender = ""
+        else:
+            name_appender = '_' + str(next(self.batch_norm_id) // 2)
+        name = 'batch_normalization' + name_appender
         return name
 
     def build_squeeze_excitation(self, filters):
@@ -399,8 +398,8 @@ def round_filters(filters, global_params, skip=False):
         return filters
     filters = filters * multiplier
     min_depth = min_depth or divisor
-    new_filters = max(
-        min_depth, int(filters + divisor / 2) // divisor * divisor)
+    threshold_depth = int(filters + divisor / 2) // divisor * divisor
+    new_filters = max(min_depth, threshold_depth)
     if new_filters < 0.9 * filters:
         new_filters = new_filters + divisor
     new_filters = int(new_filters)
@@ -770,7 +769,7 @@ class Model(tf.keras.Model):
             output tensors: Tensor, output from the efficientnet backbone.
         """
         self.endpoints = {}
-        reduction_idx = 0
+        reduction_arg = 0
 
         # Calls Stem layers
         outputs = self._stem(tensor, training)
@@ -778,36 +777,38 @@ class Model(tf.keras.Model):
         self.endpoints['stem'] = outputs
 
         # Call blocks
-        for idx, block in enumerate(self._blocks):
+        for block_arg, block in enumerate(self._blocks):
             is_reduction = False
             # reduction flag for blocks after the stem layer
             # If the first block has super-pixel (space-to-depth)
             # layer, then stem is the first reduction point
-            if (block.block_args["super_pixel"] == 1 and idx == 0):
-                reduction_idx = reduction_idx + 1
-                self.endpoints['reduction_%s' % reduction_idx] = outputs
+            if (block.block_args["super_pixel"] == 1 and block_arg == 0):
+                reduction_arg = reduction_arg + 1
+                self.endpoints['reduction_%s' % reduction_arg] = outputs
 
-            elif ((idx == len(self._blocks) - 1) or
-                    self._blocks[idx + 1].block_args["strides"][0] > 1):
+            elif ((block_arg == len(self._blocks) - 1) or
+                    self._blocks[block_arg + 1].block_args["strides"][0] > 1):
                 is_reduction = True
-                reduction_idx = reduction_idx + 1
+                reduction_arg = reduction_arg + 1
 
             survival_rate = self._global_params["survival_rate"]
             if survival_rate:
                 drop_rate = 1 - survival_rate
-                survival_rate = 1 - drop_rate * float(idx) / len(self._blocks)
+                drop_rate_changer = float(block_arg) / len(self._blocks)
+                survival_rate = 1 - drop_rate * drop_rate_changer
             outputs = block(
                 outputs, training=training, survival_rate=survival_rate)
-            self.endpoints['block_%s' % idx] = outputs
+            self.endpoints['block_%s' % block_arg] = outputs
             if is_reduction:
-                self.endpoints['reduction_%s' % reduction_idx] = outputs
+                self.endpoints['reduction_%s' % reduction_arg] = outputs
             if block.endpoints:
-                for k, v in six.iteritems(block.endpoints):
-                    self.endpoints['block_%s/%s' % (idx, k)] = v
+                for block_key, block_value in six.iteritems(block.endpoints):
+                    self.endpoints[
+                        'block_%s/%s' % (block_arg, block_key)] = block_value
                     if is_reduction:
                         self.endpoints[
-                            'reduction_%s/%s' % (reduction_idx, k)
-                        ] = v
+                            'reduction_%s/%s' % (reduction_arg, block_key)
+                        ] = block_value
         self.endpoints['features'] = outputs
 
         if not return_base:

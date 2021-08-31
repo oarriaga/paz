@@ -12,8 +12,9 @@ _DEFAULT_BLOCKS_ARGS = ['r1_k3_s11_e1_i32_o16_se0.25',
                         'r1_k3_s11_e6_i192_o320_se0.25']
 
 
-def efficientnet(width_coefficient=None, depth_coefficient=None,
-                 dropout_rate=0.2, survival_rate=0.8):
+def get_efficientnet_globalparams(
+        width_coefficient=None, depth_coefficient=None, dropout_rate=0.2,
+        survival_rate=0.8):
     """Creates efficientnet model.
 
     # Arguments
@@ -141,14 +142,11 @@ def get_model_params(model_name, params):
         block_args: BlockArgs, arguments to create a Block.
         global_params: GlobalParams, a set of global parameters.
     """
-    if model_name.startswith('efficientnet'):
-        efficientnet_param = get_efficientnet_params(model_name)
-        width_coefficient, depth_coefficient, dropout_rate = efficientnet_param
-        global_params = efficientnet(
-            width_coefficient, depth_coefficient, dropout_rate)
-    else:
-        raise NotImplementedError('model name is not pre-defined: %s' %
-                                  model_name)
+    efficientnet_param = get_efficientnet_params(model_name)
+    width_coefficient, depth_coefficient, dropout_rate = efficientnet_param
+    global_params = get_efficientnet_globalparams(
+        width_coefficient, depth_coefficient, dropout_rate)
+
     if params:
         global_params.update(params)
     decoder = BlockDecoder()
