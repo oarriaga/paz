@@ -1,15 +1,5 @@
 from tensorflow.keras.layers import BatchNormalization
 import efficientnet_model
-import re
-
-
-_DEFAULT_BLOCKS_ARGS = ['r1_k3_s11_e1_i32_o16_se0.25',
-                        'r2_k3_s22_e6_i16_o24_se0.25',
-                        'r2_k5_s22_e6_i24_o40_se0.25',
-                        'r3_k3_s22_e6_i40_o80_se0.25',
-                        'r3_k5_s11_e6_i80_o112_se0.25',
-                        'r4_k5_s22_e6_i112_o192_se0.25',
-                        'r1_k3_s11_e6_i192_o320_se0.25']
 
 
 def get_efficientnet_params(model_name):
@@ -39,68 +29,6 @@ def get_efficientnet_params(model_name):
                            'efficientnet-b8': (2.2, 3.6, 0.5),
                            'efficientnet-l2': (4.3, 5.3, 0.5)}
     return efficientnet_params[model_name]
-
-
-class BlockDecoder(object):
-    """Block Decoder for readability."""
-
-    def _decode_block_string(self, block_string):
-        """Gets a block through a string notation of arguments.
-
-        # Arguments
-            block_string: String, denoting the efficientnet block parameters.
-        """
-        assert isinstance(block_string, str)
-        ops = block_string.split('_')
-        options = {}
-        for op in ops:
-            splits = re.split(r'(\d.*)', op)
-            if len(splits) >= 2:
-                key, value = splits[:2]
-                options[key] = value
-
-        if 's' not in options or len(options['s']) != 2:
-            raise ValueError('Strides options should be a pair of integers.')
-        block_args = efficientnet_model.BlockArgs
-        block_args["num_repeat"] = int(options['r'])
-        block_args["kernel_size"] = int(options['k'])
-        block_args["strides"] = [int(options['s'][0]), int(options['s'][1])]
-        block_args["expand_ratio"] = int(options['e'])
-        block_args["input_filters"] = int(options['i'])
-        block_args["output_filters"] = int(options['o'])
-        if 'se' in options:
-            block_args["squeeze_excite_ratio"] = float(options['se'])
-        else:
-            block_args["squeeze_excite_ratio"] = None
-        block_args["id_skip"] = ('noskip' not in block_string)
-        block_args["conv_type"] = int(options['c']) if 'c' in options else 0
-        block_args["fused_conv"] = int(options['f']) if 'f' in options else 0
-        block_args["super_pixel"] = int(options['p']) if 'p' in options else 0
-        block_args["condconv"] = ('cc' in block_string)
-        return block_args
-
-    def decode(self, string_list):
-        """Decodes a list of string notations to specify blocks
-        inside the network.
-
-        # Arguments
-            string_list: a list of strings, each string is a notation of block.
-
-        # Returns
-            A list of namedtuples to represent block arguments.
-        """
-        assert isinstance(string_list, list)
-        block_args = []
-        for block_string in string_list:
-            block_args.append((self._decode_block_string(block_string)).copy())
-        return block_args
-
-
-def get_blocks_args():
-    blocks_args_string = _DEFAULT_BLOCKS_ARGS
-    decoder = BlockDecoder()
-    blocks_args = decoder.decode(blocks_args_string)
-    return blocks_args
 
 
 def build_model_base(model_name, params=None):
@@ -134,13 +62,29 @@ def build_model_base(model_name, params=None):
     condconv_num_experts = None
     clip_projection_output = False
     fix_head_stem = None
-    blocks_args = get_blocks_args()
+    kernel_sizes = [3, 3, 5, 3, 5, 5, 3]
+    num_repeats = [1, 2, 2, 3, 3, 4, 1]
+    input_filters = [32, 16, 24, 40, 80, 112, 192]
+    output_filters = [16, 24, 40, 80, 112, 192, 320]
+    expand_ratios = [1, 6, 6, 6, 6, 6, 6]
+    strides = [[1, 1], [2, 2], [2, 2], [2, 2],
+               [1, 1], [2, 2], [1, 1]]
+    squeeze_excite_ratio = 0.25
+    id_skip = True
+    conv_type = 0
+    fused_conv = 0
+    super_pixel = 0
+    condconv = False
+    num_blocks = 7
     model = efficientnet_model.EfficientNet(
-        blocks_args, dropout_rate, data_format, num_classes,
+        dropout_rate, data_format, num_classes,
         width_coefficient, depth_coefficient, depth_divisor, min_depth,
         survival_rate, activation, batch_norm, use_squeeze_excitation,
         local_pooling, condconv_num_experts, clip_projection_output,
-        fix_head_stem, model_name)
+        fix_head_stem, kernel_sizes, num_repeats, input_filters,
+        output_filters, expand_ratios, strides, squeeze_excite_ratio,
+        id_skip, conv_type, fused_conv, super_pixel, condconv, num_blocks,
+        model_name)
     return model
 
 
