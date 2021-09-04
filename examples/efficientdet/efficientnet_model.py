@@ -686,7 +686,6 @@ class EfficientNet(tf.keras.Model):
         self._clip_projection_output = clip_projection_output
         self._fix_head_stem = fix_head_stem
         self.endpoints = None
-
         self._build()
 
     def _get_conv_block(self, conv_type):
@@ -705,6 +704,26 @@ class EfficientNet(tf.keras.Model):
     def get_block_name(self):
         name = 'blocks_%d' % next(self.block_id)
         return name
+
+    def update_filters(self, block_args):
+        """Update block input and output filters based on depth multiplier.
+        # Arguments
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules.
+
+        # Returns
+            block_args: Dictionary, A list of BlockArgs to construct
+            block modules with updated filter counts.
+        """
+        input_filters = round_filters(
+            block_args["input_filters"], self._width_coefficient,
+            self._depth_divisor, self._min_depth)
+        output_filters = round_filters(
+            block_args["output_filters"], self._width_coefficient,
+            self._depth_divisor, self._min_depth)
+        block_args.update({"input_filters": input_filters,
+                           "output_filters": output_filters})
+        return block_args
 
     def update_block_repeats(self, block_args, block_num):
         """Update block repeats based on depth multiplier.
@@ -859,26 +878,6 @@ class EfficientNet(tf.keras.Model):
             block_args = self.build_super_pixel_blocks(
                 block_args, input_filters, output_filters)
         self.add_block_repeats(block_args)
-
-    def update_filters(self, block_args):
-        """Update block input and output filters based on depth multiplier.
-        # Arguments
-            block_args: Dictionary, A list of BlockArgs to construct
-            block modules.
-
-        # Returns
-            block_args: Dictionary, A list of BlockArgs to construct
-            block modules with updated filter counts.
-        """
-        input_filters = round_filters(
-            block_args["input_filters"], self._width_coefficient,
-            self._depth_divisor, self._min_depth)
-        output_filters = round_filters(
-            block_args["output_filters"], self._width_coefficient,
-            self._depth_divisor, self._min_depth)
-        block_args.update({"input_filters": input_filters,
-                           "output_filters": output_filters})
-        return block_args
 
     def _build(self):
         """Builds a model."""
