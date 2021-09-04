@@ -70,21 +70,21 @@ def build_model_base(model_name, params=None):
     strides = [[1, 1], [2, 2], [2, 2], [2, 2],
                [1, 1], [2, 2], [1, 1]]
     squeeze_excite_ratio = 0.25
-    id_skip = True
+    use_skip_connection = True
     conv_type = 0
     fused_conv = 0
     super_pixel = 0
     condconv = False
     num_blocks = 7
     model = efficientnet_model.EfficientNet(
-        dropout_rate, data_format, num_classes,
-        width_coefficient, depth_coefficient, depth_divisor, min_depth,
-        survival_rate, activation, batch_norm, use_squeeze_excitation,
+        dropout_rate, data_format, num_classes, width_coefficient,
+        depth_coefficient, depth_divisor, min_depth, survival_rate,
+        activation, batch_norm, use_squeeze_excitation,
         local_pooling, condconv_num_experts, clip_projection_output,
         fix_head_stem, kernel_sizes, num_repeats, input_filters,
         output_filters, expand_ratios, strides, squeeze_excite_ratio,
-        id_skip, conv_type, fused_conv, super_pixel, condconv, num_blocks,
-        model_name)
+        use_skip_connection, conv_type, fused_conv, super_pixel,
+        condconv, num_blocks, model_name)
     return model
 
 

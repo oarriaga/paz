@@ -14,13 +14,6 @@ from tensorflow.keras.layers import GlobalAveragePooling2D
 from utils import get_activation, get_drop_connect
 
 
-BlockArgs_arg = ['kernel_size', 'num_repeat', 'input_filters',
-                 'output_filters', 'expand_ratio', 'id_skip',
-                 'strides', 'squeeze_excititation_ratio', 'conv_type',
-                 'fused_conv', 'super_pixel', 'condconv']
-BlockArgs = dict.fromkeys(BlockArgs_arg, None)
-
-
 def conv_kernel_initializer(shape, dtype=None):
     """Initialization for convolutional kernels.
     The main difference with tf.variance_scaling_initializer is that
@@ -141,7 +134,7 @@ class SuperPixel(Layer):
     def __init__(self, input_filters, batch_norm, activation, name=None):
         """
         # Arguments
-            ADDHERE
+            input_filters: Int, input filters for the blocks to construct.
             batch_norm: TF BatchNormalization layer.
             activation: String, activation function name.
             name: layer name.
@@ -177,15 +170,14 @@ class MBConvBlock(Layer):
         endpoints: dict. A list of internal tensors.
     """
 
-    def __init__(self, local_pooling, batch_norm,
-                 condconv_num_experts, activation, use_squeeze_excitation,
-                 clip_projection_output, kernel_size, input_filters,
-                 output_filters, expand_ratio, strides, squeeze_excite_ratio,
-                 fused_conv, super_pixel, condconv, id_skip, name=None):
+    def __init__(self, local_pooling, batch_norm, condconv_num_experts,
+                 activation, use_squeeze_excitation, clip_projection_output,
+                 kernel_size, input_filters, output_filters, expand_ratio,
+                 strides, squeeze_excite_ratio, fused_conv, super_pixel,
+                 condconv, use_skip_connection, name=None):
         """Initializes a MBConv block.
 
         # Arguments
-            ADDHERE
             local_pooling: bool, flag to use local pooling of features.
             batch_norm: TF BatchNormalization layer.
             condconv_num_experts: Int, conditional convolution number of
@@ -194,6 +186,18 @@ class MBConvBlock(Layer):
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
             clip_projection_output: String, flag to clip output.
+            kernel_size: Int, kernel size of the conv block filters.
+            num_repeats: Int, number of block repeats.
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            expand_ratio: Int, ratio to expand the conv block in repeats.
+            strides: List, strides in height and weight of conv filter.
+            squeeze_excite_ratio: Float, squeeze excite block ratio.
+            fused_conv: Int, flag to select fused conv or expand conv.
+            super_pixel: Int, superpixel value.
+            condconv: bool, flag to use conditional conv.
+            use_skip_connection: bool, flag to skip connect.
+            num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: layer name.
         """
         super().__init__(name=name)
@@ -211,7 +215,7 @@ class MBConvBlock(Layer):
         self._fused_conv = fused_conv
         self._super_pixel = super_pixel
         self._condconv = condconv
-        self._id_skip = id_skip
+        self._use_skip_connection = use_skip_connection
         self._has_squeeze_excitation = (
                 use_squeeze_excitation
                 and self._squeeze_excite_ratio is not None
@@ -412,7 +416,7 @@ class MBConvBlock(Layer):
         tensor = tf.identity(tensor)
         if self._clip_projection_output:
             tensor = tf.clip_by_value(tensor, -6, 6)
-        if self._id_skip:
+        if self._use_skip_connection:
             if (all(s == 1 for s in self._strides)
                     and self._input_filters
                     == self._output_filters):
@@ -647,7 +651,7 @@ class EfficientNet(tf.keras.Model):
                  use_squeeze_excitation, local_pooling, condconv_num_experts,
                  clip_projection_output, fix_head_stem, kernel_sizes,
                  num_repeats, input_filters, output_filters, expand_ratios,
-                 strides, squeeze_excite_ratio, id_skip, conv_type,
+                 strides, squeeze_excite_ratio, use_skip_connection, conv_type,
                  fused_conv, super_pixel, condconv, num_blocks, name):
         """Initializes an 'Model' instance.
 
@@ -673,6 +677,19 @@ class EfficientNet(tf.keras.Model):
             operations.
             clip_projection_output: String, flag to clip output.
             fix_head_stem: bool, flag to fix head and stem branches.
+            kernel_size: Int, kernel size of the conv block filters.
+            num_repeats: Int, number of block repeats.
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            expand_ratio: Int, ratio to expand the conv block in repeats.
+            strides: List, strides in height and weight of conv filter.
+            squeeze_excite_ratio: Float, squeeze excite block ratio.
+            use_skip_connection: bool, flag to skip connect.
+            conv_type: Int, flag to select convolution type.
+            fused_conv: Int, flag to select fused conv or expand conv.
+            super_pixel: Int, superpixel value.
+            condconv: bool, flag to use conditional conv.
+            num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: A string of layer name.
 
         # Raises
@@ -696,7 +713,6 @@ class EfficientNet(tf.keras.Model):
         self._condconv_num_experts = condconv_num_experts
         self._clip_projection_output = clip_projection_output
         self._fix_head_stem = fix_head_stem
-        self.endpoints = None
         self._kernel_sizes = kernel_sizes
         self._num_repeats = num_repeats
         self._input_filters = input_filters
@@ -704,12 +720,13 @@ class EfficientNet(tf.keras.Model):
         self._expand_ratios = expand_ratios
         self._strides = strides
         self._squeeze_excite_ratio = squeeze_excite_ratio
-        self._id_skip = id_skip
+        self._use_skip_connection = use_skip_connection
         self._conv_type = conv_type
         self._fused_conv = fused_conv
         self._super_pixel = super_pixel
         self._condconv = condconv
         self._num_blocks = num_blocks
+        self.endpoints = None
         self._build()
 
     def _get_conv_block(self, conv_type):
@@ -732,10 +749,12 @@ class EfficientNet(tf.keras.Model):
     def update_filters(self, input_filters, output_filters):
         """Update block input and output filters based on depth multiplier.
         # Arguments
-            ADDHERE
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
 
         # Returns
-            ADDHERE
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
         """
         input_filters = round_filters(
             input_filters, self._width_coefficient,
@@ -745,28 +764,34 @@ class EfficientNet(tf.keras.Model):
             self._depth_divisor, self._min_depth)
         return input_filters, output_filters
 
-    def update_block_repeats(self, num_repeat, block_num):
+    def update_block_repeats(self, num_repeats, block_num):
         """Update block repeats based on depth multiplier.
         # Arguments
-            ADDHERE
+            num_repeats: Int, number of block repeats.
             block_num: Int, Block index.
 
         # Returns
-            ADDHERE
+            num_repeats: Int, number of block repeats.
         """
         blocks_repeat_limit = self._num_blocks - 1
         block_flag = (block_num == 0 or block_num == blocks_repeat_limit)
         if self._fix_head_stem and block_flag:
-            repeats = num_repeat
+            num_repeats = num_repeats
         else:
-            repeats = round_repeats(num_repeat, self._depth_coefficient)
-        return repeats
+            num_repeats = round_repeats(num_repeats, self._depth_coefficient)
+        return num_repeats
 
-    def add_block_repeats(self, num_repeat, input_filters, output_filters,
-                          kernel_size, expand_ratio, strides, super_pixel):
+    def add_block_repeats(self, input_filters, output_filters, num_repeat,
+                          kernel_size, strides, expand_ratio, super_pixel):
         """
         # Arguments
-            ADDHERE
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            num_repeats: Int, number of block repeats.
+            kernel_size: Int, kernel size of the conv block filters.
+            strides: List, strides in height and weight of conv filter.
+            expand_ratio: Int, ratio to expand the conv block in repeats.
+            super_pixel: Int, superpixel value.
         """
         conv_block = self._get_conv_block(self._conv_type)
         if num_repeat > 1:
@@ -781,37 +806,43 @@ class EfficientNet(tf.keras.Model):
                 kernel_size, input_filters, output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
                 self._fused_conv, super_pixel, self._condconv,
-                self._id_skip, self.get_block_name()))
+                self._use_skip_connection, self.get_block_name()))
 
-    def update_block_depth(self, strides, kernel_size,
-                           input_filters, output_filters):
+    def update_block_depth(self, input_filters, output_filters,
+                           kernel_size, strides):
         """
         # Arguments
-            ADDHERE
-            strides: Stride of convolution layers.
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            kernel_size: Int, kernel size of the conv block filters.
+            strides: List, strides in height and weight of conv filter.
 
         # Returns
-            ADDHERE
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            kernel_size: Int, kernel size of the conv block filters.
         """
         depth_factor = int(4 / strides[0] / strides[1])
         if depth_factor > 1:
             kernel_size = (kernel_size + 1) // 2
         else:
             kernel_size = kernel_size
-        filter_depth_input = input_filters * depth_factor
-        filter_depth_output = output_filters * depth_factor
-        return filter_depth_input, filter_depth_output, kernel_size
+        input_filters = input_filters * depth_factor
+        output_filters = output_filters * depth_factor
+        return input_filters, output_filters, kernel_size
 
     def add_stride2_block(self, input_filters, output_filters, kernel_size,
                           expand_ratio, super_pixel):
         """
         # Arguments
-            ADDHERE
-            input_filters: Int, Input filters for the blocks to construct.
-            output_filters: Int, Output filters for the blocks to construct.
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            kernel_size: Int, kernel size of the conv block filters.
+            expand_ratio: Int, ratio to expand the conv block in repeats.
+            super_pixel: Int, superpixel value.
 
         # Returns
-            ADDHERE
+            super_pixel: Int, superpixel value.
         """
         conv_block = self._get_conv_block(self._conv_type)
         strides = [1, 1]
@@ -821,27 +852,32 @@ class EfficientNet(tf.keras.Model):
             self._use_squeeze_excitation, self._clip_projection_output,
             kernel_size, input_filters, output_filters, expand_ratio,
             strides, self._squeeze_excite_ratio, self._fused_conv,
-            super_pixel, self._condconv, self._id_skip,
+            super_pixel, self._condconv, self._use_skip_connection,
             name=self.get_block_name()))
         super_pixel = 0
         return super_pixel
 
     def build_super_pixel_blocks(self, input_filters, output_filters,
-                                 strides, kernel_size, expand_ratio,
+                                 kernel_size, strides, expand_ratio,
                                  super_pixel):
         """
         # Arguments
-            ADDHERE
-            input_filters: Int, Input filters for the blocks to construct.
-            output_filters: Int, Output filters for the blocks to construct.
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            num_repeats: Int, number of block repeats.
+            kernel_size: Int, kernel size of the conv block filters.
+            strides: List, strides in height and weight of conv filter.
+            expand_ratio: Int, ratio to expand the conv block in repeats.
+            super_pixel: Int, superpixel value.
 
         # Returns
-            ADDHERE
+            kernel_size: Int, kernel size of the conv block filters.
+            super_pixel: Int, superpixel value.
         """
         conv_block = self._get_conv_block(self._conv_type)
         # if superpixel, adjust filters, kernels, and strides.
         updated_parameters = self.update_block_depth(
-            strides, kernel_size, input_filters, output_filters)
+            input_filters, output_filters, kernel_size, strides)
         new_input_filters, new_output_filters, kernel_size = updated_parameters
         # if the first block has stride-2 and superpixel transformation
         if strides[0] == 2 and strides[1] == 2:
@@ -857,7 +893,7 @@ class EfficientNet(tf.keras.Model):
                 kernel_size, new_input_filters, new_output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
                 self._fused_conv, super_pixel, self._condconv,
-                self._id_skip, self.get_block_name()))
+                self._use_skip_connection, self.get_block_name()))
             super_pixel = 2
         else:
             self._blocks.append(conv_block(
@@ -867,7 +903,7 @@ class EfficientNet(tf.keras.Model):
                 kernel_size, new_input_filters, new_output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
                 self._fused_conv, super_pixel, self._condconv,
-                self._id_skip, self.get_block_name()))
+                self._use_skip_connection, self.get_block_name()))
 
         return kernel_size, super_pixel
 
@@ -875,9 +911,13 @@ class EfficientNet(tf.keras.Model):
                      kernel_size, expand_ratio, strides, super_pixel):
         """
         # Arguments
-            ADDHERE
-            input_filters: Int, Input filters for the blocks to construct.
-            output_filters: Int, Output filters for the blocks to construct.
+            input_filters: Int, input filters for the blocks to construct.
+            output_filters: Int, output filters for the blocks to construct.
+            num_repeats: Int, number of block repeats.
+            kernel_size: Int, kernel size of the conv block filters.
+            expand_ratio: Int, ratio to expand the conv block in repeats.
+            strides: List, strides in height and weight of conv filter.
+            super_pixel: Int, superpixel value.
         """
 
         # The first block needs to take care of stride
@@ -890,15 +930,15 @@ class EfficientNet(tf.keras.Model):
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, input_filters, output_filters, expand_ratio,
                 strides, self._squeeze_excite_ratio, self._fused_conv,
-                super_pixel, self._condconv, self._id_skip,
+                super_pixel, self._condconv, self._use_skip_connection,
                 self.get_block_name()))
         else:
             new_params = self.build_super_pixel_blocks(
-                input_filters, output_filters, strides, kernel_size,
+                input_filters, output_filters, kernel_size, strides,
                 expand_ratio, super_pixel)
             kernel_size, super_pixel = new_params
-        self.add_block_repeats(num_repeats, input_filters, output_filters,
-                               kernel_size, expand_ratio, strides, super_pixel)
+        self.add_block_repeats(input_filters, output_filters, num_repeats,
+                               kernel_size, strides, expand_ratio, super_pixel)
 
     def _build(self):
         """Builds a model."""
