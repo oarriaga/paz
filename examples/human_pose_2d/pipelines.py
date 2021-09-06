@@ -6,46 +6,34 @@ import cv2
 
 
 class HeatmapsParser(pr.Processor):
-    def __init__(self, num_joints, joint_order, detection_thresh,
-                 max_num_people, ignore_too_much, use_detection_val,
-                 tag_thresh, tag_per_joint):
+    def __init__(self):
         super(HeatmapsParser, self).__init__()
-        self.match_by_tag = pe.MatchByTag(num_joints, joint_order,
-                                          detection_thresh, max_num_people,
-                                          ignore_too_much, use_detection_val,
-                                          tag_thresh)
-        self.top_k = pe.Top_K(max_num_people, num_joints, tag_per_joint)
-        self.adjust = pe.Adjust()
-        self.refine = pe.Refine()
+        self.match_by_tag = pe.MatchByTag()
+        self.top_k_keypoints = pe.TopK_Keypoints()
+        self.adjust_keypoints = pe.AdjustKeypoints()
+        self.refine_keypoints = pe.RefineKeypoints()
         self.get_scores = pe.GetScores()
-        self.tensor_to_numpy = pe.TensorToNumpy()
-        self.tile_array = pe.TileArray((num_joints, 1, 1, 1))
-        self.tag_per_joint = tag_per_joint
+        self.convert_to_numpy = pe.ConvertToNumpy()
 
-    def call(self, det, tag, adjust=True, refine=True):
-        # ans - answer
-        ans = self.top_k(det, tag)
-        ans = list(self.match_by_tag(ans))
+    def call(self, boxes, tag, adjust=True, refine=True):
+        keypoints = self.top_k_keypoints(boxes, tag)
+        keypoints = list(self.match_by_tag(keypoints))
         if adjust:
-            ans = self.adjust(ans, det)[0]
-        scores = self.get_scores(ans)
-        det_numpy = self.tensor_to_numpy(det[0])
-        tag_numpy = self.tensor_to_numpy(tag[0])
-        if not self.tag_per_joint:
-            tag_numpy = self.tile_array(tag_numpy)
+            keypoints = self.adjust_keypoints(boxes, keypoints)[0]
+        scores = self.get_scores(keypoints)
+        boxes, tag = self.convert_to_numpy(boxes[0], tag[0])
         if refine:
-            for i in range(len(ans)):
-                ans[i] = self.refine(det_numpy, tag_numpy, ans[i])
-        return [ans], scores
+            for i in range(len(keypoints)):
+                keypoints[i] = self.refine_keypoints(boxes, keypoints[i], tag)
+        return [keypoints], scores
 
 
-# 
 class GetMultiScaleSize(pr.Processor):
-    def __init__(self, input_size, min_scale):
+    def __init__(self):
         super(GetMultiScaleSize, self).__init__()
-        self.resize = pe.ResizeDimensions(min_scale)
+        self.resize = pe.ResizeDimensions()
         self.get_image_center = pe.GetImageCenter()
-        self.min_input_size = pe.MinInputSize(input_size, min_scale)
+        self.min_input_size = pe.MinInputSize()
 
     def call(self, image, current_scale):
         H, W, _ = image.shape
@@ -62,38 +50,33 @@ class GetMultiScaleSize(pr.Processor):
 
 
 class AffineTransform(pr.Processor):
-    def __init__(self, rotation=0, shift=np.array([0., 0.]), inv=0):
+    def __init__(self, inv=0):
         super(AffineTransform, self).__init__()
         self.inv = inv
-        rotation_angle = np.pi * rotation / 180
-        self.get_direction = pe.GetDirection(rotation_angle)
-        self.updateSRC = pe.UpdateSRCMatrix(shift)
-        self.updateDST = pe.UpdateDSTMatrix()
+        self.construct_source_image = pe.ConstructSourceImage()
+        self.construct_output_image = pe.ConstructOutputImage()
         self.get_affine_transform = pe.GetAffineTransform()
 
     def call(self, center, scale, output_size):
         if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
             scale = np.array([scale, scale])
 
-        scale = scale * 200.0
-        src_W = scale[0]
-        src_dir = self.get_direction([0, src_W * -0.5])
-        src = self.updateSRC(scale, center, src_dir)
-        dst = self.updateDST(output_size)
+        source_image = self.construct_source_image(scale, center)
+        output_image = self.construct_output_image(output_size)
 
         if self.inv:
-            transform = self.get_affine_transform(dst, src)
+            transform = self.get_affine_transform(output_image, source_image)
         else:
-            transform = self.get_affine_transform(src, dst)
+            transform = self.get_affine_transform(source_image, output_image)
 
         return transform
 
 
 class ResizeAlignMultiScale(pr.Processor):
-    def __init__(self, input_size, min_scale):
+    def __init__(self):
         super(ResizeAlignMultiScale, self).__init__()
-        self.get_multi_scale_size = GetMultiScaleSize(input_size, min_scale)
-        self.affine_transform = AffineTransform(rotation=0)
+        self.get_multi_scale_size = GetMultiScaleSize()
+        self.affine_transform = AffineTransform()
         self.warp_affine = pe.WarpAffine()
 
     def call(self, image, current_scale):
@@ -140,8 +123,8 @@ class GetMultiStageOutputs(pr.Processor):
             outputs_flip = model(tf.reverse(image, [2]))
 
             tags, num_heatmaps, heatmap_average = \
-                        self.heatmap_parameters(outputs_flip, tags, flip_index,
-                                                self.with_flip)
+                self.heatmap_parameters(outputs_flip, tags, flip_index,
+                                        self.with_flip)
 
             heatmaps = self.update_heatmaps(heatmaps, heatmap_average,
                                             num_heatmaps)
@@ -240,7 +223,7 @@ class AggregateResults(pr.Processor):
 class FinalPrediction(pr.Processor):
     def __init__(self):
         super(FinalPrediction, self).__init__()
-        self.affine_transform = AffineTransform(rotation=0, inv=1)
+        self.affine_transform = AffineTransform(inv=1)
         self.affine_transform_point = pe.AffineTransformPoint()
 
     def call(self, grouped_joints, center, scale, heatmap_size):

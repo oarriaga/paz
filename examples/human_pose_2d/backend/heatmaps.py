@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 from munkres import Munkres
-import cv2
 
 
 JOINT_ORDER = [i-1 for i in [1, 2, 3, 4, 5, 6, 7, 12,
@@ -15,11 +14,11 @@ TAG_THRESH = 1
 TAG_PER_JOINT = True
 
 
-def update_dictionary(tags, joints, idx, default, joint_dict, tag_dict):
-    for tag, joint in zip(tags, joints):
-        key = tag[0]
-        joint_dict.setdefault(key, np.copy(default))[idx] = joint
-        tag_dict[key] = [tag]
+def update_dictionary(tag, joint, idx, default, joint_dict, tag_dict):
+    # for tag, joint in zip(tags, joints):
+    key = tag[0]
+    joint_dict.setdefault(key, np.copy(default))[idx] = joint
+    tag_dict[key] = [tag]
 
 
 def group_keys_and_tags(joint_dict, tag_dict):
@@ -70,7 +69,8 @@ def match_by_tag(input_):
             continue
 
         if i == 0 or len(joint_dict) == 0:
-            update_dictionary(tags, joints, idx, default, joint_dict, tag_dict)
+            for tag, joint in zip(tags, joints):
+                update_dictionary(tag, joint, idx, default, joint_dict, tag_dict)
 
         else:
             grouped_keys, grouped_tags = group_keys_and_tags(
@@ -107,6 +107,7 @@ def match_by_tag(input_):
     return np.array([[joint_dict[i] for i in joint_dict]]).astype(np.float32)
 
 
+# boxes - heatmap
 def non_maximum_supressions(detection_boxes):
     detection_boxes = tf.transpose(detection_boxes, [0, 2, 3, 1])
     maxm = tf.keras.layers.MaxPooling2D(pool_size=3, strides=1,
@@ -138,7 +139,7 @@ def tensor_to_numpy(tensor):
     return tensor.cpu().numpy()
 
 
-def top_k(boxes, tag):
+def top_k_keypoints(boxes, tag):
     box = non_maximum_supressions(boxes)
     box = tf.transpose(box, [0, 3, 1, 2])
     num_images, num_joints = box.get_shape()[:2]
@@ -166,7 +167,95 @@ def top_k(boxes, tag):
     loc_k = np.squeeze(tensor_to_numpy(loc_k))
     val_k = np.squeeze(tensor_to_numpy(val_k))
 
-    ans = {'tag_k': tag_k, 'loc_k': loc_k, 'val_k': val_k}
-    return ans
+    keypoints = {'tag_k': tag_k, 'loc_k': loc_k, 'val_k': val_k}
+    # loc - heatmap_location, val- heatmap_value
+    return keypoints
 
 
+# keypoint - person_detections
+def adjust_heatmaps(boxes, keypoints):
+    for batch_id, people in enumerate(keypoints):
+        for people_id, i in enumerate(people):
+            for joint_id, joint in enumerate(i):
+                if joint[2] > 0:
+                    y, x = joint[0:2]
+                    xx, yy = int(x), int(y)
+                    tmp = boxes[batch_id][joint_id]
+                    # 
+                    if tmp[xx, min(yy+1, tmp.shape[1]-1)] > \
+                            tmp[xx, max(yy-1, 0)]:
+                        y += 0.25
+                    else:
+                        y -= 0.25
+
+                    if tmp[min(xx+1, tmp.shape[0]-1), yy] > \
+                            tmp[max(0, xx-1), yy]:
+                        x += 0.25
+                    else:
+                        x -= 0.25
+                    keypoints[batch_id][people_id, joint_id, 0:2] = \
+                        (y+0.5, x+0.5)
+    return keypoints
+
+
+def save_keypoint_tags(keypoints, tag):
+    '''save tag value of detected keypoint'''
+    tags = []
+    for i in range(keypoints.shape[0]):
+        if keypoints[i, 2] > 0:
+            x, y = keypoints[i][:2].astype(np.int32)
+            tags.append(tag[i, y, x])
+    return tags
+
+
+def refine_heatmaps(boxes, keypoints, tag):
+    if len(tag.shape) == 3:
+        tag = tag[:, :, :, None]
+    tags = save_keypoint_tags(keypoints, tag)
+    mean_tags = np.mean(tags, axis=0)
+
+    temp_keypoints = []
+    for i in range(keypoints.shape[0]):
+        tmp = boxes[i, :, :]
+        tt = ((tag[i, :, :] - mean_tags[None, None, :]) ** 2).sum(axis=2)
+        tmp2 = tmp - np.round(np.sqrt(tt))
+
+        # find maximum position
+        y, x = np.unravel_index(np.argmax(tmp2), tmp.shape)
+        xx = x
+        yy = y
+
+        # detection score at maximum position
+        val = tmp[y, x]
+        x += 0.5
+        y += 0.5
+
+        if tmp[yy, min(xx + 1, tmp.shape[1] - 1)] > \
+                tmp[yy, max(xx - 1, 0)]:
+            x += 0.25
+        else:
+            x -= 0.25
+
+        if tmp[min(yy + 1, tmp.shape[0] - 1), xx] > \
+                tmp[max(0, yy - 1), xx]:
+            y += 0.25
+        else:
+            y -= 0.25
+
+        temp_keypoints.append((x, y, val))
+    temp_keypoints = np.array(temp_keypoints)
+
+    if temp_keypoints is not None:
+        for i in range(boxes.shape[0]):
+            if temp_keypoints[i, 2] > 0 and keypoints[i, 2] == 0:
+                keypoints[i, :2] = temp_keypoints[i, :2]
+                keypoints[i, 2] = temp_keypoints[i, 2]
+    return keypoints
+
+
+def convert_to_numpy(boxes, tag):
+    boxes = tensor_to_numpy(boxes)
+    tag = tensor_to_numpy(tag)
+    if not TAG_PER_JOINT:
+        tag = np.tile(tag, ((NUM_JOINTS, 1, 1, 1)))
+    return boxes, tag
