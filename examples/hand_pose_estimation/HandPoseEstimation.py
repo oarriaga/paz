@@ -10,9 +10,13 @@ from backend import crop_image_from_coordinates, object_scoremap
 from backend import get_rotation_matrix
 
 
+<<<<<<< HEAD
 def Hand_Segmentation_Net(input_shape=None, load_pretrained=True):
     if input_shape is None:
         input_shape = [320, 320, 3]
+=======
+def Hand_Segmentation_Net(input_shape=(320, 320, 3), load_pretrained=True):
+>>>>>>> Working code update
     image = Input(shape=input_shape, name='image')
 
     X_1 = Conv2D(64, kernel_size=3, padding='same',

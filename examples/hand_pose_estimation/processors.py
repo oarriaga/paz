@@ -10,8 +10,15 @@ from backend import normalize_keypoints, transform_to_relative_frames
 from backend import transform_visibility_mask, get_hand_side_and_keypooints
 from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
 from backend import get_bone_connections_and_colors, find_max_location
+<<<<<<< HEAD
 from paz.backend.image.draw import lincolor
 from paz.backend.image.tensorflow_image import resize
+=======
+from backend import transform_cropped_keypoints
+from paz.backend.image.draw import lincolor
+from paz.backend.image.tensorflow_image import resize
+from paz.backend.image.opencv_image import resize_image
+>>>>>>> Working code update
 from paz.abstract import Processor
 
 
@@ -196,9 +203,15 @@ class AdjustCropSize(Processor):
 
     def call(self, crop_size_best):
         crop_size_best *= 1.25
+<<<<<<< HEAD
 
         return np.minimum(np.maximum(self.crop_size / crop_size_best, 0.25),
                           5.0)
+=======
+        scaled_crop = np.maximum(self.crop_size / crop_size_best, 0.25)
+        scaled_crop = np.minimum(scaled_crop, 5.0)
+        return scaled_crop
+>>>>>>> Working code update
 
 
 class CropImage(Processor):
@@ -289,5 +302,19 @@ class Extract_2D_Keypoint(Processor):
 
     def call(self, scoremaps):
         keypoints_2D = find_max_location(scoremaps)
+<<<<<<< HEAD
 
 
+=======
+        return keypoints_2D
+
+
+class Transform_Keypoints(Processor):
+    def __init__(self):
+        super(Transform_Keypoints, self).__init__()
+
+    def call(self, cropped_keypoints, centers, scale, crop_size):
+        keypoints_2D = transform_cropped_keypoints(cropped_keypoints, centers,
+                                                   scale, crop_size)
+        return keypoints_2D
+>>>>>>> Working code update

@@ -1,5 +1,10 @@
 import os
 
+<<<<<<< HEAD
+=======
+import matplotlib.pyplot as plt
+
+>>>>>>> Working code update
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
@@ -14,6 +19,12 @@ from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_ALIGNED_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_LAST_KEYPOINT_ID
 from paz.backend.image.draw import lincolor
+<<<<<<< HEAD
+=======
+from paz.backend.image import show_image
+
+from utils import show_mask
+>>>>>>> Working code update
 
 
 def extract_hand_segment(segmentation_label):
@@ -39,6 +50,10 @@ def transform_visibility_mask(visibility_mask):
 
 
 def keypoints_to_wrist_coordinates(keypoints):
+<<<<<<< HEAD
+=======
+    # Simplify the function more by dividing the inside of expand_dims into another line
+>>>>>>> Working code update
     palm_coordinates_left = np.expand_dims(
         0.5 * (keypoints[LEFT_ROOT_KEYPOINT_ID, :] +
                keypoints[LEFT_ALIGNED_KEYPOINT_ID, :]), 0)
@@ -47,14 +62,25 @@ def keypoints_to_wrist_coordinates(keypoints):
                keypoints[RIGHT_ALIGNED_KEYPOINT_ID, :]), 0)
     keypoints = np.concatenate(
         [palm_coordinates_left,
+<<<<<<< HEAD
          keypoints[LEFT_ROOT_KEYPOINT_ID + 1:LEFT_LAST_KEYPOINT_ID + 1, :],
          palm_coordinates_right,
          keypoints[RIGHT_ROOT_KEYPOINT_ID + 1:RIGHT_LAST_KEYPOINT_ID + 1, :]],
+=======
+         keypoints[(LEFT_ROOT_KEYPOINT_ID + 1):(LEFT_LAST_KEYPOINT_ID + 1), :],
+         palm_coordinates_right,
+         keypoints[(RIGHT_ROOT_KEYPOINT_ID + 1):(RIGHT_LAST_KEYPOINT_ID + 1),
+         :]],
+>>>>>>> Working code update
         0)
     return keypoints
 
 
 def one_hot_encode(inputs, n_classes):
+<<<<<<< HEAD
+=======
+    # Reuse the one in backend by writing a processor for it
+>>>>>>> Working code update
     """
     One hot encode a list of sample labels. Return a one-hot encoded vector
     for each label.
@@ -68,7 +94,11 @@ def normalize_keypoints(keypoints3D):
     relative_keypoint3D = keypoints3D - keypoint3D_root
     keypoint_scale = np.linalg.norm(
         relative_keypoint3D[LEFT_ALIGNED_KEYPOINT_ID, :] -
+<<<<<<< HEAD
         relative_keypoint3D[LEFT_ALIGNED_KEYPOINT_ID - 1, :])
+=======
+        relative_keypoint3D[(LEFT_ALIGNED_KEYPOINT_ID - 1), :])
+>>>>>>> Working code update
 
     keypoint_normalized = relative_keypoint3D / keypoint_scale
     return keypoint_scale, keypoint_normalized
@@ -80,6 +110,10 @@ def to_homogeneous_coordinates(vector):
 
 
 def build_4D_translation_matrix(translation_vector):
+<<<<<<< HEAD
+=======
+    # Rename to build_translation_matrix_SE3
+>>>>>>> Working code update
     transformation_matrix = np.array([[1, 0, 0, translation_vector[0]],
                                       [0, 1, 0, translation_vector[1]],
                                       [0, 0, 1, translation_vector[2]],
@@ -88,6 +122,10 @@ def build_4D_translation_matrix(translation_vector):
 
 
 def get_translation_matrix(translation_vector):
+<<<<<<< HEAD
+=======
+    # Remove this function by making translation vector always of length 3 by appending zeros
+>>>>>>> Working code update
     if len(translation_vector) == 1:
         transformation_matrix = np.array([[1, 0, 0, 0],
                                           [0, 1, 0, 0],
@@ -101,6 +139,11 @@ def get_translation_matrix(translation_vector):
 
 
 def get_affine_matrix(matrix):
+<<<<<<< HEAD
+=======
+    # don't reshape but pass in list of lists
+    # rename get to build
+>>>>>>> Working code update
     t = np.array([0, 0, 0]).reshape(3, 1)  # rename
     affine_matrix = np.hstack([matrix, t])
     affine_matrix = np.vstack((affine_matrix, [0, 0, 0, 1]))
@@ -108,7 +151,12 @@ def get_affine_matrix(matrix):
 
 
 def build_rotation_matrix_x(angle):
+<<<<<<< HEAD
     rotation_matrix_x = np.array([[1, 0, 0],
+=======
+    # Make all floats
+    rotation_matrix_x = np.array([[1.0, 0, 0],
+>>>>>>> Working code update
                                   [0, np.cos(angle), np.sin(angle)],
                                   [0, -np.sin(angle), np.cos(angle)]])
     return rotation_matrix_x
@@ -131,15 +179,23 @@ def build_rotation_matrix_z(angle):
 def extract_hand_masks(hand_parts_mask, right_hand_mask_limit=17):
     one_map = np.ones_like(hand_parts_mask)
 
+<<<<<<< HEAD
+=======
+    # simplify the line with multiple lines
+>>>>>>> Working code update
     mask_left = np.logical_and(np.greater(hand_parts_mask, one_map),
                                np.less(hand_parts_mask, one_map *
                                        (right_hand_mask_limit + 1)))
     mask_right = np.greater(hand_parts_mask, one_map * right_hand_mask_limit)
 
+<<<<<<< HEAD
     hand_mask_left = mask_left.astype('int')
     hand_mask_right = mask_right.astype('int')
 
     return hand_mask_left, hand_mask_right
+=======
+    return mask_left.astype('int'), mask_right.astype('int')
+>>>>>>> Working code update
 
 
 def extract_dominant_hand_mask(keypoints3D, dominant_hand):  # Function name
@@ -155,9 +211,15 @@ def extract_hand_side_keypooints(keypoints3D, dominant_hand_mask):
                       LEFT_ROOT_KEYPOINT_ID:LEFT_LAST_KEYPOINT_ID + 1, :]
     keypoint3D_right = keypoints3D[
                        RIGHT_ROOT_KEYPOINT_ID:RIGHT_LAST_KEYPOINT_ID + 1, :]
+<<<<<<< HEAD
     hand_side_keypoints = np.where(dominant_hand_mask, keypoint3D_left,
                                    keypoint3D_right)
     return hand_side_keypoints
+=======
+    hand_side_keypoints3D = np.where(dominant_hand_mask, keypoint3D_left,
+                                     keypoint3D_right)
+    return hand_side_keypoints3D
+>>>>>>> Working code update
 
 
 def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
@@ -166,6 +228,7 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
     num_pixels_hand_left = np.sum(hand_map_left)
     num_pixels_hand_right = np.sum(hand_map_right)
 
+<<<<<<< HEAD
     dominant_hand = np.greater(num_pixels_hand_left, num_pixels_hand_right)
 
     dominant_hand_mask = extract_dominant_hand_mask(keypoints3D, dominant_hand)
@@ -175,14 +238,33 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
     hand_side = np.where(dominant_hand, 0, 1)
 
     return hand_side, hand_side_keypoints, dominant_hand_mask
+=======
+    dominant_hand = np.greater(num_pixels_hand_left,
+                               num_pixels_hand_right)  # Rename dominant_hand as Is_Left_dominant
+
+    dominant_hand_mask = extract_dominant_hand_mask(keypoints3D, dominant_hand)
+    hand_side_keypoints3D = extract_hand_side_keypooints(keypoints3D,
+                                                         dominant_hand_mask)
+
+    hand_side = np.where(dominant_hand, 0, 1)
+
+    return hand_side, hand_side_keypoints3D, dominant_hand_mask
+>>>>>>> Working code update
 
 
 def transform_to_relative_frame(keypoints_3D, bone_index):
     translated_keypoint3D = to_homogeneous_coordinates(
+<<<<<<< HEAD
         np.expand_dims(keypoints_3D[bone_index, :], 1))
 
     Translation_matrix = get_translation_matrix(
         np.zeros_like(keypoints_3D[0, 0]))
+=======
+        np.expand_dims(keypoints_3D[bone_index, :], 1)) # Divide into two lines #Take care of expand dims
+
+    Translation_matrix = get_translation_matrix(
+        np.zeros_like(keypoints_3D[0, 0])) # Change the input method so make it always of length 3
+>>>>>>> Working code update
 
     transformation_parameters = get_transformation_parameters(
         translated_keypoint3D, Translation_matrix)
@@ -191,7 +273,11 @@ def transform_to_relative_frame(keypoints_3D, bone_index):
 
 def get_local_coordinates(transformation_matrix, keypoint3D):
     homogeneous_keypoint3D = to_homogeneous_coordinates(
+<<<<<<< HEAD
         np.expand_dims(keypoint3D, 1))
+=======
+        np.expand_dims(keypoint3D, 1)) #Take care of expand dims
+>>>>>>> Working code update
     local_keypoint_coordinates = np.matmul(transformation_matrix,
                                            homogeneous_keypoint3D)
     return local_keypoint_coordinates
@@ -549,8 +635,12 @@ def get_XY_arrays(shape):
 def get_bounding_box_list(X_masked, Y_masked, bounding_box_list):
     x_min, x_max, y_min, y_max = np.min(X_masked), np.max(X_masked), \
                                  np.min(Y_masked), np.max(Y_masked)
+<<<<<<< HEAD
 
     xy_limits = [x_min, x_max, y_min, y_max]
+=======
+    xy_limits = [x_max, x_min, y_max, y_min]
+>>>>>>> Working code update
     start = np.stack([x_min, y_min])
     end = np.stack([x_max, y_max])
     bounding_box = np.stack([start, end], 1)
@@ -572,8 +662,13 @@ def get_center_list(xy_limit, center_list):
 
 
 def get_crop_list(xy_limit, crop_size_list):
+<<<<<<< HEAD
     crop_size_x = xy_limit[1] - xy_limit[0]
     crop_size_y = xy_limit[3] - xy_limit[2]
+=======
+    crop_size_x = xy_limit[0] - xy_limit[1]
+    crop_size_y = xy_limit[2] - xy_limit[3]
+>>>>>>> Working code update
     crop_maximum_value = np.maximum(crop_size_x, crop_size_y)
     crop_size = np.expand_dims(crop_maximum_value, 0)
     crop_size.reshape([1])
@@ -606,7 +701,10 @@ def extract_bounding_box(binary_class_mask):
         shape = binary_class_mask.shape
 
     assert len(shape) == 3, "binary_class_mask must be 3D."
+<<<<<<< HEAD
 
+=======
+>>>>>>> Working code update
     X, Y = get_XY_arrays(shape)
 
     bounding_box_list, center_list, crop_size_list = get_bounding_box_features(
@@ -633,11 +731,19 @@ def convert_location_to_box(location, size, shape):
 
 
 def crop_image_from_coordinates(image, crop_location, crop_size, scale=1.0):
+<<<<<<< HEAD
+=======
+    # show_image(np.squeeze(image, axis=0).astype('uint8'))
+>>>>>>> Working code update
     image_dimensions = image.shape
     scale = np.reshape(scale, [-1])
     crop_location = crop_location.astype(np.float)
     crop_location = np.reshape(crop_location, [image_dimensions[0], 2])
+<<<<<<< HEAD
     crop_size = float(crop_size)
+=======
+    crop_size = np.float(crop_size)
+>>>>>>> Working code update
 
     crop_size_scaled = crop_size / scale
 
@@ -728,7 +834,11 @@ def object_scoremap(scoremap):
         objectmap_list.append(objectmap)
 
     objectmap = tf.stack(objectmap_list)
+<<<<<<< HEAD
 
+=======
+    plt.imshow(np.squeeze(objectmap, axis =0))
+>>>>>>> Working code update
     return objectmap
 
 
@@ -781,14 +891,24 @@ def extract_2D_keypoints(visibility_mask):
 
 def detect_keypoints(scoremaps):
     """ Performs detection per scoremap for the hands keypoints. """
+<<<<<<< HEAD
     scoremaps_shape = scoremaps.shape
 
+=======
+    scoremaps = np.squeeze(scoremaps, axis=0)
+    scoremaps_shape = scoremaps.shape
+>>>>>>> Working code update
     keypoint_coords = np.zeros((scoremaps_shape[2], 2))
     for i in range(scoremaps_shape[2]):
         v, u = np.unravel_index(np.argmax(scoremaps[:, :, i]),
                                 (scoremaps_shape[0], scoremaps_shape[1]))
+<<<<<<< HEAD
         keypoint_coords[i, 0] = v
         keypoint_coords[i, 1] = u
+=======
+        keypoint_coords[i, 0] = u
+        keypoint_coords[i, 1] = v
+>>>>>>> Working code update
     return keypoint_coords
 
 
@@ -810,11 +930,17 @@ def get_bone_connections_and_colors(colors):
     for finger in range(num_fingers):
         base = (0, num_bones + finger * num_bones)
         for bone in range(num_bones):
+<<<<<<< HEAD
             bone_to_color_mapping.append((base, colors[finger*num_bones+bone]))
+=======
+            bone_to_color_mapping.append(
+                (base, colors[finger * num_bones + bone]))
+>>>>>>> Working code update
             base = (base[1], base[1] - 1)
     return bone_to_color_mapping
 
 
+<<<<<<< HEAD
 def plot_hand(keypoints_2D, axis, color_fixed=None, linewidth='1'):
     """ Plots a hand stick figure into a matplotlib figure. """
     colors = lincolor(num_colors=21)
@@ -853,3 +979,24 @@ def plot_hand_3d(coords_xyz, axis, color_fixed=None, linewidth='1'):
                       linewidth=linewidth)
 
     axis.view_init(azim=-45., elev=45.)
+=======
+def transform_cropped_keypoints(cropped_keypoints, centers, scale, crop_size):
+    """Transforms the cropped coordinates to the original image space.
+    Args:
+        cropped_coords - Tensor (batch x num_keypoints x 3): Estimated hand
+            coordinates in the cropped space.
+        centers - Tensor (batch x 1): Repeated coordinates of the
+            center of the hand in global image space.
+        scale - Tensor (batch x 1): Scaling factor between the original image
+            and the cropped image.
+        crop_size - int: Size of the crop.
+    Returns:
+        coords - Tensor (batch x num_keypoints x 3): Transformed coordinates.
+    """
+
+    keypoints = np.copy(cropped_keypoints)
+    keypoints -= crop_size // 2
+    keypoints /= scale
+    keypoints += centers
+    return keypoints
+>>>>>>> Working code update
