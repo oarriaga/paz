@@ -14,11 +14,11 @@ TAG_THRESH = 1
 TAG_PER_JOINT = True
 
 
-def update_dictionary(tag, joint, idx, default, joint_dict, tag_dict):
-    # for tag, joint in zip(tags, joints):
-    key = tag[0]
-    joint_dict.setdefault(key, np.copy(default))[idx] = joint
-    tag_dict[key] = [tag]
+def update_dictionary(tags, joints, idx, default, joint_dict, tag_dict):
+    for tag, joint in zip(tags, joints):
+        key = tag[0]
+        joint_dict.setdefault(key, np.copy(default))[idx] = joint
+        tag_dict[key] = [tag]
 
 
 def group_keys_and_tags(joint_dict, tag_dict):
@@ -69,8 +69,8 @@ def match_by_tag(input_):
             continue
 
         if i == 0 or len(joint_dict) == 0:
-            for tag, joint in zip(tags, joints):
-                update_dictionary(tag, joint, idx, default, joint_dict, tag_dict)
+            # for tag, joint in zip(tags, joints):
+            update_dictionary(tags, joints, idx, default, joint_dict, tag_dict)
 
         else:
             grouped_keys, grouped_tags = group_keys_and_tags(
@@ -101,7 +101,9 @@ def match_by_tag(input_):
                     tag_dict[key].append(tags[row])
 
                 else:
-                    update_dictionary(tags[row], joints[row], idx, default,
+                    # check by passing the tags and joints directly and not by
+                    # removing the for loop from the function
+                    update_dictionary(tags, joints, idx, default,
                                       joint_dict, tag_dict)
 
     return np.array([[joint_dict[i] for i in joint_dict]]).astype(np.float32)
@@ -146,6 +148,9 @@ def top_k_keypoints(boxes, tag):
     H, W = box.get_shape()[2:4]
     box = tf.reshape(box, [num_images, num_joints, -1])
 
+    # val-heatmaps
+    # tag- tags
+    # loc - location of keypoints
     val_k, indices = tf.math.top_k(box, MAX_NUM_PEOPLE)
     tag = tf.reshape(tag, [tag.get_shape()[0], tag.get_shape()[1], W*H, -1])
     if not TAG_PER_JOINT:

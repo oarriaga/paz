@@ -1,30 +1,16 @@
 import numpy as np
 import tensorflow as tf
 from paz import processors as pr
-from munkres import Munkres
 import cv2
 import PIL
 from backend.preprocess import resize_dims
 from backend.preprocess import calculate_image_center
 from backend.preprocess import calculate_min_input_size
 from backend.preprocess import construct_source_image
-from backend.preprocess import construct_output_image
+from backend.preprocess import construct_output_image, tf_preprocess_input
 
 from backend.tensorflow_functions import load_model
-# from backend.tensorflow_functions import max_pooling2D
-# from backend.tensorflow_functions import transpose_tensor
-# from backend.tensorflow_functions import elementwise_equality
-# from backend.tensorflow_functions import cast_tensor
-# from backend.tensorflow_functions import reshape_tensor
-# from backend.tensorflow_functions import where_true
-# from backend.tensorflow_functions import fill_tensor
-# from backend.tensorflow_functions import stack_tensors
-# from backend.tensorflow_functions import gather_nd
-# from backend.tensorflow_functions import find_k_largest_entries
-# from backend.tensorflow_functions import up_sampling2D
-# from backend.tensorflow_functions import concatenate_tensors
-
-from backend.heatmaps import non_maximum_supressions, match_by_tag, top_k_keypoints
+from backend.heatmaps import match_by_tag, top_k_keypoints
 from backend.heatmaps import adjust_heatmaps, refine_heatmaps, convert_to_numpy
 
 
@@ -44,65 +30,15 @@ class LoadImage(pr.Processor):
         return np.array(PIL.Image.open(image_path, 'r')).astype(np.uint8)
 
 
-class NonMaximumSuppression(pr.Processor):
+class TfPreprocessInput(pr.Processor):
     def __init__(self):
-        super(NonMaximumSuppression, self).__init__()
+        super(TfPreprocessInput, self).__init__()
 
-    def call(self, detection_boxes):
-        filtered_box = non_maximum_supressions(detection_boxes)
-        return filtered_box
-
-
-class MatchByTag(pr.Processor):
-    def __init__(self):
-        super(MatchByTag, self).__init__()
-
-    def call(self, input_):
-        return match_by_tag(input_)
+    def call(self, image):
+        return tf_preprocess_input(image)
 
 
-class TopK_Keypoints(pr.Processor):
-    def __init__(self):
-        super(TopK_Keypoints, self).__init__()
-
-    def call(self, boxes, tag):
-        keypoints = top_k_keypoints(boxes, tag)
-        return keypoints
-
-
-class AdjustKeypoints(pr.Processor):
-    def __init__(self):
-        super(AdjustKeypoints, self).__init__()
-
-    def call(self, boxes, keypoints):
-        keypoints = adjust_heatmaps(boxes, keypoints)
-        return keypoints
-
-
-class RefineKeypoints(pr.Processor):
-    def __init__(self):
-        super(RefineKeypoints, self).__init__()
-
-    def call(self, boxes, keypoints, tag):
-        keypoints = refine_heatmaps(boxes, keypoints, tag)
-        return keypoints
-
-
-class GetScores(pr.Processor):
-    def __init__(self):
-        super(GetScores, self).__init__()
-
-    def call(self, ans):
-        score = [i[:, 2].mean() for i in ans]
-        return score
-
-
-class ConvertToNumpy(pr.Processor):
-    def __init__(self):
-        super(ConvertToNumpy, self).__init__()
-
-    def call(self, boxes, tag):
-        return convert_to_numpy(boxes, tag)
+# ********************GetMultiScaleSize*****************************
 
 
 class ResizeDimensions(pr.Processor):
@@ -136,6 +72,9 @@ class MinInputSize(pr.Processor):
         return min_input_size
 
 
+# ********************AffineTransform*****************************
+
+
 class ConstructSourceImage(pr.Processor):
     def __init__(self):
         super(ConstructSourceImage, self).__init__()
@@ -163,6 +102,9 @@ class GetAffineTransform(pr.Processor):
         return transform
 
 
+# ********************ResizeAlignMultiScale*****************************
+
+
 class WarpAffine(pr.Processor):
     def __init__(self):
         super(WarpAffine, self).__init__()
@@ -170,6 +112,9 @@ class WarpAffine(pr.Processor):
     def call(self, image, transform, size_resized):
         image_resized = cv2.warpAffine(image, transform, size_resized)
         return image_resized
+
+
+# ********************CalculateHeatmapParameters*****************************
 
 
 class UpSampling2D(pr.Processor):
@@ -189,22 +134,30 @@ class UpSampling2D(pr.Processor):
         return x
 
 
-class CalculateHeatmapAverage(pr.Processor):
-    def __init__(self):
-        super(CalculateHeatmapAverage, self).__init__()
+class CalculateOffset(pr.Processor):
+    def __init__(self, num_joints, loss_with_heatmap_loss):
+        super(CalculateOffset, self).__init__()
+        self.num_joints = num_joints
+        self.loss_with_heatmap_loss = loss_with_heatmap_loss
 
-    def call(self, heatmaps):
-        heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
-        return heatmaps_average
+    def call(self, idx):
+        if self.loss_with_heatmap_loss[idx]:
+            offset = self.num_joints
+        else:
+            offset = 0
+        return offset
 
 
-class IncrementByOne(pr.Processor):
-    def __init__(self):
-        super(IncrementByOne, self).__init__()
+class UpdateTags(pr.Processor):
+    def __init__(self, tag_per_joint):
+        super(UpdateTags, self).__init__()
+        self.tag_per_joint = tag_per_joint
 
-    def call(self, x):
-        x += 1
-        return x
+    def call(self, tags, output, offset, indices, with_flip=False):
+        tags.append(output[:, :, :, offset:])
+        if with_flip and self.tag_per_joint:
+            tags[-1] = tf.gather(tags[-1], indices, axis=-1)
+        return tags
 
 
 class UpdateHeatmapAverage(pr.Processor):
@@ -221,16 +174,16 @@ class UpdateHeatmapAverage(pr.Processor):
         return heatmaps_average
 
 
-class UpdateTags(pr.Processor):
-    def __init__(self, tag_per_joint):
-        super(UpdateTags, self).__init__()
-        self.tag_per_joint = tag_per_joint
+class IncrementByOne(pr.Processor):
+    def __init__(self):
+        super(IncrementByOne, self).__init__()
 
-    def call(self, tags, output, offset, indices, with_flip=False):
-        tags.append(output[:, :, :, offset:])
-        if with_flip and self.tag_per_joint:
-            tags[-1] = tf.gather(tags[-1], indices, axis=-1)
-        return tags
+    def call(self, x):
+        x += 1
+        return x
+
+
+# ********************GetMultiStageOutputs*****************************
 
 
 class UpdateHeatmaps(pr.Processor):
@@ -240,20 +193,6 @@ class UpdateHeatmaps(pr.Processor):
     def call(self, heatmaps, heatmap_average, num_heatmaps):
         heatmaps.append(heatmap_average/num_heatmaps)
         return heatmaps
-
-
-class CalculateOffset(pr.Processor):
-    def __init__(self, num_joints, loss_with_heatmap_loss):
-        super(CalculateOffset, self).__init__()
-        self.num_joints = num_joints
-        self.loss_with_heatmap_loss = loss_with_heatmap_loss
-
-    def call(self, idx):
-        if self.loss_with_heatmap_loss[idx]:
-            offset = self.num_joints
-        else:
-            offset = 0
-        return offset
 
 
 class FlipJointOrder(pr.Processor):
@@ -279,6 +218,18 @@ class RemoveLastElement(pr.Processor):
         return [each_list[:, :-1] for each_list in nested_list]
 
 
+# **************************AggregateResults*********************************
+
+
+class CalculateHeatmapAverage(pr.Processor):
+    def __init__(self):
+        super(CalculateHeatmapAverage, self).__init__()
+
+    def call(self, heatmaps):
+        heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
+        return heatmaps_average
+
+
 class PostProcessHeatmaps(pr.Processor):
     def __init__(self, test_scale_factor):
         super(PostProcessHeatmaps, self).__init__()
@@ -298,6 +249,64 @@ class PostProcessTags(pr.Processor):
         tags = tf.concat(tags, axis=4)
         tags = tf.transpose(tags, [0, 3, 1, 2, 4])
         return tags
+
+
+# **************************HeatmapsParser*********************************
+
+
+class TopK_Keypoints(pr.Processor):
+    def __init__(self):
+        super(TopK_Keypoints, self).__init__()
+
+    def call(self, boxes, tag):
+        keypoints = top_k_keypoints(boxes, tag)
+        return keypoints
+
+
+class MatchByTag(pr.Processor):
+    def __init__(self):
+        super(MatchByTag, self).__init__()
+
+    def call(self, input_):
+        return match_by_tag(input_)
+
+
+class AdjustKeypoints(pr.Processor):
+    def __init__(self):
+        super(AdjustKeypoints, self).__init__()
+
+    def call(self, boxes, keypoints):
+        keypoints = adjust_heatmaps(boxes, keypoints)
+        return keypoints
+
+
+class GetScores(pr.Processor):
+    def __init__(self):
+        super(GetScores, self).__init__()
+
+    def call(self, ans):
+        score = [i[:, 2].mean() for i in ans]
+        return score
+
+
+class ConvertToNumpy(pr.Processor):
+    def __init__(self):
+        super(ConvertToNumpy, self).__init__()
+
+    def call(self, boxes, tag):
+        return convert_to_numpy(boxes, tag)
+
+
+class RefineKeypoints(pr.Processor):
+    def __init__(self):
+        super(RefineKeypoints, self).__init__()
+
+    def call(self, boxes, keypoints, tag):
+        keypoints = refine_heatmaps(boxes, keypoints, tag)
+        return keypoints
+
+
+# **************************FinalPrediction*********************************
 
 
 class AffineTransformPoint(pr.Processor):

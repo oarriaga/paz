@@ -67,3 +67,9 @@ def construct_output_image(output_size):
     image[2:, :] = calculate_third_point(image[0, :], image[1, :])
     return image
 
+
+def tf_preprocess_input(image, data_format=None, mode='torch'):
+    image = tf.keras.applications.imagenet_utils.preprocess_input(image,
+                                                                  data_format,
+                                                                  mode)
+    return image

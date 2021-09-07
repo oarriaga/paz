@@ -3,7 +3,7 @@ import os
 import processors as pe
 import tensorflow as tf
 from pipelines import save_valid_image
-from pipelines import HeatmapsParser, GetMultiScaleSize, ResizeAlignMultiScale
+from pipelines import HeatmapsParser, ResizeAlignMultiScale
 from pipelines import GetMultiStageOutputs, AggregateResults, FinalPrediction
 
 
@@ -42,24 +42,18 @@ def main():
                         help='Path to the model weights')
     args = parser.parse_args()
 
-    image_path = os.path.join(args.image_path, 'image2.jpg')
+    image_path = os.path.join(args.image_path, 'image1.jpg')
     model_path = os.path.join(args.model_weights_path, 'HigherHRNet')
 
     load_image = pe.LoadImage()
     load_model = pe.LoadModel()
     model = load_model(model_path)
     image = load_image(image_path)
+    tf_preprocess_input = pe.TfPreprocessInput()
     # print(model.summary())
     print("\n==> Model loaded!\n")
 
-    heatmaps_parser = HeatmapsParser(num_joints, joint_order, detection_thresh,
-                                     max_num_people, ignore_too_much,
-                                     use_detection_val, tag_thresh,
-                                     tag_per_joint)
-
-    get_multi_scale_size = GetMultiScaleSize(input_size, min_scale)
-    base_size, center, scale = get_multi_scale_size(image, current_scale)
-    resize_align_multi_scale = ResizeAlignMultiScale(input_size, min_scale)
+    resize_align_multi_scale = ResizeAlignMultiScale()
     get_multi_stage_outputs = GetMultiStageOutputs(with_heatmap_loss,
                                                    test_with_heatmap,
                                                    with_AE_loss,
@@ -77,16 +71,16 @@ def main():
 
     aggregate_results = AggregateResults(test_scale_factor, test_project2image,
                                          test_flip_test)
+    heatmaps_parser = HeatmapsParser()
     get_final_preds = FinalPrediction()
 
     all_preds = []
     all_scores = []
     for idx, s in enumerate(sorted(test_scale_factor, reverse=True)):
-        image_resized, center, scale = resize_align_multi_scale(image, s)
-        image_resized = tf.keras.applications.imagenet_utils.preprocess_input(image_resized,
-                                                                              data_format=None, mode='torch')
-
+        base_size, image_resized, center, scale = resize_align_multi_scale(image, s)
+        image_resized = tf_preprocess_input(image_resized)
         image_resized = tf.expand_dims(image_resized, 0)
+
         heatmaps, tags = get_multi_stage_outputs(model, image_resized,
                                                  base_size)
 
