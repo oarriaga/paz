@@ -64,66 +64,81 @@ class ResizeAlignMultiScale(pr.Processor):
         return resized_size, resized_image, center, scale
 
 
-class CalculateHeatmapParameters(pr.Processor):
-    def __init__(self, num_joint, with_heatmap_loss, test_with_heatmap,
-                 with_AE_loss, test_with_AE, tag_per_joint):
-        super(CalculateHeatmapParameters, self).__init__()
+class GetHeatmaps(pr.Processor):
+    def __init__(self, num_joint, with_heatmap_loss, test_with_heatmap):
+        super(GetHeatmaps, self).__init__()
         self.num_joint = num_joint
         self.with_heatmap_loss = with_heatmap_loss
         self.test_with_heatmap = test_with_heatmap
-        self.with_AE_loss = with_AE_loss
-        self.test_with_AE = test_with_AE
         self.up_sampling2D = pe.UpSampling2D(size=(2, 2),
                                              interpolation='bilinear')
-        self.calculate_offset = pe.CalculateOffset(num_joint,
-                                                   with_heatmap_loss)
-        self.update_tags = pe.UpdateTags(tag_per_joint)
-        self.update_heatmap_average = pe.UpdateHeatmapAverage()
+        self.update_heatmaps_average = pe.UpdateHeatmapsAverage()
         self.increment_by_one = pe.IncrementByOne()
+        self.update_heatmaps = pe.UpdateHeatmaps()
 
-    def call(self, outputs, tags, indices=[], with_flip=False):
+    def call(self, outputs, heatmaps, indices=[], with_flip=False):
         num_heatmaps = 0
-        heatmaps_average = 0
         for i, output in enumerate(outputs):
             if len(outputs) > 1 and i != len(outputs) - 1:
                 output = self.up_sampling2D(output)
-
             if with_flip:
                 output = tf.reverse(output, [2])
 
+            if self.with_heatmap_loss[i] and self.test_with_heatmap[i]:
+                heatmaps_average = self.update_heatmaps_average(output,
+                                                                self.num_joint,
+                                                                indices,
+                                                                with_flip)
+                num_heatmaps = self.increment_by_one(num_heatmaps)
+
+        heatmaps = self.update_heatmaps(heatmaps, heatmaps_average,
+                                        num_heatmaps)
+
+        return heatmaps
+
+
+class GetTags(pr.Processor):
+    def __init__(self, with_AE_loss, test_with_AE, num_joint,
+                 with_heatmap_loss, tag_per_joint):
+        super(GetTags, self).__init__()
+        self.with_AE_loss = with_AE_loss
+        self.test_with_AE = test_with_AE
+        self.calculate_offset = pe.CalculateOffset(num_joint,
+                                                   with_heatmap_loss)
+        self.update_tags = pe.UpdateTags(tag_per_joint)
+        self.up_sampling2D = pe.UpSampling2D(size=(2, 2),
+                                             interpolation='bilinear')
+
+    def call(self, outputs, tags, indices=[], with_flip=False):
+        for i, output in enumerate(outputs):
+            if len(outputs) > 1 and i != len(outputs) - 1:
+                output = self.up_sampling2D(output)
+            if with_flip:
+                output = tf.reverse(output, [2])
             offset = self.calculate_offset(i)
 
             if self.with_AE_loss[i] and self.test_with_AE[i]:
-                tags = self.update_tags(tags, output, offset,
+                tags = self.update_tags(output, tags, offset,
                                         indices, with_flip)
 
-            if self.with_heatmap_loss[i] and self.test_with_heatmap[i]:
-                heatmap_average = self.update_heatmap_average(heatmaps_average,
-                                                              output, indices,
-                                                              self.num_joint,
-                                                              with_flip)
-                num_heatmaps = self.increment_by_one(num_heatmaps)
-        return tags, num_heatmaps, heatmap_average
+        return tags
 
 
 class GetMultiStageOutputs(pr.Processor):
     def __init__(self, with_heatmap_loss, test_with_heatmap, with_AE_loss,
-                 test_with_AE, dataset, dataset_with_centers, tag_per_joint,
-                 test_ignore_centers, test_scale_factor, test_project2image,
-                 test_flip_test, num_joint, with_flip=False,
+                 test_with_AE, dataset_with_centers, tag_per_joint,
+                 test_ignore_centers, num_joint, with_flip=False,
                  project2image=False):
         super(GetMultiStageOutputs, self).__init__()
-        self.dataset = dataset
         self.with_flip = with_flip
         self.dataset_with_centers = dataset_with_centers
         self.test_ignore_centers = test_ignore_centers
         self.project2image = project2image
-        self.heatmap_parameters = CalculateHeatmapParameters(num_joint,
-                                        with_heatmap_loss, test_with_heatmap,
-                                        with_AE_loss, test_with_AE,
-                                        tag_per_joint)
+        self.get_heatmaps = GetHeatmaps(num_joint, with_heatmap_loss,
+                                        test_with_heatmap)
+        self.get_tags = GetTags(with_AE_loss, test_with_AE, num_joint,
+                                with_heatmap_loss, tag_per_joint)
         self.flip_joint_order = pe.FlipJointOrder(dataset_with_centers)
-        self.update_heatmaps = pe.UpdateHeatmaps()
         self.remove_last_element = pe.RemoveLastElement()
         self.up_sampling2D = pe.UpSampling2D(size=(2, 2),
                                              interpolation='bilinear')
@@ -131,25 +146,18 @@ class GetMultiStageOutputs(pr.Processor):
     def call(self, model, image, size_projected=None):
         tags = []
         heatmaps = []
+
         outputs = model(image)
+        heatmaps = self.get_heatmaps(outputs, heatmaps)
+        tags = self.get_tags(outputs, tags)
 
-        tags, num_heatmaps, heatmap_average = self.heatmap_parameters(outputs,
-                                                                      tags)
-
-        heatmaps = self.update_heatmaps(heatmaps, heatmap_average,
-                                        num_heatmaps)
-
-        # put this into a different class/function
         if self.with_flip:
-            flip_index = self.flip_joint_order()
-            outputs_flip = model(tf.reverse(image, [2]))
+            indices = self.flip_joint_order()
+            outputs = model(tf.reverse(image, [2]))
 
-            tags, num_heatmaps, heatmap_average = \
-                self.heatmap_parameters(outputs_flip, tags, flip_index,
-                                        self.with_flip)
-
-            heatmaps = self.update_heatmaps(heatmaps, heatmap_average,
-                                            num_heatmaps)
+            heatmaps = self.get_heatmaps(outputs, heatmaps, indices,
+                                         self.with_flip)
+            tags = self.get_tags(outputs, tags, indices, self.with_flip)
 
         if self.dataset_with_centers and self.test_ignore_centers:
             heatmaps = self.remove_last_element(heatmaps)
@@ -168,19 +176,19 @@ class AggregateResults(pr.Processor):
         self.project2image = project2image
         self.test_flip_test = test_flip_test
         self.expand_dims = pr.ExpandDims(-1)
-        self.heatmaps_average = pe.CalculateHeatmapAverage()
-        self.postprocess_heatmaps = pe.PostProcessHeatmaps(test_scale_factor)
-        self.postprocess_tags = pe.PostProcessTags()
+        self.heatmaps_average = pe.CalculateHeatmapsAverage()
+        self.transpose_heatmaps = pe.TransposeHeatmaps(test_scale_factor)
+        self.transpose_tags = pe.TransposeTags()
         self.up_sampling2D = pe.UpSampling2D(size=(4, 4),
                                              interpolation='bilinear')
 
     def call(self, scale_factor, heatmaps, tags, final_heatmaps=None,
-             tags_list=[]):
+             final_tags=[]):
         if scale_factor == 1 or self.test_scale_factor == 1:
             if final_heatmaps is not None and not self.project2image:
                 tags = self.up_sampling2D(tags)
             for tag in tags:
-                tags_list.append(self.expand_dims(tag))
+                final_tags.append(self.expand_dims(tag))
 
         if self.test_flip_test:
             heatmaps_average = self.heatmaps_average(heatmaps)
@@ -194,8 +202,8 @@ class AggregateResults(pr.Processor):
         else:
             final_heatmaps += self.up_sampling2D(heatmaps_average)
 
-        final_heatmaps = self.postprocess_heatmaps(final_heatmaps)
-        final_tags = self.postprocess_tags(tags_list)
+        final_heatmaps = self.transpose_heatmaps(final_heatmaps)
+        final_tags = self.transpose_tags(final_tags)
 
         return final_heatmaps, final_tags
 
@@ -203,23 +211,25 @@ class AggregateResults(pr.Processor):
 class HeatmapsParser(pr.Processor):
     def __init__(self):
         super(HeatmapsParser, self).__init__()
+        self.top_k_detections = pe.TopKDetections()
         self.match_by_tag = pe.MatchByTag()
-        self.top_k_keypoints = pe.TopK_Keypoints()
         self.adjust_keypoints = pe.AdjustKeypoints()
-        self.refine_keypoints = pe.RefineKeypoints()
         self.get_scores = pe.GetScores()
         self.convert_to_numpy = pe.ConvertToNumpy()
+        self.refine_keypoints = pe.RefineKeypoints()
 
-    def call(self, boxes, tag, adjust=True, refine=True):
-        keypoints = self.top_k_keypoints(boxes, tag)
-        keypoints = list(self.match_by_tag(keypoints))
+    def call(self, heatmaps, tags, adjust=True, refine=True):
+        top_k_detections = self.top_k_detections(heatmaps, tags)
+        keypoints = list(self.match_by_tag(top_k_detections))
+        print(keypoints)
         if adjust:
-            keypoints = self.adjust_keypoints(boxes, keypoints)[0]
+            keypoints = self.adjust_keypoints(heatmaps, keypoints)[0]
         scores = self.get_scores(keypoints)
-        boxes, tag = self.convert_to_numpy(boxes[0], tag[0])
+        heatmaps, tags = self.convert_to_numpy(heatmaps[0], tags[0])
         if refine:
             for i in range(len(keypoints)):
-                keypoints[i] = self.refine_keypoints(boxes, keypoints[i], tag)
+                keypoints[i] = self.refine_keypoints(heatmaps, keypoints[i],
+                                                     tags)
         return [keypoints], scores
 
 

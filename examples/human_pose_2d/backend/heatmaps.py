@@ -14,10 +14,97 @@ TAG_THRESH = 1
 TAG_PER_JOINT = True
 
 
-def update_dictionary(tags, joints, idx, default, joint_dict, tag_dict):
+def tensor_to_numpy(tensor):
+    return tensor.cpu().numpy()
+
+
+def reshape(tensor, newshape):
+    tensor = tf.reshape(tensor, newshape)
+    return tensor
+
+
+def non_maximum_supressions(heatmaps):
+    heatmaps = tf.transpose(heatmaps, [0, 2, 3, 1])
+    maximum_values = tf.keras.layers.MaxPooling2D(pool_size=3, strides=1,
+                                                  padding='same')(heatmaps)
+    maximum_values = tf.math.equal(maximum_values, heatmaps)
+    maximum_values = tf.cast(maximum_values, tf.float32)
+    filtered_heatmaps = heatmaps * maximum_values
+    return filtered_heatmaps
+
+
+def unpack_heatmaps_dimensions(heatmaps):
+    num_images, num_joints = heatmaps.get_shape()[:2]
+    H, W = heatmaps.get_shape()[2:4]
+    return num_images, num_joints, H, W
+
+
+def torch_gather(x, indices, gather_axis=2):
+    x = tf.cast(x, tf.int64)
+    indices = tf.cast(indices, tf.int64)
+    all_indices = tf.where(tf.fill(indices.shape, True))
+    gather_locations = reshape(indices, [indices.shape.num_elements()])
+    gather_indices = []
+    for axis in range(len(indices.shape)):
+        if axis == gather_axis:
+            gather_indices.append(gather_locations)
+        else:
+            gather_indices.append(all_indices[:, axis])
+
+    gather_indices = tf.stack(gather_indices, axis=-1)
+    gathered = tf.gather_nd(x, gather_indices)
+    return reshape(gathered, indices.shape)
+
+
+def get_top_k_heatmaps_values(heatmaps):
+    top_k_heatmaps, indices = tf.math.top_k(heatmaps, MAX_NUM_PEOPLE)
+    return np.squeeze(tensor_to_numpy(top_k_heatmaps)), indices
+
+
+def get_top_k_tags(tags, indices):
+    if not TAG_PER_JOINT:
+        tags = tags.expand(-1, NUM_JOINTS, -1, -1)
+
+    top_k_tags = []
+    for i in range(tags.get_shape()[3]):
+        top_k_tags.append(torch_gather(tags[:, :, :, 0], indices))
+    top_k_tags = tf.stack(top_k_tags, axis=3)
+    return np.squeeze(tensor_to_numpy(top_k_tags))
+
+
+def get_top_k_locations(indices, image_width):
+    x = tf.cast((indices % image_width), dtype=tf.int64)
+    y = tf.cast((indices / image_width), dtype=tf.int64)
+    top_k_locations = tf.stack((x, y), axis=3)
+    return np.squeeze(tensor_to_numpy(top_k_locations))
+
+
+def top_k_detections(heatmaps, tags):
+    heatmaps = non_maximum_supressions(heatmaps)
+    heatmaps = tf.transpose(heatmaps, [0, 3, 1, 2])
+    num_images, num_joints, H, W = unpack_heatmaps_dimensions(heatmaps)
+    heatmaps = reshape(heatmaps, [num_images, num_joints, -1])
+    tags = reshape(tags, [tags.get_shape()[0], tags.get_shape()[1], W*H, -1])
+
+    top_k_heatmaps_values, indices = get_top_k_heatmaps_values(heatmaps)
+    top_k_tags = get_top_k_tags(tags, indices)
+    top_k_locations = get_top_k_locations(indices, W)
+
+    print(top_k_heatmaps_values.shape)
+    print(top_k_tags.shape)
+    print(top_k_locations.shape)
+
+    top_k_detections = {'top_k_tags': top_k_tags,
+                        'top_k_locations': top_k_locations,
+                        'top_k_heatmaps_values': top_k_heatmaps_values
+                        }
+    return top_k_detections
+
+
+def update_dictionary(tags, joints, arg, default, joint_dict, tag_dict):
     for tag, joint in zip(tags, joints):
         key = tag[0]
-        joint_dict.setdefault(key, np.copy(default))[idx] = joint
+        joint_dict.setdefault(key, np.copy(default))[arg] = joint
         tag_dict[key] = [tag]
 
 
@@ -45,41 +132,43 @@ def shortest_L2_distance(scores):
     return lowest_cost_pairs
 
 
-def get_tags_and_joints(tag_k, loc_k, val_k, idx):
-    tags = tag_k[idx]
-    joints = np.concatenate((loc_k[idx], val_k[idx, :, None],
-                            tag_k[idx]), 1)
+def get_valid_tags_and_joints(tags, locations, heatmap_values, joint_arg):
+    joints = np.concatenate((locations[joint_arg],
+                             heatmap_values[joint_arg, :, None],
+                             tags[joint_arg]), 1)
     mask = joints[:, 2] > DETECTION_THRESH
-    tags = tags[mask]
-    joints = joints[mask]
-    return tags, joints
+    tags = tags[joint_arg]
+    valid_tags = tags[mask]
+    valid_joints = joints[mask]
+    return valid_tags, valid_joints
 
 
-def match_by_tag(input_):
-    tag_k, loc_k, val_k = input_.values()
+def match_by_tag(detections):
+    tags, locations, heatmaps_values = detections.values()
     joint_dict = {}
     tag_dict = {}
-    default = np.zeros((NUM_JOINTS, tag_k.shape[2] + 3))
+    default = np.zeros((NUM_JOINTS, tags.shape[2] + 3))
 
-    for i in range(NUM_JOINTS):
-        idx = JOINT_ORDER[i]
-        tags, joints = get_tags_and_joints(tag_k, loc_k, val_k, idx)
+    for arg, joint_arg in enumerate(JOINT_ORDER):
+        valid_tags, valid_joints = get_valid_tags_and_joints(tags, locations,
+                                                             heatmaps_values,
+                                                             joint_arg)
 
-        if joints.shape[0] == 0:
+        if valid_joints.shape[0] == 0:
             continue
 
-        if i == 0 or len(joint_dict) == 0:
-            # for tag, joint in zip(tags, joints):
-            update_dictionary(tags, joints, idx, default, joint_dict, tag_dict)
+        if arg == 0 or len(joint_dict) == 0:
+            update_dictionary(valid_tags, valid_joints, joint_arg, default,
+                              joint_dict, tag_dict)
 
         else:
-            grouped_keys, grouped_tags = group_keys_and_tags(
-                                            joint_dict, tag_dict)
+            grouped_keys, grouped_tags = group_keys_and_tags(joint_dict,
+                                                             tag_dict)
 
             if IGNORE_TOO_MUCH and len(grouped_keys) == MAX_NUM_PEOPLE:
                 continue
 
-            difference, norm = calculate_norm(joints, grouped_tags)
+            difference, norm = calculate_norm(valid_joints, grouped_tags)
             norm_copy = np.copy(norm)
 
             num_added, num_grouped = difference.shape[:2]
@@ -97,84 +186,14 @@ def match_by_tag(input_):
                     and norm_copy[row][col] < TAG_THRESH
                    ):
                     key = grouped_keys[col]
-                    joint_dict[key][idx] = joints[row]
-                    tag_dict[key].append(tags[row])
+                    joint_dict[key][joint_arg] = valid_joints[row]
+                    tag_dict[key].append(valid_tags[row])
 
                 else:
-                    # check by passing the tags and joints directly and not by
-                    # removing the for loop from the function
-                    update_dictionary(tags, joints, idx, default,
-                                      joint_dict, tag_dict)
+                    update_dictionary(valid_tags, valid_joints, joint_arg,
+                                      default, joint_dict, tag_dict)
 
     return np.array([[joint_dict[i] for i in joint_dict]]).astype(np.float32)
-
-
-# boxes - heatmap
-def non_maximum_supressions(detection_boxes):
-    detection_boxes = tf.transpose(detection_boxes, [0, 2, 3, 1])
-    maxm = tf.keras.layers.MaxPooling2D(pool_size=3, strides=1,
-                                        padding='same')(detection_boxes)
-    maxm = tf.math.equal(maxm, detection_boxes)
-    maxm = tf.cast(maxm, tf.float32)
-    filtered_box = detection_boxes * maxm
-    return filtered_box
-
-
-def torch_gather(x, indices, gather_axis=2):
-    x = tf.cast(x, tf.int64)
-    indices = tf.cast(indices, tf.int64)
-    all_indices = tf.where(tf.fill(indices.shape, True))
-    gather_locations = tf.reshape(indices, [indices.shape.num_elements()])
-    gather_indices = []
-    for axis in range(len(indices.shape)):
-        if axis == gather_axis:
-            gather_indices.append(gather_locations)
-        else:
-            gather_indices.append(all_indices[:, axis])
-
-    gather_indices = tf.stack(gather_indices, axis=-1)
-    gathered = tf.gather_nd(x, gather_indices)
-    return tf.reshape(gathered, indices.shape)
-
-
-def tensor_to_numpy(tensor):
-    return tensor.cpu().numpy()
-
-
-def top_k_keypoints(boxes, tag):
-    box = non_maximum_supressions(boxes)
-    box = tf.transpose(box, [0, 3, 1, 2])
-    num_images, num_joints = box.get_shape()[:2]
-    H, W = box.get_shape()[2:4]
-    box = tf.reshape(box, [num_images, num_joints, -1])
-
-    # val-heatmaps
-    # tag- tags
-    # loc - location of keypoints
-    val_k, indices = tf.math.top_k(box, MAX_NUM_PEOPLE)
-    tag = tf.reshape(tag, [tag.get_shape()[0], tag.get_shape()[1], W*H, -1])
-    if not TAG_PER_JOINT:
-        tag = tag.expand(-1, NUM_JOINTS, -1, -1)
-
-    tag_k = tf.stack(
-        [
-            torch_gather(tag[:, :, :, 0], indices)
-            for i in range(tag.get_shape()[3])
-        ],
-        axis=3
-    )
-
-    x = tf.cast((indices % W), dtype=tf.int64)
-    y = tf.cast((indices / W), dtype=tf.int64)
-    loc_k = tf.stack((x, y), axis=3)
-
-    tag_k = np.squeeze(tensor_to_numpy(tag_k))
-    loc_k = np.squeeze(tensor_to_numpy(loc_k))
-    val_k = np.squeeze(tensor_to_numpy(val_k))
-
-    keypoints = {'tag_k': tag_k, 'loc_k': loc_k, 'val_k': val_k}
-    # loc - heatmap_location, val- heatmap_value
-    return keypoints
 
 
 # keypoint - person_detections
@@ -186,7 +205,6 @@ def adjust_heatmaps(boxes, keypoints):
                     y, x = joint[0:2]
                     xx, yy = int(x), int(y)
                     tmp = boxes[batch_id][joint_id]
-                    # 
                     if tmp[xx, min(yy+1, tmp.shape[1]-1)] > \
                             tmp[xx, max(yy-1, 0)]:
                         y += 0.25

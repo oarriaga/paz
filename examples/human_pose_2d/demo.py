@@ -58,13 +58,9 @@ def main():
                                                    test_with_heatmap,
                                                    with_AE_loss,
                                                    test_with_AE,
-                                                   dataset,
                                                    dataset_with_centers,
                                                    tag_per_joint,
                                                    test_ignore_centers,
-                                                   test_scale_factor,
-                                                   test_project2image,
-                                                   test_flip_test,
                                                    num_joints,
                                                    test_flip_test,
                                                    test_project2image)

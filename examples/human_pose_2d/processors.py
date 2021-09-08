@@ -3,14 +3,15 @@ import tensorflow as tf
 from paz import processors as pr
 import cv2
 import PIL
+from tensorflow.keras.models import load_model
+
 from backend.preprocess import resize_dims
 from backend.preprocess import calculate_image_center
 from backend.preprocess import calculate_min_input_size
 from backend.preprocess import construct_source_image
 from backend.preprocess import construct_output_image, tf_preprocess_input
 
-from backend.tensorflow_functions import load_model
-from backend.heatmaps import match_by_tag, top_k_keypoints
+from backend.heatmaps import match_by_tag, top_k_detections
 from backend.heatmaps import adjust_heatmaps, refine_heatmaps, convert_to_numpy
 
 
@@ -153,19 +154,19 @@ class UpdateTags(pr.Processor):
         super(UpdateTags, self).__init__()
         self.tag_per_joint = tag_per_joint
 
-    def call(self, tags, output, offset, indices, with_flip=False):
+    def call(self, output, tags, offset, indices, with_flip=False):
         tags.append(output[:, :, :, offset:])
         if with_flip and self.tag_per_joint:
             tags[-1] = tf.gather(tags[-1], indices, axis=-1)
         return tags
 
 
-class UpdateHeatmapAverage(pr.Processor):
+class UpdateHeatmapsAverage(pr.Processor):
     def __init__(self):
-        super(UpdateHeatmapAverage, self).__init__()
+        super(UpdateHeatmapsAverage, self).__init__()
 
-    def call(self, heatmaps_average, output, indices,
-             num_joints, with_flip=False):
+    def call(self, output, num_joints, indices, with_flip=False):
+        heatmaps_average = 0
         if not with_flip:
             heatmaps_average += output[:, :, :, :num_joints]
         else:
@@ -190,8 +191,8 @@ class UpdateHeatmaps(pr.Processor):
     def __init__(self):
         super(UpdateHeatmaps, self).__init__()
 
-    def call(self, heatmaps, heatmap_average, num_heatmaps):
-        heatmaps.append(heatmap_average/num_heatmaps)
+    def call(self, heatmaps, heatmaps_average, num_heatmaps):
+        heatmaps.append(heatmaps_average/num_heatmaps)
         return heatmaps
 
 
@@ -221,18 +222,18 @@ class RemoveLastElement(pr.Processor):
 # **************************AggregateResults*********************************
 
 
-class CalculateHeatmapAverage(pr.Processor):
+class CalculateHeatmapsAverage(pr.Processor):
     def __init__(self):
-        super(CalculateHeatmapAverage, self).__init__()
+        super(CalculateHeatmapsAverage, self).__init__()
 
     def call(self, heatmaps):
         heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
         return heatmaps_average
 
 
-class PostProcessHeatmaps(pr.Processor):
+class TransposeHeatmaps(pr.Processor):
     def __init__(self, test_scale_factor):
-        super(PostProcessHeatmaps, self).__init__()
+        super(TransposeHeatmaps, self).__init__()
         self.test_scale_factor = test_scale_factor
 
     def call(self, heatmaps):
@@ -241,9 +242,9 @@ class PostProcessHeatmaps(pr.Processor):
         return heatmaps
 
 
-class PostProcessTags(pr.Processor):
+class TransposeTags(pr.Processor):
     def __init__(self):
-        super(PostProcessTags, self).__init__()
+        super(TransposeTags, self).__init__()
 
     def call(self, tags):
         tags = tf.concat(tags, axis=4)
@@ -254,12 +255,12 @@ class PostProcessTags(pr.Processor):
 # **************************HeatmapsParser*********************************
 
 
-class TopK_Keypoints(pr.Processor):
+class TopKDetections(pr.Processor):
     def __init__(self):
-        super(TopK_Keypoints, self).__init__()
+        super(TopKDetections, self).__init__()
 
     def call(self, boxes, tag):
-        keypoints = top_k_keypoints(boxes, tag)
+        keypoints = top_k_detections(boxes, tag)
         return keypoints
 
 
