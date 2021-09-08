@@ -1,16 +1,29 @@
 from backend import one_hot_encode, normalize_keypoints, \
     to_homogeneous_coordinates, get_translation_matrix, \
     build_rotation_matrix_x, build_rotation_matrix_y, build_rotation_matrix_z, \
-    get_affine_matrix, extract_hand_side, get_canonical_transformations
+    get_affine_matrix, get_canonical_transformations
 
 from hand_keypoints_loader import RenderedHandLoader
 
 data_loader = RenderedHandLoader(
     '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/')
 
+from HandPoseEstimation import Hand_Segmentation_Net, PosePriorNet, PoseNet
+from HandPoseEstimation import ViewPointNet
 import numpy as np
+from pipelines import preprocess_image, PostprocessSegmentation, \
+    Process2DKeypoints
+from paz.backend.image.opencv_image import load_image
+from backend import create_multiple_gaussian_map
+from processors import ExtractKeypoints
 
 np.random.seed(0)
+
+use_pretrained = True
+HandSegNet = Hand_Segmentation_Net(load_pretrained=use_pretrained)
+HandPoseNet = PoseNet(load_pretrained=use_pretrained)
+HandPosePriorNet = PosePriorNet(load_pretrained=use_pretrained)
+HandViewPointNet = ViewPointNet(load_pretrained=use_pretrained)
 
 
 def test_image_loading(image_path):
@@ -126,6 +139,61 @@ def test_canonical_transformations(label_path):
 
     assert transformed_keypoints.shape == (42, 3)
     assert rotation_matrix.shape == (3, 3)
+
+
+def test_preprocess_image():
+    preprocess_pipeline = preprocess_image()
+    image = load_image('./sample.jpg')
+    processed_image = preprocess_pipeline(image)
+
+    assert len(processed_image.shape) == 4
+    assert processed_image.shape == (1, 320, 320, 3)
+
+
+def test_segmentation_postprocess():
+    preprocess_pipeline = preprocess_image()
+    image = load_image('./sample.jpg')
+    processed_image = preprocess_pipeline(image)
+
+    localization_pipeline = PostprocessSegmentation(HandSegNet)
+    localization_output = localization_pipeline(processed_image)
+
+    assert len(localization_output) == 5
+    assert localization_output[0].shape == (1, 256, 256, 3)
+    assert localization_output[1].shape == (1, 320, 320, 1)
+    assert localization_output[2].shape == (1, 2)
+    assert localization_output[3].shape == (1, 2, 2)
+    assert localization_output[4].shape == (1, 1)
+
+
+def test_keypoints2D_process():
+    preprocess_pipeline = preprocess_image()
+    image = load_image('./sample.jpg')
+    processed_image = preprocess_pipeline(image)
+
+    localization_pipeline = PostprocessSegmentation(HandSegNet)
+    localization_output = localization_pipeline(processed_image)
+
+    keypoints_pipeline = Process2DKeypoints(HandPoseNet)
+    score_maps_dict = keypoints_pipeline(np.squeeze(localization_output[0],
+                                                    axis=0))
+    score_maps = score_maps_dict['score_maps']
+
+    assert score_maps.shape == (1, 32, 32, 21)
+    assert len(score_maps) == 1
+
+
+def test_extract_keypoints2D():
+    uv_coordinates = np.array([[0, 0], [1, 1]])
+    uv_coordinates = np.expand_dims(uv_coordinates, axis=0)
+
+    gaussian_maps = create_multiple_gaussian_map(uv_coordinates, (256, 256),
+                                                 sigma=0.1, valid_vec=None)
+    gaussian_maps = np.expand_dims(gaussian_maps, axis=0)
+    keypoints_extraction_pipeline = ExtractKeypoints()
+    keypoints2D = keypoints_extraction_pipeline(gaussian_maps)
+
+    assert keypoints2D[0] == [0, 0]
 
 
 if __name__ == '__main__':
