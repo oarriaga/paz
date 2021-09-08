@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import os
 import neptune
 
+import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense
 from tensorflow.keras.layers import Dropout, Input, Flatten, Reshape
 from tensorflow.keras.models import Model
@@ -127,3 +128,24 @@ def AutoEncoder(input_shape, latent_dimension=128, mode='full',
         model = Model(i, output_tensor, name=base_name)
 
     return model
+
+
+def wrapped_bootstrapped_l2_loss(share_of_pixels=0.25):
+    """
+    Pixel loss descriped in the paper
+    :param share_of_pixels: share of pixels to use to calculate the error
+    :return:
+    """
+    def bootstrapped_l2_loss(real_image, predicted_image):
+        dim = tf.reduce_prod(tf.shape(real_image)[1:])
+
+        real_image_flat = tf.reshape(real_image, [-1, dim])
+        predicted_image_flat = tf.reshape(predicted_image, [-1, dim])
+
+        l2 = tf.math.squared_difference(real_image_flat, predicted_image_flat)
+        l2 = tf.sort(l2, direction='DESCENDING')
+        l2 = l2[:, :tf.cast(tf.cast(tf.shape(real_image_flat)[-1], tf.float32)*tf.constant(share_of_pixels), tf.int32)]
+
+        return tf.reduce_mean(l2)
+
+    return bootstrapped_l2_loss

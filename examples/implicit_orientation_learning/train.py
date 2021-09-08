@@ -17,7 +17,7 @@ from paz.pipelines import AutoEncoderPredictor
 from scenes import SingleView
 
 from pipelines import DomainRandomization, GeneratedImages
-from model import AutoEncoder, PlotImagesCallback, NeptuneLogger
+from model import AutoEncoder, PlotImagesCallback, NeptuneLogger, wrapped_bootstrapped_l2_loss
 
 description = 'Training script for learning implicit orientation vector'
 root_path = os.path.join(os.path.expanduser('~'), '.keras/paz/')
@@ -88,7 +88,8 @@ args = parser.parse_args()
 latent_dimension = args.latent_dimension
 model = AutoEncoder((args.image_size, args.image_size, 3), latent_dimension)
 optimizer = Adam(args.learning_rate, amsgrad=True)
-model.compile(optimizer, args.loss, metrics=['mse'])
+implicit_orientation_loss = wrapped_bootstrapped_l2_loss()
+model.compile(optimizer, implicit_orientation_loss, metrics=['mse'], run_eagerly=True)
 model.summary()
 
 # creating sequencer
