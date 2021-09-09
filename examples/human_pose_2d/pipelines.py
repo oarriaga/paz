@@ -221,7 +221,6 @@ class HeatmapsParser(pr.Processor):
     def call(self, heatmaps, tags, adjust=True, refine=True):
         top_k_detections = self.top_k_detections(heatmaps, tags)
         keypoints = list(self.match_by_tag(top_k_detections))
-        print(keypoints)
         if adjust:
             keypoints = self.adjust_keypoints(heatmaps, keypoints)[0]
         scores = self.get_scores(keypoints)
@@ -320,3 +319,10 @@ def save_valid_image(image, joints, file_name, dataset='COCO'):
     cv2.imwrite(file_name, image)
 
 
+def draw_skeleton(image, joints, dataset='COCO'):
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    for person in joints:
+        color = np.random.randint(0, 255, size=3)
+        color = [int(i) for i in color]
+        add_joints(image, person, color, dataset=dataset)
+    return image
