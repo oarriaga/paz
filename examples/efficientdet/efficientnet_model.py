@@ -72,11 +72,11 @@ def superpixel_kernel_initializer(shape, dtype='float32'):
     """
     #  use input depth to make superpixel kernel.
     depth = shape[-2]
-    filters = np.zeros([2, 2, depth, 4 * depth], dtype=dtype)
     span_x = np.arange(2)
     span_y = np.arange(2)
     span_z = np.arange(depth)
     mesh = np.array(np.meshgrid(span_x, span_y, span_z)).T.reshape(-1, 3).T
+    filters = np.zeros([2, 2, depth, 4 * depth], dtype=dtype)
     filters[mesh[0], mesh[1], mesh[2], 4 * mesh[2] + 2 * mesh[0] + mesh[1]] = 1
     return filters
 
@@ -256,13 +256,11 @@ class MBConvBlock(Layer):
         batch_norm = self._batch_norm(
             -1, 0.99, 1e-3, name=self.get_batch_norm_name())
         if self._has_squeeze_excitation:
-            input_filters = self._input_filters
-            squeeze_excite_ratio = self._squeeze_excite_ratio
-            num_reduced_filters = max(
-                1, int(input_filters * squeeze_excite_ratio))
+            num_filter = int(self._input_filters * self._squeeze_excite_ratio)
+            num_reduced_filters = max(1, num_filter)
             squeeze_excitation = Squeeze_Excitation(
-                self._local_pooling, self._activation, num_reduced_filters,
-                filters, name='se')
+                self._local_pooling, self._activation,
+                num_reduced_filters, filters, name='se')
         else:
             squeeze_excitation = None
         return batch_norm, squeeze_excitation
@@ -286,7 +284,7 @@ class MBConvBlock(Layer):
             fused_conv_block: TF Layers. Convolution layers for
             fused convolution block type.
         """
-        fused_conv = tf.keras.layers.Conv2D(
+        fused_conv = Conv2D(
             filters, [kernel_size, kernel_size],
             self._strides, 'same', 'channels_last',
             (1, 1), 1, None, False, conv_kernel_initializer,
@@ -330,7 +328,7 @@ class MBConvBlock(Layer):
             layers for expanded convolution block type.
         """
         fused_conv_block = None
-        expand_conv_block = (None,) * 3
+        expand_conv_block = (None, None, None)
         kernel_size = self._kernel_size
         if self._fused_conv:
             fused_conv_block = self.build_fused_convolution(
