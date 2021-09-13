@@ -170,18 +170,16 @@ class MBConvBlock(Layer):
         endpoints: dict. A list of internal tensors.
     """
 
-    def __init__(self, local_pooling, batch_norm, condconv_num_experts,
-                 activation, use_squeeze_excitation, clip_projection_output,
+    def __init__(self, local_pooling, batch_norm, activation,
+                 use_squeeze_excitation, clip_projection_output,
                  kernel_size, input_filters, output_filters, expand_ratio,
                  strides, squeeze_excite_ratio, fused_conv, super_pixel,
-                 condconv, use_skip_connection, name=None):
+                 use_skip_connection, name=None):
         """Initializes a MBConv block.
 
         # Arguments
             local_pooling: bool, flag to use local pooling of features.
             batch_norm: TF BatchNormalization layer.
-            condconv_num_experts: Int, conditional convolution number of
-            operations.
             activation: String, activation function name.
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
@@ -195,7 +193,6 @@ class MBConvBlock(Layer):
             squeeze_excite_ratio: Float, squeeze excite block ratio.
             fused_conv: Int, flag to select fused conv or expand conv.
             super_pixel: Int, superpixel value.
-            condconv: bool, flag to use conditional conv.
             use_skip_connection: bool, flag to skip connect.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: layer name.
@@ -203,7 +200,6 @@ class MBConvBlock(Layer):
         super().__init__(name=name)
         self._local_pooling = local_pooling
         self._batch_norm = batch_norm
-        self._condconv_num_experts = condconv_num_experts
         self._activation = activation
         self._clip_projection_output = clip_projection_output
         self._kernel_size = kernel_size
@@ -214,15 +210,12 @@ class MBConvBlock(Layer):
         self._squeeze_excite_ratio = squeeze_excite_ratio
         self._fused_conv = fused_conv
         self._super_pixel = super_pixel
-        self._condconv = condconv
         self._use_skip_connection = use_skip_connection
         self._has_squeeze_excitation = (
                 use_squeeze_excitation
                 and self._squeeze_excite_ratio is not None
                 and 0 < self._squeeze_excite_ratio <= 1)
         self.endpoints = None
-        if self._condconv:
-            raise ValueError('Condconv is not supported')
         # Builds the block according to arguments.
         self._build()
 
@@ -646,11 +639,11 @@ class EfficientNet(tf.keras.Model):
     def __init__(self, dropout_rate, data_format, num_classes,
                  width_coefficient, depth_coefficient, depth_divisor,
                  min_depth, survival_rate, activation, batch_norm,
-                 use_squeeze_excitation, local_pooling, condconv_num_experts,
+                 use_squeeze_excitation, local_pooling,
                  clip_projection_output, fix_head_stem, kernel_sizes,
                  num_repeats, input_filters, output_filters, expand_ratios,
                  strides, squeeze_excite_ratio, use_skip_connection, conv_type,
-                 fused_conv, super_pixel, condconv, num_blocks, name):
+                 fused_conv, super_pixel, num_blocks, name):
         """Initializes an 'Model' instance.
 
         # Arguments
@@ -671,8 +664,6 @@ class EfficientNet(tf.keras.Model):
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
             local_pooling: bool, flag to use local pooling of features.
-            condconv_num_experts: Int, conditional convolution number of
-            operations.
             clip_projection_output: String, flag to clip output.
             fix_head_stem: bool, flag to fix head and stem branches.
             kernel_size: Int, kernel size of the conv block filters.
@@ -686,7 +677,6 @@ class EfficientNet(tf.keras.Model):
             conv_type: Int, flag to select convolution type.
             fused_conv: Int, flag to select fused conv or expand conv.
             super_pixel: Int, superpixel value.
-            condconv: bool, flag to use conditional conv.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: A string of layer name.
 
@@ -708,7 +698,6 @@ class EfficientNet(tf.keras.Model):
         self._survival_rate = survival_rate
         self._use_squeeze_excitation = use_squeeze_excitation
         self._local_pooling = local_pooling
-        self._condconv_num_experts = condconv_num_experts
         self._clip_projection_output = clip_projection_output
         self._fix_head_stem = fix_head_stem
         self._kernel_sizes = kernel_sizes
@@ -722,7 +711,6 @@ class EfficientNet(tf.keras.Model):
         self._conv_type = conv_type
         self._fused_conv = fused_conv
         self._super_pixel = super_pixel
-        self._condconv = condconv
         self._num_blocks = num_blocks
         self.endpoints = None
         self._build()
@@ -798,13 +786,12 @@ class EfficientNet(tf.keras.Model):
             strides = [1, 1]
         for _ in range(num_repeat - 1):
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm,
-                self._condconv_num_experts, self._activation,
+                self._local_pooling, self._batch_norm, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, input_filters, output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
-                self._fused_conv, super_pixel, self._condconv,
-                self._use_skip_connection, self.get_block_name()))
+                self._fused_conv, super_pixel, self._use_skip_connection,
+                self.get_block_name()))
 
     def update_block_depth(self, input_filters, output_filters,
                            kernel_size, strides):
@@ -845,12 +832,11 @@ class EfficientNet(tf.keras.Model):
         conv_block = self._get_conv_block(self._conv_type)
         strides = [1, 1]
         self._blocks.append(conv_block(
-            self._local_pooling, self._batch_norm,
-            self._condconv_num_experts, self._activation,
+            self._local_pooling, self._batch_norm,self._activation,
             self._use_squeeze_excitation, self._clip_projection_output,
             kernel_size, input_filters, output_filters, expand_ratio,
             strides, self._squeeze_excite_ratio, self._fused_conv,
-            super_pixel, self._condconv, self._use_skip_connection,
+            super_pixel, self._use_skip_connection,
             name=self.get_block_name()))
         super_pixel = 0
         return super_pixel
@@ -885,22 +871,20 @@ class EfficientNet(tf.keras.Model):
             super_pixel = updated_super_pixel
         elif super_pixel == 1:
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm,
-                self._condconv_num_experts, self._activation,
+                self._local_pooling, self._batch_norm, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, new_input_filters, new_output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
-                self._fused_conv, super_pixel, self._condconv,
-                self._use_skip_connection, self.get_block_name()))
+                self._fused_conv, super_pixel, self._use_skip_connection,
+                self.get_block_name()))
             super_pixel = 2
         else:
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm,
-                self._condconv_num_experts, self._activation,
+                self._local_pooling, self._batch_norm, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, new_input_filters, new_output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
-                self._fused_conv, super_pixel, self._condconv,
+                self._fused_conv, super_pixel,
                 self._use_skip_connection, self.get_block_name()))
 
         return kernel_size, super_pixel
@@ -923,12 +907,11 @@ class EfficientNet(tf.keras.Model):
         conv_block = self._get_conv_block(self._conv_type)
         if not self._super_pixel:  # no super_pixel at all
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm,
-                self._condconv_num_experts, self._activation,
+                self._local_pooling, self._batch_norm, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, input_filters, output_filters, expand_ratio,
                 strides, self._squeeze_excite_ratio, self._fused_conv,
-                super_pixel, self._condconv, self._use_skip_connection,
+                super_pixel, self._use_skip_connection,
                 self.get_block_name()))
         else:
             new_params = self.build_super_pixel_blocks(
@@ -991,9 +974,6 @@ class EfficientNet(tf.keras.Model):
         # Call blocks
         for block_arg, block in enumerate(self._blocks):
             is_reduction = False
-            # reduction flag for blocks after the stem layer
-            # If the first block has super-pixel (space-to-depth)
-            # layer, then stem is the first reduction point
             if (block._super_pixel == 1 and block_arg == 0):
                 reduction_arg = reduction_arg + 1
                 self.endpoints['reduction_%s' % reduction_arg] = outputs
@@ -1024,7 +1004,6 @@ class EfficientNet(tf.keras.Model):
         self.endpoints['features'] = outputs
 
         if not return_base:
-            # Calls final layers and returns logits.
             outputs = self._head(outputs, training, pool_features)
             self.endpoints.update(self._head.endpoints)
 

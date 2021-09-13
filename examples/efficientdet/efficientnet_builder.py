@@ -59,7 +59,6 @@ def build_model_base(model_name, params=None):
     batch_norm = BatchNormalization
     use_squeeze_excitation = True
     local_pooling = None
-    condconv_num_experts = None
     clip_projection_output = False
     fix_head_stem = None
     kernel_sizes = [3, 3, 5, 3, 5, 5, 3]
@@ -74,17 +73,16 @@ def build_model_base(model_name, params=None):
     conv_type = 0
     fused_conv = 0
     super_pixel = 0
-    condconv = False
     num_blocks = 7
     model = efficientnet_model.EfficientNet(
         dropout_rate, data_format, num_classes, width_coefficient,
         depth_coefficient, depth_divisor, min_depth, survival_rate,
         activation, batch_norm, use_squeeze_excitation,
-        local_pooling, condconv_num_experts, clip_projection_output,
+        local_pooling, clip_projection_output,
         fix_head_stem, kernel_sizes, num_repeats, input_filters,
         output_filters, expand_ratios, strides, squeeze_excite_ratio,
         use_skip_connection, conv_type, fused_conv, super_pixel,
-        condconv, num_blocks, model_name)
+        num_blocks, model_name)
     return model
 
 
