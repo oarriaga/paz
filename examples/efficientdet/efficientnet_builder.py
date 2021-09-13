@@ -50,39 +50,10 @@ def build_model_base(model_name, params=None):
         params['survival_rate'] = 1 - params['drop_connect_rate']
     efficientnet_param = get_efficientnet_params(model_name)
     width_coefficient, depth_coefficient, dropout_rate = efficientnet_param
-    data_format = 'channels_last'
-    num_classes = 90
-    depth_divisor = 8
-    min_depth = None
     survival_rate = 1 - dropout_rate
-    activation = 'swish'
-    batch_norm = BatchNormalization
-    use_squeeze_excitation = True
-    local_pooling = None
-    clip_projection_output = False
-    fix_head_stem = None
-    kernel_sizes = [3, 3, 5, 3, 5, 5, 3]
-    num_repeats = [1, 2, 2, 3, 3, 4, 1]
-    input_filters = [32, 16, 24, 40, 80, 112, 192]
-    output_filters = [16, 24, 40, 80, 112, 192, 320]
-    expand_ratios = [1, 6, 6, 6, 6, 6, 6]
-    strides = [[1, 1], [2, 2], [2, 2], [2, 2],
-               [1, 1], [2, 2], [1, 1]]
-    squeeze_excite_ratio = 0.25
-    use_skip_connection = True
-    conv_type = 0
-    fused_conv = 0
-    super_pixel = 0
-    num_blocks = 7
     model = efficientnet_model.EfficientNet(
-        dropout_rate, data_format, num_classes, width_coefficient,
-        depth_coefficient, depth_divisor, min_depth, survival_rate,
-        activation, batch_norm, use_squeeze_excitation,
-        local_pooling, clip_projection_output,
-        fix_head_stem, kernel_sizes, num_repeats, input_filters,
-        output_filters, expand_ratios, strides, squeeze_excite_ratio,
-        use_skip_connection, conv_type, fused_conv, super_pixel,
-        num_blocks, model_name)
+        dropout_rate,  width_coefficient, depth_coefficient, survival_rate,
+        model_name)
     return model
 
 
