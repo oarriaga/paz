@@ -72,7 +72,7 @@ def superpixel_kernel_initializer(shape, dtype='float32'):
         an initialization for the variable
     """
     #  use input depth to make superpixel kernel.
-    depth = shape[-2]
+    depth = shape[2]
     span_x = np.arange(2)
     span_y = np.arange(2)
     span_z = np.arange(depth)
@@ -82,7 +82,7 @@ def superpixel_kernel_initializer(shape, dtype='float32'):
     return filters
 
 
-class Squeeze_Excitation(Layer):
+class SqueezeExcitation(Layer):
     """Squeeze-and-excitation layer."""
     def __init__(self, local_pooling, activation, filters,
                  output_filters, name=None):
@@ -124,19 +124,19 @@ class Squeeze_Excitation(Layer):
         else:
             squeeze_excitation_tensor = tf.reduce_mean(
                 tensor, [h_axis, w_axis], keepdims=True)
-        squeeze_excitation_tensor = self._expand(get_activation(
-            self._reduce(squeeze_excitation_tensor), self._activation))
+        squeeze_excitation_tensor = get_activation(
+            self._reduce(squeeze_excitation_tensor), self._activation)
+        squeeze_excitation_tensor = self._expand(squeeze_excitation_tensor)
         return tf.sigmoid(squeeze_excitation_tensor) * tensor
 
 
 class SuperPixel(Layer):
     """Super pixel layer."""
 
-    def __init__(self, input_filters, batch_norm, activation, name=None):
+    def __init__(self, input_filters, activation, name=None):
         """
         # Arguments
             input_filters: Int, input filters for the blocks to construct.
-            batch_norm: TF BatchNormalization layer.
             activation: String, activation function name.
             name: layer name.
         """
@@ -146,7 +146,7 @@ class SuperPixel(Layer):
                                   'same', 'channels_last', (1, 1), 1, None,
                                   False, superpixel_kernel_initializer,
                                   name='conv2d')
-        self._batch_norm_superpixel = batch_norm(-1, 0.99, 1e-3)
+        self._batch_norm_superpixel = BatchNormalization(-1, 0.99, 1e-3)
         self._activation = activation
 
     def call(self, tensor, training):
@@ -164,14 +164,14 @@ class SuperPixel(Layer):
         return output
 
 
-class MBConvBlock(Layer):
+class MobileInvertedResidualBottleNeckBlock(Layer):
     """A class of MBConv: Mobile Inverted Residual Bottleneck.
 
     # Attributes
         endpoints: dict. A list of internal tensors.
     """
 
-    def __init__(self, local_pooling, batch_norm, activation,
+    def __init__(self, local_pooling, activation,
                  use_squeeze_excitation, clip_projection_output,
                  kernel_size, input_filters, output_filters, expand_ratio,
                  strides, squeeze_excite_ratio, fused_conv, super_pixel,
@@ -180,7 +180,6 @@ class MBConvBlock(Layer):
 
         # Arguments
             local_pooling: bool, flag to use local pooling of features.
-            batch_norm: TF BatchNormalization layer.
             activation: String, activation function name.
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
@@ -200,7 +199,7 @@ class MBConvBlock(Layer):
         """
         super().__init__(name=name)
         self._local_pooling = local_pooling
-        self._batch_norm = batch_norm
+        self._batch_norm = BatchNormalization
         self._activation = activation
         self._clip_projection_output = clip_projection_output
         self._kernel_size = kernel_size
@@ -252,7 +251,7 @@ class MBConvBlock(Layer):
         if self._has_squeeze_excitation:
             num_filter = int(self._input_filters * self._squeeze_excite_ratio)
             num_reduced_filters = max(1, num_filter)
-            squeeze_excitation = Squeeze_Excitation(
+            squeeze_excitation = SqueezeExcitation(
                 self._local_pooling, self._activation,
                 num_reduced_filters, filters, name='se')
         else:
@@ -295,8 +294,6 @@ class MBConvBlock(Layer):
             expand_conv_block: Tuple of TF layers. Convolution
             layers for expanded convolution block type.
         """
-        expand_conv = None
-        batch_norm0 = None
         if self._expand_ratio != 1:
             expand_conv = Conv2D(
                 filters, [1, 1], [1, 1], 'same', 'channels_last',
@@ -304,6 +301,9 @@ class MBConvBlock(Layer):
                 name=self.get_conv_name())
             batch_norm0 = self._batch_norm(
                 -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        else:
+            expand_conv = None
+            batch_norm0 = None
         depthwise_conv = DepthwiseConv2D(
             [kernel_size, kernel_size], self._strides,
             'same', 1, 'channels_last', (1, 1), None, False,
@@ -321,15 +321,14 @@ class MBConvBlock(Layer):
             expand_conv_block: Tuple of TF layers. Convolution
             layers for expanded convolution block type.
         """
-        fused_conv_block = None
-        expand_conv_block = (None, None, None)
-        kernel_size = self._kernel_size
         if self._fused_conv:
             fused_conv_block = self.build_fused_convolution(
-                filters, kernel_size)
+                filters, self._kernel_size)
+            expand_conv_block = (None, None, None)
         else:
+            fused_conv_block = None
             expand_conv_block = self.build_expanded_convolution(
-                filters, kernel_size)
+                filters, self._kernel_size)
         return fused_conv_block, expand_conv_block
 
     def get_updated_filters(self):
@@ -343,10 +342,10 @@ class MBConvBlock(Layer):
         return filters
 
     def build_output_processors(self):
-        filters = self._output_filters
         project_conv = Conv2D(
-            filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1, None,
-            False, conv_kernel_initializer, name=self.get_conv_name())
+            self._output_filters, [1, 1], [1, 1], 'same', 'channels_last',
+            (1, 1), 1, None, False, conv_kernel_initializer,
+            name=self.get_conv_name())
         batch_norm = self._batch_norm(
             -1, 0.99, 1e-3, name=self.get_batch_norm_name())
         return project_conv, batch_norm
@@ -438,10 +437,6 @@ class MBConvBlock(Layer):
         return x
 
 
-class MBConvBlockWithoutDepthwise(MBConvBlock):
-    pass
-
-
 def round_filters(filters, width_coefficient, depth_divisor,
                   min_depth, skip=False):
     """Round number of filters based on depth multiplier.
@@ -489,7 +484,7 @@ class Stem(Layer):
     """Stem layer at the beginning of the network."""
 
     def __init__(self, width_coefficient, depth_divisor, min_depth,
-                 fix_head_stem, batch_norm, activation, stem_filters,
+                 fix_head_stem, activation, stem_filters,
                  name=None):
         """
         # Arguments
@@ -497,7 +492,6 @@ class Stem(Layer):
             depth_divisor: Int, multiplier for the depth of the network.
             min_depth: Int, minimum depth of the network.
             fix_head_stem: bool, flag to fix head and stem branches.
-            batch_norm: TF BatchNormalization layer.
             activation: String, activation function name.
             stem_filters: Int, filter count for the stem block.
             name: String, layer name.
@@ -509,7 +503,7 @@ class Stem(Layer):
         self._conv_stem = Conv2D(filters, [3, 3], [2, 2], 'same',
                                  'channels_last', (1, 1), 1, None, False,
                                  conv_kernel_initializer)
-        self._batch_norm = batch_norm(-1, 0.99, 1e-3)
+        self._batch_norm = BatchNormalization(-1, 0.99, 1e-3)
         self._activation = activation
 
     def call(self, tensor, training):
@@ -528,7 +522,7 @@ class Head(Layer):
     """Head layer for network outputs."""
 
     def __init__(self, width_coefficient, depth_divisor, min_depth,
-                 fix_head_stem, batch_norm, activation, num_classes,
+                 fix_head_stem, activation, num_classes,
                  dropout_rate, local_pooling, name=None):
         """
         # Arguments
@@ -536,7 +530,6 @@ class Head(Layer):
             depth_divisor: Int, multiplier for the depth of the network.
             min_depth: Int, minimum depth of the network.
             fix_head_stem: bool, flag to fix head and stem branches.
-            batch_norm: TF BatchNormalization layer.
             activation: String, activation function name.
             num_classes: Int, specifying the number of class in the
             output.
@@ -552,7 +545,7 @@ class Head(Layer):
         self._conv_head = Conv2D(
             conv_filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1,
             None, False, conv_kernel_initializer, name='conv2d')
-        self._batch_norm = batch_norm(-1, 0.99, 1e-3)
+        self._batch_norm = BatchNormalization(-1, 0.99, 1e-3)
         self._activation = activation
         self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
         if num_classes:
@@ -649,11 +642,9 @@ class EfficientNet(tf.keras.Model):
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]],
-                 squeeze_excite_ratio=0.25,
-                 use_skip_connection=True,
+                 squeeze_excite_ratio=0.25, use_skip_connection=True,
                  conv_type=0, fused_conv=0, super_pixel=0, num_blocks=7,
-                 activation='swish',
-                 batch_norm=BatchNormalization):
+                 activation='swish'):
         """Initializes an 'Model' instance.
 
         # Arguments
@@ -670,7 +661,6 @@ class EfficientNet(tf.keras.Model):
             survival_rate: Float, survival of the final fully connected layer
             units.
             activation: String, activation function name.
-            batch_norm: TF BatchNormalization layer.
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
             local_pooling: bool, flag to use local pooling of features.
@@ -696,7 +686,7 @@ class EfficientNet(tf.keras.Model):
         super().__init__(name=name)
 
         self._activation = activation
-        self._batch_norm = batch_norm
+        self._batch_norm = BatchNormalization
         self._fix_head_stem = fix_head_stem
         self._width_coefficient = width_coefficient
         self._depth_coefficient = depth_coefficient
@@ -735,7 +725,7 @@ class EfficientNet(tf.keras.Model):
         # Returns
             conv_block_map: Convolution block.
         """
-        conv_block_map = {0: MBConvBlock, 1: MBConvBlockWithoutDepthwise}
+        conv_block_map = {0: MobileInvertedResidualBottleNeckBlock}
         return conv_block_map[conv_type]
 
     def get_block_name(self):
@@ -796,7 +786,7 @@ class EfficientNet(tf.keras.Model):
             strides = [1, 1]
         for _ in range(num_repeat - 1):
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm, self._activation,
+                self._local_pooling, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, input_filters, output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
@@ -842,7 +832,7 @@ class EfficientNet(tf.keras.Model):
         conv_block = self._get_conv_block(self._conv_type)
         strides = [1, 1]
         self._blocks.append(conv_block(
-            self._local_pooling, self._batch_norm,self._activation,
+            self._local_pooling, self._activation,
             self._use_squeeze_excitation, self._clip_projection_output,
             kernel_size, input_filters, output_filters, expand_ratio,
             strides, self._squeeze_excite_ratio, self._fused_conv,
@@ -881,7 +871,7 @@ class EfficientNet(tf.keras.Model):
             super_pixel = updated_super_pixel
         elif super_pixel == 1:
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm, self._activation,
+                self._local_pooling, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, new_input_filters, new_output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
@@ -890,7 +880,7 @@ class EfficientNet(tf.keras.Model):
             super_pixel = 2
         else:
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm, self._activation,
+                self._local_pooling, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, new_input_filters, new_output_filters,
                 expand_ratio, strides, self._squeeze_excite_ratio,
@@ -917,7 +907,7 @@ class EfficientNet(tf.keras.Model):
         conv_block = self._get_conv_block(self._conv_type)
         if not self._super_pixel:  # no super_pixel at all
             self._blocks.append(conv_block(
-                self._local_pooling, self._batch_norm, self._activation,
+                self._local_pooling, self._activation,
                 self._use_squeeze_excitation, self._clip_projection_output,
                 kernel_size, input_filters, output_filters, expand_ratio,
                 strides, self._squeeze_excite_ratio, self._fused_conv,
@@ -938,7 +928,7 @@ class EfficientNet(tf.keras.Model):
         # Stem part.
         self._stem = Stem(
             self._width_coefficient, self._depth_divisor, self._min_depth,
-            self._fix_head_stem, self._batch_norm, self._activation,
+            self._fix_head_stem, self._activation,
             self._input_filters[0])
         self.block_id = itertools.count(0)
         for block_num in range(self._num_blocks):
@@ -957,7 +947,7 @@ class EfficientNet(tf.keras.Model):
         # Head part.
         self._head = Head(
             self._width_coefficient, self._depth_divisor, self._min_depth,
-            self._fix_head_stem, self._batch_norm, self._activation,
+            self._fix_head_stem, self._activation,
             self._num_classes, self._dropout_rate, self._local_pooling)
 
     def call(self, tensor, training, return_base=None, pool_features=False):
