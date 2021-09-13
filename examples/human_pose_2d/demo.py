@@ -2,14 +2,12 @@ import argparse
 import os
 import processors as pe
 import tensorflow as tf
-from pipelines import save_valid_image
 from pipelines import HeatmapsParser, ResizeAlignMultiScale
 from pipelines import GetMultiStageOutputs, AggregateResults, FinalPrediction
+from pipelines import PreprocessHeatmapsTags
+from dataset import JOINT_CONFIG
 
 
-num_joints = 17
-joint_order = [i-1 for i in [1, 2, 3, 4, 5, 6, 7, 12,
-                             13, 8, 9, 10, 11, 14, 15, 16, 17]]
 tag_thresh = 1
 detection_thresh = 0.2
 max_num_people = 30
@@ -21,15 +19,19 @@ current_scale = 1
 min_scale = 1
 
 with_heatmap_loss = (True, True)
-test_with_heatmap = (True, True)
+with_heatmap = (True, True)
 with_AE_loss = (True, False)
-test_with_AE = (True, False)
+with_AE = (True, False)
 dataset = 'COCO'
 dataset_with_centers = False
-test_ignore_centers = True
-test_scale_factor = [1]
-test_project2image = True
-test_flip_test = True
+ignore_centers = True
+scale_factor = [1]
+project2image = True
+flip_test = True
+
+joint_order = JOINT_CONFIG[dataset + '_WITH_CENTER'] \
+                    if dataset_with_centers else JOINT_CONFIG[dataset]
+num_joints = len(joint_order)
 
 
 def main():
@@ -55,32 +57,30 @@ def main():
 
     resize_align_multi_scale = ResizeAlignMultiScale()
     get_multi_stage_outputs = GetMultiStageOutputs(with_heatmap_loss,
-                                                   test_with_heatmap,
-                                                   with_AE_loss,
-                                                   test_with_AE,
+                                                   with_heatmap, with_AE_loss,
+                                                   with_AE, tag_per_joint,
                                                    dataset_with_centers,
-                                                   tag_per_joint,
-                                                   test_ignore_centers,
-                                                   num_joints,
-                                                   test_flip_test,
-                                                   test_project2image)
+                                                   num_joints, flip_test)
 
-    aggregate_results = AggregateResults(test_scale_factor, test_project2image,
-                                         test_flip_test)
+    preprocess_heatmaps_tags = PreprocessHeatmapsTags(dataset_with_centers,
+                                                      ignore_centers,
+                                                      project2image)
+    aggregate_results = AggregateResults(scale_factor, project2image,
+                                         flip_test)
     heatmaps_parser = HeatmapsParser()
     get_final_preds = FinalPrediction()
+    save_valid_image = pe.SaveValidImage(dataset)
 
     all_preds = []
     all_scores = []
-    for idx, s in enumerate(sorted(test_scale_factor, reverse=True)):
+    for idx, s in enumerate(sorted(scale_factor, reverse=True)):
         base_size, image_resized, center, scale = resize_align_multi_scale(image, s)
         image_resized = tf_preprocess_input(image_resized)
         image_resized = tf.expand_dims(image_resized, 0)
 
-        heatmaps, tags = get_multi_stage_outputs(model, image_resized,
-                                                 base_size)
-
-        final_heatmaps, final_tags = aggregate_results(s, heatmaps, tags)
+        heatmaps, tags = get_multi_stage_outputs(model, image_resized)
+        heatmaps, tags = preprocess_heatmaps_tags(heatmaps, tags, base_size)
+        final_heatmaps, final_tags = aggregate_results(heatmaps, tags, s)
         grouped, scores = heatmaps_parser(final_heatmaps, final_tags)
 
         heatmaps_size = [final_heatmaps.get_shape()[3],
@@ -88,9 +88,8 @@ def main():
 
         final_results = get_final_preds(grouped, center, scale, heatmaps_size)
 
-        prefix = '{}_'.format(os.path.join('output', 'result_valid_3'))
-        save_valid_image(image, final_results, '{}.jpg'.format(prefix),
-                         dataset='COCO')
+        prefix = '{}'.format(os.path.join('output', 'result'))
+        save_valid_image(image, final_results, '{}.jpg'.format(prefix))
         print(f"image {'{}.jpg'.format(prefix)} saved!")
 
         all_preds.append(final_results)
