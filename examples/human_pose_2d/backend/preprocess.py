@@ -1,22 +1,14 @@
 import numpy as np
 import tensorflow as tf
-from munkres import Munkres
-import cv2
 
 
-SCALING_FACTOR = 200.0
-PIXEL_SIZE = 64
-MIN_SCALE = 1
-INPUT_SIZE = 512
-
-
-def resize_dims(current_scale, min_input_size, dims1, dims2):
+def resize_dims(current_scale, min_input_size, dims1, dims2, min_scale):
     '''resize to 512'''
-    dims1_resized = int(min_input_size * current_scale / MIN_SCALE)
-    dims2_resized = int(int((min_input_size / dims1*dims2 + (PIXEL_SIZE-1)) //
-                        PIXEL_SIZE*PIXEL_SIZE) * current_scale/MIN_SCALE)
-    scale_dims1 = dims1 / SCALING_FACTOR
-    scale_dims2 = dims2_resized / dims1_resized * dims1 / SCALING_FACTOR
+    dims1_resized = int(min_input_size * current_scale / min_scale)
+    dims2_resized = int(int((min_input_size / dims1*dims2 + (64-1)) //
+                        64*64) * current_scale/min_scale)
+    scale_dims1 = dims1 / 200
+    scale_dims2 = dims2_resized / dims1_resized * dims1 / 200
     return dims1_resized, dims2_resized, scale_dims1, scale_dims2
 
 
@@ -27,9 +19,9 @@ def calculate_image_center(image):
     return center_W, center_H
 
 
-def calculate_min_input_size():
-    min_input_size = int((MIN_SCALE * INPUT_SIZE + (PIXEL_SIZE-1)) //
-                         PIXEL_SIZE*PIXEL_SIZE)
+def calculate_min_input_size(min_scale, input_size):
+    min_input_size = int((min_scale * input_size + (64-1)) //
+                         64*64)
     return min_input_size
 
 
@@ -47,7 +39,7 @@ def calculate_third_point(point2D_a, point2D_b):
 
 
 def construct_source_image(scale, center, shift=np.array([0., 0.])):
-    scale = scale * SCALING_FACTOR
+    scale = scale * 200
     image_W = scale[0]
     image_dir = rotate_point([0, image_W * -0.5], 0)
     image = np.zeros((3, 2), dtype=np.float32)
