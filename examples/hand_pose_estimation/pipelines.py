@@ -30,7 +30,7 @@ class AugmentHandSegmentation(SequentialProcessor):
 
         preprocess_segmentation_map = pr.SequentialProcessor()
         preprocess_segmentation_map.add(pr.LoadImage())
-        preprocess_segmentation_map.add(pr.ResizeImage([size, size]))
+        preprocess_segmentation_map.add(pr.ResizeImage((size, size)))
         preprocess_segmentation_map.add(ExtractHandmask())
 
         self.add(pr.ControlMap(preprocess_image, [0], [0]))
@@ -49,11 +49,11 @@ class AugmentHandPose2D(SequentialProcessor):
 
         preprocess_image = pr.SequentialProcessor()
         preprocess_image.add(pr.LoadImage())
-        preprocess_image.add(pr.ResizeImage([size, size]))
+        preprocess_image.add(pr.ResizeImage((size, size)))
 
         preprocess_segmentation_map = pr.SequentialProcessor()
         preprocess_segmentation_map.add(pr.LoadImage())
-        preprocess_segmentation_map.add(pr.ResizeImage([size, size]))
+        preprocess_segmentation_map.add(pr.ResizeImage((size, size)))
         preprocess_segmentation_map.add(ExtractHandmask())
 
         self.add(pr.ControlMap(preprocess_image, [0], [0]))
@@ -92,11 +92,11 @@ class AugmentHandPose(SequentialProcessor):
 
         preprocess_image = pr.SequentialProcessor()
         preprocess_image.add(pr.LoadImage())
-        preprocess_image.add(pr.ResizeImage([size, size]))
+        preprocess_image.add(pr.ResizeImage((size, size)))
 
         preprocess_segmentation_map = pr.SequentialProcessor()
         preprocess_segmentation_map.add(pr.LoadImage())
-        preprocess_segmentation_map.add(pr.ResizeImage([size, size]))
+        preprocess_segmentation_map.add(pr.ResizeImage((size, size)))
         preprocess_segmentation_map.add(ExtractHandmask())
 
         self.add(pr.ControlMap(preprocess_image, [0], [0]))

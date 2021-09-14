@@ -1,16 +1,17 @@
 import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import tensorflow as tf
 from tensorflow.keras.layers import Concatenate, Dense, Dropout, Reshape, Input
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, LeakyReLU
 from tensorflow.keras import Model
-from backend import extract_bounding_box, flip_right_hand
-from backend import crop_image_from_coordinates, object_scoremap
-from backend import get_rotation_matrix
+from tensorflow.keras.utils import get_file
 
 
-def Hand_Segmentation_Net(input_shape=(320, 320, 3), load_pretrained=True):
+BASE_WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/'
+                    'releases/download/v0.1/')
+
+
+def HandSegmentationNet(input_shape=(320, 320, 3), weights='RHD'):
     image = Input(shape=input_shape, name='image')
 
     X_1 = Conv2D(64, kernel_size=3, padding='same',
@@ -74,16 +75,19 @@ def Hand_Segmentation_Net(input_shape=(320, 320, 3), load_pretrained=True):
                                           raw_segmented_image},
                              name='HandSegNet')
 
-    if load_pretrained:
-        weight_path = segmentation_net.name + '-pretrained_weights.h5'
-        segmentation_net.load_weights(weight_path)
+    if weights is not None:
+        model_name = '_'.join([segmentation_net.name, weights])
+
+    if weights is not None:
+        weights_url = BASE_WEIGHT_PATH + model_name + '_weights.hdf5'
+        weights_path = get_file(os.path.basename(weights_url), weights_url,
+                                cache_subdir='paz/models')
+        segmentation_net.load_weights(weights_path)
 
     return segmentation_net
 
 
-def PoseNet(input_shape=None, load_pretrained=True):
-    if input_shape is None:
-        input_shape = [256, 256, 3]
+def PoseNet(input_shape=(256, 256, 3), weights='RHD'):
     scoremap_list = list()
     cropped_image = Input(shape=input_shape, name='cropped_image')
 
@@ -196,19 +200,20 @@ def PoseNet(input_shape=None, load_pretrained=True):
     PoseNet = Model(inputs={'cropped_image': cropped_image},
                     outputs={'score_maps': scoremap_list[-1]}, name='PoseNet')
 
-    if load_pretrained:
-        weight_path = PoseNet.name + '-pretrained_weights.h5'
-        PoseNet.load_weights(weight_path)
+    if weights is not None:
+        model_name = '_'.join([PoseNet.name, weights])
+
+    if weights is not None:
+        weights_url = BASE_WEIGHT_PATH + model_name + '_weights.hdf5'
+        weights_path = get_file(os.path.basename(weights_url), weights_url,
+                                cache_subdir='paz/models')
+        PoseNet.load_weights(weights_path)
 
     return PoseNet
 
 
-def PosePriorNet(keypoint_heatmaps_shape=None, hand_side_shape=None,
-                 num_keypoints=21, load_pretrained=True):
-    if hand_side_shape is None:
-        hand_side_shape = [2]
-    if keypoint_heatmaps_shape is None:
-        keypoint_heatmaps_shape = [32, 32, 21]
+def PosePriorNet(keypoint_heatmaps_shape=(32, 32, 21), hand_side_shape=(2,),
+                 num_keypoints=21, weights='RHD'):
     score_maps = Input(shape=keypoint_heatmaps_shape)
     hand_side = Input(shape=hand_side_shape)
 
@@ -248,19 +253,21 @@ def PosePriorNet(keypoint_heatmaps_shape=None, hand_side_shape=None,
                                  'hand_side': hand_side},
                          outputs={'canonical_coordinates': hand_keypoints},
                          name='PosePriorNet')
-    if load_pretrained:
-        weight_path = PosePriorNet.name + '-pretrained_weights.h5'
-        PosePriorNet.load_weights(weight_path)
+
+    if weights is not None:
+        model_name = '_'.join([PosePriorNet.name, weights])
+
+    if weights is not None:
+        weights_url = BASE_WEIGHT_PATH + model_name + '_weights.hdf5'
+        weights_path = get_file(os.path.basename(weights_url), weights_url,
+                                cache_subdir='paz/models')
+        PosePriorNet.load_weights(weights_path)
 
     return PosePriorNet
 
 
-def ViewPointNet(keypoint_heat_maps_shape=None, hand_side_shape=None,
-                 load_pretrained=True):
-    if hand_side_shape is None:
-        hand_side_shape = [2]
-    if keypoint_heat_maps_shape is None:
-        keypoint_heat_maps_shape = [32, 32, 21]
+def ViewPointNet(keypoint_heat_maps_shape=(32, 32, 21), hand_side_shape=(2,),
+                 weights='RHD'):
     score_maps = Input(shape=keypoint_heat_maps_shape,
                               name='score_maps')
     hand_side = Input(shape=hand_side_shape, name='hand_side')
@@ -302,73 +309,13 @@ def ViewPointNet(keypoint_heat_maps_shape=None, hand_side_shape=None,
                          outputs={'rotation_parameters': axis_angles,
                                   'hand_side': hand_side},
                          name='ViewPointNet')
-    if load_pretrained:
-        weight_path = ViewPointNet.name + '-pretrained_weights.h5'
-        ViewPointNet.load_weights(weight_path)
+    if weights is not None:
+        model_name = '_'.join([ViewPointNet.name, weights])
+
+    if weights is not None:
+        weights_url = BASE_WEIGHT_PATH + model_name + '_weights.hdf5'
+        weights_path = get_file(os.path.basename(weights_url), weights_url,
+                                cache_subdir='paz/models')
+        ViewPointNet.load_weights(weights_path)
 
     return ViewPointNet
-
-
-def ColorHandPoseNet(image_shape=None, hand_side_shape=None,
-                     use_pretrained=False, crop_size=None, num_keypoints=None):
-    if image_shape is None:
-        image_shape = [320, 320, 3]
-    if hand_side_shape is None:
-        hand_side_shape = [2]
-
-    image = Input(shape=image_shape, name='image')
-    hand_side = Input(shape=hand_side_shape, name='hand_side')
-
-    HandSegNet = Hand_Segmentation_Net(load_pretrained=use_pretrained)
-    HandPoseNet = PoseNet(load_pretrained=use_pretrained)
-    HandPosePriorNet = PosePriorNet(load_pretrained=use_pretrained)
-    HandViewPointNet = ViewPointNet(load_pretrained=use_pretrained)
-
-    if crop_size is None:
-        crop_size = 256
-    else:
-        crop_size = crop_size
-
-    if num_keypoints is None:
-        num_keypoints = 21
-    else:
-        num_keypoints = num_keypoints
-
-    raw_segmented_image = HandSegNet({'image': image})
-    hand_scoremap = tf.image.resize(raw_segmented_image,
-                                    (image_shape[0], image_shape[1]))
-    hand_mask = object_scoremap(hand_scoremap)
-    center, _, crop_size_best = extract_bounding_box(hand_mask)
-    crop_size_best *= 1.25
-    scale_crop = tf.minimum(tf.maximum(crop_size / crop_size_best, 0.25), 5.0)
-    image_crop = crop_image_from_coordinates(image, center, crop_size,
-                                             scale=scale_crop)
-
-    keypoints_scoremap = HandPoseNet({'cropped_image': image_crop})
-
-    canonical_coordinates = HandPosePriorNet(
-        {'score_maps': keypoints_scoremap[-1], 'hand_side': hand_side})
-
-    rotation_parameters = HandViewPointNet(
-        {'score_maps': keypoints_scoremap[-1], 'hand_side': hand_side})
-
-    rotation_matrix = get_rotation_matrix(rotation_parameters)
-
-    cond_right = tf.equal(tf.argmax(hand_side, 1), 1)
-    cond_right_all = tf.tile(tf.reshape(cond_right, [-1, 1, 1]),
-                             [1, num_keypoints, 3])
-
-    coord_xyz_can_flip = flip_right_hand(canonical_coordinates, cond_right_all)
-
-    coord_xyz_rel_normed = tf.matmul(coord_xyz_can_flip, rotation_matrix)
-
-    ColorHandPoseNet = Model([image, hand_side],
-                             [coord_xyz_rel_normed, keypoints_scoremap,
-                              hand_mask, image_crop, center, scale_crop],
-                             name='ColorHandPoseNet')
-
-    return ColorHandPoseNet
-
-
-if __name__ == '__main__':
-    ColorHandPoseNet()

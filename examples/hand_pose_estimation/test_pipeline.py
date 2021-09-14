@@ -2,7 +2,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 
-from HandPoseEstimation import Hand_Segmentation_Net, PosePriorNet, PoseNet
+from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
 
 from detection import DetectHandKeypoints
@@ -17,10 +17,10 @@ parser.add_argument('-c', '--camera_id', type=int, default=0,
 args = parser.parse_args()
 
 use_pretrained = True
-HandSegNet = Hand_Segmentation_Net(load_pretrained=use_pretrained)
-HandPoseNet = PoseNet(load_pretrained=use_pretrained)
-HandPosePriorNet = PosePriorNet(load_pretrained=use_pretrained)
-HandViewPointNet = ViewPointNet(load_pretrained=use_pretrained)
+HandSegNet = HandSegmentationNet()
+HandPoseNet = PoseNet()
+HandPosePriorNet = PosePriorNet()
+HandViewPointNet = ViewPointNet()
 
 pipeline = DetectHandKeypoints(HandSegNet, HandPoseNet, HandPosePriorNet,
                                HandViewPointNet)
