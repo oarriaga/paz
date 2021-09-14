@@ -1,7 +1,6 @@
 import numpy as np
 from paz import processors as pr
 import processors as pe
-import tensorflow as tf
 
 
 class GetMultiScaleSize(pr.Processor):
@@ -11,23 +10,21 @@ class GetMultiScaleSize(pr.Processor):
         self.get_image_center = pe.GetImageCenter()
         self.min_input_size = pe.MinInputSize(min_scale, input_size)
 
-    def call(self, image, current_scale):
+    def call(self, image):
         H, W, _ = image.shape
         center = self.get_image_center(image)
         min_input_size = self.min_input_size()
         if W < H:
-            W, H, scale_W, scale_H = self.resize(current_scale,
-                                                 min_input_size, W, H)
+            W, H, scale_W, scale_H = self.resize(min_input_size, W, H)
         else:
-            H, W, scale_H, scale_W = self.resize(current_scale,
-                                                 min_input_size, H, W)
+            H, W, scale_H, scale_W = self.resize(min_input_size, H, W)
 
         return (W, H), center, np.array([scale_W, scale_H])
 
 
-class AffineTransform(pr.Processor):
+class GetAffineTransform(pr.Processor):
     def __init__(self, inv=0):
-        super(AffineTransform, self).__init__()
+        super(GetAffineTransform, self).__init__()
         self.inv = inv
         self.construct_source_image = pe.ConstructSourceImage()
         self.construct_output_image = pe.ConstructOutputImage()
@@ -52,15 +49,14 @@ class ResizeAlignMultiScale(pr.Processor):
     def __init__(self, min_scale=1, input_size=512):
         super(ResizeAlignMultiScale, self).__init__()
         self.get_multi_scale_size = GetMultiScaleSize(min_scale, input_size)
-        self.affine_transform = AffineTransform()
+        self.get_affine_transform = GetAffineTransform()
         self.warp_affine = pe.WarpAffine()
 
-    def call(self, image, current_scale):
-        resized_size, center, scale = self.get_multi_scale_size(image,
-                                                                current_scale)
-        transform = self.affine_transform(center, scale, resized_size)
+    def call(self, image):
+        resized_size, center, scale = self.get_multi_scale_size(image)
+        transform = self.get_affine_transform(center, scale, resized_size)
         resized_image = self.warp_affine(image, transform, resized_size)
-        return resized_size, resized_image, center, scale
+        return resized_image, center, scale
 
 
 class GetHeatmaps(pr.Processor):
@@ -81,7 +77,7 @@ class GetHeatmaps(pr.Processor):
             if len(outputs) > 1 and i != len(outputs) - 1:
                 output = self.up_sampling2D(output)
             if with_flip:
-                output = tf.reverse(output, [2])
+                output = np.flip(output, [2])
 
             if self.with_heatmap_loss[i] and self.with_heatmap[i]:
                 heatmaps_average = self.update_heatmaps_average(output,
@@ -113,7 +109,7 @@ class GetTags(pr.Processor):
             if len(outputs) > 1 and i != len(outputs) - 1:
                 output = self.up_sampling2D(output)
             if with_flip:
-                output = tf.reverse(output, [2])
+                output = np.flip(output, [2])
             offset = self.calculate_offset(i)
 
             if self.with_AE_loss[i] and self.with_AE[i]:
@@ -124,15 +120,18 @@ class GetTags(pr.Processor):
 
 
 class GetMultiStageOutputs(pr.Processor):
-    def __init__(self, num_joint, dataset, data_with_center,
+    def __init__(self, dataset, data_with_center,
                  with_flip=True, tag_per_joint=True,
                  with_AE_loss=(True, False), with_AE=(True, False),
                  with_heatmap_loss=(True, True), with_heatmap=(True, True)):
         super(GetMultiStageOutputs, self).__init__()
+        get_joint_order = pe.GetJointOrder(dataset, data_with_center)
+        num_joints = len(get_joint_order())
+        self.flip_joint_order = pe.FlipJointOrder(dataset, data_with_center)
         self.with_flip = with_flip
-        self.get_heatmaps = GetHeatmaps(num_joint, with_heatmap_loss,
+        self.get_heatmaps = GetHeatmaps(num_joints, with_heatmap_loss,
                                         with_heatmap)
-        self.get_tags = GetTags(with_AE_loss, with_AE, num_joint,
+        self.get_tags = GetTags(with_AE_loss, with_AE, num_joints,
                                 with_heatmap_loss, tag_per_joint)
         self.flip_joint_order = pe.FlipJointOrder(dataset, data_with_center)
 
@@ -146,7 +145,7 @@ class GetMultiStageOutputs(pr.Processor):
 
         if self.with_flip:
             indices = self.flip_joint_order()
-            outputs = model(tf.reverse(image, [2]))
+            outputs = model(np.flip(image, [2]))
 
             heatmaps = self.get_heatmaps(outputs, heatmaps, indices,
                                          self.with_flip)
@@ -165,12 +164,12 @@ class ProcessHeatmapsTags(pr.Processor):
         self.up_sampling2D = pe.UpSampling2D(size=(2, 2),
                                              interpolation='bilinear')
 
-    def call(self, heatmaps, tags, size_projected=None):
+    def call(self, heatmaps, tags):
         if self.data_with_center and self.ignore_centers:
             heatmaps = self.remove_last_element(heatmaps)
             tags = self.remove_last_element(tags)
 
-        if self.project2image and size_projected:
+        if self.project2image:
             heatmaps = self.up_sampling2D(heatmaps)
             tags = self.up_sampling2D(tags)
 
@@ -178,25 +177,22 @@ class ProcessHeatmapsTags(pr.Processor):
 
 
 class AggregateResults(pr.Processor):
-    def __init__(self, scale_factor, project2image=True, flip_test=True):
+    def __init__(self, project2image=True, flip_test=True):
         super(AggregateResults, self).__init__()
-        self.scale_factor = scale_factor
         self.project2image = project2image
         self.flip_test = flip_test
         self.expand_dims = pr.ExpandDims(-1)
         self.heatmaps_average = pe.CalculateHeatmapsAverage()
-        self.transpose_heatmaps = pe.TransposeHeatmaps(scale_factor)
-        self.transpose_tags = pe.TransposeTags()
+        self.transpose = pe.Transpose()
         self.up_sampling2D = pe.UpSampling2D(size=(4, 4),
                                              interpolation='bilinear')
 
-    def call(self, heatmaps, tags, current_scale, final_heatmaps=None,
+    def call(self, heatmaps, tags, final_heatmaps=None,
              final_tags=[]):
-        if current_scale == 1 or len(self.scale_factor) == 1:
-            if final_heatmaps is not None and not self.project2image:
-                tags = self.up_sampling2D(tags)
-            for tag in tags:
-                final_tags.append(self.expand_dims(tag))
+        if final_heatmaps is not None and not self.project2image:
+            tags = self.up_sampling2D(tags)
+        for tag in tags:
+            final_tags.append(self.expand_dims(tag))
 
         if self.flip_test:
             heatmaps_average = self.heatmaps_average(heatmaps)
@@ -210,18 +206,22 @@ class AggregateResults(pr.Processor):
         else:
             final_heatmaps += self.up_sampling2D(heatmaps_average)
 
-        final_heatmaps = self.transpose_heatmaps(final_heatmaps)
-        final_tags = self.transpose_tags(final_tags)
+        final_heatmaps = self.transpose(final_heatmaps, [0, 3, 1, 2])
+        final_tags = np.concatenate(final_tags, axis=4)
+        final_tags = self.transpose(final_tags, [0, 3, 1, 2, 4])
 
         return final_heatmaps, final_tags
 
 
 class HeatmapsParser(pr.Processor):
-    def __init__(self, max_num_people, joint_order, tag_thresh,
-                 detection_thresh, tag_per_joint=True, ignore_too_much=False,
-                 use_detection_val=True):
+    def __init__(self, max_num_people, dataset, data_with_center,
+                 tag_thresh=1, detection_thresh=0.2, tag_per_joint=True,
+                 ignore_too_much=False, use_detection_val=True):
         super(HeatmapsParser, self).__init__()
+        get_joint_order = pe.GetJointOrder(dataset, data_with_center)
+        joint_order = get_joint_order()
         num_joints = len(joint_order)
+        self.tag_per_joint = tag_per_joint
         self.top_k_detections = pe.TopKDetections(max_num_people,
                                                   tag_per_joint, num_joints)
         self.group_joints_by_tag = pe.GroupJointsByTag(max_num_people,
@@ -231,7 +231,7 @@ class HeatmapsParser(pr.Processor):
                                                        use_detection_val)
         self.adjust_joints_locations = pe.AdjustJointsLocations()
         self.get_scores = pe.GetScores()
-        self.convert_to_numpy = pe.ConvertToNumpy(tag_per_joint, num_joints)
+        self.tile_array = pe.TileArray(num_joints)
         self.refine_joints_locations = pe.RefineJointsLocations()
 
     def call(self, heatmaps, tags, adjust=True, refine=True):
@@ -241,27 +241,31 @@ class HeatmapsParser(pr.Processor):
             grouped_joints = self.adjust_joints_locations(heatmaps,
                                                           grouped_joints)[0]
         scores = self.get_scores(grouped_joints)
-        heatmaps, tags = self.convert_to_numpy(heatmaps[0], tags[0])
+        heatmaps, tags = heatmaps[0], tags[0]
+        if not self.tag_per_joint:
+            tags = self.tile_array(tags)
         if refine:
             for arg, joints in enumerate(grouped_joints):
                 joints = self.refine_joints_locations(heatmaps, joints, tags)
         return [grouped_joints], scores
 
 
-class FinalPrediction(pr.Processor):
+class TransformJoints(pr.Processor):
     def __init__(self):
-        super(FinalPrediction, self).__init__()
-        self.affine_transform = AffineTransform(inv=1)
-        self.affine_transform_point = pe.AffineTransformPoint()
+        super(TransformJoints, self).__init__()
+        self.get_affine_transform = GetAffineTransform(inv=1)
+        self.transform_point = pe.TransformPoint()
 
-    def call(self, grouped_joints, center, scale, heatmap_size):
-        final_result = []
+    def call(self, grouped_joints, center, scale, heatmaps):
+        transformed_joints = []
+        heatmaps_size = [heatmaps.shape[3],
+                         heatmaps.shape[2]]
         for joints in grouped_joints[0]:
-            transform = self.affine_transform(center, scale, heatmap_size)
+            transform = self.get_affine_transform(center, scale, heatmaps_size)
             for joint in joints:
-                joint[0:2] = self.affine_transform_point(joint[0:2], transform)
-            final_result.append(joints)
-        return final_result
+                joint[0:2] = self.transform_point(joint[0:2], transform)
+            transformed_joints.append(joints)
+        return transformed_joints
 
 
 # *************************************************************************

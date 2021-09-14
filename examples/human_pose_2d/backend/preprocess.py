@@ -2,11 +2,11 @@ import numpy as np
 import tensorflow as tf
 
 
-def resize_dims(current_scale, min_input_size, dims1, dims2, min_scale):
+def resize_dims(min_input_size, dims1, dims2, min_scale):
     '''resize to 512'''
-    dims1_resized = int(min_input_size * current_scale / min_scale)
+    dims1_resized = int(min_input_size / min_scale)
     dims2_resized = int(int((min_input_size / dims1*dims2 + (64-1)) //
-                        64*64) * current_scale/min_scale)
+                        64*64) / min_scale)
     scale_dims1 = dims1 / 200
     scale_dims2 = dims2_resized / dims1_resized * dims1 / 200
     return dims1_resized, dims2_resized, scale_dims1, scale_dims2

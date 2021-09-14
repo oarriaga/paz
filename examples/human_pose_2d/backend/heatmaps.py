@@ -3,28 +3,28 @@ import tensorflow as tf
 from munkres import Munkres
 
 
-def reshape(tensor, newshape):
-    tensor = tf.reshape(tensor, newshape)
-    return tensor
+def reshape(x, newshape):
+    x = np.reshape(x, newshape)
+    return x
 
 
 def non_maximum_supressions(heatmaps):
-    heatmaps = tf.transpose(heatmaps, [0, 2, 3, 1])
+    heatmaps = np.transpose(heatmaps, [0, 2, 3, 1])
     maximum_values = tf.keras.layers.MaxPooling2D(pool_size=3, strides=1,
                                                   padding='same')(heatmaps)
-    maximum_values = tf.math.equal(maximum_values, heatmaps)
-    maximum_values = tf.cast(maximum_values, tf.float32)
+    maximum_values = np.equal(maximum_values, heatmaps)
+    maximum_values = maximum_values.astype(np.float32)
     filtered_heatmaps = heatmaps * maximum_values
     return filtered_heatmaps
 
 
 def unpack_heatmaps_dimensions(heatmaps):
-    num_images, joints_count, H, W = heatmaps.get_shape()[:4]
+    num_images, joints_count, H, W = heatmaps.shape[:4]
     return num_images, joints_count, H, W
 
 
 def torch_gather(x, indices, gather_axis=2):
-    x = tf.cast(x, tf.int64)
+    x = x.astype(np.int64)
     indices = tf.cast(indices, tf.int64)
     all_indices = tf.where(tf.fill(indices.shape, True))
     gather_locations = reshape(indices, [indices.shape.num_elements()])
@@ -35,14 +35,14 @@ def torch_gather(x, indices, gather_axis=2):
         else:
             gather_indices.append(all_indices[:, axis])
 
-    gather_indices = tf.stack(gather_indices, axis=-1)
+    gather_indices = np.stack(gather_indices, axis=-1)
     gathered = tf.gather_nd(x, gather_indices)
     return reshape(gathered, indices.shape)
 
 
 def get_top_k_heatmaps_values(heatmaps, max_num_people):
     top_k_heatmaps, indices = tf.math.top_k(heatmaps, max_num_people)
-    return np.squeeze(tensor_to_numpy(top_k_heatmaps)), indices
+    return np.squeeze(top_k_heatmaps), indices
 
 
 def get_top_k_tags(tags, indices, tag_per_joint, num_joints):
@@ -50,26 +50,26 @@ def get_top_k_tags(tags, indices, tag_per_joint, num_joints):
         tags = tags.expand(-1, num_joints, -1, -1)
 
     top_k_tags = []
-    for arg in range(tags.get_shape()[3]):
+    for arg in range(tags.shape[3]):
         top_k_tags.append(torch_gather(tags[:, :, :, 0], indices))
-    top_k_tags = tf.stack(top_k_tags, axis=3)
-    return np.squeeze(tensor_to_numpy(top_k_tags))
+    top_k_tags = np.stack(top_k_tags, axis=3)
+    return np.squeeze(top_k_tags)
 
 
 def get_top_k_locations(indices, image_width):
-    x = tf.cast((indices % image_width), dtype=tf.int64)
-    y = tf.cast((indices / image_width), dtype=tf.int64)
-    top_k_locations = tf.stack((x, y), axis=3)
-    return np.squeeze(tensor_to_numpy(top_k_locations))
+    x = tensor_to_numpy((indices % image_width)).astype(np.int64)
+    y = tensor_to_numpy((indices / image_width)).astype(np.int64)
+    top_k_locations = np.stack((x, y), axis=3)
+    return np.squeeze(top_k_locations)
 
 
 def top_k_detections(heatmaps, tags, max_num_people,
                      tag_per_joint, num_joints):
     heatmaps = non_maximum_supressions(heatmaps)
-    heatmaps = tf.transpose(heatmaps, [0, 3, 1, 2])
+    heatmaps = np.transpose(heatmaps, [0, 3, 1, 2])
     num_images, joints_count, H, W = unpack_heatmaps_dimensions(heatmaps)
     heatmaps = reshape(heatmaps, [num_images, joints_count, -1])
-    tags = reshape(tags, [tags.get_shape()[0], tags.get_shape()[1], W*H, -1])
+    tags = reshape(tags, [tags.shape[0], tags.shape[1], W*H, -1])
 
     top_k_heatmaps_values, indices = get_top_k_heatmaps_values(heatmaps,
                                                                max_num_people)
@@ -186,19 +186,20 @@ def group_joints_by_tag(detections, max_num_people, joint_order, tag_thresh,
 
 
 def compare_vertical_neighbours(x, y, heatmap_value, offset=0.25):
-    iny_x, int_y = int(x), int(y)
+    int_x, int_y = int(x), int(y)
     lower_y = min(int_y + 1, heatmap_value.shape[1] - 1)
     upper_y = max(int_y - 1, 0)
-    if heatmap_value[iny_x, lower_y] > heatmap_value[iny_x, upper_y]:
+    if heatmap_value[int_x, lower_y] > heatmap_value[int_x, upper_y]:
         y = y + offset
     else:
         y = y - offset
     return y
 
+
 def compare_horizontal_neighbours(x, y, heatmap_value, offset=0.25):
-    iny_x, int_y = int(x), int(y)
-    left_x = max(0, iny_x - 1)
-    right_x = min(iny_x + 1, heatmap_value.shape[0] - 1)
+    int_x, int_y = int(x), int(y)
+    left_x = max(0, int_x - 1)
+    right_x = min(int_x + 1, heatmap_value.shape[0] - 1)
     if heatmap_value[right_x, int_y] > heatmap_value[left_x, int_y]:
         x = x + offset
     else:
@@ -285,9 +286,6 @@ def tensor_to_numpy(tensor):
     return tensor.cpu().numpy()
 
 
-def convert_to_numpy(heatmaps, tags, tag_per_joint, num_joints):
-    heatmaps = tensor_to_numpy(heatmaps)
-    tags = tensor_to_numpy(tags)
-    if not tag_per_joint:
-        tags = np.tile(tags, ((num_joints, 1, 1, 1)))
-    return heatmaps, tags
+def tile_array(tags, num_joints):
+    tags = np.tile(tags, ((num_joints, 1, 1, 1)))
+    return tags

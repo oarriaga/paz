@@ -3,16 +3,14 @@ import tensorflow as tf
 from paz import processors as pr
 import cv2
 
-from backend.preprocess import resize_dims
-from backend.preprocess import calculate_image_center
-from backend.preprocess import calculate_min_input_size
-from backend.preprocess import construct_source_image
-from backend.preprocess import construct_output_image, tf_preprocess_input
-
-from backend.heatmaps import group_joints_by_tag, top_k_detections, convert_to_numpy
-from backend.heatmaps import adjust_joints_locations, refine_joints_locations
+from backend.preprocess import resize_dims, calculate_image_center
+from backend.preprocess import construct_source_image, construct_output_image
+from backend.preprocess import calculate_min_input_size, tf_preprocess_input
+from backend.heatmaps import tile_array
+from backend.heatmaps import refine_joints_locations, top_k_detections
+from backend.heatmaps import group_joints_by_tag, adjust_joints_locations
 from backend.postprocess import draw_skeleton
-from dataset import FLIP_CONFIG
+from dataset import FLIP_CONFIG, JOINT_CONFIG
 
 
 class TfPreprocessInput(pr.Processor):
@@ -31,10 +29,9 @@ class ResizeDimensions(pr.Processor):
         super(ResizeDimensions, self).__init__()
         self.min_scale = min_scale
 
-    def call(self, current_scale, min_input_size, dims1, dims2):
+    def call(self, min_input_size, dims1, dims2):
         dims1_resized, dims2_resized, scale_dims1, scale_dims2 = \
-            resize_dims(current_scale, min_input_size, dims1, dims2,
-                        self.min_scale)
+            resize_dims(min_input_size, dims1, dims2, self.min_scale)
         return dims1_resized, dims2_resized, scale_dims1, scale_dims2
 
 
@@ -148,7 +145,6 @@ class UpdateTags(pr.Processor):
     def call(self, output, tags, offset, indices, with_flip=False):
         tags.append(output[:, :, :, offset:])
         if with_flip and self.tag_per_joint:
-            # tags[-1] = tf.gather(tags[-1], indices, axis=-1)
             tags[-1] = np.take(tags[-1], indices, axis=-1)
         return tags
 
@@ -163,7 +159,6 @@ class UpdateHeatmapsAverage(pr.Processor):
             heatmaps_average += output[:, :, :, :num_joints]
         else:
             temp = output[:, :, :, :num_joints]
-            # heatmaps_average += tf.gather(temp, indices, axis=-1)
             heatmaps_average += np.take(temp, indices, axis=-1)
         return heatmaps_average
 
@@ -189,6 +184,20 @@ class UpdateHeatmaps(pr.Processor):
         return heatmaps
 
 
+class GetJointOrder(pr.Processor):
+    def __init__(self, dataset, with_center):
+        super(GetJointOrder, self).__init__()
+        self.dataset = dataset
+        self.with_center = with_center
+
+    def call(self):
+        if not self.with_center:
+            joint_order = JOINT_CONFIG[self.dataset]
+        else:
+            joint_order = JOINT_CONFIG[self.dataset + '_WITH_CENTER']
+        return joint_order
+
+
 class FlipJointOrder(pr.Processor):
     def __init__(self, dataset, with_center):
         super(FlipJointOrder, self).__init__()
@@ -197,10 +206,10 @@ class FlipJointOrder(pr.Processor):
 
     def call(self):
         if not self.with_center:
-            indices = FLIP_CONFIG[self.dataset]
+            joint_order = FLIP_CONFIG[self.dataset]
         else:
-            indices = FLIP_CONFIG[self.dataset + '_WITH_CENTER']
-        return indices
+            joint_order = FLIP_CONFIG[self.dataset + '_WITH_CENTER']
+        return joint_order
 
 
 class RemoveLastElement(pr.Processor):
@@ -223,26 +232,13 @@ class CalculateHeatmapsAverage(pr.Processor):
         return heatmaps_average
 
 
-class TransposeHeatmaps(pr.Processor):
-    def __init__(self, test_scale_factor):
-        super(TransposeHeatmaps, self).__init__()
-        self.test_scale_factor = test_scale_factor
-
-    def call(self, heatmaps):
-        heatmaps = heatmaps/float(len(self.test_scale_factor))
-        heatmaps = tf.transpose(heatmaps, [0, 3, 1, 2])
-        return heatmaps
-
-
-class TransposeTags(pr.Processor):
+class Transpose(pr.Processor):
     def __init__(self):
-        super(TransposeTags, self).__init__()
+        super(Transpose, self).__init__()
 
-    def call(self, tags):
-        tags = tf.concat(tags, axis=4)
-        tags = tf.transpose(tags, [0, 3, 1, 2, 4])
+    def call(self, tags, permutes=None):
+        tags = np.transpose(tags, permutes)
         return tags
-
 
 # **************************HeatmapsParser*********************************
 
@@ -296,15 +292,13 @@ class GetScores(pr.Processor):
         return score
 
 
-class ConvertToNumpy(pr.Processor):
-    def __init__(self, tag_per_joint, num_joints):
-        super(ConvertToNumpy, self).__init__()
-        self.tag_per_joint = tag_per_joint
+class TileArray(pr.Processor):
+    def __init__(self, num_joints):
+        super(TileArray, self).__init__()
         self.num_joints = num_joints
 
-    def call(self, heatmaps, tags):
-        return convert_to_numpy(heatmaps, tags, self.tag_per_joint,
-                                self.num_joints)
+    def call(self, tags):
+        return tile_array(tags, self.num_joints)
 
 
 class RefineJointsLocations(pr.Processor):
@@ -316,12 +310,12 @@ class RefineJointsLocations(pr.Processor):
         return keypoints
 
 
-# **************************FinalPrediction*********************************
+# **************************FinalPrediction****************************
 
 
-class AffineTransformPoint(pr.Processor):
+class TransformPoint(pr.Processor):
     def __init__(self):
-        super(AffineTransformPoint, self).__init__()
+        super(TransformPoint, self).__init__()
 
     def call(self, point, transform):
         point = np.array([point[0], point[1], 1.]).T
@@ -332,20 +326,10 @@ class AffineTransformPoint(pr.Processor):
 # **************************SaveResult*********************************
 
 
-class SaveValidImage(pr.Processor):
-    def __init__(self, dataset='COCO'):
-        self.dataset = dataset
-        super(SaveValidImage, self).__init__()
-
-    def call(self, image, joints):
-        image = draw_skeleton(image, joints, dataset=self.dataset)
-        return image
-
-
 class DrawSkeleton(pr.Processor):
     def __init__(self, dataset='COCO'):
-        self.dataset = dataset
         super(DrawSkeleton, self).__init__()
+        self.dataset = dataset
 
     def call(self, image, joints):
         image = draw_skeleton(image, joints, dataset=self.dataset)
