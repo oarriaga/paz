@@ -71,9 +71,10 @@ class EPOSActivationOutput(Layer):
         self.num_fragments = num_fragments
 
     def call(self, inputs):
-        first_branch = K.softmax(inputs[:, :, :, :self.num_objects + 1 + self.num_fragments*self.num_objects])
-        second_branch = K.tanh(inputs[:, :, :, self.num_objects + 1 + self.num_fragments*self.num_objects:])
-        return K.concatenate([first_branch, second_branch], axis=-1)
+        first_branch = K.softmax(inputs[:, :, :, :self.num_objects + 1])
+        second_branch = K.softmax(inputs[:, :, :, self.num_objects + 1:self.num_objects + 1 + self.num_fragments*self.num_objects])
+        third_branch = K.tanh(inputs[:, :, :, self.num_objects + 1 + self.num_fragments*self.num_objects:])
+        return K.concatenate([first_branch, second_branch, third_branch], axis=-1)
 
     def get_config(self):
         # Implement get_config to enable serialization. This is optional.
@@ -529,7 +530,7 @@ def epos_loss_wrapped(num_objects, num_fragments, lambda01=1, lambda02=100):
                 start_fragment_coords = num_objects + 1 + (num_objects*num_fragments) + 3*((num_fragments*num_object) + num_fragment)
                 fragment_coords_loss += real_epos_output[:, :, :, idx_fragment] * lambda02 * huber_fn(real_epos_output[:, :, :, start_fragment_coords:start_fragment_coords+3], predicted_epos_output[:, :, :, start_fragment_coords:start_fragment_coords+3])
 
-            fragment_loss += real_epos_output[:, :, :, num_object + 1] * lambda01 * cross_entropy_fn(real_epos_output[:, :, :, num_objects + 1 + (num_fragments*num_object):num_objects + 1 + (num_fragments*num_object) + num_fragments], predicted_epos_output[:, :, :, num_objects + 1 + (num_fragments*num_object):num_objects + 1 + (num_fragments*num_object) + num_fragments]) * fragment_coords_loss
+            fragment_loss += real_epos_output[:, :, :, num_object + 1] * (lambda01 * cross_entropy_fn(real_epos_output[:, :, :, num_objects + 1 + (num_fragments*num_object):num_objects + 1 + (num_fragments*num_object) + num_fragments], predicted_epos_output[:, :, :, num_objects + 1 + (num_fragments*num_object):num_objects + 1 + (num_fragments*num_object) + num_fragments]) + fragment_coords_loss)
 
         total_loss = tf.math.reduce_mean(object_loss + fragment_loss)
         return total_loss

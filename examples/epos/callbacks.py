@@ -1,10 +1,19 @@
 import numpy as np
 import neptune
+import os
 import sys
 import matplotlib.pyplot as plt
 import gc
+import glob
 
+from pipelines import GeneratedImageGenerator
+from paz.abstract import GeneratingSequence
+
+from model import EPOSActivationOutput, epos_loss_wrapped
+
+import tensorflow as tf
 from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.models import load_model
 import tensorflow.keras.backend as K
 
 np.set_printoptions(threshold=sys.maxsize)
@@ -84,7 +93,6 @@ class PlotImagesCallback(Callback):
             image_fragment_coords = self._fragment_coords_from_epos_output(epos_output_fragments_coords, epos_output_fragments_argmax)
             ax[i, 3].imshow(image_fragment_coords)
 
-
             epos_output_objects = predicted_epos_output[i, :, :, :self.num_objects+1]
             epos_output_fragments = predicted_epos_output[i, :, :, self.num_objects+1:self.num_objects+1+self.num_fragments]
             epos_output_fragments_coords = predicted_epos_output[i, :, :, self.num_objects + 1 + self.num_fragments:]
@@ -157,8 +165,18 @@ class PlotImagesCallback(Callback):
         return ((image_fragment_coords+1)*127.5).astype("uint8")
 
 if __name__ == "__main__":
-    epos_output = np.load("/home/fabian/.keras/tless_obj05/epos/train/epos_output/epos_output_0000001.npy")
-    print(epos_output.shape)
-    fragment_centers = np.load("/home/fabian/.keras/tless_obj05/epos_data/fragment_centers.npy")
-    callback = PlotImagesCallback(None, None, None, num_objects=1, num_fragments=64, fragment_centers=fragment_centers, object_extent=np.array([0.1, 0.15, 0.2]))
+    fragment_centers = np.load("/home/fabian/Dokumente/epos_data/fragment_centers.npy")
+
+    num_objects = 1
+    num_fragments = 64
+    num_output_channels = (4 * num_objects * num_fragments + num_objects + 1)
+
+    background_image_paths = glob.glob(os.path.join("/home/fabian/.keras/backgrounds", '*.jpg'))
+    processor = GeneratedImageGenerator(os.path.join("/home/fabian/Dokumente/epos", "test"), background_image_paths, 128, num_output_channels)
+    sequence = GeneratingSequence(processor, 3, 1)
+
+    epos_loss = epos_loss_wrapped(num_objects=num_objects, num_fragments=num_fragments)
+    model = load_model("/home/fabian/Dokumente/epos_4200.h5", custom_objects={"relu6": tf.nn.relu6, "EPOSActivationOutput": EPOSActivationOutput, "epos_loss": epos_loss})
+
+    callback = PlotImagesCallback(model, sequence, num_objects=1, num_fragments=64, fragment_centers=fragment_centers, object_extent=np.array([0.1, 0.15, 0.2]))
     callback.on_epoch_end(0)

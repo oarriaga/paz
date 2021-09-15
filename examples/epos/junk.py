@@ -1,5 +1,5 @@
 import numpy as np
 
-diff = np.load("./diff.npy")
+epos = np.load("./predicted_epos.npy")
 
 print(np.where(np.isinf(epos)))
