@@ -8,9 +8,9 @@ if __name__ == "__main__":
     model = EFFICIENTDETD0()
     image_size = model.image_size
     input_image, image_scales = efficientdet_preprocess(raw_images, image_size)
-    class_outputs, box_outputs = model(input_image)
+    outputs = model(input_image)
     image, detections = efficientdet_postprocess(
-        model, class_outputs, box_outputs, image_scales, raw_images)
+        model, outputs, image_scales, raw_images)
     print(detections)
     write_image('paz_postprocess.jpg', image)
     print('task completed')

@@ -3,6 +3,7 @@ import efficientnet_builder
 from anchors import get_prior_boxes
 from efficientdet_blocks import ResampleFeatureMap
 from efficientdet_blocks import FPNCells, ClassNet, BoxNet
+from utils import create_multibox_head
 
 
 class EfficientDet(tf.keras.Model):
@@ -112,14 +113,13 @@ class EfficientDet(tf.keras.Model):
         self.num_filters = self.fpn_num_filters
         self.class_net = ClassNet(
             self.num_classes, self.num_anchors, self.num_filters,
-            self.min_level, self.max_level, self.activation,
-            self.box_class_repeats, self.separable_conv,
-            self.survival_rate)
+            self.min_level, self.max_level, self.box_class_repeats,
+            self.separable_conv, self.survival_rate)
 
         self.box_net = BoxNet(
             self.num_anchors, self.num_filters, self.min_level,
-            self.max_level, self.activation, self.box_class_repeats,
-            self.separable_conv, self.survival_rate)
+            self.max_level, self.box_class_repeats, self.separable_conv,
+            self.survival_rate)
 
     def call(self, images, training=False):
         """Build EfficientDet model.
@@ -154,4 +154,10 @@ class EfficientDet(tf.keras.Model):
         # Box regression head
         box_outputs = self.box_net(fpn_features, training)
 
-        return class_outputs, box_outputs
+        branch_tensors = [class_outputs, box_outputs]
+        if self.return_base:
+            outputs = branch_tensors
+        else:
+            outputs = create_multibox_head(branch_tensors,
+                                           self.num_levels, self.num_classes)
+        return outputs

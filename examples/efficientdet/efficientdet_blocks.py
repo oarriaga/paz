@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer, BatchNormalization
 from tensorflow.keras.layers import Conv2D, SeparableConv2D
 from tensorflow.keras.layers import MaxPooling2D, AveragePooling2D
-from utils import get_activation, get_drop_connect
+from utils import get_drop_connect
 
 
 def get_top_down_path(min_level, max_level, node_ids):
@@ -290,7 +290,7 @@ class FPNCells(Layer):
     def __init__(self, fpn_name, min_level, max_level, fpn_weight_method,
                  fpn_cell_repeats, fpn_num_filters, use_batchnorm_for_sampling,
                  conv_after_downsample, conv_batchnorm_activation_block,
-                 with_separable_conv, activation, name='fpn_cells'):
+                 with_separable_conv, name='fpn_cells'):
         """
         # Arguments
             fpn_name: A string specifying the feature fusion FPN layer.
@@ -310,7 +310,6 @@ class FPNCells(Layer):
             patter in the EfficientDet building blocks.
             with_separable_conv: Bool, specifying the usage of separable
             convolution layers in EfficientDet.
-            activation: A string specifying the activation function.
             name: Module name.
         """
         super().__init__(name=name)
@@ -324,7 +323,7 @@ class FPNCells(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
-        self.activation = activation
+        self.activation = tf.nn.swish
         self.fpn_config = bifpn_configuration(
             self.min_level, self.max_level, self.fpn_weight_method)
         self.create_fpn_cell_repeats()
@@ -338,8 +337,7 @@ class FPNCells(Layer):
                 self.fpn_num_filters, self.use_batchnorm_for_sampling,
                 self.conv_after_downsample,
                 self.conv_batchnorm_activation_block,
-                self.with_separable_conv, self.activation,
-                'cell_%d' % repeat_arg))
+                self.with_separable_conv, 'cell_%d' % repeat_arg))
 
     def get_cell_features(self, cell_features):
         """
@@ -379,7 +377,7 @@ class FPNCell(Layer):
                  fpn_cell_repeats, fpn_num_filters,
                  use_batchnorm_for_sampling, conv_after_downsample,
                  conv_batchnorm_activation_block, with_separable_conv,
-                 activation, name='fpn_cell'):
+                 name='fpn_cell'):
         """
         # Arguments
             fpn_name: A string specifying the feature fusion FPN layer.
@@ -399,7 +397,6 @@ class FPNCell(Layer):
             patter in the EfficientDet building blocks.
             with_separable_conv: Bool, specifying the usage of separable
             convolution layers in EfficientDet.
-            activation: A string specifying the activation function.
             name: Module name.
         """
         super().__init__(name=name)
@@ -413,7 +410,7 @@ class FPNCell(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
-        self.activation = activation
+        self.activation = tf.nn.swish
         self.fpn_config = bifpn_configuration(
             self.min_level, self.max_level, self.fpn_weight_method)
         self.create_node_features()
@@ -427,8 +424,7 @@ class FPNCell(Layer):
                 node_cfg['inputs_offsets'], self.fpn_num_filters,
                 self.use_batchnorm_for_sampling, self.conv_after_downsample,
                 self.conv_batchnorm_activation_block, self.with_separable_conv,
-                self.activation, self.fpn_weight_method,
-                'fnode%d' % node_cfg_arg)
+                self.fpn_weight_method, 'fnode%d' % node_cfg_arg)
             self.node_features.append(node_feature)
 
     def call(self, features, training):
@@ -467,7 +463,7 @@ class FeatureNode(Layer):
     def __init__(self, feature_level, inputs_offsets, fpn_num_filters,
                  use_batchnorm_for_sampling, conv_after_downsample,
                  conv_batchnorm_activation_block, with_separable_conv,
-                 activation, weight_method, name='fnode'):
+                 weight_method, name='fnode'):
         """
         # Arguments
             feature_level: Int, Feature level of the features.
@@ -483,7 +479,6 @@ class FeatureNode(Layer):
             patter in the EfficientDet building blocks.
             with_separable_conv: Bool, specifying the usage of separable
             convolution layers in EfficientDet.
-            activation: A string specifying the activation function.
             name: Module name.
         """
 
@@ -495,7 +490,7 @@ class FeatureNode(Layer):
         self.conv_after_downsample = conv_after_downsample
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
-        self.activation = activation
+        self.activation = tf.nn.swish
         self.weight_method = weight_method
         self.resample_layers = []
         self.assign_weights = []
@@ -591,7 +586,7 @@ class FeatureNode(Layer):
             self._add_bifpn_weights('ones')
         self.conv_after_fusion = ConvolutionAfterFusion(
             self.conv_batchnorm_activation_block, self.with_separable_conv,
-            self.fpn_num_filters, self.activation,
+            self.fpn_num_filters,
             name='op_after_combine{}'.format(len(features_shape))
         )
         self.built = True
@@ -622,7 +617,7 @@ class FeatureNode(Layer):
 class ConvolutionAfterFusion(Layer):
     """Operation after combining input features during feature fusion."""
     def __init__(self, conv_batchnorm_activation_block, with_separable_conv,
-                 fpn_num_filters, activation, name='op_after_combine'):
+                 fpn_num_filters, name='op_after_combine'):
         """
         # Arguments
             fpn_num_filters: Int, FPN filter output size.
@@ -631,14 +626,13 @@ class ConvolutionAfterFusion(Layer):
             patter in the EfficientDet building blocks.
             with_separable_conv: Bool, specifying the usage of separable
             convolution layers in EfficientDet.
-            activation: A string specifying the activation function.
             name: Module name.
         """
         super().__init__(name=name)
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
         self.fpn_num_filters = fpn_num_filters
-        self.activation = activation
+        self.activation = tf.nn.swish
 
         if self.with_separable_conv:
             conv2d_layer = SeparableConv2D(
@@ -669,15 +663,15 @@ class ConvolutionAfterFusion(Layer):
         new_node = self.convolution(new_node)
         new_node = self.batchnorm(new_node, training=training)
         if self.conv_batchnorm_activation_block:
-            new_node = tf.nn.swish(new_node)
+            new_node = self.activation(new_node)
         return new_node
 
 
 class ClassNet(Layer):
     """Object class prediction network."""
     def __init__(self, num_classes=90, num_anchors=9, num_filters=32,
-                 min_level=3, max_level=7, activation='swish',
-                 num_repeats=4, with_separable_conv=True, survival_rate=None,
+                 min_level=3, max_level=7, num_repeats=4,
+                 with_separable_conv=True, survival_rate=None,
                  return_base=False, name='class_net', **kwargs):
         """Initialize the ClassNet.
 
@@ -687,7 +681,6 @@ class ClassNet(Layer):
             num_filters: Integer. Number of filters for intermediate layers.
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
-            activation: String of the activation used.
             num_repeats: Integer. Number of intermediate layers.
             with_separable_conv: Bool.
             True to use separable_conv instead of Conv2D.
@@ -707,7 +700,7 @@ class ClassNet(Layer):
         self.num_repeats = num_repeats
         self.with_separable_conv = with_separable_conv
         self.survival_rate = survival_rate
-        self.activation = activation
+        self.activation = tf.nn.swish
         self.conv_blocks = []
         self.batchnorms = []
         self.return_base = return_base
@@ -737,7 +730,6 @@ class ClassNet(Layer):
         """
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
-        activation = self.activation
 
         def _call(image):
             """
@@ -750,8 +742,7 @@ class ClassNet(Layer):
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
-            if self.activation:
-                image = get_activation(image, activation)
+            image = self.activation(image)
             if level > 0 and self.survival_rate:
                 image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image
@@ -804,9 +795,8 @@ class ClassNet(Layer):
 class BoxNet(Layer):
     """Box regression network."""
     def __init__(self, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-                 activation='swish', num_repeats=4, with_separable_conv=True,
-                 survival_rate=None, return_base=False, name='box_net',
-                 **kwargs):
+                 num_repeats=4, with_separable_conv=True, survival_rate=None,
+                 return_base=False, name='box_net', **kwargs):
         """Initialize the BoxNet.
 
         # Arguments
@@ -815,7 +805,6 @@ class BoxNet(Layer):
             num_filters: Integer. Number of filters for intermediate layers.
             min_level: Integer. Minimum level for features.
             max_level: Integer. Maximum level for features.
-            activation: String of the activation used.
             num_repeats: Integer. Number of intermediate layers.
             with_separable_conv: Bool.
             True to use separable_conv instead of Conv2D.
@@ -834,7 +823,7 @@ class BoxNet(Layer):
         self.num_repeats = num_repeats
         self.with_separable_conv = with_separable_conv
         self.survival_rate = survival_rate
-        self.activation = activation
+        self.activation = tf.nn.swish
         self.conv_blocks = []
         self.batchnorms = []
         self.return_base = return_base
@@ -875,7 +864,6 @@ class BoxNet(Layer):
         """
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
-        activation = self.activation
 
         def _call(image):
             """
@@ -888,8 +876,7 @@ class BoxNet(Layer):
             original_image = image
             image = conv_block(image)
             image = batchnorm(image, training=training)
-            if self.activation:
-                image = get_activation(image, activation)
+            image = self.activation(image)
             if level > 0 and self.survival_rate:
                 image = get_drop_connect(image, training, self.survival_rate)
                 image = image + original_image

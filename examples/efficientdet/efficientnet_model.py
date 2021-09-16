@@ -323,9 +323,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         # Returns:
         filter: Int, filters count in the successive layers.
         """
-        block_input_filters = self._input_filters
-        block_expand_ratio = self._expand_ratio
-        filters = block_input_filters * block_expand_ratio
+        filters = self._input_filters * self._expand_ratio
         return filters
 
     def build_output_processors(self):
@@ -363,17 +361,16 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             training: boolean, whether the model is constructed for training.
         """
         if self._fused_conv:
-            tensor = self._batch_norm1(
-                self._fused_conv_layer(tensor), training=training)
+            tensor = self._fused_conv_layer(tensor)
+            tensor = self._batch_norm1(tensor, training=training)
             tensor = self._activation(tensor)
         else:
             if self._expand_ratio != 1:
-                tensor = self._batch_norm0(
-                    self._expand_conv_layer(tensor), training=training)
+                tensor = self._expand_conv_layer(tensor)
+                tensor = self._batch_norm0(tensor, training=training)
                 tensor = self._activation(tensor)
-
-            tensor = self._batch_norm1(
-                self._depthwise_conv(tensor), training=training)
+            tensor = self._depthwise_conv(tensor)
+            tensor = self._batch_norm1(tensor, training=training)
             tensor = self._activation(tensor)
         return tensor
 
@@ -389,15 +386,14 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         # Returns
             A output tensor.
         """
-        tensor = self._batch_norm2(
-            self._project_conv(tensor), training=training)
+        tensor = self._project_conv(tensor)
+        tensor = self._batch_norm2(tensor, training=training)
         tensor = tf.identity(tensor)
         if self._clip_projection_output:
             tensor = tf.clip_by_value(tensor, -6, 6)
         if self._use_skip_connection:
             if (all(s == 1 for s in self._strides)
-                    and self._input_filters
-                    == self._output_filters):
+                    and self._input_filters == self._output_filters):
                 if survival_rate:
                     tensor = get_drop_connect(tensor, training, survival_rate)
                 tensor = tf.add(tensor, initial_tensor)

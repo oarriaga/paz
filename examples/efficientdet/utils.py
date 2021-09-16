@@ -3,6 +3,9 @@ import paz.processors as pr
 from paz.abstract import SequentialProcessor
 from paz.processors.image import LoadImage
 from paz.processors.image import RGB_IMAGENET_MEAN, RGB_IMAGENET_STDEV
+from tensorflow.keras.layers import Flatten, Concatenate
+from tensorflow.keras.layers import Reshape, Activation
+import tensorflow.keras.backend as K
 
 
 # Mock input image.
@@ -32,27 +35,6 @@ class_names = ['person', 'bicycle', 'car', 'motorcycle',
 def get_class_name_efficientdet(dataset_name):
     if dataset_name == 'COCO':
         return class_names
-
-
-def get_activation(features, activation):
-    """Apply non-linear activation function to features provided.
-
-    # Arguments
-        features: Tensor, representing an input feature map
-        to be pass through an activation function.
-        activation: A string specifying the activation function
-        type.
-
-    # Returns
-        activation function: features transformed by the
-        activation function.
-    """
-    if activation in ('silu', 'swish'):
-        return tf.nn.swish(features)
-    elif activation == 'relu':
-        return tf.nn.relu(features)
-    else:
-        raise ValueError('Unsupported activation fn {}'.format(activation))
 
 
 def get_drop_connect(features, is_training, survival_rate):
@@ -105,3 +87,27 @@ def efficientdet_preprocess(image, image_size):
         ])
     image, image_scale = preprocessing(image)
     return image, image_scale
+
+
+def create_multibox_head(branch_tensors, num_levels, num_classes, num_regressions=4):
+    class_outputs = branch_tensors[0]
+    box_outputs = branch_tensors[1]
+    classification_layers, regression_layers = [], []
+    for level in range(0, num_levels):
+        class_leaf = class_outputs[level]
+        class_leaf = Flatten()(class_leaf)
+        classification_layers.append(class_leaf)
+
+        regress_leaf = box_outputs[level]
+        regress_leaf = Flatten()(regress_leaf)
+        regression_layers.append(regress_leaf)
+
+    classifications = Concatenate(axis=1)(classification_layers)
+    regressions = Concatenate(axis=1)(regression_layers)
+    num_boxes = K.int_shape(regressions)[-1] // num_regressions
+    classifications = Reshape((num_boxes, num_classes))(classifications)
+    classifications = Activation('sigmoid')(classifications)
+    regressions = Reshape((num_boxes, num_regressions))(regressions)
+    outputs = Concatenate(axis=2, name='boxes')([regressions, classifications])
+    return outputs
+
