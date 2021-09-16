@@ -1,15 +1,12 @@
 import numpy as np
 
+from layer import SegmentationDilation
 from paz import processors as pr
 from paz.abstract import Processor, SequentialProcessor
-from paz.backend.image import show_image
-from pipelines import Process2DKeypoints, PostProcessKeypoints
-from pipelines import preprocess_image, PostprocessSegmentation
-from processors import Merge_Dictionaries, ExtractKeypoints
-from processors import Resize_image, Transform_Keypoints, HandSegmentationMap
+from pipelines import PostProcessKeypoints
 from processors import ExtractBoundingbox, AdjustCropSize, CropImage
-from utils import visualize_heatmaps
-import matplotlib.pyplot as plt
+from processors import Merge_Dictionaries, ExtractKeypoints
+from processors import Resize_image, Transform_Keypoints
 
 
 class DetectHandKeypoints(Processor):
@@ -25,7 +22,7 @@ class DetectHandKeypoints(Processor):
             [pr.UnpackDictionary(['image', 'raw_segmentation_map']),
              pr.ControlMap(Resize_image(size=(image_size, image_size)),
                            [1], [1]),
-             pr.ControlMap(HandSegmentationMap(), [1], [1]),
+             pr.ControlMap(SegmentationDilation(), [1], [1]),
              pr.ControlMap(ExtractBoundingbox(), [1], [2, 3, 4],
                            keep={1: 1}),
              pr.ControlMap(AdjustCropSize(), [4], [4]),

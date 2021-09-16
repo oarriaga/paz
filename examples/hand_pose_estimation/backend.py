@@ -1,6 +1,5 @@
 import os
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
 
@@ -49,20 +48,10 @@ def keypoints_to_wrist_coordinates(keypoints):
         [palm_coordinates_left,
          keypoints[(LEFT_ROOT_KEYPOINT_ID + 1):(LEFT_LAST_KEYPOINT_ID + 1), :],
          palm_coordinates_right,
-         keypoints[(RIGHT_ROOT_KEYPOINT_ID + 1):(RIGHT_LAST_KEYPOINT_ID + 1),
-         :]], 0)
+         keypoints[(RIGHT_ROOT_KEYPOINT_ID + 1):(RIGHT_LAST_KEYPOINT_ID + 1), :]
+         ], 0)
 
     return keypoints
-
-
-# def one_hot_encode(inputs, n_classes):
-#     # Reuse the one in backend by writing a processor for it
-#     """
-#     One hot encode a list of sample labels. Return a one-hot encoded vector
-#     for each label.
-#     : input: List of sample Labels
-#     : return: Numpy array of one-hot encoded labels """
-#     return np.eye(n_classes, dtype=int)[inputs]
 
 
 def normalize_keypoints(keypoints3D):
@@ -100,7 +89,6 @@ def build_affine_matrix(matrix):
 
 
 def build_rotation_matrix_x(angle):
-    # Make all floats
     rotation_matrix_x = np.array([[1.0, 0.0, 0.0],
                                   [0.0, np.cos(angle), np.sin(angle)],
                                   [0.0, -np.sin(angle), np.cos(angle)]])
@@ -115,9 +103,9 @@ def build_rotation_matrix_y(angle):
 
 
 def build_rotation_matrix_z(angle):
-    rotation_matrix_z = np.array([[np.cos(angle), np.sin(angle), 0],
-                                  [-np.sin(angle), np.cos(angle), 0],
-                                  [0, 0, 1]])
+    rotation_matrix_z = np.array([[np.cos(angle), np.sin(angle), 0.0],
+                                  [-np.sin(angle), np.cos(angle), 0.0],
+                                  [0.0, 0.0, 1.0]])
     return rotation_matrix_z
 
 
@@ -222,8 +210,7 @@ def get_child_transformations(keypoints_3D, bone_index, parent_key,
         local_child_coordinates, local_parent_coordinates,
         Transformation_matrix)
 
-    relative_coordinates[bone_index] = np.stack(
-        transformation_parameters[:3])
+    relative_coordinates[bone_index] = np.stack(transformation_parameters[:3])
     transformations[bone_index] = transformation_parameters[3]
     return transformations, relative_coordinates
 
@@ -371,8 +358,8 @@ def get_scale(keypoints_2D, keypoints_2D_vis, image_size, crop_size):
     min_coordinates, max_coordinates = extract_coordinate_limits(
         keypoints_2D, keypoints_2D_vis, image_size)
 
-    crop_size_best = get_best_crop_size(max_coordinates, min_coordinates,
-                                        crop_center)
+    crop_size_best = get_best_crop_size(
+        max_coordinates, min_coordinates, crop_center)
 
     scale = crop_size / crop_size_best
     return scale, crop_center
@@ -380,20 +367,20 @@ def get_scale(keypoints_2D, keypoints_2D_vis, image_size, crop_size):
 
 def crop_image_using_mask(keypoints_2D, keypoints_2D_vis, image, image_size,
                           crop_size, camera_matrix):
-    scale, crop_center = get_scale(keypoints_2D, keypoints_2D_vis, image_size,
-                                   crop_size)
+    scale, crop_center = get_scale(
+        keypoints_2D, keypoints_2D_vis, image_size, crop_size)
     scale, scale_matrix = get_scale_matrix(scale)
 
     img_crop = crop_image_from_coordinates(image, crop_center, crop_size, scale)
 
-    keypoint_uv21 = get_keypoints_camera_coordinates(keypoints_2D, crop_center,
-                                                     scale, crop_size)
+    keypoint_uv21 = get_keypoints_camera_coordinates(
+        keypoints_2D, crop_center, scale, crop_size)
 
-    scale_translation_matrix = get_scale_translation_matrix(crop_center,
-                                                            crop_size, scale)
+    scale_translation_matrix = get_scale_translation_matrix(
+        crop_center, crop_size, scale)
 
-    camera_matrix_cropped = np.matmul(scale_translation_matrix,
-                                      np.matmul(scale_matrix, camera_matrix))
+    camera_matrix_cropped = np.matmul(
+        scale_translation_matrix, np.matmul(scale_matrix, camera_matrix))
 
     return scale, np.squeeze(img_crop), keypoint_uv21, camera_matrix_cropped
 
@@ -411,40 +398,42 @@ def flip_right_hand(canonical_keypoints3D, flip_right):
         [canonical_keypoints3D[:, :, 0], canonical_keypoints3D[:, :, 1],
          -canonical_keypoints3D[:, :, 2]], -1)
 
-    canonical_keypoints3D_left = np.where(flip_right,
-                                          canonical_keypoints3D_mirrored,
-                                          canonical_keypoints3D)
+    canonical_keypoints3D_left = np.where(
+        flip_right, canonical_keypoints3D_mirrored, canonical_keypoints3D)
+
     if expanded:
-        canonical_keypoints3D_left = np.squeeze(canonical_keypoints3D_left,
-                                                axis=0)
+        canonical_keypoints3D_left = np.squeeze(
+            canonical_keypoints3D_left, axis=0)
+
     return canonical_keypoints3D_left
 
 
 def extract_dominant_hand_visibility(keypoint_visibility, dominant_hand):
     keypoint_visibility_left = keypoint_visibility[:21]
     keypoint_visibility_right = keypoint_visibility[-21:]
-    keypoint_visibility_21 = np.where(dominant_hand[:, 0],
-                                      keypoint_visibility_left,
-                                      keypoint_visibility_right)
+    keypoint_visibility_21 = np.where(
+        dominant_hand[:, 0], keypoint_visibility_left,
+        keypoint_visibility_right)
     return keypoint_visibility_21
 
 
 def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
     keypoint_visibility_left = keypoint_2D[:21, :]
     keypoint_visibility_right = keypoint_2D[-21:, :]
-    keypoint_visibility_2D_21 = np.where(dominant_hand[:, :2],
-                                         keypoint_visibility_left,
-                                         keypoint_visibility_right)
+    keypoint_visibility_2D_21 = np.where(
+        dominant_hand[:, :2], keypoint_visibility_left,
+        keypoint_visibility_right)
     return keypoint_visibility_2D_21
 
 
 def extract_keypoint2D_limits(uv_coordinates, scoremap_size):
-    cond_1_in = np.logical_and(np.less(uv_coordinates[:, 0],
-                                       scoremap_size[0] - 1),
-                               np.greater(uv_coordinates[:, 0], 0))
-    cond_2_in = np.logical_and(np.less(uv_coordinates[:, 1],
-                                       scoremap_size[1] - 1),
-                               np.greater(uv_coordinates[:, 1], 0))
+    cond_1_in = np.logical_and(
+        np.less(uv_coordinates[:, 0], scoremap_size[0] - 1), np.greater(
+            uv_coordinates[:, 0], 0))
+
+    cond_2_in = np.logical_and(
+        np.less(uv_coordinates[:, 1], scoremap_size[1] - 1), np.greater(
+            uv_coordinates[:, 1], 0))
 
     cond_in = np.logical_and(cond_1_in, cond_2_in)
 
@@ -459,8 +448,9 @@ def get_keypoints_mask(valid_vec, uv_coordinates, scoremap_size):
         keypoint_validity = np.ones_like(uv_coordinates[:, 0], dtype=np.float32)
         keypoint_validity = np.greater(keypoint_validity, 0.5)
 
-    keypoint_out_limits = extract_keypoint2D_limits(uv_coordinates,
-                                                    scoremap_size)
+    keypoint_out_limits = extract_keypoint2D_limits(
+        uv_coordinates, scoremap_size)
+
     keypooints_mask = np.logical_and(keypoint_validity, keypoint_out_limits)
     return keypooints_mask
 
@@ -491,8 +481,8 @@ def get_xy_limits(uv_coordinates, scoremap_size):
 def create_multiple_gaussian_map(uv_coordinates, scoremap_size, sigma,
                                  valid_vec):
     assert len(scoremap_size) == 2
-    keypoints_mask = get_keypoints_mask(valid_vec, uv_coordinates,
-                                        scoremap_size)
+    keypoints_mask = get_keypoints_mask(
+        valid_vec, uv_coordinates, scoremap_size)
 
     X_limits, Y_limits = get_xy_limits(uv_coordinates, scoremap_size)
 
@@ -518,14 +508,14 @@ def get_transformation_parameters(keypoint3D, transformation_matrix):
 
     translation_matrix_to_origin = build_translation_matrix_SE3(
         -length_from_origin)
-    rotation_matrix_xy = np.matmul(affine_rotation_matrix_x,
-                                   affine_rotation_matrix_y)
+    rotation_matrix_xy = np.matmul(
+        affine_rotation_matrix_x, affine_rotation_matrix_y)
 
-    keypoint3D_rotated_X = np.matmul(translation_matrix_to_origin,
-                                     rotation_matrix_xy)
+    keypoint3D_rotated_X = np.matmul(
+        translation_matrix_to_origin, rotation_matrix_xy)
 
-    final_transformation_matrix = np.matmul(keypoint3D_rotated_X,
-                                            transformation_matrix)
+    final_transformation_matrix = np.matmul(
+        keypoint3D_rotated_X, transformation_matrix)
 
     return length_from_origin, alpha, gamma, final_transformation_matrix
 
@@ -587,8 +577,8 @@ def get_bounding_box_features(X, Y, binary_class_mask, shape):
             bounding_box_list, center_list, crop_size_list = [], [], []
             return bounding_box_list, center_list, crop_size_list
 
-        bounding_box_list, xy_limit = get_bounding_box_list(X_masked, Y_masked,
-                                                            bounding_box_list)
+        bounding_box_list, xy_limit = get_bounding_box_list(
+            X_masked, Y_masked, bounding_box_list)
 
         center_list = get_center_list(xy_limit, center_list)
 
@@ -633,7 +623,6 @@ def convert_location_to_box(location, size, shape):
 
 
 def crop_image_from_coordinates(image, crop_location, crop_size, scale=1.0):
-    # show_image(np.squeeze(image, axis=0).astype('uint8'))
     image_dimensions = image.shape
     scale = np.reshape(scale, [-1])
     crop_location = crop_location.astype(np.float)
@@ -642,15 +631,14 @@ def crop_image_from_coordinates(image, crop_location, crop_size, scale=1.0):
 
     crop_size_scaled = crop_size / scale
 
-    boxes = convert_location_to_box(crop_location, crop_size_scaled,
-                                    image_dimensions)
+    boxes = convert_location_to_box(
+        crop_location, crop_size_scaled, image_dimensions)
 
     crop_size = np.stack([crop_size, crop_size])
     crop_size = crop_size.astype(np.float)
     box_indices = np.arange(image_dimensions[0])
-    image_cropped = tf.image.crop_and_resize(tf.cast(image, tf.float32),
-                                             boxes, box_indices, crop_size,
-                                             name='crop')
+    image_cropped = tf.image.crop_and_resize(
+        tf.cast(image, tf.float32), boxes, box_indices, crop_size, name='crop')
     return image_cropped.numpy()
 
 
@@ -675,6 +663,7 @@ def extract_keypoints_XY(x_vector, y_vector, maximum_indices, batch_size):
 def extract_2D_grids(shape):
     x_range = np.expand_dims(np.arange(shape[1]), 1)
     y_range = np.expand_dims(np.arange(shape[2]), 0)
+
     X = np.tile(x_range, [1, shape[2]])
     Y = np.tile(y_range, [shape[1], 1])
 
@@ -690,53 +679,11 @@ def find_max_location(scoremap):
     x_grid_vector, y_grid_vector = extract_2D_grids(shape)
 
     max_ind_vec = extract_scoremap_indices(scoremap)
-    keypoints_2D = extract_keypoints_XY(x_grid_vector, y_grid_vector,
-                                        max_ind_vec, shape[0])
+
+    keypoints_2D = extract_keypoints_XY(
+        x_grid_vector, y_grid_vector, max_ind_vec, shape[0])
 
     return keypoints_2D
-
-
-def softmax(x):
-    """Compute softmax values for each sets of scores in x."""
-    exp = np.exp(x - np.max(x))
-    return exp / exp.sum(axis=0)
-
-
-def object_scoremap(scoremap):
-    filter_size = 21
-    s = scoremap.shape
-    assert len(s) == 4, "Scoremap must be 4D."
-
-    scoremap_softmax = softmax(scoremap)
-    scoremap_fg = tf.reduce_max(scoremap_softmax[:, :, :, 1:], -1)  # B, H, W
-    detmap_fg = tf.round(scoremap_fg)  # B, H, W
-
-    max_loc = find_max_location(scoremap_fg)
-
-    objectmap_list = list()
-    kernel_dil = tf.ones((filter_size, filter_size, 1)) / float(
-        filter_size * filter_size)
-    if s[0] is None:
-        s[0] = 1
-    for i in range(s[0]):
-        sparse_ind = tf.reshape(max_loc[i, :], [1, 2])
-        objectmap = tf.compat.v1.sparse_to_dense(sparse_ind, [s[1], s[2]], 1.0)
-
-        num_passes = max(s[1], s[2]) // (filter_size // 2)
-        for pass_count in range(num_passes):
-            objectmap = tf.reshape(objectmap, [1, s[1], s[2], 1])
-            objectmap_dil = tf.compat.v1.nn.dilation2d(objectmap, kernel_dil,
-                                                       [1, 1, 1, 1],
-                                                       [1, 1, 1, 1], 'SAME')
-
-            objectmap_dil = tf.reshape(objectmap_dil, [s[1], s[2]])
-            objectmap = tf.round(tf.multiply(detmap_fg[i, :, :], objectmap_dil))
-
-        objectmap = tf.reshape(objectmap, [s[1], s[2], 1])
-        objectmap_list.append(objectmap)
-
-    objectmap = tf.stack(objectmap_list)
-    return objectmap
 
 
 def get_axis_coordinates(axis_angles, theta, is_normalized):
@@ -790,8 +737,8 @@ def create_score_maps(keypoint_2D, keypoint_vis21, image_size, crop_size,
     if crop_image:
         scoremap_size = (crop_size, crop_size)
 
-    scoremap = create_multiple_gaussian_map(keypoint_uv, scoremap_size,
-                                            sigma, valid_vec=keypoint_vis21)
+    scoremap = create_multiple_gaussian_map(
+        keypoint_uv, scoremap_size, sigma, valid_vec=keypoint_vis21)
 
     return scoremap
 
@@ -808,8 +755,9 @@ def detect_keypoints(scoremaps):
     scoremaps_shape = scoremaps.shape
     keypoint_coords = np.zeros((scoremaps_shape[2], 2))
     for i in range(scoremaps_shape[2]):
-        v, u = np.unravel_index(np.argmax(scoremaps[:, :, i]),
-                                (scoremaps_shape[0], scoremaps_shape[1]))
+        v, u = np.unravel_index(
+            np.argmax(scoremaps[:, :, i]), (scoremaps_shape[0],
+                                            scoremaps_shape[1]))
         keypoint_coords[i, 0] = u
         keypoint_coords[i, 1] = v
     return keypoint_coords

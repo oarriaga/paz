@@ -6,10 +6,9 @@ from processors import Extract2DKeypoints, ExtractHandSide, FlipRightHand
 from processors import ExtractDominantKeypoint, CropImageFromMask
 from processors import ExtractHandmask, KeypointsWristFrame
 from processors import MatrixInverse, ExtractDominantHandVisibility
+from processors import Resize_image, RotationMatrixfromAxisAngles
 from processors import TransformVisibilityMask, NormalizeKeypoints
 from processors import TransformtoRelativeFrame, GetCanonicalTransformation
-from processors import Resize_image
-from processors import Merge_Dictionaries, GetRotationMatrix
 
 
 class PreprocessKeypoints(SequentialProcessor):
@@ -172,6 +171,6 @@ class PostProcessKeypoints(SequentialProcessor):
         super(PostProcessKeypoints, self).__init__()
         self.add(pr.UnpackDictionary(['canonical_coordinates',
                                       'rotation_parameters', 'hand_side']))
-        self.add(pr.ControlMap(GetRotationMatrix(), [1], [1]))
+        self.add(pr.ControlMap(RotationMatrixfromAxisAngles(), [1], [1]))
         self.add(pr.ControlMap(CanonicaltoRelativeFrame(number_of_keypoints),
                                [0, 1, 2], [0]))

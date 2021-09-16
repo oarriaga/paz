@@ -1,20 +1,19 @@
 import numpy as np
 
-from backend import create_score_maps, extract_2D_keypoints, object_scoremap
-from backend import crop_image_from_coordinates, get_rotation_matrix
+from backend import create_score_maps, extract_2D_keypoints
+from backend import crop_image_from_coordinates, rotation_from_axis_angles
+from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
 from backend import extract_dominant_hand_visibility, extract_bounding_box
 from backend import extract_dominant_keypoints2D, crop_image_using_mask
 from backend import extract_hand_segment, keypoints_to_wrist_coordinates
+from backend import get_bone_connections_and_colors, find_max_location
 from backend import get_canonical_transformations, flip_right_hand
 from backend import normalize_keypoints, transform_to_relative_frames
-from backend import transform_visibility_mask, get_hand_side_and_keypooints
-from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
-from backend import get_bone_connections_and_colors, find_max_location
 from backend import transform_cropped_keypoints
+from backend import transform_visibility_mask, get_hand_side_and_keypooints
+from paz.abstract import Processor
 from paz.backend.image.draw import lincolor
 from paz.backend.image.tensorflow_image import resize
-from paz.backend.image.opencv_image import resize_image
-from paz.abstract import Processor
 
 
 class ExtractHandmask(Processor):
@@ -213,12 +212,12 @@ class CropImage(Processor):
                                            scale)
 
 
-class GetRotationMatrix(Processor):
+class RotationMatrixfromAxisAngles(Processor):
     def __init__(self):
-        super(GetRotationMatrix, self).__init__()
+        super(RotationMatrixfromAxisAngles, self).__init__()
 
     def call(self, rotation_angles):
-        return get_rotation_matrix(rotation_angles)
+        return rotation_from_axis_angles(rotation_angles)
 
 
 class CanonicaltoRelativeFrame(Processor):
@@ -247,7 +246,7 @@ class ExtractKeypoints(Processor):
 
 
 class Resize_image(Processor):
-    def __init__(self, size=(256, 256)):
+    def __init__(self, size=[256, 256]):
         super(Resize_image, self).__init__()
         self.size = size
 

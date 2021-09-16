@@ -1,14 +1,15 @@
-from backend import one_hot_encode, normalize_keypoints, \
-    to_homogeneous_coordinates, get_translation_matrix, \
-    build_rotation_matrix_x, build_rotation_matrix_y, build_rotation_matrix_z, \
-    get_affine_matrix, get_canonical_transformations
+from backend import one_hot_encode, normalize_keypoints,
+from backend import to_homogeneous_coordinates, build_translation_matrix_SE3
+from backend import build_rotation_matrix_x, build_rotation_matrix_y
+from backend import build_rotation_matrix_z, build_affine_matrix
+from backend import get_canonical_transformations
 
 from hand_keypoints_loader import RenderedHandLoader
 
 data_loader = RenderedHandLoader(
     '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/')
 
-from HandPoseEstimation import Hand_Segmentation_Net, PosePriorNet, PoseNet
+from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
 import numpy as np
 from pipelines import preprocess_image, PostprocessSegmentation, \
@@ -21,9 +22,9 @@ np.random.seed(0)
 
 use_pretrained = True
 HandSegNet = Hand_Segmentation_Net(load_pretrained=use_pretrained)
-HandPoseNet = PoseNet(load_pretrained=use_pretrained)
-HandPosePriorNet = PosePriorNet(load_pretrained=use_pretrained)
-HandViewPointNet = ViewPointNet(load_pretrained=use_pretrained)
+HandPoseNet = PoseNet()
+HandPosePriorNet = PosePriorNet()
+HandViewPointNet = ViewPointNet()
 
 
 def test_image_loading(image_path):
