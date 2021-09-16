@@ -164,6 +164,7 @@ class PlotImagesCallback(Callback):
 
         return ((image_fragment_coords+1)*127.5).astype("uint8")
 
+
 if __name__ == "__main__":
     fragment_centers = np.load("/home/fabian/Dokumente/epos_data/fragment_centers.npy")
 
@@ -172,11 +173,11 @@ if __name__ == "__main__":
     num_output_channels = (4 * num_objects * num_fragments + num_objects + 1)
 
     background_image_paths = glob.glob(os.path.join("/home/fabian/.keras/backgrounds", '*.jpg'))
-    processor = GeneratedImageGenerator(os.path.join("/home/fabian/Dokumente/epos", "test"), background_image_paths, 128, num_output_channels)
+    processor = GeneratedImageGenerator(os.path.join("/home/fabian/Dokumente/epos", "train"), background_image_paths, 128, num_output_channels)
     sequence = GeneratingSequence(processor, 3, 1)
 
     epos_loss = epos_loss_wrapped(num_objects=num_objects, num_fragments=num_fragments)
-    model = load_model("/home/fabian/Dokumente/epos_4200.h5", custom_objects={"relu6": tf.nn.relu6, "EPOSActivationOutput": EPOSActivationOutput, "epos_loss": epos_loss})
+    model = load_model("/home/fabian/Dokumente/epos_4500.h5", custom_objects={"relu6": tf.nn.relu6, "EPOSActivationOutput": EPOSActivationOutput, "epos_loss": epos_loss})
 
     callback = PlotImagesCallback(model, sequence, num_objects=1, num_fragments=64, fragment_centers=fragment_centers, object_extent=np.array([0.1, 0.15, 0.2]))
     callback.on_epoch_end(0)
