@@ -338,7 +338,9 @@ if __name__ == "__main__":
                           roll=None, shift=None)
 
     rotation_matrices_error = [np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), np.array([[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]])]
-    plot_predictions(renderer, model)
+    test_custom_coloring(renderer, batch_size=4)
+
+    #plot_predictions(renderer, model)
     #calculate_error(renderer, model, rotation_matrices_error)
 
     #renderer = SingleView(filepath=args.obj_path,

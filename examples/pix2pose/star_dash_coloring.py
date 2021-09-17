@@ -22,18 +22,18 @@ def color_star(mesh, symmetry_fold):
 
     # Transform vertices in object coordinates to cylindric coordinates
     vertices_cylindric_coords = np.zeros_like(vertices)
-    vertices_cylindric_coords[:, 1] = np.arctan2(vertices[:, 0], vertices[:, 1])
-    vertices_cylindric_coords[:, 0] = np.sqrt(vertices[:, 0]**2 + vertices[:, 1]**2)
-    vertices_cylindric_coords[:, 2] = vertices[:, 2]
+    vertices_cylindric_coords[:, 0] = np.arctan2(vertices[:, 2], vertices[:, 0])
+    vertices_cylindric_coords[:, 1] = vertices[:, 1]
+    vertices_cylindric_coords[:, 2] = np.sqrt(vertices[:, 2]**2 + vertices[:, 0]**2)
 
     # Multiply by fold of symmetry
-    vertices_cylindric_coords *= np.array([1, symmetry_fold, 1])
+    vertices_cylindric_coords *= np.array([symmetry_fold, 1, 1])
 
     # Transform back to cartesian coordinates
     vertices_cartesian_coords = np.zeros_like(vertices)
-    vertices_cartesian_coords[:, 1] = vertices_cylindric_coords[:, 0] * np.cos(vertices_cylindric_coords[:, 1])
-    vertices_cartesian_coords[:, 0] = vertices_cylindric_coords[:, 0] * np.sin(vertices_cylindric_coords[:, 1])
-    vertices_cartesian_coords[:, 2] = vertices_cylindric_coords[:, 2]
+    vertices_cartesian_coords[:, 0] = vertices_cylindric_coords[:, 2] * np.cos(vertices_cylindric_coords[:, 0])
+    vertices_cartesian_coords[:, 1] = vertices_cylindric_coords[:, 1]
+    vertices_cartesian_coords[:, 2] = vertices_cylindric_coords[:, 2] * np.sin(vertices_cylindric_coords[:, 0])
 
     x_min = vertices_cartesian_coords[:, 0].min()
     x_max = vertices_cartesian_coords[:, 0].max()
