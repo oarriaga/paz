@@ -1,8 +1,10 @@
-from backend import one_hot_encode, normalize_keypoints,
+from backend import normalize_keypoints
 from backend import to_homogeneous_coordinates, build_translation_matrix_SE3
 from backend import build_rotation_matrix_x, build_rotation_matrix_y
 from backend import build_rotation_matrix_z, build_affine_matrix
-from backend import get_canonical_transformations
+from backend import get_canonical_transformations, get_hand_side_and_keypooints
+
+from paz.backend.boxes import to_one_hot
 
 from hand_keypoints_loader import RenderedHandLoader
 
@@ -21,7 +23,7 @@ from processors import ExtractKeypoints
 np.random.seed(0)
 
 use_pretrained = True
-HandSegNet = Hand_Segmentation_Net(load_pretrained=use_pretrained)
+HandSegNet = HandSegmentationNet(load_pretrained=use_pretrained)
 HandPoseNet = PoseNet()
 HandPosePriorNet = PosePriorNet()
 HandViewPointNet = ViewPointNet()
@@ -38,10 +40,10 @@ def test_segmentation_map_loading(segmentation_path):
 
 
 def test_one_hot_encode():
-    one_hot_vector = one_hot_encode(1, 2)
+    one_hot_vector = to_one_hot(1, 2)
     assert type(one_hot_vector).__module__ == np.__name__
     assert one_hot_vector.all() == np.array([0, 1]).all()
-    assert one_hot_encode(0, 2).all() == np.array([1, 0]).all()
+    assert to_one_hot(0, 2).all() == np.array([1, 0]).all()
 
 
 def test_normalize_keypoints():
@@ -68,7 +70,7 @@ def test_to_homogeneous():
 
 
 def test_to_translation():
-    translation_matrix = get_translation_matrix(1)
+    translation_matrix = build_translation_matrix_SE3(1)
     assert translation_matrix.shape == (1, 4, 4)
     assert translation_matrix[-1].all() == np.array([0, 0, 0, 1]).all()
 
@@ -114,7 +116,7 @@ def test_rotation_matrix_z():
 
 def test_get_affine_matrix():
     rotation_matrix = build_rotation_matrix_x(np.deg2rad(30))
-    affine_rotation_matrix = get_affine_matrix(rotation_matrix)
+    affine_rotation_matrix = build_affine_matrix(rotation_matrix)
     assert affine_rotation_matrix.shape == (4, 4)
     assert affine_rotation_matrix[-1].all() == np.array([0, 0, 0, 1]).all()
 
@@ -124,7 +126,7 @@ def test_hand_side_extraction(segmentation_path, label_path):
     annotations_all = data_loader._load_annotation(label_path)
     keypoints3D = data_loader.process_keypoints_3D(annotations_all[11]['xyz'])
     hand_side, hand_side_keypoints, dominant_hand_keypoints = \
-        extract_hand_side(segmentation_mask, keypoints3D)
+        get_hand_side_and_keypooints(segmentation_mask, keypoints3D)
 
     assert type(hand_side).__module__ == np.__name__
     assert hand_side == np.array([0])
