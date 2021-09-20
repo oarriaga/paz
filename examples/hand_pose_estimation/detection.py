@@ -5,8 +5,8 @@ from paz import processors as pr
 from paz.abstract import Processor, SequentialProcessor
 from pipelines import PostProcessKeypoints
 from processors import ExtractBoundingbox, AdjustCropSize, CropImage
-from processors import Merge_Dictionaries, ExtractKeypoints
-from processors import Resize_image, Transform_Keypoints
+from processors import MergeDictionaries, ExtractKeypoints
+from processors import Resize_image, TransformKeypoints
 
 
 class DetectHandKeypoints(Processor):
@@ -32,7 +32,7 @@ class DetectHandKeypoints(Processor):
         self.localize_hand = pr.Predict(handsegnet, preprocess=preprocess_image,
                                         postprocess=postprocess_segmentation)
 
-        self.merge_dictionaries = Merge_Dictionaries()
+        self.merge_dictionaries = MergeDictionaries()
 
         self.predict_keypoints2D = pr.Predict(posenet)
         self.predict_keypoints3D = pr.Predict(posepriornet)
@@ -40,7 +40,7 @@ class DetectHandKeypoints(Processor):
         self.postprocess_keypoints = PostProcessKeypoints()
         self.resize = Resize_image(crop_shape)
         self.extract_2D_keypoints = ExtractKeypoints()
-        self.transform_keypoints = Transform_Keypoints()
+        self.transform_keypoints = TransformKeypoints()
         self.draw_keypoint = pr.DrawKeypoints2D(num_keypoints)
         self.denormalize = pr.DenormalizeImage()
         self.wrap = pr.WrapOutput(['image', 'keypoints2D'])

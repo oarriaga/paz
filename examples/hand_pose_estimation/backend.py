@@ -1,25 +1,42 @@
-import os
-
 import numpy as np
 import tensorflow as tf
 
-from hand_keypoints_loader import kinematic_chain_dict, kinematic_chain_list
-from hand_keypoints_loader import LEFT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import LEFT_ALIGNED_KEYPOINT_ID
 from hand_keypoints_loader import LEFT_LAST_KEYPOINT_ID
-
-from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
+from hand_keypoints_loader import LEFT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_ALIGNED_KEYPOINT_ID
 from hand_keypoints_loader import RIGHT_LAST_KEYPOINT_ID
+from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
+from hand_keypoints_loader import kinematic_chain_dict, kinematic_chain_list
 
 
 def extract_hand_segment(segmentation_label):
+    """
+    Data Pre-processing step: Extract only hand mask from the
+    segmentation map provided in RHD dataset.
+
+        # Arguments
+            segmentation_label: Numpy array with shape `(320, 320, 1)`.
+
+        # Returns
+            Numpy array with shape `(320, 320, 2)`.
+    """
     hand_mask = np.greater(segmentation_label, 1)
     background_mask = np.logical_not(hand_mask)
     return np.stack([background_mask, hand_mask], 2)
 
 
 def transform_visibility_mask(visibility_mask):
+    """
+    Data Pre-processing step: Transform Visibility mask to palm coordinates
+    from wrist coordinates.
+
+        # Arguments
+            visibility_mask: Numpy array with shape `(42, 1)`.
+
+        # Returns
+            Numpy array with shape `(42, 1)`.
+    """
     palm_visibility_left = np.logical_or(
         visibility_mask[LEFT_ROOT_KEYPOINT_ID],
         visibility_mask[LEFT_ALIGNED_KEYPOINT_ID])
@@ -36,6 +53,19 @@ def transform_visibility_mask(visibility_mask):
 
 
 def keypoints_to_wrist_coordinates(keypoints):
+    """
+    Data Pre-processing step: Transform keypoints to palm coordinates
+    from wrist coordinates.
+
+        # Arguments
+            keypoints: Numpy array with shape `(42, 3)` for 3D keypoints.
+                       Numpy array with shape `(42, 2)` for 2D keypoints.
+
+
+        # Returns
+            Numpy array with shape `(42, 3)` for 3D keypoints.
+            Numpy array with shape `(42, 2)` for 2D keypoints.
+    """
     palm_coordinates_left = 0.5 * (keypoints[LEFT_ROOT_KEYPOINT_ID, :] +
                                    keypoints[LEFT_ALIGNED_KEYPOINT_ID, :])
     palm_coordinates_left = np.expand_dims(palm_coordinates_left, 0)
@@ -55,6 +85,15 @@ def keypoints_to_wrist_coordinates(keypoints):
 
 
 def normalize_keypoints(keypoints3D):
+    """
+    Normalize 3D-keypoints.
+
+        # Arguments
+            keypoints: Numpy array with shape `(21, 3)`
+
+        # Returns
+            Numpy array with shape `(21, 3)`.
+    """
     keypoint3D_root = keypoints3D[0, :]
     relative_keypoint3D = keypoints3D - keypoint3D_root
     keypoint_scale = np.linalg.norm(
@@ -66,11 +105,29 @@ def normalize_keypoints(keypoints3D):
 
 
 def to_homogeneous_coordinates(vector):
+    """
+    Homogenize the vector : Appending 1 to the vector.
+
+        # Arguments
+            keypoints: Numpy array with any shape.
+
+        # Returns
+            Numpy array.
+    """
     vector = np.append(vector, 1)
     return vector
 
 
 def build_translation_matrix_SE3(translation_vector):
+    """
+    Build a translation matrix from translation vector : .
+
+        # Arguments
+            translation_vector: list of length 1 or 3.
+
+        # Returns
+            Numpy array of size (1, 4, 4).
+    """
     if len(translation_vector) == 1:
         translation_vector = [0, 0, translation_vector]
     transformation_matrix = np.array([[1, 0, 0, translation_vector[0]],
@@ -82,6 +139,15 @@ def build_translation_matrix_SE3(translation_vector):
 
 
 def build_affine_matrix(matrix):
+    """
+    Build a (4, 4) affine matrix provided a matrix of size (3, 3): .
+
+        # Arguments
+            matrix: numpy array of shape (3, 3).
+
+        # Returns
+            Numpy array of size (4, 4).
+    """
     translation_vector = np.array([[0], [0], [0]])
     affine_matrix = np.hstack([matrix, translation_vector])
     affine_matrix = np.vstack((affine_matrix, [0, 0, 0, 1]))
@@ -89,6 +155,15 @@ def build_affine_matrix(matrix):
 
 
 def build_rotation_matrix_x(angle):
+    """
+    Build a (3, 3) rotation matrix along x-axis: .
+
+        # Arguments
+            angle: float value of range [0, 360].
+
+        # Returns
+            Numpy array of size (3, 3).
+    """
     rotation_matrix_x = np.array([[1.0, 0.0, 0.0],
                                   [0.0, np.cos(angle), np.sin(angle)],
                                   [0.0, -np.sin(angle), np.cos(angle)]])
@@ -96,6 +171,15 @@ def build_rotation_matrix_x(angle):
 
 
 def build_rotation_matrix_y(angle):
+    """
+    Build a (3, 3) rotation matrix along y-axis: .
+
+        # Arguments
+            angle: float value of range [0, 360].
+
+        # Returns
+            Numpy array of size (3, 3).
+    """
     rotation_matrix_y = np.array([[np.cos(angle), 0.0, -np.sin(angle)],
                                   [0.0, 1.0, 0.0],
                                   [np.sin(angle), 0.0, np.cos(angle)]])
@@ -103,6 +187,15 @@ def build_rotation_matrix_y(angle):
 
 
 def build_rotation_matrix_z(angle):
+    """
+    Build a (3, 3) rotation matrix along z-axis: .
+
+        # Arguments
+            angle: float value of range [0, 360].
+
+        # Returns
+            Numpy array of size (3, 3).
+    """
     rotation_matrix_z = np.array([[np.cos(angle), np.sin(angle), 0.0],
                                   [-np.sin(angle), np.cos(angle), 0.0],
                                   [0.0, 0.0, 1.0]])
@@ -110,6 +203,16 @@ def build_rotation_matrix_z(angle):
 
 
 def extract_hand_masks(hand_parts_mask, right_hand_mask_limit=17):
+    """
+    Extract Hand masks of left and right hand: .
+
+        # Arguments
+            hand_parts_mask: float value of range [320, 320].
+
+        # Returns
+            mask_left: Numpy array of size (320, 320).
+            mask_right: Numpy array of size (320, 320).
+    """
     one_map = np.ones_like(hand_parts_mask)
     left_hand_map = np.greater(hand_parts_mask, one_map)
     right_hand_map = np.less(hand_parts_mask, one_map *
@@ -119,7 +222,17 @@ def extract_hand_masks(hand_parts_mask, right_hand_mask_limit=17):
     return mask_left.astype('int'), mask_right.astype('int')
 
 
-def extract_dominant_hand_mask(keypoints3D, dominant_hand):  # Function name
+def extract_dominant_hand_mask(keypoints3D, dominant_hand):
+    """
+    Extract Hand masks of dominant hand: .
+
+        # Arguments
+            keypoints3D: numpy array of shape (21, 3)
+            dominant_hand: numpy array of shape (1).
+
+        # Returns
+            dominant_hand_mask: Numpy array of size (21, 1).
+    """
     keypoint3D_left = keypoints3D[
                       LEFT_ROOT_KEYPOINT_ID:LEFT_LAST_KEYPOINT_ID, :]
     keypoints_mask = np.ones_like(keypoint3D_left, dtype=bool)
@@ -128,16 +241,38 @@ def extract_dominant_hand_mask(keypoints3D, dominant_hand):  # Function name
 
 
 def extract_hand_side_keypooints(keypoints3D, dominant_hand_mask):
+    """
+    Extract Hand masks of dominant hand keypoints: .
+
+        # Arguments
+            keypoints3D: numpy array of shape (21, 3)
+            dominant_hand_mask: numpy array of shape (1).
+
+        # Returns
+            hand_side_keypoints3D: Numpy array of size (21, 3).
+    """
     keypoint3D_left = keypoints3D[
                       LEFT_ROOT_KEYPOINT_ID:LEFT_LAST_KEYPOINT_ID + 1, :]
     keypoint3D_right = keypoints3D[
                        RIGHT_ROOT_KEYPOINT_ID:RIGHT_LAST_KEYPOINT_ID + 1, :]
-    hand_side_keypoints3D = np.where(dominant_hand_mask, keypoint3D_left,
-                                     keypoint3D_right)
+    hand_side_keypoints3D = np.where(
+        dominant_hand_mask, keypoint3D_left, keypoint3D_right)
     return hand_side_keypoints3D
 
 
 def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
+    """
+    Extract Hand masks, Hand side and keypoints of dominant hand : .
+
+        # Arguments
+            keypoints3D: numpy array of shape (21, 3)
+            hand_parts_mask: numpy array of shape (320, 320).
+
+        # Returns
+            hand_side: Numpy array of size (2)
+            hand_side_keypoints3D: Numpy array of size (21, 3).
+            dominant_hand_mask: Numpy array of size (320, 320)
+    """
     hand_map_left, hand_map_right = extract_hand_masks(hand_parts_mask)
 
     num_pixels_hand_left = np.sum(hand_map_left)
@@ -156,6 +291,18 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
 
 
 def transform_to_relative_frame(keypoints_3D, bone_index):
+    """
+    Transform the keypoints in camera image frame to index keypoint frame: .
+
+        # Arguments
+            keypoints3D: numpy array of shape (21, 3)
+            bone_index: int value of range [0, 21].
+
+        # Returns
+            transformation_parameters: multiple values representing all the
+            euclidean parameters to calculate transformation matrix
+    """
+
     index_keypoint = np.expand_dims(keypoints_3D[bone_index, :], 1)
     translated_keypoint3D = to_homogeneous_coordinates(index_keypoint)
 
@@ -169,6 +316,16 @@ def transform_to_relative_frame(keypoints_3D, bone_index):
 
 
 def get_local_coordinates(transformation_matrix, keypoint3D):
+    """
+    Transform keypoint from one frame to another : .
+
+        # Arguments
+            transformation_matrix: numpy array of shape (4, 4)
+            keypoint3D: numpy array of shape (3, ).
+
+        # Returns
+            local_keypoint_coordinates: Numpy array of size (3, ).
+    """
     homogeneous_keypoint3D = to_homogeneous_coordinates(
         np.expand_dims(keypoint3D, 1))
     local_keypoint_coordinates = np.matmul(transformation_matrix,
@@ -178,6 +335,19 @@ def get_local_coordinates(transformation_matrix, keypoint3D):
 
 def get_root_transformations(keypoints_3D, bone_index,
                              relative_coordinates, transformations):
+    """
+    Transform all keypoints to root keypoint frame : .
+
+        # Arguments
+            keypoints_3D: numpy array of shape (21, 3)
+            bone_index: int value of range [0, 21].
+            relative_coordinates: numpy array of shape (21, 3, 1)
+            transformations: placeholder for transformation (21, 4, 4, 1)
+
+        # Returns
+            relative_coordinates: numpy array of shape (21, 3, 1)
+            transformations: placeholder for transformation (21, 4, 4, 1)
+    """
     transformation_parameters = transform_to_relative_frame(
         keypoints_3D, bone_index)
     relative_coordinates[bone_index] = np.stack(
@@ -188,6 +358,7 @@ def get_root_transformations(keypoints_3D, bone_index,
 
 def get_articulation_angles(local_child_coordinates, local_parent_coordinates,
                             Transformation_matrix):
+    
     delta_vector = local_child_coordinates - local_parent_coordinates
     delta_vector = to_homogeneous_coordinates(
         np.expand_dims(delta_vector[:, :3], 1))
@@ -344,10 +515,12 @@ def extract_coordinate_limits(keypoints_2D, keypoints_2D_vis, image_size):
 
 def get_keypoints_camera_coordinates(keypoints_2D, crop_center, scale,
                                      crop_size):
-    keypoint_uv21_u = (keypoints_2D[:, 0] - crop_center[1]) * scale + \
-                      crop_size // 2
-    keypoint_uv21_v = (keypoints_2D[:, 1] - crop_center[0]) * scale + \
-                      crop_size // 2
+    keypoint_uv21_u = (keypoints_2D[:, 0] -
+                       crop_center[1]) * scale + crop_size // 2
+
+    keypoint_uv21_v = (keypoints_2D[:, 1] -
+                       crop_center[0]) * scale + crop_size // 2
+
     keypoint_uv21 = np.stack([keypoint_uv21_u, keypoint_uv21_v], 1)
     return keypoint_uv21
 
@@ -427,17 +600,17 @@ def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
 
 
 def extract_keypoint2D_limits(uv_coordinates, scoremap_size):
-    cond_1_in = np.logical_and(
-        np.less(uv_coordinates[:, 0], scoremap_size[0] - 1), np.greater(
-            uv_coordinates[:, 0], 0))
+    x_limits = np.logical_and(
+        np.less(uv_coordinates[:, 0], scoremap_size[0] - 1),
+        np.greater(uv_coordinates[:, 0], 0))
 
-    cond_2_in = np.logical_and(
-        np.less(uv_coordinates[:, 1], scoremap_size[1] - 1), np.greater(
-            uv_coordinates[:, 1], 0))
+    y_limits = np.logical_and(
+        np.less(uv_coordinates[:, 1], scoremap_size[1] - 1),
+        np.greater(uv_coordinates[:, 1], 0))
 
-    cond_in = np.logical_and(cond_1_in, cond_2_in)
+    keypoint_limits = np.logical_and(x_limits, y_limits)
 
-    return cond_in
+    return keypoint_limits
 
 
 def get_keypoints_mask(valid_vec, uv_coordinates, scoremap_size):

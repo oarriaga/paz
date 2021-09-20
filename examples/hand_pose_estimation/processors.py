@@ -18,7 +18,6 @@ from paz.backend.image.tensorflow_image import resize
 
 class ExtractHandmask(Processor):
     """Extract Hand mask."""
-
     def __init__(self):
         super(ExtractHandmask, self).__init__()
 
@@ -159,6 +158,7 @@ class CreateScoremaps(Processor):
 
 
 class Extract2DKeypoints(Processor):
+    """ Extract the keyppoints based on the visibility of the hand"""
     def __init__(self):
         super(Extract2DKeypoints, self).__init__()
 
@@ -167,6 +167,7 @@ class Extract2DKeypoints(Processor):
 
 
 class MatrixInverse(Processor):
+    """ Perform Pseudo Inverse of the matrix"""
     def __init__(self):
         super(MatrixInverse, self).__init__()
 
@@ -174,15 +175,8 @@ class MatrixInverse(Processor):
         return np.linalg.pinv(matrix)
 
 
-class HandSegmentationMap(Processor):
-    def __init__(self):
-        super(HandSegmentationMap, self).__init__()
-
-    def call(self, raw_segmentation_map):
-        return object_scoremap(raw_segmentation_map)
-
-
 class ExtractBoundingbox(Processor):
+    """ Extract bounding box when provided with a binary mask"""
     def __init__(self):
         super(ExtractBoundingbox, self).__init__()
 
@@ -191,6 +185,7 @@ class ExtractBoundingbox(Processor):
 
 
 class AdjustCropSize(Processor):
+    """ Adjust the crop size with a buffer of scale 0.25 added"""
     def __init__(self, crop_size=256):
         super(AdjustCropSize, self).__init__()
         self.crop_size = crop_size
@@ -203,6 +198,8 @@ class AdjustCropSize(Processor):
 
 
 class CropImage(Processor):
+    """ Crop the input image provided the location, output image size and the
+    scaling of the output image"""
     def __init__(self, crop_size=256):
         super(CropImage, self).__init__()
         self.crop_size = crop_size
@@ -213,6 +210,7 @@ class CropImage(Processor):
 
 
 class RotationMatrixfromAxisAngles(Processor):
+    """ Get Rotation matrix from the axis angles"""
     def __init__(self):
         super(RotationMatrixfromAxisAngles, self).__init__()
 
@@ -221,6 +219,8 @@ class RotationMatrixfromAxisAngles(Processor):
 
 
 class CanonicaltoRelativeFrame(Processor):
+    """ Transform the keypoints from Canonical coordinates to chosen relative (
+    wrist or palm) coordinates """
     def __init__(self, num_keypoints=21):
         super(CanonicaltoRelativeFrame, self).__init__()
         self.num_keypoints = num_keypoints
@@ -238,6 +238,7 @@ class CanonicaltoRelativeFrame(Processor):
 
 
 class ExtractKeypoints(Processor):
+    """ Extract keypoints when provided with a predicted scoremap"""
     def __init__(self):
         super(ExtractKeypoints, self).__init__()
 
@@ -246,6 +247,7 @@ class ExtractKeypoints(Processor):
 
 
 class Resize_image(Processor):
+    """ Resize images. Done with tensorflow"""
     def __init__(self, size=[256, 256]):
         super(Resize_image, self).__init__()
         self.size = size
@@ -254,9 +256,11 @@ class Resize_image(Processor):
         return resize(image, self.size)
 
 
-class Wrap_to_Dictionary(Processor):
+class WraptoDictionary(Processor):
+    """ Wrap the input values to a dictionary with already provided key
+    values """
     def __init__(self, keys):
-        super(Wrap_to_Dictionary, self).__init__()
+        super(WraptoDictionary, self).__init__()
         if not isinstance(keys, list):
             keys = list(keys)
         self.keys = keys
@@ -267,35 +271,41 @@ class Wrap_to_Dictionary(Processor):
         return wrap_dictionary(self.keys, values)
 
 
-class Merge_Dictionaries(Processor):
+class MergeDictionaries(Processor):
+    """ Merge two dictionaries into one"""
     def __init__(self):
-        super(Merge_Dictionaries, self).__init__()
+        super(MergeDictionaries, self).__init__()
 
     def call(self, dicts):
         return merge_dictionaries(dicts)
 
 
-class Get_Bone_Color_Encoding(Processor):
+class GetBoneColorEncoding(Processor):
+    """ Map bone segmentation with respective colors to visualize"""
     def __init__(self):
-        super(Get_Bone_Color_Encoding, self).__init__()
+        super(GetBoneColorEncoding, self).__init__()
 
     def call(self, num_keypoints=21):
         colors = lincolor(num_colors=num_keypoints)
         return get_bone_connections_and_colors(colors=colors)
 
 
-class Extract_2D_Keypoint(Processor):
+class FindMaxLocation(Processor):
+    """ Find the brightest point in the score map, which is represented as a
+    keypoint"""
     def __init__(self):
-        super(Extract_2D_Keypoint, self).__init__()
+        super(FindMaxLocation, self).__init__()
 
     def call(self, scoremaps):
         keypoints_2D = find_max_location(scoremaps)
         return keypoints_2D
 
 
-class Transform_Keypoints(Processor):
+class TransformKeypoints(Processor):
+    """ Transform the keypoint from cropped image frame to original image
+    frame"""
     def __init__(self):
-        super(Transform_Keypoints, self).__init__()
+        super(TransformKeypoints, self).__init__()
 
     def call(self, cropped_keypoints, centers, scale, crop_size):
         keypoints_2D = transform_cropped_keypoints(cropped_keypoints, centers,
