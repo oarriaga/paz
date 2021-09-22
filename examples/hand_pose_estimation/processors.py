@@ -5,7 +5,7 @@ from backend import crop_image_from_coordinates, rotation_from_axis_angles
 from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
 from backend import extract_dominant_hand_visibility, extract_bounding_box
 from backend import extract_dominant_keypoints2D, crop_image_using_mask
-from backend import extract_hand_segment, keypoints_to_wrist_coordinates
+from backend import extract_hand_segment, keypoints_to_palm_coordinates
 from backend import get_bone_connections_and_colors, find_max_location
 from backend import get_canonical_transformations, flip_right_hand
 from backend import normalize_keypoints, transform_to_relative_frames
@@ -25,15 +25,15 @@ class ExtractHandmask(Processor):
         return extract_hand_segment(segmentation_label=segmentation_label)
 
 
-class KeypointsWristFrame(Processor):
+class KeypointstoPalmFrame(Processor):
     """Translate to Wrist Coordinates.
     """
 
     def __init__(self):
-        super(KeypointsWristFrame, self).__init__()
+        super(KeypointstoPalmFrame, self).__init__()
 
     def call(self, keypoints):
-        return keypoints_to_wrist_coordinates(keypoints=keypoints)
+        return keypoints_to_palm_coordinates(keypoints=keypoints)
 
 
 class TransformVisibilityMask(Processor):

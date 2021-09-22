@@ -5,7 +5,7 @@ from processors import AdjustCropSize, CropImage, CanonicaltoRelativeFrame
 from processors import CreateScoremaps, ExtractBoundingbox
 from processors import Extract2DKeypoints, ExtractHandSide, FlipRightHand
 from processors import ExtractDominantKeypoint, CropImageFromMask
-from processors import ExtractHandmask, KeypointsWristFrame
+from processors import ExtractHandmask, KeypointstoPalmFrame
 from processors import MatrixInverse, ExtractDominantHandVisibility
 from processors import Resize_image, RotationMatrixfromAxisAngles
 from processors import TransformVisibilityMask, NormalizeKeypoints
@@ -65,7 +65,7 @@ class AugmentHandPose2D(SequentialProcessor):
         self.add(pr.ControlMap(Extract2DKeypoints(), [3], [3, 5]))
 
         if not use_palm_coordinates:
-            self.add(pr.ControlMap(KeypointsWristFrame, [3], [3]))
+            self.add(pr.ControlMap(KeypointstoPalmFrame, [3], [3]))
             self.add(pr.ControlMap(TransformVisibilityMask, [5], [5]))
 
         self.add(pr.ControlMap(ExtractHandSide, [1, 2], [6, 2, 7]))
@@ -107,8 +107,8 @@ class AugmentHandPose(SequentialProcessor):
         self.add(pr.ControlMap(Extract2DKeypoints, [3], [5, 6]))
 
         if not use_palm_coordinates:
-            self.add(pr.ControlMap(KeypointsWristFrame, [2], [2]))
-            self.add(pr.ControlMap(KeypointsWristFrame, [5], [5]))
+            self.add(pr.ControlMap(KeypointstoPalmFrame, [2], [2]))
+            self.add(pr.ControlMap(KeypointstoPalmFrame, [5], [5]))
             self.add(pr.ControlMap(TransformVisibilityMask, [6], [6]))
 
         self.add(pr.ControlMap(ExtractHandSide, [1, 2], [7, 2, 8]))

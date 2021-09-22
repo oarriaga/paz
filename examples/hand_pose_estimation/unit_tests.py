@@ -3,6 +3,11 @@ from backend import to_homogeneous_coordinates, build_translation_matrix_SE3
 from backend import build_rotation_matrix_x, build_rotation_matrix_y
 from backend import build_rotation_matrix_z, build_affine_matrix
 from backend import get_canonical_transformations, get_hand_side_and_keypooints
+from backend import keypoints_to_palm_coordinates
+from backend import LEFT_ROOT_KEYPOINT_ID, LEFT_ALIGNED_KEYPOINT_ID
+from backend import LEFT_LAST_KEYPOINT_ID, RIGHT_ROOT_KEYPOINT_ID
+from backend import RIGHT_ALIGNED_KEYPOINT_ID, RIGHT_LAST_KEYPOINT_ID
+from backend import build_affine_matrix
 
 from paz.backend.boxes import to_one_hot
 
@@ -23,20 +28,19 @@ from processors import ExtractKeypoints
 np.random.seed(0)
 
 use_pretrained = True
-HandSegNet = HandSegmentationNet(load_pretrained=use_pretrained)
+HandSegNet = HandSegmentationNet()
 HandPoseNet = PoseNet()
 HandPosePriorNet = PosePriorNet()
 HandViewPointNet = ViewPointNet()
 
 
-def test_image_loading(image_path):
-    image = data_loader.load_images(image_path)
-    assert image.shape == data_loader.image_size
-
-
-def test_segmentation_map_loading(segmentation_path):
-    segmentation_mask = data_loader.load_images(segmentation_path)
-    assert segmentation_mask.shape == data_loader.image_size
+def test_keypoints_to_palm_coordinates():
+    keypoints = np.arange(0, 123).reshape((41, 3))
+    keypoint_palm = keypoints_to_palm_coordinates(keypoints)
+    assert keypoint_palm[LEFT_ROOT_KEYPOINT_ID, :].all() == np.array([
+        [18., 19., 20.]]).all()
+    assert keypoint_palm[RIGHT_ROOT_KEYPOINT_ID, :].all() == np.array([
+        [81., 82., 83.]]).all()
 
 
 def test_one_hot_encode():
@@ -69,10 +73,27 @@ def test_to_homogeneous():
     assert homogeneous_keypoint.shape == (vector_shape[1] + 1,)
 
 
-def test_to_translation():
-    translation_matrix = build_translation_matrix_SE3(1)
+def test_to_translation_1D():
+    translation_matrix = build_translation_matrix_SE3([1])
+
     assert translation_matrix.shape == (1, 4, 4)
     assert translation_matrix[-1].all() == np.array([0, 0, 0, 1]).all()
+
+
+def test_to_translation_3D():
+    translation_matrix = build_translation_matrix_SE3([1, 2, 3])
+
+    assert translation_matrix[:, :, -1].all() == np.array([[1, 2, 3, 1]]).all()
+    assert translation_matrix.shape == (1, 4, 4)
+    assert translation_matrix[-1].all() == np.array([0, 0, 0, 1]).all()
+
+
+def test_to_affine_matrix():
+    matrix = np.arange(0, 9).reshape((3, 3))
+    affine_matrix = build_affine_matrix(matrix)
+
+    assert matrix.shape == (3, 3)
+    assert affine_matrix.shape == (4, 4)
 
 
 def test_rotation_matrix_x():
