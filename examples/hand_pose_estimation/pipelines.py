@@ -1,7 +1,8 @@
 from paz import processors as pr
+
 from paz.abstract import SequentialProcessor
 from processors import AdjustCropSize, CropImage, CanonicaltoRelativeFrame
-from processors import CreateScoremaps, HandSegmentationMap, ExtractBoundingbox
+from processors import CreateScoremaps, ExtractBoundingbox
 from processors import Extract2DKeypoints, ExtractHandSide, FlipRightHand
 from processors import ExtractDominantKeypoint, CropImageFromMask
 from processors import ExtractHandmask, KeypointsWristFrame
@@ -9,6 +10,7 @@ from processors import MatrixInverse, ExtractDominantHandVisibility
 from processors import Resize_image, RotationMatrixfromAxisAngles
 from processors import TransformVisibilityMask, NormalizeKeypoints
 from processors import TransformtoRelativeFrame, GetCanonicalTransformation
+from layer import SegmentationDilation
 
 
 class PreprocessKeypoints(SequentialProcessor):
@@ -151,7 +153,7 @@ class PostprocessSegmentation(SequentialProcessor):
         self.add(pr.UnpackDictionary(['image', 'raw_segmentation_map']))
         self.add(pr.ControlMap(Resize_image(size=(image_size, image_size)),
                                [1], [1]))
-        self.add(pr.ControlMap(HandSegmentationMap(), [1], [1]))
+        self.add(pr.ControlMap(SegmentationDilation(), [1], [1]))
         self.add(pr.ControlMap(ExtractBoundingbox(), [1], [2, 3, 4],
                                keep={1: 1}))
         self.add(pr.ControlMap(AdjustCropSize(), [4], [4]))
