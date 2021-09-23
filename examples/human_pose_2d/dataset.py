@@ -47,3 +47,15 @@ VIS_CONFIG = {
         'part_arg': coco_part_arg,
         'part_orders': coco_part_orders
     }}
+
+
+def get_joint_info(dataset, data_with_center):
+    if data_with_center:
+        joint_order = JOINT_CONFIG[dataset + '_WITH_CENTER']
+        fliped_joint_order = FLIP_CONFIG[dataset + '_WITH_CENTER']
+    else:
+        joint_order = JOINT_CONFIG[dataset]
+        fliped_joint_order = FLIP_CONFIG[dataset]
+
+    num_joints = len(joint_order)
+    return joint_order, num_joints, fliped_joint_order

@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import cv2
 
 
 def resize_dims(min_input_size, dims1, dims2, min_scale):
@@ -20,8 +21,7 @@ def calculate_image_center(image):
 
 
 def calculate_min_input_size(min_scale, input_size):
-    min_input_size = int((min_scale * input_size + (64-1)) //
-                         64*64)
+    min_input_size = int((min_scale * input_size + (64-1)) // 64*64)
     return min_input_size
 
 
@@ -60,8 +60,24 @@ def construct_output_image(output_size):
     return image
 
 
-def tf_preprocess_input(image, data_format=None, mode='torch'):
+def imagenet_preprocess_input(image, data_format=None, mode='torch'):
     image = tf.keras.applications.imagenet_utils.preprocess_input(image,
                                                                   data_format,
                                                                   mode)
     return image
+
+
+def resize_output(output, size):
+    output = np.transpose(output, [0, 3, 1, 2])
+    resized_output = []
+    for image_arg, image in enumerate(output):
+        resized_images = []
+        for joint_arg in range(len(image)):
+            resized = cv2.resize(output[image_arg][joint_arg], size)
+            resized_images.append(resized)
+        resized_images = np.stack(resized_images, axis=0)
+    resized_output.append(resized_images)
+    resized_output = np.stack(resized_output, axis=0)
+
+    output = np.transpose(resized_output, [0, 2, 3, 1])
+    return output

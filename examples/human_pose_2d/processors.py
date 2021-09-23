@@ -1,38 +1,29 @@
 import numpy as np
-import tensorflow as tf
 from paz import processors as pr
 import cv2
 
-from backend.preprocess import resize_dims, calculate_image_center
+from backend.preprocess import calculate_min_input_size, calculate_image_center
 from backend.preprocess import construct_source_image, construct_output_image
-from backend.preprocess import calculate_min_input_size, tf_preprocess_input
-from backend.heatmaps import tile_array
+from backend.preprocess import resize_dims, imagenet_preprocess_input
+from backend.preprocess import resize_output
 from backend.heatmaps import refine_joints_locations, top_k_detections
 from backend.heatmaps import group_joints_by_tag, adjust_joints_locations
 from backend.postprocess import draw_skeleton
-from dataset import FLIP_CONFIG, JOINT_CONFIG
+from backend.multi_stage_output import get_heatmaps_average
+from backend.multi_stage_output import calculate_offset, get_tags
+
+from dataset import FLIP_CONFIG, JOINT_CONFIG, get_joint_info
 
 
-class TfPreprocessInput(pr.Processor):
+class ImagenetPreprocessInput(pr.Processor):
     def __init__(self):
-        super(TfPreprocessInput, self).__init__()
+        super(ImagenetPreprocessInput, self).__init__()
 
     def call(self, image):
-        return tf_preprocess_input(image)
+        return imagenet_preprocess_input(image)
 
 
-# ********************GetMultiScaleSize*****************************
-
-
-class ResizeDimensions(pr.Processor):
-    def __init__(self, min_scale):
-        super(ResizeDimensions, self).__init__()
-        self.min_scale = min_scale
-
-    def call(self, min_input_size, dims1, dims2):
-        dims1_resized, dims2_resized, scale_dims1, scale_dims2 = \
-            resize_dims(min_input_size, dims1, dims2, self.min_scale)
-        return dims1_resized, dims2_resized, scale_dims1, scale_dims2
+# ********************PreprocessImage*****************************
 
 
 class GetImageCenter(pr.Processor):
@@ -59,120 +50,133 @@ class MinInputSize(pr.Processor):
         return min_input_size
 
 
-# ********************AffineTransform*****************************
+class GetMultiScaleSize(pr.Processor):
+    def __init__(self, min_scale, input_size):
+        super(GetMultiScaleSize, self).__init__()
+        self.min_scale = min_scale
+        self.min_input_size = int((min_scale * input_size + (64-1)) // 64*64)
 
-
-class ConstructSourceImage(pr.Processor):
-    def __init__(self):
-        super(ConstructSourceImage, self).__init__()
-
-    def call(self, scale, center):
-        source_image = construct_source_image(scale, center)
-        return source_image
-
-
-class ConstructOutputImage(pr.Processor):
-    def __init__(self):
-        super(ConstructOutputImage, self).__init__()
-
-    def call(self, output_size):
-        output_image = construct_output_image(output_size)
-        return output_image
+    def call(self, image):
+        H, W = image.shape[:2]
+        if W < H:
+            W, H, scale_W, scale_H = resize_dims(self.min_input_size, W, H,
+                                                 self.min_scale)
+        else:
+            H, W, scale_H, scale_W = resize_dims(self.min_input_size, H, W,
+                                                 self.min_scale)
+        scale = np.array([scale_W, scale_H])
+        size = (W, H)
+        return scale, size
 
 
 class GetAffineTransform(pr.Processor):
-    def __init__(self):
+    def __init__(self, inverse):
         super(GetAffineTransform, self).__init__()
+        self.inverse = inverse
 
-    def call(self, dst, src):
-        transform = cv2.getAffineTransform(np.float32(dst), np.float32(src))
+    def call(self, center, scale, size):
+        if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
+            scale = np.array([scale, scale])
+        source_image = construct_source_image(scale, center)
+        output_image = construct_output_image(size)
+        if self.inverse:
+            transform = cv2.getAffineTransform(output_image, source_image)
+        else:
+            transform = cv2.getAffineTransform(source_image, output_image)
         return transform
-
-
-# ********************ResizeAlignMultiScale*****************************
 
 
 class WarpAffine(pr.Processor):
     def __init__(self):
         super(WarpAffine, self).__init__()
 
-    def call(self, image, transform, size_resized):
-        image_resized = cv2.warpAffine(image, transform, size_resized)
-        return image_resized
-
-
-# ********************CalculateHeatmapParameters*****************************
-
-
-class UpSampling2D(pr.Processor):
-    def __init__(self, size, interpolation):
-        super(UpSampling2D, self).__init__()
-        self.size = size
-        self.interpolation = interpolation
-
-    def call(self, x):
-        if isinstance(x, list):
-            x = [tf.keras.layers.UpSampling2D(size=self.size,
-                 interpolation=self.interpolation)(each) for each in x]
-            # x = [np.kron(each, np.ones(self.size)) for each in x]
-        else:
-            x = \
-             tf.keras.layers.UpSampling2D(size=self.size,
-                                          interpolation=self.interpolation)(x)
-            # x = np.kron(x, np.ones(self.size))
-        return x
-
-
-class CalculateOffset(pr.Processor):
-    def __init__(self, num_joints, loss_with_heatmap_loss):
-        super(CalculateOffset, self).__init__()
-        self.num_joints = num_joints
-        self.loss_with_heatmap_loss = loss_with_heatmap_loss
-
-    def call(self, idx):
-        if self.loss_with_heatmap_loss[idx]:
-            offset = self.num_joints
-        else:
-            offset = 0
-        return offset
-
-
-class UpdateTags(pr.Processor):
-    def __init__(self, tag_per_joint):
-        super(UpdateTags, self).__init__()
-        self.tag_per_joint = tag_per_joint
-
-    def call(self, output, tags, offset, indices, with_flip=False):
-        tags.append(output[:, :, :, offset:])
-        if with_flip and self.tag_per_joint:
-            tags[-1] = np.take(tags[-1], indices, axis=-1)
-        return tags
-
-
-class UpdateHeatmapsAverage(pr.Processor):
-    def __init__(self):
-        super(UpdateHeatmapsAverage, self).__init__()
-
-    def call(self, output, num_joints, indices, with_flip=False):
-        heatmaps_average = 0
-        if not with_flip:
-            heatmaps_average += output[:, :, :, :num_joints]
-        else:
-            temp = output[:, :, :, :num_joints]
-            heatmaps_average += np.take(temp, indices, axis=-1)
-        return heatmaps_average
-
-
-class IncrementByOne(pr.Processor):
-    def __init__(self):
-        super(IncrementByOne, self).__init__()
-
-    def call(self, x):
-        x += 1
-        return x
+    def call(self, image, transform, size):
+        image = cv2.warpAffine(image, transform, size)
+        return image
 
 
 # ********************GetMultiStageOutputs*****************************
+
+
+class Resize(pr.Processor):
+    def __init__(self, size):
+        super(Resize, self).__init__()
+        self.size = int(size[:-1])
+
+    def call(self, outputs):
+        for arg in range(len(outputs)):
+            H, W = outputs[arg].shape[1:3]
+            H, W = self.size*H, self.size*W
+            outputs[arg] = resize_output(outputs[arg], (W, H))
+        return outputs
+
+
+class ResizeOutput(pr.Processor):
+    def __init__(self, size):
+        super(ResizeOutput, self).__init__()
+        self.size = int(size[:-1])
+
+    def call(self, outputs):
+        for arg in range(len(outputs)):
+            H, W = outputs[arg].shape[1:3]
+            H, W = self.size*H, self.size*W
+            if len(outputs) > 1 and arg != len(outputs) - 1:
+                outputs[arg] = resize_output(outputs[arg], (W, H))
+        return outputs
+
+
+class FlipOutput(pr.Processor):
+    def __init__(self):
+        super(FlipOutput, self).__init__()
+
+    def call(self, outputs, index):
+        for arg in range(len(outputs)):
+            outputs[arg] = np.flip(outputs[arg], index)
+        return outputs
+
+
+# class GetHeatmapsAverage(pr.Processor):
+#     def __init__(self, num_joint, with_heatmap, with_heatmap_loss):
+#         super(GetHeatmapsAverage, self).__init__()
+#         self.num_joint = num_joint
+#         self.with_heatmap_loss = with_heatmap_loss
+#         self.with_heatmap = with_heatmap
+#         self.update_heatmaps = UpdateHeatmaps()
+
+#     def call(self, outputs, heatmaps, indices=[], with_flip=False):
+#         num_heatmaps = 0
+#         for arg, output in enumerate(outputs):
+#             if self.with_heatmap_loss[arg] and self.with_heatmap[arg]:
+#                 heatmaps_average = get_heatmaps_average(output, self.num_joint,
+#                                                         indices, with_flip)
+#                 num_heatmaps += 1
+#         return heatmaps, heatmaps_average, num_heatmaps
+
+
+class GetHeatmapsAverage(pr.Processor):
+    def __init__(self, dataset, data_with_center, with_heatmap,
+                 with_heatmap_loss):
+        super(GetHeatmapsAverage, self).__init__()
+        self.with_heatmap_loss = with_heatmap_loss
+        self.with_heatmap = with_heatmap
+        self.num_joint, self.fliped_joint_order = \
+            get_joint_info(dataset, data_with_center)[1:]
+
+    def call(self, outputs, heatmaps, with_flip, indices=[]):
+        num_heatmaps = 0
+        for arg, output in enumerate(outputs):
+            if with_flip and self.with_heatmap_loss[arg] and self.with_heatmap[arg]:
+                output = np.flip(output, [2])
+                indices = self.fliped_joint_order
+                heatmaps_average = get_heatmaps_average(output, self.num_joint,
+                                                        with_flip, indices)
+                num_heatmaps += 1
+
+            if not with_flip and self.with_heatmap_loss[arg] and self.with_heatmap[arg]:
+                heatmaps_average = get_heatmaps_average(output, self.num_joint,
+                                                        with_flip, indices)
+                num_heatmaps += 1
+        return heatmaps, heatmaps_average, num_heatmaps
 
 
 class UpdateHeatmaps(pr.Processor):
@@ -184,32 +188,50 @@ class UpdateHeatmaps(pr.Processor):
         return heatmaps
 
 
-class GetJointOrder(pr.Processor):
-    def __init__(self, dataset, with_center):
-        super(GetJointOrder, self).__init__()
+class GetTags(pr.Processor):
+    def __init__(self, with_AE_loss, with_AE, data_with_center, dataset,
+                 with_heatmap_loss, tag_per_joint):
+        super(GetTags, self).__init__()
+        self.with_AE_loss = with_AE_loss
+        self.with_AE = with_AE
+        self.with_heatmap_loss = with_heatmap_loss
+        self.tag_per_joint = tag_per_joint
+        self.num_joint, self.fliped_joint_order = \
+            get_joint_info(dataset, data_with_center)[1:]
+
+    def call(self, outputs, tags, with_flip, indices=[]):
+        for arg, output in enumerate(outputs):
+            offset = calculate_offset(self.with_heatmap_loss[arg],
+                                      self.num_joint)
+            if with_flip and self.with_AE_loss[arg] and self.with_AE[arg]:
+                output = np.flip(output, [2])
+                indices = self.fliped_joint_order
+                tags = get_tags(output, tags, offset, indices,
+                                self.tag_per_joint, with_flip)
+            if not with_flip and self.with_AE_loss[arg] and self.with_AE[arg]:
+                tags = get_tags(output, tags, offset, indices,
+                                self.tag_per_joint, with_flip)
+
+        return tags
+
+
+class GetJointInfo(pr.Processor):
+    def __init__(self, dataset, data_with_center):
+        super(GetJointInfo, self).__init__()
         self.dataset = dataset
-        self.with_center = with_center
+        self.data_with_center = data_with_center
 
     def call(self):
-        if not self.with_center:
+        if not self.data_with_center:
             joint_order = JOINT_CONFIG[self.dataset]
+            fliped_joint_order = FLIP_CONFIG[self.dataset]
+
         else:
             joint_order = JOINT_CONFIG[self.dataset + '_WITH_CENTER']
-        return joint_order
+            fliped_joint_order = FLIP_CONFIG[self.dataset + '_WITH_CENTER']
 
-
-class FlipJointOrder(pr.Processor):
-    def __init__(self, dataset, with_center):
-        super(FlipJointOrder, self).__init__()
-        self.dataset = dataset
-        self.with_center = with_center
-
-    def call(self):
-        if not self.with_center:
-            joint_order = FLIP_CONFIG[self.dataset]
-        else:
-            joint_order = FLIP_CONFIG[self.dataset + '_WITH_CENTER']
-        return joint_order
+        num_joints = len(joint_order)
+        return joint_order, num_joints, fliped_joint_order
 
 
 class RemoveLastElement(pr.Processor):
@@ -224,21 +246,61 @@ class RemoveLastElement(pr.Processor):
 
 
 class CalculateHeatmapsAverage(pr.Processor):
-    def __init__(self):
+    def __init__(self, with_flip):
         super(CalculateHeatmapsAverage, self).__init__()
+        self.with_flip = with_flip
 
     def call(self, heatmaps):
-        heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
+        if self.with_flip:
+            heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
+        else:
+            heatmaps_average = heatmaps[0]
         return heatmaps_average
 
 
 class Transpose(pr.Processor):
-    def __init__(self):
+    def __init__(self, permutes=None):
         super(Transpose, self).__init__()
+        self.permutes = permutes
 
-    def call(self, tags, permutes=None):
-        tags = np.transpose(tags, permutes)
-        return tags
+    def call(self, x):
+        x = np.transpose(x, self.permutes)
+        return x
+
+
+class Concatenate(pr.Processor):
+    def __init__(self, axis):
+        super(Concatenate, self).__init__()
+        self.axis = axis
+
+    def call(self, x):
+        x = np.concatenate(x, self.axis)
+        return x
+
+
+class ExpandTagsDimension(pr.Processor):
+    def __init__(self):
+        super(ExpandTagsDimension, self).__init__()
+        self.expand_dims = pr.ExpandDims(-1)
+
+    def call(self, tags):
+        updated_tags = []
+        for tag in tags:
+            updated_tags.append(self.expand_dims(tag))
+        return updated_tags
+
+
+class UpdateFinalHeatmaps(pr.Processor):
+    def __init__(self, project2image):
+        super(UpdateFinalHeatmaps, self).__init__()
+        self.project2image = project2image
+
+    def call(self, heatmaps_average):
+        final_heatmaps = heatmaps_average
+        if self.project2image:
+            final_heatmaps += heatmaps_average
+        return final_heatmaps
+
 
 # **************************HeatmapsParser*********************************
 
@@ -293,21 +355,27 @@ class GetScores(pr.Processor):
 
 
 class TileArray(pr.Processor):
-    def __init__(self, num_joints):
+    def __init__(self, num_joints, tag_per_joint):
         super(TileArray, self).__init__()
         self.num_joints = num_joints
+        self.tag_per_joint = tag_per_joint
 
-    def call(self, tags):
-        return tile_array(tags, self.num_joints)
+    def call(self, heatmaps, tags):
+        heatmaps, tags = heatmaps[0], tags[0]
+        if not self.tag_per_joint:
+            tags = self.tile_array(tags)
+        return heatmaps, tags
 
 
 class RefineJointsLocations(pr.Processor):
     def __init__(self):
         super(RefineJointsLocations, self).__init__()
 
-    def call(self, boxes, keypoints, tag):
-        keypoints = refine_joints_locations(boxes, keypoints, tag)
-        return keypoints
+    def call(self, heatmaps, tags, grouped_joints):
+        for arg in range(len(grouped_joints)):
+            grouped_joints[arg] = refine_joints_locations(heatmaps, tags,
+                                                          grouped_joints[arg])
+        return grouped_joints
 
 
 # **************************FinalPrediction****************************

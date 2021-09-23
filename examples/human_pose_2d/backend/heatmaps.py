@@ -261,7 +261,7 @@ def update_joints(joints, updated_joints, heatmaps):
     return joints
 
 
-def refine_joints_locations(heatmaps, joints_per_person, tags):
+def refine_joints_locations(heatmaps, tags, joints_per_person):
     tags, tags_mean = calculate_tags_mean(joints_per_person, tags)
     updated_joints = []
     for arg in range(joints_per_person.shape[0]):
