@@ -1,18 +1,8 @@
 import numpy as np
 from paz import processors as pr
 import cv2
-
-from backend.preprocess import calculate_min_input_size, calculate_image_center
-from backend.preprocess import construct_source_image, construct_output_image
-from backend.preprocess import resize_dims, imagenet_preprocess_input
-from backend.preprocess import resize_output
-from backend.heatmaps import refine_joints_locations, top_k_detections
-from backend.heatmaps import group_joints_by_tag, adjust_joints_locations
-from backend.postprocess import draw_skeleton
-from backend.multi_stage_output import get_heatmaps_average
-from backend.multi_stage_output import calculate_offset, get_tags
-
-from dataset import FLIP_CONFIG, JOINT_CONFIG, get_joint_info
+import backend as B
+from dataset import get_joint_info
 
 
 class ImagenetPreprocessInput(pr.Processor):
@@ -20,7 +10,7 @@ class ImagenetPreprocessInput(pr.Processor):
         super(ImagenetPreprocessInput, self).__init__()
 
     def call(self, image):
-        return imagenet_preprocess_input(image)
+        return B.imagenet_preprocess_input(image)
 
 
 # ********************PreprocessImage*****************************
@@ -32,7 +22,7 @@ class GetImageCenter(pr.Processor):
         self.offset = offset
 
     def call(self, image):
-        center_W, center_H = calculate_image_center(image)
+        center_W, center_H = B.calculate_image_center(image)
         center_W = int(center_W + self.offset)
         center_H = int(center_H + self.offset)
         return np.array([center_W, center_H])
@@ -45,7 +35,7 @@ class MinInputSize(pr.Processor):
         self.input_size = input_size
 
     def call(self):
-        min_input_size = calculate_min_input_size(self.min_scale,
+        min_input_size = B.calculate_min_input_size(self.min_scale,
                                                   self.input_size)
         return min_input_size
 
@@ -54,16 +44,16 @@ class GetMultiScaleSize(pr.Processor):
     def __init__(self, min_scale, input_size):
         super(GetMultiScaleSize, self).__init__()
         self.min_scale = min_scale
-        self.min_input_size = int((min_scale * input_size + (64-1)) // 64*64)
+        self.min_input_size = int(((min_scale * input_size) + (64-1)) // 64*64)
 
     def call(self, image):
         H, W = image.shape[:2]
         if W < H:
-            W, H, scale_W, scale_H = resize_dims(self.min_input_size, W, H,
-                                                 self.min_scale)
+            W, H, scale_W, scale_H = B.resize_dims(self.min_input_size, W, H,
+                                                   self.min_scale)
         else:
-            H, W, scale_H, scale_W = resize_dims(self.min_input_size, H, W,
-                                                 self.min_scale)
+            H, W, scale_H, scale_W = B.resize_dims(self.min_input_size, H, W,
+                                                   self.min_scale)
         scale = np.array([scale_W, scale_H])
         size = (W, H)
         return scale, size
@@ -77,8 +67,8 @@ class GetAffineTransform(pr.Processor):
     def call(self, center, scale, size):
         if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
             scale = np.array([scale, scale])
-        source_image = construct_source_image(scale, center)
-        output_image = construct_output_image(size)
+        source_image = B.construct_source_image(scale, center)
+        output_image = B.construct_output_image(size)
         if self.inverse:
             transform = cv2.getAffineTransform(output_image, source_image)
         else:
@@ -107,7 +97,7 @@ class Resize(pr.Processor):
         for arg in range(len(outputs)):
             H, W = outputs[arg].shape[1:3]
             H, W = self.size*H, self.size*W
-            outputs[arg] = resize_output(outputs[arg], (W, H))
+            outputs[arg] = B.resize_output(outputs[arg], (W, H))
         return outputs
 
 
@@ -121,59 +111,31 @@ class ResizeOutput(pr.Processor):
             H, W = outputs[arg].shape[1:3]
             H, W = self.size*H, self.size*W
             if len(outputs) > 1 and arg != len(outputs) - 1:
-                outputs[arg] = resize_output(outputs[arg], (W, H))
+                outputs[arg] = B.resize_output(outputs[arg], (W, H))
         return outputs
-
-
-class FlipOutput(pr.Processor):
-    def __init__(self):
-        super(FlipOutput, self).__init__()
-
-    def call(self, outputs, index):
-        for arg in range(len(outputs)):
-            outputs[arg] = np.flip(outputs[arg], index)
-        return outputs
-
-
-# class GetHeatmapsAverage(pr.Processor):
-#     def __init__(self, num_joint, with_heatmap, with_heatmap_loss):
-#         super(GetHeatmapsAverage, self).__init__()
-#         self.num_joint = num_joint
-#         self.with_heatmap_loss = with_heatmap_loss
-#         self.with_heatmap = with_heatmap
-#         self.update_heatmaps = UpdateHeatmaps()
-
-#     def call(self, outputs, heatmaps, indices=[], with_flip=False):
-#         num_heatmaps = 0
-#         for arg, output in enumerate(outputs):
-#             if self.with_heatmap_loss[arg] and self.with_heatmap[arg]:
-#                 heatmaps_average = get_heatmaps_average(output, self.num_joint,
-#                                                         indices, with_flip)
-#                 num_heatmaps += 1
-#         return heatmaps, heatmaps_average, num_heatmaps
 
 
 class GetHeatmapsAverage(pr.Processor):
-    def __init__(self, dataset, data_with_center, with_heatmap,
-                 with_heatmap_loss):
+    def __init__(self, data_info, with_heatmap, with_heatmap_loss):
         super(GetHeatmapsAverage, self).__init__()
         self.with_heatmap_loss = with_heatmap_loss
         self.with_heatmap = with_heatmap
-        self.num_joint, self.fliped_joint_order = \
-            get_joint_info(dataset, data_with_center)[1:]
+        self.num_joint, self.fliped_joint_order = get_joint_info(data_info)[1:]
 
     def call(self, outputs, heatmaps, with_flip, indices=[]):
         num_heatmaps = 0
         for arg, output in enumerate(outputs):
-            if with_flip and self.with_heatmap_loss[arg] and self.with_heatmap[arg]:
+            if (with_flip and
+                    self.with_heatmap_loss[arg] and self.with_heatmap[arg]):
                 output = np.flip(output, [2])
                 indices = self.fliped_joint_order
-                heatmaps_average = get_heatmaps_average(output, self.num_joint,
+                heatmaps_average = B.get_heatmaps_average(output, self.num_joint,
                                                         with_flip, indices)
                 num_heatmaps += 1
 
-            if not with_flip and self.with_heatmap_loss[arg] and self.with_heatmap[arg]:
-                heatmaps_average = get_heatmaps_average(output, self.num_joint,
+            if (not with_flip and
+                    self.with_heatmap_loss[arg] and self.with_heatmap[arg]):
+                heatmaps_average = B.get_heatmaps_average(output, self.num_joint,
                                                         with_flip, indices)
                 num_heatmaps += 1
         return heatmaps, heatmaps_average, num_heatmaps
@@ -189,57 +151,40 @@ class UpdateHeatmaps(pr.Processor):
 
 
 class GetTags(pr.Processor):
-    def __init__(self, with_AE_loss, with_AE, data_with_center, dataset,
+    def __init__(self, with_AE_loss, with_AE, data_info,
                  with_heatmap_loss, tag_per_joint):
         super(GetTags, self).__init__()
         self.with_AE_loss = with_AE_loss
         self.with_AE = with_AE
         self.with_heatmap_loss = with_heatmap_loss
         self.tag_per_joint = tag_per_joint
-        self.num_joint, self.fliped_joint_order = \
-            get_joint_info(dataset, data_with_center)[1:]
+        self.num_joint, self.fliped_joint_order = get_joint_info(data_info)[1:]
 
     def call(self, outputs, tags, with_flip, indices=[]):
         for arg, output in enumerate(outputs):
-            offset = calculate_offset(self.with_heatmap_loss[arg],
-                                      self.num_joint)
+            offset = B.calculate_offset(self.with_heatmap_loss[arg],
+                                        self.num_joint)
             if with_flip and self.with_AE_loss[arg] and self.with_AE[arg]:
                 output = np.flip(output, [2])
                 indices = self.fliped_joint_order
-                tags = get_tags(output, tags, offset, indices,
-                                self.tag_per_joint, with_flip)
+                tags = B.get_tags(output, tags, offset, indices,
+                                  self.tag_per_joint, with_flip)
             if not with_flip and self.with_AE_loss[arg] and self.with_AE[arg]:
-                tags = get_tags(output, tags, offset, indices,
-                                self.tag_per_joint, with_flip)
+                tags = B.get_tags(output, tags, offset, indices,
+                                  self.tag_per_joint, with_flip)
 
         return tags
-
-
-class GetJointInfo(pr.Processor):
-    def __init__(self, dataset, data_with_center):
-        super(GetJointInfo, self).__init__()
-        self.dataset = dataset
-        self.data_with_center = data_with_center
-
-    def call(self):
-        if not self.data_with_center:
-            joint_order = JOINT_CONFIG[self.dataset]
-            fliped_joint_order = FLIP_CONFIG[self.dataset]
-
-        else:
-            joint_order = JOINT_CONFIG[self.dataset + '_WITH_CENTER']
-            fliped_joint_order = FLIP_CONFIG[self.dataset + '_WITH_CENTER']
-
-        num_joints = len(joint_order)
-        return joint_order, num_joints, fliped_joint_order
 
 
 class RemoveLastElement(pr.Processor):
     def __init__(self):
         super(RemoveLastElement, self).__init__()
 
-    def call(self, nested_list):
-        return [each_list[:, :-1] for each_list in nested_list]
+    def call(self, x):
+        if all(isinstance(each, list) for each in x):
+            return [each[:, :-1] for each in x]
+        else:
+            return x[:, :-1]
 
 
 # **************************AggregateResults*********************************
@@ -290,9 +235,9 @@ class ExpandTagsDimension(pr.Processor):
         return updated_tags
 
 
-class UpdateFinalHeatmaps(pr.Processor):
+class AggregateHeatmapsAverage(pr.Processor):
     def __init__(self, project2image):
-        super(UpdateFinalHeatmaps, self).__init__()
+        super(AggregateHeatmapsAverage, self).__init__()
         self.project2image = project2image
 
     def call(self, heatmaps_average):
@@ -306,34 +251,34 @@ class UpdateFinalHeatmaps(pr.Processor):
 
 
 class TopKDetections(pr.Processor):
-    def __init__(self, max_num_people, tag_per_joint, num_joints):
+    def __init__(self, max_num_people, tag_per_joint, data_info):
         super(TopKDetections, self).__init__()
         self.max_num_people = max_num_people
         self.tag_per_joint = tag_per_joint
-        self.num_joints = num_joints
+        self.num_joints = get_joint_info(data_info)[1]
 
     def call(self, heatmaps, tags):
-        keypoints = top_k_detections(heatmaps, tags, self.max_num_people,
-                                     self.tag_per_joint, self.num_joints)
+        keypoints = B.top_k_detections(heatmaps, tags, self.max_num_people,
+                                       self.tag_per_joint, self.num_joints)
         return keypoints
 
 
 class GroupJointsByTag(pr.Processor):
-    def __init__(self, max_num_people, joint_order, tag_thresh,
+    def __init__(self, max_num_people, data_info, tag_thresh,
                  detection_thresh, ignore_too_much, use_detection_val):
         super(GroupJointsByTag, self).__init__()
         self.max_num_people = max_num_people
-        self.joint_order = joint_order
+        self.joint_order = get_joint_info(data_info)[0]
         self.tag_thresh = tag_thresh
         self.detection_thresh = detection_thresh
         self.ignore_too_much = ignore_too_much
         self.use_detection_val = use_detection_val
 
     def call(self, detections):
-        return group_joints_by_tag(detections, self.max_num_people,
-                                   self.joint_order, self.tag_thresh,
-                                   self.detection_thresh, self.ignore_too_much,
-                                   self.use_detection_val)
+        return B.group_joints_by_tag(detections, self.max_num_people,
+                                     self.joint_order, self.detection_thresh,
+                                     self.tag_thresh, self.ignore_too_much,
+                                     self.use_detection_val)
 
 
 class AdjustJointsLocations(pr.Processor):
@@ -341,7 +286,7 @@ class AdjustJointsLocations(pr.Processor):
         super(AdjustJointsLocations, self).__init__()
 
     def call(self, heatmaps, detections):
-        detections = adjust_joints_locations(heatmaps, detections)
+        detections = B.adjust_joints_locations(heatmaps, detections)
         return detections
 
 
@@ -355,9 +300,9 @@ class GetScores(pr.Processor):
 
 
 class TileArray(pr.Processor):
-    def __init__(self, num_joints, tag_per_joint):
+    def __init__(self, data_info, tag_per_joint):
         super(TileArray, self).__init__()
-        self.num_joints = num_joints
+        self.num_joints = get_joint_info(data_info)[1]
         self.tag_per_joint = tag_per_joint
 
     def call(self, heatmaps, tags):
@@ -373,8 +318,8 @@ class RefineJointsLocations(pr.Processor):
 
     def call(self, heatmaps, tags, grouped_joints):
         for arg in range(len(grouped_joints)):
-            grouped_joints[arg] = refine_joints_locations(heatmaps, tags,
-                                                          grouped_joints[arg])
+            grouped_joints[arg] = B.refine_joints_locations(heatmaps, tags,
+                                                            grouped_joints[arg])
         return grouped_joints
 
 
@@ -395,10 +340,10 @@ class TransformPoint(pr.Processor):
 
 
 class DrawSkeleton(pr.Processor):
-    def __init__(self, dataset='COCO'):
+    def __init__(self, data_info):
         super(DrawSkeleton, self).__init__()
-        self.dataset = dataset
+        self.dataset = data_info['data']
 
     def call(self, image, joints):
-        image = draw_skeleton(image, joints, dataset=self.dataset)
+        image = B.draw_skeleton(image, joints, dataset=self.dataset)
         return image

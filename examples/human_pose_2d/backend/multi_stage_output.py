@@ -24,8 +24,3 @@ def get_tags(output, tags, offset, indices, tag_per_joint, with_flip=False):
     if with_flip and tag_per_joint:
         tags[-1] = np.take(tags[-1], indices, axis=-1)
     return tags
-
-
-def calculate_heatmaps_sverage(self, heatmaps):
-    heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
-    return heatmaps_average

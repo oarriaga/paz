@@ -5,19 +5,16 @@ from pipelines import GetMultiStageOutputs, AggregateResults, TransformJoints
 
 
 class DetectHumanPose2D(pr.Processor):
-    def __init__(self, model, max_num_people=30, dataset='COCO',
-                 data_with_center=False, with_flip=True):
+    def __init__(self, model, data_info, max_num_people=30, with_flip=True):
         super(DetectHumanPose2D, self).__init__()
         self.with_flip = with_flip
         self.preprocess_image = PreprocessImage()
-        self.get_output = pr.SequentialProcessor()
-        self.get_output.add(GetMultiStageOutputs(model, dataset,
-                                                 data_with_center))
-        self.get_output.add(AggregateResults(with_flip=self.with_flip))
-        self.heatmaps_parser = HeatmapsParser(max_num_people, dataset,
-                                              data_with_center)
+        self.get_output = pr.SequentialProcessor(
+            [GetMultiStageOutputs(model, data_info),
+             AggregateResults(with_flip=self.with_flip)])
+        self.heatmaps_parser = HeatmapsParser(max_num_people, data_info)
         self.transform_joints = TransformJoints()
-        self.draw_skeleton = pe.DrawSkeleton(dataset)
+        self.draw_skeleton = pe.DrawSkeleton(data_info)
 
     def call(self, image):
         resized_image, center, scale = self.preprocess_image(image)

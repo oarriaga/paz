@@ -126,8 +126,9 @@ def get_valid_tags_and_joints(tags, locations, heatmap_values, joint_arg,
     return valid_tags, valid_joints
 
 
-def group_joints_by_tag(detections, max_num_people, joint_order, tag_thresh,
-                        detection_thresh, ignore_too_much, use_detection_val):
+def group_joints_by_tag(detections, max_num_people, joint_order,
+                        detection_thresh, tag_thresh, ignore_too_much,
+                        use_detection_val):
     tags, locations, heatmaps_values = detections.values()
     joint_dict = {}
     tag_dict = {}
