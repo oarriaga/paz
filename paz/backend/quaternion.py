@@ -20,3 +20,17 @@ def rotation_vector_to_quaternion(rotation_vector):
         norm * rotation_axis[2],
         np.cos(half_theta)])
     return quaternion
+
+
+def quarternion_to_rotation_matrix(q):
+    """Transforms quarternion into rotation vector
+    # Arguments
+        q: quarternion, Numpy array of shape ``[4]``
+    # Returns
+        Numpy array representing a rotation vector having a shape ``[3]``.
+    """
+    rotation_matrix = np.array([[1 - 2*(q[1]**2 + q[2]**2), 2*(q[0]*q[1] - q[3]*q[2]), 2*(q[3]*q[1] + q[0]*q[2])],
+                                [2*(q[0]*q[1] + q[3]*q[2]), 1 - 2*(q[0]**2 + q[2]**2), 2*(q[1]*q[2] - q[3]*q[0])],
+                                [2*(q[0]*q[2] - q[3]*q[1]), 2*(q[3]*q[0] + q[1]*q[2]), 1 - 2*(q[0]**2 + q[1]**2)]])
+
+    return np.squeeze(rotation_matrix)
