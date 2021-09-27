@@ -36,7 +36,7 @@ class MinInputSize(pr.Processor):
 
     def call(self):
         min_input_size = B.calculate_min_input_size(self.min_scale,
-                                                  self.input_size)
+                                                    self.input_size)
         return min_input_size
 
 

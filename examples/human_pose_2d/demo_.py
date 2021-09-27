@@ -12,7 +12,7 @@ parser.add_argument('-m', '--model_weights_path', default='models_weights_tf',
                     help='Path to the model weights')
 args = parser.parse_args()
 
-image_path = os.path.join(args.image_path, 'image1.jpg')
+image_path = os.path.join(args.image_path, 'image3.jpg')
 model_path = os.path.join(args.model_weights_path, 'HigherHRNet')
 model = load_model(model_path)
 print("\n==> Model loaded!\n")

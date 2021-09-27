@@ -114,10 +114,10 @@ def shortest_L2_distance(scores):
     return lowest_cost_pairs
 
 
-def get_valid_tags_and_joints(tags, locations, heatmap_values, joint_arg,
-                              detection_thresh):
+def get_valid_tags_and_joints(detections, joint_arg, detection_thresh):
+    tags, locations, heatmaps_values = detections.values()
     joints = np.concatenate((locations[joint_arg],
-                             heatmap_values[joint_arg, :, None],
+                             heatmaps_values[joint_arg, :, None],
                              tags[joint_arg]), 1)
     mask = joints[:, 2] > detection_thresh
     tags = tags[joint_arg]
@@ -129,14 +129,11 @@ def get_valid_tags_and_joints(tags, locations, heatmap_values, joint_arg,
 def group_joints_by_tag(detections, max_num_people, joint_order,
                         detection_thresh, tag_thresh, ignore_too_much,
                         use_detection_val):
-    tags, locations, heatmaps_values = detections.values()
-    joint_dict = {}
-    tag_dict = {}
+    tags = detections['top_k_tags']
+    joint_dict, tag_dict = {}, {}
     default = np.zeros((len(joint_order), tags.shape[2] + 3))
-
     for arg, joint_arg in enumerate(joint_order):
-        valid_tags, valid_joints = get_valid_tags_and_joints(tags, locations,
-                                                             heatmaps_values,
+        valid_tags, valid_joints = get_valid_tags_and_joints(detections,
                                                              joint_arg,
                                                              detection_thresh)
 
