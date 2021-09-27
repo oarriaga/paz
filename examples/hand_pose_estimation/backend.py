@@ -703,9 +703,11 @@ def crop_image_using_mask(keypoints_2D, keypoints_2D_vis, image, image_size,
     """
     scale, crop_center = get_scale(
         keypoints_2D, keypoints_2D_vis, image_size, crop_size)
+
     scale, scale_matrix = get_scale_matrix(scale)
 
-    img_crop = crop_image_from_coordinates(image, crop_center, crop_size, scale)
+    image_crop = crop_image_from_coordinates(
+        image, crop_center, crop_size, scale)
 
     keypoint_uv21 = get_keypoints_camera_coordinates(
         keypoints_2D, crop_center, scale, crop_size)
@@ -716,7 +718,7 @@ def crop_image_using_mask(keypoints_2D, keypoints_2D_vis, image, image_size,
     camera_matrix_cropped = np.matmul(
         scale_translation_matrix, np.matmul(scale_matrix, camera_matrix))
 
-    return scale, np.squeeze(img_crop), keypoint_uv21, camera_matrix_cropped
+    return scale, np.squeeze(image_crop), keypoint_uv21, camera_matrix_cropped
 
 
 def flip_right_hand(canonical_keypoints3D, flip_right):
@@ -835,7 +837,7 @@ def get_keypoints_mask(valid_vec, uv_coordinates, scoremap_size):
     return keypooints_mask
 
 
-def get_xy_limits(uv_coordinates, scoremap_size):
+def get_keypoint_limits(uv_coordinates, scoremap_size):
     """
     Extract X and Y limits :
         # Arguments
@@ -885,7 +887,7 @@ def create_multiple_gaussian_map(uv_coordinates, scoremap_size, sigma,
     keypoints_mask = get_keypoints_mask(
         valid_vec, uv_coordinates, scoremap_size)
 
-    X_limits, Y_limits = get_xy_limits(uv_coordinates, scoremap_size)
+    X_limits, Y_limits = get_keypoint_limits(uv_coordinates, scoremap_size)
 
     dist = np.square(X_limits) + np.square(Y_limits)
 
@@ -962,12 +964,12 @@ def get_bounding_box_list(X_masked, Y_masked, bounding_box_list):
     """
     x_min, x_max, y_min, y_max = np.min(X_masked), np.max(X_masked), \
                                  np.min(Y_masked), np.max(Y_masked)
-    xy_limits = [x_max, x_min, y_max, y_min]
+    bounding_box_limits = [x_max, x_min, y_max, y_min]
     start = np.stack([x_min, y_min])
     end = np.stack([x_max, y_max])
     bounding_box = np.stack([start, end], 1)
     bounding_box_list.append(bounding_box)
-    return bounding_box_list, xy_limits
+    return bounding_box_list, bounding_box_limits
 
 
 def get_center_list(xy_limit, center_list):
