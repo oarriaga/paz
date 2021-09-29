@@ -7,9 +7,9 @@ import itertools
 import math
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, DepthwiseConv2D
-from tensorflow.keras.layers import Conv2D, Dense
-from tensorflow.keras.layers import GlobalAveragePooling2D
+from tensorflow.keras.layers import Layer
+from tensorflow.keras.layers import DepthwiseConv2D
+from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import BatchNormalization
 from utils import get_drop_connect
 
@@ -82,16 +82,12 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         endpoints: dict. A list of internal tensors.
     """
 
-    def __init__(self, use_squeeze_excitation,
-                 clip_projection_output, kernel_size, input_filters,
+    def __init__(self, kernel_size, input_filters,
                  output_filters, expand_ratio, strides, squeeze_excite_ratio,
-                 use_skip_connection, name=None):
+                 name=None):
         """Initializes a MBConv block.
 
         # Arguments
-            use_squeeze_excitation: bool, flag to use squeeze and excitation
-            layer.
-            clip_projection_output: String, flag to clip output.
             kernel_size: Int, kernel size of the conv block filters.
             num_repeats: Int, number of block repeats.
             input_filters: Int, input filters for the blocks to construct.
@@ -99,25 +95,17 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             expand_ratio: Int, ratio to expand the conv block in repeats.
             strides: List, strides in height and weight of conv filter.
             squeeze_excite_ratio: Float, squeeze excite block ratio.
-            use_skip_connection: bool, flag to skip connect.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: layer name.
         """
         super().__init__(name=name)
         self._activation = tf.nn.swish
-        self._clip_projection_output = clip_projection_output
         self._kernel_size = kernel_size
         self._input_filters = input_filters
         self._output_filters = output_filters
         self._expand_ratio = expand_ratio
         self._strides = strides
         self._squeeze_excite_ratio = squeeze_excite_ratio
-        self._use_skip_connection = use_skip_connection
-        # TODO: Check and raise user mistakes.
-        self._has_squeeze_excitation = (
-                use_squeeze_excitation
-                and self._squeeze_excite_ratio is not None
-                and 0 < self._squeeze_excite_ratio <= 1)
         self.endpoints = None
         self._build()
 
@@ -125,7 +113,6 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
     def block_args(self):
         return self._block_args
 
-    # TODO: Try to remove the next and pass as an argument. Similar to bn.
     def get_conv_name(self):
         if not next(self.conv_id):
             name_appender = ""
@@ -149,17 +136,12 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         # Arguments
             filters: Int, output filters of squeeze and excite block.
         """
-        # TODO: Check all the if else flags and remove the unnecessary one.
-        #  For SE, expand_ratio, etc.,
-        if self._has_squeeze_excitation:
-            num_filter = int(self._input_filters * self._squeeze_excite_ratio)
-            num_reduced_filters = max(1, num_filter)
-            squeeze_excitation = SqueezeExcitation(
-                num_reduced_filters, filters, name='se')
-        else:
-            squeeze_excitation = None
+        #  For expand_ratio, etc.,
+        num_filter = int(self._input_filters * self._squeeze_excite_ratio)
+        num_reduced_filters = max(1, num_filter)
+        squeeze_excitation = SqueezeExcitation(
+            num_reduced_filters, filters, name='se')
         return squeeze_excitation
-
 
     def build_expanded_convolution(self, filters, kernel_size):
         """
@@ -172,10 +154,10 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             layers for expanded convolution block type.
         """
         if self._expand_ratio != 1:
-            expand_conv = Conv2D(filters, [1, 1], [1, 1], 'same',
-                                 'channels_last', (1, 1), 1, None, False,
-                                 conv_normal_initializer,
-                                 name=self.get_conv_name())
+            expand_conv = Conv2D(
+                filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1,
+                None, False, conv_normal_initializer,
+                name=self.get_conv_name())
         else:
             expand_conv = None
         depthwise_conv = DepthwiseConv2D(
@@ -261,14 +243,11 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         tensor = self._project_conv(tensor)
         tensor = self._batch_norm2(tensor, training=training)
         tensor = tf.identity(tensor)
-        if self._clip_projection_output:
-            tensor = tf.clip_by_value(tensor, -6, 6)
-        if self._use_skip_connection:
-            if (all(s == 1 for s in self._strides)
-                    and self._input_filters == self._output_filters):
-                if survival_rate:
-                    tensor = get_drop_connect(tensor, training, survival_rate)
-                tensor = tf.add(tensor, initial_tensor)
+        if (all(s == 1 for s in self._strides)
+                and self._input_filters == self._output_filters):
+            if survival_rate:
+                tensor = get_drop_connect(tensor, training, survival_rate)
+            tensor = tf.add(tensor, initial_tensor)
         return tensor
 
     def call(self, tensor, training, survival_rate):
@@ -373,8 +352,6 @@ class EfficientNet(tf.keras.Model):
     def __init__(self, dropout_rate, width_coefficient, depth_coefficient,
                  survival_rate, name, data_format='channels_last',
                  num_classes=90, depth_divisor=8, min_depth=None,
-                 use_squeeze_excitation=True,
-                 clip_projection_output=False,
                  kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  num_repeats=[1, 2, 2, 3, 3, 4, 1],
                  input_filters=[32, 16, 24, 40, 80, 112, 192],
@@ -382,7 +359,7 @@ class EfficientNet(tf.keras.Model):
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]],
-                 squeeze_excite_ratio=0.25, use_skip_connection=True,
+                 squeeze_excite_ratio=0.25,
                  conv_type=0, num_blocks=7):
         """Initializes an 'Model' instance.
 
@@ -399,9 +376,7 @@ class EfficientNet(tf.keras.Model):
             min_depth: Int, minimum depth of the network.
             survival_rate: Float, survival of the final fully connected layer
             units.
-            use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
-            clip_projection_output: String, flag to clip output.
             kernel_size: Int, kernel size of the conv block filters.
             num_repeats: Int, number of block repeats.
             input_filters: Int, input filters for the blocks to construct.
@@ -409,7 +384,6 @@ class EfficientNet(tf.keras.Model):
             expand_ratio: Int, ratio to expand the conv block in repeats.
             strides: List, strides in height and weight of conv filter.
             squeeze_excite_ratio: Float, squeeze excite block ratio.
-            use_skip_connection: bool, flag to skip connect.
             conv_type: Int, flag to select convolution type.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: A string of layer name.
@@ -428,8 +402,6 @@ class EfficientNet(tf.keras.Model):
         self._depth_divisor = depth_divisor
         self._min_depth = min_depth
         self._survival_rate = survival_rate
-        self._use_squeeze_excitation = use_squeeze_excitation
-        self._clip_projection_output = clip_projection_output
         self._kernel_sizes = kernel_sizes
         self._num_repeats = num_repeats
         self._input_filters = input_filters
@@ -437,7 +409,6 @@ class EfficientNet(tf.keras.Model):
         self._expand_ratios = expand_ratios
         self._strides = strides
         self._squeeze_excite_ratio = squeeze_excite_ratio
-        self._use_skip_connection = use_skip_connection
         self._conv_type = conv_type
         self._num_blocks = num_blocks
         self.endpoints = None
@@ -506,11 +477,10 @@ class EfficientNet(tf.keras.Model):
             input_filters = output_filters
             strides = [1, 1]
         for _ in range(num_repeat - 1):
-            self._blocks.append(conv_block(self._use_squeeze_excitation,
-                self._clip_projection_output, kernel_size, input_filters,
+            self._blocks.append(conv_block(
+                kernel_size, input_filters,
                 output_filters, expand_ratio, strides,
-                self._squeeze_excite_ratio, self._use_skip_connection,
-                self.get_block_name()))
+                self._squeeze_excite_ratio, self.get_block_name()))
 
     def update_block_depth(self, input_filters, output_filters,
                            kernel_size, strides):
@@ -535,7 +505,6 @@ class EfficientNet(tf.keras.Model):
         output_filters = output_filters * depth_factor
         return input_filters, output_filters, kernel_size
 
-
     def build_blocks(self, input_filters, output_filters, num_repeats,
                      kernel_size, expand_ratio, strides):
         """
@@ -552,9 +521,8 @@ class EfficientNet(tf.keras.Model):
         # and filter size increase.
         conv_block = self._get_conv_block(self._conv_type)
         self._blocks.append(conv_block(
-            self._use_squeeze_excitation, self._clip_projection_output,
-            kernel_size, input_filters, output_filters, expand_ratio,
-            strides, self._squeeze_excite_ratio, self._use_skip_connection,
+            kernel_size, input_filters,
+            output_filters, expand_ratio, strides, self._squeeze_excite_ratio,
             self.get_block_name()))
         self.add_block_repeats(input_filters, output_filters, num_repeats,
                                kernel_size, strides, expand_ratio)
@@ -581,7 +549,7 @@ class EfficientNet(tf.keras.Model):
                 self._kernel_sizes[block_num], self._expand_ratios[block_num],
                 self._strides[block_num])
 
-    def call(self, tensor, training, return_base=None, pool_features=False):
+    def call(self, tensor, training):
         """Implementation of call().
 
         # Arguments

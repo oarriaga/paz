@@ -89,7 +89,8 @@ def efficientdet_preprocess(image, image_size):
     return image, image_scale
 
 
-def create_multibox_head(branch_tensors, num_levels, num_classes, num_regressions=4):
+def create_multibox_head(branch_tensors, num_levels, num_classes,
+                         num_regressions=4):
     class_outputs = branch_tensors[0]
     box_outputs = branch_tensors[1]
     classification_layers, regression_layers = [], []
@@ -110,4 +111,3 @@ def create_multibox_head(branch_tensors, num_levels, num_classes, num_regression
     regressions = Reshape((num_boxes, num_regressions))(regressions)
     outputs = Concatenate(axis=2, name='boxes')([regressions, classifications])
     return outputs
-

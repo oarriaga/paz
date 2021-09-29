@@ -136,7 +136,7 @@ class EfficientDet(tf.keras.Model):
         """
 
         # Efficientnet backbone features
-        branch_tensors = self.backbone(images, training, True)
+        branch_tensors = self.backbone(images, training)
 
         feature_levels = branch_tensors[self.min_level:self.max_level + 1]
 
