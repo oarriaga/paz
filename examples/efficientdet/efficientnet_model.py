@@ -348,7 +348,10 @@ class Stem(Layer):
 
 
 class EfficientNet(tf.keras.Model):
-    """A class implementing tf.keras.Model for EfficientNet."""
+    """
+    A class implementing tf.keras.Model for EfficientNet. Base paper:
+    https://arxiv.org/pdf/1905.11946.pdf
+    """
 
     def __init__(self, dropout_rate, width_coefficient, depth_coefficient,
                  survival_rate, name, num_classes=90, depth_divisor=8,
