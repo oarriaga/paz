@@ -6,7 +6,6 @@ Reference:
 import itertools
 import math
 import numpy as np
-import six
 import tensorflow as tf
 from tensorflow.keras.layers import Layer, DepthwiseConv2D
 from tensorflow.keras.layers import Conv2D, Dense
@@ -15,7 +14,7 @@ from tensorflow.keras.layers import BatchNormalization
 from utils import get_drop_connect
 
 
-def conv_kernel_initializer(shape, dtype=None):
+def conv_normal_initializer(shape, dtype=None):
     """Initialization for convolutional kernels.
     The main difference with tf.variance_scaling_initializer is that
     tf.variance_scaling_initializer uses a truncated normal with an uncorrected
@@ -33,24 +32,6 @@ def conv_kernel_initializer(shape, dtype=None):
     kernel_height, kernel_width, _, output_filters = shape
     fan_output = int(kernel_height * kernel_width * output_filters)
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
-
-
-def dense_kernel_initializer(shape, dtype=None):
-    """Initialization for dense kernels.
-    This initialization is equal to
-      tf.variance_scaling_initializer(scale=1.0/3.0, mode='fan_output',
-                                      distribution='uniform').
-    It is written out explicitly here for clarity.
-
-    # Arguments
-        shape: shape of variable
-        dtype: dtype of variable
-
-    # Returns
-        an initialization for the variable
-    """
-    span = 1.0 / np.sqrt(shape[1])
-    return tf.random.uniform(shape, -span, span, dtype=dtype)
 
 
 def superpixel_kernel_initializer(shape, dtype='float32'):
@@ -72,6 +53,8 @@ def superpixel_kernel_initializer(shape, dtype='float32'):
         an initialization for the variable
     """
     #  use input depth to make superpixel kernel.
+    # TODO: Unit test.
+    # TODO: Check whether this is used in any member of the family.
     depth = shape[2]
     span_x = np.arange(2)
     span_y = np.arange(2)
@@ -83,6 +66,7 @@ def superpixel_kernel_initializer(shape, dtype='float32'):
 
 
 class SqueezeExcitation(Layer):
+    # TODO: Add a short description of what is se layer. Ref too in MD.
     """Squeeze-and-excitation layer."""
     def __init__(self, local_pooling, filters, output_filters, name=None):
         """
@@ -100,13 +84,14 @@ class SqueezeExcitation(Layer):
 
         # Squeeze and Excitation layer.
         self._reduce = Conv2D(filters, [1, 1], [1, 1], 'same', 'channels_last',
-                              (1, 1), 1, None, True, conv_kernel_initializer,
+                              (1, 1), 1, None, True, conv_normal_initializer,
                               name='conv2d')
         self._expand = Conv2D(output_filters, [1, 1], [1, 1], 'same',
                               'channels_last', (1, 1), 1, None, True,
-                              conv_kernel_initializer, name='conv2d_1')
+                              conv_normal_initializer, name='conv2d_1')
 
     def call(self, tensor):
+        # TODO: Add the shape of the tensor or any additional uniqueness.
         """
         # Arguments
             tensor: Tensor, tensor for forward computation through SE layer.
@@ -114,7 +99,7 @@ class SqueezeExcitation(Layer):
         # Returns
             output_tensor: Tensor, output tensor after forward computation.
         """
-        h_axis, w_axis = [1, 2]
+        h_axis, w_axis = 1, 2
         if self._local_pooling:
             squeeze_excitation_tensor = tf.nn.avg_pool(
                 tensor, [1, tensor.shape[h_axis], tensor.shape[w_axis], 1],
@@ -129,6 +114,7 @@ class SqueezeExcitation(Layer):
 
 
 class SuperPixel(Layer):
+    # TODO: Add a short description of what is SP layer. Ref too in MD.
     """Super pixel layer."""
 
     def __init__(self, input_filters, name=None):
@@ -161,6 +147,7 @@ class SuperPixel(Layer):
 
 
 class MobileInvertedResidualBottleNeckBlock(Layer):
+    # TODO: MBConvBlock. Add docstring of role and paper ref.
     """A class of MBConv: Mobile Inverted Residual Bottleneck.
 
     # Attributes
@@ -205,6 +192,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         self._fused_conv = fused_conv
         self._super_pixel = super_pixel
         self._use_skip_connection = use_skip_connection
+        # TODO: Check and raise user mistakes.
         self._has_squeeze_excitation = (
                 use_squeeze_excitation
                 and self._squeeze_excite_ratio is not None
@@ -216,6 +204,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
     def block_args(self):
         return self._block_args
 
+    # TODO: Try to remove the next and pass as an argument. Similar to bn.
     def get_conv_name(self):
         if not next(self.conv_id):
             name_appender = ""
@@ -239,6 +228,9 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         # Arguments
             filters: Int, output filters of squeeze and excite block.
         """
+        # TODO: Add BatchNormalization layer directly here.
+        # TODO: Check all the if else flags and remove the unnecessary one.
+        #  For SP, SE, fused_conv, local_pooling, expand_ratio, etc.,
         batch_norm = self._batch_norm(
             -1, 0.99, 1e-3, name=self.get_batch_norm_name())
         if self._has_squeeze_excitation:
@@ -269,7 +261,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         """
         fused_conv = Conv2D(filters, [kernel_size, kernel_size], self._strides,
                             'same', 'channels_last', (1, 1), 1, None, False,
-                            conv_kernel_initializer, name=self.get_conv_name())
+                            conv_normal_initializer, name=self.get_conv_name())
         return fused_conv
 
     def build_expanded_convolution(self, filters, kernel_size):
@@ -285,16 +277,18 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         if self._expand_ratio != 1:
             expand_conv = Conv2D(filters, [1, 1], [1, 1], 'same',
                                  'channels_last', (1, 1), 1, None, False,
-                                 conv_kernel_initializer, name=self.get_conv_name())
+                                 conv_normal_initializer,
+                                 name=self.get_conv_name())
             batch_norm0 = self._batch_norm(
                 -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        # TODO: Refactor None.
         else:
             expand_conv = None
             batch_norm0 = None
         depthwise_conv = DepthwiseConv2D(
             [kernel_size, kernel_size], self._strides,
             'same', 1, 'channels_last', (1, 1), None, False,
-            conv_kernel_initializer, name='depthwise_conv2d')
+            conv_normal_initializer, name='depthwise_conv2d')
         return expand_conv, batch_norm0, depthwise_conv
 
     def build_conv_layers(self, filters):
@@ -329,7 +323,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
     def build_output_processors(self):
         project_conv = Conv2D(
             self._output_filters, [1, 1], [1, 1], 'same', 'channels_last',
-            (1, 1), 1, None, False, conv_kernel_initializer,
+            (1, 1), 1, None, False, conv_normal_initializer,
             name=self.get_conv_name())
         batch_norm = self._batch_norm(
             -1, 0.99, 1e-3, name=self.get_batch_norm_name())
@@ -483,7 +477,7 @@ class Stem(Layer):
             fix_head_stem)
         self._conv_stem = Conv2D(filters, [3, 3], [2, 2], 'same',
                                  'channels_last', (1, 1), 1, None, False,
-                                 conv_kernel_initializer)
+                                 conv_normal_initializer)
         self._batch_norm = BatchNormalization(-1, 0.99, 1e-3)
         self._activation = tf.nn.swish
 
@@ -511,7 +505,6 @@ class Head(Layer):
             depth_divisor: Int, multiplier for the depth of the network.
             min_depth: Int, minimum depth of the network.
             fix_head_stem: bool, flag to fix head and stem branches.
-
             num_classes: Int, specifying the number of class in the
             output.
             dropout_rate: Float, dropout rate for final fully connected layers.
@@ -525,13 +518,15 @@ class Head(Layer):
             1280, width_coefficient, depth_divisor, min_depth, fix_head_stem)
         self._conv_head = Conv2D(
             conv_filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1,
-            None, False, conv_kernel_initializer, name='conv2d')
+            None, False, conv_normal_initializer, name='conv2d')
         self._batch_norm = BatchNormalization(-1, 0.99, 1e-3)
         self._activation = tf.nn.swish
         self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
         if num_classes:
             self._fully_connected = Dense(
-                num_classes, kernel_initializer=dense_kernel_initializer)
+                num_classes, kernel_initializer=
+                tf.keras.initializers.VarianceScaling(
+                    scale=1.0/3.0, mode='fan_out', distribution='uniform'))
         else:
             self._fully_connected = None
         if dropout_rate > 0:
@@ -970,7 +965,7 @@ class EfficientNet(tf.keras.Model):
             if is_reduction:
                 self.endpoints['reduction_%s' % reduction_arg] = outputs
             if block.endpoints:
-                for block_key, block_value in six.iteritems(block.endpoints):
+                for block_key, block_value in block.endpoints.items():
                     self.endpoints[
                         'block_%s/%s' % (block_arg, block_key)] = block_value
                     if is_reduction:
