@@ -269,14 +269,12 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         return x
 
 
-def round_filters(filters, width_coefficient, depth_divisor,
-                  min_depth, skip=False):
+def round_filters(filters, width_coefficient, depth_divisor, skip=False):
     """Round number of filters based on depth multiplier.
     # Arguments
         filters: Int, filters to be rounded based on depth multiplier.
         with_coefficient: Float, scaling coefficient for network width.
         depth_divisor: Int, multiplier for the depth of the network.
-        min_depth: Int, minimum depth of the network.
         skip: Bool, skip rounding filters based on multiplier.
 
     # Returns
@@ -285,7 +283,7 @@ def round_filters(filters, width_coefficient, depth_divisor,
     if skip or not width_coefficient:
         return filters
     filters = filters * width_coefficient
-    min_depth = min_depth or depth_divisor
+    min_depth = depth_divisor
     half_depth = depth_divisor / 2
     threshold = int(filters + half_depth) // depth_divisor * depth_divisor
     new_filters = max(min_depth, threshold)
@@ -315,19 +313,18 @@ def round_repeats(repeats, depth_coefficient, skip=False):
 class Stem(Layer):
     """Stem layer at the beginning of the network."""
 
-    def __init__(self, width_coefficient, depth_divisor, min_depth,
-                 stem_filters, name=None):
+    def __init__(self, width_coefficient, depth_divisor, stem_filters,
+                 name=None):
         """
         # Arguments
             with_coefficient: Float, scaling coefficient for network width.
             depth_divisor: Int, multiplier for the depth of the network.
-            min_depth: Int, minimum depth of the network.
             stem_filters: Int, filter count for the stem block.
             name: String, layer name.
         """
         super().__init__(name=name)
         filters = round_filters(
-            stem_filters, width_coefficient, depth_divisor, min_depth)
+            stem_filters, width_coefficient, depth_divisor)
         self._conv_stem = Conv2D(filters, [3, 3], [2, 2], 'same',
                                  'channels_last', (1, 1), 1, None, False,
                                  conv_normal_initializer)
@@ -350,8 +347,7 @@ class EfficientNet(tf.keras.Model):
     """A class implementing tf.keras.Model for EfficientNet."""
 
     def __init__(self, dropout_rate, width_coefficient, depth_coefficient,
-                 survival_rate, name, data_format='channels_last',
-                 num_classes=90, depth_divisor=8, min_depth=None,
+                 survival_rate, name, num_classes=90, depth_divisor=8,
                  kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  num_repeats=[1, 2, 2, 3, 3, 4, 1],
                  input_filters=[32, 16, 24, 40, 80, 112, 192],
@@ -359,21 +355,17 @@ class EfficientNet(tf.keras.Model):
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]],
-                 squeeze_excite_ratio=0.25,
-                 conv_type=0, num_blocks=7):
+                 squeeze_excite_ratio=0.25):
         """Initializes an 'Model' instance.
 
         # Arguments
             blocks_args: Dictionary of BlockArgs to construct block modules.
             dropout_rate: Float, dropout rate for final fully connected layers.
-            data_format: String, Data format 'channels_first' or
-            'channels_last'.
             num_classes: Int, specifying the number of class in the
             output.
             with_coefficient: Float, scaling coefficient for network width.
             depth_coefficient: Float, scaling coefficient for network depth.
             depth_divisor: Int, multiplier for the depth of the network.
-            min_depth: Int, minimum depth of the network.
             survival_rate: Float, survival of the final fully connected layer
             units.
             layer.
@@ -384,7 +376,6 @@ class EfficientNet(tf.keras.Model):
             expand_ratio: Int, ratio to expand the conv block in repeats.
             strides: List, strides in height and weight of conv filter.
             squeeze_excite_ratio: Float, squeeze excite block ratio.
-            conv_type: Int, flag to select convolution type.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: A string of layer name.
 
@@ -397,10 +388,8 @@ class EfficientNet(tf.keras.Model):
         self._width_coefficient = width_coefficient
         self._depth_coefficient = depth_coefficient
         self._dropout_rate = dropout_rate
-        self._data_format = data_format
         self._num_classes = num_classes
         self._depth_divisor = depth_divisor
-        self._min_depth = min_depth
         self._survival_rate = survival_rate
         self._kernel_sizes = kernel_sizes
         self._num_repeats = num_repeats
@@ -409,23 +398,9 @@ class EfficientNet(tf.keras.Model):
         self._expand_ratios = expand_ratios
         self._strides = strides
         self._squeeze_excite_ratio = squeeze_excite_ratio
-        self._conv_type = conv_type
-        self._num_blocks = num_blocks
+        self._num_blocks = len(kernel_sizes)
         self.endpoints = None
         self._build()
-
-    def _get_conv_block(self, conv_type):
-        """
-        # Arguments
-            conv_type: Int, key deciding the Convolution block type
-            0 - Mobile Bottleneck block with depthwise convolution.
-            1 - Mobile Bottleneck block without depthwise convolution.
-
-        # Returns
-            conv_block_map: Convolution block.
-        """
-        conv_block_map = {0: MobileInvertedResidualBottleNeckBlock}
-        return conv_block_map[conv_type]
 
     def get_block_name(self):
         name = 'blocks_%d' % next(self.block_id)
@@ -442,11 +417,9 @@ class EfficientNet(tf.keras.Model):
             output_filters: Int, output filters for the blocks to construct.
         """
         input_filters = round_filters(
-            input_filters, self._width_coefficient,
-            self._depth_divisor, self._min_depth)
+            input_filters, self._width_coefficient, self._depth_divisor)
         output_filters = round_filters(
-            output_filters, self._width_coefficient,
-            self._depth_divisor, self._min_depth)
+            output_filters, self._width_coefficient, self._depth_divisor)
         return input_filters, output_filters
 
     def update_block_repeats(self, num_repeats):
@@ -471,13 +444,12 @@ class EfficientNet(tf.keras.Model):
             kernel_size: Int, kernel size of the conv block filters.
             strides: List, strides in height and weight of conv filter.
         """
-        conv_block = self._get_conv_block(self._conv_type)
         if num_repeat > 1:
             # rest of blocks with the same block_arg
             input_filters = output_filters
             strides = [1, 1]
         for _ in range(num_repeat - 1):
-            self._blocks.append(conv_block(
+            self._blocks.append(MobileInvertedResidualBottleNeckBlock(
                 kernel_size, input_filters,
                 output_filters, expand_ratio, strides,
                 self._squeeze_excite_ratio, self.get_block_name()))
@@ -519,8 +491,7 @@ class EfficientNet(tf.keras.Model):
 
         # The first block needs to take care of stride
         # and filter size increase.
-        conv_block = self._get_conv_block(self._conv_type)
-        self._blocks.append(conv_block(
+        self._blocks.append(MobileInvertedResidualBottleNeckBlock(
             kernel_size, input_filters,
             output_filters, expand_ratio, strides, self._squeeze_excite_ratio,
             self.get_block_name()))
@@ -532,9 +503,8 @@ class EfficientNet(tf.keras.Model):
         self._blocks = []
 
         # Stem part.
-        self._stem = Stem(
-            self._width_coefficient, self._depth_divisor, self._min_depth,
-            self._input_filters[0])
+        self._stem = Stem(self._width_coefficient, self._depth_divisor,
+                          self._input_filters[0])
         self.block_id = itertools.count(0)
         for block_num in range(self._num_blocks):
             assert self._num_repeats[block_num] > 0
