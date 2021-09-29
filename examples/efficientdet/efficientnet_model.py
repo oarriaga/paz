@@ -37,10 +37,9 @@ def conv_normal_initializer(shape, dtype=None):
 class SqueezeExcitation(Layer):
     # TODO: Add a short description of what is se layer. Ref too in MD.
     """Squeeze-and-excitation layer."""
-    def __init__(self, local_pooling, filters, output_filters, name=None):
+    def __init__(self, filters, output_filters, name=None):
         """
         # Arguments
-            local_pooling: bool, flag to use local pooling of features.
             filters: Int, Number of input filters of the Squeeze Excitation
             layer.
             output_filters: Int, Number of output filters of the Squeeze
@@ -48,9 +47,7 @@ class SqueezeExcitation(Layer):
         """
         super().__init__(name=name)
 
-        self._local_pooling = local_pooling
         self._activation = tf.nn.swish
-
         # Squeeze and Excitation layer.
         self._reduce = Conv2D(filters, [1, 1], [1, 1], 'same', 'channels_last',
                               (1, 1), 1, None, True, conv_normal_initializer,
@@ -69,13 +66,8 @@ class SqueezeExcitation(Layer):
             output_tensor: Tensor, output tensor after forward computation.
         """
         h_axis, w_axis = 1, 2
-        if self._local_pooling:
-            squeeze_excitation_tensor = tf.nn.avg_pool(
-                tensor, [1, tensor.shape[h_axis], tensor.shape[w_axis], 1],
-                [1, 1, 1, 1], 'VALID')
-        else:
-            squeeze_excitation_tensor = tf.reduce_mean(
-                tensor, [h_axis, w_axis], keepdims=True)
+        squeeze_excitation_tensor = tf.reduce_mean(
+            tensor, [h_axis, w_axis], keepdims=True)
         squeeze_excitation_tensor = self._reduce(squeeze_excitation_tensor)
         squeeze_excitation_tensor = self._activation(squeeze_excitation_tensor)
         squeeze_excitation_tensor = self._expand(squeeze_excitation_tensor)
@@ -90,14 +82,13 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         endpoints: dict. A list of internal tensors.
     """
 
-    def __init__(self, local_pooling, use_squeeze_excitation,
+    def __init__(self, use_squeeze_excitation,
                  clip_projection_output, kernel_size, input_filters,
                  output_filters, expand_ratio, strides, squeeze_excite_ratio,
                  use_skip_connection, name=None):
         """Initializes a MBConv block.
 
         # Arguments
-            local_pooling: bool, flag to use local pooling of features.
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
             clip_projection_output: String, flag to clip output.
@@ -113,7 +104,6 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             name: layer name.
         """
         super().__init__(name=name)
-        self._local_pooling = local_pooling
         self._activation = tf.nn.swish
         self._clip_projection_output = clip_projection_output
         self._kernel_size = kernel_size
@@ -160,12 +150,12 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             filters: Int, output filters of squeeze and excite block.
         """
         # TODO: Check all the if else flags and remove the unnecessary one.
-        #  For SP, SE, fused_conv, local_pooling, expand_ratio, etc.,
+        #  For SE, expand_ratio, etc.,
         if self._has_squeeze_excitation:
             num_filter = int(self._input_filters * self._squeeze_excite_ratio)
             num_reduced_filters = max(1, num_filter)
             squeeze_excitation = SqueezeExcitation(
-                self._local_pooling, num_reduced_filters, filters, name='se')
+                num_reduced_filters, filters, name='se')
         else:
             squeeze_excitation = None
         return squeeze_excitation
@@ -347,20 +337,18 @@ class Stem(Layer):
     """Stem layer at the beginning of the network."""
 
     def __init__(self, width_coefficient, depth_divisor, min_depth,
-                 fix_head_stem, stem_filters, name=None):
+                 stem_filters, name=None):
         """
         # Arguments
             with_coefficient: Float, scaling coefficient for network width.
             depth_divisor: Int, multiplier for the depth of the network.
             min_depth: Int, minimum depth of the network.
-            fix_head_stem: bool, flag to fix head and stem branches.
             stem_filters: Int, filter count for the stem block.
             name: String, layer name.
         """
         super().__init__(name=name)
         filters = round_filters(
-            stem_filters, width_coefficient, depth_divisor, min_depth,
-            fix_head_stem)
+            stem_filters, width_coefficient, depth_divisor, min_depth)
         self._conv_stem = Conv2D(filters, [3, 3], [2, 2], 'same',
                                  'channels_last', (1, 1), 1, None, False,
                                  conv_normal_initializer)
@@ -379,124 +367,14 @@ class Stem(Layer):
         return output
 
 
-class Head(Layer):
-    """Head layer for network outputs."""
-
-    def __init__(self, width_coefficient, depth_divisor, min_depth,
-                 fix_head_stem, num_classes, dropout_rate, local_pooling,
-                 name=None):
-        """
-        # Arguments
-            with_coefficient: Float, scaling coefficient for network width.
-            depth_divisor: Int, multiplier for the depth of the network.
-            min_depth: Int, minimum depth of the network.
-            fix_head_stem: bool, flag to fix head and stem branches.
-            num_classes: Int, specifying the number of class in the
-            output.
-            dropout_rate: Float, dropout rate for final fully connected layers.
-            local_pooling: bool, flag to use local pooling of features.
-            name: String, layer name.
-        """
-        super().__init__(name=name)
-
-        self.endpoints = {}
-        conv_filters = round_filters(
-            1280, width_coefficient, depth_divisor, min_depth, fix_head_stem)
-        self._conv_head = Conv2D(
-            conv_filters, [1, 1], [1, 1], 'same', 'channels_last', (1, 1), 1,
-            None, False, conv_normal_initializer, name='conv2d')
-        self._batch_norm = BatchNormalization(-1, 0.99, 1e-3)
-        self._activation = tf.nn.swish
-        self._avg_pooling = GlobalAveragePooling2D(data_format='channels_last')
-        if num_classes:
-            self._fully_connected = Dense(
-                num_classes, kernel_initializer=
-                tf.keras.initializers.VarianceScaling(
-                    scale=1.0/3.0, mode='fan_out', distribution='uniform'))
-        else:
-            self._fully_connected = None
-        if dropout_rate > 0:
-            self._dropout = tf.keras.layers.Dropout(dropout_rate)
-        else:
-            self._dropout = None
-        self.h_axis, self.w_axis = ([1, 2])
-        self._local_pooling = local_pooling
-
-    def call_local_pooling_head(self, tensor, training, pool_features):
-        """
-        # Arguments
-            tensor: Tensor, the inputs tensor.
-            training: boolean, whether the model is constructed for training.
-            pool_features: Bool, flag to decide feature pooling from tensor.
-
-        # Returns
-            tensor: Tensor, local pooled head output tensor.
-        """
-        shape = tensor.get_shape().as_list()
-        kernel_size = [1, shape[self.h_axis], shape[self.w_axis], 1]
-        tensor = tf.nn.avg_pool(
-            tensor, kernel_size, [1, 1, 1, 1], 'VALID')
-        self.endpoints['pooled_features'] = tensor
-        if not pool_features:
-            if self._dropout:
-                tensor = self._dropout(tensor, training=training)
-            self.endpoints['global_pool'] = tensor
-            if self._fully_connected:
-                tensor = tf.squeeze(tensor, [self.h_axis, self.w_axis])
-                tensor = self._fully_connected(tensor)
-            self.endpoints['head'] = tensor
-        return tensor
-
-    def call_avg_pooling_head(self, tensor, training, pool_features):
-        """
-        # Arguments
-            tensor: Tensor, the inputs tensor.
-            training: boolean, whether the model is constructed for training.
-            pool_features: Bool, flag to decide feature pooling from tensor.
-
-        # Returns
-            tensor: Tensor, average pooled head output tensor.
-        """
-        tensor = self._avg_pooling(tensor)
-        self.endpoints['pooled_features'] = tensor
-        if not pool_features:
-            if self._dropout:
-                tensor = self._dropout(tensor, training=training)
-            self.endpoints['global_pool'] = tensor
-            if self._fully_connected:
-                tensor = self._fully_connected(tensor)
-            self.endpoints['head'] = tensor
-        return tensor
-
-    def call(self, tensor, training, pool_features):
-        """Call the head layer.
-        # Arguments
-            tensor: Tensor, the inputs tensor.
-            training: boolean, whether the model is constructed for training.
-            pool_features: Bool, flag to decide feature pooling from tensor.
-        # Returns
-            tensor: Tensor, Pooled head output tensor.
-        """
-        outputs = self._batch_norm(self._conv_head(tensor), training=training)
-        outputs = self._activation(outputs)
-        self.endpoints['head_1x1'] = outputs
-        if self._local_pooling:
-            outputs = self.call_local_pooling_head(
-                outputs, training, pool_features)
-        else:
-            outputs = self.call_avg_pooling_head(
-                outputs, training, pool_features)
-        return outputs
-
-
 class EfficientNet(tf.keras.Model):
     """A class implementing tf.keras.Model for EfficientNet."""
 
     def __init__(self, dropout_rate, width_coefficient, depth_coefficient,
                  survival_rate, name, data_format='channels_last',
                  num_classes=90, depth_divisor=8, min_depth=None,
-                 use_squeeze_excitation=True, local_pooling=None,
-                 clip_projection_output=False, fix_head_stem=None,
+                 use_squeeze_excitation=True,
+                 clip_projection_output=False,
                  kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  num_repeats=[1, 2, 2, 3, 3, 4, 1],
                  input_filters=[32, 16, 24, 40, 80, 112, 192],
@@ -523,9 +401,7 @@ class EfficientNet(tf.keras.Model):
             units.
             use_squeeze_excitation: bool, flag to use squeeze and excitation
             layer.
-            local_pooling: bool, flag to use local pooling of features.
             clip_projection_output: String, flag to clip output.
-            fix_head_stem: bool, flag to fix head and stem branches.
             kernel_size: Int, kernel size of the conv block filters.
             num_repeats: Int, number of block repeats.
             input_filters: Int, input filters for the blocks to construct.
@@ -544,7 +420,6 @@ class EfficientNet(tf.keras.Model):
         super().__init__(name=name)
 
         self._activation = tf.nn.swish
-        self._fix_head_stem = fix_head_stem
         self._width_coefficient = width_coefficient
         self._depth_coefficient = depth_coefficient
         self._dropout_rate = dropout_rate
@@ -554,9 +429,7 @@ class EfficientNet(tf.keras.Model):
         self._min_depth = min_depth
         self._survival_rate = survival_rate
         self._use_squeeze_excitation = use_squeeze_excitation
-        self._local_pooling = local_pooling
         self._clip_projection_output = clip_projection_output
-        self._fix_head_stem = fix_head_stem
         self._kernel_sizes = kernel_sizes
         self._num_repeats = num_repeats
         self._input_filters = input_filters
@@ -605,7 +478,7 @@ class EfficientNet(tf.keras.Model):
             self._depth_divisor, self._min_depth)
         return input_filters, output_filters
 
-    def update_block_repeats(self, num_repeats, block_num):
+    def update_block_repeats(self, num_repeats):
         """Update block repeats based on depth multiplier.
         # Arguments
             num_repeats: Int, number of block repeats.
@@ -614,12 +487,7 @@ class EfficientNet(tf.keras.Model):
         # Returns
             num_repeats: Int, number of block repeats.
         """
-        blocks_repeat_limit = self._num_blocks - 1
-        block_flag = (block_num == 0 or block_num == blocks_repeat_limit)
-        if self._fix_head_stem and block_flag:
-            num_repeats = num_repeats
-        else:
-            num_repeats = round_repeats(num_repeats, self._depth_coefficient)
+        num_repeats = round_repeats(num_repeats, self._depth_coefficient)
         return num_repeats
 
     def add_block_repeats(self, input_filters, output_filters, num_repeat,
@@ -638,8 +506,7 @@ class EfficientNet(tf.keras.Model):
             input_filters = output_filters
             strides = [1, 1]
         for _ in range(num_repeat - 1):
-            self._blocks.append(conv_block(
-                self._local_pooling, self._use_squeeze_excitation,
+            self._blocks.append(conv_block(self._use_squeeze_excitation,
                 self._clip_projection_output, kernel_size, input_filters,
                 output_filters, expand_ratio, strides,
                 self._squeeze_excite_ratio, self._use_skip_connection,
@@ -685,7 +552,6 @@ class EfficientNet(tf.keras.Model):
         # and filter size increase.
         conv_block = self._get_conv_block(self._conv_type)
         self._blocks.append(conv_block(
-            self._local_pooling,
             self._use_squeeze_excitation, self._clip_projection_output,
             kernel_size, input_filters, output_filters, expand_ratio,
             strides, self._squeeze_excite_ratio, self._use_skip_connection,
@@ -700,7 +566,7 @@ class EfficientNet(tf.keras.Model):
         # Stem part.
         self._stem = Stem(
             self._width_coefficient, self._depth_divisor, self._min_depth,
-            self._fix_head_stem, self._input_filters[0])
+            self._input_filters[0])
         self.block_id = itertools.count(0)
         for block_num in range(self._num_blocks):
             assert self._num_repeats[block_num] > 0
@@ -709,16 +575,11 @@ class EfficientNet(tf.keras.Model):
                 self._output_filters[block_num])
             new_input_filter, new_output_filter = new_filters
             new_repeats = self.update_block_repeats(
-                self._num_repeats[block_num], block_num)
+                self._num_repeats[block_num])
             self.build_blocks(
                 new_input_filter, new_output_filter, new_repeats,
                 self._kernel_sizes[block_num], self._expand_ratios[block_num],
                 self._strides[block_num])
-        # Head part.
-        self._head = Head(
-            self._width_coefficient, self._depth_divisor, self._min_depth,
-            self._fix_head_stem, self._num_classes, self._dropout_rate,
-            self._local_pooling)
 
     def call(self, tensor, training, return_base=None, pool_features=False):
         """Implementation of call().
@@ -768,10 +629,6 @@ class EfficientNet(tf.keras.Model):
                             'reduction_%s/%s' % (reduction_arg, block_key)
                         ] = block_value
         self.endpoints['features'] = outputs
-
-        if not return_base:
-            outputs = self._head(outputs, training, pool_features)
-            self.endpoints.update(self._head.endpoints)
 
         return [outputs] + list(
             filter(
