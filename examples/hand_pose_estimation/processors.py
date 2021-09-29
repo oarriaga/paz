@@ -11,6 +11,7 @@ from backend import get_canonical_transformations, flip_right_hand
 from backend import normalize_keypoints, transform_to_relative_frames
 from backend import transform_cropped_keypoints
 from backend import transform_visibility_mask, get_hand_side_and_keypooints
+
 from paz.abstract import Processor
 from paz.backend.image.draw import lincolor
 from paz.backend.image.tensorflow_image import resize
@@ -191,6 +192,7 @@ class AdjustCropSize(Processor):
         self.crop_size = crop_size
 
     def call(self, crop_size_best):
+        crop_size_best = crop_size_best.astype(dtype=np.float64)
         crop_size_best *= 1.25
         scaled_crop = np.maximum(self.crop_size / crop_size_best, 0.25)
         scaled_crop = np.minimum(scaled_crop, 5.0)
