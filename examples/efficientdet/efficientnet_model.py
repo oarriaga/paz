@@ -35,8 +35,11 @@ def conv_normal_initializer(shape, dtype=None):
 
 
 class SqueezeExcitation(Layer):
-    # TODO: Add a short description of what is se layer. Ref too in MD.
-    """Squeeze-and-excitation layer."""
+    """
+    Squeeze-and-excitation layer: Recalibrates channel-wise feature responses
+    by modelling channel interdependencies as provided in the paper:
+    https://arxiv.org/pdf/1709.01507.pdf
+    """
     def __init__(self, filters, output_filters, name=None):
         """
         # Arguments
@@ -57,7 +60,6 @@ class SqueezeExcitation(Layer):
                               conv_normal_initializer, name='conv2d_1')
 
     def call(self, tensor):
-        # TODO: Add the shape of the tensor or any additional uniqueness.
         """
         # Arguments
             tensor: Tensor, tensor for forward computation through SE layer.
@@ -75,8 +77,10 @@ class SqueezeExcitation(Layer):
 
 
 class MobileInvertedResidualBottleNeckBlock(Layer):
-    # TODO: MBConvBlock. Add docstring of role and paper ref.
-    """A class of MBConv: Mobile Inverted Residual Bottleneck.
+    """
+    A class of MBConv: Mobile Inverted Residual Bottleneck. As provided in
+    the paper: https://arxiv.org/pdf/1801.04381.pdf and
+    https://arxiv.org/pdf/1905.11946.pdf
 
     # Attributes
         endpoints: dict. A list of internal tensors.
