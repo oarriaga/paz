@@ -34,37 +34,6 @@ def conv_normal_initializer(shape, dtype=None):
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
-def superpixel_kernel_initializer(shape, dtype='float32'):
-    """Initializes superpixel kernels.
-    This is inspired by space-to-depth transformation that
-    is mathematically equivalent before and after the
-    transformation. But we do the space-to-depth via a
-    convolution. Moreover, we make the layer trainable
-    instead of direct transform, we can initialization it
-    this way so that the model can learn not to do anything
-    but keep it mathematically equivalent,
-    when improving performance.
-
-    # Arguments
-        shape: shape of variable
-        dtype: dtype of variable
-
-    # Returns
-        an initialization for the variable
-    """
-    #  use input depth to make superpixel kernel.
-    # TODO: Unit test.
-    # TODO: Check whether this is used in any member of the family.
-    depth = shape[2]
-    span_x = np.arange(2)
-    span_y = np.arange(2)
-    span_z = np.arange(depth)
-    mesh = np.array(np.meshgrid(span_x, span_y, span_z)).T.reshape(-1, 3).T
-    filters = np.zeros([2, 2, depth, 4 * depth], dtype=dtype)
-    filters[mesh[0], mesh[1], mesh[2], 4 * mesh[2] + 2 * mesh[0] + mesh[1]] = 1
-    return filters
-
-
 class SqueezeExcitation(Layer):
     # TODO: Add a short description of what is se layer. Ref too in MD.
     """Squeeze-and-excitation layer."""
@@ -113,39 +82,6 @@ class SqueezeExcitation(Layer):
         return tf.sigmoid(squeeze_excitation_tensor) * tensor
 
 
-class SuperPixel(Layer):
-    # TODO: Add a short description of what is SP layer. Ref too in MD.
-    """Super pixel layer."""
-
-    def __init__(self, input_filters, name=None):
-        """
-        # Arguments
-            input_filters: Int, input filters for the blocks to construct.
-            name: layer name.
-        """
-
-        super().__init__(name=name)
-        self._superpixel = Conv2D(input_filters, [2, 2], [2, 2], 'same',
-                                  'channels_last', (1, 1), 1, None, False,
-                                  superpixel_kernel_initializer, name='conv2d')
-        self._batch_norm_superpixel = BatchNormalization(-1, 0.99, 1e-3)
-        self._activation = tf.nn.swish
-
-    def call(self, tensor, training):
-        """
-        # Arguments
-            tensor: Tensor, tensor for forward computation through SE layer.
-            training: Bool, indicating whether forward computation is happening
-
-        # Returns
-            output_tensor: Tensor, output tensor after forward computation.
-        """
-        output = self._superpixel(tensor)
-        output = self._batch_norm_superpixel(output, training)
-        output = self._activation(output)
-        return output
-
-
 class MobileInvertedResidualBottleNeckBlock(Layer):
     # TODO: MBConvBlock. Add docstring of role and paper ref.
     """A class of MBConv: Mobile Inverted Residual Bottleneck.
@@ -157,7 +93,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
     def __init__(self, local_pooling, use_squeeze_excitation,
                  clip_projection_output, kernel_size, input_filters,
                  output_filters, expand_ratio, strides, squeeze_excite_ratio,
-                 fused_conv, super_pixel, use_skip_connection, name=None):
+                 use_skip_connection, name=None):
         """Initializes a MBConv block.
 
         # Arguments
@@ -172,15 +108,12 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             expand_ratio: Int, ratio to expand the conv block in repeats.
             strides: List, strides in height and weight of conv filter.
             squeeze_excite_ratio: Float, squeeze excite block ratio.
-            fused_conv: Int, flag to select fused conv or expand conv.
-            super_pixel: Int, superpixel value.
             use_skip_connection: bool, flag to skip connect.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: layer name.
         """
         super().__init__(name=name)
         self._local_pooling = local_pooling
-        self._batch_norm = BatchNormalization
         self._activation = tf.nn.swish
         self._clip_projection_output = clip_projection_output
         self._kernel_size = kernel_size
@@ -189,8 +122,6 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         self._expand_ratio = expand_ratio
         self._strides = strides
         self._squeeze_excite_ratio = squeeze_excite_ratio
-        self._fused_conv = fused_conv
-        self._super_pixel = super_pixel
         self._use_skip_connection = use_skip_connection
         # TODO: Check and raise user mistakes.
         self._has_squeeze_excitation = (
@@ -228,11 +159,8 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         # Arguments
             filters: Int, output filters of squeeze and excite block.
         """
-        # TODO: Add BatchNormalization layer directly here.
         # TODO: Check all the if else flags and remove the unnecessary one.
         #  For SP, SE, fused_conv, local_pooling, expand_ratio, etc.,
-        batch_norm = self._batch_norm(
-            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
         if self._has_squeeze_excitation:
             num_filter = int(self._input_filters * self._squeeze_excite_ratio)
             num_reduced_filters = max(1, num_filter)
@@ -240,29 +168,8 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
                 self._local_pooling, num_reduced_filters, filters, name='se')
         else:
             squeeze_excitation = None
-        return batch_norm, squeeze_excitation
+        return squeeze_excitation
 
-    def build_super_pixel(self):
-        if self._super_pixel == 1:
-            super_pixel = SuperPixel(self._input_filters, name='super_pixel')
-        else:
-            super_pixel = None
-        return super_pixel
-
-    def build_fused_convolution(self, filters, kernel_size):
-        """
-        # Arguments
-            filters: Int, output filters of fused conv block.
-            kernel: Int, size of the convolution filter.
-
-        # Returns
-            fused_conv_block: TF Layers. Convolution layers for
-            fused convolution block type.
-        """
-        fused_conv = Conv2D(filters, [kernel_size, kernel_size], self._strides,
-                            'same', 'channels_last', (1, 1), 1, None, False,
-                            conv_normal_initializer, name=self.get_conv_name())
-        return fused_conv
 
     def build_expanded_convolution(self, filters, kernel_size):
         """
@@ -279,17 +186,13 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
                                  'channels_last', (1, 1), 1, None, False,
                                  conv_normal_initializer,
                                  name=self.get_conv_name())
-            batch_norm0 = self._batch_norm(
-                -1, 0.99, 1e-3, name=self.get_batch_norm_name())
-        # TODO: Refactor None.
         else:
             expand_conv = None
-            batch_norm0 = None
         depthwise_conv = DepthwiseConv2D(
             [kernel_size, kernel_size], self._strides,
             'same', 1, 'channels_last', (1, 1), None, False,
             conv_normal_initializer, name='depthwise_conv2d')
-        return expand_conv, batch_norm0, depthwise_conv
+        return expand_conv, depthwise_conv
 
     def build_conv_layers(self, filters):
         """
@@ -297,20 +200,12 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             filters: Int, output filters of fused conv block.
 
         # Returns
-            fused_conv_block: TF Layers. Convolution layers for
-            fused convolution block type.
             expand_conv_block: Tuple of TF layers. Convolution
             layers for expanded convolution block type.
         """
-        if self._fused_conv:
-            fused_conv_block = self.build_fused_convolution(
-                filters, self._kernel_size)
-            expand_conv_block = (None, None, None)
-        else:
-            fused_conv_block = None
-            expand_conv_block = self.build_expanded_convolution(
-                filters, self._kernel_size)
-        return fused_conv_block, expand_conv_block
+        expand_conv_block = self.build_expanded_convolution(
+            filters, self._kernel_size)
+        return expand_conv_block
 
     def get_updated_filters(self):
         """Updates filter count depending on the expand ratio.
@@ -325,27 +220,24 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             self._output_filters, [1, 1], [1, 1], 'same', 'channels_last',
             (1, 1), 1, None, False, conv_normal_initializer,
             name=self.get_conv_name())
-        batch_norm = self._batch_norm(
-            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
-        return project_conv, batch_norm
+        return project_conv
 
     def _build(self):
         """Builds block according to the arguments."""
         self.conv_id = itertools.count(0)
         self.batch_norm_id = itertools.count(0)
-        self.super_pixel_layer = self.build_super_pixel()
         filters = self.get_updated_filters()
-        fused_conv_block, expand_conv_block = self.build_conv_layers(filters)
-        self._fused_conv_layer = fused_conv_block
+        expand_conv_block = self.build_conv_layers(filters)
         self._expand_conv_layer = expand_conv_block[0]
-        self._batch_norm0 = expand_conv_block[1]
-        self._depthwise_conv = expand_conv_block[2]
-        squeeze_block = self.build_squeeze_excitation(filters)
-        self._batch_norm1 = squeeze_block[0]
-        self._squeeze_excitation = squeeze_block[1]
-        output_block = self.build_output_processors()
-        self._project_conv = output_block[0]
-        self._batch_norm2 = output_block[1]
+        self._batch_norm0 = BatchNormalization(
+            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        self._depthwise_conv = expand_conv_block[1]
+        self._batch_norm1 = BatchNormalization(
+            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
+        self._squeeze_excitation = self.build_squeeze_excitation(filters)
+        self._project_conv = self.build_output_processors()
+        self._batch_norm2 = BatchNormalization(
+            -1, 0.99, 1e-3, name=self.get_batch_norm_name())
 
     def call_conv_layers(self, tensor, training):
         """
@@ -354,18 +246,14 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             MBConv block.
             training: boolean, whether the model is constructed for training.
         """
-        if self._fused_conv:
-            tensor = self._fused_conv_layer(tensor)
-            tensor = self._batch_norm1(tensor, training=training)
+
+        if self._expand_ratio != 1:
+            tensor = self._expand_conv_layer(tensor)
+            tensor = self._batch_norm0(tensor, training=training)
             tensor = self._activation(tensor)
-        else:
-            if self._expand_ratio != 1:
-                tensor = self._expand_conv_layer(tensor)
-                tensor = self._batch_norm0(tensor, training=training)
-                tensor = self._activation(tensor)
-            tensor = self._depthwise_conv(tensor)
-            tensor = self._batch_norm1(tensor, training=training)
-            tensor = self._activation(tensor)
+        tensor = self._depthwise_conv(tensor)
+        tensor = self._batch_norm1(tensor, training=training)
+        tensor = self._activation(tensor)
         return tensor
 
     def call_output_processors(self, tensor, training,
@@ -404,8 +292,6 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
             A output tensor.
         """
         x = tensor
-        if self.super_pixel_layer:
-            x = self.super_pixel_layer(x, training)
         x = self.call_conv_layers(x, training)
         if self._squeeze_excitation:
             x = self._squeeze_excitation(x)
@@ -619,7 +505,7 @@ class EfficientNet(tf.keras.Model):
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]],
                  squeeze_excite_ratio=0.25, use_skip_connection=True,
-                 conv_type=0, fused_conv=0, super_pixel=0, num_blocks=7):
+                 conv_type=0, num_blocks=7):
         """Initializes an 'Model' instance.
 
         # Arguments
@@ -649,8 +535,6 @@ class EfficientNet(tf.keras.Model):
             squeeze_excite_ratio: Float, squeeze excite block ratio.
             use_skip_connection: bool, flag to skip connect.
             conv_type: Int, flag to select convolution type.
-            fused_conv: Int, flag to select fused conv or expand conv.
-            super_pixel: Int, superpixel value.
             num_blocks: Int, number of Mobile bottleneck conv blocks.
             name: A string of layer name.
 
@@ -660,7 +544,6 @@ class EfficientNet(tf.keras.Model):
         super().__init__(name=name)
 
         self._activation = tf.nn.swish
-        self._batch_norm = BatchNormalization
         self._fix_head_stem = fix_head_stem
         self._width_coefficient = width_coefficient
         self._depth_coefficient = depth_coefficient
@@ -683,8 +566,6 @@ class EfficientNet(tf.keras.Model):
         self._squeeze_excite_ratio = squeeze_excite_ratio
         self._use_skip_connection = use_skip_connection
         self._conv_type = conv_type
-        self._fused_conv = fused_conv
-        self._super_pixel = super_pixel
         self._num_blocks = num_blocks
         self.endpoints = None
         self._build()
@@ -742,7 +623,7 @@ class EfficientNet(tf.keras.Model):
         return num_repeats
 
     def add_block_repeats(self, input_filters, output_filters, num_repeat,
-                          kernel_size, strides, expand_ratio, super_pixel):
+                          kernel_size, strides, expand_ratio):
         """
         # Arguments
             input_filters: Int, input filters for the blocks to construct.
@@ -750,8 +631,6 @@ class EfficientNet(tf.keras.Model):
             num_repeats: Int, number of block repeats.
             kernel_size: Int, kernel size of the conv block filters.
             strides: List, strides in height and weight of conv filter.
-            expand_ratio: Int, ratio to expand the conv block in repeats.
-            super_pixel: Int, superpixel value.
         """
         conv_block = self._get_conv_block(self._conv_type)
         if num_repeat > 1:
@@ -763,8 +642,8 @@ class EfficientNet(tf.keras.Model):
                 self._local_pooling, self._use_squeeze_excitation,
                 self._clip_projection_output, kernel_size, input_filters,
                 output_filters, expand_ratio, strides,
-                self._squeeze_excite_ratio, self._fused_conv, super_pixel,
-                self._use_skip_connection, self.get_block_name()))
+                self._squeeze_excite_ratio, self._use_skip_connection,
+                self.get_block_name()))
 
     def update_block_depth(self, input_filters, output_filters,
                            kernel_size, strides):
@@ -789,80 +668,9 @@ class EfficientNet(tf.keras.Model):
         output_filters = output_filters * depth_factor
         return input_filters, output_filters, kernel_size
 
-    def add_stride2_block(self, input_filters, output_filters, kernel_size,
-                          expand_ratio, super_pixel):
-        """
-        # Arguments
-            input_filters: Int, input filters for the blocks to construct.
-            output_filters: Int, output filters for the blocks to construct.
-            kernel_size: Int, kernel size of the conv block filters.
-            expand_ratio: Int, ratio to expand the conv block in repeats.
-            super_pixel: Int, superpixel value.
-
-        # Returns
-            super_pixel: Int, superpixel value.
-        """
-        conv_block = self._get_conv_block(self._conv_type)
-        strides = [1, 1]
-        self._blocks.append(conv_block(
-            self._local_pooling, self._use_squeeze_excitation,
-            self._clip_projection_output, kernel_size, input_filters,
-            output_filters, expand_ratio, strides, self._squeeze_excite_ratio,
-            self._fused_conv, super_pixel, self._use_skip_connection,
-            name=self.get_block_name()))
-        super_pixel = 0
-        return super_pixel
-
-    def build_super_pixel_blocks(self, input_filters, output_filters,
-                                 kernel_size, strides, expand_ratio,
-                                 super_pixel):
-        """
-        # Arguments
-            input_filters: Int, input filters for the blocks to construct.
-            output_filters: Int, output filters for the blocks to construct.
-            num_repeats: Int, number of block repeats.
-            kernel_size: Int, kernel size of the conv block filters.
-            strides: List, strides in height and weight of conv filter.
-            expand_ratio: Int, ratio to expand the conv block in repeats.
-            super_pixel: Int, superpixel value.
-
-        # Returns
-            kernel_size: Int, kernel size of the conv block filters.
-            super_pixel: Int, superpixel value.
-        """
-        conv_block = self._get_conv_block(self._conv_type)
-        # if superpixel, adjust filters, kernels, and strides.
-        updated_parameters = self.update_block_depth(
-            input_filters, output_filters, kernel_size, strides)
-        new_input_filters, new_output_filters, kernel_size = updated_parameters
-        # if the first block has stride-2 and superpixel transformation
-        if strides[0] == 2 and strides[1] == 2:
-            updated_super_pixel = self.add_stride2_block(
-                new_input_filters, new_output_filters, kernel_size,
-                expand_ratio, super_pixel)
-            super_pixel = updated_super_pixel
-        elif super_pixel == 1:
-            self._blocks.append(conv_block(
-                self._local_pooling,
-                self._use_squeeze_excitation, self._clip_projection_output,
-                kernel_size, new_input_filters, new_output_filters,
-                expand_ratio, strides, self._squeeze_excite_ratio,
-                self._fused_conv, super_pixel, self._use_skip_connection,
-                self.get_block_name()))
-            super_pixel = 2
-        else:
-            self._blocks.append(conv_block(
-                self._local_pooling,
-                self._use_squeeze_excitation, self._clip_projection_output,
-                kernel_size, new_input_filters, new_output_filters,
-                expand_ratio, strides, self._squeeze_excite_ratio,
-                self._fused_conv, super_pixel,
-                self._use_skip_connection, self.get_block_name()))
-
-        return kernel_size, super_pixel
 
     def build_blocks(self, input_filters, output_filters, num_repeats,
-                     kernel_size, expand_ratio, strides, super_pixel):
+                     kernel_size, expand_ratio, strides):
         """
         # Arguments
             input_filters: Int, input filters for the blocks to construct.
@@ -871,27 +679,19 @@ class EfficientNet(tf.keras.Model):
             kernel_size: Int, kernel size of the conv block filters.
             expand_ratio: Int, ratio to expand the conv block in repeats.
             strides: List, strides in height and weight of conv filter.
-            super_pixel: Int, superpixel value.
         """
 
         # The first block needs to take care of stride
         # and filter size increase.
         conv_block = self._get_conv_block(self._conv_type)
-        if not self._super_pixel:  # no super_pixel at all
-            self._blocks.append(conv_block(
-                self._local_pooling,
-                self._use_squeeze_excitation, self._clip_projection_output,
-                kernel_size, input_filters, output_filters, expand_ratio,
-                strides, self._squeeze_excite_ratio, self._fused_conv,
-                super_pixel, self._use_skip_connection,
-                self.get_block_name()))
-        else:
-            new_params = self.build_super_pixel_blocks(
-                input_filters, output_filters, kernel_size, strides,
-                expand_ratio, super_pixel)
-            kernel_size, super_pixel = new_params
+        self._blocks.append(conv_block(
+            self._local_pooling,
+            self._use_squeeze_excitation, self._clip_projection_output,
+            kernel_size, input_filters, output_filters, expand_ratio,
+            strides, self._squeeze_excite_ratio, self._use_skip_connection,
+            self.get_block_name()))
         self.add_block_repeats(input_filters, output_filters, num_repeats,
-                               kernel_size, strides, expand_ratio, super_pixel)
+                               kernel_size, strides, expand_ratio)
 
     def _build(self):
         """Builds a model."""
@@ -904,7 +704,6 @@ class EfficientNet(tf.keras.Model):
         self.block_id = itertools.count(0)
         for block_num in range(self._num_blocks):
             assert self._num_repeats[block_num] > 0
-            assert self._super_pixel in [0, 1, 2]
             new_filters = self.update_filters(
                 self._input_filters[block_num],
                 self._output_filters[block_num])
@@ -914,7 +713,7 @@ class EfficientNet(tf.keras.Model):
             self.build_blocks(
                 new_input_filter, new_output_filter, new_repeats,
                 self._kernel_sizes[block_num], self._expand_ratios[block_num],
-                self._strides[block_num], self._super_pixel)
+                self._strides[block_num])
         # Head part.
         self._head = Head(
             self._width_coefficient, self._depth_divisor, self._min_depth,
@@ -945,11 +744,7 @@ class EfficientNet(tf.keras.Model):
         # Call blocks
         for block_arg, block in enumerate(self._blocks):
             is_reduction = False
-            if block._super_pixel == 1 and block_arg == 0:
-                reduction_arg = reduction_arg + 1
-                self.endpoints['reduction_%s' % reduction_arg] = outputs
-
-            elif ((block_arg == len(self._blocks) - 1) or
+            if ((block_arg == len(self._blocks) - 1) or
                     self._blocks[block_arg + 1]._strides[0] > 1):
                 is_reduction = True
                 reduction_arg = reduction_arg + 1
