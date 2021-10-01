@@ -15,4 +15,3 @@ from .draw_skeleton import draw_skeleton
 
 from .multi_stage_output import get_heatmaps_average
 from .multi_stage_output import get_tags
-from .multi_stage_output import calculate_offset

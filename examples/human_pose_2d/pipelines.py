@@ -4,24 +4,23 @@ import processors as pe
 
 
 class DetectHumanPose2D(pr.Processor):
-    def __init__(self, model, data_info, max_num_people=30, with_flip=True):
+    def __init__(self, model, joint_order, fliped_joint_order,
+                 data_with_center, max_num_people=30, with_flip=True):
         super(DetectHumanPose2D, self).__init__()
         self.with_flip = with_flip
         self.preprocess_image = PreprocessImage()
         self.get_output = pr.SequentialProcessor(
-            [GetMultiStageOutputs(model, data_info),
+            [GetMultiStageOutputs(model, fliped_joint_order, data_with_center),
              AggregateResults(with_flip=self.with_flip)])
-        self.heatmaps_parser = HeatmapsParser(max_num_people, data_info)
+        self.heatmaps_parser = HeatmapsParser(max_num_people, joint_order)
         self.transform_joints = TransformJoints()
-        self.draw_skeleton = pe.DrawSkeleton(data_info)
 
     def call(self, image):
         resized_image, center, scale = self.preprocess_image(image)
         heatmaps, tags = self.get_output(resized_image, self.with_flip)
         grouped_joints, scores = self.heatmaps_parser(heatmaps, tags)
         joints = self.transform_joints(grouped_joints, center, scale, heatmaps)
-        image = self.draw_skeleton(image, joints)
-        return joints, scores, image
+        return joints, scores
 
 
 class PreprocessImage(pr.Processor):
@@ -42,23 +41,19 @@ class PreprocessImage(pr.Processor):
 
 
 class GetMultiStageOutputs(pr.Processor):
-    def __init__(self, model, data_info, with_AE=(True, False),
-                 with_AE_loss=(True, False), with_heatmap=(True, True),
-                 with_heatmap_loss=(True, True), tag_per_joint=True,
-                 project2image=True, ignore_centers=True):
+    def __init__(self, model, fliped_joint_order, data_with_center,
+                 tag_per_joint=True, project2image=True, ignore_centers=True):
         super(GetMultiStageOutputs, self).__init__()
         self.predict = pr.SequentialProcessor(
-            [pr.Predict(model), pe.ResizeOutput('2x')])
+            [pr.Predict(model), pe.ScaleOutputs(2)])
         self.get_heatmaps = pr.SequentialProcessor(
-            [pe.GetHeatmapsAverage(data_info, with_heatmap,
-             with_heatmap_loss), pe.UpdateHeatmaps()])
-        self.get_tags = pe.GetTags(with_AE_loss, with_AE, data_info,
-                                   with_heatmap_loss, tag_per_joint)
+            [pe.GetHeatmapsAverage(fliped_joint_order), pe.UpdateHeatmaps()])
+        self.get_tags = pe.GetTags(fliped_joint_order, tag_per_joint)
         self.postprocess = pr.SequentialProcessor()
-        if data_info['data_with_center'] and ignore_centers:
+        if data_with_center and ignore_centers:
             self.postprocess.add(pe.RemoveLastElement())
         if project2image:
-            self.postprocess.add(pe.Resize('2x'))
+            self.postprocess.add(pe.ScaleImage(2))
 
     def call(self, image, with_flip):
         outputs = self.predict(image)
@@ -91,21 +86,21 @@ class AggregateResults(pr.Processor):
 
 
 class HeatmapsParser(pr.Processor):
-    def __init__(self, max_num_people, data_info, detection_thresh=0.2,
+    def __init__(self, max_num_people, joint_order, detection_thresh=0.2,
                  tag_thresh=1, tag_per_joint=True, ignore_too_much=False,
                  use_detection_val=True):
         super(HeatmapsParser, self).__init__()
         self.group_joints = pr.SequentialProcessor()
         self.group_joints.add(pe.TopKDetections(max_num_people, tag_per_joint,
-                                                data_info))
-        self.group_joints.add(pe.GroupJointsByTag(max_num_people, data_info,
+                                                joint_order))
+        self.group_joints.add(pe.GroupJointsByTag(max_num_people, joint_order,
                                                   tag_thresh, detection_thresh,
                                                   ignore_too_much,
                                                   use_detection_val))
 
         self.adjust_joints = pe.AdjustJointsLocations()
         self.get_scores = pe.GetScores()
-        self.tile_array = pe.TileArray(data_info, tag_per_joint)
+        self.tile_array = pe.TileArray(tag_per_joint)
         self.refine_joints = pe.RefineJointsLocations()
 
     def call(self, heatmaps, tags, adjust=True, refine=True):

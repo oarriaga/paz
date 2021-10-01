@@ -107,6 +107,7 @@ def concatenate_zeros(metrix, shape):
     return concatenated
 
 
+# replace with numpy
 def shortest_L2_distance(scores):
     munkres = Munkres()
     lowest_cost_pairs = munkres.compute(scores)
