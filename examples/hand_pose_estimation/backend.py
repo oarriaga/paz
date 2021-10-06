@@ -37,31 +37,32 @@ def transform_visibility_mask(visibility_mask):
         # Returns
             Numpy array with shape `(42, 1)`.
     """
-    visibility_leftmask = visibility_mask[LEFT_ROOT_KEYPOINT_ID]
-    palm_visibility_left = np.logical_or(
-        visibility_mask[LEFT_ROOT_KEYPOINT_ID],
-        visibility_mask[LEFT_ALIGNED_KEYPOINT_ID])
+    visibility_left_root = visibility_mask[LEFT_ROOT_KEYPOINT_ID]
+    visibility_left_aligned = visibility_mask[LEFT_ALIGNED_KEYPOINT_ID]
+    visibility_right_root = visibility_mask[RIGHT_ROOT_KEYPOINT_ID]
+    visibility_right_aligned = visibility_mask[RIGHT_ALIGNED_KEYPOINT_ID]
 
+    palm_visibility_left = np.logical_or(
+        visibility_left_root, visibility_left_aligned)
     palm_visibility_left = np.expand_dims(palm_visibility_left, 0)
 
     palm_visibility_right = np.logical_or(
-        visibility_mask[RIGHT_ROOT_KEYPOINT_ID],
-        visibility_mask[RIGHT_ALIGNED_KEYPOINT_ID])
-
+        visibility_right_root, visibility_right_aligned)
     palm_visibility_right = np.expand_dims(palm_visibility_right, 0)
 
     visibility_mask = np.concatenate(
-        [palm_visibility_left, visibility_mask[LEFT_ROOT_KEYPOINT_ID + 1:
-                                               LEFT_LAST_KEYPOINT_ID + 1],
-         palm_visibility_right, visibility_mask[RIGHT_ROOT_KEYPOINT_ID + 1:
-                                                RIGHT_LAST_KEYPOINT_ID + 1]], 0)
+        [palm_visibility_left,
+         visibility_mask[LEFT_ROOT_KEYPOINT_ID + 1: LEFT_LAST_KEYPOINT_ID + 1],
+         palm_visibility_right,
+         visibility_mask[RIGHT_ROOT_KEYPOINT_ID + 1: RIGHT_LAST_KEYPOINT_ID + 1]
+         ], 0)
 
     return visibility_mask
 
 
 def keypoints_to_palm_coordinates(keypoints):
     """ Data Pre-processing step: Transform keypoints to palm coordinates
-       from wrist coordinates.
+        from wrist coordinates.
         # Arguments
             keypoints: Numpy array with shape `(42, 3)` for 3D keypoints.
                        Numpy array with shape `(42, 2)` for 2D keypoints.
@@ -196,11 +197,11 @@ def extract_hand_masks(hand_parts_mask, right_hand_mask_limit=17):
     """
     one_map = np.ones_like(hand_parts_mask)
     left_hand_map = np.greater(hand_parts_mask, one_map)
-    right_hand_map = np.less(hand_parts_mask, one_map *
-                             (right_hand_mask_limit + 1))
+    right_hand_map = np.less(
+        hand_parts_mask, one_map * (right_hand_mask_limit + 1))
     mask_left = np.logical_and(left_hand_map, right_hand_map)
     mask_right = np.greater(hand_parts_mask, one_map * right_hand_mask_limit)
-    return mask_left.astype('int'), mask_right.astype('int')
+    return mask_left, mask_right
 
 
 def extract_dominant_hand_mask(keypoints3D, dominant_hand):
@@ -248,23 +249,16 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
             dominant_hand_mask: Numpy array of size (320, 320)
     """
     hand_map_left, hand_map_right = extract_hand_masks(hand_parts_mask)
-
     num_pixels_hand_left = np.sum(hand_map_left)
     num_pixels_hand_right = np.sum(hand_map_right)
-
     is_left_dominant = np.greater(num_pixels_hand_left, num_pixels_hand_right)
-    dominant_hand_mask = extract_dominant_hand_mask(keypoints3D,
-                                                    is_left_dominant)
-
-    hand_side_keypoints3D = extract_hand_side_keypoints(keypoints3D,
-                                                        dominant_hand_mask)
-
+    dominant_hand = extract_dominant_hand_mask(keypoints3D, is_left_dominant)
+    keypoints3D = extract_hand_side_keypoints(keypoints3D, dominant_hand)
     hand_side = np.where(is_left_dominant, 0, 1)
+    return hand_side, keypoints3D, dominant_hand
 
-    return hand_side, hand_side_keypoints3D, dominant_hand_mask
 
-
-def transform_to_relative_frame(keypoints3D, bone_index):
+def transform_to_bone_frame(keypoints3D, bone_index):
     """ Transform the keypoints in camera image frame to index keypoint frame: .
         # Arguments
             keypoints3D: numpy array of shape (21, 3)
@@ -274,7 +268,6 @@ def transform_to_relative_frame(keypoints3D, bone_index):
             transformation_parameters: multiple values representing all the
             euclidean parameters to calculate transformation matrix
     """
-
     index_keypoint = np.expand_dims(keypoints3D[bone_index, :], 1)
     translated_keypoint3D = to_homogeneous_coordinates(index_keypoint)
 
@@ -282,13 +275,13 @@ def transform_to_relative_frame(keypoints3D, bone_index):
         np.zeros_like(keypoints3D[0, 0]))
 
     transformation_parameters = get_transformation_parameters(
-        translated_keypoint3D, translation_matrix)  # Specify the frame
+        translated_keypoint3D, translation_matrix)
 
     return transformation_parameters
 
 
-def get_local_coordinates(transformation_matrix, keypoint3D):
-    """ Transform keypoint from one frame to another : .
+def transform_to_keypoint_coordinates(transformation_matrix, keypoint3D):
+    """ Transform to keypoint (root/child) frame  : .
         # Arguments
             transformation_matrix: numpy array of shape (4, 4)
             keypoint3D: numpy array of shape (3, ).
@@ -296,12 +289,10 @@ def get_local_coordinates(transformation_matrix, keypoint3D):
         # Returns
             local_keypoint_coordinates: Numpy array of size (3, ).
     """
-    homogeneous_keypoint3D = to_homogeneous_coordinates(
-        np.expand_dims(keypoint3D, 1))
-    local_keypoint_coordinates = np.matmul(transformation_matrix,
-                                           homogeneous_keypoint3D)
-    return local_keypoint_coordinates  # Specify which frame, remove expand
-    # dims and place in the function
+    keypoint3D = np.expand_dims(keypoint3D, 1)
+    keypoint3D = to_homogeneous_coordinates(keypoint3D)
+    keypoint_coordinates = np.matmul(transformation_matrix, keypoint3D)
+    return keypoint_coordinates
 
 
 def get_root_transformations(keypoints3D, bone_index,
@@ -317,18 +308,16 @@ def get_root_transformations(keypoints3D, bone_index,
             relative_coordinates: numpy array of shape (21, 3, 1)
             transformations: placeholder for transformation (21, 4, 4, 1)
     """
-    transformation_parameters = transform_to_relative_frame(
-        keypoints3D, bone_index)  # unpack the parameters with understandable
-    # names
-    relative_coordinates[bone_index] = np.stack(
-        transformation_parameters[:3], 0)
-    transformations[bone_index] = transformation_parameters[3]
-    return transformations, relative_coordinates
+    length_from_origin, rotation_angle_x, rotation_angle_y, rotated_keypoints = \
+        transform_to_bone_frame(keypoints3D, bone_index)
+    relative_coordinate = np.stack(
+        [length_from_origin, rotation_angle_x, rotation_angle_y], 0)
+    transformation = rotated_keypoints
+    return transformation, relative_coordinate
 
 
-def get_articulation_angles(local_child_coordinates, local_parent_coordinates,
-                            transformation_matrix):
-    # local needs to be replaced with an understandable frame name
+def get_articulation_angles(child_keypoint_coordinates,
+                            parent_keypoint_coordinates, transformation_matrix):
     """ Calculate Articulation Angles :
         # Arguments
             local_child_coordinates: Child keypoint coordinates (1, 3)
@@ -339,12 +328,10 @@ def get_articulation_angles(local_child_coordinates, local_parent_coordinates,
             transformation_parameters: parameters for transformation to
             local frame
     """
-
-    delta_vector = local_child_coordinates - local_parent_coordinates
+    delta_vector = child_keypoint_coordinates - parent_keypoint_coordinates
     delta_vector = to_homogeneous_coordinates(
         np.expand_dims(delta_vector[:, :3], 1))
-
-    transformation_parameters = transform_to_relative_frame(
+    transformation_parameters = transform_to_bone_frame(
         delta_vector, transformation_matrix)  # relative to be replaced
     return transformation_parameters
 
@@ -365,22 +352,21 @@ def get_child_transformations(keypoints3D, bone_index, parent_index,
     """
     transformation_matrix = transformations[parent_index]
 
-    local_parent_coordinates = get_local_coordinates(
+    parent_keypoint_coordinates = transform_to_keypoint_coordinates(
         transformation_matrix, keypoints3D[parent_index, :])
-    local_child_coordinates = get_local_coordinates(
+    child_keypoint_coordinates = transform_to_keypoint_coordinates(
         transformation_matrix, keypoints3D[bone_index, :])
 
     transformation_parameters = get_articulation_angles(
-        local_child_coordinates, local_parent_coordinates,
-        transformation_matrix)  # try reducing the variable names, unpack the
-    # parameters
+        parent_keypoint_coordinates, child_keypoint_coordinates,
+        transformation_matrix)
 
-    relative_coordinates[bone_index] = np.stack(transformation_parameters[:3])
-    transformations[bone_index] = transformation_parameters[3]
-    return transformations, relative_coordinates
+    relative_coordinate = np.stack(transformation_parameters[:3])
+    transformation = transformation_parameters[3]
+    return transformation, relative_coordinate
 
 
-def get_keypoints_relative_frame(keypoints3D):
+def keypoints_to_root_frame(keypoints3D):
     """ Convert keypoints to root keypoint coordinates :
         # Arguments
             keypoints3D: Keypoints, Numpy array of shape (1, 21, 3)
@@ -389,38 +375,35 @@ def get_keypoints_relative_frame(keypoints3D):
             relative_coordinates: keypoints in root keypoint coordinate frame
     """
     transformations = [None] * len(kinematic_chain_list)
-    relative_coordinates = [0.0] * len(kinematic_chain_list)  # np.zeros
-    # should be used
-
+    relative_coordinates = np.zeros(len(kinematic_chain_list))
     for bone_index in kinematic_chain_list:
         parent_index = kinematic_chain_dict[bone_index]
         if parent_index == 'root':
-            transformations, relative_coordinates = get_root_transformations(
+            transformation, relative_coordinate = get_root_transformations(
                 keypoints3D, bone_index, relative_coordinates, transformations)
-            # Stop using placeholder technique
         else:
-            transformations, relative_coordinates = get_child_transformations(
+            transformation, relative_coordinate = get_child_transformations(
                 keypoints3D, bone_index, parent_index, relative_coordinates,
                 transformations)
-
+        transformations[bone_index] = transformation
+        relative_coordinates[bone_index] = relative_coordinate
     return relative_coordinates
 
 
-def transform_to_relative_frames(keypoints3D, num_keypoints=21):
+def keypoint_to_root_frame(keypoints3D, num_keypoints=21):
     """ Convert keypoints to root keypoint coordinates :
         # Arguments
             keypoints3D: Keypoints, Numpy array of shape (1, 21, 3)
-
         # Returns
             relative_coordinates: keypoints in root keypoint coordinate frame
     """
     keypoints3D = keypoints3D.reshape([num_keypoints, 3])
-    relative_coordinates = get_keypoints_relative_frame(keypoints3D)
+    relative_coordinates = keypoints_to_root_frame(keypoints3D)
     key_point_relative_frame = np.stack(relative_coordinates, 1)
     return key_point_relative_frame
 
 
-def get_keypoints_z_rotation(alignment_keypoint, translated_keypoints3D):
+def get_keypoints_z_rotation(keypoints3D, keypoint):
     """ Rotate Keypoints along z-axis :
         # Arguments
             alignment_keypoint: Keypoint to whose frame transformation is to
@@ -432,18 +415,14 @@ def get_keypoints_z_rotation(alignment_keypoint, translated_keypoints3D):
             resultant_keypoints3D: keypoints after rotation
             rotation_matrix_z: Rotation matrix
     """
-    alpha = np.arctan2(alignment_keypoint[0], alignment_keypoint[1])
-    rotation_matrix_z = build_rotation_matrix_z(alpha)
-    resultant_keypoints3D = np.matmul(
-        translated_keypoints3D.T, rotation_matrix_z)
-    reference_keypoint_z_rotation = resultant_keypoints3D[
-                                    LEFT_ALIGNED_KEYPOINT_ID, :]
-    return reference_keypoint_z_rotation, resultant_keypoints3D, \
-           rotation_matrix_z
+    alpha = np.arctan2(keypoint[0], keypoint[1])
+    rotation_matrix = build_rotation_matrix_z(alpha)
+    keypoints3D = np.matmul(keypoints3D.T, rotation_matrix)
+    keypoint = keypoints3D[LEFT_ALIGNED_KEYPOINT_ID, :]
+    return keypoint, rotation_matrix, keypoints3D
 
 
-def get_keypoints_x_rotation(keypoints3D,
-                             reference_keypoint):  # change the name
+def get_keypoints_x_rotation(keypoints3D, keypoint):
     """ Rotate Keypoints along x-axis :
         # Arguments
             keypoints3D: Keypoints, Numpy array of shape (1, 21, 3)
@@ -453,16 +432,14 @@ def get_keypoints_x_rotation(keypoints3D,
             resultant_keypoints3D: keypoints after rotation
             rotation_matrix_x: Rotation matrix along x-axis
     """
-    beta = -np.arctan2(reference_keypoint[2], reference_keypoint[1])  # Think
-    # about reference_keypoint
-    rotation_matrix_x = build_rotation_matrix_x(beta + np.pi)
-    resultant_keypoints3D = np.matmul(keypoints3D, rotation_matrix_x)  #
-    # remove resultant, try making multiplication from right to left
-    resultant_keypoint = resultant_keypoints3D[LEFT_LAST_KEYPOINT_ID, :]
-    return resultant_keypoint, rotation_matrix_x, resultant_keypoints3D
+    beta = -np.arctan2(keypoint[2], keypoint[1])
+    rotation_matrix = build_rotation_matrix_x(beta + np.pi)
+    keypoints3D = np.matmul(keypoints3D, rotation_matrix)
+    keypoint = keypoints3D[LEFT_LAST_KEYPOINT_ID, :]
+    return keypoint, rotation_matrix, keypoints3D
 
 
-def get_keypoints_y_rotation(keypoints3D, reference_keypoint):
+def get_keypoints_y_rotation(keypoints3D, keypoint):
     """ Rotate Keypoints along y-axis :
         # Arguments
             keypoints3D: Keypoints, Numpy array of shape (1, 21, 3)
@@ -473,10 +450,11 @@ def get_keypoints_y_rotation(keypoints3D, reference_keypoint):
             resultant_keypoints3D: keypoints after rotation along Y-axis
             rotation_matrix_y: Rotation matrix along x-axis
     """
-    gamma = np.arctan2(reference_keypoint[2], reference_keypoint[0])
-    rotation_matrix_y = build_rotation_matrix_y(gamma)
-    transformed_keypoints3D = np.matmul(keypoints3D, rotation_matrix_y)
-    return transformed_keypoints3D, rotation_matrix_y
+    gamma = np.arctan2(keypoint[2], keypoint[0])
+    rotation_matrix = build_rotation_matrix_y(gamma)
+    keypoints3D = np.matmul(keypoints3D, rotation_matrix)
+    keypoint = keypoints3D[LEFT_LAST_KEYPOINT_ID, :]
+    return keypoint, rotation_matrix, keypoints3D
 
 
 def get_canonical_transformations(keypoints3D):
@@ -488,31 +466,19 @@ def get_canonical_transformations(keypoints3D):
             transformed_keypoints3D: Resultant keypoint after transformation
             final_rotation_matrix: Final transformation matrix
     """
-    # Reduce the size of the function
-    reference_keypoint = np.expand_dims(keypoints3D[:, LEFT_ROOT_KEYPOINT_ID],
-                                        1)
-    translated_keypoints3D = keypoints3D - reference_keypoint
-    alignment_keypoint = translated_keypoints3D[:, LEFT_ALIGNED_KEYPOINT_ID]
-
-    # rotating_functions = [get_keypoints_z_rotation, get_keypoints_z_rotation,
-    # get_keypoints_z_rotation]
-    # for function in apply_rotation:
-    #
-    reference_keypoint_z_rotation, resultant_keypoints3D, rotation_matrix_z = \
-        get_keypoints_z_rotation(alignment_keypoint, translated_keypoints3D)
-
-    reference_keypoint_x_rotation, rotation_matrix_x, resultant_keypoints3D \
-        = get_keypoints_x_rotation(resultant_keypoints3D,
-                                   reference_keypoint_z_rotation)
-
-    transformed_keypoints3D, rotation_matrix_y = get_keypoints_y_rotation(
-        resultant_keypoints3D, reference_keypoint_x_rotation)
-
-    rotation_matrix_xz = np.matmul(rotation_matrix_z, rotation_matrix_x)
-    final_rotation_matrix = np.matmul(rotation_matrix_xz, rotation_matrix_y)
-
-    return np.squeeze(transformed_keypoints3D), np.squeeze(
-        final_rotation_matrix)
+    reference_keypoint = np.expand_dims(
+        keypoints3D[:, LEFT_ROOT_KEYPOINT_ID], 1)
+    keypoints3D = keypoints3D - reference_keypoint
+    keypoint = keypoints3D[:, LEFT_ALIGNED_KEYPOINT_ID]
+    final_rotation_matrix = np.ones((3, 3))
+    apply_rotations = [get_keypoints_z_rotation, get_keypoints_z_rotation,
+                       get_keypoints_z_rotation]
+    for function in apply_rotations:
+        keypoint, rotation_matrix, keypoints3D = function(
+            keypoints3D, keypoint)
+        final_rotation_matrix = np.matmul(
+            final_rotation_matrix, rotation_matrix)
+    return np.squeeze(keypoints3D), np.squeeze(final_rotation_matrix)
 
 
 def get_best_crop_size(max_coordinates, min_coordinates, crop_center):
@@ -538,7 +504,6 @@ def get_scale_matrix(scale):
     """ calculate scale matrix :
         # Arguments
             scale: Int value
-
         # Returns
             scale_original: Int value
             scale_matrix: Numpy array of shape (3, 3)
@@ -563,37 +528,38 @@ def get_scale_translation_matrix(crop_center, crop_size, scale):
         # Returns
             translation_matrix: Numpy array of shape (3, 3)
     """
-    # Variable names should be understandable
-    trans1 = crop_center[0] * scale - crop_size // 2
-    trans2 = crop_center[1] * scale - crop_size // 2
+    translated_center_x = crop_center[0] * scale - crop_size // 2
+    translated_center_y = crop_center[1] * scale - crop_size // 2
 
-    trans1 = np.reshape(trans1, [1, ])
-    trans2 = np.reshape(trans2, [1, ])
+    translated_center_x = np.reshape(translated_center_x, [1, ])
+    translated_center_y = np.reshape(translated_center_y, [1, ])
 
-    translation_matrix = np.array([[1.0, 0.0, -trans2],
-                                   [0.0, 1.0, -trans1],
+    translation_matrix = np.array([[1.0, 0.0, -translated_center_x],
+                                   [0.0, 1.0, -translated_center_y],
                                    [0.0, 0.0, 1.0]])
 
     return translation_matrix
 
 
-def extract_coordinate_limits(keypoints_2D, keypoints_2D_vis, image_size):
+def extract_coordinate_limits(keypoints_2D, keypoints_2D_visibility,
+                              image_size):
     """ Extract minimum and maximum coordinates :
         # Arguments
             keypoints_2D: Numpy array of shape (21, 2)
-            keypoints_2D_vis: Numpy array of shape (21, 1)
+            keypoints_2D_visibility: Numpy array of shape (21, 1)
             image_size: List of shape (3)
 
         # Returns
             min_coordinates: Tuple of size (2)
             max_coordinates: Tuple of size (2)
     """
-    keypoint_h = keypoints_2D[:, 1][keypoints_2D_vis]
-    keypoint_w = keypoints_2D[:, 0][keypoints_2D_vis]
-    kp_coord_hw = np.stack([keypoint_h, keypoint_w], 1)
+    keypoint_u = keypoints_2D[:, 1][keypoints_2D_visibility]
+    keypoint_v = keypoints_2D[:, 0][keypoints_2D_visibility]
+    keypoints_2D_coordinates = np.stack([keypoint_u, keypoint_v], 1)
 
-    min_coordinates = np.maximum(np.amin(kp_coord_hw, 0), 0.0)
-    max_coordinates = np.minimum(np.amax(kp_coord_hw, 0), image_size[0:2])
+    min_coordinates = np.maximum(np.amin(keypoints_2D_coordinates, 0), 0.0)
+    max_coordinates = np.minimum(
+        np.amax(keypoints_2D_coordinates, 0), image_size[0:2])
     return min_coordinates, max_coordinates
 
 
@@ -609,24 +575,21 @@ def get_keypoints_camera_coordinates(keypoints_2D, crop_center, scale,
         # Returns
             keypoint_uv21: Numpy array of shape (21, 2)
     """
-    keypoint_uv21_u = (keypoints_2D[:, 0] -
-                       crop_center[1]) * scale + crop_size // 2
-
-    keypoint_uv21_v = (keypoints_2D[:, 1] -
-                       crop_center[0]) * scale + crop_size // 2
-
+    keypoint_uv21_u = ((keypoints_2D[:, 0] - crop_center[1]) * scale) + (
+            crop_size // 2)
+    keypoint_uv21_v = ((keypoints_2D[:, 1] - crop_center[0]) * scale) + (
+            crop_size // 2)
     keypoint_uv21 = np.stack([keypoint_uv21_u, keypoint_uv21_v], 1)
     return keypoint_uv21
 
 
-def get_scale(keypoints_2D, keypoints_2D_vis, image_size, crop_size):
+def get_scale(keypoints_2D, keypoints_2D_visibility, image_size, crop_size):
     """ Extract scale to which image should be cropped :
         # Arguments
             keypoints_2D: Numpy array of shape (21, 2)
             keypoints_2D_vis: Numpy array of shape (21, 1)
             image_size: List of size (3)
             image_size: List of size (2)
-
         # Returns
             scale: Integer value
             crop_center: Tuple of length 3
@@ -634,17 +597,15 @@ def get_scale(keypoints_2D, keypoints_2D_vis, image_size, crop_size):
     crop_center = keypoints_2D[LEFT_ALIGNED_KEYPOINT_ID, ::-1]
     crop_center = np.reshape(crop_center, [2, ])
     min_coordinates, max_coordinates = extract_coordinate_limits(
-        keypoints_2D, keypoints_2D_vis, image_size)
-
+        keypoints_2D, keypoints_2D_visibility, image_size)
     crop_size_best = get_best_crop_size(
         max_coordinates, min_coordinates, crop_center)
-
     scale = crop_size / crop_size_best
     return scale, crop_center
 
 
-def crop_image_using_mask(keypoints_2D, keypoints_2D_vis, image, image_size,
-                          crop_size, camera_matrix):
+def crop_image_using_mask(keypoints_2D, keypoints_2D_visibility, image,
+                          image_size, crop_size, camera_matrix):
     """ Crop image from mask :
         # Arguments
             keypoints_2D: Numpy array of shape (21, 2)
@@ -661,7 +622,7 @@ def crop_image_using_mask(keypoints_2D, keypoints_2D_vis, image, image_size,
             camera_matrix_cropped: Numpy array of shape (3, 3)
     """
     scale, crop_center = get_scale(
-        keypoints_2D, keypoints_2D_vis, image_size, crop_size)
+        keypoints_2D, keypoints_2D_visibility, image_size, crop_size)
 
     scale, scale_matrix = get_scale_matrix(scale)
 
@@ -692,23 +653,18 @@ def flip_right_hand(canonical_keypoints3D, flip_right):
     """
     shape = canonical_keypoints3D.shape
     expanded = False
-
     if len(shape) == 2:
         canonical_keypoints3D = np.expand_dims(canonical_keypoints3D, 0)
         flip_right = np.expand_dims(flip_right, 0)
         expanded = True
-
     canonical_keypoints3D_mirrored = np.stack(
         [canonical_keypoints3D[:, :, 0], canonical_keypoints3D[:, :, 1],
          -canonical_keypoints3D[:, :, 2]], -1)
-
     canonical_keypoints3D_left = np.where(
         flip_right, canonical_keypoints3D_mirrored, canonical_keypoints3D)
-
     if expanded:
         canonical_keypoints3D_left = np.squeeze(
             canonical_keypoints3D_left, axis=0)
-
     return canonical_keypoints3D_left
 
 
@@ -845,7 +801,6 @@ def get_y_axis_rotated_keypoints(keypoint3D):
     gamma = np.arctan2(keypoint3D[0], keypoint3D[2])
     rotation_matrix_y = build_rotation_matrix_y(gamma)
     affine_rotation_matrix_y = build_affine_matrix(rotation_matrix_y)
-
     keypoint3D_rotated_Y = np.matmul(affine_rotation_matrix_y, keypoint3D)
     return keypoint3D_rotated_Y, affine_rotation_matrix_y, gamma
 
@@ -932,9 +887,7 @@ def get_center_list(box_coordinates, image_center=[160, 160]):
     """
     center_x = 0.5 * (box_coordinates[0][0] + box_coordinates[0][1])
     center_y = 0.5 * (box_coordinates[1][1] + box_coordinates[1][0])
-
     center = np.stack([center_x, center_y], 0)
-
     if not np.all(np.isfinite(center)):
         center = np.array(image_center)  # Use it as a parameter
     center.reshape([2])
@@ -949,8 +902,10 @@ def get_crop_list(box_coordinates):
         # Returns
             crop_size_list: List of length batch_size
     """
-    crop_size_x = box_coordinates[0][1] - box_coordinates[0][0]  # x_min, x_max
-    crop_size_y = box_coordinates[1][1] - box_coordinates[1][0]
+    x_max, x_min = box_coordinates[0][1], box_coordinates[0][0]
+    y_max, y_min = box_coordinates[1][1], box_coordinates[1][0]
+    crop_size_x = x_max - x_min
+    crop_size_y = y_max - y_min
     crop_maximum_value = np.maximum(crop_size_x, crop_size_y)
     crop_size = np.expand_dims(crop_maximum_value, 0)
     crop_size.reshape([1])
@@ -1007,10 +962,8 @@ def extract_bounding_box(binary_class_mask):
     assert len(shape) == 3, "binary_class_mask must be 3D."
 
     coordinates_x, coordinates_y = possing_xy_coordinates(shape)
-
     bounding_box_list, center_list, crop_size_list = get_bounding_box_features(
         coordinates_x, coordinates_y, binary_class_mask, shape)
-
     bounding_box = np.stack(bounding_box_list)
     center = np.stack(center_list)
     crop_size = np.stack(crop_size_list)
@@ -1049,12 +1002,12 @@ def crop_image(image, crop_box):
         # Returns
             Numpy array.
     """
-    if (type(image) != np.ndarray):
+    if type(image) != np.ndarray:
         raise ValueError(
             'Recieved Image is not of type numpy array', type(image))
     else:
-        cropped_image = image[crop_box[0]:crop_box[2], crop_box[1]:crop_box[3],
-                        :]
+        cropped_image = image[
+                        crop_box[0]:crop_box[2], crop_box[1]:crop_box[3], :]
     return cropped_image
 
 
@@ -1073,16 +1026,12 @@ def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
     crop_location = crop_center.astype(np.float)
     crop_location = np.reshape(crop_location, [image_dimensions[0], 2])
     crop_size = np.float(crop_size)
-
     crop_size_scaled = crop_size / scale
-
     boxes = box_coordinates_from_center(
         crop_location, crop_size_scaled, image_dimensions)
-
     crop_size = np.stack([crop_size, crop_size])
     crop_size = crop_size.astype(np.float)
     box_indices = np.arange(image_dimensions[0])
-
     image_cropped = tf.image.crop_and_resize(
         tf.cast(image, tf.float32), boxes, box_indices, crop_size, name='crop')
     return image_cropped.numpy()
@@ -1222,8 +1171,8 @@ def rotation_from_axis_angles(axis_angles, is_normalized=False):
     return rotation_matrix
 
 
-def create_score_maps(keypoint_2D, keypoint_vis21, image_size, crop_size,
-                      variance, crop_image=True):
+def create_score_maps(keypoint_2D, keypoint_visibility, image_size,
+                      crop_size, variance, crop_image=True):
     """ Create gaussian maps for keypoint representation
         Inputs:
             keypoint_2D: Numpy array of shape (21, 2)
@@ -1240,7 +1189,7 @@ def create_score_maps(keypoint_2D, keypoint_vis21, image_size, crop_size,
     if crop_image:
         scoremap_size = (crop_size, crop_size)
     scoremap = create_multiple_gaussian_map(
-        keypoint_uv, scoremap_size, variance, keypoint_vis21)
+        keypoint_uv, scoremap_size, variance, keypoint_visibility)
     return scoremap
 
 
@@ -1332,7 +1281,6 @@ def transform_cropped_keypoints(cropped_keypoints, centers, scale, crop_size):
         Returns:
             coords - Tensor (batch x num_keypoints x 3): Transformed coordinates.
     """
-
     keypoints = np.copy(cropped_keypoints)
     keypoints = keypoints - crop_size // 2
     keypoints = keypoints / scale

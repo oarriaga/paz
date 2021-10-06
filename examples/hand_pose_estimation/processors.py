@@ -8,7 +8,7 @@ from backend import extract_dominant_keypoints2D, crop_image_using_mask
 from backend import extract_hand_segment, keypoints_to_palm_coordinates
 from backend import get_bone_connections_and_colors, find_max_location
 from backend import get_canonical_transformations, flip_right_hand
-from backend import normalize_keypoints, transform_to_relative_frames
+from backend import normalize_keypoints, keypoint_to_root_frame
 from backend import transform_cropped_keypoints
 from backend import transform_visibility_mask, get_hand_side_and_keypooints
 
@@ -78,7 +78,7 @@ class TransformtoRelativeFrame(Processor):
         super(TransformtoRelativeFrame, self).__init__()
 
     def call(self, keypoints3D):
-        return np.squeeze(transform_to_relative_frames(keypoints3D))
+        return np.squeeze(keypoint_to_root_frame(keypoints3D))
 
 
 class GetCanonicalTransformation(Processor):
