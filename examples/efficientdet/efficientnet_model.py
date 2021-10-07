@@ -593,6 +593,21 @@ class EfficientNet(tf.keras.Model):
         self.endpoints['features'] = tensor
         return tensor
 
+    def collate_feature_levels(self, tensor):
+        """
+        # Arguments:
+            tensor: Tensor, efficientnet output from blocks.
+
+        # Returns:
+            tensor: List, contains tensors representing different level
+            features.
+        """
+        tensor = [tensor]
+        for block_arg in range(5):
+            key_name = 'reduction_' + str(block_arg + 1)
+            tensor = tensor + [self.endpoints.get(key_name)]
+        return tensor
+
     def call(self, tensor, training):
         """Implementation of call().
 
@@ -610,8 +625,5 @@ class EfficientNet(tf.keras.Model):
         self.endpoints = {}
         tensor = self.call_stem(tensor, training)
         tensor = self.call_blocks(tensor, training)
-        outputs = [tensor]
-        for block_arg in range(5):
-            key_name = 'reduction_' + str(block_arg + 1)
-            outputs = outputs + [self.endpoints.get(key_name)]
-        return outputs
+        tensor = self.collate_feature_levels(tensor)
+        return tensor
