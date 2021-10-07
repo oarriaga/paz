@@ -610,11 +610,8 @@ class EfficientNet(tf.keras.Model):
         self.endpoints = {}
         tensor = self.call_stem(tensor, training)
         tensor = self.call_blocks(tensor, training)
-        outputs = [tensor] + list(
-            filter(lambda endpoint: endpoint is not None,
-                   [self.endpoints.get('reduction_1'),
-                    self.endpoints.get('reduction_2'),
-                    self.endpoints.get('reduction_3'),
-                    self.endpoints.get('reduction_4'),
-                    self.endpoints.get('reduction_5')]))
+        outputs = [tensor]
+        for block_arg in range(5):
+            key_name = 'reduction_' + str(block_arg + 1)
+            outputs = outputs + [self.endpoints.get(key_name)]
         return outputs
