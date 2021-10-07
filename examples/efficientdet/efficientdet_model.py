@@ -68,7 +68,7 @@ class EfficientDet(tf.keras.Model):
         """
         super().__init__(name=name)
         self.model_name = model_name
-        self.backbone = backbone
+        self.backbone_name = backbone
         self.image_size = image_size
         self.fpn_num_filters = fpn_num_filters
         self.fpn_cell_repeats = fpn_cell_repeats
@@ -94,7 +94,7 @@ class EfficientDet(tf.keras.Model):
             min_level, max_level, num_scales, aspect_ratios, anchor_scale,
             image_size)
         self.backbone = efficientnet_builder.build_backbone(
-            self.backbone, self.activation, self.survival_rate)
+            self.backbone_name, self.activation, self.survival_rate)
         self.resample_layers = []
         for level in range(6, self.max_level + 1):
             self.resample_layers.append(ResampleFeatureMap(
