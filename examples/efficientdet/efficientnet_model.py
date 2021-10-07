@@ -526,6 +526,73 @@ class EfficientNet(tf.keras.Model):
                 self._kernel_sizes[block_num], self._expand_ratios[block_num],
                 self._strides[block_num])
 
+    def get_survival_rate(self, block_arg):
+        """
+        # Arguments
+            block_arg: Int, block argument of MB conv block.
+
+        # Returns
+            survival_rate: Float, survival rate of the MB conv block.
+        """
+        survival_rate = self._survival_rate
+        if survival_rate:
+            drop_rate = 1 - survival_rate
+            drop_rate_changer = float(block_arg) / len(self._blocks)
+            survival_rate = 1 - drop_rate * drop_rate_changer
+        return survival_rate
+
+    def reduce_block(self, block_arg, tensor, reduction_arg):
+        """
+        # Arguments
+            block_arg: Int, block argument of MB conv block.
+            tensor: Tensor, outputs from MB conv block sequences.
+            reduction_arg: Int, reduction from the previous block outputs.
+
+        # Returns
+            is_reduction: Bool, flag to further add reduction tensors.
+            reduction_arg: Int, reduction from the previous block outputs.
+        """
+        is_reduction = False
+        if ((block_arg == len(self._blocks) - 1) or
+                self._blocks[block_arg + 1]._strides[0] > 1):
+            is_reduction = True
+            reduction_arg = reduction_arg + 1
+        return is_reduction, reduction_arg
+
+    def call_stem(self, tensor, training):
+        """
+        # Arguments
+           tensor: input tensors.
+           training: boolean, whether the model is constructed for training.
+
+        # Returns
+           tensors: Tensor, output from the efficientnet stem.
+        """
+        tensor = self._stem(tensor, training)
+        self.endpoints['stem'] = tensor
+        return tensor
+
+    def call_blocks(self, tensor, training):
+        """
+        # Arguments
+           tensor: input tensors.
+           training: boolean, whether the model is constructed for training.
+
+        # Returns
+           tensors: Tensor, output from the efficientnet blocks.
+        """
+        reduction_arg = 0
+        for block_arg, block in enumerate(self._blocks):
+            survival_rate = self.get_survival_rate(block_arg)
+            tensor = block(tensor, training, survival_rate)
+            self.endpoints['block_%s' % block_arg] = tensor
+            is_reduction, reduction_arg = self.reduce_block(
+                block_arg, tensor, reduction_arg)
+            if is_reduction:
+                self.endpoints['reduction_%s' % reduction_arg] = tensor
+        self.endpoints['features'] = tensor
+        return tensor
+
     def call(self, tensor, training):
         """Implementation of call().
 
@@ -541,49 +608,13 @@ class EfficientNet(tf.keras.Model):
             output tensors: Tensor, output from the efficientnet backbone.
         """
         self.endpoints = {}
-        reduction_arg = 0
-
-        # Calls Stem layers
-        outputs = self._stem(tensor, training)
-        self.endpoints['stem'] = outputs
-
-        # Call blocks
-        for block_arg, block in enumerate(self._blocks):
-            is_reduction = False
-            if ((block_arg == len(self._blocks) - 1) or
-                    self._blocks[block_arg + 1]._strides[0] > 1):
-                is_reduction = True
-                reduction_arg = reduction_arg + 1
-
-            survival_rate = self._survival_rate
-            if survival_rate:
-                drop_rate = 1 - survival_rate
-                drop_rate_changer = float(block_arg) / len(self._blocks)
-                survival_rate = 1 - drop_rate * drop_rate_changer
-            outputs = block(
-                outputs, training=training, survival_rate=survival_rate)
-            self.endpoints['block_%s' % block_arg] = outputs
-            if is_reduction:
-                self.endpoints['reduction_%s' % reduction_arg] = outputs
-            if block.endpoints:
-                for block_key, block_value in block.endpoints.items():
-                    self.endpoints[
-                        'block_%s/%s' % (block_arg, block_key)] = block_value
-                    if is_reduction:
-                        self.endpoints[
-                            'reduction_%s/%s' % (reduction_arg, block_key)
-                        ] = block_value
-        self.endpoints['features'] = outputs
-
-        return [outputs] + list(
-            filter(
-                lambda endpoint: endpoint is not None,
-                [
-                    self.endpoints.get('reduction_1'),
+        tensor = self.call_stem(tensor, training)
+        tensor = self.call_blocks(tensor, training)
+        outputs = [tensor] + list(
+            filter(lambda endpoint: endpoint is not None,
+                   [self.endpoints.get('reduction_1'),
                     self.endpoints.get('reduction_2'),
                     self.endpoints.get('reduction_3'),
                     self.endpoints.get('reduction_4'),
-                    self.endpoints.get('reduction_5'),
-                ],
-            )
-        )
+                    self.endpoints.get('reduction_5')]))
+        return outputs
