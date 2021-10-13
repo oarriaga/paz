@@ -1,0 +1,1 @@
+python3 train.py --images_directory /home/fabian/.keras/tless_obj05/pix2pose/normal_coloring --background_images_directory /home/fabian/.keras/backgrounds --batch_size 4 --steps_per_epoch 5 --image_size 128 --rotation_matrices /home/fabian/Uni/masterarbeit/src/paz/examples/pix2pose/rotation_matrices/2_fold_symmetry_rotation_matrices.npy
