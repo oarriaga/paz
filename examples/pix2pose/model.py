@@ -1,50 +1,8 @@
 import numpy as np
-import sys
-import glob
-import os
-import pickle
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import neptune
 
-from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense, Conv2DTranspose
-from tensorflow.keras.layers import Dropout, Input, Flatten, Reshape, LeakyReLU, BatchNormalization, Concatenate
+from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense, Conv2DTranspose, Dropout, Input, Flatten, Reshape, LeakyReLU, BatchNormalization, Concatenate
 from tensorflow.keras.models import Model
-from tensorflow.keras.callbacks import Callback
-import tensorflow.keras.backend as K
 import tensorflow as tf
-
-from scenes import SingleView
-from pipelines import DepthImageGenerator
-from paz.abstract.sequence import GeneratingSequencePix2Pose
-
-
-def transformer_loss(real_depth_image, predicted_depth_image):
-    print("shape of real_depth_image: {}".format(real_depth_image.numpy().shape))
-    print("shape of predicted_depth_image: {}".format(predicted_depth_image.numpy().shape))
-
-    plt.imshow(predicted_depth_image.numpy()[0])
-    plt.show()
-
-    plt.imshow(predicted_depth_image.numpy()[1])
-    plt.show()
-    #print(predicted_depth_image.numpy()[0])
-    return K.mean(K.square(predicted_depth_image - real_depth_image), axis=-1)
-
-
-def rotate_image(image, rotation_matrix):
-    mask_image = (np.sum(image, axis=-1) != 0).astype(float)
-    mask_image = np.repeat(mask_image[..., np.newaxis], 3, axis=-1)
-
-    image_colors = (image * 2) - 1
-
-    image_colors_rotated = image_colors + np.ones_like(image_colors) * 0.0001
-    image_colors_rotated = np.einsum('ij,klj->kli', rotation_matrix, image_colors_rotated)
-    image_colors_rotated = (image_colors_rotated + 1) / 2
-    image_colors_rotated = np.clip(image_colors_rotated, a_min=0.0, a_max=1.0)
-    image_colors_rotated *= mask_image
-
-    return image_colors_rotated
 
 
 def loss_color_wrapped(rotation_matrices):
@@ -95,106 +53,11 @@ def loss_color_wrapped(rotation_matrices):
 
 
 def loss_error(real_error_image, predicted_error_image):
-
     # Get the number of pixels
     num_pixels = tf.math.reduce_prod(tf.shape(real_error_image)[1:3])
     loss_error = tf.cast((1/num_pixels), dtype=tf.float32)*(tf.math.reduce_sum(tf.math.square(predicted_error_image - tf.clip_by_value(tf.math.abs(real_error_image), tf.float32.min, 1.)), axis=[1, 2, 3]))
 
     return loss_error
-
-
-class PlotImagesCallback(Callback):
-    def __init__(self, model, sequence, save_path, obj_path, image_size, y_fov, depth, light,
-                 top_only, roll, shift, batch_size, steps_per_epoch, neptune_logging=False,
-                 rotation_matrices=None, processor=None):
-        self.save_path = save_path
-        self.model = model
-        self.sequence = sequence
-        self.neptune_logging = neptune_logging
-        self.obj_path = obj_path
-        self.image_size = image_size
-        self.y_fov = y_fov
-        self.depth = depth
-        self.light = light
-        self.top_only = top_only
-        self.roll = roll
-        self.shift = shift
-        self.batch_size = batch_size
-        self.steps_per_epoch = steps_per_epoch
-        self.rotation_matrices = rotation_matrices
-        self.processor = processor
-
-    def on_epoch_end(self, epoch_index, logs=None):
-        #renderer = SingleView(self.obj_path, (self.image_size, self.image_size),
-        #                      self.y_fov, self.depth, self.light, bool(self.top_only),
-        #                      self.roll, self.shift)
-
-        # creating sequencer
-        #image_paths = glob.glob(os.path.join(self.images_directory, '*.jpg'))
-        #processor = DepthImageGenerator(renderer, self.image_size, image_paths, num_occlusions=0)
-        sequence = GeneratingSequencePix2Pose(self.processor, self.model, self.batch_size, self.steps_per_epoch * 2, rotation_matrices=self.rotation_matrices)
-
-        sequence_iterator = sequence.__iter__()
-        batch = next(sequence_iterator)
-        predictions = self.model.predict(batch[0]['input_image'])
-
-        original_images = (batch[0]['input_image'] * 255).astype(np.int)
-        color_images = ((batch[1]['color_output'] + 1) * 127.5).astype(np.int)
-        color_images = color_images.astype(np.float)/255.
-        predictions['color_output'] = ((predictions['color_output'] + 1) * 127.5).astype(np.int)
-        predictions['error_output'] = ((predictions['error_output'] + 1) * 127.5).astype(np.int)
-        #color_images = batch[1]['color_output']
-
-        num_columns = 0
-        if self.rotation_matrices is None:
-            num_columns = 4
-        else:
-            num_columns = 3 + len(self.rotation_matrices)
-
-        fig, ax = plt.subplots(4, num_columns)
-        fig.set_size_inches(10, 6)
-
-        cols = ["Input image", "Predicted image", "Predicted error", "Ground truth"]
-
-        for i in range(4):
-            ax[0, i].set_title(cols[i])
-            for j in range(num_columns):
-                ax[i, j].get_xaxis().set_visible(False)
-                ax[i, j].get_yaxis().set_visible(False)
-
-        for i in range(4):
-            ax[i, 0].imshow(original_images[i])
-            ax[i, 1].imshow(predictions['color_output'][i])
-            ax[i, 2].imshow(np.squeeze(predictions['error_output'][i]))
-            # Plot all the possible rotations
-            for j, rotation_matrix in enumerate(self.rotation_matrices):
-                ax[i, 3 + j].imshow(rotate_image(color_images[i], rotation_matrix))
-
-        plt.tight_layout()
-        plt.show()
-        #plt.savefig(os.path.join(self.save_path, "images/plot-epoch-{}.png".format(epoch_index)))
-
-        if self.neptune_logging:
-            neptune.log_image('plot', fig, image_name="epoch_{}.png".format(epoch_index))
-
-        plt.clf()
-        plt.close(fig)
-
-
-class NeptuneLogger(Callback):
-
-    def __init__(self, model, log_interval, save_path):
-        self.model = model
-        self.log_interval = log_interval
-        self.save_path = save_path
-
-    def on_epoch_end(self, epoch, logs={}):
-        for log_name, log_value in logs.items():
-            neptune.log_metric(log_name, log_value)
-
-        if epoch%self.log_interval == 0:
-            self.model.save(os.path.join(self.save_path, 'pix2pose_dcgan_{}.h5'.format(epoch)))
-            #neptune.log_artifact('pix2pose_dcgan_{}.h5'.format(epoch))
 
 
 def Generator():
@@ -209,7 +72,7 @@ def Generator():
 
     e1_2 = Conv2D(64, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_1_2')(input)
     e1_2 = BatchNormalization(bn_axis)(e1_2)
-    e1_1 = LeakyReLU()(e1_1)
+    e1_2 = LeakyReLU()(e1_2)
 
     e1 = Concatenate()([e1_1, e1_2])
 
@@ -295,8 +158,7 @@ def Generator():
 
     # Define model
     model = Model(inputs=[input], outputs=[color_output, error_output])
-    #model.compile(optimizer='adam', loss=transformer_loss)
-    #model.summary()
+
     return model
 
 
@@ -344,8 +206,3 @@ def Discriminator():
     output = Dense(1, activation='sigmoid', name='discriminator_output')(flatten)
     discriminator_model = Model(inputs=input, outputs=[output])
     return discriminator_model
-
-
-if __name__ == '__main__':
-    disc = Discriminator()
-    print(disc.summary())
