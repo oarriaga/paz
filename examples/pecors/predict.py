@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 from paz.abstract import GeneratingSequence
-from pipelines import GeneratedImageGenerator
+from pipelines import GeneratedImageGenerator, GeneratedVectorGenerator
 
 def make_prediction(model_path, batch):
     # Threshold to distinguish between background and circle
@@ -51,18 +51,27 @@ def make_prediction(model_path, batch):
         print("Real: {}".format(np.mean(real_colors_filtered, axis=0)))
 
     
+def make_prediction_vectors(model_path, batch):
+    pecors = load_model(model_path)
+    predictions = pecors.predict(batch[0]['input_image'])
+
+    print("Real rotation: {}".format(batch[1]['rotation_output']))
+    print("Predicted rotation: {}".format(predictions[0]))
+
+    print("Real translation: {}".format(batch[1]['translation_output']))
+    print("Predicted translation: {}".format(predictions[1]))
 
 
 if __name__ == '__main__':
-    model_path = '/media/fabian/Data/Masterarbeit/data/models/tless03/pecors/base/pecors_model_epoch_6500.pkl'
-    images_directory = '/media/fabian/Data/Masterarbeit/data/tless_obj03'
+    model_path = '/media/fabian/Data/Masterarbeit/data/models/tless03/pecors/vectors/pecors_model_epoch_9900.pkl'
+    images_directory = '/media/fabian/Data/Masterarbeit/data/tless_obj03/vectors'
     background_images_directory = '/home/fabian/.keras/backgrounds'
     image_size = 128
 
     background_image_paths = glob.glob(os.path.join(background_images_directory, '*.jpg'))
-    processor_test = GeneratedImageGenerator(os.path.join(images_directory, "train"), background_image_paths,
+    processor_test = GeneratedVectorGenerator(os.path.join(images_directory, "test"), background_image_paths,
                                              image_size=image_size, num_occlusions=0)
     sequence_test = GeneratingSequence(processor_test, 20, 1)
     batch = sequence_test.__getitem__(0)
 
-    make_prediction(model_path, batch)
+    make_prediction_vectors(model_path, batch)

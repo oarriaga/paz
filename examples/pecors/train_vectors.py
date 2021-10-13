@@ -24,7 +24,7 @@ from paz.pipelines import AutoEncoderPredictor
 
 from scenes import SingleView
 
-from pipelines import GeneratedImageGenerator
+from pipelines import GeneratedVectorGenerator
 from model import Pecors, pecors_loss, PlotImagesCallback, NeptuneLogger
 
 
@@ -82,8 +82,7 @@ parser.add_argument('-de', '--description',
                     type=str, help='Description of the model')
 args = parser.parse_args()
 
-# setting optimizer and compiling model
-dcgan_input = Input(shape=(128, 128, 3))
+
 pecors = Pecors()
 
 optimizer = Adam(args.learning_rate, amsgrad=True)
@@ -94,13 +93,10 @@ pecors.summary()
 # creating sequencer
 background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
 
-processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, image_size=args.image_size, num_occlusions=0)
-processor_test = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, image_size=args.image_size, num_occlusions=0)
+processor_train = GeneratedVectorGenerator(os.path.join(args.images_directory, "test"), background_image_paths, image_size=args.image_size, num_occlusions=0)
+processor_test = GeneratedVectorGenerator(os.path.join(args.images_directory, "test"), background_image_paths, image_size=args.image_size, num_occlusions=0)
 sequence_train = GeneratingSequence(processor_train, args.batch_size, args.steps_per_epoch)
 sequence_test = GeneratingSequence(processor_test, args.batch_size, args.steps_per_epoch)
-
-plot = PlotImagesCallback(pecors, sequence_test, neptune_logging=(args.neptune_config is not None))
-callbacks=[plot]
 
 # set up neptune run
 if args.neptune_config is not None:

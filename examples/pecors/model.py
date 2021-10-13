@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Conv2D, BatchNormalization, Input, LeakyReLU
     Flatten, Dense, Reshape, Conv2DTranspose, Activation
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.applications import MobileNetV3Small
 
 import neptune
 
@@ -44,7 +45,7 @@ def Pecors():
 
     e1_2 = Conv2D(64, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_1_2')(input)
     e1_2 = BatchNormalization(bn_axis)(e1_2)
-    e1_1 = LeakyReLU()(e1_1)
+    e1_2 = LeakyReLU()(e1_2)
 
     e1 = Concatenate()([e1_1, e1_2])
 
@@ -136,6 +137,95 @@ def Pecors():
     return model
 
 
+def PecorsEncoder():
+    bn_axis = 3
+
+    input = Input((128, 128, 3), name='input_image')
+
+    # First layer of the encoder
+    e1_1 = Conv2D(64, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_1_1')(input)
+    e1_1 = BatchNormalization(bn_axis)(e1_1)
+    e1_1 = LeakyReLU()(e1_1)
+
+    e1_2 = Conv2D(64, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_1_2')(input)
+    e1_2 = BatchNormalization(bn_axis)(e1_2)
+    e1_2 = LeakyReLU()(e1_2)
+
+    e1 = Concatenate()([e1_1, e1_2])
+
+    # Second layer of the encoder
+    e2_1 = Conv2D(128, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_2_1')(e1)
+    e2_1 = BatchNormalization(bn_axis)(e2_1)
+    e2_1 = LeakyReLU()(e2_1)
+
+    e2_2 = Conv2D(128, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_2_2')(e1)
+    e2_2 = BatchNormalization(bn_axis)(e2_2)
+    e2_2 = LeakyReLU()(e2_2)
+
+    e2 = Concatenate()([e2_1, e2_2])
+
+    # Third layer of the encoder
+    e3_1 = Conv2D(128, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_3_1')(e2)
+    e3_1 = BatchNormalization(bn_axis)(e3_1)
+    e3_1 = LeakyReLU()(e3_1)
+
+    e3_2 = Conv2D(128, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_3_2')(e2)
+    e3_2 = BatchNormalization(bn_axis)(e3_2)
+    e3_2 = LeakyReLU()(e3_2)
+
+    e3 = Concatenate()([e3_1, e3_2])
+
+    # Fourth layer of the encoder
+    e4_1 = Conv2D(256, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_4_1')(e3)
+    e4_1 = BatchNormalization(bn_axis)(e4_1)
+    e4_1 = LeakyReLU()(e4_1)
+
+    e4_2 = Conv2D(256, (5, 5), strides=(2, 2), padding='same', name='encoder_conv2D_4_2')(e3)
+    e4_2 = BatchNormalization(bn_axis)(e4_2)
+    e4_2 = LeakyReLU()(e4_2)
+
+    e4 = Concatenate()([e4_1, e4_2])
+
+    # Latent dimension
+    x = Flatten()(e4)
+    x = Dense(1024)(x)
+    x = Dense(256)(x)
+    x = Dense(64)(x)
+
+    # Circle output: shows the vector of the top of the object
+    color_output = Dense(3)(x)
+    color_output = Activation('tanh', name='rotation_output')(color_output)
+
+    # Depth output: position of the center of the object and the depth
+    depth_output = Dense(3)(x)
+    depth_output = Activation('sigmoid', name='translation_output')(depth_output)
+
+    # Define model
+    model = Model(inputs=[input], outputs=[color_output, depth_output])
+    #model.compile(optimizer='adam', loss=transformer_loss)
+    #model.summary()
+    return model
+
+
+def PecorsEncoderMobileNet():
+    inp = Input(shape=(128, 128, 3), name='input_1')
+
+    mobilenet = MobileNetV3Small(include_top=False, weights=None, input_tensor=inp, pooling="avg")
+
+    color_output = Dense(3)(mobilenet.output)
+    color_output = Activation('tanh', name='rotation_output')(color_output)
+
+    # Depth output: position of the center of the object and the depth
+    depth_output = Dense(3)(mobilenet.output)
+    depth_output = Activation('sigmoid', name='translation_output')(depth_output)
+
+    # Define model
+    model = Model(inputs=[inp], outputs=[color_output, depth_output])
+    #model.compile(optimizer='adam', loss=transformer_loss)
+    #model.summary()
+    return model
+
+
 class NeptuneLogger(Callback):
 
     def __init__(self, model, log_interval, save_path):
@@ -211,3 +301,8 @@ class PlotImagesCallback(Callback):
 
         plt.clf()
         plt.close(fig)
+
+
+if __name__ == "__main__":
+    model = PecorsEncoderVGG()
+    model.summary()

@@ -242,6 +242,7 @@ class SingleView():
         self.camera_node = self.scene.add(self.camera)
         self.mesh = self.scene.add(Mesh.from_trimesh(trimesh.load(path), smooth=True))
         self.world_origin = self.mesh.mesh.centroid
+        self.path = path
 
     def _sample_parameters(self):
         camera_distance = sample_uniformly(self.camera_distance_bounds)
@@ -303,6 +304,136 @@ class SingleView():
         return image_original, alpha_original, image_circle, image_depth, color
 
 
+    def render_vectors(self):
+        """
+        Does not return images for the rotation vector and the depth but to vectors:
+        First vector: rotation vector
+        Second vector: (normalized x coordinate, normalized y coordinate, depth)
+        :return:
+        """
+        camera_distance, light_intensity, mesh_rotation, mesh_translation = self._sample_parameters()
+        camera_origin = np.array([0., 0., camera_distance])
+
+        camera_to_world, world_to_camera = compute_modelview_matrices(camera_origin, self.world_origin, None, None)
+
+        self.scene.set_pose(self.camera_node, camera_to_world)
+        self.scene.set_pose(self.light, camera_to_world)
+        self.light.light.intensity = light_intensity
+
+        # Set the mesh rotation and translation
+        self.mesh.rotation = mesh_rotation
+        self.mesh.translation = mesh_translation
+
+        image_original, depth_original = self.renderer.render(self.scene, flags=pyrender.constants.RenderFlags.RGBA)
+        image_original, alpha_original = split_alpha_channel(image_original)
+
+        top_point_3d = quarternion_to_rotation_matrix(mesh_rotation) @ (
+                    self.mesh.mesh.centroid + np.array([0, self.mesh.mesh.extents[1] / 2, 0])) + mesh_translation
+        top_point_3d = np.concatenate((top_point_3d, np.array([1])))
+        x_top_point, y_top_point, _ = map_to_image_location(top_point_3d, self.viewport_size[0], self.viewport_size[0],
+                                                            self.camera.get_projection_matrix(*self.viewport_size),
+                                                            world_to_camera)
+
+        # Calculate rotation vector
+        top_point_3d_no_translation = quarternion_to_rotation_matrix(mesh_rotation) @ (
+                    self.mesh.mesh.centroid + np.array([0, self.mesh.mesh.extents[1] / 2, 0]))
+        rotation_matrix = quarternion_to_rotation_matrix(mesh_rotation)
+        rotation_vector = top_point_3d_no_translation[:3] / np.linalg.norm(top_point_3d_no_translation[:3])
+
+        # Calculate translation vector
+        center_point_3d = quarternion_to_rotation_matrix(mesh_rotation) @ self.mesh.mesh.centroid + mesh_translation
+        center_point_3d = np.concatenate((center_point_3d, np.array([1])))
+        x_center_point, y_center_point, depth_center = map_to_image_location(center_point_3d, self.viewport_size[0],
+                                                                             self.viewport_size[0],
+                                                                             self.camera.get_projection_matrix(
+                                                                                 *self.viewport_size), world_to_camera)
+
+        translation_vector = np.array([x_center_point/self.viewport_size[0], y_center_point/self.viewport_size[1], depth_center])
+
+        return image_original, alpha_original, rotation_vector, translation_vector
+
+
+    def render_full_object(self):
+        camera_distance, light_intensity, mesh_rotation, mesh_translation = self._sample_parameters()
+        camera_origin = np.array([0., 0., camera_distance])
+
+        camera_to_world, world_to_camera = compute_modelview_matrices(camera_origin, self.world_origin, None, None)
+
+        self.scene.set_pose(self.camera_node, camera_to_world)
+        self.scene.set_pose(self.light, camera_to_world)
+        self.light.light.intensity = light_intensity
+        
+        # Add the mesh and color it
+        self.scene.remove_node(self.mesh)
+        loaded_trimesh = trimesh.load(self.path)
+        self.color_mesh(loaded_trimesh)
+        self.mesh = self.scene.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
+
+        # Set the mesh rotation and translation
+        self.mesh.rotation = mesh_rotation
+        self.mesh.translation = mesh_translation
+
+        image_original, depth_original = self.renderer.render(self.scene, flags=pyrender.constants.RenderFlags.FLAT)
+        #image_original, alpha_original = split_alpha_channel(image_original)
+
+        top_point_3d = quarternion_to_rotation_matrix(mesh_rotation)@(self.mesh.mesh.centroid + np.array([0, self.mesh.mesh.extents[1] / 2, 0])) + mesh_translation
+        top_point_3d = np.concatenate((top_point_3d, np.array([1])))
+        x_top_point, y_top_point, _ = map_to_image_location(top_point_3d, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(*self.viewport_size), world_to_camera)
+
+        # Calculate color for the top point of the object
+        top_point_3d_no_translation = quarternion_to_rotation_matrix(mesh_rotation)@(self.mesh.mesh.centroid + np.array([0, self.mesh.mesh.extents[1] / 2, 0]))
+        rotation_matrix = quarternion_to_rotation_matrix(mesh_rotation)
+        color = top_point_3d_no_translation[:3]/np.linalg.norm(top_point_3d_no_translation[:3])
+        color = (color+1)/2.
+
+        image_circle = np.zeros_like(image_original).astype("float")
+        image_circle = draw_circle(image_circle, point=(int(x_top_point), int(y_top_point)), color=(color[0], color[1], color[2]), inner_circle=False, radius=5)
+        image_circle = (image_circle*255.).astype("uint8")
+
+        # Calculate depth image
+        center_point_3d = quarternion_to_rotation_matrix(mesh_rotation)@self.mesh.mesh.centroid + mesh_translation
+        center_point_3d = np.concatenate((center_point_3d, np.array([1])))
+        x_center_point, y_center_point, depth_center = map_to_image_location(center_point_3d, self.viewport_size[0], self.viewport_size[0], self.camera.get_projection_matrix(*self.viewport_size), world_to_camera)
+
+        image_depth = np.zeros_like(image_original).astype("float")
+        image_depth = draw_circle(image_depth, point=(int(x_center_point), int(y_center_point)), color=(depth_center, depth_center, depth_center), inner_circle=False, radius=5)
+        image_depth = (image_depth*255.).astype("uint8")
+
+        return image_original, None, image_circle, image_depth
+
+    def normalize(self, x, x_min, x_max):
+        return (x-x_min)/(x_max-x_min)
+
+    def color_mesh(self, mesh):
+        """ color the mesh
+        # Arguments
+            mesh: obj mesh
+        # Returns
+            mesh: colored obj mesh
+        """
+        x_min = mesh.vertices[:, 0].min()
+        x_max = mesh.vertices[:, 0].max()
+        y_min = mesh.vertices[:, 1].min()
+        y_max = mesh.vertices[:, 1].max()
+        z_min = mesh.vertices[:, 2].min()
+        z_max = mesh.vertices[:, 2].max()
+
+        # make vertices using RGB format
+        vertices_x = 255 * self.normalize(mesh.vertices[:, 0:1], x_min, x_max)
+        vertices_y = 255 * self.normalize(mesh.vertices[:, 1:2], y_min, y_max)
+        vertices_z = 255 * self.normalize(mesh.vertices[:, 2:3], z_min, z_max)
+
+        vertices_x = vertices_x.astype('uint8')
+        vertices_y = vertices_y.astype('uint8')
+        vertices_z = vertices_z.astype('uint8')
+        colors = np.hstack([vertices_x, vertices_y, vertices_z])
+
+        mesh.visual = mesh.visual.to_color()
+        mesh.visual.vertex_colors = colors
+
+        return mesh
+
+
 if __name__ == "__main__":
     obj_path = "/home/fabian/.keras/datasets/tless_obj/obj_000003.obj"
     save_path = "/media/fabian/Data/Masterarbeit/data/tless_obj03"
@@ -311,8 +442,13 @@ if __name__ == "__main__":
 
     colors = list()
     renderer = SingleView(filepath=obj_path)
-    
 
+    image_original, alpha_original, image_circle, image_depth = renderer.render_full_object()
+
+    plt.imshow(image_original)
+    plt.show()
+    
+    """
     for mode, num_images in zip(("train", "test"), (num_train_images, num_test_images)):
         for i in tqdm(range(num_images)):
             image_original, alpha_original, image_circle, image_depth, color = renderer.render()
@@ -322,17 +458,13 @@ if __name__ == "__main__":
             np.save(os.path.join(save_path, "{}/alpha_original/alpha_original_{}".format(mode, str(i).zfill(7))), alpha_original)
             np.save(os.path.join(save_path, "{}/image_circle/image_circle_{}".format(mode, str(i).zfill(7))), image_circle)
             np.save(os.path.join(save_path, "{}/image_depth/image_depth_{}".format(mode, str(i).zfill(7))), image_depth)
-
     """
-    for _ in range(10):
-        image_original, alpha_original, image_circle, image_depth, color = renderer.render()
 
-        plt.imshow(image_original)
-        plt.show()
-
-        plt.imshow(image_circle)
-        plt.show()
-
-        plt.imshow(image_depth)
-        plt.show()
-    """
+    for mode, num_images in zip(("train", "test"), (num_train_images, num_test_images)):
+        for i in tqdm(range(num_images)):
+            image_original, alpha_original, rotation_vector, translation_vector = renderer.render_vectors()
+    
+            np.save(os.path.join(save_path, "{}/image_original/image_original_{}".format(mode, str(i).zfill(7))), image_original)
+            np.save(os.path.join(save_path, "{}/alpha_original/alpha_original_{}".format(mode, str(i).zfill(7))), alpha_original)
+            np.save(os.path.join(save_path, "{}/rotation_vector/rotation_vector_{}".format(mode, str(i).zfill(7))), rotation_vector)
+            np.save(os.path.join(save_path, "{}/translation_vector/translation_vector_{}".format(mode, str(i).zfill(7))), translation_vector)
