@@ -46,10 +46,9 @@ def get_top_k_heatmaps_values(heatmaps, max_num_people):
 
 
 def get_top_k_tags(tags, indices, tag_per_joint, num_joints):
+    top_k_tags = []
     if not tag_per_joint:
         tags = tags.expand(-1, num_joints, -1, -1)
-
-    top_k_tags = []
     for arg in range(tags.shape[3]):
         top_k_tags.append(torch_gather(tags[:, :, :, 0], indices))
     top_k_tags = np.stack(top_k_tags, axis=3)
@@ -128,8 +127,7 @@ def get_valid_tags_and_joints(detections, joint_arg, detection_thresh):
 
 
 def group_joints_by_tag(detections, max_num_people, joint_order,
-                        detection_thresh, tag_thresh, ignore_too_much,
-                        use_detection_val):
+                        detection_thresh, tag_thresh):
     tags = detections['top_k_tags']
     joint_dict, tag_dict = {}, {}
     default = np.zeros((len(joint_order), tags.shape[2] + 3))
@@ -150,15 +148,10 @@ def group_joints_by_tag(detections, max_num_people, joint_order,
                                                              tag_dict,
                                                              max_num_people)
 
-            if ignore_too_much and len(grouped_keys) == max_num_people:
-                continue
-
             difference, norm = calculate_norm(valid_joints, grouped_tags)
             norm_copy = np.copy(norm)
 
-            if use_detection_val:
-                norm = np.round(norm) * 100 - valid_joints[:, 2:3]
-
+            norm = np.round(norm) * 100 - valid_joints[:, 2:3]
             num_added, num_grouped = difference.shape[:2]
 
             if num_added > num_grouped:

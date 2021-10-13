@@ -94,20 +94,21 @@ class ScaleImage(pr.Processor):
 
     def call(self, image):
         for arg in range(len(image)):
-            H, W = image[arg].shape[1:3]
+            H, W = image[arg].shape[-2:]
             H, W = self.scale_factor*H, self.scale_factor*W
             image[arg] = B.resize_output(image[arg], (W, H))
         return image
 
 
-class ScaleOutputs(pr.Processor):
+class ScaleOutput(pr.Processor):
     def __init__(self, scale_factor):
-        super(ScaleOutputs, self).__init__()
+        super(ScaleOutput, self).__init__()
         self.scale_factor = int(scale_factor)
 
     def call(self, outputs):
         for arg in range(len(outputs)):
-            H, W = outputs[arg].shape[1:3]
+            outputs[arg] = np.transpose(outputs[arg], [0, 3, 1, 2])
+            H, W = outputs[arg].shape[-2:]
             H, W = self.scale_factor*H, self.scale_factor*W
             if len(outputs) > 1 and arg != len(outputs) - 1:
                 outputs[arg] = B.resize_output(outputs[arg], (W, H))
@@ -124,7 +125,7 @@ class GetHeatmapsAverage(pr.Processor):
         num_heatmaps = 0
         for arg, output in enumerate(outputs):
             if with_flip:
-                output = np.flip(output, [2])
+                output = np.flip(output, [3])
                 indices = self.fliped_joint_order
             heatmaps_average = B.get_heatmaps_average(output, self.num_joint,
                                                       with_flip, indices)
@@ -151,7 +152,7 @@ class GetTags(pr.Processor):
     def call(self, outputs, tags, with_flip, indices=[]):
         output = outputs[0]
         if with_flip:
-            output = np.flip(output, [2])
+            output = np.flip(output, [3])
             indices = self.fliped_joint_order
         tags = B.get_tags(output, tags, self.offset, indices,
                           self.tag_per_joint, with_flip)
@@ -183,16 +184,6 @@ class CalculateHeatmapsAverage(pr.Processor):
         else:
             heatmaps_average = heatmaps[0]
         return heatmaps_average
-
-
-class Transpose(pr.Processor):
-    def __init__(self, permutes=None):
-        super(Transpose, self).__init__()
-        self.permutes = permutes
-
-    def call(self, x):
-        x = np.transpose(x, self.permutes)
-        return x
 
 
 class Concatenate(pr.Processor):
@@ -247,20 +238,17 @@ class TopKDetections(pr.Processor):
 
 class GroupJointsByTag(pr.Processor):
     def __init__(self, max_num_people, joint_order, tag_thresh,
-                 detection_thresh, ignore_too_much, use_detection_val):
+                 detection_thresh):
         super(GroupJointsByTag, self).__init__()
         self.max_num_people = max_num_people
         self.joint_order = joint_order
         self.tag_thresh = tag_thresh
         self.detection_thresh = detection_thresh
-        self.ignore_too_much = ignore_too_much
-        self.use_detection_val = use_detection_val
 
     def call(self, detections):
         return B.group_joints_by_tag(detections, self.max_num_people,
                                      self.joint_order, self.detection_thresh,
-                                     self.tag_thresh, self.ignore_too_much,
-                                     self.use_detection_val)
+                                     self.tag_thresh)
 
 
 class AdjustJointsLocations(pr.Processor):

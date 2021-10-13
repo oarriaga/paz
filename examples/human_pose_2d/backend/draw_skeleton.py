@@ -9,11 +9,11 @@ def add_joints(image, joints, color, dataset):
 
     def link(a, b, color):
         if part_arg[a] < joints.shape[0] and part_arg[b] < joints.shape[0]:
-            jointa = joints[part_arg[a]]
-            jointb = joints[part_arg[b]]
-            if jointa[2] > 0 and jointb[2] > 0:
-                cv2.line(image, (int(jointa[0]), int(jointa[1])),
-                                (int(jointb[0]), int(jointb[1])),
+            joint_a = joints[part_arg[a]]
+            joint_b = joints[part_arg[b]]
+            if joint_a[2] > 0 and joint_b[2] > 0:
+                cv2.line(image, (int(joint_a[0]), int(joint_a[1])),
+                                (int(joint_b[0]), int(joint_b[1])),
                          color, 2)
 
     # add joints

@@ -68,7 +68,6 @@ def imagenet_preprocess_input(image, data_format=None, mode='torch'):
 
 
 def resize_output(output, size):
-    output = np.transpose(output, [0, 3, 1, 2])
     resized_output = []
     for image_arg, image in enumerate(output):
         resized_images = []
@@ -78,6 +77,4 @@ def resize_output(output, size):
         resized_images = np.stack(resized_images, axis=0)
     resized_output.append(resized_images)
     resized_output = np.stack(resized_output, axis=0)
-
-    output = np.transpose(resized_output, [0, 2, 3, 1])
-    return output
+    return resized_output
