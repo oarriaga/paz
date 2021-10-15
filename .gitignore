@@ -1,5 +1,6 @@
 *.pyc
 *.hdf5
+*.h5
 *.log
 *.pkl
 *.json
