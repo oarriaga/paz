@@ -1,7 +1,9 @@
 import numpy as np
 
-from tensorflow.keras.layers import Conv2D, Activation, UpSampling2D, Dense, Conv2DTranspose, Dropout, Input, Flatten, Reshape, LeakyReLU, BatchNormalization, Concatenate
 from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Input, Conv2D, Activation, Dense, Reshape,
+                                     Conv2DTranspose, Flatten, LeakyReLU,
+                                     BatchNormalization, Concatenate)
 import tensorflow as tf
 
 
