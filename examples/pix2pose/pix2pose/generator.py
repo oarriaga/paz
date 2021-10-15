@@ -60,11 +60,11 @@ def Generator(input_shape=(128, 128, 3), latent_dimension=256,
     x = Dense(8 * 8 * latent_dimension)(x)
     x = Reshape((8, 8, latent_dimension))(x)
     x = decoder(x, skip_connections)
-    RGB_mask = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(x)
-    RGB_mask = Activation('tanh', name='RGB_mask')(RGB_mask)
-    error_mask = Conv2DTranspose(1, (5, 5), (2, 2), padding='same')(x)
-    error_mask = Activation('sigmoid', name='error_mask')(error_mask)
-    model = Model([input_image], [RGB_mask, error_mask], name=name)
+    label_image = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(x)
+    label_image = Activation('tanh', name='label_image')(label_image)
+    error_image = Conv2DTranspose(1, (5, 5), (2, 2), padding='same')(x)
+    error_image = Activation('sigmoid', name='error_image')(error_image)
+    model = Model([input_image], [label_image, error_image], name=name)
     return model
 
 

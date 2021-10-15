@@ -11,8 +11,7 @@ from paz import processors as pr
 
 
 class GeneratedImageProcessor(Processor):
-    """
-    Loads pre-generated images
+    """Loads pre-generated images
     """
     def __init__(self, path_images, background_images_paths, num_occlusions=1, split=pr.TRAIN, no_ambiguities=False):
         super(GeneratedImageProcessor, self).__init__()
@@ -38,18 +37,17 @@ class GeneratedImageProcessor(Processor):
         self.alpha_original = [np.load(os.path.join(path_images, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
 
 
-    def call(self):
-        index = random.randint(0, self.num_images-1)
-        image_original = self.images_original[index]
-        image_colors = self.images_colors[index]
-        alpha_original = self.alpha_original[index]
+    def call(self, input_image, label_image):
+        # index = random.randint(0, self.num_images-1)
+        # image_original = self.images_original[index]
+        # image_colors = self.images_colors[index]
+        # alpha_original = self.alpha_original[index]
 
         if self.split == pr.TRAIN:
             image_original = self.augment(image_original, alpha_original)
 
         image_original = self.preprocess_input(image_original)
         image_colors = self.preprocess_output(image_colors)
-
         return image_original, image_colors
 
 
@@ -150,25 +148,3 @@ class GeneratingSequencePix2Pose(SequenceExtra):
             self._place_sample(sample['labels'], sample_arg, labels)
 
         return inputs, labels
-
-
-class NormalizeImageTanh(Processor):
-    """
-    Normalize image so that the values are between -1 and 1
-    """
-    def __init__(self):
-        super(NormalizeImageTanh, self).__init__()
-
-    def call(self, image):
-        return (image/127.5)-1
-
-
-class DenormalizeImageTanh(Processor):
-    """
-    Transforms an image from the value range -1 to 1 back to 0 to 255
-    """
-    def __init__(self):
-        super(DenormalizeImageTanh, self).__init__()
-
-    def call(self, image):
-        return (image + 1.0)*127.5

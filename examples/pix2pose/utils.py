@@ -1,8 +1,25 @@
 import tensorflow as tf
+from tensorflow.keras.losses import Loss
 
 
-def loss_color_wrapped(rotation_matrices):
-    def loss_color_unwrapped(color_image, predicted_color_image):
+class Pix2PoseLoss(Loss):
+    def __init__(self):
+        super(Pix2PoseLoss, self).__init__()
+
+    def call(self, y_true, y_pred):
+        y_true = tf.clip_by_value(tf.math.abs(y_true), tf.float32.min, 1.0)
+        squared_error = tf.square(y_pred - y_true)
+        squared_error = tf.reduce_sum(squared_error, axis=3)
+        squared_error = tf.reduce_mean(squared_error, axis=[1, 2])
+        return squared_error
+
+
+class Pix2PoseColor(Loss):
+    def __init__(self, rotation_matrices):
+        super(Pix2PoseColor, self).__init__()
+        self.rotation_matrices = rotation_matrices
+
+    def call(self, color_image, predicted_color_image):
         min_loss = tf.float32.max
 
         # Bring the image in the range between 0 and 1
@@ -17,7 +34,7 @@ def loss_color_wrapped(rotation_matrices):
         color_image = (color_image * 2) - 1
 
         # Iterate over all possible rotations
-        for rotation_matrix in rotation_matrices:
+        for rotation_matrix in self.rotation_matrices:
 
             real_color_image = tf.identity(color_image)
 
@@ -44,15 +61,3 @@ def loss_color_wrapped(rotation_matrices):
             loss_colors = tf.cast((1/num_pixels), dtype=tf.float32)*(beta*tf.math.reduce_sum(diff_object, axis=[1, 2, 3]) + tf.math.reduce_sum(diff_background, axis=[1, 2, 3]))
             min_loss = tf.math.minimum(loss_colors, min_loss)
         return min_loss
-
-    return loss_color_unwrapped
-
-
-def loss_error(real_error_image, predicted_error_image):
-    # Get the number of pixels
-    num_pixels = tf.math.reduce_prod(tf.shape(real_error_image)[1:3])
-    loss_error = tf.cast((1/num_pixels), dtype=tf.float32)*(tf.math.reduce_sum(tf.math.square(predicted_error_image - tf.clip_by_value(tf.math.abs(real_error_image), tf.float32.min, 1.)), axis=[1, 2, 3]))
-
-    return loss_error
-
-
