@@ -22,6 +22,7 @@ checkpoint
 *.npy
 *.p
 *.zip
+*.iml
 
 !.github/manifest.xml
 
