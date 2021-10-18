@@ -21,6 +21,9 @@ RIGHT_ROOT_KEYPOINT_ID = 21
 RIGHT_ALIGNED_KEYPOINT_ID = 33
 RIGHT_LAST_KEYPOINT_ID = 41
 
+LEFT_HAND = 0
+RIGHT_HAND = 1
+
 
 def extract_hand_segment(segmentation_label):
     """ Data Pre-processing step: Extract only hand mask from the
