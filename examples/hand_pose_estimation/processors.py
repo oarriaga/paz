@@ -1,19 +1,21 @@
 import numpy as np
 
-from backend import create_score_maps, extract_2D_keypoints
-from backend import crop_image_from_coordinates, rotation_from_axis_angles
-from backend import detect_keypoints, wrap_dictionary, merge_dictionaries
-from backend import extract_dominant_hand_visibility, extract_bounding_box
-from backend import extract_dominant_keypoints2D, crop_image_using_mask
-from backend import extract_hand_segment, keypoints_to_palm_coordinates
-from backend import get_bone_connections_and_colors, find_max_location
-from backend import get_canonical_transformations, flip_right_hand
-from backend import normalize_keypoints, keypoint_to_root_frame
-from backend import transform_cropped_keypoints
-from backend import transform_visibility_mask, get_hand_side_and_keypooints
-
+from backend.SE3 import rotation_from_axis_angles
+from backend.general import wrap_dictionary, merge_dictionaries
+from backend.handkeypoints import create_score_maps, extract_2D_keypoints
+from backend.handkeypoints import crop_image_from_coordinates, detect_keypoints
+from backend.handkeypoints import crop_image_using_mask, extract_hand_segment
+from backend.handkeypoints import extract_bounding_box, find_max_location
+from backend.handkeypoints import extract_dominant_hand_visibility
+from backend.handkeypoints import extract_dominant_keypoints2D, flip_right_hand
+from backend.handkeypoints import get_canonical_transformations
+from backend.handkeypoints import get_hand_side_and_keypooints
+from backend.handkeypoints import keypoint_to_root_frame
+from backend.handkeypoints import keypoints_to_palm_coordinates
+from backend.handkeypoints import normalize_keypoints
+from backend.handkeypoints import transform_cropped_keypoints
+from backend.handkeypoints import transform_visibility_mask
 from paz.abstract import Processor
-from paz.backend.image.draw import lincolor
 from paz.backend.image.tensorflow_image import resize
 
 
@@ -280,16 +282,6 @@ class MergeDictionaries(Processor):
 
     def call(self, dicts):
         return merge_dictionaries(dicts)
-
-
-class GetBoneColorEncoding(Processor):
-    """ Map bone segmentation with respective colors to visualize"""
-    def __init__(self):
-        super(GetBoneColorEncoding, self).__init__()
-
-    def call(self, num_keypoints=21):
-        colors = lincolor(num_colors=num_keypoints)
-        return get_bone_connections_and_colors(colors=colors)
 
 
 class FindMaxLocation(Processor):

@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
-from backend import find_max_location
+from backend.handkeypoints import find_max_location
 
 
 class SegmentationDilation(Layer):
