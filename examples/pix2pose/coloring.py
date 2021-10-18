@@ -32,6 +32,10 @@ def color_object(path):
     colors = compute_vertices_colors(mesh.vertices)
     mesh.visual = mesh.visual.to_color()
     mesh.visual.vertex_colors = colors
+    mesh = Mesh.from_trimesh(mesh, smooth=False)
+    mesh.primitives[0].material.metallicFactor = 0.0
+    mesh.primitives[0].material.roughnessFactor = 1.0
+    mesh.primitives[0].material.alphaMode = 'OPAQUE'
     return mesh
 
 
@@ -41,9 +45,5 @@ if __name__ == "__main__":
     mesh_path = '.keras/paz/datasets/ycb_models/035_power_drill/textured.obj'
     path = os.path.join(root, mesh_path)
     mesh = color_object(path)
-    mesh = Mesh.from_trimesh(mesh, smooth=False)
-    mesh.primitives[0].material.metallicFactor = 0.0
-    mesh.primitives[0].material.roughnessFactor = 1.0
-    mesh.primitives[0].material.alphaMode = 'OPAQUE'
     scene.add(mesh)
     Viewer(scene, use_raymond_lighting=True, flags=RenderFlags.FLAT)
