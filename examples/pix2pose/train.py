@@ -33,8 +33,10 @@ show_image(RGB_mask)
 processor = DomainRandomization(renderer, image_shape,
                                 image_paths, num_occlusions)
 
+"""
 for _ in range(100):
     sample = processor()
     inputs, labels = sample['inputs'], sample['labels']
     show_image((inputs['input_image'] * 255).astype('uint8'))
     show_image((labels['label_image'] * 255).astype('uint8'))
+"""

@@ -29,7 +29,7 @@ class PixelMask():
         self._build_scene(path_OBJ, viewport_size, light, y_fov)
         self.renderer = OffscreenRenderer(viewport_size[0], viewport_size[1])
         self.flags_RGBA = RenderFlags.RGBA
-        self.flags_FLAT = RenderFlags.FLAT
+        self.flags_FLAT = RenderFlags.RGBA | RenderFlags.FLAT
         self.epsilon = 0.01
 
     def _build_scene(self, path, size, light, y_fov):

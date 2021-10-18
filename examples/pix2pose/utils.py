@@ -2,9 +2,9 @@ import tensorflow as tf
 from tensorflow.keras.losses import Loss
 
 
-class Pix2PoseLoss(Loss):
+class LossError(Loss):
     def __init__(self):
-        super(Pix2PoseLoss, self).__init__()
+        super(LossError, self).__init__()
 
     def call(self, y_true, y_pred):
         y_true = tf.clip_by_value(tf.math.abs(y_true), tf.float32.min, 1.0)
@@ -14,23 +14,23 @@ class Pix2PoseLoss(Loss):
         return squared_error
 
 
-class Pix2PoseColor(Loss):
+class LossColor(Loss):
     def __init__(self, rotation_matrices):
-        super(Pix2PoseColor, self).__init__()
+        super(LossColor, self).__init__()
         self.rotation_matrices = rotation_matrices
+
 
     def call(self, color_image, predicted_color_image):
         min_loss = tf.float32.max
 
-        # Bring the image in the range between 0 and 1
+        # [-1, 1] -> [0, 1]
         color_image = (color_image + 1) * 0.5
 
         # Calculate masks for the object and the background (they are independent of the rotation)
-        mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(color_image), axis=-1), axis=-1),
-                                repeats=3, axis=-1)
+        mask_object = tf.repeat(tf.expand_dims(tf.math.reduce_max(tf.math.ceil(color_image), axis=-1), axis=-1), repeats=3, axis=-1)
         mask_background = tf.ones(tf.shape(mask_object)) - mask_object
 
-        # Bring the image again in the range between -1 and 1
+        # [0, 1] -> [-1, 1]
         color_image = (color_image * 2) - 1
 
         # Iterate over all possible rotations
@@ -43,11 +43,10 @@ class Pix2PoseColor(Loss):
 
             # Rotate the object
             real_color_image = tf.einsum('ij,mklj->mkli', tf.convert_to_tensor(np.array(rotation_matrix), dtype=tf.float32), real_color_image)
-            #real_color_image = tf.where(tf.math.less(real_color_image, 0), tf.ones_like(real_color_image) + real_color_image, real_color_image)
 
             # Set the background to be all -1
             real_color_image *= mask_object
-            real_color_image += (mask_background*tf.constant(-1.))
+            real_color_image += (mask_background * tf.constant(-1.))
 
             # Get the number of pixels
             num_pixels = tf.math.reduce_prod(tf.shape(real_color_image)[1:3])
