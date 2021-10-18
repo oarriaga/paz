@@ -8,7 +8,7 @@ import trimesh
 from coloring import color_object
 
 
-class PixelMask():
+class PixelMaskRenderer():
     """Render-ready scene composed of a single object and a single moving camera.
 
     # Arguments

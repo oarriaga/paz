@@ -3,9 +3,9 @@ import tensorflow as tf
 
 
 class WeightedForeground(Loss):
-    def __init__(self, beta=3.0, epsilon=1e-4):
+    def __init__(self, beta=3.0):
         super(WeightedForeground, self).__init__()
-        self.beta, self.epsilon = beta, epsilon
+        self.beta = beta
 
     def _extract_alpha_mask(self, RGBA_mask):
         alpha_mask = RGBA_mask[:, :, :, 3:4]
