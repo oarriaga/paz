@@ -52,3 +52,6 @@ while True:
 
 video_capture.release()
 cv2.destroyAllWindows()
+
+
+# replace it with object_detection's demo.py
