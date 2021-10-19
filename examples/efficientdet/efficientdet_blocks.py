@@ -166,7 +166,7 @@ class ResampleFeatureMap(Layer):
     """Resample feature maps for downsampling or upsampling
      to create coarser or finer additional feature maps."""
     def __init__(self, feature_level, target_num_channels,
-                 use_batchnorm=False, conv_after_downsample=False,
+                 use_batchnorm=True, conv_after_downsample=False,
                  pooling_type='max', upsampling_type='nearest',
                  name='resample_p0'):
         """
@@ -199,6 +199,7 @@ class ResampleFeatureMap(Layer):
 
     def _pool2d(self, features, H, W, H_target, W_target):
         """Pool the inputs to target height and width.
+
         # Arguments
             features: Tensor, features for pooling.
             H: Int, Height of the feature.
@@ -236,6 +237,7 @@ class ResampleFeatureMap(Layer):
 
     def _apply_1x1_conv(self, feature, training, num_channels):
         """Apply 1x1 conv to change layer width if necessary.
+
         # Arguments
             features: Tensor, features to undergo 1x1 convolution.
             training: Bool, mode of using the network.
@@ -288,9 +290,10 @@ class ResampleFeatureMap(Layer):
 class FPNCells(Layer):
     """Set of FPN Cells."""
     def __init__(self, fpn_name, min_level, max_level, fpn_weight_method,
-                 fpn_cell_repeats, fpn_num_filters, use_batchnorm_for_sampling,
-                 conv_after_downsample, conv_batchnorm_activation_block,
-                 with_separable_conv, name='fpn_cells'):
+                 fpn_cell_repeats, fpn_num_filters,
+                 use_batchnorm_for_sampling=True, conv_after_downsample=False,
+                 conv_batchnorm_activation_block=False,
+                 with_separable_conv=True, name='fpn_cells'):
         """
         # Arguments
             fpn_name: A string specifying the feature fusion FPN layer.
@@ -671,7 +674,7 @@ class ClassNet(Layer):
     """Object class prediction network."""
     def __init__(self, num_classes=90, num_anchors=9, num_filters=32,
                  min_level=3, max_level=7, num_repeats=4,
-                 with_separable_conv=True, survival_rate=None,
+                 survival_rate=None, with_separable_conv=True,
                  return_base=False, name='class_net', **kwargs):
         """Initialize the ClassNet.
 
@@ -795,7 +798,7 @@ class ClassNet(Layer):
 class BoxNet(Layer):
     """Box regression network."""
     def __init__(self, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-                 num_repeats=4, with_separable_conv=True, survival_rate=None,
+                 num_repeats=4, survival_rate=None, with_separable_conv=True,
                  return_base=False, name='box_net', **kwargs):
         """Initialize the BoxNet.
 
@@ -886,6 +889,7 @@ class BoxNet(Layer):
 
     def call(self, features, training):
         """Call boxnet.
+
         # Arguments
             features: List, feature to be processed by BoxNet head.
             training: Bool, mode of using the network.

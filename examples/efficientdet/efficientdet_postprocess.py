@@ -5,8 +5,7 @@ from utils import get_class_name_efficientdet
 
 
 def process_outputs(outputs):
-    """
-    Merges all feature levels into single tensor and combines box offsets
+    """Merges all feature levels into single tensor and combines box offsets
     and class scores.
 
     # Arguments
@@ -33,8 +32,8 @@ def process_outputs(outputs):
 
 
 def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
-    """
-    EfficientDet output postprocessing function.
+    """EfficientDet output postprocessing function.
+
     # Arguments
         model: EfficientDet model
         class_outputs: Tensor, logits for all classes corresponding to the

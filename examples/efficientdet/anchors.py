@@ -110,8 +110,7 @@ class Anchors():
 
 def get_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
                     anchor_scale, image_size):
-    """
-    Function to generate prior boxes.
+    """Function to generate prior boxes.
 
     # Arguments
     min_level: Int, minimum level for features.

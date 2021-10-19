@@ -7,6 +7,7 @@ def EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
                  return_base, model_name, backbone):
     """ Generates an EfficientDet model with the parameter
     values passed as argument.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -21,7 +22,8 @@ def EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet model
     """
@@ -40,6 +42,7 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b0'):
     """ Instantiates EfficientDet-D0 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -54,7 +57,8 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D0 model
     """
@@ -73,6 +77,7 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b1'):
     """ Instantiates EfficientDet-D1 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -87,7 +92,8 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D1 model
     """
@@ -106,6 +112,7 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b2'):
     """ Instantiate EfficientDet-D2 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -120,7 +127,8 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D2 model
     """
@@ -139,6 +147,7 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b3'):
     """ Instantiates EfficientDet-D3 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -153,7 +162,8 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D3 model
     """
@@ -172,6 +182,7 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b4'):
     """ Instantiates EfficientDet-D4 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -186,7 +197,8 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D4 model
     """
@@ -205,6 +217,7 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b5'):
     """ Instantiates EfficientDet-D5 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -219,7 +232,8 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D5 model
     """
@@ -238,6 +252,7 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b6'):
     """ Instantiates EfficientDet-D6 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -252,7 +267,8 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D6 model
     """
@@ -271,6 +287,7 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
                    backbone='efficientnet-b6'):
     """ Instantiates EfficientDet-D7 model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -284,7 +301,8 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D7 model
     """
@@ -303,6 +321,7 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
                     backbone='efficientnet-b7'):
     """ Instantiates EfficientDet-D7x model with the default
     setting provided in the official implementation.
+
     # Arguments
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
@@ -317,7 +336,8 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn
+        fusion weighting method in fpn.
+
     # Returns
         model: EfficientDet-D7x model
     """

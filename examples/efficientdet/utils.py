@@ -63,8 +63,7 @@ def get_drop_connect(features, is_training, survival_rate):
 
 
 def efficientdet_preprocess(image, image_size):
-    """
-    Preprocess image for EfficientDet model.
+    """Preprocess image for EfficientDet model.
 
     # Arguments
         image: Tensor, raw input image to be preprocessed

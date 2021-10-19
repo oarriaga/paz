@@ -7,10 +7,8 @@ import itertools
 import math
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
-from tensorflow.keras.layers import DepthwiseConv2D
-from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import (Layer, DepthwiseConv2D, Conv2D,
+                                     BatchNormalization)
 from utils import get_drop_connect
 
 
@@ -35,8 +33,7 @@ def conv_normal_initializer(shape, dtype=None):
 
 
 class SqueezeExcitation(Layer):
-    """
-    Squeeze-and-excitation layer: Recalibrates channel-wise feature responses
+    """Squeeze-and-excitation layer: Recalibrates channel-wise feature responses
     by modelling channel interdependencies as provided in the paper:
     https://arxiv.org/pdf/1709.01507.pdf
     """
@@ -77,8 +74,7 @@ class SqueezeExcitation(Layer):
 
 
 class MobileInvertedResidualBottleNeckBlock(Layer):
-    """
-    A class of MBConv: Mobile Inverted Residual Bottleneck. As provided in
+    """A class of MBConv: Mobile Inverted Residual Bottleneck. As provided in
     the paper: https://arxiv.org/pdf/1801.04381.pdf and
     https://arxiv.org/pdf/1905.11946.pdf
 
@@ -134,13 +130,11 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
         return name
 
     def build_squeeze_excitation(self, filters):
-        """
-        Builds Squeeze-and-excitation block.
+        """Builds Squeeze-and-excitation block.
 
         # Arguments
             filters: Int, output filters of squeeze and excite block.
         """
-        #  For expand_ratio, etc.,
         num_filter = int(self._input_filters * self._squeeze_excite_ratio)
         num_reduced_filters = max(1, num_filter)
         squeeze_excitation = SqueezeExcitation(
@@ -185,8 +179,9 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
 
     def get_updated_filters(self):
         """Updates filter count depending on the expand ratio.
+
         # Returns:
-        filter: Int, filters count in the successive layers.
+            filter: Int, filters count in the successive layers.
         """
         filters = self._input_filters * self._expand_ratio
         return filters
@@ -256,6 +251,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
 
     def call(self, tensor, training, survival_rate):
         """Implementation of call().
+
         # Arguments
             tensor: Tensor, the inputs tensor.
             training: boolean, whether the model is constructed for training.
@@ -275,6 +271,7 @@ class MobileInvertedResidualBottleNeckBlock(Layer):
 
 def round_filters(filters, width_coefficient, depth_divisor, skip=False):
     """Round number of filters based on depth multiplier.
+
     # Arguments
         filters: Int, filters to be rounded based on depth multiplier.
         with_coefficient: Float, scaling coefficient for network width.
@@ -348,12 +345,11 @@ class Stem(Layer):
 
 
 class EfficientNet(tf.keras.Model):
-    """
-    A class implementing tf.keras.Model for EfficientNet. Base paper:
+    """A class implementing tf.keras.Model for EfficientNet. Base paper:
     https://arxiv.org/pdf/1905.11946.pdf
     """
 
-    def __init__(self, dropout_rate, width_coefficient, depth_coefficient,
+    def __init__(self, width_coefficient, depth_coefficient,
                  survival_rate, name, num_classes=90, depth_divisor=8,
                  kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  num_repeats=[1, 2, 2, 3, 3, 4, 1],
@@ -367,7 +363,6 @@ class EfficientNet(tf.keras.Model):
 
         # Arguments
             blocks_args: Dictionary of BlockArgs to construct block modules.
-            dropout_rate: Float, dropout rate for final fully connected layers.
             num_classes: Int, specifying the number of class in the
             output.
             with_coefficient: Float, scaling coefficient for network width.
@@ -394,7 +389,6 @@ class EfficientNet(tf.keras.Model):
         self._activation = tf.nn.swish
         self._width_coefficient = width_coefficient
         self._depth_coefficient = depth_coefficient
-        self._dropout_rate = dropout_rate
         self._num_classes = num_classes
         self._depth_divisor = depth_divisor
         self._survival_rate = survival_rate
@@ -415,6 +409,7 @@ class EfficientNet(tf.keras.Model):
 
     def update_filters(self, input_filters, output_filters):
         """Update block input and output filters based on depth multiplier.
+
         # Arguments
             input_filters: Int, input filters for the blocks to construct.
             output_filters: Int, output filters for the blocks to construct.
@@ -431,6 +426,7 @@ class EfficientNet(tf.keras.Model):
 
     def update_block_repeats(self, num_repeats):
         """Update block repeats based on depth multiplier.
+
         # Arguments
             num_repeats: Int, number of block repeats.
             block_num: Int, Block index.
