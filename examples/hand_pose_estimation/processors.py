@@ -17,6 +17,7 @@ from backend.handkeypoints import transform_cropped_keypoints
 from backend.handkeypoints import transform_visibility_mask
 from paz.abstract import Processor
 from paz.backend.image.tensorflow_image import resize
+from paz.backend.boxes import to_one_hot
 
 
 class ExtractHandmask(Processor):
@@ -26,6 +27,16 @@ class ExtractHandmask(Processor):
 
     def call(self, segmentation_label):
         return extract_hand_segment(segmentation_label=segmentation_label)
+
+
+class ToOneHot(Processor):
+    """Extract Hand mask."""
+    def __init__(self, num_classes=2):
+        super(ToOneHot, self).__init__()
+        self.num_classes = num_classes
+
+    def call(self, class_indices):
+        return to_one_hot(class_indices, self.num_classes)
 
 
 class KeypointstoPalmFrame(Processor):
@@ -43,9 +54,8 @@ class TransformVisibilityMask(Processor):
     """Extract Visibility Mask.
     """
 
-    def __init__(self, use_wrist_coordinates):
+    def __init__(self):
         super(TransformVisibilityMask, self).__init__()
-        self.use_wrist_coordinates = use_wrist_coordinates
 
     def call(self, visibility_mask):
         return transform_visibility_mask(visibility_mask)

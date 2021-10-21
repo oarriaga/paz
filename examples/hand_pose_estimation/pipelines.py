@@ -1,6 +1,6 @@
 from paz import processors as pr
 
-from paz.abstract import SequentialProcessor
+from paz.abstract import SequentialProcessor, Processor
 from processors import AdjustCropSize, CropImage, CanonicaltoRelativeFrame
 from processors import CreateScoremaps, ExtractBoundingbox
 from processors import Extract2DKeypoints, ExtractHandSide, FlipRightHand
@@ -10,13 +10,14 @@ from processors import MatrixInverse, ExtractDominantHandVisibility
 from processors import Resize_image, RotationMatrixfromAxisAngles
 from processors import TransformVisibilityMask, NormalizeKeypoints
 from processors import TransformtoRelativeFrame, GetCanonicalTransformation
+from processors import ToOneHot
 from layer import SegmentationDilation
 
 
 class PreprocessKeypoints(SequentialProcessor):
     def __init__(self):
         super(PreprocessKeypoints, self).__init__()
-        self.add(ExtractHandmask())
+        self.add(ExtractHandmask())  # use it directly in main pipeline
 
 
 class AugmentHandSegmentation(SequentialProcessor):
@@ -25,14 +26,14 @@ class AugmentHandSegmentation(SequentialProcessor):
         self.add(pr.UnpackDictionary(['image', 'segmentation_label',
                                       'annotations']))
 
-        preprocess_image = pr.SequentialProcessor()
-        preprocess_image.add(pr.LoadImage())
-        preprocess_image.add(pr.ResizeImage([size, size]))
+        preprocess_image = pr.SequentialProcessor(
+            [pr.LoadImage(),
+             pr.ResizeImage((size, size))])
 
-        preprocess_segmentation_map = pr.SequentialProcessor()
-        preprocess_segmentation_map.add(pr.LoadImage())
-        preprocess_segmentation_map.add(pr.ResizeImage((size, size)))
-        preprocess_segmentation_map.add(ExtractHandmask())
+        preprocess_segmentation_map = pr.SequentialProcessor(
+            [pr.LoadImage(),
+             pr.ResizeImage((size, size)),
+             ExtractHandmask()])
 
         self.add(pr.ControlMap(preprocess_image, [0], [0]))
         self.add(pr.ControlMap(preprocess_segmentation_map, [1], [1]))
@@ -41,106 +42,154 @@ class AugmentHandSegmentation(SequentialProcessor):
                                     {1: {'hand_mask': [size, size]}}))
 
 
-class AugmentHandPose2D(SequentialProcessor):
-    def __init__(self, size=320, crop_size=256, use_palm_coordinates=False,
-                 crop_image=True):
+class AugmentHandPose2D(Processor):
+    def __init__(self, size, image_size, crop_size, variance):
         super(AugmentHandPose2D, self).__init__()
-        self.add(pr.UnpackDictionary(['image', 'segmentation_label',
-                                      'annotations']))
+        self.unwrap_inputs = pr.UnpackDictionary(
+            ['image', 'segmentation_label', 'annotations'])
+        self.preprocess_image = pr.SequentialProcessor(
+            [pr.LoadImage(),
+             pr.ResizeImage((size, size))])
 
-        preprocess_image = pr.SequentialProcessor()
-        preprocess_image.add(pr.LoadImage())
-        preprocess_image.add(pr.ResizeImage((size, size)))
+        self.preprocess_segmentation_map = pr.SequentialProcessor(
+            [pr.LoadImage(),
+             pr.ResizeImage((size, size)),
+             ExtractHandmask()])
+        self.extract_annotations = pr.UnpackDictionary(['xyz', 'uv_vis', 'K'])
+        self.extract_2D_keypoints = Extract2DKeypoints()
+        self.keypoints_to_palm = KeypointstoPalmFrame()
+        self.visibility_to_palm = TransformVisibilityMask()
+        self.extract_hand_side = ExtractHandSide()
 
-        preprocess_segmentation_map = pr.SequentialProcessor()
-        preprocess_segmentation_map.add(pr.LoadImage())
-        preprocess_segmentation_map.add(pr.ResizeImage((size, size)))
-        preprocess_segmentation_map.add(ExtractHandmask())
+        self.extract_visibility_dominant_hand = ExtractDominantHandVisibility()
+        self.create_scoremaps = CreateScoremaps(image_size=image_size,
+                                                crop_size=crop_size,
+                                                variance=variance)
+        self.crop_image_from_mask = CropImageFromMask()
+        self.wrap = pr.WrapOutput(
+            ['cropped_image', 'score_maps', 'keypoints_vis21'])
 
-        self.add(pr.ControlMap(preprocess_image, [0], [0]))
-        self.add(pr.ControlMap(preprocess_segmentation_map, [1], [1]))
+    def call(self, inputs, use_palm_coordinates, crop_image):
+        image, segmentation_label, annotations = self.unwrap_inputs(inputs)
 
-        self.add(pr.ControlMap(pr.UnpackDictionary(['xyz', 'uv_vis', 'K']),
-                               [2], [2, 3, 4]))
-        self.add(pr.ControlMap(Extract2DKeypoints(), [3], [3, 5]))
+        image = self.preprocess_image(image)
+        segmentation_label = self.preprocess_segmentation_map(
+            segmentation_label)
+        keypoints3D, keypoints2D, camera_matrix = self.extract_annotations(
+            annotations)
+        keypoints2D, keypoints_visibility_mask = self.extract_2D_keypoints(
+            keypoints2D)
 
-        if not use_palm_coordinates:
-            self.add(pr.ControlMap(KeypointstoPalmFrame, [3], [3]))
-            self.add(pr.ControlMap(TransformVisibilityMask, [5], [5]))
+        if use_palm_coordinates:
+            keypoints2D = self.keypoints_to_palm(keypoints2D)
+            keypoints_visibility_mask = self.visibility_to_palm(
+                keypoints_visibility_mask)
 
-        self.add(pr.ControlMap(ExtractHandSide, [1, 2], [6, 2, 7]))
+        hand_side, keypoints3D, dominant_hand = self.extract_hand_side(
+            segmentation_label, keypoints3D)
 
-        self.add(pr.ControlMap(ExtractDominantHandVisibility, [6, 7], [8]))
+        keypoints21 = self.extract_visibility_dominant_hand(
+            keypoints_visibility_mask, dominant_hand)
 
-        self.add(pr.ControlMap(CreateScoremaps, [3, 8], [9]))
+        scoremaps = self.create_scoremaps(keypoints2D, keypoints21)
 
         if crop_image:
-            self.add(pr.ControlMap(CropImageFromMask(), [3, 8, 0, 4],
-                                   [10, 0, 3, 4]))
+            image = self.crop_image_from_mask(
+                keypoints2D, keypoints21, image, camera_matrix)
 
-        self.add(pr.SequenceWrapper({0: {'cropped_image': [crop_size, crop_size,
-                                                           3]}},
-                                    {9: {'score_maps': [size, size]},
-                                     8: {'keypoints_vis21': [size, size]}}))
+        return self.wrap(image, scoremaps, keypoints21)
 
 
-class AugmentHandPose(SequentialProcessor):
-    def __init__(self, size=320, crop_size=256, use_palm_coordinates=False,
-                 flip_right_hand=False, crop_image=True):
+class AugmentHandPose(Processor):
+    def __init__(self, size, image_size, crop_size, variance):
         super(AugmentHandPose, self).__init__()
-        self.add(pr.UnpackDictionary(['image', 'segmentation_label',
-                                      'annotations']))
+        self.unwrap_inputs = pr.UnpackDictionary(
+            ['image', 'segmentation_label', 'annotations'])
+        self.preprocess_image = pr.SequentialProcessor(
+            [pr.LoadImage(),
+             pr.ResizeImage((size, size))])
 
-        preprocess_image = pr.SequentialProcessor()
-        preprocess_image.add(pr.LoadImage())
-        preprocess_image.add(pr.ResizeImage((size, size)))
+        self.preprocess_segmentation_map = pr.SequentialProcessor(
+            [pr.LoadImage(),
+             pr.ResizeImage((size, size)),
+             ExtractHandmask()])
 
-        preprocess_segmentation_map = pr.SequentialProcessor()
-        preprocess_segmentation_map.add(pr.LoadImage())
-        preprocess_segmentation_map.add(pr.ResizeImage((size, size)))
-        preprocess_segmentation_map.add(ExtractHandmask())
+        self.extract_annotations = pr.UnpackDictionary(['xyz', 'uv_vis', 'K'])
+        self.extract_2D_keypoints = Extract2DKeypoints()
+        self.keypoints_to_palm = KeypointstoPalmFrame()
+        self.visibility_to_palm = TransformVisibilityMask()
+        self.extract_hand_side = ExtractHandSide()
+        self.to_one_hot = ToOneHot(num_classes=2)
+        self.normaliza_keypoints = NormalizeKeypoints()
+        self.to_relative_frame = TransformtoRelativeFrame()
+        self.canonical_transformations = GetCanonicalTransformation()
+        self.flip_right_hand = FlipRightHand()
+        self.get_matrix_inverse = MatrixInverse()
 
-        self.add(pr.ControlMap(preprocess_image, [0], [0]))
-        self.add(pr.ControlMap(preprocess_segmentation_map, [1], [1]))
-        self.add(pr.ControlMap(pr.UnpackDictionary(['xyz', 'uv_vis', 'K']),
-                               [2], [2, 3, 4]))
-        self.add(pr.ControlMap(Extract2DKeypoints, [3], [5, 6]))
+        self.extract_hand_visibility = ExtractDominantHandVisibility()
+        self.extract_dominant_keypoints = ExtractDominantKeypoint()
 
-        if not use_palm_coordinates:
-            self.add(pr.ControlMap(KeypointstoPalmFrame, [2], [2]))
-            self.add(pr.ControlMap(KeypointstoPalmFrame, [5], [5]))
-            self.add(pr.ControlMap(TransformVisibilityMask, [6], [6]))
+        self.crop_image_from_mask = CropImageFromMask()
+        self.create_scoremaps = CreateScoremaps(image_size=image_size,
+                                                crop_size=crop_size,
+                                                variance=variance)
 
-        self.add(pr.ControlMap(ExtractHandSide, [1, 2], [7, 2, 8]))
-        self.add(pr.ControlMap(pr.BoxClassToOneHotVector(num_classes=2),
-                               [7], [7]))
+        self.wrap = pr.WrapOutput(
+            ['score_maps', 'hand_side', 'keypoints3D', 'rotation_matrix'])
 
-        self.add(pr.ControlMap(NormalizeKeypoints, [2], [9, 2]))
-        self.add(pr.ControlMap(TransformtoRelativeFrame, [2], [2]))
-        self.add(pr.ControlMap(GetCanonicalTransformation, [2], [2, 10]))
+    def call(self, inputs, use_palm_coordinates, crop_image,
+             flip_right_hand=False):
+        image, segmentation_label, annotations = self.unwrap_inputs(inputs)
+
+        image = self.preprocess_image(image)
+        segmentation_label = self.preprocess_segmentation_map(
+            segmentation_label)
+        keypoints3D, keypoints2D, camera_matrix = self.extract_annotations(
+            annotations)
+        keypoints2D, keypoints_visibility_mask = self.extract_2D_keypoints(
+            keypoints2D)
+
+        if use_palm_coordinates:
+            keypoints2D = self.keypoints_to_palm(keypoints2D)
+            keypoints3D = self.keypoints_to_palm(keypoints3D)
+            keypoints_visibility_mask = self.visibility_to_palm(
+                keypoints_visibility_mask)
+
+        hand_side, keypoints3D, dominant_hand = self.extract_hand_side(
+            segmentation_label, keypoints3D)
+
+        hand_side_one_hot = self.to_one_hot(hand_side)
+
+        keypoint_scale, keypoints3D = self.normaliza_keypoints(keypoints3D)
+        keypoints3D = self.to_relative_frame(keypoints3D)
+        keypoints3D, canonical_rotation_matrix = self.canonical_transformations(
+            keypoints3D)
 
         if flip_right_hand:
-            self.add(pr.ControlMap(FlipRightHand, [2], [2]))
+            keypoints3D = self.flip_right_hand(keypoints3D)
 
-        self.add(pr.ControlMap(MatrixInverse, [10], [10]))
+        canonical_rotation_matrix = self.get_matrix_inverse(
+            canonical_rotation_matrix)
 
-        self.add(pr.ControlMap(ExtractDominantHandVisibility, [6, 8], [11]))
-        self.add(pr.ControlMap(ExtractDominantKeypoint, [3, 8], [12]))
+        visible_keypoints = self.extract_hand_visibility(
+            keypoints_visibility_mask, dominant_hand)
+        dominant_keypoints = self.extract_dominant_keypoints(
+            keypoints2D, dominant_hand)
 
         if crop_image:
-            self.add(pr.ControlMap(CropImageFromMask(), [11, 12, 0, 4],
-                                   [12, 13, 11, 14]))
-        self.add(pr.ControlMap(CreateScoremaps, [10, 11], [15]))
+            scale, image, visible_keypoints, camera_matrix = \
+                self.crop_image_from_mask(
+                    visible_keypoints, dominant_keypoints, image, camera_matrix)
+        scoremaps = self.create_scoremaps(
+            canonical_rotation_matrix, visible_keypoints)
 
-        self.add(pr.SequenceWrapper({0: {'score_maps': [crop_size, crop_size]},
-                                     7: {'hand_side': [2]}},
-                                    {2: {'keypoints3D_can': [21, 3]},
-                                     10: {'rotation_matrix': [3, 3]}}))
+        return self.wrap(scoremaps, hand_side_one_hot, keypoints3D,
+                         canonical_rotation_matrix)
 
 
-class preprocess_image(SequentialProcessor):
+class PreprocessImage(SequentialProcessor):
     def __init__(self, image_size=320):
-        super(preprocess_image, self).__init__()
+        super(PreprocessImage, self).__init__()
         self.add(pr.NormalizeImage())
         self.add(pr.ResizeImage((image_size, image_size)))
         self.add(pr.ExpandDims(0))
