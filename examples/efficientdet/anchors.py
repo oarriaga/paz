@@ -72,35 +72,50 @@ class Anchors():
                          ))
         return anchor_configs
 
-    def _generate_boxes(self):
+    def get_aspect_ratio(self, aspect):
+        if isinstance(aspect, list):
+            aspect_x, aspect_y = aspect
+        else:
+            aspect_x = np.sqrt(aspect)
+            aspect_y = 1 / aspect_x
+        return aspect_x, aspect_y
+
+    def get_box_coordinates(self, config):
+        stride, octave_scale, aspect, anchor_scale = config
+        base_anchor_x = anchor_scale * stride[1] * 2 ** octave_scale
+        base_anchor_y = anchor_scale * stride[0] * 2 ** octave_scale
+        aspect_x, aspect_y = self.get_aspect_ratio(aspect)
+        anchor_x = base_anchor_x * aspect_x / 2.0
+        anchor_y = base_anchor_y * aspect_y / 2.0
+        x = np.arange(stride[1] / 2, self.image_size[1], stride[1])
+        y = np.arange(stride[0] / 2, self.image_size[0], stride[0])
+        center_x, center_y = np.meshgrid(x, y)
+        center_x = center_x.reshape(-1)
+        center_y = center_y.reshape(-1)
+        return center_x, center_y, anchor_x, anchor_y
+
+    def get_level_boxes(self, configs):
+        boxes_level = []
+        for config in configs:
+            box_coordinates = self.get_box_coordinates(config)
+            center_x, center_y, anchor_x, anchor_y = box_coordinates
+            boxes = np.vstack((center_y - anchor_y, center_x - anchor_x,
+                               center_y + anchor_y, center_x + anchor_x))
+            boxes = np.swapaxes(boxes, 0, 1)
+            boxes_level.append(np.expand_dims(boxes, axis=1))
+        return boxes_level
+
+    def get_anchors(self):
         boxes_all = []
         for _, configs in self.config.items():
-            boxes_level = []
-            for config in configs:
-                stride, octave_scale, aspect, anchor_scale = config
-                base_anchor_size_x = anchor_scale * stride[1] * 2**octave_scale
-                base_anchor_size_y = anchor_scale * stride[0] * 2**octave_scale
-                if isinstance(aspect, list):
-                    aspect_x, aspect_y = aspect
-                else:
-                    aspect_x = np.sqrt(aspect)
-                    aspect_y = 1 / aspect_x
-                anchor_size_x_2 = base_anchor_size_x * aspect_x / 2.0
-                anchor_size_y_2 = base_anchor_size_y * aspect_y / 2.0
-
-                x = np.arange(stride[1] / 2, self.image_size[1], stride[1])
-                y = np.arange(stride[0] / 2, self.image_size[0], stride[0])
-                xv, yv = np.meshgrid(x, y)
-                xv = xv.reshape(-1)
-                yv = yv.reshape(-1)
-
-                boxes = np.vstack((yv - anchor_size_y_2, xv - anchor_size_x_2,
-                                   yv + anchor_size_y_2, xv + anchor_size_x_2))
-                boxes = np.swapaxes(boxes, 0, 1)
-                boxes_level.append(np.expand_dims(boxes, axis=1))
+            boxes_level = self.get_level_boxes(configs)
             boxes_level = np.concatenate(boxes_level, axis=1)
             boxes_all.append(boxes_level.reshape([-1, 4]))
-        anchor_boxes = np.vstack(boxes_all)
+        anchors = np.vstack(boxes_all)
+        return anchors
+
+    def _generate_boxes(self):
+        anchor_boxes = self.get_anchors()
         anchor_boxes = anchor_boxes.astype('float32')
         return anchor_boxes
 
