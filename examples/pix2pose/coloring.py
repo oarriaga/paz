@@ -47,3 +47,4 @@ if __name__ == "__main__":
     mesh = color_object(path)
     scene.add(mesh)
     Viewer(scene, use_raymond_lighting=True, flags=RenderFlags.FLAT)
+    # mesh_extents = np.array([0.184, 0.187, 0.052])
