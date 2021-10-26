@@ -5,6 +5,8 @@ from SE3 import to_homogeneous_coordinates, build_translation_matrix_SE3
 from SE3 import build_rotation_matrix_x, build_rotation_matrix_y
 from SE3 import build_rotation_matrix_z, build_affine_matrix
 
+
+
 kinematic_chain_dict = {0: 'root',
                         4: 'root', 3: 4, 2: 3, 1: 2,
                         8: 'root', 7: 8, 6: 7, 5: 6,

@@ -6,7 +6,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
 
-from detection import DetectHandKeypoints
+from pipelines import DetectHandKeypoints
 
 from paz.backend.camera import Camera, VideoPlayer
 

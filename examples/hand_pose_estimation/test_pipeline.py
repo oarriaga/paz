@@ -4,7 +4,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
-from detection import DetectHandKeypoints
+from pipelines import DetectHandKeypoints
 from paz.backend.image.opencv_image import load_image, show_image
 
 parser = argparse.ArgumentParser()
@@ -25,4 +25,3 @@ img = load_image('./sample.jpg')
 detection = pipeline(img)
 
 show_image(detection['image'].astype('uint8'))
-
