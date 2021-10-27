@@ -2,6 +2,7 @@ import numpy as np
 from paz.abstract import Processor
 from paz.backend.keypoints import project_points3D
 from paz.backend.image import draw_cube
+from paz.backend.quaternion import rotation_vector_to_quaternion
 
 from backend import build_cube_points3D
 from backend import replace_lower_than_threshold
@@ -81,7 +82,8 @@ class GetNonZeroValues(Processor):
         super(GetNonZeroValues, self).__init__()
 
     def call(self, array):
-        non_zero_arguments = np.nonzero(array)
+        channel_wise_sum = np.sum(array, axis=2)
+        non_zero_arguments = np.nonzero(channel_wise_sum)
         return array[non_zero_arguments]
 
 
@@ -90,7 +92,8 @@ class GetNonZeroArguments(Processor):
         super(GetNonZeroArguments, self).__init__()
 
     def call(self, array):
-        non_zero_rows, non_zero_columns = np.nonzero(array)
+        channel_wise_sum = np.sum(array, axis=2)
+        non_zero_rows, non_zero_columns = np.nonzero(channel_wise_sum)
         return non_zero_rows, non_zero_columns
 
 
@@ -140,3 +143,38 @@ class CropImage(Processor):
 
     def call(self, image):
         return image[:128, :128, :]
+
+
+class UnwrapDictionary(Processor):
+    def __init__(self, keys):
+        super(UnwrapDictionary, self).__init__()
+        self.keys = keys
+
+    def call(self, dictionary):
+        return [dictionary[key] for key in self.keys]
+
+
+class ToAffineMatrix(Processor):
+    def __init__(self):
+        super(ToAffineMatrix, self).__init__()
+
+    def call(self, rotation_matrix, translation):
+        if len(translation) != 3:
+            raise ValueError('Translation should be of lenght 3')
+        if rotation_matrix.shape != (3, 3):
+            raise ValueError('Rotation matrix should be of shape (3, 3)')
+        translation = translation.reshape(3, 1)
+        affine_matrix = np.concatenate([rotation_matrix, translation], axis=1)
+        affine_row = np.array([[0.0, 0.0, 0.0, 1.0]])
+        affine_matrix = np.concatenate([affine_matrix, affine_row], axis=0)
+        print(affine_matrix.shape)
+        return affine_matrix
+
+
+class RotationVectorToQuaternion(Processor):
+    def __init__(self):
+        super(RotationVectorToQuaternion, self).__init__()
+
+    def call(self, rotation_vector):
+        quaternion = rotation_vector_to_quaternion(rotation_vector)
+        return quaternion

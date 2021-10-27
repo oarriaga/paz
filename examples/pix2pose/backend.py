@@ -1,6 +1,6 @@
 import numpy as np
 from paz.backend.image.draw import GREEN
-from paz.backend.image import draw_line, draw_dot
+from paz.backend.image import draw_line, draw_dot, draw_circle
 import cv2
 
 
@@ -53,6 +53,14 @@ def inhomogenous_quaternion_to_rotation_matrix(q):
 
     return rotation_matrix
     # return np.squeeze(rotation_matrix)
+
+
+def quaternion_to_rotation_matrix(quaternion, homogenous=True):
+    if homogenous:
+        matrix = homogenous_quaternion_to_rotation_matrix(quaternion)
+    else:
+        matrix = inhomogenous_quaternion_to_rotation_matrix(quaternion)
+    return matrix
 
 
 def multiply_quaternions(quaternion_0, quaternion_1):
@@ -135,6 +143,33 @@ def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
     if success is False:
         rotation_vector, translation = None, None
     return rotation_vector, translation
+
+
+def apply_affine_transform(affine_matrix, vectors):
+    return np.matmul(affine_matrix, vectors.T).T
+
+
+def project_to_image2(affine_matrix, points3D, camera_intrinsics):
+    """Project points3D to image plane using a perspective transformation
+    """
+    if affine_matrix.shape != (4, 4):
+        raise ValueError('Affine matrix is not of shape (4, 4)')
+    if len(points3D.shape) != 2:
+        raise ValueError('points3D should have a shape (N, 3)')
+    if points3D.shape[1] != 3:
+        raise ValueError('points3D should have a shape (N, 3)')
+    # TODO missing checks for camera intrinsics conditions
+    points3D = apply_affine_transform(affine_matrix, points3D)
+    # points3D = np.matmul(rotation, points3D.T).T + translation
+    x, y, z = np.split(points3D, 3, axis=1)
+    x_focal_length = camera_intrinsics[0, 0]
+    y_focal_length = camera_intrinsics[1, 1]
+    x_image_center = camera_intrinsics[0, 2]
+    y_image_center = camera_intrinsics[1, 2]
+    x_points = (x_focal_length * (x / z)) + x_image_center
+    y_points = (y_focal_length * (y / z)) + y_image_center
+    projected_points2D = np.concatenate([x_points, y_points], axis=1)
+    return projected_points2D
 
 
 def project_to_image(rotation, translation, points3D, camera_intrinsics):
@@ -222,3 +257,37 @@ def rotation_vector_to_rotation_matrix(rotation_vector):
     rotation_matrix = np.eye(3)
     cv2.Rodrigues(rotation_vector, rotation_matrix)
     return rotation_matrix
+
+
+def draw_keypoints(image, keypoints, colors, radius):
+    for keypoint, color in zip(keypoints, colors):
+        R, G, B = color
+        color = (int(R), int(G), int(B))
+        draw_circle(image, keypoint.astype('int'), color, radius)
+    return image
+
+
+def draw_mask(image, keypoints, colors, radius):
+    for keypoint, color in zip(keypoints, colors):
+        R, G, B = color
+        color = (int(R), int(G), int(B))
+        draw_circle(image, keypoint.astype('int'), color, radius)
+    return image
+
+
+def rotation_matrix_to_quaternion(rotation_matrix):
+    qw = np.sqrt(1 + np.trace(rotation_matrix)) / 2.0
+
+    m21 = rotation_matrix[2, 1]
+    m12 = rotation_matrix[1, 2]
+
+    m02 = rotation_matrix[0, 2]
+    m20 = rotation_matrix[2, 0]
+
+    m10 = rotation_matrix[1, 0]
+    m01 = rotation_matrix[0, 1]
+
+    qx = (m21 - m12) / (4.0 * qw)
+    qy = (m02 - m20) / (4.0 * qw)
+    qz = (m10 - m01) / (4.0 * qw)
+    return qx, qy, qz, qw
