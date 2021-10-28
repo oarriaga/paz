@@ -41,7 +41,6 @@ camera.intrinsics = np.array([[focal_length, 0, image_center[0]],
 
 
 object_sizes = np.array([0.184, 0.187, 0.052])
-# epsilon = 0.005
 epsilon = 0.15
 detect = SSD300FAT(draw=False)
 offsets = [0.1, 0.1]

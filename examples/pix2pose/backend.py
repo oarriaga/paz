@@ -142,6 +142,7 @@ def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
         object_points3D, image_points2D, camera_intrinsics, None,
         flags=cv2.SOLVEPNP_EPNP, reprojectionError=inlier_threshold,
         iterationsCount=num_iterations)
+    translation = np.squeeze(translation, 1)
     if success is False:
         rotation_vector, translation = None, None
     return rotation_vector, translation
@@ -352,6 +353,7 @@ def denormalize_points2D(points2D, height, width):
     return points2D
 
 
+
 def flip_y_axis(points2D):
     x, y = np.split(points2D, 2, axis=1)
     points2D = np.concatenate([x, -y], axis=1)
@@ -398,3 +400,17 @@ def denormalize_keypoints(keypoints, height, width):
         x, y = int(round(x)), int(round(y))
         keypoints[keypoint_arg][:2] = [x, y]
     return keypoints
+
+
+def draw_poses6D(image, poses6D, cube_points3D, camera_intrinsics):
+    image = image.astype(float)
+    for pose6D in poses6D:
+        rotation = quaternion_to_rotation_matrix(pose6D.quaternion)
+        rotation = np.squeeze(rotation, axis=2)
+        cube_points2D = project_to_image(
+            rotation, pose6D.translation,
+            cube_points3D, camera_intrinsics)
+        cube_points2D = cube_points2D.astype(np.int32)
+        image = draw_cube(image, cube_points2D)
+    image = image.astype('uint8')
+    return image
