@@ -6,12 +6,14 @@ from paz import processors as pr
 from processors import (
     GetNonZeroArguments, GetNonZeroValues, ArgumentsToImagePoints2D,
     ImageToClosedOneBall, Scale, SolveChangingObjectPnPRANSAC,
-    RotationVectorToRotationMatrix, ReplaceLowerThanThreshold)
-from backend import build_cube_points3D, project_to_image, draw_cube, draw_keypoints, project_to_image2
-from processors import CropImage, UnwrapDictionary, ToAffineMatrix, RotationVectorToQuaternion
-from paz.backend.image import show_image
-from backend import solve_PnP_RANSAC, rotation_matrix_to_quaternion
-from backend import rotation_vector_to_rotation_matrix
+    ReplaceLowerThanThreshold)
+from backend import (build_cube_points3D, project_to_image, draw_cube,
+                     draw_keypoints)
+from processors import UnwrapDictionary, RotationVectorToQuaternion
+# from paz.backend.image import show_image
+from backend import quaternion_to_rotation_matrix, draw_maski
+from backend import normalize_points2D, flip_y_axis
+from backend import denormalize_points2D
 
 
 class DomainRandomization(SequentialProcessor):
@@ -61,9 +63,10 @@ class SolveChangingObjectPnP(SequentialProcessor):
     def __init__(self, camera_intrinsics):
         super(SolveChangingObjectPnP, self).__init__()
         self.add(SolveChangingObjectPnPRANSAC(camera_intrinsics))
-        self.add(pr.ControlMap(RotationVectorToRotationMatrix()))
-        # self.add(pr.ControlMap(RotationVectorToQuaternion()))
+        # self.add(pr.ControlMap(RotationVectorToRotationMatrix()))
+        self.add(pr.ControlMap(RotationVectorToQuaternion()))
         self.add(pr.ControlMap(pr.Squeeze(1), [1], [1]))
+        # self.add(ToPose6D())
         # self.add(ToAffineMatrix())
 
 
@@ -78,14 +81,9 @@ class Pix2Pose(pr.Processor):
         self.wrap = pr.WrapOutput(['points3D', 'points2D', 'RGB_mask'])
 
     def call(self, image):
-        # show_image(image, wait=False)
-        print(image.shape)
         image = self.resize(image)
-        print(image.shape)
         RGB_mask = self.predict_RGBMask(image)
-        print(RGB_mask.shape)
         points3D = self.RGBMask_to_points3D(RGB_mask)
-        # points3D = points3D * 100
         points2D = self.RGBMask_to_points2D(RGB_mask)
         return self.wrap(points3D, points2D, RGB_mask)
         """
@@ -117,10 +115,9 @@ class EstimatePoseMasks(Processor):
         self.crop = pr.CropBoxes2D()
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
         self.predict_pose = SolveChangingObjectPnP(camera.intrinsics)
-        self.unwrap = UnwrapDictionary(['points3D', 'points2D', 'RGB_mask'])
-        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'RGB_mask', 'poses6D'])
+        self.unwrap = UnwrapDictionary(['points2D', 'points3D'])
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
         self.draw_boxes2D = pr.DrawBoxes2D(detect.class_names)
-        self.denormalize_keypoints = pr.DenormalizeKeypoints()
         self.cube_points3D = build_cube_points3D(0.2, 0.2, 0.07)
 
     def call(self, image):
@@ -128,44 +125,49 @@ class EstimatePoseMasks(Processor):
         boxes2D = self.square(boxes2D)
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
-        poses6D, RGB_masks, cubes_points2D = [], [], []
-        for cropped_image, box2D in zip(cropped_images, boxes2D):
+        poses6D, points = [], []
+        for crop, box2D in zip(cropped_images, boxes2D):
             if box2D.class_name != '035_power_drill':
                 continue
-            keypoints = self.estimate_keypoints(cropped_image)
-            points3D, points2D, RGB_mask = self.unwrap(keypoints)
-            # Change keypoints coordinates
-            points2D = (2 * points2D / 128.0) - 1.0
-            x, y = np.split(points2D, 2, axis=1)
-            points2D = np.concatenate([x, -y], axis=1)
-            points2D = self.denormalize_keypoints(points2D, cropped_image)
+            points2D, points3D = self.unwrap(self.estimate_keypoints(crop))
+
+            points2D = normalize_points2D(points2D, 128.0, 128.0)
+            crop_H, crop_W = crop.shape[:2]
+            points2D = denormalize_points2D(points2D, crop_H, crop_W)
             points2D = self.change_coordinates(points2D, box2D)
-            # ----------------------------
 
-            rotation, translation = self.predict_pose(points3D, points2D)
-            # quaternion = rotation_matrix_to_quaternion(rotation)
-            # pose6D = Pose6D(quaternion, translation, box2D.class_name)
-            cube_points2D = project_to_image(
-                rotation, translation, self.cube_points3D,
-                self.camera.intrinsics)
-            cube_points2D = cube_points2D.astype(np.int32)
+            quaternion, translation = self.predict_pose(points3D, points2D)
+            pose6D = Pose6D(quaternion, translation, box2D.class_name)
 
-            # draw mask on image
+            poses6D.append(pose6D), points.append([points2D, points3D])
+
+        # draw boxes
+        new_boxes2D = []
+        for box2D in boxes2D:
+            if box2D.class_name == '035_power_drill':
+                new_boxes2D.append(box2D)
+        image = self.draw_boxes2D(image, new_boxes2D)
+
+        # draw masks
+        for points2D, points3D in points:
             object_sizes = np.array([0.184, 0.187, 0.052])
             colors = points3D / (object_sizes / 2.0)
             colors = (colors + 1.0) * 127.5
             colors = colors.astype('int')
-            print(colors.min(), colors.max())
-            draw_keypoints(image, points2D, colors, radius=3)
-            # -----------------------------------
-            poses6D.append(None), RGB_masks.append(RGB_mask)
-            cubes_points2D.append(cube_points2D)
+            draw_maski(image, points2D, colors)
 
-        image = self.draw_boxes2D(image, boxes2D)
-        # draw cube
+        # draw cubes
         image = image.astype(float)
-        for cube_points2D in cubes_points2D:
+        for pose6D in poses6D:
+            rotation = quaternion_to_rotation_matrix(pose6D.quaternion)
+            rotation = np.squeeze(rotation, axis=2)
+            cube_points2D = project_to_image(
+                rotation,
+                pose6D.translation,
+                self.cube_points3D,
+                self.camera.intrinsics)
+            cube_points2D = cube_points2D.astype(np.int32)
             image = draw_cube(image, cube_points2D)
         image = image.astype('uint8')
 
-        return self.wrap(image, boxes2D, RGB_masks, poses6D)
+        return self.wrap(image, boxes2D, poses6D)

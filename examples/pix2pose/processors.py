@@ -9,6 +9,7 @@ from backend import replace_lower_than_threshold
 from backend import arguments_to_image_points2D
 from backend import solve_PnP_RANSAC
 from backend import rotation_vector_to_rotation_matrix
+from backend import translate_points2D
 
 
 class ImageToClosedOneBall(Processor):
@@ -18,7 +19,7 @@ class ImageToClosedOneBall(Processor):
         super(ImageToClosedOneBall, self).__init__()
 
     def call(self, image):
-        return (image / 127.5) - 1
+        return (image / 127.5) - 1.0
 
 
 class ClosedOneBallToImage(Processor):
@@ -178,3 +179,22 @@ class RotationVectorToQuaternion(Processor):
     def call(self, rotation_vector):
         quaternion = rotation_vector_to_quaternion(rotation_vector)
         return quaternion
+
+
+class TranslatePoints2D(Processor):
+    def __init__(self):
+        super(TranslatePoints2D, self).__init__()
+
+    def call(points2D, image):
+        height, width = image.shape[:2]
+        translated_points2D = translate_points2D(points2D, (height, width))
+        return translated_points2D
+
+
+class FlipYAxisPoints2D(Processor):
+    def __init__(self):
+        super(FlipYAxisPoints2D, self).__init__()
+
+    def call(self, points2D, image):
+        height = image.shape[0]
+        translate_points2D(points2D, (0, height))

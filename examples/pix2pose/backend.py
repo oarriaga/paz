@@ -1,6 +1,8 @@
+from collections import Iterable
 import numpy as np
 from paz.backend.image.draw import GREEN
 from paz.backend.image import draw_line, draw_dot, draw_circle
+from paz.abstract import Pose6D
 import cv2
 
 
@@ -267,11 +269,14 @@ def draw_keypoints(image, keypoints, colors, radius):
     return image
 
 
-def draw_mask(image, keypoints, colors, radius):
+def draw_maski(image, keypoints, colors, radius=5):
     for keypoint, color in zip(keypoints, colors):
         R, G, B = color
         color = (int(R), int(G), int(B))
-        draw_circle(image, keypoint.astype('int'), color, radius)
+        x, y = keypoint
+        x = int(x)
+        y = int(y)
+        draw_dot(image, (x, y), color, radius)
     return image
 
 
@@ -291,3 +296,105 @@ def rotation_matrix_to_quaternion(rotation_matrix):
     qy = (m02 - m20) / (4.0 * qw)
     qz = (m10 - m01) / (4.0 * qw)
     return qx, qy, qz, qw
+
+
+def to_pose6D(quaternion, translation, class_name=None):
+    return Pose6D(quaternion, translation, class_name)
+
+
+class MultiList(Iterable):
+    def __init__(self, num_lists):
+        self.num_lists = num_lists
+        self.lists = [[] for list_arg in range(self.num_lists)]
+
+    def append(self, *args):
+        if len(args) != self.num_lists:
+            raise ValueError('Arguments should have equal lenght as num_lists')
+        for arg, arg_list in zip(args, self.lists):
+            arg_list.append(arg)
+
+    def __iter__(self):
+        return iter(self.lists)
+
+
+def draw_mask2(image, points3D, object_sizes):
+    if len(object_sizes) != 3:
+        raise ValueError('Object sizes must contain 3 values')
+    colors = points3D / (object_sizes / 2.0)
+    colors = (colors + 1.0) * 127.5
+    colors = colors.astype('int')
+    # draw_keypoints(image, points2D, colors, radius=3)
+
+
+def normalize_points2D(points2D, height, width):
+    """Transform points2D in image coordinates to normalized coordinates.
+
+    # Arguments
+        points2D: Numpy array of shape ``(num_keypoints, 2)``.
+        height: Int. Height of the image
+        width: Int. Width of the image
+
+    # Returns
+        Numpy array of shape ``(num_keypoints, 2)``.
+    """
+    image_shape = np.array([width, height])
+    points2D = points2D / image_shape  # [0, W], [0, H] -> [0,  1], [0,  1]
+    points2D = 2.0 * points2D          # [0, 1], [0, 1] -> [0,  2], [0,  2]
+    points2D = points2D - 1.0          # [0, 2], [0, 2] -> [-1, 1], [-1, 1]
+    return points2D
+
+
+def denormalize_points2D(points2D, height, width):
+    image_shape = np.array([width, height])
+    points2D = points2D + 1.0          # [-1, 1], [-1, 1] -> [0, 2], [0, 2]
+    points2D = points2D / 2.0          # [0 , 2], [0 , 2] -> [0, 1], [0, 1]
+    points2D = points2D * image_shape  # [0 , 1], [0 , 1] -> [0, W], [0, H]
+    return points2D
+
+
+def flip_y_axis(points2D):
+    x, y = np.split(points2D, 2, axis=1)
+    points2D = np.concatenate([x, -y], axis=1)
+    return points2D
+
+
+def denormalize_keypoints2(keypoints, height, width):
+    # [-1, 1] -> [-127.5, 127.5] -> [0, 255]
+    half_sizes = np.array([width, height]) / 2.0
+    return (half_sizes * keypoints) + half_sizes
+
+
+def translate_points2D(points2D, translation):
+    if len(points2D.shape) != 2:
+        raise ValueError('Invalid points2D shape')
+    if len(translation) != 2:
+        raise ValueError('Invalid translation lenght')
+    num_keypoints = len(points2D)
+    height, width = translation
+    x_translation = np.full((num_keypoints, 1), width)
+    y_translation = np.full((num_keypoints, 1), height)
+    translation = np.concatenate([x_translation, y_translation], axis=1)
+    translated_points2D = translation - points2D
+    return translated_points2D
+
+
+def denormalize_keypoints(keypoints, height, width):
+    """Transform normalized keypoint coordinates into image coordinates
+
+    # Arguments
+        keypoints: Numpy array of shape ``(num_keypoints, 2)``.
+        height: Int. Height of the image
+        width: Int. Width of the image
+
+    # Returns
+        Numpy array of shape ``(num_keypoints, 2)``.
+    """
+    for keypoint_arg, keypoint in enumerate(keypoints):
+        x, y = keypoint[:2]
+        # transform key-point coordinates to image coordinates
+        x = (min(max(x, -1), 1) * width / 2 + width / 2) - 0.5
+        # flip since the image coordinates for y are flipped
+        y = height - 0.5 - (min(max(y, -1), 1) * height / 2 + height / 2)
+        x, y = int(round(x)), int(round(y))
+        keypoints[keypoint_arg][:2] = [x, y]
+    return keypoints
