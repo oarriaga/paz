@@ -7,12 +7,13 @@ from processors import (
     GetNonZeroArguments, GetNonZeroValues, ArgumentsToImagePoints2D,
     ImageToClosedOneBall, Scale, SolveChangingObjectPnPRANSAC,
     ReplaceLowerThanThreshold)
-from backend import build_cube_points3D, project_to_image, draw_cube
+from backend import build_cube_points3D
 from processors import UnwrapDictionary, RotationVectorToQuaternion
 from processors import NormalizePoints2D
-from backend import quaternion_to_rotation_matrix, draw_maski
+from backend import draw_maski
 from backend import denormalize_points2D
 from backend import draw_poses6D
+from backend import draw_masks
 
 
 class DomainRandomization(SequentialProcessor):
@@ -83,13 +84,14 @@ class Pix2Pose(pr.Processor):
 
 class EstimatePoseMasks(Processor):
     def __init__(self, detect, estimate_keypoints, camera, offsets,
-                 class_to_dimensions, radius=3, thickness=1):
+                 class_to_dimensions, radius=3, thickness=1, draw=True):
         """Pose estimation pipeline using keypoints.
         """
         super(EstimatePoseMasks, self).__init__()
         self.detect = detect
-        self.camera = camera
         self.estimate_keypoints = estimate_keypoints
+        self.camera = camera
+        self.draw = draw
         self.postprocess_boxes = SequentialProcessor(
             [pr.UnpackDictionary(['boxes2D']),
              pr.FilterClassBoxes2D(['035_power_drill']),
@@ -116,17 +118,9 @@ class EstimatePoseMasks(Processor):
             quaternion, translation = self.predict_pose(points3D, points2D)
             pose6D = Pose6D(quaternion, translation, box2D.class_name)
             poses6D.append(pose6D), points.append([points2D, points3D])
-        image = self.draw_boxes2D(image, boxes2D)
-
-        # draw masks
-        for points2D, points3D in points:
-            object_sizes = np.array([0.184, 0.187, 0.052])
-            colors = points3D / (object_sizes / 2.0)
-            colors = (colors + 1.0) * 127.5
-            colors = colors.astype('int')
-            draw_maski(image, points2D, colors)
-
-        # draw cubes
-        image = draw_poses6D(
-            image, poses6D, self.cube_points3D, self.camera.intrinsics)
+        if self.draw:
+            image = self.draw_boxes2D(image, boxes2D)
+            image = draw_masks(image, points)
+            image = draw_poses6D(
+                image, poses6D, self.cube_points3D, self.camera.intrinsics)
         return self.wrap(image, boxes2D, poses6D)

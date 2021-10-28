@@ -270,7 +270,17 @@ def draw_keypoints(image, keypoints, colors, radius):
     return image
 
 
-def draw_maski(image, keypoints, colors, radius=5):
+def draw_masks(image, points):
+    for points2D, points3D in points:
+        object_sizes = np.array([0.184, 0.187, 0.052])
+        colors = points3D / (object_sizes / 2.0)
+        colors = (colors + 1.0) * 127.5
+        colors = colors.astype('int')
+        image = draw_maski(image, points2D, colors)
+    return image
+
+
+def draw_maski(image, keypoints, colors, radius=1):
     for keypoint, color in zip(keypoints, colors):
         R, G, B = color
         color = (int(R), int(G), int(B))
