@@ -10,6 +10,7 @@ from backend import arguments_to_image_points2D
 from backend import solve_PnP_RANSAC
 from backend import rotation_vector_to_rotation_matrix
 from backend import translate_points2D
+from backend import normalize_points2D
 
 
 class ImageToClosedOneBall(Processor):
@@ -198,3 +199,12 @@ class FlipYAxisPoints2D(Processor):
     def call(self, points2D, image):
         height = image.shape[0]
         translate_points2D(points2D, (0, height))
+
+
+class NormalizePoints2D(Processor):
+    def __init__(self, image_shape):
+        self.height, self.width = image_shape[:2]
+
+    def call(self, points2D):
+        points2D = normalize_points2D(points2D, self.height, self.width)
+        return points2D
