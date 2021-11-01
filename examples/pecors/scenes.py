@@ -275,7 +275,7 @@ class SingleView():
         self.mesh.rotation = mesh_rotation
         self.mesh.translation = mesh_translation
 
-        image_original, depth_original = self.renderer.render(self.scene, flags=pyrender.constants.RenderFlags.RGBA)
+        image_original, depth_original = self.renderer.render(self.scene, flags=pyrender.constants.RenderFlags.FLAT)
         image_original, alpha_original = split_alpha_channel(image_original)
 
         top_point_3d = quarternion_to_rotation_matrix(mesh_rotation)@(self.mesh.mesh.centroid + np.array([0, self.mesh.mesh.extents[1] / 2, 0])) + mesh_translation
@@ -366,15 +366,15 @@ class SingleView():
         # Add the mesh and color it
         self.scene.remove_node(self.mesh)
         loaded_trimesh = trimesh.load(self.path)
-        self.color_mesh(loaded_trimesh)
+        #self.color_mesh(loaded_trimesh)
         self.mesh = self.scene.add(Mesh.from_trimesh(loaded_trimesh, smooth=True))
 
         # Set the mesh rotation and translation
         self.mesh.rotation = mesh_rotation
         self.mesh.translation = mesh_translation
 
-        image_original, depth_original = self.renderer.render(self.scene, flags=pyrender.constants.RenderFlags.FLAT)
-        #image_original, alpha_original = split_alpha_channel(image_original)
+        image_original, depth_original = self.renderer.render(self.scene, flags=pyrender.constants.RenderFlags.RGBA)
+        image_original, alpha_original = split_alpha_channel(image_original)
 
         top_point_3d = quarternion_to_rotation_matrix(mesh_rotation)@(self.mesh.mesh.centroid + np.array([0, self.mesh.mesh.extents[1] / 2, 0])) + mesh_translation
         top_point_3d = np.concatenate((top_point_3d, np.array([1])))
@@ -446,6 +446,21 @@ if __name__ == "__main__":
     image_original, alpha_original, image_circle, image_depth = renderer.render_full_object()
 
     plt.imshow(image_original)
+    plt.gca().get_xaxis().set_visible(False)
+    plt.gca().get_yaxis().set_visible(False)
+    plt.savefig("/home/fabian/Uni/masterarbeit/Thesis/images/pecors03.png", bbox_inches='tight', pad_inches=0)
+    plt.show()
+
+    plt.imshow(image_circle)
+    plt.gca().get_xaxis().set_visible(False)
+    plt.gca().get_yaxis().set_visible(False)
+    plt.savefig("/home/fabian/Uni/masterarbeit/Thesis/images/pecors04.png", bbox_inches='tight', pad_inches=0)
+    plt.show()
+
+    plt.imshow(image_depth)
+    plt.gca().get_xaxis().set_visible(False)
+    plt.gca().get_yaxis().set_visible(False)
+    plt.savefig("/home/fabian/Uni/masterarbeit/Thesis/images/pecors05.png", bbox_inches='tight', pad_inches=0)
     plt.show()
     
     """

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
-def plot_colored_sphere(num_points=80):
+def plot_colored_sphere(num_points=200):
     range_phi = np.linspace(0, np.pi, num_points)
     range_psi = np.linspace(0, 2*np.pi, num_points)
 
@@ -27,6 +27,9 @@ def plot_colored_sphere(num_points=80):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(xs, ys, zs, c=np.column_stack((xs, ys, zs)))
+    ax.set_xlabel("Normalized x-coordinate")
+    ax.set_ylabel("Normalized y-coordinate")
+    ax.set_zlabel("Normalized z-coordinate")
     plt.show()
 
 
