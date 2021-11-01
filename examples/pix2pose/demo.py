@@ -16,14 +16,12 @@ model.load_weights('UNET_weights_epochs-10_beta-3.hdf5')
 
 # approximating intrinsic camera parameters
 camera = Camera(device_id=4)
-camera.start()
-image_size = camera.read().shape[0:2]
-camera.stop()
+# camera.start()
+# image_size = camera.read().shape[0:2]
+# camera.stop()
 
-"""
 image = load_image('test_image.jpg')
 image_size = image.shape[0:2]
-"""
 focal_length = image_size[1]
 image_center = (image_size[1] / 2.0, image_size[0] / 2.0)
 camera.distortion = np.zeros((4))
@@ -37,10 +35,12 @@ offsets = [0.1, 0.1]
 estimate_keypoints = Pix2Pose(model, object_sizes)
 pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets, None)
 
-# results = pipeline(image)
-# predicted_image = results['image']
-# show_image(predicted_image)
+results = pipeline(image)
+predicted_image = results['image']
+show_image(predicted_image)
 
+"""
 image_size = (640, 480)
 player = VideoPlayer(image_size, pipeline, camera)
 player.run()
+"""

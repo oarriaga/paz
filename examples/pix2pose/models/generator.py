@@ -53,22 +53,24 @@ def decoder(x, skip_connections):
 
 def Generator(input_shape=(128, 128, 3), latent_dimension=256,
               name='PIX2POSE_GENERATOR'):
-    input_image = Input(input_shape, name='input_image')
-    x, skip_connections = encoder(input_image)
+    RGB_input = Input(input_shape, name='RGB_input')
+    x, skip_connections = encoder(RGB_input)
     x = Flatten()(x)
     x = Dense(latent_dimension)(x)
     x = Dense(8 * 8 * latent_dimension)(x)
     x = Reshape((8, 8, latent_dimension))(x)
     x = decoder(x, skip_connections)
-    label_image = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(x)
-    label_image = Activation('tanh', name='label_image')(label_image)
-    error_image = Conv2DTranspose(1, (5, 5), (2, 2), padding='same')(x)
-    error_image = Activation('sigmoid', name='error_image')(error_image)
-    model = Model([input_image], [label_image, error_image], name=name)
+    RGB = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(x)
+    RGB = Activation('tanh', name='RGB')(RGB)
+    error = Conv2DTranspose(1, (5, 5), (2, 2), padding='same')(x)
+    error = Activation('sigmoid', name='error')(error)
+    RGB_with_error = Concatenate(axis=-1, name='RGB_with_error')([RGB, error])
+    model = Model(RGB_input, RGB_with_error, name=name)
     return model
 
 
 model = Generator()
 assert model.count_params() == 25740356
-assert model.output_shape == [(None, 128, 128, 3), (None, 128, 128, 1)]
+# assert model.output_shape == [(None, 128, 128, 3), (None, 128, 128, 1)]
+assert model.output_shape == (None, 128, 128, 4)
 assert model.input_shape == (None, 128, 128, 3)

@@ -19,7 +19,8 @@ from backend import draw_masks
 class DomainRandomization(SequentialProcessor):
     """Performs domain randomization on a rendered image
     """
-    def __init__(self, renderer, image_shape, image_paths, num_occlusions=1):
+    def __init__(self, renderer, image_shape, image_paths, inputs_to_shape,
+                 labels_to_shape, num_occlusions=1):
         super(DomainRandomization, self).__init__()
         H, W = image_shape[:2]
         self.add(pr.Render(renderer))
@@ -27,8 +28,12 @@ class DomainRandomization(SequentialProcessor):
         self.add(pr.ControlMap(pr.NormalizeImage(), [0], [0]))
         # self.add(pr.ControlMap(ImageToClosedOneBall(), [1], [1]))
         self.add(pr.ControlMap(pr.NormalizeImage(), [1], [1]))
+        """
         self.add(pr.SequenceWrapper({0: {'input_1': [H, W, 3]}},
                                     {1: {'masks': [H, W, 4]}}))
+        """
+        self.add(pr.SequenceWrapper({0: inputs_to_shape},
+                                    {1: labels_to_shape}))
 
 
 class PredictRGBMask(SequentialProcessor):
