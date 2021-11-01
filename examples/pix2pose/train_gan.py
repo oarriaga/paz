@@ -4,14 +4,17 @@ from tensorflow.keras.optimizers import Adam
 from paz.abstract import GeneratingSequence
 from paz.models.segmentation import UNET_VGG16
 from models.generator import Generator
-from paz.backend.image import show_image, resize_image
-import numpy as np
+# from paz.backend.image import show_image, resize_image
+# import numpy as np
 
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
 from loss import WeightedReconstruction
 from loss import WeightedReconstructionWithError
-from metrics import error_prediction, weighted_reconstruction
+# from metrics import error_prediction, weighted_reconstruction
+# from metrics import weighted_reconstruction_with_error
+from metrics import mean_squared_error, error_prediction
+from metrics import weighted_reconstruction_wrapper
 # from models.fully_convolutional_net import FullyConvolutionalNet
 
 H, W, num_channels = image_shape = [128, 128, 3]
@@ -58,17 +61,18 @@ if model_name == 'UNET_VGG16':
     loss = WeightedReconstruction(beta)
     inputs_to_shape = {'input_1': [H, W, num_channels]}
     labels_to_shape = {'masks': [H, W, 4]}
-    metrics = weighted_reconstruction
+    weighted_reconstruction = weighted_reconstruction_wrapper(beta, False)
+    metrics = {'masks': [weighted_reconstruction, mean_squared_error]}
 if model_name == 'PIX2POSE':
     model = Generator(image_shape, latent_dimension)
     reconstruction_loss = WeightedReconstructionWithError(beta)
-    # error_prediction_loss = ErrorPrediction()
-    # loss = {'RGB_with_error': [reconstruction_loss, error_prediction_loss]}
     loss = WeightedReconstructionWithError()
     H, W, num_channels = image_shape
     inputs_to_shape = {'RGB_input': [H, W, num_channels]}
     labels_to_shape = {'RGB_with_error': [H, W, 4]}
-    metrics = {'RGB_with_error': [weighted_reconstruction, error_prediction]}
+    weighted_reconstruction = weighted_reconstruction_wrapper(beta, True)
+    metrics = {'RGB_with_error':
+               [weighted_reconstruction, error_prediction, mean_squared_error]}
 
 
 processor = DomainRandomization(
@@ -79,12 +83,6 @@ sequence = GeneratingSequence(processor, batch_size, num_steps)
 
 optimizer = Adam(learning_rate)
 
-# inputs, labels = sequence.__getitem__(0)
-# preds = model(inputs)
-# error_prediction = ErrorPrediction()
-# losses = error_prediction(preds, labels['RGB_with_error'])
-
-# model.compile(optimizer, loss, metrics=mean_squared_error)
 model.compile(optimizer, loss, metrics)
 
 model.fit(
