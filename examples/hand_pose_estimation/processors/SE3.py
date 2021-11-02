@@ -1,7 +1,6 @@
 import numpy as np
 
 from paz.abstract import Processor
-from paz.backend.boxes import to_one_hot
 from ..backend.SE3 import rotation_from_axis_angles
 from ..backend.keypoints import flip_right_hand
 from ..backend.keypoints import get_canonical_transformations
@@ -21,16 +20,6 @@ class TransformKeypoints(Processor):
         keypoints_2D = transform_cropped_keypoints(cropped_keypoints, centers,
                                                    scale, crop_size)
         return keypoints_2D
-
-
-class ToOneHot(Processor):
-    """Extract Hand mask."""
-    def __init__(self, num_classes=2):
-        super(ToOneHot, self).__init__()
-        self.num_classes = num_classes
-
-    def call(self, class_indices):
-        return to_one_hot(class_indices, self.num_classes)
 
 
 class KeypointstoPalmFrame(Processor):

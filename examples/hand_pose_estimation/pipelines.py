@@ -2,22 +2,22 @@ import numpy as np
 from paz import processors as pr
 
 from paz.abstract import SequentialProcessor, Processor
-from processors.keypoints import AdjustCropSize, CropImage
-from processors.keypoints import CreateScoremaps, ExtractBoundingbox
-from processors.keypoints import Extract2DKeypoints, ExtractHandSide, FlipRightHand
-from processors.keypoints import ExtractDominantKeypoint, CropImageFromMask
-from processors.keypoints import ExtractHandmask, ExtractKeypoints
-from processors.keypoints import ExtractDominantHandVisibility
-from processors.keypoints import Resize_image
-from processors.keypoints import NormalizeKeypoints
+from processors import AdjustCropSize, CropImage
+from processors import CreateScoremaps, ExtractBoundingbox
+from processors import Extract2DKeypoints, ExtractHandSide, FlipRightHand
+from processors import ExtractDominantKeypoint, CropImageFromMask
+from processors import ExtractHandmask, ExtractKeypoints
+from processors import ExtractDominantHandVisibility
+from processors import Resize_image
+from processors import NormalizeKeypoints
 
-from processors.SE3 import CanonicaltoRelativeFrame, KeypointstoPalmFrame
-from processors.SE3 import MatrixInverse, RotationMatrixfromAxisAngles
-from processors.SE3 import TransformVisibilityMask, TransformtoRelativeFrame
-from processors.SE3 import GetCanonicalTransformation, TransformKeypoints
-from processors.SE3 import ToOneHot
+from processors import CanonicaltoRelativeFrame, KeypointstoPalmFrame
+from processors import MatrixInverse, RotationMatrixfromAxisAngles
+from processors import TransformVisibilityMask, TransformtoRelativeFrame
+from processors import GetCanonicalTransformation, TransformKeypoints
+from processors import ToOneHot
 
-from processors.standard import MergeDictionaries
+from processors import MergeDictionaries
 
 from layer import SegmentationDilation
 

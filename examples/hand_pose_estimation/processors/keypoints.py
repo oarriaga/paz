@@ -12,6 +12,7 @@ from ..backend.keypoints import extract_dominant_keypoints2D, flip_right_hand
 from ..backend.keypoints import get_hand_side_and_keypooints
 from ..backend.keypoints import normalize_keypoints
 
+
 class ExtractHandmask(Processor):
     """Extract Hand mask."""
 
@@ -112,6 +113,7 @@ class CreateScoremaps(Processor):
 
 class Extract2DKeypoints(Processor):
     """ Extract the keyppoints based on the visibility of the hand"""
+
     def __init__(self):
         super(Extract2DKeypoints, self).__init__()
 
@@ -121,6 +123,7 @@ class Extract2DKeypoints(Processor):
 
 class ExtractBoundingbox(Processor):
     """ Extract bounding box when provided with a binary mask"""
+
     def __init__(self):
         super(ExtractBoundingbox, self).__init__()
 
@@ -130,6 +133,7 @@ class ExtractBoundingbox(Processor):
 
 class AdjustCropSize(Processor):
     """ Adjust the crop size with a buffer of scale 0.25 added"""
+
     def __init__(self, crop_size=256):
         super(AdjustCropSize, self).__init__()
         self.crop_size = crop_size
@@ -145,6 +149,7 @@ class AdjustCropSize(Processor):
 class CropImage(Processor):
     """ Crop the input image provided the location, output image size and the
     scaling of the output image"""
+
     def __init__(self, crop_size=256):
         super(CropImage, self).__init__()
         self.crop_size = crop_size
@@ -156,6 +161,7 @@ class CropImage(Processor):
 
 class ExtractKeypoints(Processor):
     """ Extract keypoints when provided with a predicted scoremap"""
+
     def __init__(self):
         super(ExtractKeypoints, self).__init__()
 
@@ -165,6 +171,7 @@ class ExtractKeypoints(Processor):
 
 class Resize_image(Processor):
     """ Resize images. Done with tensorflow"""
+
     def __init__(self, size=[256, 256]):
         super(Resize_image, self).__init__()
         self.size = size
@@ -176,6 +183,7 @@ class Resize_image(Processor):
 class FindMaxLocation(Processor):
     """ Find the brightest point in the score map, which is represented as a
     keypoint"""
+
     def __init__(self):
         super(FindMaxLocation, self).__init__()
 
