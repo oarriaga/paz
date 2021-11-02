@@ -1,11 +1,10 @@
 import numpy as np
 import tensorflow as tf
 
-from SE3 import to_homogeneous_coordinates, build_translation_matrix_SE3
-from SE3 import build_rotation_matrix_x, build_rotation_matrix_y
-from SE3 import build_rotation_matrix_z, build_affine_matrix
-
-
+from ..backend.SE3 import to_homogeneous_coordinates
+from ..backend.SE3 import build_translation_matrix_SE3
+from ..backend.SE3 import build_rotation_matrix_x, build_rotation_matrix_y
+from ..backend.SE3 import build_rotation_matrix_z, build_affine_matrix
 
 kinematic_chain_dict = {0: 'root',
                         4: 'root', 3: 4, 2: 3, 1: 2,
@@ -754,6 +753,7 @@ def detect_keypoints(scoremaps):
         keypoint2D[keypoint_arg, 1] = coordinates[0]
     return keypoint2D
 
+
 def transform_visibility_mask(visibility_mask):
     """ Data Pre-processing step: Transform Visibility mask to palm coordinates
     from wrist coordinates.
@@ -1145,7 +1145,7 @@ def get_transformation_parameters(keypoint3D, transformation_matrix):
     rotation_angle_y = get_y_axis_rotated_keypoints(keypoint3D)
 
     keypoint3D_rotated_x, rotation_angle_x = get_x_axis_rotated_keypoints(
-        keypoint3D_rotated_y, length_from_origin, affine_matrix) # Change
+        keypoint3D_rotated_y, length_from_origin, affine_matrix)  # Change
     # function to appropriate name
 
     rotated_keypoints = np.matmul(
