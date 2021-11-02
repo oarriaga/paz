@@ -115,7 +115,10 @@ for num_epoch in range(args.max_num_epochs):
 
         # Train the generator
         discriminator.trainable = False
-        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'], {"color_output": batch[1]['color_output'], "error_output": batch[1]['error_output'], "discriminator_output": np.ones((args.batch_size, 1))})
+        loss_dcgan, loss_color_output, loss_dcgan_discriminator, loss_error_output = dcgan.train_on_batch(batch[0]['input_image'],
+                {"color_output": batch[1]['color_output'],
+                 "error_output": batch[1]['error_output'],
+                 "discriminator_output": np.ones((args.batch_size, 1))})
 
         # Test the network
         batch_test = next(sequence_iterator_test)

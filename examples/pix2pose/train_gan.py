@@ -4,6 +4,9 @@ from tensorflow.keras.optimizers import Adam
 from paz.abstract import GeneratingSequence
 from paz.models.segmentation import UNET_VGG16
 from models.generator import Generator
+from models.discriminator import Discriminator
+from models.pix2pose import Pix2Pose
+from tensorflow.keras.losses import BinaryCrossentropy
 # from paz.backend.image import show_image, resize_image
 # import numpy as np
 
@@ -40,9 +43,10 @@ filters = 16
 num_classes = 3
 learning_rate = 0.001
 # steps_per_epoch
-model_names = ['PIX2POSE', 'UNET_VGG16']
-model_name = 'UNET_VGG16'
-# model_name = 'PIX2POSE'
+model_names = ['PIX2POSE', 'PIX2POSE_GENERATOR', 'UNET_VGG16']
+# model_name = 'UNET_VGG16'
+# model_name = 'PIX2POSE_GENERATOR'
+model_name = 'PIX2POSE'
 max_num_epochs = 1
 latent_dimension = 128
 beta = 3.0
@@ -63,7 +67,9 @@ if model_name == 'UNET_VGG16':
     labels_to_shape = {'masks': [H, W, 4]}
     weighted_reconstruction = weighted_reconstruction_wrapper(beta, False)
     metrics = {'masks': [weighted_reconstruction, mean_squared_error]}
-if model_name == 'PIX2POSE':
+    optimizer = Adam(learning_rate)
+    model.compile(optimizer, loss, metrics)
+if model_name == 'PIX2POSE_GENERATOR':
     model = Generator(image_shape, latent_dimension)
     reconstruction_loss = WeightedReconstructionWithError(beta)
     loss = WeightedReconstructionWithError()
@@ -73,17 +79,29 @@ if model_name == 'PIX2POSE':
     weighted_reconstruction = weighted_reconstruction_wrapper(beta, True)
     metrics = {'RGB_with_error':
                [weighted_reconstruction, error_prediction, mean_squared_error]}
-
+    optimizer = Adam(learning_rate)
+    model.compile(optimizer, loss, metrics)
+if model_name == 'PIX2POSE':
+    discriminator = Discriminator(image_shape)
+    generator = Generator(image_shape, latent_dimension)
+    model = Pix2Pose(image_shape, discriminator, generator, latent_dimension)
+    # reconstruction_loss = WeightedReconstructionWithError(beta)
+    # loss = WeightedReconstructionWithError()
+    H, W, num_channels = image_shape
+    inputs_to_shape = {'RGB_input': [H, W, num_channels]}
+    labels_to_shape = {'RGB_with_error': [H, W, 4]}
+    # weighted_reconstruction = weighted_reconstruction_wrapper(beta, True)
+    # metrics = {'RGB_with_error':
+    #           [weighted_reconstruction,error_prediction, mean_squared_error]}
+    optimizer_D = Adam(learning_rate)
+    optimizer_G = Adam(learning_rate)
+    model.compile(optimizer_D, optimizer_G, BinaryCrossentropy())
 
 processor = DomainRandomization(
     renderer, image_shape, image_paths, inputs_to_shape,
     labels_to_shape, num_occlusions)
 
 sequence = GeneratingSequence(processor, batch_size, num_steps)
-
-optimizer = Adam(learning_rate)
-
-model.compile(optimizer, loss, metrics)
 
 model.fit(
     sequence,
