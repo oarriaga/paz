@@ -2,6 +2,7 @@ import glob
 import os
 import numpy as np
 import random
+import gzip
 
 from paz.abstract import Processor, SequentialProcessor
 from paz.pipelines import RandomizeRenderedImage
@@ -25,13 +26,19 @@ class GeneratedImageProcessor(Processor):
         # Load all images into memory to save time
         self.images_original = [np.load(os.path.join(path_images, "image_original/image_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
         self.alpha_original = [np.load(os.path.join(path_images, "alpha_original/alpha_original_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
-        self.epos_output = [np.load(os.path.join(path_images, "epos_output/epos_output_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+
+	# Just load the paths for the epos outputs because the uncompressed npy.gz files are to big (~3 or 4 MB)
+        #self.epos_output = [np.load(os.path.join(path_images, "epos_output/epos_output_{}.npy".format(str(i).zfill(7)))) for i in range(self.num_images)]
+	self.epos_output_path = [os.path.join(path_images, "epos_output/epos_output_{}.npy.gz".format(str(i).zfill(7))) for i in range(self.num_images)]
 
     def call(self):
         index = random.randint(0, self.num_images-1)
         image_original = self.images_original[index]
-        epos_output = self.epos_output[index]
+        epos_output_path = self.epos_output_path[index]
         alpha_original = self.alpha_original[index]
+
+	f = gzip.GzipFile(epos_output_path, "r")
+	epos_output = np.load(f)
 
         if self.split == pr.TRAIN:
             image_original = self.augment(image_original, alpha_original)
