@@ -1,5 +1,5 @@
 from paz.abstract import Processor
-from ..backend.standard import wrap_dictionary, merge_dictionaries
+from backend_standard import wrap_dictionary, merge_dictionaries
 from paz.backend.boxes import to_one_hot
 
 

@@ -1,10 +1,10 @@
 import numpy as np
 import tensorflow as tf
 
-from ..backend.SE3 import to_homogeneous_coordinates
-from ..backend.SE3 import build_translation_matrix_SE3
-from ..backend.SE3 import build_rotation_matrix_x, build_rotation_matrix_y
-from ..backend.SE3 import build_rotation_matrix_z, build_affine_matrix
+from backend_SE3 import to_homogeneous_coordinates
+from backend_SE3 import build_translation_matrix_SE3
+from backend_SE3 import build_rotation_matrix_x, build_rotation_matrix_y
+from backend_SE3 import build_rotation_matrix_z, build_affine_matrix
 
 kinematic_chain_dict = {0: 'root',
                         4: 'root', 3: 4, 2: 3, 1: 2,

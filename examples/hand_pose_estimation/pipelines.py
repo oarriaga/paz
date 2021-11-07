@@ -2,22 +2,21 @@ import numpy as np
 from paz import processors as pr
 
 from paz.abstract import SequentialProcessor, Processor
-from processors import AdjustCropSize, CropImage
-from processors import CreateScoremaps, ExtractBoundingbox
-from processors import Extract2DKeypoints, ExtractHandSide, FlipRightHand
-from processors import ExtractDominantKeypoint, CropImageFromMask
-from processors import ExtractHandmask, ExtractKeypoints
-from processors import ExtractDominantHandVisibility
-from processors import Resize_image
-from processors import NormalizeKeypoints
+from processors_keypoints import AdjustCropSize, CropImage
+from processors_keypoints import CreateScoremaps, ExtractBoundingbox
+from processors_keypoints import Extract2DKeypoints, ExtractHandSide, FlipRightHand
+from processors_keypoints import ExtractDominantKeypoint, CropImageFromMask
+from processors_keypoints import ExtractHandmask, ExtractKeypoints
+from processors_keypoints import ExtractDominantHandVisibility
+from processors_keypoints import Resize_image
+from processors_keypoints import NormalizeKeypoints
 
-from processors import CanonicaltoRelativeFrame, KeypointstoPalmFrame
-from processors import MatrixInverse, RotationMatrixfromAxisAngles
-from processors import TransformVisibilityMask, TransformtoRelativeFrame
-from processors import GetCanonicalTransformation, TransformKeypoints
-from processors import ToOneHot
+from processors_SE3 import CanonicaltoRelativeFrame, KeypointstoPalmFrame
+from processors_SE3 import MatrixInverse, RotationMatrixfromAxisAngles
+from processors_SE3 import TransformVisibilityMask, TransformtoRelativeFrame
+from processors_SE3 import GetCanonicalTransformation, TransformKeypoints
 
-from processors import MergeDictionaries
+from processors_standard import MergeDictionaries, ToOneHot
 
 from layer import SegmentationDilation
 
@@ -64,7 +63,7 @@ class GetHandPose2D(Processor): # Extract
 
         self.extract_visibility_dominant_hand = ExtractDominantHandVisibility()
         self.create_scoremaps = CreateScoremaps(
-            image_size=image_size, crop_size=crop_size, variance=variance)
+            image_size, crop_size, variance)
         self.crop_image_from_mask = CropImageFromMask()
         self.wrap = pr.WrapOutput(
             ['cropped_image', 'score_maps', 'keypoints_vis21'])
@@ -247,7 +246,8 @@ class PostProcessSegmentation(Processor):
             dilated_segmentation_map)
         crop_size = self.adjust_crop_size(crop_size)
         cropped_image = self.crop_image(image, center, crop_size)
-        return cropped_image, center, crop_size
+
+        return cropped_image, dilated_segmentation_map, center, bounding_box, crop_size
 
 
 class DetectHandKeypoints(Processor):

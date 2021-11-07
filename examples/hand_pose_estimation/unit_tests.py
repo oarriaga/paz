@@ -1,17 +1,15 @@
-from backend import normalize_keypoints
-from backend import to_homogeneous_coordinates, build_translation_matrix_SE3
-from backend import build_rotation_matrix_x, build_rotation_matrix_y
-from backend import build_rotation_matrix_z, build_affine_matrix
-from backend import get_canonical_transformations, get_hand_side_and_keypooints
-from backend import keypoints_to_palm_coordinates
-from backend import LEFT_ROOT_KEYPOINT_ID, LEFT_ALIGNED_KEYPOINT_ID
-from backend import LEFT_LAST_KEYPOINT_ID, RIGHT_ROOT_KEYPOINT_ID
-from backend import RIGHT_ALIGNED_KEYPOINT_ID, RIGHT_LAST_KEYPOINT_ID
-from backend import build_affine_matrix
-
-from paz.backend.boxes import to_one_hot
-
+from backend_SE3 import build_rotation_matrix_x, build_rotation_matrix_y
+from backend_SE3 import build_rotation_matrix_z, build_affine_matrix
+from backend_SE3 import rotation_from_axis_angles
+from backend_SE3 import to_homogeneous_coordinates, build_translation_matrix_SE3
+from backend_keypoints import get_canonical_transformations
+from backend_keypoints import get_hand_side_and_keypooints
+from backend_keypoints import keypoints_to_palm_coordinates
+from backend_keypoints import normalize_keypoints
+from hand_keypoints_loader import LEFT_ROOT_KEYPOINT_ID
+from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import RenderedHandLoader
+from paz.backend.boxes import to_one_hot
 
 data_loader = RenderedHandLoader(
     '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/')
@@ -19,11 +17,11 @@ data_loader = RenderedHandLoader(
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
 import numpy as np
-from pipelines import preprocess_image, PostprocessSegmentation, \
+from pipelines import PreprocessImage, PostprocessSegmentation, \
     Process2DKeypoints
 from paz.backend.image.opencv_image import load_image
-from backend import create_multiple_gaussian_map
-from processors import ExtractKeypoints
+from backend_keypoints import create_multiple_gaussian_map
+from processors_keypoints import ExtractKeypoints
 
 np.random.seed(0)
 
@@ -135,6 +133,20 @@ def test_rotation_matrix_z():
            rotation_matrix.round().all()
 
 
+def test_rotation_matrix_axis_angles():
+    rotation_matrix_test = np.array([[0.8660254, -0.5000000, 0.0000000],
+                                     [0.5000000, 0.8660254, 0.0000000],
+                                     [0.0000000, 0.0000000, 1.0000000]])
+    rotation_matrix = rotation_from_axis_angles(np.deg2rad([15, 30, 30]))
+    print(rotation_matrix)
+    assert rotation_matrix.shape == rotation_matrix_test.shape
+    assert np.round(np.linalg.det(rotation_matrix)) == 1.0
+    assert np.round(np.linalg.inv(rotation_matrix)).all() == \
+           np.round(np.transpose(rotation_matrix)).all()
+    assert rotation_matrix_test.round().all() == \
+           rotation_matrix.round().all()
+
+
 def test_get_affine_matrix():
     rotation_matrix = build_rotation_matrix_x(np.deg2rad(30))
     affine_rotation_matrix = build_affine_matrix(rotation_matrix)
@@ -166,7 +178,7 @@ def test_canonical_transformations(label_path):
 
 
 def test_preprocess_image():
-    preprocess_pipeline = preprocess_image()
+    preprocess_pipeline = PreprocessImage()
     image = load_image('./sample.jpg')
     processed_image = preprocess_pipeline(image)
 
@@ -175,7 +187,7 @@ def test_preprocess_image():
 
 
 def test_segmentation_postprocess():
-    preprocess_pipeline = preprocess_image()
+    preprocess_pipeline = PreprocessImage()
     image = load_image('./sample.jpg')
     processed_image = preprocess_pipeline(image)
 
@@ -191,7 +203,7 @@ def test_segmentation_postprocess():
 
 
 def test_keypoints2D_process():
-    preprocess_pipeline = preprocess_image()
+    preprocess_pipeline = PreprocessImage()
     image = load_image('./sample.jpg')
     processed_image = preprocess_pipeline(image)
 
@@ -212,7 +224,7 @@ def test_extract_keypoints2D():
     uv_coordinates = np.expand_dims(uv_coordinates, axis=0)
 
     gaussian_maps = create_multiple_gaussian_map(uv_coordinates, (256, 256),
-                                                 sigma=0.1, valid_vec=None)
+                                                 sigma=0.1, validity_mask=None)
     gaussian_maps = np.expand_dims(gaussian_maps, axis=0)
     keypoints_extraction_pipeline = ExtractKeypoints()
     keypoints2D = keypoints_extraction_pipeline(gaussian_maps)

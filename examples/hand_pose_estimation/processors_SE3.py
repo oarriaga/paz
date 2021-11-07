@@ -1,13 +1,13 @@
 import numpy as np
 
 from paz.abstract import Processor
-from ..backend.SE3 import rotation_from_axis_angles
-from ..backend.keypoints import flip_right_hand
-from ..backend.keypoints import get_canonical_transformations
-from ..backend.keypoints import keypoint_to_root_frame
-from ..backend.keypoints import keypoints_to_palm_coordinates
-from ..backend.keypoints import transform_cropped_keypoints
-from ..backend.keypoints import transform_visibility_mask
+from backend_SE3 import rotation_from_axis_angles
+from backend_keypoints import flip_right_hand
+from backend_keypoints import get_canonical_transformations
+from backend_keypoints import keypoint_to_root_frame
+from backend_keypoints import keypoints_to_palm_coordinates
+from backend_keypoints import transform_cropped_keypoints
+from backend_keypoints import transform_visibility_mask
 
 
 class TransformKeypoints(Processor):

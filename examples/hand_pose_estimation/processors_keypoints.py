@@ -3,14 +3,14 @@ import numpy as np
 from paz.abstract import Processor
 from paz.backend.image.tensorflow_image import resize
 
-from ..backend.keypoints import create_score_maps, extract_2D_keypoints
-from ..backend.keypoints import crop_image_from_coordinates, detect_keypoints
-from ..backend.keypoints import crop_image_using_mask, extract_hand_segment
-from ..backend.keypoints import extract_bounding_box, find_max_location
-from ..backend.keypoints import extract_dominant_hand_visibility
-from ..backend.keypoints import extract_dominant_keypoints2D, flip_right_hand
-from ..backend.keypoints import get_hand_side_and_keypooints
-from ..backend.keypoints import normalize_keypoints
+from backend_keypoints import create_score_maps, extract_2D_keypoints
+from backend_keypoints import crop_image_from_coordinates, detect_keypoints
+from backend_keypoints import crop_image_using_mask, extract_hand_segment
+from backend_keypoints import extract_bounding_box, find_max_location
+from backend_keypoints import extract_dominant_hand_visibility
+from backend_keypoints import extract_dominant_keypoints2D, flip_right_hand
+from backend_keypoints import get_hand_side_and_keypooints
+from backend_keypoints import normalize_keypoints
 
 
 class ExtractHandmask(Processor):

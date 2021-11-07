@@ -114,16 +114,16 @@ def get_axis_coordinates(axis_angles, theta, is_normalized):
     # Returns:
         ux, uy, uz: Float values.
     """
-    ux = axis_angles[:, 0]
-    uy = axis_angles[:, 1]
-    uz = axis_angles[:, 2]
+    axis_coordinates_x = axis_angles[:, 0]
+    axis_coordinates_y = axis_angles[:, 1]
+    axis_coordinates_z = axis_angles[:, 2]
 
     if not is_normalized:
         normalization_factor = 1.0 / theta
-        ux = ux * normalization_factor
-        uy = uy * normalization_factor
-        uz = uz * normalization_factor
-    return ux, uy, uz
+        axis_coordinates_x = axis_coordinates_x * normalization_factor
+        axis_coordinates_y = axis_coordinates_y * normalization_factor
+        axis_coordinates_z = axis_coordinates_z * normalization_factor
+    return axis_coordinates_x, axis_coordinates_y, axis_coordinates_z
 
 
 def get_rotation_matrix_elements(axis_coordinates, theta):
