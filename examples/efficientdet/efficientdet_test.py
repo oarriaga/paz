@@ -1,6 +1,5 @@
 import tensorflow as tf
 from efficientnet_model import EfficientNet
-from efficientnet_builder import get_efficientnet_model
 from efficientdet import EFFICIENTDETD0
 from examples.efficientdet.efficientdet_blocks import FeatureNode
 
@@ -31,31 +30,29 @@ def test_efficientdet_model():
 
 
 def test_efficientnet_model():
-    backbone = get_efficientnet_model('efficientnet-b0')
     image_size = 512
     images = get_test_images(image_size)
-    features = backbone(images, False)
-    assert len(features) == 6, 'EfficientNet model features length mismatch'
+    features = EfficientNet(images, 'efficientnet-b0', (512, 512, 3))
+    assert len(features) == 5, 'EfficientNet model features length mismatch'
 
 
 def test_efficientnet_bottleneck_block():
     images = get_test_images(128, 10)
-    backbone = EfficientNet(
-        1., 1., 1., 'efficientnet-b0', strides=[[2, 2]], kernel_sizes=[3],
-        num_repeats=[3], num_classes=10, input_filters=[3], output_filters=[6],
-        expand_ratios=[6])
-    output_shape = backbone(images, False)[0].shape
+    output_shape = EfficientNet(
+        images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
+        kernel_sizes=[3], num_repeats=[3], input_filters=[3],
+        output_filters=[6], expand_ratios=[6])[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
 def test_efficientnet_se_block():
     images = get_test_images(128, 10)
-    backbone = EfficientNet(
-        1., 1., 1., 'efficientnet-b0', strides=[[2, 2]], kernel_sizes=[3],
-        num_repeats=[3], num_classes=10, input_filters=[3], output_filters=[6],
-        expand_ratios=[6], squeeze_excite_ratio=0.8)
-    output_shape = backbone(images, False)[0].shape
+    output_shape = EfficientNet(
+        images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
+        kernel_sizes=[3], num_repeats=[3], input_filters=[3],
+        output_filters=[6], expand_ratios=[6],
+        squeeze_excite_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 

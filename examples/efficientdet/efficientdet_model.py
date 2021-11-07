@@ -1,10 +1,10 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
-from efficientnet_builder import get_efficientnet_model
 from anchors import get_prior_boxes
 from efficientdet_blocks import ResampleFeatureMap
 from efficientdet_blocks import FPNCells, ClassNet, BoxNet
 from utils import create_multibox_head
+from efficientnet_model import EfficientNet
 
 WEIGHT_PATH = (
     '/media/deepan/externaldrive1/project_repos/paz_versions'
@@ -67,9 +67,9 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
 
     image = Input(shape=input_shape, name='image')
 
-    branch_tensors = get_efficientnet_model(backbone)(image)
+    branch_tensors = EfficientNet(image, backbone, input_shape)
+    feature_levels = branch_tensors[min_level - 1: max_level + 1]
 
-    feature_levels = branch_tensors[min_level:max_level + 1]
     for level in range(6, max_level + 1):
         resampler = ResampleFeatureMap(
             (level - min_level), fpn_num_filters, name='resample_p%d' % level)(
