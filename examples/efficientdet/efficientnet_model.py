@@ -161,7 +161,7 @@ def mobile_inverted_residual_bottleneck_block(
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
                    kernel_initializer=conv_normal_initializer,
-                   name=name+'/'+get_conv_name(conv_id))(inputs)
+                   name=name + '/' + get_conv_name(conv_id))(inputs)
         x = BatchNormalization(
             -1, 0.99, 1e-3,
             name=name+'/' + get_batch_norm_name(batch_norm_id))(x)
@@ -172,7 +172,7 @@ def mobile_inverted_residual_bottleneck_block(
     # Depthwise Convolution
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
                         depthwise_initializer=conv_normal_initializer,
-                        name=name+'/depthwise_conv2d')(x)
+                        name=name + '/depthwise_conv2d')(x)
     x = BatchNormalization(
         -1, 0.99, 1e-3,
         name=name + '/' + get_batch_norm_name(batch_norm_id))(x)
@@ -183,7 +183,7 @@ def mobile_inverted_residual_bottleneck_block(
     se_tensor = tf.reduce_mean(x, [1, 2], keepdims=True)
     se_tensor = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
                        kernel_initializer=conv_normal_initializer,
-                       name=name+'/se/conv2d')(se_tensor)
+                       name=name + '/se/conv2d')(se_tensor)
     se_tensor = tf.nn.swish(se_tensor)
     se_tensor = Conv2D(filters, 1, padding='same', use_bias=True,
                        kernel_initializer=conv_normal_initializer,
@@ -266,7 +266,7 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
                     x, survival_rate, kernel_sizes[block_num], out_filter,
                     out_filter, expand_ratios[block_num], [1, 1],
                     squeeze_excite_ratio,
-                    model_name+'/blocks_%d' % next(block_id))
+                    model_name + '/blocks_%d' % next(block_id))
         if (block_num < len(kernel_sizes) - 1 and
                 strides[block_num + 1][0] == 2):
             features.append(x)
