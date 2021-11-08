@@ -110,6 +110,7 @@ model.fit(
     verbose=1,
     workers=0)
 
+model.save_weights('PIX2POSE_GAN.hdf5')
 """
 def normalize(image):
     return (image * 255.0).astype('uint8')
