@@ -14,6 +14,7 @@ from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
 from loss import WeightedReconstruction
 from loss import WeightedReconstructionWithError
+from loss import ErrorPrediction
 # from metrics import error_prediction, weighted_reconstruction
 # from metrics import weighted_reconstruction_with_error
 from metrics import mean_squared_error, error_prediction
@@ -69,6 +70,9 @@ if model_name == 'UNET_VGG16':
     metrics = {'masks': [weighted_reconstruction, mean_squared_error]}
     optimizer = Adam(learning_rate)
     model.compile(optimizer, loss, metrics)
+
+# TODO this is not working at the moment because the loss does not include 
+# the error prediction loss.
 if model_name == 'PIX2POSE_GENERATOR':
     model = Generator(image_shape, latent_dimension)
     reconstruction_loss = WeightedReconstructionWithError(beta)
@@ -81,28 +85,29 @@ if model_name == 'PIX2POSE_GENERATOR':
                [weighted_reconstruction, error_prediction, mean_squared_error]}
     optimizer = Adam(learning_rate)
     model.compile(optimizer, loss, metrics)
+
 if model_name == 'PIX2POSE':
     discriminator = Discriminator(image_shape)
     generator = Generator(image_shape, latent_dimension)
     model = Pix2Pose(image_shape, discriminator, generator, latent_dimension)
-    # reconstruction_loss = WeightedReconstructionWithError(beta)
-    # loss = WeightedReconstructionWithError()
     H, W, num_channels = image_shape
     inputs_to_shape = {'RGB_input': [H, W, num_channels]}
     labels_to_shape = {'RGB_with_error': [H, W, 4]}
-    # weighted_reconstruction = weighted_reconstruction_wrapper(beta, True)
-    # metrics = {'RGB_with_error':
-    #           [weighted_reconstruction,error_prediction, mean_squared_error]}
-    optimizer_D = Adam(learning_rate)
-    optimizer_G = Adam(learning_rate)
-    model.compile(optimizer_D, optimizer_G, BinaryCrossentropy())
+    optimizers = {'discriminator': Adam(learning_rate),
+                  'generator': Adam(learning_rate)}
+    losses = {'discriminator': BinaryCrossentropy(),
+              'weighted_reconstruction': WeightedReconstructionWithError(),
+              'error_prediction': ErrorPrediction()}
+    loss_weights = {'weighted_reconstruction': 100, 'error_prediction': 50}
+    model.compile(optimizers, losses, loss_weights)
 
 processor = DomainRandomization(
     renderer, image_shape, image_paths, inputs_to_shape,
     labels_to_shape, num_occlusions)
 
 sequence = GeneratingSequence(processor, batch_size, num_steps)
-
+model.load_weights('PIX2POSE_GAN.hdf5')
+"""
 model.fit(
     sequence,
     epochs=max_num_epochs,
@@ -111,6 +116,7 @@ model.fit(
     workers=0)
 
 model.save_weights('PIX2POSE_GAN.hdf5')
+"""
 """
 def normalize(image):
     return (image * 255.0).astype('uint8')

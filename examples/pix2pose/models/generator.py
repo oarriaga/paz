@@ -52,7 +52,7 @@ def decoder(x, skip_connections):
 
 
 def Generator(input_shape=(128, 128, 3), latent_dimension=256,
-              name='PIX2POSE_GENERATOR'):
+              activation='sigmoid', name='PIX2POSE_GENERATOR'):
     RGB_input = Input(input_shape, name='RGB_input')
     x, skip_connections = encoder(RGB_input)
     x = Flatten()(x)
@@ -61,9 +61,9 @@ def Generator(input_shape=(128, 128, 3), latent_dimension=256,
     x = Reshape((8, 8, latent_dimension))(x)
     x = decoder(x, skip_connections)
     RGB = Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same')(x)
-    RGB = Activation('tanh', name='RGB')(RGB)
+    RGB = Activation(activation, name='RGB')(RGB)
     error = Conv2DTranspose(1, (5, 5), (2, 2), padding='same')(x)
-    error = Activation('sigmoid', name='error')(error)
+    error = Activation(activation, name='error')(error)
     RGB_with_error = Concatenate(axis=-1, name='RGB_with_error')([RGB, error])
     model = Model(RGB_input, RGB_with_error, name=name)
     return model

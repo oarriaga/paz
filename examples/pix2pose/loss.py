@@ -37,8 +37,8 @@ def compute_weighted_reconstruction_loss(RGBA_true, RGB_pred, beta=3.0):
     return tf.reduce_mean(reconstruction_loss, axis=-1, keepdims=True)
 
 
-def compute_weighted_reconstruction_loss_with_error(RGBA_true, RGBE_pred,
-                                                    beta=3.0):
+def compute_weighted_reconstruction_loss_with_error(
+        RGBA_true, RGBE_pred, beta=3.0):
     RGB_pred, error_mask = extract_error_mask(RGBE_pred)
     loss = compute_weighted_reconstruction_loss(RGBA_true, RGB_pred, beta)
     return loss
@@ -53,17 +53,24 @@ def compute_error_prediction_loss(RGBA_true, RGBE_pred):
     return error_loss
 
 
+class ErrorPrediction(Loss):
+    def __init__(self):
+        super(ErrorPrediction, self).__init__()
+
+    def call(self, RGBA_true, RGBE_pred):
+        error_loss = compute_error_prediction_loss(RGBA_true, RGBE_pred)
+        return error_loss
+
+
 class WeightedReconstructionWithError(Loss):
     def __init__(self, beta=3.0):
         super(WeightedReconstructionWithError, self).__init__()
         self.beta = beta
 
     def call(self, RGBA_true, RGBE_pred):
-        reconstruction = compute_weighted_reconstruction_loss_with_error(
+        reconstruction_loss = compute_weighted_reconstruction_loss_with_error(
             RGBA_true, RGBE_pred, self.beta)
-        error_prediction = compute_error_prediction_loss(RGBA_true, RGBE_pred)
-        loss = reconstruction + error_prediction
-        return loss
+        return reconstruction_loss
 
 
 class WeightedReconstruction(Loss):
