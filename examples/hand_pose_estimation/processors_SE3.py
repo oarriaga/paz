@@ -3,7 +3,7 @@ import numpy as np
 from paz.abstract import Processor
 from backend_SE3 import rotation_from_axis_angles
 from backend_keypoints import flip_right_hand
-from backend_keypoints import get_canonical_transformations
+from backend_keypoints import canonical_transformations_on_keypoints
 from backend_keypoints import keypoint_to_root_frame
 from backend_keypoints import keypoints_to_palm_coordinates
 from backend_keypoints import transform_cropped_keypoints
@@ -62,7 +62,7 @@ class GetCanonicalTransformation(Processor):
         super(GetCanonicalTransformation, self).__init__()
 
     def call(self, keypoints3D):
-        return get_canonical_transformations(keypoints3D)
+        return canonical_transformations_on_keypoints(keypoints3D)
 
 
 class MatrixInverse(Processor):

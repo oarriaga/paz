@@ -22,6 +22,6 @@ def merge_dictionaries(dicts):
         result: Dictionary.
     """
     result = {}
-    for dict in dicts:
+    for dict in dicts: # Check if dict is ok to use
         result.update(dict)
     return result

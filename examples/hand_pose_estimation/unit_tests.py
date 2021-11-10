@@ -42,10 +42,10 @@ def test_keypoints_to_palm_coordinates():
 
 
 def test_one_hot_encode():
-    one_hot_vector = to_one_hot(1, 2)
+    one_hot_vector = to_one_hot([1], 2)
     assert type(one_hot_vector).__module__ == np.__name__
     assert one_hot_vector.all() == np.array([0, 1]).all()
-    assert to_one_hot(0, 2).all() == np.array([1, 0]).all()
+    assert to_one_hot([0], 2).all() == np.array([1, 0]).all()
 
 
 def test_normalize_keypoints():
@@ -134,9 +134,9 @@ def test_rotation_matrix_z():
 
 
 def test_rotation_matrix_axis_angles():
-    rotation_matrix_test = np.array([[0.8660254, -0.5000000, 0.0000000],
-                                     [0.5000000, 0.8660254, 0.0000000],
-                                     [0.0000000, 0.0000000, 1.0000000]])
+    rotation_matrix_test = np.array([[0.739, -0.406, 0.536],
+                                     [0.536, 0.837, -0.1],
+                                     [-0.4, 0.36, 0.837]])
     rotation_matrix = rotation_from_axis_angles(np.deg2rad([15, 30, 30]))
     print(rotation_matrix)
     assert rotation_matrix.shape == rotation_matrix_test.shape

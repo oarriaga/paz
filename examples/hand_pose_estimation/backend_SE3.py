@@ -62,7 +62,7 @@ def build_rotation_matrix_x(angle):
         rotation_matrix_x: Numpy array of size (3, 3).
     """
     cosine_value = np.cos(angle)
-    sine_value = np.cos(angle)
+    sine_value = np.sin(angle)
     rotation_matrix_x = np.array([[1.0, 0.0, 0.0],
                                   [0.0, cosine_value, sine_value],
                                   [0.0, -sine_value, cosine_value]])
@@ -79,7 +79,7 @@ def build_rotation_matrix_y(angle):
         rotation_matrix_y: Numpy array of size (3, 3).
     """
     cosine_value = np.cos(angle)
-    sine_value = np.cos(angle)
+    sine_value = np.sin(angle)
     rotation_matrix_y = np.array([[cosine_value, 0.0, -sine_value],
                                   [0.0, 1.0, 0.0],
                                   [sine_value, 0.0, cosine_value]])
@@ -96,7 +96,7 @@ def build_rotation_matrix_z(angle):
         rotation_matrix_z: Numpy array of size (3, 3).
     """
     cosine_value = np.cos(angle)
-    sine_value = np.cos(angle)
+    sine_value = np.sin(angle)
     rotation_matrix_z = np.array([[cosine_value, sine_value, 0.0],
                                   [-sine_value, cosine_value, 0.0],
                                   [0.0, 0.0, 1.0]])
@@ -114,9 +114,9 @@ def get_axis_coordinates(axis_angles, theta, is_normalized):
     # Returns:
         ux, uy, uz: Float values.
     """
-    axis_coordinates_x = axis_angles[:, 0]
-    axis_coordinates_y = axis_angles[:, 1]
-    axis_coordinates_z = axis_angles[:, 2]
+    axis_coordinates_x = axis_angles[0][0]
+    axis_coordinates_y = axis_angles[0][1]
+    axis_coordinates_z = axis_angles[0][2]
 
     if not is_normalized:
         normalization_factor = 1.0 / theta
@@ -136,6 +136,7 @@ def get_rotation_matrix_elements(axis_coordinates, theta):
     # Returns:
         matrix: Numpy array of size (3, 3).
     """
+    # initililize a matrix and assign each element
     x = axis_coordinates[0]
     y = axis_coordinates[1]
     z = axis_coordinates[2]

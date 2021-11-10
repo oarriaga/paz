@@ -14,6 +14,7 @@ kinematic_chain_dict = {0: 'root',
                         20: 'root', 19: 20, 18: 19, 17: 18}
 kinematic_chain_list = list(kinematic_chain_dict.keys())
 
+# Check if usage constants is okay or use them as a parameter to function
 LEFT_ROOT_KEYPOINT_ID = 0
 LEFT_ALIGNED_KEYPOINT_ID = 12
 LEFT_LAST_KEYPOINT_ID = 20
@@ -26,7 +27,7 @@ LEFT_HAND = 0
 RIGHT_HAND = 1
 
 
-def extract_hand_segment(segmentation_label):
+def extract_hand_segment(segmentation_label, hand_arg=1):
     """ Data Pre-processing step: Extract only hand mask from the
     segmentation map provided in RHD dataset.
 
@@ -36,9 +37,9 @@ def extract_hand_segment(segmentation_label):
     # Returns
         Numpy array with shape `(320, 320, 2)`.
     """
-    hand_mask = np.greater(segmentation_label, 1)
+    hand_mask = np.greater(segmentation_label, hand_arg)
     background_mask = np.logical_not(hand_mask)
-    return np.stack([background_mask, hand_mask], 2)
+    return np.stack([background_mask, hand_mask], axis=2)
 
 
 def normalize_keypoints(keypoints3D):
@@ -105,23 +106,6 @@ def extract_hand_side_keypoints(keypoints3D, Is_Left):
     return keypoints3D
 
 
-def extract_dominant_hand_keypoints(keypoints3D, dominant_hand):
-    """ Extract Hand masks of dominant hand keypoints.
-
-    # Arguments
-        keypoints3D: numpy array of shape (21, 3).
-        dominant_hand_mask: numpy array of shape (1).
-
-    # Returns
-        hand_side_keypoints3D: Numpy array of size (21, 3).
-    """
-    if dominant_hand == LEFT_HAND:
-        keypoints3D = extract_hand_side_keypoints(keypoints3D, True)
-    else:
-        keypoints3D = extract_hand_side_keypoints(keypoints3D, False)
-    return keypoints3D
-
-
 def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
     """Extract Hand masks, Hand side and keypoints of dominant hand.
 
@@ -140,9 +124,10 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
     is_left_dominant = num_pixels_hand_left > num_pixels_hand_right
     if num_pixels_hand_left > num_pixels_hand_right:
         dominant_hand = LEFT_HAND
+        keypoints3D = extract_hand_side_keypoints(keypoints3D, True)
     else:
         dominant_hand = RIGHT_HAND
-    keypoints3D = extract_hand_side_keypoints(keypoints3D, dominant_hand)
+        keypoints3D = extract_hand_side_keypoints(keypoints3D, True)
     hand_side = np.where(is_left_dominant, 0, 1)
     return hand_side, keypoints3D, dominant_hand
 
@@ -182,11 +167,11 @@ def get_keypoints_camera_coordinates(keypoints2D, crop_center, scale,
     # Returns
         keypoint_uv21: Numpy array of shape (21, 2).
     """
-    keypoint_uv21_u = ((keypoints2D[:, 0] - crop_center[1]) * scale) + (
-            crop_size // 2)
-    keypoint_uv21_v = ((keypoints2D[:, 1] - crop_center[0]) * scale) + (
-            crop_size // 2)
-    keypoint_uv21 = np.stack([keypoint_uv21_u, keypoint_uv21_v], 1)
+    keypoint_u = ((keypoints2D[:, 0] - crop_center[1]) *
+                  scale) + (crop_size // 2)
+    keypoint_v = ((keypoints2D[:, 1] - crop_center[0]) *
+                  scale) + (crop_size // 2)
+    keypoint_uv21 = np.stack([keypoint_u, keypoint_v], 1)
     return keypoint_uv21
 
 
@@ -210,7 +195,8 @@ def get_best_crop_size(max_coordinates, min_coordinates, crop_center):
     return crop_size_best
 
 
-def get_scale(keypoints2D, keypoints2D_visibility, image_size, crop_size):
+def get_crop_scale_and_center(keypoints2D, keypoints2D_visibility, image_size,
+                              crop_size):
     """ Extract scale to which image should be cropped.
 
     # Arguments
@@ -251,7 +237,7 @@ def crop_image_using_mask(keypoints2D, keypoints2D_visibility, image,
         keypoint_uv21: Numpy array of shape (21, 2).
         camera_matrix_cropped: Numpy array of shape (3, 3).
     """
-    scale, crop_center = get_scale(
+    scale, crop_center = get_crop_scale_and_center(
         keypoints2D, keypoints2D_visibility, image_size, crop_size)
     scale, scale_matrix = get_scale_matrix(scale)
     image_crop = crop_image_from_coordinates(
@@ -332,8 +318,7 @@ def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
 
 
 def extract_keypoint2D_limits(uv_coordinates, scoremap_size):
-    """ Extract for dominant hand , # Change the description to better fit
-    function name.
+    """ Limit keypoint coordinates to scoremap size ,
 
     # Arguments
         uv_coordinates: Numpy array of shape (21, 2).
@@ -382,18 +367,21 @@ def get_keypoint_limits(uv_coordinates, scoremap_size):
         Y_limits: Numpy array of shape (21, 1).
     """
     shape = uv_coordinates.shape
+
     x_range = np.expand_dims(np.arange(scoremap_size[0]), 1)
-    y_range = np.expand_dims(np.arange(scoremap_size[1]), 0)
     x_coordinates = np.tile(x_range, [1, scoremap_size[1]])
-    y_coordinates = np.tile(y_range, [scoremap_size[0], 1])
     x_coordinates.reshape((scoremap_size[0], scoremap_size[1]))
-    y_coordinates.reshape((scoremap_size[0], scoremap_size[1]))
     x_coordinates = np.expand_dims(x_coordinates, -1)
-    y_coordinates = np.expand_dims(y_coordinates, -1)
     x_coordinates = np.tile(x_coordinates, [1, 1, shape[0]])
-    y_coordinates = np.tile(y_coordinates, [1, 1, shape[0]])
     x_limits = x_coordinates - uv_coordinates[:, 0].astype('float64')
+
+    y_range = np.expand_dims(np.arange(scoremap_size[1]), 0)
+    y_coordinates = np.tile(y_range, [scoremap_size[0], 1])
+    y_coordinates.reshape((scoremap_size[0], scoremap_size[1]))
+    y_coordinates = np.expand_dims(y_coordinates, -1)
+    y_coordinates = np.tile(y_coordinates, [1, 1, shape[0]])
     y_limits = y_coordinates - uv_coordinates[:, 1].astype('float64')
+
     return x_limits, y_limits
 
 
@@ -552,8 +540,10 @@ def extract_bounding_box(binary_class_mask):
     return center, bounding_box, crop_size
 
 
-def box_coordinates_from_center(location, size, shape):
+def get_box_coordinates(location, size, shape):
     """ Extract Bounding Box from center and size of cropped image.
+
+    # rename to get_box_coordinates
 
     # Arguments
         location: Tuple of length (2).
@@ -613,7 +603,7 @@ def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
     crop_location = np.reshape(crop_location, [image_dimensions[0], 2])
     crop_size = np.float(crop_size)
     crop_size_scaled = crop_size / scale
-    boxes = box_coordinates_from_center(
+    boxes = get_box_coordinates(
         crop_location, crop_size_scaled, image_dimensions)
     crop_size = np.stack([crop_size, crop_size])
     crop_size = crop_size.astype(np.float)
@@ -634,8 +624,8 @@ def extract_keypoint_index(scoremap):
     """
     shape = scoremap.shape
     scoremap = np.reshape(scoremap, [shape[0], -1])
-    keypoint = np.argmax(scoremap, axis=1)
-    return keypoint
+    keypoint_index = np.argmax(scoremap, axis=1)
+    return keypoint_index
 
 
 def extract_keypoints_XY(x_vector, y_vector, maximum_indices, batch_size):
@@ -653,13 +643,14 @@ def extract_keypoints_XY(x_vector, y_vector, maximum_indices, batch_size):
     keypoints2D = list()
     for image_index in range(batch_size):
         x_location = np.reshape(x_vector[maximum_indices[image_index]], [1])
-        y_location = np.reshape(y_vector[maximum_indices[image_index]], [1])
+        y_location = np.reshape(y_vector[maximum_indices[image_index]],
+                                [1])  # Try simplifying the line
         keypoints2D.append(np.concatenate([x_location, y_location], 0))
     keypoints2D = np.stack(keypoints2D, 0)
     return keypoints2D
 
 
-def extract_2D_grids(shape):
+def extract_2D_grids(shape):  # Rename to create_2D_grids
     """ Create 2D Grids.
 
     # Arguments
@@ -734,7 +725,7 @@ def extract_2D_keypoints(visibility_mask):
     return keypoints2D, keypoints_visibility_mask
 
 
-def detect_keypoints(scoremaps):
+def detect_keypoints(scoremaps):  # detect to extract
     """ Performs detection per scoremap for the hands keypoints.
 
     # Arguments
@@ -817,7 +808,7 @@ def keypoints_to_palm_coordinates(keypoints):
     return keypoints
 
 
-def transform_to_bone_frame(keypoints3D, bone_index):
+def transform_to_bone_frame(keypoints3D, bone_index):  # Get transform to bone
     """ Transform the keypoints in camera image frame to index keypoint frame.
 
     # Arguments
@@ -1018,7 +1009,7 @@ def get_keypoints_y_rotation(keypoints3D, keypoint):
     return keypoint, rotation_matrix, keypoints3D
 
 
-def get_canonical_transformations(keypoints3D):
+def canonical_transformations_on_keypoints(keypoints3D):  # rename properly
     """ Transform Keypoints to canonical coordinates.
 
     # Arguments
@@ -1058,7 +1049,8 @@ def get_scale_matrix(scale):
     scale = np.reshape(scale_original, [1, ])
     scale_matrix = np.array([scale, 0.0, 0.0,
                              0.0, scale, 0.0,
-                             0.0, 0.0, 1.0])
+                             0.0, 0.0,
+                             1.0])  # get an I matrix and assign values
     scale_matrix = np.reshape(scale_matrix, [3, 3])
     return scale_original, scale_matrix
 
@@ -1145,8 +1137,7 @@ def get_transformation_parameters(keypoint3D, transformation_matrix):
     rotation_angle_y = get_y_axis_rotated_keypoints(keypoint3D)
 
     keypoint3D_rotated_x, rotation_angle_x = get_x_axis_rotated_keypoints(
-        keypoint3D_rotated_y, length_from_origin, affine_matrix)  # Change
-    # function to appropriate name
+        keypoint3D_rotated_y, length_from_origin, affine_matrix)
 
     rotated_keypoints = np.matmul(
         keypoint3D_rotated_x, transformation_matrix)
