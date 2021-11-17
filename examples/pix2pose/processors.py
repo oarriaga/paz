@@ -125,10 +125,10 @@ class SolveChangingObjectPnPRANSAC(Processor):
         self.num_iterations = num_iterations
 
     def call(self, object_points3D, image_points2D):
-        rotation_vector, translation = solve_PnP_RANSAC(
+        success, rotation_vector, translation = solve_PnP_RANSAC(
             object_points3D, image_points2D, self.camera_intrinsics,
             self.inlier_thresh, self.num_iterations)
-        return rotation_vector, translation
+        return success, rotation_vector, translation
 
 
 class RotationVectorToRotationMatrix(Processor):
@@ -178,8 +178,6 @@ class RotationVectorToQuaternion(Processor):
         super(RotationVectorToQuaternion, self).__init__()
 
     def call(self, rotation_vector):
-        if rotation_vector is None:
-            return None
         quaternion = rotation_vector_to_quaternion(rotation_vector)
         return quaternion
 

@@ -1,4 +1,3 @@
-import numpy as np
 from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines import RandomizeRenderedImage as RandomizeRender
 from paz.abstract.messages import Pose6D
@@ -8,12 +7,12 @@ from processors import (
     ImageToClosedOneBall, Scale, SolveChangingObjectPnPRANSAC,
     ReplaceLowerThanThreshold)
 from backend import build_cube_points3D
-from processors import UnwrapDictionary, RotationVectorToQuaternion
+from processors import UnwrapDictionary
 from processors import NormalizePoints2D
-from backend import draw_maski
 from backend import denormalize_points2D
 from backend import draw_poses6D
 from backend import draw_masks
+from paz.backend.quaternion import rotation_vector_to_quaternion
 
 
 class DomainRandomization(SequentialProcessor):
@@ -68,8 +67,9 @@ class RGBMaskToImagePoints2D(SequentialProcessor):
 class SolveChangingObjectPnP(SequentialProcessor):
     def __init__(self, camera_intrinsics):
         super(SolveChangingObjectPnP, self).__init__()
+        self.MINIMUM_REQUIRED_POINTS = 4
         self.add(SolveChangingObjectPnPRANSAC(camera_intrinsics))
-        self.add(pr.ControlMap(RotationVectorToQuaternion()))
+        # self.add(pr.ControlMap(RotationVectorToQuaternion()))
 
 
 class Pix2Pose(pr.Processor):
@@ -120,9 +120,13 @@ class EstimatePoseMasks(Processor):
             points2D, points3D = self.unwrap(self.estimate_keypoints(crop))
             points2D = denormalize_points2D(points2D, *crop.shape[0:2])
             points2D = self.change_coordinates(points2D, box2D)
-            quaternion, translation = self.predict_pose(points3D, points2D)
-            if (quaternion is None) or (translation is None):
+            if len(points3D) < self.predict_pose.MINIMUM_REQUIRED_POINTS:
                 continue
+            success, rotation, translation = self.predict_pose(
+                points3D, points2D)
+            if success is False:
+                continue
+            quaternion = rotation_vector_to_quaternion(rotation)
             pose6D = Pose6D(quaternion, translation, box2D.class_name)
             poses6D.append(pose6D), points.append([points2D, points3D])
         if self.draw:

@@ -138,16 +138,14 @@ def _preprocess_image_points2D(image_points2D):
 def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
                      inlier_threshold=5, num_iterations=100):
     if ((len(object_points3D) < 4) or (len(image_points2D) < 4)):
-        return None, None
+        raise ValueError('Solve PnP requires at least 4 3D and 2D points')
     image_points2D = _preprocess_image_points2D(image_points2D)
     success, rotation_vector, translation, inliers = cv2.solvePnPRansac(
         object_points3D, image_points2D, camera_intrinsics, None,
         flags=cv2.SOLVEPNP_EPNP, reprojectionError=inlier_threshold,
         iterationsCount=num_iterations)
     translation = np.squeeze(translation, 1)
-    if success is False:
-        rotation_vector, translation = None, None
-    return rotation_vector, translation
+    return success, rotation_vector, translation
 
 
 def apply_affine_transform(affine_matrix, vectors):
