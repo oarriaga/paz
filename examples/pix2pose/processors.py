@@ -178,6 +178,8 @@ class RotationVectorToQuaternion(Processor):
         super(RotationVectorToQuaternion, self).__init__()
 
     def call(self, rotation_vector):
+        if rotation_vector is None:
+            return None
         quaternion = rotation_vector_to_quaternion(rotation_vector)
         return quaternion
 

@@ -121,6 +121,8 @@ class EstimatePoseMasks(Processor):
             points2D = denormalize_points2D(points2D, *crop.shape[0:2])
             points2D = self.change_coordinates(points2D, box2D)
             quaternion, translation = self.predict_pose(points3D, points2D)
+            if (quaternion is None) or (translation is None):
+                continue
             pose6D = Pose6D(quaternion, translation, box2D.class_name)
             poses6D.append(pose6D), points.append([points2D, points3D])
         if self.draw:

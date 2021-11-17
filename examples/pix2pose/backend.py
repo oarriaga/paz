@@ -137,6 +137,8 @@ def _preprocess_image_points2D(image_points2D):
 
 def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
                      inlier_threshold=5, num_iterations=100):
+    if ((len(object_points3D) < 4) or (len(image_points2D) < 4)):
+        return None, None
     image_points2D = _preprocess_image_points2D(image_points2D)
     success, rotation_vector, translation, inliers = cv2.solvePnPRansac(
         object_points3D, image_points2D, camera_intrinsics, None,
