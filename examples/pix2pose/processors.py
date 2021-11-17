@@ -8,9 +8,9 @@ from backend import build_cube_points3D
 from backend import replace_lower_than_threshold
 from backend import arguments_to_image_points2D
 from backend import solve_PnP_RANSAC
-from backend import rotation_vector_to_rotation_matrix
-from backend import translate_points2D
 from backend import normalize_points2D
+from backend import rotation_vector_to_rotation_matrix
+from backend import to_affine_matrix
 
 
 class ImageToClosedOneBall(Processor):
@@ -62,8 +62,6 @@ class DrawBoxes3D(Processor):
         points3D = self.class_to_points[pose6D.class_name]
         points2D = project_points3D(points3D, pose6D, self.camera)
         points2D = points2D.astype(np.int32)
-        # points2D = np.squeeze(points2D)
-        # return points2D
         draw_cube(image, points2D, thickness=self.thickness)
         return image
 
@@ -74,9 +72,9 @@ class ReplaceLowerThanThreshold(Processor):
         self.threshold = threshold
         self.replacement = replacement
 
-    def call(self, image):
+    def call(self, values):
         return replace_lower_than_threshold(
-            image, self.threshold, self.replacement)
+            values, self.threshold, self.replacement)
 
 
 class GetNonZeroValues(Processor):
@@ -131,22 +129,6 @@ class SolveChangingObjectPnPRANSAC(Processor):
         return success, rotation_vector, translation
 
 
-class RotationVectorToRotationMatrix(Processor):
-    def __init__(self):
-        super(RotationVectorToRotationMatrix, self).__init__()
-
-    def call(self, rotation_vector):
-        return rotation_vector_to_rotation_matrix(rotation_vector)
-
-
-class CropImage(Processor):
-    def __init__(self):
-        super(CropImage, self).__init__()
-
-    def call(self, image):
-        return image[:128, :128, :]
-
-
 class UnwrapDictionary(Processor):
     def __init__(self, keys):
         super(UnwrapDictionary, self).__init__()
@@ -154,23 +136,6 @@ class UnwrapDictionary(Processor):
 
     def call(self, dictionary):
         return [dictionary[key] for key in self.keys]
-
-
-class ToAffineMatrix(Processor):
-    def __init__(self):
-        super(ToAffineMatrix, self).__init__()
-
-    def call(self, rotation_matrix, translation):
-        if len(translation) != 3:
-            raise ValueError('Translation should be of lenght 3')
-        if rotation_matrix.shape != (3, 3):
-            raise ValueError('Rotation matrix should be of shape (3, 3)')
-        translation = translation.reshape(3, 1)
-        affine_matrix = np.concatenate([rotation_matrix, translation], axis=1)
-        affine_row = np.array([[0.0, 0.0, 0.0, 1.0]])
-        affine_matrix = np.concatenate([affine_matrix, affine_row], axis=0)
-        print(affine_matrix.shape)
-        return affine_matrix
 
 
 class RotationVectorToQuaternion(Processor):
@@ -182,25 +147,6 @@ class RotationVectorToQuaternion(Processor):
         return quaternion
 
 
-class TranslatePoints2D(Processor):
-    def __init__(self):
-        super(TranslatePoints2D, self).__init__()
-
-    def call(points2D, image):
-        height, width = image.shape[:2]
-        translated_points2D = translate_points2D(points2D, (height, width))
-        return translated_points2D
-
-
-class FlipYAxisPoints2D(Processor):
-    def __init__(self):
-        super(FlipYAxisPoints2D, self).__init__()
-
-    def call(self, points2D, image):
-        height = image.shape[0]
-        translate_points2D(points2D, (0, height))
-
-
 class NormalizePoints2D(Processor):
     def __init__(self, image_shape):
         self.height, self.width = image_shape[:2]
@@ -208,3 +154,20 @@ class NormalizePoints2D(Processor):
     def call(self, points2D):
         points2D = normalize_points2D(points2D, self.height, self.width)
         return points2D
+
+
+class RotationVectorToRotationMatrix(Processor):
+    def __init__(self):
+        super(RotationVectorToRotationMatrix, self).__init__()
+
+    def call(self, rotation_vector):
+        return rotation_vector_to_rotation_matrix(rotation_vector)
+
+
+class ToAffineMatrix(Processor):
+    def __init__(self):
+        super(ToAffineMatrix, self).__init__()
+
+    def call(self, rotation_matrix, translation):
+        affine_matrix = to_affine_matrix(rotation_matrix, translation)
+        return affine_matrix

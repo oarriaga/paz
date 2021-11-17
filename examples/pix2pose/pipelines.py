@@ -69,7 +69,6 @@ class SolveChangingObjectPnP(SequentialProcessor):
         super(SolveChangingObjectPnP, self).__init__()
         self.MINIMUM_REQUIRED_POINTS = 4
         self.add(SolveChangingObjectPnPRANSAC(camera_intrinsics))
-        # self.add(pr.ControlMap(RotationVectorToQuaternion()))
 
 
 class Pix2Pose(pr.Processor):
