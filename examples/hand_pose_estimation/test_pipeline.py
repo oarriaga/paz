@@ -25,3 +25,13 @@ img = load_image('./sample.jpg')
 detection = pipeline(img)
 
 show_image(detection['image'].astype('uint8'))
+
+img = load_image('./images/00149.png')
+detection = pipeline(img)
+
+show_image(detection['image'].astype('uint8'))
+
+img = load_image('./images/img5.png')
+detection = pipeline(img)
+
+show_image(detection['image'].astype('uint8'))

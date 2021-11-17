@@ -27,7 +27,7 @@ def build_translation_matrix_SE3(translation_vector):
     # Returns
         transformation_matrix: Numpy array of size (1, 4, 4).
     """
-    if len(translation_vector) == 1:  # Make it into another function
+    if len(translation_vector) == 1:
         translation_vector = scalar_to_vector(translation_vector)
     transformation_matrix = np.array([[1, 0, 0, translation_vector[0]],
                                       [0, 1, 0, translation_vector[1]],
@@ -137,25 +137,29 @@ def get_rotation_matrix_elements(axis_coordinates, theta):
         matrix: Numpy array of size (3, 3).
     """
     # initililize a matrix and assign each element
+    rotation_matrix = np.zeros(shape=(3, 3))
     x = axis_coordinates[0]
     y = axis_coordinates[1]
     z = axis_coordinates[2]
 
-    m00 = np.cos(theta) + ((x ** 2) * (1.0 - np.cos(theta)))
-    m11 = np.cos(theta) + ((y ** 2) * (1.0 - np.cos(theta)))
-    m22 = np.cos(theta) + ((z ** 2) * (1.0 - np.cos(theta)))
+    rotation_matrix[0][0] = np.cos(theta) + ((x ** 2) * (1.0 - np.cos(theta)))
+    rotation_matrix[1][1] = np.cos(theta) + ((y ** 2) * (1.0 - np.cos(theta)))
+    rotation_matrix[2][2] = np.cos(theta) + ((z ** 2) * (1.0 - np.cos(theta)))
 
-    m01 = (x * y * (1.0 - np.cos(theta))) - (z * np.sin(theta))
-    m02 = (x * z * (1.0 - np.cos(theta))) + (y * np.sin(theta))
-    m10 = (y * x * (1.0 - np.cos(theta))) + (z * np.sin(theta))
-    m12 = (y * z * (1.0 - np.cos(theta))) - (x * np.sin(theta))
-    m20 = (z * x * (1.0 - np.cos(theta))) - (y * np.sin(theta))
-    m21 = (z * y * (1.0 - np.cos(theta))) + (x * np.sin(theta))
+    rotation_matrix[0][1] = (x * y * (1.0 - np.cos(theta))) - (z * np.sin(
+        theta))
+    rotation_matrix[0][2] = (x * z * (1.0 - np.cos(theta))) + (y * np.sin(
+        theta))
+    rotation_matrix[1][0] = (y * x * (1.0 - np.cos(theta))) + (z * np.sin(
+        theta))
+    rotation_matrix[1][2] = (y * z * (1.0 - np.cos(theta))) - (x * np.sin(
+        theta))
+    rotation_matrix[2][0] = (z * x * (1.0 - np.cos(theta))) - (y * np.sin(
+        theta))
+    rotation_matrix[2][1] = (z * y * (1.0 - np.cos(theta))) + (x * np.sin(
+        theta))
 
-    matrix = np.array([[m00, m01, m02],
-                       [m10, m11, m12],
-                       [m20, m21, m22]])
-    return matrix
+    return rotation_matrix
 
 
 def rotation_from_axis_angles(axis_angles, is_normalized=False):

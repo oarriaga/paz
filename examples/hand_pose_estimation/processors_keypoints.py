@@ -4,7 +4,7 @@ from paz.abstract import Processor
 from paz.backend.image.tensorflow_image import resize
 
 from backend_keypoints import create_score_maps, extract_2D_keypoints
-from backend_keypoints import crop_image_from_coordinates, detect_keypoints
+from backend_keypoints import crop_image_from_coordinates, extract_keypoints
 from backend_keypoints import crop_image_using_mask, extract_hand_segment
 from backend_keypoints import extract_bounding_box, find_max_location
 from backend_keypoints import extract_dominant_hand_visibility
@@ -140,7 +140,7 @@ class AdjustCropSize(Processor):
 
     def call(self, crop_size_best):
         crop_size_best = crop_size_best.astype(dtype=np.float64)
-        crop_size_best *= 1.25
+        crop_size_best = crop_size_best * 1.25
         scaled_crop = np.maximum(self.crop_size / crop_size_best, 0.25)
         scaled_crop = np.minimum(scaled_crop, 5.0)
         return scaled_crop
@@ -166,14 +166,14 @@ class ExtractKeypoints(Processor):
         super(ExtractKeypoints, self).__init__()
 
     def call(self, keypoint_scoremaps):
-        return detect_keypoints(keypoint_scoremaps)
+        return extract_keypoints(keypoint_scoremaps)
 
 
-class Resize_image(Processor):
+class ResizeImage(Processor):
     """ Resize images. Done with tensorflow"""
 
     def __init__(self, size=[256, 256]):
-        super(Resize_image, self).__init__()
+        super(ResizeImage, self).__init__()
         self.size = size
 
     def call(self, image):

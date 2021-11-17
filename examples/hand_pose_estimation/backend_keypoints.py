@@ -6,25 +6,11 @@ from backend_SE3 import build_translation_matrix_SE3
 from backend_SE3 import build_rotation_matrix_x, build_rotation_matrix_y
 from backend_SE3 import build_rotation_matrix_z, build_affine_matrix
 
-kinematic_chain_dict = {0: 'root',
-                        4: 'root', 3: 4, 2: 3, 1: 2,
-                        8: 'root', 7: 8, 6: 7, 5: 6,
-                        12: 'root', 11: 12, 10: 11, 9: 10,
-                        16: 'root', 15: 16, 14: 15, 13: 14,
-                        20: 'root', 19: 20, 18: 19, 17: 18}
-kinematic_chain_list = list(kinematic_chain_dict.keys())
-
-# Check if usage constants is okay or use them as a parameter to function
-LEFT_ROOT_KEYPOINT_ID = 0
-LEFT_ALIGNED_KEYPOINT_ID = 12
-LEFT_LAST_KEYPOINT_ID = 20
-
-RIGHT_ROOT_KEYPOINT_ID = 21
-RIGHT_ALIGNED_KEYPOINT_ID = 33
-RIGHT_LAST_KEYPOINT_ID = 41
-
-LEFT_HAND = 0
-RIGHT_HAND = 1
+from RHD_v2 import LEFT_ALIGNED_KEYPOINT_ID, LEFT_ROOT_KEYPOINT_ID
+from RHD_v2 import LEFT_LAST_KEYPOINT_ID, LEFT_HAND
+from RHD_v2 import RIGHT_ALIGNED_KEYPOINT_ID, RIGHT_ROOT_KEYPOINT_ID
+from RHD_v2 import RIGHT_LAST_KEYPOINT_ID, RIGHT_HAND
+from RHD_v2 import kinematic_chain_dict, kinematic_chain_list
 
 
 def extract_hand_segment(segmentation_label, hand_arg=1):
@@ -62,6 +48,15 @@ def normalize_keypoints(keypoints3D):
 
 
 def extract_hand_mask(segmenation_mask, hand_arg=1):
+    """ Normalize 3D-keypoints.
+
+    # Arguments
+        segmenation_mask: Numpy array with shape `(320, 320)`
+        hand_arg: Int value.
+
+    # Returns
+        hand_mask: Numpy array with shape `(320, 320)`.
+    """
     hand_mask = np.greater(segmenation_mask, hand_arg)
     return hand_mask
 
@@ -70,7 +65,8 @@ def extract_hand_masks(segmentation_mask, right_hand_mask_limit=17):
     """ Extract Hand masks of left and right hand.
 
     # Arguments
-        hand_parts_mask: float value of size [320, 320].
+        segmentation_mask: Numpy array of size [320, 320].
+        right_hand_mask_limit: Int value.
 
     # Returns
         mask_left: Numpy array of size (320, 320).
@@ -91,11 +87,10 @@ def extract_hand_side_keypoints(keypoints3D, Is_Left):
 
     # Arguments
         keypoints3D: numpy array of shape (21, 3)
-        dominant_hand: numpy array of shape (1). # Modify the name of the
-        argument
+        Is_Left: numpy array of shape (1).
 
     # Returns
-        dominant_hand_mask: Numpy array of size (21, 1).
+        keypoints3D: Numpy array of size (21, 3).
     """
     if Is_Left:
         keypoints3D = keypoints3D[
@@ -127,7 +122,7 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
         keypoints3D = extract_hand_side_keypoints(keypoints3D, True)
     else:
         dominant_hand = RIGHT_HAND
-        keypoints3D = extract_hand_side_keypoints(keypoints3D, True)
+        keypoints3D = extract_hand_side_keypoints(keypoints3D, False)
     hand_side = np.where(is_left_dominant, 0, 1)
     return hand_side, keypoints3D, dominant_hand
 
@@ -432,8 +427,7 @@ def get_bounding_box_list(X_masked, Y_masked):
         Y_masked: tuple of size (256, 1).
 
     # Returns
-        bounding_box_list: List of length (4).
-        xy_limits: List of length (4).
+        bounding_box: List of length (4).
     """
     x_min, x_max = np.min(X_masked), np.max(X_masked)
     y_min, y_max = np.min(Y_masked), np.max(Y_masked)
@@ -642,15 +636,15 @@ def extract_keypoints_XY(x_vector, y_vector, maximum_indices, batch_size):
     """
     keypoints2D = list()
     for image_index in range(batch_size):
-        x_location = np.reshape(x_vector[maximum_indices[image_index]], [1])
-        y_location = np.reshape(y_vector[maximum_indices[image_index]],
-                                [1])  # Try simplifying the line
+        index_choice = maximum_indices[image_index]
+        x_location = np.reshape(x_vector[index_choice], [1])
+        y_location = np.reshape(y_vector[index_choice], [1])
         keypoints2D.append(np.concatenate([x_location, y_location], 0))
     keypoints2D = np.stack(keypoints2D, 0)
     return keypoints2D
 
 
-def extract_2D_grids(shape):  # Rename to create_2D_grids
+def create_2D_grids(shape):
     """ Create 2D Grids.
 
     # Arguments
@@ -680,7 +674,7 @@ def find_max_location(scoremap):
     """
     shape = scoremap.shape
     assert len(shape) == 3, "Scoremap must be 3D."
-    x_grid, y_grid = extract_2D_grids(shape)
+    x_grid, y_grid = create_2D_grids(shape)
     keypoint_index = extract_keypoint_index(scoremap)
     keypoints2D = extract_keypoints_XY(x_grid, y_grid, keypoint_index, shape[0])
     return keypoints2D
@@ -725,7 +719,7 @@ def extract_2D_keypoints(visibility_mask):
     return keypoints2D, keypoints_visibility_mask
 
 
-def detect_keypoints(scoremaps):  # detect to extract
+def extract_keypoints(scoremaps):
     """ Performs detection per scoremap for the hands keypoints.
 
     # Arguments
@@ -808,7 +802,8 @@ def keypoints_to_palm_coordinates(keypoints):
     return keypoints
 
 
-def transform_to_bone_frame(keypoints3D, bone_index):  # Get transform to bone
+def get_transform_to_bone_frame(keypoints3D, bone_index):
+    # bone
     """ Transform the keypoints in camera image frame to index keypoint frame.
 
     # Arguments
@@ -856,7 +851,7 @@ def get_root_transformations(keypoints3D, bone_index):
         transformations: placeholder for transformation (21, 4, 4, 1).
     """
     length_from_origin, rotation_angle_x, rotation_angle_y, rotated_keypoints = \
-        transform_to_bone_frame(keypoints3D, bone_index)
+        get_transform_to_bone_frame(keypoints3D, bone_index)
     relative_coordinate = np.stack(
         [length_from_origin, rotation_angle_x, rotation_angle_y], 0)
     transformation = rotated_keypoints
@@ -879,7 +874,7 @@ def get_articulation_angles(child_keypoint_coordinates,
     delta_vector = child_keypoint_coordinates - parent_keypoint_coordinates
     delta_vector = to_homogeneous_coordinates(
         np.expand_dims(delta_vector[:, :3], 1))
-    transformation_parameters = transform_to_bone_frame(
+    transformation_parameters = get_transform_to_bone_frame(
         delta_vector, transformation_matrix)
     return transformation_parameters
 
@@ -1045,13 +1040,10 @@ def get_scale_matrix(scale):
         scale_matrix: Numpy array of shape (3, 3)
     """
     scale_original = np.minimum(np.maximum(scale, 1.0), 10.0)
-
+    scale_matrix = np.eye(3)
     scale = np.reshape(scale_original, [1, ])
-    scale_matrix = np.array([scale, 0.0, 0.0,
-                             0.0, scale, 0.0,
-                             0.0, 0.0,
-                             1.0])  # get an I matrix and assign values
-    scale_matrix = np.reshape(scale_matrix, [3, 3])
+    scale_matrix[0][0] = scale
+    scale_matrix[1][1] = scale
     return scale_original, scale_matrix
 
 
@@ -1066,13 +1058,16 @@ def get_scale_translation_matrix(crop_center, crop_size, scale):
     # Returns
         translation_matrix: Numpy array of shape (3, 3).
     """
+    translation_matrix = np.eye(3)
     translated_center_x = crop_center[0] * scale - crop_size // 2
-    translated_center_y = crop_center[1] * scale - crop_size // 2
     translated_center_x = np.reshape(translated_center_x, [1, ])
+
+    translated_center_y = crop_center[1] * scale - crop_size // 2
     translated_center_y = np.reshape(translated_center_y, [1, ])
-    translation_matrix = np.array([[1.0, 0.0, -translated_center_x],
-                                   [0.0, 1.0, -translated_center_y],
-                                   [0.0, 0.0, 1.0]])
+
+    translation_matrix[0][2] = -translated_center_x
+    translation_matrix[1][2] = -translated_center_y
+
     return translation_matrix
 
 

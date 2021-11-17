@@ -2,12 +2,12 @@ from backend_SE3 import build_rotation_matrix_x, build_rotation_matrix_y
 from backend_SE3 import build_rotation_matrix_z, build_affine_matrix
 from backend_SE3 import rotation_from_axis_angles
 from backend_SE3 import to_homogeneous_coordinates, build_translation_matrix_SE3
-from backend_keypoints import get_canonical_transformations
+from backend_keypoints import canonical_transformations_on_keypoints
 from backend_keypoints import get_hand_side_and_keypooints
 from backend_keypoints import keypoints_to_palm_coordinates
 from backend_keypoints import normalize_keypoints
-from hand_keypoints_loader import LEFT_ROOT_KEYPOINT_ID
-from hand_keypoints_loader import RIGHT_ROOT_KEYPOINT_ID
+from RHD_v2 import LEFT_ROOT_KEYPOINT_ID
+from RHD_v2 import RIGHT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import RenderedHandLoader
 from paz.backend.boxes import to_one_hot
 
@@ -170,7 +170,7 @@ def test_hand_side_extraction(segmentation_path, label_path):
 def test_canonical_transformations(label_path):
     annotations_all = data_loader._load_annotation(label_path)
     keypoints3D = data_loader.process_keypoints_3D(annotations_all[11]['xyz'])
-    transformed_keypoints, rotation_matrix = get_canonical_transformations(
+    transformed_keypoints, rotation_matrix = canonical_transformations_on_keypoints(
         keypoints3D.T)
 
     assert transformed_keypoints.shape == (42, 3)
@@ -230,8 +230,3 @@ def test_extract_keypoints2D():
     keypoints2D = keypoints_extraction_pipeline(gaussian_maps)
 
     assert keypoints2D[0] == [0, 0]
-
-
-if __name__ == '__main__':
-    test_canonical_transformations(
-        '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/training/anno_training.pickle')

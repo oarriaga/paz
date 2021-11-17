@@ -65,7 +65,7 @@ class GetCanonicalTransformation(Processor):
         return canonical_transformations_on_keypoints(keypoints3D)
 
 
-class MatrixInverse(Processor):
+class MatrixInverse(Processor): # Start with a verb
     """ Perform Pseudo Inverse of the matrix"""
     def __init__(self):
         super(MatrixInverse, self).__init__()

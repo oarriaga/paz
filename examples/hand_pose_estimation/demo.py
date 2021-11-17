@@ -24,5 +24,5 @@ HandViewPointNet = ViewPointNet()
 pipeline = DetectHandKeypoints(HandSegNet, HandPoseNet, HandPosePriorNet,
                                HandViewPointNet)
 camera = Camera(args.camera_id)
-player = VideoPlayer((256, 256), pipeline, camera)
+player = VideoPlayer((640, 640), pipeline, camera)
 player.run()
