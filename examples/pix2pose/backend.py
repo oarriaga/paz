@@ -7,7 +7,7 @@ import cv2
 
 
 def build_cube_points3D(width, height, depth):
-    """ Build the 3D points of a cube in the openCV coordinate system:
+    """Build the 3D points of a cube in the openCV coordinate system:
                                4--------1
                               /|       /|
                              / |      / |
@@ -46,6 +46,14 @@ def build_cube_points3D(width, height, depth):
 
 
 def _preprocess_image_points2D(image_points2D):
+    """Preprocessing image points for PnPRANSAC
+
+    # Arguments
+        image_points2D: Array of shape (num_points, 2)
+
+    # Returns
+        Contiguous float64 array of shape (num_points, 1, 2)
+    """
     num_points = len(image_points2D)
     image_points2D = image_points2D.reshape(num_points, 1, 2)
     image_points2D = image_points2D.astype(np.float64)
@@ -55,6 +63,39 @@ def _preprocess_image_points2D(image_points2D):
 
 def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
                      inlier_threshold=5, num_iterations=100):
+    """Returns rotation (Roc) and translation (Toc) vectors that transform
+        3D points in object frame to camera frame.
+
+                               O------------O
+                              /|           /|
+                             / |          / |
+                            O------------O  |
+                            |  |    z    |  |
+                            |  O____|____|__O
+                            |  /    |___y|  /   object
+                            | /    /     | /  coordinates
+                            |/    x      |/
+                            O------------O
+                                   ___
+                   Z                |
+                  /                 | Rco, Tco
+                 /_____X     <------|
+                 |
+                 |    camera
+                 Y  coordinates
+
+    # Arguments
+        object_points3D: Array (num_points, 3). Points 3D in object reference
+            frame. Represented as (0) in image above.
+        image_points2D: Array (num_points, 2). Points in 2D in camera UV space.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+        inlier_threshold: Number of inliers for RANSAC method.
+        num_iterations: Maximum number of iterations.
+
+    # Returns
+        Rotation vector in axis-angle form (3) and translation vector (3).
+    """
     if ((len(object_points3D) < 4) or (len(image_points2D) < 4)):
         raise ValueError('Solve PnP requires at least 4 3D and 2D points')
     image_points2D = _preprocess_image_points2D(image_points2D)
@@ -67,16 +108,36 @@ def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
 
 
 def project_to_image(rotation, translation, points3D, camera_intrinsics):
-    """Project points3D to image plane using a perspective transformation
+    """Project points3D to image plane using a perspective transformation.
+
+              Image plane
+
+           (0,0)-------->  (U)
+             |
+             |
+             |
+             v
+
+            (V)
+
+    # Arguments
+        rotation: Array (3, 3). Rotation matrix (Rco).
+        translation: Array (3). Translation (Tco).
+        points3D: Array (num_points, 3). Points 3D in object frame.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+
+    # Returns
+        Array (num_points, 2) in UV image space.
     """
     if rotation.shape != (3, 3):
         raise ValueError('Rotation matrix is not of shape (3, 3)')
     if len(translation) != 3:
         raise ValueError('Translation vector is not of length 3')
     if len(points3D.shape) != 2:
-        raise ValueError('points3D should have a shape (N, 3)')
+        raise ValueError('Points3D should have a shape (num_points, 3)')
     if points3D.shape[1] != 3:
-        raise ValueError('points3D should have a shape (N, 3)')
+        raise ValueError('Points3D should have a shape (num_points, 3)')
     # TODO missing checks for camera intrinsics conditions
     points3D = np.matmul(rotation, points3D.T).T + translation
     x, y, z = np.split(points3D, 3, axis=1)
@@ -91,18 +152,18 @@ def project_to_image(rotation, translation, points3D, camera_intrinsics):
 
 
 def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
-    """ Draws a cube in image.
+    """Draws a cube in image.
 
     # Arguments
-        image: Numpy array of shape ``[H, W, 3]``.
+        image: Numpy array of shape (H, W, 3).
         points: List of length 8  having each element a list
-            of length two indicating ``(y, x)`` openCV coordinates.
+            of length two indicating (U, V) openCV coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer indicating the thickness of the line to be drawn.
         radius: Integer indicating the radius of corner points to be drawn.
 
     # Returns
-        Numpy array with shape ``[H, W, 3]``. Image with cube.
+        Numpy array with shape (H, W, 3). Image with cube.
     """
     if points.shape != (8, 2):
         raise ValueError('Cube points 2D must be of shape (8, 2)')
@@ -135,12 +196,46 @@ def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
 
 
 def replace_lower_than_threshold(source, threshold=1e-3, replacement=0.0):
+    """Replace values from source that are lower than the given threshold.
+
+    # Arguments
+        source: Array.
+        threshold: Float. Values lower than this value will be replaced.
+        replacement: Float. Value taken by elements lower than threshold.
+
+    # Returns
+        Array of same shape as source.
+    """
     lower_than_epsilon = source < threshold
     source[lower_than_epsilon] = replacement
     return source
 
 
 def arguments_to_image_points2D(row_args, col_args):
+    """Convert array arguments into UV coordinates.
+
+            Image plane
+
+           (0,0)-------->  (U)
+             |
+             |
+             |
+             v
+
+            (V)
+
+    # Arguments
+        row_args: Array (num_rows).
+        col_args: Array (num_cols).
+
+    # Returns
+        Array (num_cols, num_rows) representing points2D in UV space.
+
+    # Notes
+        Arguments are row args (V) and col args (U). Iamge points are in UV
+            coordinates; thus, we concatenate them in that order
+            i.e. [col_args, row_args]
+    """
     row_args = row_args.reshape(-1, 1)
     col_args = col_args.reshape(-1, 1)
     image_points2D = np.concatenate([col_args, row_args], axis=1)
@@ -169,28 +264,60 @@ def draw_maski(image, keypoints, colors, radius=1):
 
 
 def normalize_points2D(points2D, height, width):
-    """Transform points2D in image coordinates to normalized coordinates.
+    """Transform points2D in image coordinates to normalized coordinates i.e.
+        [U, V] -> [-1, 1]. UV have maximum values of [W, H] respectively.
+
+             Image plane
+
+           (0,0)-------->  (U)
+             |
+             |
+             |
+             v
+
+            (V)
 
     # Arguments
-        points2D: Numpy array of shape ``(num_keypoints, 2)``.
+        points2D: Numpy array of shape (num_keypoints, 2).
         height: Int. Height of the image
         width: Int. Width of the image
 
     # Returns
-        Numpy array of shape ``(num_keypoints, 2)``.
+        Numpy array of shape (num_keypoints, 2).
     """
     image_shape = np.array([width, height])
-    points2D = points2D / image_shape  # [0, W], [0, H] -> [0,  1], [0,  1]
-    points2D = 2.0 * points2D          # [0, 1], [0, 1] -> [0,  2], [0,  2]
-    points2D = points2D - 1.0          # [0, 2], [0, 2] -> [-1, 1], [-1, 1]
+    points2D = points2D / image_shape  # [W, 0], [0, H] -> [1,  0], [0,  1]
+    points2D = 2.0 * points2D          # [1, 0], [0, 1] -> [2,  0], [0,  2]
+    points2D = points2D - 1.0          # [2, 0], [0, 2] -> [-1, 1], [-1, 1]
     return points2D
 
 
 def denormalize_points2D(points2D, height, width):
+    """Transform nomralized points2D to image UV coordinates i.e.
+        [-1, 1] -> [U, V]. UV have maximum values of [W, H] respectively.
+
+             Image plane
+
+           (0,0)-------->  (U)
+             |
+             |
+             |
+             v
+
+            (V)
+
+    # Arguments
+        points2D: Numpy array of shape (num_keypoints, 2).
+        height: Int. Height of the image
+        width: Int. Width of the image
+
+    # Returns
+        Numpy array of shape (num_keypoints, 2).
+    """
     image_shape = np.array([width, height])
-    points2D = points2D + 1.0          # [-1, 1], [-1, 1] -> [0, 2], [0, 2]
-    points2D = points2D / 2.0          # [0 , 2], [0 , 2] -> [0, 1], [0, 1]
-    points2D = points2D * image_shape  # [0 , 1], [0 , 1] -> [0, W], [0, H]
+    points2D = points2D + 1.0          # [-1, 1], [-1, 1] -> [2, 0], [0, 2]
+    points2D = points2D / 2.0          # [2 , 0], [0 , 2] -> [1, 0], [0, 1]
+    points2D = points2D * image_shape  # [1 , 0], [0 , 1] -> [W, 0], [0, H]
     return points2D
 
 
