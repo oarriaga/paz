@@ -237,6 +237,7 @@ def arguments_to_image_points2D(row_args, col_args):
     row_args = row_args.reshape(-1, 1)
     col_args = col_args.reshape(-1, 1)
     image_points2D = np.concatenate([col_args, row_args], axis=1)
+    # image_points2D = np.concatenate([row_args, col_args], axis=1)
     return image_points2D
 
 
@@ -275,6 +276,7 @@ def draw_points2D(image, points2D, colors):
     # Returns
         Array with drawn points.
     """
+    # print(np.max(points2D, axis=0))
     keypoints = points2D.astype(int)
     U = keypoints[:, 0]
     V = keypoints[:, 1]

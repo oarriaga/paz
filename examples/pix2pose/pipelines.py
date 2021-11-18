@@ -13,6 +13,7 @@ from backend import denormalize_points2D
 from backend import draw_poses6D
 from backend import draw_masks
 from paz.backend.quaternion import rotation_vector_to_quaternion
+from paz.backend.image import resize_image, show_image
 
 
 class DomainRandomization(SequentialProcessor):
@@ -61,7 +62,7 @@ class RGBMaskToImagePoints2D(SequentialProcessor):
         super(RGBMaskToImagePoints2D, self).__init__()
         self.add(GetNonZeroArguments())
         self.add(ArgumentsToImagePoints2D())
-        self.add(NormalizePoints2D(output_shape))
+        # self.add(NormalizePoints2D(output_shape))
 
 
 class SolveChangingObjectPnP(SequentialProcessor):
@@ -72,17 +73,25 @@ class SolveChangingObjectPnP(SequentialProcessor):
 
 
 class Pix2Pose(pr.Processor):
-    def __init__(self, model, object_sizes, epsilon=0.15):
+    def __init__(self, model, object_sizes, epsilon=0.15, with_resize=True):
         self.object_sizes = object_sizes
         self.predict_RGBMask = PredictRGBMask(model, epsilon)
         self.mask_to_points3D = RGBMaskToObjectPoints3D(self.object_sizes)
         self.mask_to_points2D = RGBMaskToImagePoints2D(model.output_shape[1:3])
         self.wrap = pr.WrapOutput(['points3D', 'points2D', 'RGB_mask'])
+        self.with_resize = with_resize
 
     def call(self, image):
         RGB_mask = self.predict_RGBMask(image)
+        if self.with_resize:
+            print(image.shape, RGB_mask.shape)
+            RGB_mask = resize_image(RGB_mask, image.shape[:2][::-1])
+            print(RGB_mask.shape)
+            show_image(RGB_mask)
         points3D = self.mask_to_points3D(RGB_mask)
         points2D = self.mask_to_points2D(RGB_mask)
+        from backend import normalize_points2D
+        points2D = normalize_points2D(points2D, *image.shape[:2][::-1])
         return self.wrap(points3D, points2D, RGB_mask)
 
 
@@ -108,7 +117,6 @@ class EstimatePoseMasks(Processor):
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
         self.draw_boxes2D = pr.DrawBoxes2D(detect.class_names)
         self.object_sizes = self.estimate_keypoints.object_sizes
-        # self.cube_points3D = build_cube_points3D(0.2, 0.2, 0.07)
         self.cube_points3D = build_cube_points3D(*self.object_sizes)
 
     def call(self, image):
@@ -119,7 +127,11 @@ class EstimatePoseMasks(Processor):
         for crop, box2D in zip(cropped_images, boxes2D):
             points2D, points3D = self.unwrap(self.estimate_keypoints(crop))
             points2D = denormalize_points2D(points2D, *crop.shape[0:2])
+            print(box2D.coordinates)
             points2D = self.change_coordinates(points2D, box2D)
+            import numpy as np
+            print(np.max(points2D, axis=0))
+            print(points2D.shape)
             if len(points3D) < self.predict_pose.MINIMUM_REQUIRED_POINTS:
                 continue
             success, rotation, translation = self.predict_pose(
@@ -132,6 +144,6 @@ class EstimatePoseMasks(Processor):
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
             image = draw_masks(image, points, self.object_sizes)
-            image = draw_poses6D(
-                image, poses6D, self.cube_points3D, self.camera.intrinsics)
+            image = draw_poses6D(image, poses6D, self.cube_points3D,
+                                 self.camera.intrinsics)
         return self.wrap(image, boxes2D, poses6D)
