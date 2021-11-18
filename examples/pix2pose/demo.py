@@ -34,7 +34,7 @@ score_thresh = 0.50
 detect = SSD300FAT(score_thresh, draw=False)
 offsets = [0.2, 0.2]
 estimate_keypoints = Pix2Pose(model, object_sizes)
-pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets, None)
+pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets)
 
 results = pipeline(image)
 predicted_image = results['image']

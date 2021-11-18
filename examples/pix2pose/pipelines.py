@@ -87,8 +87,7 @@ class Pix2Pose(pr.Processor):
 
 
 class EstimatePoseMasks(Processor):
-    def __init__(self, detect, estimate_keypoints, camera, offsets,
-                 class_to_dimensions, radius=3, thickness=1, draw=True):
+    def __init__(self, detect, estimate_keypoints, camera, offsets, draw=True):
         """Pose estimation pipeline using keypoints.
         """
         super(EstimatePoseMasks, self).__init__()
@@ -108,7 +107,9 @@ class EstimatePoseMasks(Processor):
         self.unwrap = UnwrapDictionary(['points2D', 'points3D'])
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
         self.draw_boxes2D = pr.DrawBoxes2D(detect.class_names)
-        self.cube_points3D = build_cube_points3D(0.2, 0.2, 0.07)
+        self.object_sizes = self.estimate_keypoints.object_sizes
+        # self.cube_points3D = build_cube_points3D(0.2, 0.2, 0.07)
+        self.cube_points3D = build_cube_points3D(*self.object_sizes)
 
     def call(self, image):
         boxes2D = self.postprocess_boxes(self.detect(image))
@@ -130,7 +131,7 @@ class EstimatePoseMasks(Processor):
             poses6D.append(pose6D), points.append([points2D, points3D])
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
-            image = draw_masks(image, points)
+            image = draw_masks(image, points, self.object_sizes)
             image = draw_poses6D(
                 image, poses6D, self.cube_points3D, self.camera.intrinsics)
         return self.wrap(image, boxes2D, poses6D)
