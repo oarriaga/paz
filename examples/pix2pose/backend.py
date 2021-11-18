@@ -1,8 +1,6 @@
-# from collections import Iterable
 import numpy as np
 from paz.backend.image.draw import GREEN
 from paz.backend.image import draw_line, draw_dot
-# from paz.abstract import Pose6D
 import cv2
 
 
@@ -214,7 +212,7 @@ def replace_lower_than_threshold(source, threshold=1e-3, replacement=0.0):
 def arguments_to_image_points2D(row_args, col_args):
     """Convert array arguments into UV coordinates.
 
-            Image plane
+              Image plane
 
            (0,0)-------->  (U)
              |
@@ -242,24 +240,52 @@ def arguments_to_image_points2D(row_args, col_args):
     return image_points2D
 
 
-def draw_masks(image, points):
+def points3D_to_RGB(points3D, object_sizes):
+    """Transforms points3D in object frame to RGB color space.
+    # Arguments
+        points3D: Array (num_points, 3). Points3D a
+        object_sizes: List (3) indicating the
+            (width, height, depth) of object.
+
+    # Returns
+        Array of ints (num_points, 3) in RGB space.
+    """
+    colors = points3D / (0.5 * object_sizes)
+    colors = colors + 1.0
+    colors = colors * 127.5
+    colors = colors.astype(np.uint8)
+    return colors
+
+
+def draw_masks(image, points, object_sizes):
     for points2D, points3D in points:
-        object_sizes = np.array([0.184, 0.187, 0.052])
-        colors = points3D / (object_sizes / 2.0)
-        colors = (colors + 1.0) * 127.5
-        colors = colors.astype('int')
-        image = draw_maski(image, points2D, colors)
+        colors = points3D_to_RGB(points3D, object_sizes)
+        image = draw_points2D(image, points2D, colors)
     return image
 
 
-def draw_maski(image, keypoints, colors, radius=1):
-    for keypoint, color in zip(keypoints, colors):
-        R, G, B = color
+def draw_points2D(image, points2D, colors):
+    """Draws mask using points2D in UV space using only numpy.
+
+    # Arguments
+        image: Array (H, W).
+        keypoints: Array (num_points, U, V). Keypoints in image space
+        colors: Array (num_points, 3). Colors in RGB space.
+
+    # Returns
+        Array with drawn points.
+    """
+    keypoints = points2D.astype(int)
+    U = keypoints[:, 0]
+    V = keypoints[:, 1]
+    image[V, U, :] = colors
+    return image
+
+
+def draw_points2D_(image, keypoints, colors, radius=1):
+    for (u, v), (R, G, B) in zip(keypoints, colors):
         color = (int(R), int(G), int(B))
-        x, y = keypoint
-        x = int(x)
-        y = int(y)
-        draw_dot(image, (x, y), color, radius)
+        draw_dot(image, (u, v), color, radius)
     return image
 
 
