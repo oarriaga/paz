@@ -1,6 +1,8 @@
 from paz.abstract import SequentialProcessor, Processor
 from paz import processors as pr
 import numpy as np
+from backend import build_cube_points3D
+# import pytest
 
 
 class PipelineWithTwoChannels(SequentialProcessor):
@@ -61,3 +63,7 @@ def test_copy_with_controlmap_using_3_channels_plus():
     assert len(values) == 2
     assert np.allclose(values[0], A_random_values + B_random_values)
     assert np.allclose(values[1], A_random_values)
+
+
+def test_build_cube_points3D(width, height, depth):
+    cube_points3D = build_cube_points3D(width, height, depth)
