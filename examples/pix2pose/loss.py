@@ -109,13 +109,16 @@ def compute_weighted_symmetric_loss(RGBA_true, RGB_pred, rotations, beta=3.0):
     """
     # alpha mask is invariant to rotations that leave the shape symmetric.
     RGB_true, alpha = split_alpha_mask(RGBA_true)
-    RGB_original_shape = tf.shape(RGBA_true)
-    RGB_true = tf.reshape(RGB_true, [-1, 3])
+    # RGB_original_shape = tf.shape(RGBA_true)
+    batch_size, H, W, num_channels = RGB_true.shape
+    batch_size, H, W, num_channels = 32, 128, 128, 3
+    RGB_true = tf.reshape(RGB_true, [batch_size, -1, 3])
     RGB_true = to_normalized_device_coordinates(RGB_true)
     symmetric_losses = []
     for rotation in rotations:
-        RGB_true_symmetric = tf.matmul(rotation, RGB_true.T).T
-        RGB_true_symmetric = tf.reshape(RGB_true_symmetric, RGB_original_shape)
+        # RGB_true_symmetric = tf.matmul(rotation, RGB_true.T).T
+        RGB_true_symmetric = tf.einsum('ij,bpj->bpi', rotation, RGB_true)
+        RGB_true_symmetric = tf.reshape(RGB_true_symmetric, (batch_size, H, W, num_channels))
         RGBA_true_symmetric = tf.concat([RGB_true_symmetric, alpha], axis=3)
         symmetric_loss = compute_weighted_reconstruction_loss(
             RGBA_true_symmetric, RGB_pred, beta)
@@ -192,6 +195,7 @@ class WeightedSymmetricReconstruction(Loss):
         the positive alpha mask values in the predicted RGB image by beta.
     """
     def __init__(self, rotations, beta=3.0):
+        super(WeightedSymmetricReconstruction, self).__init__()
         self.rotations = rotations
         self.beta = beta
 
