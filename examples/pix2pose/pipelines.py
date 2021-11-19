@@ -4,7 +4,7 @@ from paz.abstract.messages import Pose6D
 from paz import processors as pr
 from processors import (
     GetNonZeroArguments, GetNonZeroValues, ArgumentsToImagePoints2D,
-    ImageToClosedOneBall, Scale, SolveChangingObjectPnPRANSAC,
+    ImageToNormalizedDeviceCoordinates, Scale, SolveChangingObjectPnPRANSAC,
     ReplaceLowerThanThreshold)
 from backend import build_cube_points3D
 from processors import UnwrapDictionary
@@ -54,7 +54,7 @@ class RGBMaskToObjectPoints3D(SequentialProcessor):
     def __init__(self, object_sizes):
         super(RGBMaskToObjectPoints3D, self).__init__()
         self.add(GetNonZeroValues())
-        self.add(ImageToClosedOneBall())
+        self.add(ImageToNormalizedDeviceCoordinates())
         self.add(Scale(object_sizes / 2.0))
 
 

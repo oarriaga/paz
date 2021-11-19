@@ -11,26 +11,28 @@ from backend import solve_PnP_RANSAC
 from backend import normalize_points2D
 from backend import rotation_vector_to_rotation_matrix
 from backend import to_affine_matrix
+from backend import image_to_normalized_device_coordinates
+from backend import normalized_device_coordinates_to_image
 
 
-class ImageToClosedOneBall(Processor):
+class ImageToNormalizedDeviceCoordinates(Processor):
     """Map image value from [0, 255] -> [-1, 1].
     """
     def __init__(self):
-        super(ImageToClosedOneBall, self).__init__()
+        super(ImageToNormalizedDeviceCoordinates, self).__init__()
 
     def call(self, image):
-        return (image / 127.5) - 1.0
+        return image_to_normalized_device_coordinates(image)
 
 
-class ClosedOneBallToImage(Processor):
+class NormalizedDeviceCoordinatesToImage(Processor):
     """Map normalized value from [-1, 1] -> [0, 255].
     """
     def __init__(self):
-        super(ClosedOneBallToImage, self).__init__()
+        super(NormalizedDeviceCoordinatesToImage, self).__init__()
 
     def call(self, image):
-        return (image + 1.0) * 127.5
+        return normalized_device_coordinates_to_image(image)
 
 
 class DrawBoxes3D(Processor):
