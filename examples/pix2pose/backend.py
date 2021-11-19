@@ -478,3 +478,30 @@ def to_affine_matrix(rotation_matrix, translation):
     affine_row = np.array([[0.0, 0.0, 0.0, 1.0]])
     affine_matrix = np.concatenate([affine_top, affine_row], axis=0)
     return affine_matrix
+
+
+def image_to_normalized_device_coordinates(image):
+    """Map image value from [0, 255] -> [-1, 1].
+    """
+    return (image / 127.5) - 1.0
+
+
+def normalized_device_coordinates_to_image(image):
+    """Map normalized value from [-1, 1] -> [0, 255].
+    """
+    return (image + 1.0) * 127.5
+
+
+def build_rotation_matrix_z(angle):
+    """Builds rotation matrix in Z axis.
+    # Arguments
+        angle: Float. Angle in radians.
+    # Return
+        Array (3, 3) rotation matrix in Z axis.
+    """
+    cos_angle = np.cos(angle)
+    sin_angle = np.cos(angle)
+    rotation_matrix_z = np.array([[+cos_angle, -sin_angle, 0.0],
+                                  [+sin_angle, +cos_angle, 0.0],
+                                  [0.0, 0.0, 1.0]])
+    return rotation_matrix_z
