@@ -1,10 +1,11 @@
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv2D, Activation, LeakyReLU
+from tensorflow.keras.layers import (
+    Input, Conv2D, Activation, LeakyReLU, BatchNormalization)
 
 
 def block(x, filters, dilation_rate, alpha):
     x = Conv2D(filters, (3, 3), dilation_rate=dilation_rate, padding='same')(x)
-    # x = BatchNormalization()(x)
+    x = BatchNormalization()(x)
     x = LeakyReLU(alpha)(x)
     return x
 
