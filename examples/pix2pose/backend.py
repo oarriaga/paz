@@ -237,7 +237,6 @@ def arguments_to_image_points2D(row_args, col_args):
     row_args = row_args.reshape(-1, 1)
     col_args = col_args.reshape(-1, 1)
     image_points2D = np.concatenate([col_args, row_args], axis=1)
-    # image_points2D = np.concatenate([row_args, col_args], axis=1)
     return image_points2D
 
 
@@ -251,6 +250,7 @@ def points3D_to_RGB(points3D, object_sizes):
     # Returns
         Array of ints (num_points, 3) in RGB space.
     """
+    # TODO add domain and codomain transform as comments
     colors = points3D / (0.5 * object_sizes)
     colors = colors + 1.0
     colors = colors * 127.5
@@ -258,6 +258,7 @@ def points3D_to_RGB(points3D, object_sizes):
     return colors
 
 
+# TODO change to processor
 def draw_masks(image, points, object_sizes):
     for points2D, points3D in points:
         colors = points3D_to_RGB(points3D, object_sizes)
@@ -266,7 +267,7 @@ def draw_masks(image, points, object_sizes):
 
 
 def draw_points2D(image, points2D, colors):
-    """Draws mask using points2D in UV space using only numpy.
+    """Draws a pixel for all points2D in UV space using only numpy.
 
     # Arguments
         image: Array (H, W).
@@ -276,7 +277,6 @@ def draw_points2D(image, points2D, colors):
     # Returns
         Array with drawn points.
     """
-    # print(np.max(points2D, axis=0))
     keypoints = points2D.astype(int)
     U = keypoints[:, 0]
     V = keypoints[:, 1]
@@ -349,23 +349,61 @@ def denormalize_points2D(points2D, height, width):
     return points2D
 
 
-def draw_poses6D(image, poses6D, cube_points3D, camera_intrinsics):
-    image = image.astype(float)
-    for pose6D in poses6D:
-        rotation = quaternion_to_rotation_matrix(pose6D.quaternion)
-        rotation = np.squeeze(rotation, axis=2)
-        cube_points2D = project_to_image(
-            rotation, pose6D.translation,
-            cube_points3D, camera_intrinsics)
-        cube_points2D = cube_points2D.astype(np.int32)
-        image = draw_cube(image, cube_points2D)
-    image = image.astype('uint8')
+def draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics):
+    """Draws pose6D by projecting cube3D to image space with camera intrinsics.
+
+    # Arguments
+        image: Array (H, W, 3)
+        pose6D: paz message Pose6D with quaternion and translation values.
+        cube3D: Array (8, 3). Cube 3D points in object frame.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+
+    # Returns
+        Original image array (H, W, 3) with drawn cube points.
+    """
+    quaternion, translation = pose6D.quaternion, pose6D.translation
+    rotation = quaternion_to_rotation_matrix(quaternion)
+    rotation = np.squeeze(rotation, axis=2)
+    cube_points2D = project_to_image(
+        rotation, translation, cube_points3D, camera_intrinsics)
+    cube_points2D = cube_points2D.astype(np.int32)
+    image = draw_cube(image, cube_points2D)
     return image
 
 
-# NOT USED
+def draw_poses6D(image, poses6D, cube_points3D, camera_intrinsics):
+    """Draws pose6D by projecting cube3D to image space with camera intrinsics.
+
+    # Arguments
+        image: Array (H, W, 3)
+        pose6D: List paz messages Pose6D with quaternions and translations.
+        cube3D: Array (8, 3). Cube 3D points in object frame.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+
+    # Returns
+        Original image array (H, W, 3) with drawn cube points for all poses6D.
+    """
+    for pose6D in poses6D:
+        image = draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics)
+    return image
+
+
 def homogenous_quaternion_to_rotation_matrix(quaternion):
-    # w0, q1, q2, q3 = quaternion
+    """Transforms quaternion to rotation matrix.
+
+    # Arguments
+        quaternion: Array containing quaternion value [q1, q2, q3, w0].
+
+    # Returns
+        Rotation matrix [3, 3].
+
+    # Note
+        If quaternion is not a unit quaternion the rotation matrix is not
+        unitary but still orthogonal i.e. the outputted rotation matrix is
+        a scalar multiple of a rotation matrix.
+    """
     q1, q2, q3, w0 = quaternion
 
     r11 = w0**2 + q1**2 - q2**2 - q3**2
@@ -386,43 +424,51 @@ def homogenous_quaternion_to_rotation_matrix(quaternion):
     return rotation_matrix
 
 
-def inhomogenous_quaternion_to_rotation_matrix(q):
-    # quaternion
-    # q = q[::-1]
-    r11 = 1 - (2 * (q[1]**2 + q[2]**2))
-    r12 = 2 * (q[0] * q[1] - q[3] * q[2])
-    r13 = 2 * (q[3] * q[1] + q[0] * q[2])
+def quaternion_to_rotation_matrix(quaternion):
+    """Transforms quaternion to rotation matrix.
 
-    r21 = 2 * (q[0] * q[1] + q[3] * q[2])
-    r22 = 1 - (2 * (q[0]**2 + q[2]**2))
-    r23 = 2 * (q[1] * q[2] - q[3] * q[0])
+    # Arguments
+        quaternion: Array containing quaternion value [q1, q2, q3, w0].
 
-    r31 = 2 * (q[0] * q[2] - q[3] * q[1])
-    r32 = 2 * (q[3] * q[0] + q[1] * q[2])
-    r33 = 1 - (2 * (q[0]**2 + q[1]**2))
+    # Returns
+        Rotation matrix [3, 3].
 
-    rotation_matrix = np.array([[r11, r12, r13],
-                                [r21, r22, r23],
-                                [r31, r32, r33]])
-
-    return rotation_matrix
-
-
-def quaternion_to_rotation_matrix(quaternion, homogenous=True):
-    if homogenous:
-        matrix = homogenous_quaternion_to_rotation_matrix(quaternion)
-    else:
-        matrix = inhomogenous_quaternion_to_rotation_matrix(quaternion)
+    # Note
+        "If the quaternion "is not a unit quaternion then the homogeneous form
+        is still a scalar multiple of a rotation matrix, while the
+        inhomogeneous form is in general no longer an orthogonal matrix.
+        This is why in numerical work the homogeneous form is to be preferred
+        if distortion is to be avoided." [wikipedia](https://en.wikipedia.org/
+            wiki/Conversion_between_quaternions_and_Euler_angles)
+    """
+    matrix = homogenous_quaternion_to_rotation_matrix(quaternion)
     return matrix
 
 
 def rotation_vector_to_rotation_matrix(rotation_vector):
+    """Transforms rotation vector (axis-angle) form to rotation matrix.
+
+    # Arguments
+        rotation_vector: Array (3). Rotation vector in axis-angle form.
+
+    # Returns
+        Array (3, 3) rotation matrix.
+    """
     rotation_matrix = np.eye(3)
     cv2.Rodrigues(rotation_vector, rotation_matrix)
     return rotation_matrix
 
 
 def to_affine_matrix(rotation_matrix, translation):
+    """Builds affine matrix from rotation matrix and translation vector.
+
+    # Arguments
+        rotation_matrix: Array (3, 3). Representing a rotation matrix.
+        translation: Array (3). Translation vector.
+
+    # Returns
+        Array (4, 4) representing an affine matrix.
+    """
     if len(translation) != 3:
         raise ValueError('Translation should be of lenght 3')
     if rotation_matrix.shape != (3, 3):
