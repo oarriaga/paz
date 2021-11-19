@@ -20,6 +20,7 @@ camera.start()
 image_size = camera.read().shape[0:2]
 camera.stop()
 
+# image = load_image('test_image2.jpg')
 image = load_image('test_image.jpg')
 image_size = image.shape[0:2]
 focal_length = image_size[1]
@@ -29,11 +30,11 @@ camera.intrinsics = np.array([[focal_length, 0, image_center[0]],
                               [0, focal_length, image_center[1]],
                               [0, 0, 1]])
 object_sizes = np.array([0.184, 0.187, 0.052])
-epsilon = 0.15
+epsilon = 0.001
 score_thresh = 0.50
 detect = SSD300FAT(score_thresh, draw=False)
 offsets = [0.2, 0.2]
-estimate_keypoints = Pix2Pose(model, object_sizes)
+estimate_keypoints = Pix2Pose(model, object_sizes, epsilon, True)
 pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets)
 
 results = pipeline(image)
