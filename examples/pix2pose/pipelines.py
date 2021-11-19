@@ -12,6 +12,7 @@ from processors import NormalizePoints2D
 from backend import denormalize_points2D
 from backend import draw_poses6D
 from backend import draw_masks
+from backend import normalize_points2D
 from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.image import resize_image, show_image
 
@@ -66,10 +67,11 @@ class RGBMaskToImagePoints2D(SequentialProcessor):
 
 
 class SolveChangingObjectPnP(SequentialProcessor):
-    def __init__(self, camera_intrinsics):
+    def __init__(self, camera_intrinsics, inlier_thresh=5, num_iterations=100):
         super(SolveChangingObjectPnP, self).__init__()
         self.MINIMUM_REQUIRED_POINTS = 4
-        self.add(SolveChangingObjectPnPRANSAC(camera_intrinsics))
+        self.add(SolveChangingObjectPnPRANSAC(
+            camera_intrinsics, inlier_thresh, num_iterations))
 
 
 class Pix2Pose(pr.Processor):
@@ -84,13 +86,9 @@ class Pix2Pose(pr.Processor):
     def call(self, image):
         RGB_mask = self.predict_RGBMask(image)
         if self.with_resize:
-            print(image.shape, RGB_mask.shape)
             RGB_mask = resize_image(RGB_mask, image.shape[:2][::-1])
-            print(RGB_mask.shape)
-            show_image(RGB_mask)
         points3D = self.mask_to_points3D(RGB_mask)
         points2D = self.mask_to_points2D(RGB_mask)
-        from backend import normalize_points2D
         points2D = normalize_points2D(points2D, *image.shape[:2][::-1])
         return self.wrap(points3D, points2D, RGB_mask)
 
@@ -127,18 +125,16 @@ class EstimatePoseMasks(Processor):
         for crop, box2D in zip(cropped_images, boxes2D):
             points2D, points3D = self.unwrap(self.estimate_keypoints(crop))
             points2D = denormalize_points2D(points2D, *crop.shape[0:2])
-            print(box2D.coordinates)
             points2D = self.change_coordinates(points2D, box2D)
-            import numpy as np
-            print(np.max(points2D, axis=0))
-            print(points2D.shape)
             if len(points3D) < self.predict_pose.MINIMUM_REQUIRED_POINTS:
                 continue
             success, rotation, translation = self.predict_pose(
                 points3D, points2D)
             if success is False:
                 continue
+            print('ROTATION', rotation.shape)
             quaternion = rotation_vector_to_quaternion(rotation)
+            print('QUATERNION', quaternion.shape)
             pose6D = Pose6D(quaternion, translation, box2D.class_name)
             poses6D.append(pose6D), points.append([points2D, points3D])
         if self.draw:
