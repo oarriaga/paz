@@ -189,8 +189,3 @@ class WeightedReconstructionWithError(Loss):
         reconstruction_loss = compute_weighted_reconstruction_loss_with_error(
             RGBA_true, RGBE_pred, self.beta)
         return reconstruction_loss
-
-
-def MSE_without_last_channel(y_true, y_pred):
-    squared_difference = tf.square(y_true[:, :, :, 0:3] - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)  # Note the `axis=-1`
