@@ -705,8 +705,7 @@ class ClassNet(Layer):
 
         for repeat_args in range(self.num_repeats):
             self.conv_blocks.append(self.conv2d_layer(
-                with_separable_conv, self.num_filters, 3,
-                tf.zeros_initializer(), None, 'same',
+                self.num_filters, 3, tf.zeros_initializer(), None, 'same',
                 'class-%d' % repeat_args))
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
@@ -714,7 +713,7 @@ class ClassNet(Layer):
                     name='class-%d-bn-%d' % (repeat_args, level)))
             self.batchnorms.append(batchnorm_per_level)
         self.classes = self.conv2d_layer(
-            with_separable_conv, num_classes*num_anchors, 3,
+            num_classes*num_anchors, 3,
             tf.constant_initializer(-np.log((1 - 0.01) / 0.01)), None, 'same',
             'class-predict')
 
@@ -725,28 +724,20 @@ class ClassNet(Layer):
             level: Int, feature level.
             level_id: Int, level ID of the feature level.
             training: Bool, mode of using the network.
+
+        # Returns
+            image: Tensor, processed image tensor.
         """
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
-
-        def _call(image):
-            """
-            # Arguments
-                image: Tensor, features of the image.
-
-            # Returns
-                image: Tensor, processed image tensor.
-            """
-            original_image = image
-            image = conv_block(image)
-            image = batchnorm(image, training=training)
-            image = self.activation(image)
-            if level > 0 and self.survival_rate:
-                image = get_drop_connect(image, training, self.survival_rate)
-                image = image + original_image
-            return image
-
-        return _call(image)
+        original_image = image
+        image = conv_block(image)
+        image = batchnorm(image, training=training)
+        image = self.activation(image)
+        if level > 0 and self.survival_rate:
+            image = get_drop_connect(image, training, self.survival_rate)
+            image = image + original_image
+        return image
 
     def call(self, features, training, **kwargs):
         """Call ClassNet.
@@ -770,11 +761,10 @@ class ClassNet(Layer):
                 class_outputs.append(self.classes(image))
         return class_outputs
 
-    @classmethod
-    def conv2d_layer(cls, with_separable_conv, num_filters, kernel_size,
-                     bias_initializer, activation, padding, name):
+    def conv2d_layer(self, num_filters, kernel_size, bias_initializer,
+                     activation, padding, name):
         """Gets the conv2d layer in ClassNet class."""
-        if with_separable_conv:
+        if self.with_separable_conv:
             conv2d_layer = SeparableConv2D(
                 num_filters, kernel_size, (1, 1), padding, 'channels_last',
                 (1, 1), 1, activation, True,
@@ -827,60 +817,37 @@ class BoxNet(Layer):
         self.return_base = return_base
 
         for repeat_args in range(self.num_repeats):
-            # If using SeparableConv2D
-            if self.with_separable_conv:
-                self.conv_blocks.append(SeparableConv2D(
-                    self.num_filters, 3, (1, 1), 'same', 'channels_last',
-                    (1, 1), 1, None, True, tf.initializers.variance_scaling(),
-                    tf.initializers.variance_scaling(),
-                    tf.zeros_initializer(), name='box-%d' % repeat_args))
-            # If using Conv2d
-            else:
-                self.conv_blocks.append(Conv2D(
-                    self.num_filters, 3, (1, 1), 'same', 'channels_last',
-                    (1, 1), 1, None, True,
-                    tf.random_normal_initializer(stddev=0.01),
-                    tf.zeros_initializer(), name='box-%d' % repeat_args))
-
+            self.conv_blocks.append(self.boxes_layer(
+                self.num_filters, name='box-%d' % repeat_args))
             batchnorm_per_level = []
             for level in range(self.min_level, self.max_level + 1):
                 batchnorm_per_level.append(
                     BatchNormalization(
                         name='box-%d-bn-%d' % (repeat_args, level)))
             self.batchnorms.append(batchnorm_per_level)
+        self.boxes = self.boxes_layer(4 * num_anchors, name='box-predict')
 
-        self.boxes = self.boxes_layer(
-            with_separable_conv, num_anchors, name='box-predict')
-
-    def _conv_batchnorm_activation(self, image, level, level_id, training):
+    def conv_batchnorm_activation(self, image, level, level_id, training):
         """
         # Arguments
             image: Tensor, image features.
             level: Int, feature level.
             level_id: Int, level ID of the feature level.
             training: Bool, mode of using the network.
+
+        # Returns
+            image: Tensor, processed image tensor.
         """
         conv_block = self.conv_blocks[level]
         batchnorm = self.batchnorms[level][level_id]
-
-        def _call(image):
-            """
-            # Arguments
-                image: Tensor, features of the image.
-
-            # Returns
-                image: Tensor, processed image tensor.
-            """
-            original_image = image
-            image = conv_block(image)
-            image = batchnorm(image, training=training)
-            image = self.activation(image)
-            if level > 0 and self.survival_rate:
-                image = get_drop_connect(image, training, self.survival_rate)
-                image = image + original_image
-            return image
-
-        return _call(image)
+        original_image = image
+        image = conv_block(image)
+        image = batchnorm(image, training=training)
+        image = self.activation(image)
+        if level > 0 and self.survival_rate:
+            image = get_drop_connect(image, training, self.survival_rate)
+            image = image + original_image
+        return image
 
     def call(self, features, training):
         """Call boxnet.
@@ -896,7 +863,7 @@ class BoxNet(Layer):
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
             for repeat_arg in range(self.num_repeats):
-                image = self._conv_batchnorm_activation(
+                image = self.conv_batchnorm_activation(
                     image, repeat_arg, level_id, training)
             if self.return_base:
                 box_outputs.append(image)
@@ -904,8 +871,7 @@ class BoxNet(Layer):
                 box_outputs.append(self.boxes(image))
         return box_outputs
 
-    @classmethod
-    def boxes_layer(cls, with_separable_conv, num_anchors, name):
+    def boxes_layer(self, num_filters, name):
         """Gets the conv2d layer in BoxNet class.
 
         # Arguments
@@ -918,15 +884,15 @@ class BoxNet(Layer):
             convolution_block: TF layer type. Separable conv or Classical
             conv block.
         """
-        if with_separable_conv:
+        if self.with_separable_conv:
             return SeparableConv2D(
-                4 * num_anchors, 3, (1, 1), 'same', 'channels_last',
+                num_filters, 3, (1, 1), 'same', 'channels_last',
                 (1, 1), 1, None, True, tf.initializers.variance_scaling(),
                 tf.initializers.variance_scaling(),
                 tf.zeros_initializer(), name=name)
         else:
             return Conv2D(
-                4 * num_anchors, 3, (1, 1), 'same', 'channels_last',
+                num_filters, 3, (1, 1), 'same', 'channels_last',
                 (1, 1), 1, None, True,
                 tf.random_normal_initializer(stddev=0.01),
                 tf.zeros_initializer(), name=name)
