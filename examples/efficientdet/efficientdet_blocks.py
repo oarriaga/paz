@@ -634,20 +634,15 @@ class ConvolutionAfterFusion(Layer):
         super().__init__(name=name)
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
-        self.fpn_num_filters = fpn_num_filters
-        self.activation = tf.nn.swish
-
         if self.with_separable_conv:
-            conv2d_layer = SeparableConv2D(
+            self.convolution = SeparableConv2D(
                 fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
                 (1, 1), 1, None, not self.conv_batchnorm_activation_block,
                 name='conv')
         else:
-            conv2d_layer = Conv2D(
+            self.convolution = Conv2D(
                 fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
                 use_bias=not self.conv_batchnorm_activation_block, name='conv')
-
-        self.convolution = conv2d_layer
         self.batchnorm = BatchNormalization(
             -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
 
@@ -666,7 +661,7 @@ class ConvolutionAfterFusion(Layer):
         new_node = self.convolution(new_node)
         new_node = self.batchnorm(new_node, training=training)
         if self.conv_batchnorm_activation_block:
-            new_node = self.activation(new_node)
+            new_node = tf.nn.swish(new_node)
         return new_node
 
 
