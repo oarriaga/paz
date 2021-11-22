@@ -717,7 +717,7 @@ class ClassNet(Layer):
             tf.constant_initializer(-np.log((1 - 0.01) / 0.01)), None, 'same',
             'class-predict')
 
-    def _conv_batchnorm_activation(self, image, level, level_id, training):
+    def conv_batchnorm_activation(self, image, level, level_id, training):
         """
         # Arguments
             image: Tensor, image features.
@@ -753,7 +753,7 @@ class ClassNet(Layer):
         for level_id in range(0, self.max_level - self.min_level + 1):
             image = features[level_id]
             for repeat_args in range(self.num_repeats):
-                image = self._conv_batchnorm_activation(
+                image = self.conv_batchnorm_activation(
                     image, repeat_args, level_id, training)
             if self.return_base:
                 class_outputs.append(image)
