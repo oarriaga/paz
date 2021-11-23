@@ -114,6 +114,7 @@ def compute_weighted_symmetric_loss(RGBA_true, RGB_pred, rotations, beta=3.0):
     batch_size, H, W, num_channels = 32, 128, 128, 3
     RGB_true = tf.reshape(RGB_true, [batch_size, -1, 3])
     RGB_true = to_normalized_device_coordinates(RGB_true)
+    RGB_pred = to_normalized_device_coordinates(RGB_pred)
     symmetric_losses = []
     for rotation in rotations:
         # RGB_true_symmetric = tf.matmul(rotation, RGB_true.T).T
