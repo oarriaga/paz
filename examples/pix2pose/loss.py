@@ -88,13 +88,47 @@ def compute_weighted_reconstruction_loss(RGBA_true, RGB_pred, beta=3.0):
     return tf.reduce_mean(reconstruction_loss, axis=-1, keepdims=True)
 
 
-def to_normalized_device_coordinates(image):
+def normalized_image_to_normalized_device_coordinates(image):
     """Map image value from [0, 1] -> [-1, 1].
     """
-    return (image * 2) - 1.0
+    return (image * 2.0) - 1.0
+
+
+def normalized_device_coordinates_to_normalized_image(image):
+    """Map image value from [0, 1] -> [-1, 1].
+    """
+    return (image + 1.0) / 2.0
 
 
 def compute_weighted_symmetric_loss(RGBA_true, RGB_pred, rotations, beta=3.0):
+    """Computes the mininum of all rotated L1 reconstruction losses weighting
+        the positive alpha mask values in the predicted RGB image by beta.
+
+    # Arguments
+        RGBA_true: Tensor [batch, H, W, 4]. Color with alpha mask label values.
+        RGB_pred: Tensor [batch, H, W, 3]. Predicted RGB values.
+        rotations: Array (num_symmetries, 3, 3). Rotation matrices
+            that when applied lead to the same object view.
+
+    # Returns
+        Tensor [batch, H, W] with weighted reconstruction loss values.
+    """
+    RGB_true, alpha = split_alpha_mask(RGBA_true)
+    RGB_true = normalized_image_to_normalized_device_coordinates(RGB_true)
+    symmetric_losses = []
+    for rotation in rotations:
+        RGB_true = tf.einsum('ij,bklj->bkli', rotation, RGB_true)
+        RGB_true = normalized_device_coordinates_to_normalized_image(RGB_true)
+        RGB_true = tf.concat([RGB_true, alpha], axis=3)
+        loss = compute_weighted_reconstruction_loss(RGBA_true, RGB_pred, beta)
+        loss = tf.expand_dims(loss, -1)
+        symmetric_losses.append(loss)
+    symmetric_losses = tf.concat(symmetric_losses, axis=-1)
+    minimum_symmetric_loss = tf.reduce_min(symmetric_losses, axis=-1)
+    return minimum_symmetric_loss
+
+
+def compute_weighted_symmetric_loss2(RGBA_true, RGB_pred, rotations, beta=3.0):
     """Computes the mininum of all rotated L1 reconstruction losses weighting
         the positive alpha mask values in the predicted RGB image by beta.
 
@@ -118,7 +152,7 @@ def compute_weighted_symmetric_loss(RGBA_true, RGB_pred, rotations, beta=3.0):
     symmetric_losses = []
     for rotation in rotations:
         # RGB_true_symmetric = tf.matmul(rotation, RGB_true.T).T
-        RGB_true_symmetric = tf.einsum('ij,bpj->bpi', rotation, RGB_true)
+        RGB_true_symmetric = tf.einsum('ij,klj->kli', rotation, RGB_true)
         RGB_true_symmetric = tf.reshape(RGB_true_symmetric, (batch_size, H, W, num_channels))
         RGBA_true_symmetric = tf.concat([RGB_true_symmetric, alpha], axis=3)
         symmetric_loss = compute_weighted_reconstruction_loss(
