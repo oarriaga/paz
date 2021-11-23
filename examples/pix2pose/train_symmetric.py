@@ -41,22 +41,21 @@ H, W, num_channels = image_shape = [128, 128, 3]
 
 renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
                              light, top_only, roll, shift)
+# check why this is needed in this object
+renderer.scene.ambient_light = [1.0, 1.0, 1.0]
 
 inputs_to_shape = {'input_1': [H, W, num_channels]}
 labels_to_shape = {'masks': [H, W, 4]}
+
 processor = DomainRandomization(
     renderer, image_shape, image_paths, inputs_to_shape,
     labels_to_shape, num_occlusions)
 
-
 sequence = GeneratingSequence(processor, batch_size, steps_per_epoch)
 
-angles = np.linspace(0, 2 * np.pi, 6)
-rotations = []
-for angle in angles:
-    rotations.append(build_rotation_matrix_z(angle))
-rotations = np.array(rotations)
-
+# build all symmetric rotations for solar pannel
+angles = np.linspace(0, 2 * np.pi, 7)[:6]
+rotations = np.array([build_rotation_matrix_z(angle) for angle in angles])
 
 loss = WeightedSymmetricReconstruction(rotations, beta)
 
