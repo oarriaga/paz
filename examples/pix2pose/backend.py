@@ -507,24 +507,19 @@ def build_rotation_matrix_z(angle):
     return rotation_matrix_z
 
 
-def rotate_image(image, rotation_matrix, epsilon=1e-4):
+def rotate_image(image, rotation_matrix):
     """Rotates an image with a symmetry.
     # Arguments
         image: Array (H, W, 3) with domain [0, 255].
         rotation_matrix: Array (3, 3).
+
+    # Returns
+        Array (H, W, 3) with domain [0, 255]
     """
-    mask_image = np.sum(image, axis=-1, keepdims=True)
-    mask_image = mask_image != 0
-    # mask_image = np.repeat(mask_image, 3, axis=-1)
-
+    mask_image = np.sum(image, axis=-1, keepdims=True) != 0
     image = image_to_normalized_device_coordinates(image)
-    # image_colors = (image * 2) - 1
-
-    # rotated_image = image + epsilon
     rotated_image = np.einsum('ij,klj->kli', rotation_matrix, image)
-    image = normalized_device_coordinates_to_image(rotated_image)
-    # rotated_image = (rotated_image + 1) / 2
-
-    # rotated_image = np.clip(rotated_image, a_min=0.0, a_max=255.0)
-    # rotated_image = rotated_image * mask_image
+    rotated_image = normalized_device_coordinates_to_image(rotated_image)
+    rotated_image = np.clip(rotated_image, a_min=0.0, a_max=255.0)
+    rotated_image = rotated_image * mask_image
     return rotated_image
