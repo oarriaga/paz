@@ -33,7 +33,7 @@ alpha = 0.1
 filters = 16
 num_classes = 3
 learning_rate = 0.001
-max_num_epochs = 10
+max_num_epochs = 5
 beta = 3.0
 steps_per_epoch = 1000
 H, W, num_channels = image_shape = [128, 128, 3]
@@ -70,3 +70,5 @@ model.fit(
     epochs=max_num_epochs,
     verbose=1,
     workers=0)
+
+model.save_weights('UNET_VGG_symmetric_weights.hdf5')
