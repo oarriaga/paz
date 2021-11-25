@@ -494,8 +494,10 @@ def normalized_device_coordinates_to_image(image):
 
 def build_rotation_matrix_z(angle):
     """Builds rotation matrix in Z axis.
+
     # Arguments
         angle: Float. Angle in radians.
+
     # Return
         Array (3, 3) rotation matrix in Z axis.
     """
@@ -507,8 +509,43 @@ def build_rotation_matrix_z(angle):
     return rotation_matrix_z
 
 
+def build_rotation_matrix_x(angle):
+    """Builds rotation matrix in X axis.
+
+    # Arguments
+        angle: Float. Angle in radians.
+
+    # Return
+        Array (3, 3) rotation matrix in Z axis.
+    """
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+    rotation_matrix_x = np.array([[1.0, 0.0, 0.0],
+                                  [0.0, +cos_angle, -sin_angle],
+                                  [0.0, +sin_angle, +cos_angle]])
+    return rotation_matrix_x
+
+
+def build_rotation_matrix_y(angle):
+    """Builds rotation matrix in Y axis.
+
+    # Arguments
+        angle: Float. Angle in radians.
+
+    # Return
+        Array (3, 3) rotation matrix in Z axis.
+    """
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+    rotation_matrix_y = np.array([[+cos_angle, 0.0, +sin_angle],
+                                  [0.0, 1.0, 0.0],
+                                  [-sin_angle, 0.0, +cos_angle]])
+    return rotation_matrix_y
+
+
 def rotate_image(image, rotation_matrix):
     """Rotates an image with a symmetry.
+
     # Arguments
         image: Array (H, W, 3) with domain [0, 255].
         rotation_matrix: Array (3, 3).
