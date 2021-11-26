@@ -117,10 +117,12 @@ def compute_weighted_symmetric_loss(RGBA_true, RGB_pred, rotations, beta=3.0):
     RGB_true = normalized_image_to_normalized_device_coordinates(RGB_true)
     symmetric_losses = []
     for rotation in rotations:
-        RGB_true = tf.einsum('ij,bklj->bkli', rotation, RGB_true)
-        RGB_true = normalized_device_coordinates_to_normalized_image(RGB_true)
-        RGB_true = tf.concat([RGB_true, alpha], axis=3)
-        loss = compute_weighted_reconstruction_loss(RGBA_true, RGB_pred, beta)
+        RGB_true_rotated = tf.einsum('ij,bklj->bkli', rotation, RGB_true)
+        RGB_true_rotated = normalized_device_coordinates_to_normalized_image(RGB_true_rotated)
+        RGB_true_rotated = tf.clip_by_value(RGB_true_rotated, 0.0, 1.0)
+        RGB_true_rotated = RGB_true_rotated * alpha
+        RGBA_true_rotated = tf.concat([RGB_true_rotated, alpha], axis=3)
+        loss = compute_weighted_reconstruction_loss(RGBA_true_rotated, RGB_pred, beta)
         loss = tf.expand_dims(loss, -1)
         symmetric_losses.append(loss)
     symmetric_losses = tf.concat(symmetric_losses, axis=-1)
