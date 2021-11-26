@@ -560,3 +560,114 @@ def rotate_image(image, rotation_matrix):
     rotated_image = np.clip(rotated_image, a_min=0.0, a_max=255.0)
     rotated_image = rotated_image * mask_image
     return rotated_image
+
+
+def sample_uniform(min_value, max_value):
+    """Samples values inside segment [min_value, max_value)
+
+    # Arguments
+        segment_limits: List (2) containing min and max segment values.
+
+    # Returns
+        Float inside segment [min_value, max_value]
+    """
+    if min_value > max_value:
+        raise ValueError('First value must be lower than second value')
+    value = np.random.uniform(min_value, max_value)
+    return value
+
+
+def sample_inside_box3D(min_W, min_H, min_D, max_W, max_H, max_D):
+    """ Samples points inside a 3D box defined by the
+        width, height and depth limits.
+                    ________
+                   /       /|
+                  /       / |
+                 /       /  |
+                /_______/   /
+         |      |       |  /   /
+       height   |       | / depth
+         |      |_______|/   /
+
+                --widht--
+
+    # Arguments
+        width_limits: List (2) with [min_value_width, max_value_width].
+        height_limits: List (2) with [min_value_height, max_value_height].
+        depth_limits: List (2) with [min_value_depth, max_value_depth].
+
+    # Returns
+        Array (3) of point inside the 3D box.
+    """
+    W = sample_uniform(min_W, max_W)
+    H = sample_uniform(min_H, max_H)
+    D = sample_uniform(min_D, max_D)
+    box_point3D = np.array([W, H, D])
+    return box_point3D
+
+
+def sample_front_rotation_matrix(epsilon=0.1):
+    x_angle = np.random.uniform((-np.pi / 2.0) + epsilon,
+                                (np.pi / 2.0) - epsilon)
+    y_angle = np.random.uniform((-np.pi / 2.0) + epsilon,
+                                (np.pi / 2.0) - epsilon)
+    z_angle = np.random.uniform(np.pi, -np.pi)
+
+    x_matrix = build_rotation_matrix_x(x_angle)
+    y_matrix = build_rotation_matrix_y(y_angle)
+    z_matrix = build_rotation_matrix_z(z_angle)
+
+    rotation_matrix = np.dot(z_matrix, np.dot(y_matrix, x_matrix))
+    return rotation_matrix
+
+
+def sample_affine_transform(min_corner, max_corner):
+    min_W, min_H, min_D = min_corner
+    max_W, max_H, max_D = max_corner
+    translation = sample_inside_box3D(min_W, min_H, min_D, max_W, max_H, max_D)
+    rotation_matrix = sample_front_rotation_matrix()
+    affine_matrix = to_affine_matrix(rotation_matrix, translation)
+    return affine_matrix
+
+
+def sample_random_rotation_matrix():
+    """Samples SO3 in rotation matrix form.
+
+    # Return
+        Array (3, 3).
+
+    # References
+        [Lost in my terminal](http://blog.lostinmyterminal.com/python/2015/05/
+            12/random-rotation-matrix.html)
+        [real-time rendering](from http://www.realtimerendering.com/resources/
+            GraphicsGems/gemsiii/rand_rotation.c)
+    """
+    theta = 2.0 * np.pi * np.random.uniform()
+    phi = 2.0 * np.pi * np.random.uniform()
+    z = 2.0 * np.random.uniform()
+    # random_vector has length sqrt(2) to eliminate 2 in the Householder matrix
+    r = np.sqrt(z)
+    random_vector = np.array(
+        [np.sin(phi) * r, np.cos(phi) * r, np.sqrt(2.0 - z)])
+    sin_theta = np.sin(theta)
+    cos_theta = np.cos(theta)
+    R = np.array([[+cos_theta, +sin_theta, 0.0],
+                  [-sin_theta, +cos_theta, 0.0],
+                  [0.0, 0.0, 1.0]])
+    random_rotation_matrix = (
+        np.outer(random_vector, random_vector) - np.eye(3)).dot(R)
+    return random_rotation_matrix
+
+
+def compute_norm_SO3(rotation_mesh, rotation):
+    difference = np.dot(np.linalg.inv(rotation), rotation_mesh) - np.eye(3)
+    distance = np.linalg.norm(difference, ord='fro')
+    return distance
+
+
+def calculate_canonical_rotation(rotation_mesh, rotations):
+    norms = [compute_norm_SO3(rotation_mesh, R) for R in rotations]
+    closest_rotation_arg = np.argmin(norms)
+    closest_rotation = rotations[closest_rotation_arg]
+    canonical_rotation = np.linalg.inv(closest_rotation)
+    return canonical_rotation
