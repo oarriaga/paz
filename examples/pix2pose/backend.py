@@ -668,6 +668,7 @@ def compute_norm_SO3(rotation_mesh, rotation):
 def calculate_canonical_rotation(rotation_mesh, rotations):
     norms = [compute_norm_SO3(rotation_mesh, R) for R in rotations]
     closest_rotation_arg = np.argmin(norms)
+    # print(closest_rotation_arg)
     closest_rotation = rotations[closest_rotation_arg]
     canonical_rotation = np.linalg.inv(closest_rotation)
     return canonical_rotation

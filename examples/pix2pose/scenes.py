@@ -9,6 +9,7 @@ from coloring import color_object
 from backend import to_affine_matrix
 from backend import sample_affine_transform
 from backend import calculate_canonical_rotation
+from paz.models import UNET_VGG16
 
 
 class PixelMaskRenderer():
@@ -147,3 +148,88 @@ class CanonicalScene():
         RGB_masks = np.concatenate(RGB_masks, axis=1)
         images = np.concatenate([images, RGB_masks], axis=0)
         return images
+
+
+if __name__ == "__main__":
+    import os
+    from paz.backend.image import show_image
+    from backend import build_rotation_matrix_x
+    from backend import build_rotation_matrix_z
+    from backend import build_rotation_matrix_y
+    from paz.backend.render import compute_modelview_matrices
+    from pipelines import DomainRandomization
+    import glob
+
+    # generic parameters
+    root_path = os.path.expanduser('~')
+    num_occlusions = 1
+    image_shape = (128, 128, 3)
+    viewport_size = image_shape[:2]
+    y_fov = 3.14159 / 4.0
+    light = [1.0, 30]
+
+    # solar panel parameters
+    """
+    OBJ_name = 'single_solar_panel_02.obj'
+    path_OBJ = os.path.join(root_path, OBJ_name)
+    angles = np.linspace(0, 2 * np.pi, 7)[:6]
+    symmetries = np.array([build_rotation_matrix_z(angle) for angle in angles])
+    camera_rotation = build_rotation_matrix_x(np.pi)
+    translation = np.array([0.0, 0.0, -1.0])
+    camera_pose = to_affine_matrix(camera_rotation, translation)
+    min_corner = [0.0, 0.0, -0.4]
+    max_corner = [0.0, 0.0, +0.0]
+    """
+
+    # large clamp parameters
+    # REMEMBER TO CHANGE THE Ns coefficient to values between [0, 1] in
+    # textured.mtl. For example change 96.07 to .967
+    OBJ_name = '.keras/paz/datasets/ycb_models/051_large_clamp/textured.obj'
+    path_OBJ = os.path.join(root_path, OBJ_name)
+    translation = np.array([0.0, 0.0, 0.25])
+    camera_pose, y = compute_modelview_matrices(translation, np.zeros((3)))
+    align_z = build_rotation_matrix_z(np.pi / 20)
+    camera_pose[:3, :3] = np.matmul(align_z, camera_pose[:3, :3])
+    min_corner = [-0.05, -0.02, -0.05]
+    max_corner = [+0.05, +0.02, +0.01]
+
+    angles = [0.0, np.pi]
+    symmetries = np.array([build_rotation_matrix_y(angle) for angle in angles])
+    renderer = CanonicalScene(path_OBJ, camera_pose, min_corner,
+                              max_corner, symmetries)
+    renderer.scene.ambient_light = [1.0, 1.0, 1.0]
+    image = renderer.render_symmetries()
+    show_image(image)
+    for arg in range(0):
+        image, alpha, RGB_mask = renderer.render()
+        show_image(RGB_mask[:, :, 0:3])
+
+    model = UNET_VGG16(3, image_shape, freeze_backbone=True)
+    model.load_weights('UNET-VGG_large_clamp_canonical_10.hdf5')
+
+    background_wildcard = '.keras/paz/datasets/voc-backgrounds/*.png'
+    background_wildcard = os.path.join(root_path, background_wildcard)
+    image_paths = glob.glob(background_wildcard)
+
+    H, W, num_channels = image_shape = (128, 128, 3)
+    inputs_to_shape = {'input_1': [H, W, num_channels]}
+    labels_to_shape = {'masks': [H, W, 4]}
+    processor = DomainRandomization(
+        renderer, image_shape, image_paths, inputs_to_shape,
+        labels_to_shape, num_occlusions)
+
+    for arg in range(100):
+        sample = processor()
+        image = sample['inputs']['input_1']
+        image = (image * 255.0).astype('uint8')
+        RGB_mask = sample['labels']['masks']
+        # image, alpha, RGB_mask = renderer.render()
+        RGB_mask_true = (RGB_mask[:, :, 0:3] * 255.0).astype('uint8')
+        RGB_mask_pred = model.predict(np.expand_dims(image / 255.0, 0))
+        RGB_mask_pred = np.squeeze(RGB_mask_pred * 255.0, 0)
+        # error = np.square(RGB_mask_true - RGB_mask_pred)
+        # error = RGB_mask_pred - RGB_mask
+        RGB_mask_pred = RGB_mask_pred.astype('uint8')
+        print(image.dtype, RGB_mask_pred.dtype, RGB_mask_true.dtype)
+        images = np.concatenate([image, RGB_mask_pred, RGB_mask_true], axis=1)
+        show_image(images)
