@@ -2,7 +2,7 @@ import numpy as np
 
 from paz.abstract import Processor
 from backend_SE3 import rotation_from_axis_angles
-from backend_keypoints import flip_right_hand
+from backend_keypoints import flip_right_to_left_hand
 from backend_keypoints import canonical_transformations_on_keypoints
 from backend_keypoints import keypoint_to_root_frame
 from backend_keypoints import keypoints_to_palm_coordinates
@@ -13,6 +13,7 @@ from backend_keypoints import transform_visibility_mask
 class TransformKeypoints(Processor):
     """ Transform the keypoint from cropped image frame to original image
     frame"""
+
     def __init__(self):
         super(TransformKeypoints, self).__init__()
 
@@ -34,7 +35,7 @@ class KeypointstoPalmFrame(Processor):
 
 
 class TransformVisibilityMask(Processor):
-    """Extract Visibility Mask.
+    """Tranform Visibility Mask to palm coordinates.
     """
 
     def __init__(self):
@@ -51,12 +52,13 @@ class TransformtoRelativeFrame(Processor):
         super(TransformtoRelativeFrame, self).__init__()
 
     def call(self, keypoints3D):
-        return np.squeeze(keypoint_to_root_frame(keypoints3D))
+        return keypoint_to_root_frame(keypoints3D)
 
 
 class GetCanonicalTransformation(Processor):
-    """Extract Canonical Transformation matrix.
-        """
+    """Extract Canonical Transformation matrix. To transform keypoints to
+    palm frame inorder to make them rotationally invariant
+    """
 
     def __init__(self):
         super(GetCanonicalTransformation, self).__init__()
@@ -65,10 +67,11 @@ class GetCanonicalTransformation(Processor):
         return canonical_transformations_on_keypoints(keypoints3D)
 
 
-class MatrixInverse(Processor): # Start with a verb
+class CalculatePseudoInverse(Processor):
     """ Perform Pseudo Inverse of the matrix"""
+
     def __init__(self):
-        super(MatrixInverse, self).__init__()
+        super(CalculatePseudoInverse, self).__init__()
 
     def call(self, matrix):
         return np.linalg.pinv(matrix)
@@ -76,6 +79,7 @@ class MatrixInverse(Processor): # Start with a verb
 
 class RotationMatrixfromAxisAngles(Processor):
     """ Get Rotation matrix from the axis angles"""
+
     def __init__(self):
         super(RotationMatrixfromAxisAngles, self).__init__()
 
@@ -85,18 +89,19 @@ class RotationMatrixfromAxisAngles(Processor):
 
 class CanonicaltoRelativeFrame(Processor):
     """ Transform the keypoints from Canonical coordinates to chosen relative (
-    wrist or palm) coordinates """
+    wrist or palm) coordinates. To make keypoints rotationally invariant """
+
     def __init__(self, num_keypoints=21):
         super(CanonicaltoRelativeFrame, self).__init__()
         self.num_keypoints = num_keypoints
 
     def call(self, canonical_coordinates, rotation_matrix, hand_side):
-        cond_right = np.equal(np.argmax(hand_side, 1), 1)
+        hand_arg = np.argmax(hand_side, 1)
+        cond_right = np.equal(hand_arg, 1)
         cond_right_all = np.tile(np.reshape(cond_right, [-1, 1, 1]),
                                  [1, self.num_keypoints, 3])
 
-        coord_xyz_can_flip = flip_right_hand(canonical_coordinates,
-                                             cond_right_all)
-        # rotate view back
+        coord_xyz_can_flip = flip_right_to_left_hand(canonical_coordinates,
+                                                     cond_right_all)
         coord_xyz_rel_normed = np.matmul(coord_xyz_can_flip, rotation_matrix)
         return coord_xyz_rel_normed

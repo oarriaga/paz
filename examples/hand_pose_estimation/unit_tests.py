@@ -6,8 +6,8 @@ from backend_keypoints import canonical_transformations_on_keypoints
 from backend_keypoints import get_hand_side_and_keypooints
 from backend_keypoints import keypoints_to_palm_coordinates
 from backend_keypoints import normalize_keypoints
-from RHD_v2 import LEFT_ROOT_KEYPOINT_ID
-from RHD_v2 import RIGHT_ROOT_KEYPOINT_ID
+from RHDv2 import LEFT_ROOT_KEYPOINT_ID
+from RHDv2 import RIGHT_ROOT_KEYPOINT_ID
 from hand_keypoints_loader import RenderedHandLoader
 from paz.backend.boxes import to_one_hot
 

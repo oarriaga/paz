@@ -14,10 +14,6 @@ def to_homogeneous_coordinates(vector):
     return vector
 
 
-def scalar_to_vector(scalar):
-    return [0, 0, scalar]
-
-
 def build_translation_matrix_SE3(translation_vector):
     """ Build a translation matrix from translation vector.
 
@@ -28,16 +24,15 @@ def build_translation_matrix_SE3(translation_vector):
         transformation_matrix: Numpy array of size (1, 4, 4).
     """
     if len(translation_vector) == 1:
-        translation_vector = scalar_to_vector(translation_vector)
+        translation_vector = [0, 0, translation_vector]
     transformation_matrix = np.array([[1, 0, 0, translation_vector[0]],
                                       [0, 1, 0, translation_vector[1]],
                                       [0, 0, 1, translation_vector[2]],
                                       [0, 0, 0, 1]])
-    transformation_matrix = np.expand_dims(transformation_matrix, 0)
     return transformation_matrix
 
 
-def build_affine_matrix(matrix):
+def build_affine_matrix(matrix, translation_vector=None):
     """ Build a (4, 4) affine matrix provided a matrix of size (3, 3).
 
     # Arguments
@@ -46,7 +41,12 @@ def build_affine_matrix(matrix):
     # Returns
         affine_matrix: Numpy array of size (4, 4).
     """
-    translation_vector = np.array([[0], [0], [0]])
+    if translation_vector is None:
+        translation_vector = np.array([[0], [0], [0]])
+
+    if len(translation_vector) == 1:
+        translation_vector = [0, 0, translation_vector]
+
     affine_matrix = np.hstack([matrix, translation_vector])
     affine_matrix = np.vstack((affine_matrix, [0, 0, 0, 1]))
     return affine_matrix
@@ -103,30 +103,16 @@ def build_rotation_matrix_z(angle):
     return rotation_matrix_z
 
 
-def get_axis_coordinates(axis_angles, theta, is_normalized):
-    """ Calculate axis coordinates.
-
-    # Arguments:
-        axis_angles: Numpy array of shape (batch_size, 3).
-        theta: Float value.
-        is_normalized: boolean value.
-
-    # Returns:
-        ux, uy, uz: Float values.
-    """
-    axis_coordinates_x = axis_angles[0][0]
-    axis_coordinates_y = axis_angles[0][1]
-    axis_coordinates_z = axis_angles[0][2]
-
-    if not is_normalized:
-        normalization_factor = 1.0 / theta
-        axis_coordinates_x = axis_coordinates_x * normalization_factor
-        axis_coordinates_y = axis_coordinates_y * normalization_factor
-        axis_coordinates_z = axis_coordinates_z * normalization_factor
-    return axis_coordinates_x, axis_coordinates_y, axis_coordinates_z
+def normalize_axis_coordinates(axis_angles, theta):
+    normalization_factor = 1.0 / theta
+    axis_coordinates_x = axis_angles[0][0] * normalization_factor
+    axis_coordinates_y = axis_angles[0][1] * normalization_factor
+    axis_coordinates_z = axis_angles[0][2] * normalization_factor
+    axis_angles = (axis_coordinates_x, axis_coordinates_y, axis_coordinates_z)
+    return axis_angles
 
 
-def get_rotation_matrix_elements(axis_coordinates, theta):
+def get_rotation_matrix(axis_coordinates, theta):
     """ Calculate Rotation matrix.
 
     # Arguments
@@ -136,28 +122,27 @@ def get_rotation_matrix_elements(axis_coordinates, theta):
     # Returns:
         matrix: Numpy array of size (3, 3).
     """
-    # initililize a matrix and assign each element
-    rotation_matrix = np.zeros(shape=(3, 3))
     x = axis_coordinates[0]
     y = axis_coordinates[1]
     z = axis_coordinates[2]
 
-    rotation_matrix[0][0] = np.cos(theta) + ((x ** 2) * (1.0 - np.cos(theta)))
-    rotation_matrix[1][1] = np.cos(theta) + ((y ** 2) * (1.0 - np.cos(theta)))
-    rotation_matrix[2][2] = np.cos(theta) + ((z ** 2) * (1.0 - np.cos(theta)))
+    sine_theta = np.sin(theta)
+    cosine_theta = np.cos(theta)
 
-    rotation_matrix[0][1] = (x * y * (1.0 - np.cos(theta))) - (z * np.sin(
-        theta))
-    rotation_matrix[0][2] = (x * z * (1.0 - np.cos(theta))) + (y * np.sin(
-        theta))
-    rotation_matrix[1][0] = (y * x * (1.0 - np.cos(theta))) + (z * np.sin(
-        theta))
-    rotation_matrix[1][2] = (y * z * (1.0 - np.cos(theta))) - (x * np.sin(
-        theta))
-    rotation_matrix[2][0] = (z * x * (1.0 - np.cos(theta))) - (y * np.sin(
-        theta))
-    rotation_matrix[2][1] = (z * y * (1.0 - np.cos(theta))) + (x * np.sin(
-        theta))
+    r11 = cosine_theta + ((x ** 2) * (1.0 - cosine_theta))
+    r22 = cosine_theta + ((y ** 2) * (1.0 - cosine_theta))
+    r33 = cosine_theta + ((z ** 2) * (1.0 - cosine_theta))
+
+    r12 = (x * y * (1.0 - cosine_theta)) - (z * sine_theta)
+    r13 = (x * z * (1.0 - cosine_theta)) + (y * sine_theta)
+    r21 = (y * x * (1.0 - cosine_theta)) + (z * sine_theta)
+    r23 = (y * z * (1.0 - cosine_theta)) - (x * sine_theta)
+    r31 = (z * x * (1.0 - cosine_theta)) - (y * sine_theta)
+    r32 = (z * y * (1.0 - cosine_theta)) + (x * sine_theta)
+
+    rotation_matrix = np.array([[r11, r12, r13],
+                                [r21, r22, r23],
+                                [r31, r32, r33]])
 
     return rotation_matrix
 
@@ -173,6 +158,7 @@ def rotation_from_axis_angles(axis_angles, is_normalized=False):
         rotation-matrix: numpy array of size (3, 3).
     """
     theta = np.linalg.norm(axis_angles)
-    ux, uy, uz = get_axis_coordinates(axis_angles, theta, is_normalized)
-    rotation_matrix = get_rotation_matrix_elements([ux, uy, uz], theta)
+    if not is_normalized:
+        axis_angles = normalize_axis_coordinates(axis_angles, theta)
+    rotation_matrix = get_rotation_matrix(axis_angles, theta)
     return rotation_matrix

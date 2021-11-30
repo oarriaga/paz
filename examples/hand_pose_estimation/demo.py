@@ -1,13 +1,8 @@
 import argparse
-import os
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
-
 from pipelines import DetectHandKeypoints
-
 from paz.backend.camera import Camera, VideoPlayer
 
 parser = argparse.ArgumentParser()
@@ -24,5 +19,5 @@ HandViewPointNet = ViewPointNet()
 pipeline = DetectHandKeypoints(HandSegNet, HandPoseNet, HandPosePriorNet,
                                HandViewPointNet)
 camera = Camera(args.camera_id)
-player = VideoPlayer((640, 640), pipeline, camera)
+player = VideoPlayer((640, 480), pipeline, camera)
 player.run()

@@ -20,11 +20,11 @@ class RenderedHandLoader(Loader):
     def to_list_of_dictionaries(self, hands, segmentation_labels=None,
                                 annotations=None):
         dataset = []
-        for arg in range(len(hands)):
+        for hand_arg in range(len(hands)):
             sample = dict()
-            sample['image_path'] = hands[arg]
-            sample['segmentation_label'] = segmentation_labels[arg]
-            sample['annotations'] = annotations[arg]
+            sample['image_path'] = hands[hand_arg]
+            sample['segmentation_label'] = segmentation_labels[hand_arg]
+            sample['annotations'] = annotations[hand_arg]
             dataset.append(sample)
         return dataset
 

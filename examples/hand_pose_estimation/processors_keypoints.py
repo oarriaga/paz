@@ -5,16 +5,19 @@ from paz.backend.image.tensorflow_image import resize
 
 from backend_keypoints import create_score_maps, extract_2D_keypoints
 from backend_keypoints import crop_image_from_coordinates, extract_keypoints
-from backend_keypoints import crop_image_using_mask, extract_hand_segment
+from backend_keypoints import crop_image_from_mask, extract_hand_segment
 from backend_keypoints import extract_bounding_box, find_max_location
 from backend_keypoints import extract_dominant_hand_visibility
-from backend_keypoints import extract_dominant_keypoints2D, flip_right_hand
+from backend_keypoints import extract_dominant_keypoints2D
+from backend_keypoints import flip_right_to_left_hand
 from backend_keypoints import get_hand_side_and_keypooints
 from backend_keypoints import normalize_keypoints
 
 
 class ExtractHandmask(Processor):
-    """Extract Hand mask."""
+    """Extract Hand mask from the segmentation label provided. The pixels
+    with value greater than 1 belongs to hands
+    """
 
     def __init__(self):
         super(ExtractHandmask, self).__init__()
@@ -23,12 +26,13 @@ class ExtractHandmask(Processor):
         return extract_hand_segment(segmentation_label=segmentation_label)
 
 
-class ExtractHandSide(Processor):
-    """Extract Hand Side.
+class ExtractHandsideandKeypoints(Processor):
+    """Extract Hand Side by counting the number of pixels belonging to each
+    hand.
     """
 
     def __init__(self):
-        super(ExtractHandSide, self).__init__()
+        super(ExtractHandsideandKeypoints, self).__init__()
 
     def call(self, hand_parts_mask, keypoints3D):
         return get_hand_side_and_keypooints(hand_parts_mask, keypoints3D)
@@ -36,7 +40,7 @@ class ExtractHandSide(Processor):
 
 class NormalizeKeypoints(Processor):
     """Normalize KeyPoints.
-        """
+    """
 
     def __init__(self):
         super(NormalizeKeypoints, self).__init__()
@@ -45,20 +49,21 @@ class NormalizeKeypoints(Processor):
         return normalize_keypoints(keypoints3D)
 
 
-class FlipRightHand(Processor):
-    """Flip Right Hand to Left Hand coordinates.
-        """
+class FlipRightHandToLeftHand(Processor):
+    """Flip Right hand keypoints to Left hand keypoints.
+    """
 
     def __init__(self, flip_to_left=True):
-        super(FlipRightHand, self).__init__()
+        super(FlipRightHandToLeftHand, self).__init__()
         self.flip_to_left = flip_to_left
 
     def call(self, keypoints3D):
-        return flip_right_hand(keypoints3D, self.flip_to_left)
+        return flip_right_to_left_hand(keypoints3D, self.flip_to_left)
 
 
 class ExtractDominantHandVisibility(Processor):
-    """Extract Dominant hand Visibility.
+    """Extract hand Visibility of Left or Right hand based on the
+    dominant_hand flag.
         """
 
     def __init__(self):
@@ -69,12 +74,13 @@ class ExtractDominantHandVisibility(Processor):
                                                 dominant_hand)
 
 
-class ExtractDominantKeypoint(Processor):
-    """Extract Dominant hand Keypoints.
+class ExtractDominantKeypoints2D(Processor):
+    """Extract hand keypoints of Left or Right hand based on the
+    dominant_hand flag.
         """
 
     def __init__(self):
-        super(ExtractDominantKeypoint, self).__init__()
+        super(ExtractDominantKeypoints2D, self).__init__()
 
     def call(self, keypoint_visibility, dominant_hand):
         return extract_dominant_keypoints2D(keypoint_visibility,
@@ -91,13 +97,16 @@ class CropImageFromMask(Processor):
         self.crop_size = crop_size
 
     def call(self, keypoints, keypoint_visibility, image, camera_matrix):
-        return crop_image_using_mask(keypoints, keypoint_visibility, image,
+        return crop_image_from_mask(keypoints, keypoint_visibility, image,
                                      self.image_size, self.crop_size,
                                      camera_matrix)
 
 
 class CreateScoremaps(Processor):
     """Create Gaussian Score maps representing 2D Keypoints.
+       image_size: Size of the input image
+       crop_size: Cropped Image size
+       variance: variance of the gaussian scoremap to be generated
             """
 
     def __init__(self, image_size, crop_size, variance):
@@ -106,9 +115,9 @@ class CreateScoremaps(Processor):
         self.crop_size = crop_size
         self.variance = variance
 
-    def call(self, keypoints2D, keypoints_vis21):
-        return create_score_maps(keypoints2D, keypoints_vis21, self.image_size,
-                                 self.crop_size, self.variance)
+    def call(self, keypoints2D, keypoints_visibility):
+        return create_score_maps(keypoints2D, keypoints_visibility,
+                                 self.image_size, self.crop_size, self.variance)
 
 
 class Extract2DKeypoints(Processor):
@@ -122,7 +131,7 @@ class Extract2DKeypoints(Processor):
 
 
 class ExtractBoundingbox(Processor):
-    """ Extract bounding box when provided with a binary mask"""
+    """ Extract bounding box from a binary mask"""
 
     def __init__(self):
         super(ExtractBoundingbox, self).__init__()

@@ -1,4 +1,8 @@
-def wrap_dictionary(keys, values):
+import cv2
+import numpy as np
+
+
+def wrap_as_dictionary(keys, values):
     """ Wrap values with respective keys into a dictionary.
 
     # Arguments
@@ -22,6 +26,41 @@ def merge_dictionaries(dicts):
         result: Dictionary.
     """
     result = {}
-    for dict in dicts: # Check if dict is ok to use
+    for dict in dicts:
         result.update(dict)
     return result
+
+
+def resize_image_with_nearest_neighbors(image, size):
+    """Resize image using nearest neighbors interpolation.
+
+    # Arguments
+        image: Numpy array.
+        size: List of two ints.
+
+    # Returns
+        Numpy array.
+    """
+    print(image.shape)
+    if(type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    else:
+        return cv2.resize(image, size, interpolation=cv2.INTER_NEAREST)
+
+
+def transpose_array(array):
+    """Resize image using nearest neighbors interpolation.
+
+    # Arguments
+        image: Numpy array.
+        size: List of two ints.
+
+    # Returns
+        Numpy array.
+    """
+    if(type(array) != np.ndarray):
+        raise ValueError(
+            'Recieved Input is not of type numpy array', type(array))
+    else:
+        return array.T

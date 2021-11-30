@@ -1,23 +1,21 @@
 import argparse
-import os
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
 from pipelines import DetectHandKeypoints
 from paz.backend.image.opencv_image import load_image, show_image
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--camera_id', type=int, default=0,
-                    help='Camera device ID')
-args = parser.parse_args()
-
 use_pretrained = True
-HandSegNet = HandSegmentationNet()
-HandPoseNet = PoseNet()
-HandPosePriorNet = PosePriorNet()
-HandViewPointNet = ViewPointNet()
-
+HandSegNet = HandSegmentationNet(weights=None)
+HandPoseNet = PoseNet(weights=None)
+HandPosePriorNet = PosePriorNet(weights=None)
+HandViewPointNet = ViewPointNet(weights=None)
+HandSegNet.load_weights('./pretrained_weights/HandSegNet-RHDv2_weights.hdf5')
+HandPoseNet.load_weights('./pretrained_weights/PoseNet-RHDv2_weights.hdf5')
+HandPosePriorNet.load_weights(
+    './pretrained_weights/PosePriorNet-RHDv2_weights.hdf5')
+HandViewPointNet.load_weights(
+    './pretrained_weights/ViewPointNet-RHDv2_weights.hdf5')
 pipeline = DetectHandKeypoints(HandSegNet, HandPoseNet, HandPosePriorNet,
                                HandViewPointNet)
 

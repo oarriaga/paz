@@ -1,20 +1,16 @@
-import os
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from tensorflow.keras.layers import Concatenate, Dense, Dropout, Reshape, Input
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, LeakyReLU
 from tensorflow.keras import Model
 from tensorflow.keras.utils import get_file
 
-BASE_WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/'
-                    'releases/download/v0.1/')
+BASE_WEIGHT_PATH = (
+    'https://github.com/oarriaga/altamira-data/releases/download/v0.1/')
 
 
-def HandSegmentationNet(input_shape=(320, 320, 3), weights='RHD'):
+def HandSegmentationNet(input_shape=(320, 320, 3), weights='RHDv2'):
     image = Input(shape=input_shape, name='image')
 
-    X = Conv2D(64, kernel_size=3, padding='same',
-                 name='conv1_1')(image)
+    X = Conv2D(64, kernel_size=3, padding='same', name='conv1_1')(image)
     X = LeakyReLU(alpha=0.01)(X)
 
     X = Conv2D(64, 3, padding='same', name='conv1_2')(X)
@@ -74,13 +70,19 @@ def HandSegmentationNet(input_shape=(320, 320, 3), weights='RHD'):
                                           raw_segmented_image},
                              name='HandSegNet')
 
-    segmentation_net.load_weights('./HandSegNet-pretrained_weights.h5')
+    if weights is not None:
+        model_filename = [segmentation_net.name, str(weights)]
+        model_filename = '_'.join(['-'.join(model_filename), 'weights.hdf5'])
+        weights_path = get_file(model_filename,
+                                BASE_WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
+        segmentation_net.load_weights(weights_path)
 
     return segmentation_net
 
 
-def PoseNet(input_shape=(256, 256, 3), weights='RHD'):
-
+def PoseNet(input_shape=(256, 256, 3), weights='RHDv2'):
     cropped_image = Input(shape=input_shape, name='cropped_image')
 
     X = Conv2D(64, kernel_size=3, padding='same', name='conv2_1')(
@@ -188,13 +190,20 @@ def PoseNet(input_shape=(256, 256, 3), weights='RHD'):
     PoseNet = Model(inputs={'cropped_image': cropped_image},
                     outputs={'score_maps': score_maps}, name='PoseNet')
 
-    PoseNet.load_weights('./PoseNet-pretrained_weights.h5')
+    if weights is not None:
+        model_filename = [PoseNet.name, str(weights)]
+        model_filename = '_'.join(['-'.join(model_filename), 'weights.hdf5'])
+        weights_path = get_file(model_filename,
+                                BASE_WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
+        PoseNet.load_weights(weights_path)
 
     return PoseNet
 
 
 def PosePriorNet(keypoint_heatmaps_shape=(32, 32, 21), hand_side_shape=(2,),
-                 num_keypoints=21, weights='RHD'):
+                 num_keypoints=21, weights='RHDv2'):
     score_maps = Input(shape=keypoint_heatmaps_shape)
     hand_side = Input(shape=hand_side_shape)
 
@@ -235,13 +244,20 @@ def PosePriorNet(keypoint_heatmaps_shape=(32, 32, 21), hand_side_shape=(2,),
                          outputs={'canonical_coordinates': hand_keypoints},
                          name='PosePriorNet')
 
-    PosePriorNet.load_weights('PosePriorNet-pretrained_weights.h5')
+    if weights is not None:
+        model_filename = [PosePriorNet.name, str(weights)]
+        model_filename = '_'.join(['-'.join(model_filename), 'weights.hdf5'])
+        weights_path = get_file(model_filename,
+                                BASE_WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
+        PosePriorNet.load_weights(weights_path)
 
     return PosePriorNet
 
 
 def ViewPointNet(keypoint_heat_maps_shape=(32, 32, 21), hand_side_shape=(2,),
-                 weights='RHD'):
+                 weights='RHDv2'):
     score_maps = Input(shape=keypoint_heat_maps_shape,
                        name='score_maps')
     hand_side = Input(shape=hand_side_shape, name='hand_side')
@@ -284,6 +300,13 @@ def ViewPointNet(keypoint_heat_maps_shape=(32, 32, 21), hand_side_shape=(2,),
                                   'hand_side': hand_side},
                          name='ViewPointNet')
 
-    ViewPointNet.load_weights('./ViewPointNet-pretrained_weights.h5')
+    if weights is not None:
+        model_filename = [ViewPointNet.name, str(weights)]
+        model_filename = '_'.join(['-'.join(model_filename), 'weights.hdf5'])
+        weights_path = get_file(model_filename,
+                                BASE_WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
+        ViewPointNet.load_weights(weights_path)
 
     return ViewPointNet

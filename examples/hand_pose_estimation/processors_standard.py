@@ -1,14 +1,16 @@
+import numpy as np
 from paz.abstract import Processor
-from backend_standard import wrap_dictionary, merge_dictionaries
+from backend_standard import wrap_as_dictionary, merge_dictionaries
+from backend_standard import resize_image_with_nearest_neighbors
 from paz.backend.boxes import to_one_hot
 
 
-class WraptoDictionary(Processor):
+class WrapToDictionary(Processor):
     """ Wrap the input values to a dictionary with already provided key
     values """
 
     def __init__(self, keys):
-        super(WraptoDictionary, self).__init__()
+        super(WrapToDictionary, self).__init__()
         if not isinstance(keys, list):
             keys = list(keys)
         self.keys = keys
@@ -16,7 +18,7 @@ class WraptoDictionary(Processor):
     def call(self, values):
         if not isinstance(values, list):
             values = list(values)
-        return wrap_dictionary(self.keys, values)
+        return wrap_as_dictionary(self.keys, values)
 
 
 class MergeDictionaries(Processor):
@@ -38,3 +40,28 @@ class ToOneHot(Processor):
 
     def call(self, class_indices):
         return to_one_hot(class_indices, self.num_classes)
+
+
+class ResizeImageWithNearestNeighbors(Processor):
+    def __init__(self, shape):
+        self.shape = shape
+        super(ResizeImageWithNearestNeighbors, self).__init__()
+
+    def call(self, image):
+        return resize_image_with_nearest_neighbors(image, self.shape)
+
+
+class TransposeOfArray(Processor):
+    def __init__(self):
+        super(TransposeOfArray, self).__init__()
+
+    def call(self, array):
+        return array.T
+
+
+class ListToArray(Processor):
+    def __init__(self):
+        super(ListToArray, self).__init__()
+
+    def call(self, input):
+        return np.array(input)
