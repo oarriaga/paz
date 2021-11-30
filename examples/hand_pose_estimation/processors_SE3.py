@@ -1,13 +1,13 @@
 import numpy as np
 
-from paz.abstract import Processor
 from backend_SE3 import rotation_from_axis_angles
-from backend_keypoints import flip_right_to_left_hand
+from backend_keypoints import canonical_to_relative_coordinates
 from backend_keypoints import canonical_transformations_on_keypoints
 from backend_keypoints import keypoint_to_root_frame
 from backend_keypoints import keypoints_to_palm_coordinates
 from backend_keypoints import transform_cropped_keypoints
 from backend_keypoints import transform_visibility_mask
+from paz.abstract import Processor
 
 
 class TransformKeypoints(Processor):
@@ -96,12 +96,7 @@ class CanonicaltoRelativeFrame(Processor):
         self.num_keypoints = num_keypoints
 
     def call(self, canonical_coordinates, rotation_matrix, hand_side):
-        hand_arg = np.argmax(hand_side, 1)
-        cond_right = np.equal(hand_arg, 1)
-        cond_right_all = np.tile(np.reshape(cond_right, [-1, 1, 1]),
-                                 [1, self.num_keypoints, 3])
-
-        coord_xyz_can_flip = flip_right_to_left_hand(canonical_coordinates,
-                                                     cond_right_all)
-        coord_xyz_rel_normed = np.matmul(coord_xyz_can_flip, rotation_matrix)
-        return coord_xyz_rel_normed
+        keypoints = canonical_to_relative_coordinates(
+            self.num_keypoints, canonical_coordinates, rotation_matrix,
+            hand_side)
+        return keypoints

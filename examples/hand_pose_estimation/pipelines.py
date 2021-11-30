@@ -1,29 +1,23 @@
 import numpy as np
-import tensorflow as tf
-from paz import processors as pr
 
+from layer import SegmentationDilation
+from paz import processors as pr
 from paz.abstract import SequentialProcessor, Processor
+from processors_SE3 import CalculatePseudoInverse, RotationMatrixfromAxisAngles
+from processors_SE3 import CanonicaltoRelativeFrame, KeypointstoPalmFrame
+from processors_SE3 import GetCanonicalTransformation, TransformKeypoints
+from processors_SE3 import TransformVisibilityMask, TransformtoRelativeFrame
 from processors_keypoints import AdjustCropSize, CropImage
 from processors_keypoints import CreateScoremaps, ExtractBoundingbox
 from processors_keypoints import Extract2DKeypoints, ExtractHandsideandKeypoints
-from processors_keypoints import FlipRightHandToLeftHand
+from processors_keypoints import ExtractDominantHandVisibility
 from processors_keypoints import ExtractDominantKeypoints2D, CropImageFromMask
 from processors_keypoints import ExtractHandmask, ExtractKeypoints
-from processors_keypoints import ExtractDominantHandVisibility
-from processors_keypoints import NormalizeKeypoints, ResizeImage
-
-from processors_SE3 import CanonicaltoRelativeFrame, KeypointstoPalmFrame
-from processors_SE3 import CalculatePseudoInverse, RotationMatrixfromAxisAngles
-from processors_SE3 import TransformVisibilityMask, TransformtoRelativeFrame
-from processors_SE3 import GetCanonicalTransformation, TransformKeypoints
-
+from processors_keypoints import FlipRightHandToLeftHand
+from processors_keypoints import NormalizeKeypoints
 from processors_standard import MergeDictionaries, ToOneHot
-from processors_standard import TransposeOfArray, ListToArray
 from processors_standard import ResizeImageWithLinearInterpolation
-
-from layer import SegmentationDilation
-
-from utils import show_mask, visualize_heatmaps
+from processors_standard import TransposeOfArray, ListToArray
 
 
 class ExtractHandSegmentation(SequentialProcessor):
@@ -282,6 +276,8 @@ class DetectHandKeypoints(Processor):
 
         rotation_parameters = self.predict_keypoints3D(score_maps)
         viewpoints = self.predict_keypoints_angles(score_maps)
+
+        print(rotation_parameters, viewpoints)
 
         canonical_keypoints = self.merge_dictionaries(
             [rotation_parameters, viewpoints])

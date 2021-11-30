@@ -1,8 +1,5 @@
 import numpy as np
 
-from paz.abstract import Processor
-from paz.backend.image.tensorflow_image import resize
-
 from backend_keypoints import create_score_maps, extract_2D_keypoints
 from backend_keypoints import crop_image_from_coordinates, extract_keypoints
 from backend_keypoints import crop_image_from_mask, extract_hand_segment
@@ -12,6 +9,8 @@ from backend_keypoints import extract_dominant_keypoints2D
 from backend_keypoints import flip_right_to_left_hand
 from backend_keypoints import get_hand_side_and_keypooints
 from backend_keypoints import normalize_keypoints
+
+from paz.abstract import Processor
 
 
 class ExtractHandmask(Processor):
@@ -176,17 +175,6 @@ class ExtractKeypoints(Processor):
 
     def call(self, keypoint_scoremaps):
         return extract_keypoints(keypoint_scoremaps)
-
-
-class ResizeImage(Processor):
-    """ Resize images. Done with tensorflow"""
-
-    def __init__(self, size=[256, 256]):
-        super(ResizeImage, self).__init__()
-        self.size = size
-
-    def call(self, image):
-        return resize(image, self.size)
 
 
 class FindMaxLocation(Processor):

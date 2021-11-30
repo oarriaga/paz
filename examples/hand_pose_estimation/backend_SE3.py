@@ -105,9 +105,9 @@ def build_rotation_matrix_z(angle):
 
 def normalize_axis_coordinates(axis_angles, theta):
     normalization_factor = 1.0 / theta
-    axis_coordinates_x = axis_angles[0][0] * normalization_factor
-    axis_coordinates_y = axis_angles[0][1] * normalization_factor
-    axis_coordinates_z = axis_angles[0][2] * normalization_factor
+    axis_coordinates_x = axis_angles[0] * normalization_factor
+    axis_coordinates_y = axis_angles[1] * normalization_factor
+    axis_coordinates_z = axis_angles[2] * normalization_factor
     axis_angles = (axis_coordinates_x, axis_coordinates_y, axis_coordinates_z)
     return axis_angles
 
@@ -157,6 +157,7 @@ def rotation_from_axis_angles(axis_angles, is_normalized=False):
     # Returns
         rotation-matrix: numpy array of size (3, 3).
     """
+    print(axis_angles)
     theta = np.linalg.norm(axis_angles)
     if not is_normalized:
         axis_angles = normalize_axis_coordinates(axis_angles, theta)

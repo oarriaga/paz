@@ -296,7 +296,7 @@ def ViewPointNet(keypoint_heat_maps_shape=(32, 32, 21), hand_side_shape=(2,),
 
     ViewPointNet = Model(inputs={'score_maps': score_maps,
                                  'hand_side': hand_side},
-                         outputs={'rotation_parameters': axis_angles,
+                         outputs={'rotation_parameters': axis_angles[0],
                                   'hand_side': hand_side},
                          name='ViewPointNet')
 
