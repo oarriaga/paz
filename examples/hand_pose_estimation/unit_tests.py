@@ -2,14 +2,19 @@ from backend_SE3 import build_rotation_matrix_x, build_rotation_matrix_y
 from backend_SE3 import build_rotation_matrix_z, build_affine_matrix
 from backend_SE3 import rotation_from_axis_angles
 from backend_SE3 import to_homogeneous_coordinates, build_translation_matrix_SE3
+
 from backend_keypoints import canonical_transformations_on_keypoints
 from backend_keypoints import get_hand_side_and_keypooints
 from backend_keypoints import keypoints_to_palm_coordinates
-from backend_keypoints import normalize_keypoints
-from RHDv2 import LEFT_ROOT_KEYPOINT_ID
-from RHDv2 import RIGHT_ROOT_KEYPOINT_ID
+from backend_keypoints import normalize_keypoints, extract_hand_side_keypoints
+from RHDv2 import LEFT_WRIST
+from RHDv2 import RIGHT_WRIST
 from hand_keypoints_loader import RenderedHandLoader
 from paz.backend.boxes import to_one_hot
+from processors_standard import TransposeOfArray, ListToArray
+
+import paz.processors as pr
+from paz.processors import SequentialProcessor
 
 data_loader = RenderedHandLoader(
     '/media/jarvis/CommonFiles/5th_Semester/DFKI_Work/RHD_published_v2/')
@@ -17,7 +22,7 @@ data_loader = RenderedHandLoader(
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
 import numpy as np
-from pipelines import PreprocessImage, PostprocessSegmentation, \
+from pipelines import PostProcessSegmentation, \
     Process2DKeypoints
 from paz.backend.image.opencv_image import load_image
 from backend_keypoints import create_multiple_gaussian_map
@@ -35,9 +40,9 @@ HandViewPointNet = ViewPointNet()
 def test_keypoints_to_palm_coordinates():
     keypoints = np.arange(0, 123).reshape((41, 3))
     keypoint_palm = keypoints_to_palm_coordinates(keypoints)
-    assert keypoint_palm[LEFT_ROOT_KEYPOINT_ID, :].all() == np.array([
+    assert keypoint_palm[LEFT_WRIST, :].all() == np.array([
         [18., 19., 20.]]).all()
-    assert keypoint_palm[RIGHT_ROOT_KEYPOINT_ID, :].all() == np.array([
+    assert keypoint_palm[RIGHT_WRIST, :].all() == np.array([
         [81., 82., 83.]]).all()
 
 
@@ -61,6 +66,14 @@ def test_normalize_keypoints():
     assert round(keypoint_scale, 2) == 0.68
     assert keypoints3D.shape == keypoint_normalized.shape
     assert keypoint_normalized.round().all() == test_array.all()
+
+
+def test_extracting_handside():
+    keypoints3D = np.random.rand(42, 3)
+    left_keypoints = extract_hand_side_keypoints(keypoints3D, 0)
+    right_keypoints = extract_hand_side_keypoints(keypoints3D, 1)
+    assert left_keypoints.shape == (21, 3)
+    assert right_keypoints.shape == (21, 3)
 
 
 def test_to_homogeneous():
@@ -178,7 +191,8 @@ def test_canonical_transformations(label_path):
 
 
 def test_preprocess_image():
-    preprocess_pipeline = PreprocessImage()
+    preprocess_pipeline = SequentialProcessor(
+        [pr.NormalizeImage(), pr.ResizeImage((320, 320)), pr.ExpandDims(0)])
     image = load_image('./sample.jpg')
     processed_image = preprocess_pipeline(image)
 
@@ -186,12 +200,42 @@ def test_preprocess_image():
     assert processed_image.shape == (1, 320, 320, 3)
 
 
+def test_image_cropping():
+    handsegnet = HandSegmentationNet()
+    preprocess_image = SequentialProcessor(
+        [pr.NormalizeImage(), pr.ResizeImage((320, 320)),
+         pr.ExpandDims(0)])
+
+    postprocess_segmentation = PostProcessSegmentation(
+        320, 320)
+
+    localize_hand = pr.Predict(handsegnet, preprocess_image,
+                               postprocess_segmentation)
+    image = load_image('./sample.jpg')
+    hand_crop, segmentation_map, center, boxes, crop_sizes = localize_hand(
+        image)
+    box = boxes[0]
+    xmin, ymin, xmax, ymax = box
+    crop_size = crop_sizes[0]
+
+    assert len(hand_crop.shape) == 4
+    assert hand_crop.shape == (1, 256, 256, 3)
+    assert len(segmentation_map.shape) == 4
+    assert segmentation_map.shape == (1, 320, 320, 1)
+    assert center == [[191.5, 194.5]]
+    assert len(box) == 4
+    assert box == [114, 153, 269, 236]
+    assert xmax > xmin and ymin > ymax
+    assert round(crop_size[0], 2) == 1.32
+
+
 def test_segmentation_postprocess():
-    preprocess_pipeline = PreprocessImage()
+    preprocess_pipeline = SequentialProcessor(
+        [pr.NormalizeImage(), pr.ResizeImage((320, 320)), pr.ExpandDims(0)])
     image = load_image('./sample.jpg')
     processed_image = preprocess_pipeline(image)
 
-    localization_pipeline = PostprocessSegmentation(HandSegNet)
+    localization_pipeline = PostProcessSegmentation(HandSegNet)
     localization_output = localization_pipeline(processed_image)
 
     assert len(localization_output) == 5
@@ -203,11 +247,12 @@ def test_segmentation_postprocess():
 
 
 def test_keypoints2D_process():
-    preprocess_pipeline = PreprocessImage()
+    preprocess_pipeline = SequentialProcessor(
+        [pr.NormalizeImage(), pr.ResizeImage((320, 320)), pr.ExpandDims(0)])
     image = load_image('./sample.jpg')
     processed_image = preprocess_pipeline(image)
 
-    localization_pipeline = PostprocessSegmentation(HandSegNet)
+    localization_pipeline = PostProcessSegmentation(HandSegNet)
     localization_output = localization_pipeline(processed_image)
 
     keypoints_pipeline = Process2DKeypoints(HandPoseNet)

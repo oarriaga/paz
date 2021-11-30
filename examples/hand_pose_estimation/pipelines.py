@@ -221,6 +221,8 @@ class PostProcessSegmentation(Processor):
             dilated_segmentation_map)
         crop_size = self.adjust_crop_size(crop_size)
         cropped_image = self.crop_image(image, center, crop_size)
+        print(cropped_image.shape, dilated_segmentation_map.shape, center,
+              bounding_box, crop_size)
 
         return cropped_image, dilated_segmentation_map, center, bounding_box, crop_size
 
@@ -276,8 +278,6 @@ class DetectHandKeypoints(Processor):
 
         rotation_parameters = self.predict_keypoints3D(score_maps)
         viewpoints = self.predict_keypoints_angles(score_maps)
-
-        print(rotation_parameters, viewpoints)
 
         canonical_keypoints = self.merge_dictionaries(
             [rotation_parameters, viewpoints])
