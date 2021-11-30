@@ -23,10 +23,12 @@ class SegmentationDilation(Layer):
             shape[0] = 1
         for i in range(shape[0]):
             sparse_indices = tf.reshape(max_loc[i, :], [1, 2])
+
             sparse_input = tf.SparseTensor(dense_shape=[shape[1], shape[2]],
                                            values=[1.0], indices=sparse_indices)
             objectmap = tf.sparse.to_dense(sparse_input)
             num_passes = max(shape[1], shape[2]) // (self.filter_size // 2)
+
             for pass_count in range(num_passes):
                 objectmap = tf.reshape(objectmap, [1, shape[1], shape[2], 1])
                 objectmap_dilated = tf.nn.dilation2d(

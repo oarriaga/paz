@@ -215,16 +215,13 @@ class PostProcessSegmentation(Processor):
         raw_segmentation_map = self.resize_segmentation_map(
             raw_segmentation_map)
         raw_segmentation_map = self.expand_dims(raw_segmentation_map)
-        dilated_segmentation_map = self.dilate_map(raw_segmentation_map)
-        dilated_segmentation_map = dilated_segmentation_map.numpy()
-        center, bounding_box, crop_size = self.extract_box(
-            dilated_segmentation_map)
+        segmentation_map = self.dilate_map(raw_segmentation_map)
+        segmentation_map = segmentation_map.numpy()
+        center, bounding_box, crop_size = self.extract_box(segmentation_map)
         crop_size = self.adjust_crop_size(crop_size)
         cropped_image = self.crop_image(image, center, crop_size)
-        print(cropped_image.shape, dilated_segmentation_map.shape, center,
-              bounding_box, crop_size)
 
-        return cropped_image, dilated_segmentation_map, center, bounding_box, crop_size
+        return cropped_image, segmentation_map, center, bounding_box, crop_size
 
 
 class DetectHandKeypoints(Processor):
