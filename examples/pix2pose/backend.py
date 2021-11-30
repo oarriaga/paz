@@ -283,9 +283,9 @@ def draw_points2D(image, points2D, colors):
     # Returns
         Array with drawn points.
     """
-    keypoints = points2D.astype(int)
-    U = keypoints[:, 0]
-    V = keypoints[:, 1]
+    points2D = points2D.astype(int)
+    U = points2D[:, 0]
+    V = points2D[:, 1]
     image[V, U, :] = colors
     return image
 
