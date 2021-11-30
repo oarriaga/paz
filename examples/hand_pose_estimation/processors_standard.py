@@ -1,7 +1,7 @@
 import numpy as np
 from paz.abstract import Processor
 from backend_standard import wrap_as_dictionary, merge_dictionaries
-from backend_standard import resize_image_with_nearest_neighbors
+from backend_standard import resize_image_with_linear_interpolation
 from paz.backend.boxes import to_one_hot
 
 
@@ -42,13 +42,13 @@ class ToOneHot(Processor):
         return to_one_hot(class_indices, self.num_classes)
 
 
-class ResizeImageWithNearestNeighbors(Processor):
+class ResizeImageWithLinearInterpolation(Processor):
     def __init__(self, shape):
         self.shape = shape
-        super(ResizeImageWithNearestNeighbors, self).__init__()
+        super(ResizeImageWithLinearInterpolation, self).__init__()
 
     def call(self, image):
-        return resize_image_with_nearest_neighbors(image, self.shape)
+        return resize_image_with_linear_interpolation(image, self.shape)
 
 
 class TransposeOfArray(Processor):

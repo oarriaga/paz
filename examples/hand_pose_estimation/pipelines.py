@@ -19,7 +19,7 @@ from processors_SE3 import GetCanonicalTransformation, TransformKeypoints
 
 from processors_standard import MergeDictionaries, ToOneHot
 from processors_standard import TransposeOfArray, ListToArray
-from processors_standard import ResizeImageWithNearestNeighbors
+from processors_standard import ResizeImageWithLinearInterpolation
 
 from layer import SegmentationDilation
 
@@ -206,7 +206,7 @@ class PostProcessSegmentation(Processor):
         super(PostProcessSegmentation, self).__init__()
         self.unpack_inputs = pr.UnpackDictionary(['image',
                                                   'raw_segmentation_map'])
-        self.resize_segmentation_map = ResizeImageWithNearestNeighbors(
+        self.resize_segmentation_map = ResizeImageWithLinearInterpolation(
             shape=(image_size, image_size))
         self.dilate_map = SegmentationDilation()
         self.extract_box = ExtractBoundingbox()

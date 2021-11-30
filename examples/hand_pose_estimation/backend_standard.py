@@ -31,7 +31,7 @@ def merge_dictionaries(dicts):
     return result
 
 
-def resize_image_with_nearest_neighbors(image, size):
+def resize_image_with_linear_interpolation(image, size):
     """Resize image using nearest neighbors interpolation.
 
     # Arguments
@@ -46,7 +46,7 @@ def resize_image_with_nearest_neighbors(image, size):
         raise ValueError(
             'Recieved Image is not of type numpy array', type(image))
     else:
-        return cv2.resize(image, size, interpolation=cv2.INTER_NEAREST)
+        return cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
 
 
 def transpose_array(array):

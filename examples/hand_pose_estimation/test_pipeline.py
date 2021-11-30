@@ -1,9 +1,7 @@
-import argparse
-
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
-from pipelines import DetectHandKeypoints
 from paz.backend.image.opencv_image import load_image, show_image
+from pipelines import DetectHandKeypoints
 
 use_pretrained = True
 HandSegNet = HandSegmentationNet(weights=None)
