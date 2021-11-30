@@ -258,6 +258,12 @@ def points3D_to_RGB(points3D, object_sizes):
     return colors
 
 
+def draw_mask(image, points2D, points3D, object_sizes):
+    colors = points3D_to_RGB(points3D, object_sizes)
+    image = draw_points2D(image, points2D, colors)
+    return image
+
+
 # TODO change to processor
 def draw_masks(image, points, object_sizes):
     for points2D, points3D in points:
