@@ -72,7 +72,8 @@ class Pix2Pose(pr.Processor):
             pose6D = Pose6D(quaternion, translation, self.class_name)
         else:
             pose6D = None
-        if self.draw:
+        # change_coordinates puts points2D outside image.
+        if (self.draw and (box2D is None)):
             topic = 'image_crop' if box2D is not None else 'image'
             image = draw_mask(image, points2D, points3D, self.object_sizes)
             image = draw_pose6D(image, pose6D, self.cube_points3D,
