@@ -7,8 +7,8 @@ from paz.applications import SSD300FAT
 
 # from pipelines import Pix2Pose
 # from pipelines import EstimatePoseMasks
-from pipelines3 import Pix2Pose
-from pipelines3 import EstimatePoseMasks
+from pipelines import Pix2Pose
+from pipelines import EstimatePoseMasks
 
 
 image_shape = (128, 128, 3)
@@ -41,22 +41,13 @@ offsets = [0.2, 0.2]
 # pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets)
 
 object_sizes = np.array([1840, 1870, 520])
-# object_sizes = np.array([0.184, 0.187, 0.052])
-estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=False)
+estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=True)
 # image = image[50:320, 60:320]
 # show_image(estimate_pose(image)['image'])
 pipeline = EstimatePoseMasks(detect, estimate_pose, offsets, True)
 results = pipeline(image)
 predicted_image = results['image']
 show_image(predicted_image)
-
-"""
-estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=False)
-
-results = pipeline(image)
-predicted_image = results['image']
-show_image(predicted_image)
-"""
 
 # image_size = (640, 480)
 # player = VideoPlayer(image_size, pipeline, camera)
