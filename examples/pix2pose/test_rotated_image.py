@@ -66,6 +66,7 @@ predict_pose = SolveChangingObjectPnPRANSAC(camera_intrinsics, 5, 100)
 
 def quick_pose(image):
     image = resize_image(image, (128, 128))
+    # show_image(resize_image(image, (256 * 3, 256 * 3)))
     keypoints = estimate_keypoints(image)
     points2D = keypoints['points2D']
     points3D = keypoints['points3D']
@@ -81,20 +82,30 @@ def quick_pose(image):
     image = image.astype('float')
     image = draw_poses6D(image, poses6D, cube_points3D, camera_intrinsics)
     image = image.astype('uint8')
-    image = resize_image(image, (256, 256))
+    image = resize_image(image, (256 * 3, 256 * 3))
     show_image(image)
 
 
-image = load_image('zed_left_1011.png')
+image = load_image('images/zed_left_1011.png')
 image = image[250:800, 250:850, :]
+H, W, num_channels = image.shape
+# image = resize_image(image, (W * 20, H * 20))
 quick_pose(image)
 
-image = load_image('MicrosoftTeams-image.png')
+image = load_image('images/MicrosoftTeams-image.png')
 quick_pose(image)
 
-image = load_image('zed_left_705.png')
+image = load_image('images/zed_left_705.png')
 image = image[250:1080, 250:1400, :]
 quick_pose(image)
+
+
+image = load_image('images/zed_left_792.png')
+# image = image[280:1060, 320:1060, :]
+image = image[320:1300, 280:1060, :]
+quick_pose(image)
+
+
 
 renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
                              light, top_only, roll, shift)
