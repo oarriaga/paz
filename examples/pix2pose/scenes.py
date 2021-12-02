@@ -168,8 +168,9 @@ if __name__ == "__main__":
     y_fov = 3.14159 / 4.0
     light = [1.0, 30]
 
+    # model = UNET_VGG16(3, image_shape, freeze_backbone=True)
+
     # solar panel parameters
-    """
     OBJ_name = 'single_solar_panel_02.obj'
     path_OBJ = os.path.join(root_path, OBJ_name)
     angles = np.linspace(0, 2 * np.pi, 7)[:6]
@@ -179,8 +180,14 @@ if __name__ == "__main__":
     camera_pose = to_affine_matrix(camera_rotation, translation)
     min_corner = [0.0, 0.0, -0.4]
     max_corner = [0.0, 0.0, +0.0]
-    """
+    # model.load_weights('weights/UNET-VGG_solar_panel_canonical_13.hdf5')
+    renderer = CanonicalScene(path_OBJ, camera_pose, min_corner,
+                              max_corner, symmetries)
+    renderer.scene.ambient_light = [1.0, 1.0, 1.0]
+    image = renderer.render_symmetries()
+    show_image(image)
 
+    """
     # large clamp parameters
     # REMEMBER TO CHANGE THE Ns coefficient to values between [0, 1] in
     # textured.mtl. For example change 96.07 to .967
@@ -192,6 +199,7 @@ if __name__ == "__main__":
     camera_pose[:3, :3] = np.matmul(align_z, camera_pose[:3, :3])
     min_corner = [-0.05, -0.02, -0.05]
     max_corner = [+0.05, +0.02, +0.01]
+    # model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
 
     angles = [0.0, np.pi]
     symmetries = np.array([build_rotation_matrix_y(angle) for angle in angles])
@@ -200,12 +208,51 @@ if __name__ == "__main__":
     renderer.scene.ambient_light = [1.0, 1.0, 1.0]
     image = renderer.render_symmetries()
     show_image(image)
+    """
+    """
+    # -------------------------------------------------------------
+    # Training scene for hammer
+    # --------------------------------------------------------------
+    OBJ_name = '.keras/paz/datasets/ycb_models/048_hammer/textured.obj'
+    path_OBJ = os.path.join(root_path, OBJ_name)
+    distance = [0.5, 0.6]
+    top_only = False
+    roll = 3.14159
+    shift = 0.05
+    renderer = PixelMaskRenderer(
+        path_OBJ, viewport_size, y_fov, distance, light, top_only, roll, shift)
+    for arg in range(100):
+        image, alpha, RGBA_mask = renderer.render()
+        image = np.concatenate([image, RGBA_mask[..., 0:3]], axis=1)
+        show_image(image)
+    """
+    """
+    translation = np.array([0.0, 0.0, 0.50])
+    camera_pose, y = compute_modelview_matrices(translation, np.zeros((3)))
+    align_z = build_rotation_matrix_z(np.pi / 8)
+    camera_pose[:3, :3] = np.matmul(align_z, camera_pose[:3, :3])
+    min_corner = [-0.05, -0.02, -0.05]
+    max_corner = [+0.05, +0.02, +0.01]
+
+    symmetries, angles = [], [0.0, np.pi]
+    for angle in angles:
+        symmetry = build_rotation_matrix_y(angle)
+        symmetries.append(symmetry)
+    symmetries = np.array(symmetries)
+
+    renderer = CanonicalScene(path_OBJ, camera_pose, min_corner,
+                              max_corner, symmetries)
+    renderer.scene.ambient_light = [1.0, 1.0, 1.0]
+    image = renderer.render_symmetries()
+    show_image(image)
+    """
+
+
+    """
+    show_image(image)
     for arg in range(0):
         image, alpha, RGB_mask = renderer.render()
         show_image(RGB_mask[:, :, 0:3])
-
-    model = UNET_VGG16(3, image_shape, freeze_backbone=True)
-    model.load_weights('UNET-VGG_large_clamp_canonical_10.hdf5')
 
     background_wildcard = '.keras/paz/datasets/voc-backgrounds/*.png'
     background_wildcard = os.path.join(root_path, background_wildcard)
@@ -231,5 +278,7 @@ if __name__ == "__main__":
         # error = RGB_mask_pred - RGB_mask
         RGB_mask_pred = RGB_mask_pred.astype('uint8')
         print(image.dtype, RGB_mask_pred.dtype, RGB_mask_true.dtype)
-        images = np.concatenate([image, RGB_mask_pred, RGB_mask_true], axis=1)
+        # images = np.concatenate([image, RGB_mask_pred, RGB_mask_true], axis=1)
+        images = np.concatenate([image, RGB_mask_pred], axis=1)
         show_image(images)
+    """
