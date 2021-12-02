@@ -23,6 +23,7 @@ checkpoint
 *.p
 *.zip
 *.iml
+*.jpeg
 
 !.github/manifest.xml
 
