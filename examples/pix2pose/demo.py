@@ -15,7 +15,9 @@ image_shape = (128, 128, 3)
 num_classes = 3
 
 model = UNET_VGG16(num_classes, image_shape, freeze_backbone=True)
-model.load_weights('weights/UNET_weights_epochs-10_beta-3.hdf5')
+# model.load_weights('weights/UNET_weights_epochs-10_beta-3.hdf5')
+# model.load_weights('weights/UNET-VGG_solar_panel_canonical_13.hdf5')
+# model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
 
 # approximating intrinsic camera parameters
 camera = Camera(device_id=0)
@@ -24,7 +26,7 @@ camera = Camera(device_id=0)
 # camera.stop()
 
 # image = load_image('test_image2.jpg')
-image = load_image('images/test_image.jpg')
+image = load_image('images/lab_condition.png')
 image_size = image.shape[0:2]
 focal_length = image_size[1]
 image_center = (image_size[1] / 2.0, image_size[0] / 2.0)
@@ -40,14 +42,54 @@ offsets = [0.2, 0.2]
 # estimate_keypoints = Pix2Pose(model, object_sizes, epsilon, True)
 # pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets)
 
-object_sizes = np.array([1840, 1870, 520])
+
+object_sizes = np.array([1840, 1870, 520])  # power drill
+object_sizes = np.array([15000, 15000, 2000])  # solar panel
+object_sizes = np.array([15000, 15000, 2000])  # solar panel
 estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=True)
-# image = image[50:320, 60:320]
-# show_image(estimate_pose(image)['image'])
-pipeline = EstimatePoseMasks(detect, estimate_pose, offsets, True)
-results = pipeline(image)
-predicted_image = results['image']
-show_image(predicted_image)
+# image = image[768:1324, 622:784]
+# image = image[622:784, 768:1324]
+
+
+# image_hammer = image[460:1030, 740:1340]
+# model.load_weights('weights/UNET-VGG16_weights_hammer_10.hdf5')
+# show_image(estimate_pose(image_hammer)['image'])
+
+# show_image(image)
+image_clamp = image[670:1000, 1000:1400]
+# image_hammer = image[460:1030, 740:1340]
+model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
+show_image(estimate_pose(image_clamp)['image'])
+
+"""
+image = load_image('images/zed_left_1011.png')
+image = image[250:800, 250:850, :]
+H, W, num_channels = image.shape
+show_image(estimate_pose(image)['image'])
+
+image = load_image('images/MicrosoftTeams-image.png')
+show_image(estimate_pose(image)['image'])
+
+image = load_image('images/zed_left_705.png')
+image = image[250:1080, 250:1400, :]
+show_image(estimate_pose(image)['image'])
+
+
+image = load_image('images/zed_left_792.png')
+image = image[30:1400, 280:1060, :]
+show_image(estimate_pose(image)['image'])
+"""
+
+# image = load_image('images/large_clamp.jpeg')
+# show_image(image[1])
+# results = estimate_pose(image)
+# show_image(results['image'])
+
+
+# pipeline = EstimatePoseMasks(detect, estimate_pose, offsets, True)
+# results = pipeline(image)
+# predicted_image = results['image']
+# show_image(predicted_image)
 
 # image_size = (640, 480)
 # player = VideoPlayer(image_size, pipeline, camera)
