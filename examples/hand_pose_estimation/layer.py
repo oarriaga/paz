@@ -26,6 +26,7 @@ class SegmentationDilation(Layer):
 
             sparse_input = tf.SparseTensor(dense_shape=[shape[1], shape[2]],
                                            values=[1.0], indices=sparse_indices)
+
             objectmap = tf.sparse.to_dense(sparse_input)
             num_passes = max(shape[1], shape[2]) // (self.filter_size // 2)
 

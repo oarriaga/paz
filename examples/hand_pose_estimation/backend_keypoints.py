@@ -64,6 +64,7 @@ def extract_hand_mask(segmenation_mask, hand_arg=1):
 
 def extract_hand_masks(segmentation_mask, right_hand_mask_limit=18):
     """ Extract Hand masks of left and right hand.
+    ones_mask * right_hand_mask_limit convert to a variable
 
     # Arguments
         segmentation_mask: Numpy array.
@@ -75,11 +76,10 @@ def extract_hand_masks(segmentation_mask, right_hand_mask_limit=18):
     """
     ones_mask = np.ones_like(segmentation_mask)
     hand_mask = extract_hand_mask(segmentation_mask, hand_arg=1)
-    right_hand_map = np.less(
-        segmentation_mask, ones_mask * right_hand_mask_limit)
+    right_hand_mask = ones_mask * right_hand_mask_limit
+    right_hand_map = np.less(segmentation_mask, right_hand_mask)
     mask_left = np.logical_and(hand_mask, right_hand_map)
-    mask_right = np.greater(segmentation_mask,
-                            ones_mask * right_hand_mask_limit)
+    mask_right = np.greater(segmentation_mask, right_hand_mask)
     return mask_left, mask_right
 
 
@@ -116,12 +116,9 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
     num_pixels_hand_left = np.sum(hand_map_left)
     num_pixels_hand_right = np.sum(hand_map_right)
     is_left_dominant = num_pixels_hand_left > num_pixels_hand_right
-    if num_pixels_hand_left > num_pixels_hand_right:
-        dominant_hand = LEFT_HAND
-        keypoints3D = extract_hand_side_keypoints(keypoints3D, dominant_hand)
-    else:
-        dominant_hand = RIGHT_HAND
-        keypoints3D = extract_hand_side_keypoints(keypoints3D, dominant_hand)
+    # TO DO: Check if it can fit in a single line DONE
+    dominant_hand = LEFT_HAND if is_left_dominant else RIGHT_HAND
+    keypoints3D = extract_hand_side_keypoints(keypoints3D, dominant_hand)
     hand_side = np.where(is_left_dominant, 0, 1)
     return hand_side, keypoints3D, dominant_hand
 
@@ -129,7 +126,7 @@ def get_hand_side_and_keypooints(hand_parts_mask, keypoints3D):
 def extract_coordinate_limits(keypoints2D, keypoints2D_visibility,
                               image_size):
     """ Extract minimum and maximum coordinates.
-
+    # Try to convert to a function , check numpy.permute , rollaxis, flip
     # Arguments
         keypoints2D: Numpy array of shape (num_keypoints, 1).
         keypoints2D_visibility: Numpy array of shape (num_keypoints, 1).
@@ -143,10 +140,12 @@ def extract_coordinate_limits(keypoints2D, keypoints2D_visibility,
     keypoint_u = visible_keypoints[:, 1]
     keypoint_v = visible_keypoints[:, 0]
     keypoints2D_coordinates = np.stack([keypoint_u, keypoint_v], 1)
-    max_keypoint2D = np.amax(keypoints2D_coordinates, 0)
-    min_keypoint2D = np.amin(keypoints2D_coordinates, 0)
+    # TO DO: Change to maximum and min
+    max_keypoint2D = np.maximum(keypoints2D_coordinates, 0)
+    min_keypoint2D = np.minimum(keypoints2D_coordinates, 0)
     min_coordinates = np.maximum(min_keypoint2D, 0.0)
     max_coordinates = np.minimum(max_keypoint2D, image_size[0:2])
+    # TO DO: Check image size to be flipped
     return min_coordinates, max_coordinates
 
 
@@ -173,10 +172,11 @@ def tranform_keypoints_to_camera_coordinates(keypoints2D, crop_center, scale,
 
 
 def get_best_crop_size(max_coordinates, min_coordinates, crop_center,
-                       min_crop_size=50.0, max_crop_size=500.0,
-                       default_crop_size=200.0):
+                       min_crop_size=50.0, max_crop_size=500.0):
     """ calculate crop size.
-
+    # TO DO: Change all amx to maximum and amin to minimum
+    # To DO: Check if infinite check is needed
+    # TO DO: Check paz.backend.boxes.offset and make_box_square
     # Arguments
         max_coordinates: (x_max, y_max) Numpy array of shape (1,2).
         min_coordinates: (x_min, y_min) Numpy array of shape (1,2).
@@ -187,17 +187,16 @@ def get_best_crop_size(max_coordinates, min_coordinates, crop_center,
     """
     crop_size_best = 2 * np.maximum(max_coordinates - crop_center,
                                     crop_center - min_coordinates)
-    crop_size_best = np.amax(crop_size_best)
-    crop_size_best = np.minimum(
-        np.maximum(crop_size_best, min_crop_size), max_crop_size)
-    if not np.isfinite(crop_size_best):
-        crop_size_best = default_crop_size
+    crop_size_best = np.maximum(crop_size_best)
+    crop_size_best = np.minimum(np.maximum(crop_size_best, min_crop_size),
+                                max_crop_size)
     return crop_size_best
 
 
 def get_crop_scale_and_center(keypoints2D, keypoints2D_visibility, image_size,
                               crop_size):
     """ Extract scale to which image should be cropped.
+    #To DO: Remove reshape that is used for conformation purposes
 
     # Arguments
         keypoints2D: Numpy array of shape (num_keypoints, 1).
@@ -222,6 +221,7 @@ def get_crop_scale_and_center(keypoints2D, keypoints2D_visibility, image_size,
 def crop_image_from_mask(keypoints2D, keypoints2D_visibility, image,
                          image_size, crop_size, camera_matrix):
     """ Crop image from mask.
+    TO DO: Check crop in paz.backend or processors
 
     # Arguments
         keypoints2D: Numpy array of shape (num_keypoints, 1).
@@ -254,7 +254,8 @@ def crop_image_from_mask(keypoints2D, keypoints2D_visibility, image,
 
 def flip_right_to_left_hand(keypoints3D, flip_right):
     """ Flip right hend coordinates to left hand coordinates.
-
+    # TO DO: numpy array  indexing simlification
+    # TO DO: No Batch Size to be considered
     # Arguments
         canonical_keypoints3D: Numpy array of shape (num_keypoints, 3).
         flip_right: boolean value.
@@ -270,7 +271,8 @@ def flip_right_to_left_hand(keypoints3D, flip_right):
 
 def extract_dominant_hand_visibility(keypoint_visibility, dominant_hand):
     """ Extract Visibility mask for dominant hand.
-
+    # TO DO: No Batch Size to be considered
+    # Look Later with Octavio
     # Arguments
         keypoint_visibility: Numpy array of shape (num_keypoints, 1).
         dominant_hand: List of size (2).
@@ -288,7 +290,8 @@ def extract_dominant_hand_visibility(keypoint_visibility, dominant_hand):
 
 def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
     """ Extract keypoint 2D.
-
+    # TO DO: No Batch Size to be considered
+    # Look Later with Octavio
     # Arguments
         keypoint_2D: Numpy array of shape (num_keypoints, 1).
         dominant_hand: List of size (2) with booleans.
@@ -297,9 +300,7 @@ def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
         keypoint_visibility_2D_21: Numpy array of shape (num_keypoints, 1).
     """
     keypoint_visibility_left = keypoint_2D[:LEFT_PINKY_TIP, :]
-
-    keypoint_visibility_right = keypoint_2D[RIGHT_WRIST:
-                                            RIGHT_THUMB_TIP, :]
+    keypoint_visibility_right = keypoint_2D[RIGHT_WRIST:RIGHT_THUMB_TIP, :]
     keypoint_visibility_2D_21 = np.where(
         dominant_hand[:, :2], keypoint_visibility_left,
         keypoint_visibility_right)
@@ -308,7 +309,7 @@ def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
 
 def extract_keypoint2D_limits(uv_coordinates, scoremap_size):
     """ Limit keypoint coordinates to scoremap size ,
-
+    # TO DO: Unpack scoremap_size as width and height DONE
     # Arguments
         uv_coordinates: Numpy array of shape (num_keypoints, 1).
         scoremap_size: List of size (2).
@@ -316,11 +317,12 @@ def extract_keypoint2D_limits(uv_coordinates, scoremap_size):
     # Returns
         keypoint_limits: Numpy array of shape (num_keypoints, 1).
     """
-    x_lower_limits = np.less(uv_coordinates[:, 0], scoremap_size[0] - 1)
+    scoremap_height, scoremap_width = scoremap_size
+    x_lower_limits = np.less(uv_coordinates[:, 0], scoremap_height - 1)
     x_upper_limits = np.greater(uv_coordinates[:, 0], 0)
     x_limits = np.logical_and(x_lower_limits, x_upper_limits)
 
-    y_lower_limits = np.less(uv_coordinates[:, 1], scoremap_size[1] - 1)
+    y_lower_limits = np.less(uv_coordinates[:, 1], scoremap_width - 1)
     y_upper_limits = np.greater(uv_coordinates[:, 1], 0)
     y_limits = np.logical_and(y_lower_limits, y_upper_limits)
 
@@ -331,7 +333,7 @@ def extract_keypoint2D_limits(uv_coordinates, scoremap_size):
 def get_keypoints_mask(validity_mask, uv_coordinates, scoremap_size,
                        validity_score=0.5):
     """ Extract Visibility mask for dominant hand.
-
+    # Add in dataset README the difference between seg and vis
     # Arguments
         validity_mask: Int value.
         uv_coordinates: Numpy array of shape (num_keypoints, 1).
@@ -349,7 +351,7 @@ def get_keypoints_mask(validity_mask, uv_coordinates, scoremap_size,
 
 def get_keypoint_limits(uv_coordinates, scoremap_size):
     """ Extract X and Y limits.
-
+    # TO DO: Unpack scoremap_size as width and height DONE
     # Arguments
         uv_coordinates: Numpy array of shape (num_keypoints, 2).
         scoremap_size: List of size (2).
@@ -359,17 +361,18 @@ def get_keypoint_limits(uv_coordinates, scoremap_size):
         Y_limits: Numpy array of shape (num_keypoints, 1).
     """
     shape = uv_coordinates.shape
+    scoremap_height, scoremap_width = scoremap_size
 
-    x_range = np.expand_dims(np.arange(scoremap_size[0]), 1)
-    x_coordinates = np.tile(x_range, [1, scoremap_size[1]])
-    x_coordinates.reshape((scoremap_size[0], scoremap_size[1]))
+    x_range = np.expand_dims(np.arange(scoremap_height), 1)
+    x_coordinates = np.tile(x_range, [1, scoremap_width])
+    x_coordinates.reshape((scoremap_height, scoremap_width))
     x_coordinates = np.expand_dims(x_coordinates, -1)
     x_coordinates = np.tile(x_coordinates, [1, 1, shape[0]])
     x_limits = x_coordinates - uv_coordinates[:, 0].astype('float64')
 
-    y_range = np.expand_dims(np.arange(scoremap_size[1]), 0)
-    y_coordinates = np.tile(y_range, [scoremap_size[0], 1])
-    y_coordinates.reshape((scoremap_size[0], scoremap_size[1]))
+    y_range = np.expand_dims(np.arange(scoremap_width), 0)
+    y_coordinates = np.tile(y_range, [scoremap_height, 1])
+    y_coordinates.reshape((scoremap_height, scoremap_width))
     y_coordinates = np.expand_dims(y_coordinates, -1)
     y_coordinates = np.tile(y_coordinates, [1, 1, shape[0]])
     y_limits = y_coordinates - uv_coordinates[:, 1].astype('float64')
@@ -377,10 +380,9 @@ def get_keypoint_limits(uv_coordinates, scoremap_size):
     return x_limits, y_limits
 
 
-def create_multiple_gaussian_map(uv_coordinates, scoremap_size, sigma,
-                                 validity_mask):
+def create_gaussian_map(uv_coordinates, scoremap_size, sigma, validity_mask):
     """ Generate Gaussian maps based on keypoints in Image coordinates.
-
+    # TO DO: Remove multiple in function name DONE
     # Arguments
         uv_coordinates: Numpy array of shape (num_keypoints, 1).
         scoremap_size: List of size (2).
@@ -390,7 +392,6 @@ def create_multiple_gaussian_map(uv_coordinates, scoremap_size, sigma,
     # Returns
         scoremap: Numpy array of shape (crop_size, crop-size).
     """
-    assert len(scoremap_size) == 2
     keypoints_mask = get_keypoints_mask(validity_mask, uv_coordinates,
                                         scoremap_size)
     x_limits, y_limits = get_keypoint_limits(uv_coordinates, scoremap_size)
@@ -401,7 +402,7 @@ def create_multiple_gaussian_map(uv_coordinates, scoremap_size, sigma,
 
 def extract_keypoints_uv_coordinates(shape):
     """ Generate X and Y mesh.
-
+    # Rename to best name
     # Arguments
         shape: tuple of size (3).
 
@@ -409,10 +410,11 @@ def extract_keypoints_uv_coordinates(shape):
         X: Numpy array of shape (1, crop_size).
         Y: Numpy array of shape (crop_size, 1).
     """
-    x_range = np.expand_dims(np.arange(shape[1]), 1)
-    y_range = np.expand_dims(np.arange(shape[2]), 0)
-    x_coordinates = np.tile(x_range, [1, shape[2]])
-    y_coordinates = np.tile(y_range, [shape[1], 1])
+    crop_size_height, crop_size_width = shape[1], shape[2]
+    x_range = np.expand_dims(np.arange(crop_size_height), 1)
+    y_range = np.expand_dims(np.arange(crop_size_width), 0)
+    x_coordinates = np.tile(x_range, [1, crop_size_width])
+    y_coordinates = np.tile(y_range, [crop_size_height, 1])
     return x_coordinates, y_coordinates
 
 
@@ -434,7 +436,7 @@ def get_bounding_box(X_masked, Y_masked):
 
 def get_crop_center(box_coordinates):
     """ Extract Center.
-
+    # TO DO: Check poaxz convention for boxes
     # Arguments
         box_coordinates: List of length 4.
         center_list: List of length batch_size.
@@ -447,7 +449,6 @@ def get_crop_center(box_coordinates):
     center_x = 0.5 * (x_min + x_max)
     center_y = 0.5 * (y_min + y_max)
     center = np.stack([center_x, center_y], 0)
-    center.reshape([2])
     return center
 
 
@@ -470,6 +471,7 @@ def get_crop_size(box_coordinates):
     return crop_size
 
 
+# RESTART_LINE
 def get_bounding_box_features(X, Y, binary_class_mask, shape):
     """ Extract Crop.
 
@@ -492,7 +494,6 @@ def get_bounding_box_features(X, Y, binary_class_mask, shape):
             bounding_box_list, center_list, crop_size_list = None, None, None
             return bounding_box_list, center_list, crop_size_list
         bounding_box = get_bounding_box(X_masked, Y_masked)
-        print(bounding_box)
         center = get_crop_center(bounding_box)
         crop_size = get_crop_size(bounding_box)
         bounding_box_list.append(bounding_box)
@@ -518,7 +519,6 @@ def extract_bounding_box(binary_class_mask):
     if len(shape) == 4:
         binary_class_mask = np.squeeze(binary_class_mask, axis=-1)
         shape = binary_class_mask.shape
-    assert len(shape) == 3, "binary_class_mask must be 3D."
     coordinates_x, coordinates_y = extract_keypoints_uv_coordinates(shape)
     bounding_box_list, center_list, crop_size_list = get_bounding_box_features(
         coordinates_x, coordinates_y, binary_class_mask, shape)
@@ -542,14 +542,10 @@ def get_box_coordinates(location, size, shape):
         boxes: Numpy array of shape (batch_size, 4).
     """
     height, width = shape[1], shape[2]
-    x_min = location[:, 0] - size // 2
-    x_max = x_min + size
-    y_min = location[:, 1] - size // 2
-    y_max = y_min + size
-    x_min = x_min / height
-    x_max = x_max / height
-    y_min = y_min / width
-    y_max = y_max / width
+    x_min, y_min = location[:, 0] - size // 2, location[:, 1] - size // 2
+    x_max, y_max = x_min + size, y_min + size
+    x_min, x_max = x_min / height, x_max / height
+    y_min, y_max = y_min / width, y_max / width
     boxes = np.stack([x_min, y_min, x_max, y_max], -1)
     return boxes
 
@@ -568,8 +564,8 @@ def crop_image(image, crop_box):
         raise ValueError(
             'Recieved Image is not of type numpy array', type(image))
     else:
-        cropped_image = image[
-                        crop_box[0]:crop_box[2], crop_box[1]:crop_box[3], :]
+        cropped_image = image[crop_box[0]:crop_box[2], crop_box[1]:crop_box[3],
+                        :]
     return cropped_image
 
 
@@ -588,7 +584,6 @@ def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
     image_dimensions = image.shape
     scale = np.reshape(scale, [-1])
     crop_location = crop_center.astype(np.float)
-    crop_location = np.reshape(crop_location, [image_dimensions[0], 2])
     crop_size = np.float(crop_size)
     crop_size_scaled = crop_size / scale
     boxes = get_box_coordinates(crop_location, crop_size_scaled,
@@ -596,6 +591,7 @@ def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
     crop_size = np.stack([crop_size, crop_size])
     crop_size = crop_size.astype(np.float)
     box_indices = np.arange(image_dimensions[0])
+    # TO DO: Refrain using TF in backend
     image_cropped = tf.image.crop_and_resize(
         tf.cast(image, tf.float32), boxes, box_indices, crop_size, name='crop')
     return image_cropped.numpy()
@@ -610,6 +606,7 @@ def extract_keypoint_index(scoremap):
     # Returns
         max_index_vec: List of Max Indices.
     """
+    # To DO: Check after correcting batch size
     shape = scoremap.shape
     scoremap = np.reshape(scoremap, [shape[0], -1])
     keypoint_index = np.argmax(scoremap, axis=1)
@@ -648,8 +645,9 @@ def create_2D_grids(shape):
         x_vec: Numpy array.
         y_vec: Numpy array.
     """
-    x_range = np.expand_dims(np.arange(shape[1]), 1)
-    y_range = np.expand_dims(np.arange(shape[2]), 0)
+    height, width = shape[1], shape[2]
+    x_range = np.expand_dims(np.arange(height), 1)
+    y_range = np.expand_dims(np.arange(width), 0)
     X = np.tile(x_range, [1, shape[2]])
     Y = np.tile(y_range, [shape[1], 1])
     X = np.reshape(X, [-1])
@@ -693,8 +691,8 @@ def create_score_maps(keypoint_2D, keypoint_visibility, image_size,
     scoremap_size = image_size[0:2]
     if crop_image:
         scoremap_size = (crop_size, crop_size)
-    scoremap = create_multiple_gaussian_map(
-        keypoint_uv, scoremap_size, variance, keypoint_visibility)
+    scoremap = create_gaussian_map(keypoint_uv, scoremap_size, variance,
+                                   keypoint_visibility)
     return scoremap
 
 
@@ -796,7 +794,6 @@ def keypoints_to_palm_coordinates(keypoints):
 
 
 def get_transform_to_bone_frame(keypoints3D, bone_index):
-    # bone
     """ Transform the keypoints in camera image frame to index keypoint frame.
 
     # Arguments
@@ -903,9 +900,13 @@ def get_child_transformations(keypoints3D, bone_index, parent_index,
     transformation_parameters = get_articulation_angles(
         parent_keypoint_coordinates, child_keypoint_coordinates,
         transformation_matrix)
-    relative_coordinate = np.stack(transformation_parameters[:3])
-    transformation = transformation_parameters[3]
-    return transformation, relative_coordinate
+    length_from_origin = transformation_parameters[0]
+    rotation_angle_x, rotation_angle_y = transformation_parameters[1:3]
+    rotated_keypoints = transformation_parameters[3]
+    transformations = np.stack([length_from_origin, rotation_angle_x,
+                                rotation_angle_y])
+    relative_coordinate = rotated_keypoints
+    return relative_coordinate, transformations
 
 
 def keypoints_to_root_frame(keypoints3D):

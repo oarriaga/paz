@@ -41,7 +41,6 @@ def resize_image_with_linear_interpolation(image, size):
     # Returns
         Numpy array.
     """
-    print(image.shape)
     if(type(image) != np.ndarray):
         raise ValueError(
             'Recieved Image is not of type numpy array', type(image))

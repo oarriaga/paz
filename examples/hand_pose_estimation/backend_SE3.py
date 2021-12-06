@@ -157,7 +157,6 @@ def rotation_from_axis_angles(axis_angles, is_normalized=False):
     # Returns
         rotation-matrix: numpy array of size (3, 3).
     """
-    print(axis_angles)
     theta = np.linalg.norm(axis_angles)
     if not is_normalized:
         axis_angles = normalize_axis_coordinates(axis_angles, theta)
