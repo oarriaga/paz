@@ -11,38 +11,40 @@ class SegmentationDilation(Layer):
         self.kernel = filters / float(self.filter_size ** 2)
 
     def call(self, inputs):
-        shape = inputs.shape
+        segmentation_map_height, segmentation_map_width, channels = inputs.shape
         scoremap_softmax = tf.nn.softmax(inputs)
-        scoremap_foreground = tf.reduce_max(scoremap_softmax[:, :, :, 1:], -1)
+        scoremap_foreground = tf.reduce_max(scoremap_softmax[:, :, 1:], -1)
         segmentationmap_foreground = tf.round(scoremap_foreground)
         max_loc = find_max_location(scoremap_foreground)
 
-        objectmap_list = list()
+        sparse_indices = tf.reshape(max_loc, [1, 2])
 
-        if shape[0] is None:
-            shape[0] = 1
-        for i in range(shape[0]):
-            sparse_indices = tf.reshape(max_loc[i, :], [1, 2])
+        sparse_input = tf.SparseTensor(
+            dense_shape=[segmentation_map_height, segmentation_map_width],
+            values=[1.0], indices=sparse_indices)
 
-            sparse_input = tf.SparseTensor(dense_shape=[shape[1], shape[2]],
-                                           values=[1.0], indices=sparse_indices)
+        objectmap = tf.sparse.to_dense(sparse_input)
+        num_passes = max(segmentation_map_height, segmentation_map_width) // (
+                self.filter_size // 2)
 
-            objectmap = tf.sparse.to_dense(sparse_input)
-            num_passes = max(shape[1], shape[2]) // (self.filter_size // 2)
+        for pass_count in range(num_passes):
+            objectmap = tf.reshape(objectmap, [1, segmentation_map_height,
+                                               segmentation_map_width, 1])
 
-            for pass_count in range(num_passes):
-                objectmap = tf.reshape(objectmap, [1, shape[1], shape[2], 1])
-                objectmap_dilated = tf.nn.dilation2d(
-                    input=objectmap, filters=self.kernel,
-                    strides=[1, 1, 1, 1], dilations=[1, 1, 1, 1],
-                    padding='SAME', data_format='NHWC')
-                objectmap_dilated = tf.reshape(objectmap_dilated,
-                                               [shape[1], shape[2]])
-                objectmap = tf.round(
-                    tf.multiply(segmentationmap_foreground[i, :, :],
-                                objectmap_dilated))
+            objectmap_dilated = tf.nn.dilation2d(
+                input=objectmap, filters=self.kernel,
+                strides=[1, 1, 1, 1], dilations=[1, 1, 1, 1],
+                padding='SAME', data_format='NHWC')
 
-            objectmap = tf.reshape(objectmap, [shape[1], shape[2], 1])
-            objectmap_list.append(objectmap)
-        objectmap = tf.stack(objectmap_list)
-        return objectmap
+            objectmap_dilated = tf.reshape(objectmap_dilated,
+                                           [segmentation_map_height,
+                                            segmentation_map_width])
+
+            objectmap = tf.round(tf.multiply(segmentationmap_foreground,
+                                             objectmap_dilated))
+
+        objectmap = tf.reshape(objectmap, [segmentation_map_height,
+                                           segmentation_map_width, 1])
+
+        objectmap = tf.stack([objectmap])
+        return objectmap.numpy()

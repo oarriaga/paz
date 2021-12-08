@@ -15,7 +15,7 @@ from processors_keypoints import ExtractDominantKeypoints2D, CropImageFromMask
 from processors_keypoints import ExtractHandmask, ExtractKeypoints
 from processors_keypoints import FlipRightHandToLeftHand
 from processors_keypoints import NormalizeKeypoints
-from processors_standard import MergeDictionaries, ToOneHot
+from processors_standard import MergeDictionaries, ToOneHot, WrapToDictionary
 from processors_standard import ResizeImageWithLinearInterpolation
 from processors_standard import TransposeOfArray, ListToArray
 
@@ -214,14 +214,36 @@ class PostProcessSegmentation(Processor):
         raw_segmentation_map = self.squeeze_input(raw_segmentation_map)
         raw_segmentation_map = self.resize_segmentation_map(
             raw_segmentation_map)
-        raw_segmentation_map = self.expand_dims(raw_segmentation_map)
+        # raw_segmentation_map = self.expand_dims(raw_segmentation_map)
         segmentation_map = self.dilate_map(raw_segmentation_map)
-        segmentation_map = segmentation_map.numpy()
+        # segmentation_map = segmentation_map.numpy()
+        segmentation_map = self.squeeze_input(segmentation_map)
         center, bounding_box, crop_size = self.extract_box(segmentation_map)
         crop_size = self.adjust_crop_size(crop_size)
         cropped_image = self.crop_image(image, center, crop_size)
-
         return cropped_image, segmentation_map, center, bounding_box, crop_size
+
+
+class ResizeScoreMaps(Processor):
+    def __init__(self, crop_shape=(256, 256)):
+        super(ResizeScoreMaps, self).__init__()
+        self.unpack_inputs = pr.UnpackDictionary(['score_maps'])
+        self.crop_shape = crop_shape
+        self.squeeze = pr.Squeeze(axis=0)
+        self.transpose = TransposeOfArray()
+        self.resize_scoremap = pr.ResizeImages(crop_shape)
+        self.list_to_array = ListToArray()
+        self.expand_dims = pr.ExpandDims(axis=0)
+
+    def call(self, input):
+        scoremaps = self.unpack_inputs(input)
+        scoremaps = self.squeeze(scoremaps)
+        scoremaps_transposed = self.transpose(scoremaps)
+        scoremaps_resized = self.resize_scoremap(scoremaps_transposed)
+        scoremaps_resized = self.list_to_array(scoremaps_resized)
+        scoremaps_transposed = self.transpose(scoremaps_resized)
+        # scoremaps = self.expand_dims(scoremaps_transposed)
+        return scoremaps_transposed
 
 
 class DetectHandKeypoints(Processor):
@@ -233,17 +255,16 @@ class DetectHandKeypoints(Processor):
             [pr.NormalizeImage(), pr.ResizeImage((image_size, image_size)),
              pr.ExpandDims(0)])
 
-        postprocess_segmentation = PostProcessSegmentation(
-            image_size, crop_shape)
-
-        self.postprocess_scoremaps = SequentialProcessor([
-            pr.Squeeze(axis=0), TransposeOfArray(), pr.ResizeImages(crop_shape),
-            ListToArray(), TransposeOfArray(), pr.ExpandDims(0)])
+        postprocess_segmentation = PostProcessSegmentation(image_size,
+                                                           crop_shape)
 
         self.localize_hand = pr.Predict(handsegnet, preprocess_image,
                                         postprocess_segmentation)
 
+        self.resize_scoremaps = ResizeScoreMaps(crop_shape)
+
         self.merge_dictionaries = MergeDictionaries()
+        self.wrap_input = WrapToDictionary(['hand_side'])
 
         self.predict_keypoints2D = pr.Predict(posenet)
         self.predict_keypoints3D = pr.Predict(posepriornet)
@@ -256,33 +277,22 @@ class DetectHandKeypoints(Processor):
                                                 radius=4)
         self.denormalize = pr.DenormalizeImage()
         self.wrap = pr.WrapOutput(['image', 'keypoints2D'])
-        self.expand_dims = pr.ExpandDims(axis=0)
-        self.squeeze_input = pr.Squeeze(axis=0)
 
     def call(self, image, hand_side=np.array([[1.0, 0.0]])):
         hand_crop, segmentation_map, center, _, crop_size_best = \
             self.localize_hand(image)
-
         score_maps = self.predict_keypoints2D(hand_crop)
-
-        score_maps_resized = self.postprocess_scoremaps(
-            score_maps['score_maps'])
-
+        score_maps_resized = self.resize_scoremaps(score_maps)
         hand_side = {'hand_side': hand_side}
         score_maps = self.merge_dictionaries([score_maps, hand_side])
-
         keypoints_2D = self.extract_2D_keypoints(score_maps_resized)
-
         rotation_parameters = self.predict_keypoints3D(score_maps)
         viewpoints = self.predict_keypoints_angles(score_maps)
-
-        canonical_keypoints = self.merge_dictionaries(
-            [rotation_parameters, viewpoints])
-
+        canonical_keypoints = self.merge_dictionaries([rotation_parameters,
+                                                       viewpoints])
         relative_keypoints = self.postprocess_keypoints(canonical_keypoints)
         tranformed_keypoints_2D = self.transform_keypoints(
             keypoints_2D, center, crop_size_best, 256)
-
         image = self.draw_keypoint(np.squeeze(hand_crop), keypoints_2D)
         image = self.denormalize(image)
         output = self.wrap(image.astype('uint8'), keypoints_2D)

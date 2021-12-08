@@ -96,6 +96,7 @@ class CanonicaltoRelativeFrame(Processor):
         self.num_keypoints = num_keypoints
 
     def call(self, canonical_coordinates, rotation_matrix, hand_side):
+        canonical_coordinates = canonical_coordinates.reshape((21, 3))
         keypoints = canonical_to_relative_coordinates(
             self.num_keypoints, canonical_coordinates, rotation_matrix,
             hand_side)

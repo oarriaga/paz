@@ -97,8 +97,8 @@ class CropImageFromMask(Processor):
 
     def call(self, keypoints, keypoint_visibility, image, camera_matrix):
         return crop_image_from_mask(keypoints, keypoint_visibility, image,
-                                     self.image_size, self.crop_size,
-                                     camera_matrix)
+                                    self.image_size, self.crop_size,
+                                    camera_matrix)
 
 
 class CreateScoremaps(Processor):

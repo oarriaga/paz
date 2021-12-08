@@ -128,8 +128,8 @@ def extract_coordinate_limits(keypoints2D, keypoints2D_visibility,
     """ Extract minimum and maximum coordinates.
     # Try to convert to a function , check numpy.permute , rollaxis, flip
     # Arguments
-        keypoints2D: Numpy array of shape (num_keypoints, 1).
-        keypoints2D_visibility: Numpy array of shape (num_keypoints, 1).
+        keypoints2D: Numpy array of shape (num_keypoints, 2).
+        keypoints2D_visibility: Numpy array of shape (num_keypoints, 2).
         image_size: List of shape (3).
 
     # Returns
@@ -140,7 +140,7 @@ def extract_coordinate_limits(keypoints2D, keypoints2D_visibility,
     keypoint_u = visible_keypoints[:, 1]
     keypoint_v = visible_keypoints[:, 0]
     keypoints2D_coordinates = np.stack([keypoint_u, keypoint_v], 1)
-    # TO DO: Change to maximum and min
+    # TO DO: Change to maximum and min DONE
     max_keypoint2D = np.maximum(keypoints2D_coordinates, 0)
     min_keypoint2D = np.minimum(keypoints2D_coordinates, 0)
     min_coordinates = np.maximum(min_keypoint2D, 0.0)
@@ -263,8 +263,8 @@ def flip_right_to_left_hand(keypoints3D, flip_right):
     # Returns
         canonical_keypoints3D_left: Numpy array of shape (num_keypoints, 3).
     """
-    keypoints3D_mirrored = np.stack([keypoints3D[:, :, 0], keypoints3D[:, :, 1],
-                                     -keypoints3D[:, :, 2]], -1)
+    keypoints3D_mirrored = np.stack([keypoints3D[:, 0], keypoints3D[:, 1],
+                                     -keypoints3D[:, 2]], -1)
     keypoints3D_left = np.where(flip_right, keypoints3D_mirrored, keypoints3D)
     return keypoints3D_left
 
@@ -282,9 +282,9 @@ def extract_dominant_hand_visibility(keypoint_visibility, dominant_hand):
     """
     keypoint_visibility_left = keypoint_visibility[:LEFT_PINKY_TIP]
     keypoint_visibility_right = keypoint_visibility[RIGHT_WRIST:RIGHT_THUMB_TIP]
-    keypoint_visibility_21 = np.where(
-        dominant_hand[:, 0], keypoint_visibility_left,
-        keypoint_visibility_right)
+    keypoint_visibility_21 = np.where(dominant_hand[:, 0],
+                                      keypoint_visibility_left,
+                                      keypoint_visibility_right)
     return keypoint_visibility_21
 
 
@@ -410,7 +410,7 @@ def extract_keypoints_uv_coordinates(shape):
         X: Numpy array of shape (1, crop_size).
         Y: Numpy array of shape (crop_size, 1).
     """
-    crop_size_height, crop_size_width = shape[1], shape[2]
+    crop_size_height, crop_size_width = shape[0], shape[1]
     x_range = np.expand_dims(np.arange(crop_size_height), 1)
     y_range = np.expand_dims(np.arange(crop_size_width), 0)
     x_coordinates = np.tile(x_range, [1, crop_size_width])
@@ -487,18 +487,17 @@ def get_bounding_box_features(X, Y, binary_class_mask, shape):
         crop_size_list: List of length batch_size.
     """
     bounding_box_list, center_list, crop_size_list = [], [], []
-    for binary_class_index in range(shape[0]):
-        X_masked = X[binary_class_mask[binary_class_index, :, :]]
-        Y_masked = Y[binary_class_mask[binary_class_index, :, :]]
-        if len(X_masked) == 0:
-            bounding_box_list, center_list, crop_size_list = None, None, None
-            return bounding_box_list, center_list, crop_size_list
-        bounding_box = get_bounding_box(X_masked, Y_masked)
-        center = get_crop_center(bounding_box)
-        crop_size = get_crop_size(bounding_box)
-        bounding_box_list.append(bounding_box)
-        center_list.append(center)
-        crop_size_list.append(crop_size)
+    X_masked = X[binary_class_mask]
+    Y_masked = Y[binary_class_mask]
+    if len(X_masked) == 0:
+        bounding_box_list, center_list, crop_size_list = None, None, None
+        return bounding_box_list, center_list, crop_size_list
+    bounding_box = get_bounding_box(X_masked, Y_masked)
+    center = get_crop_center(bounding_box)
+    crop_size = get_crop_size(bounding_box)
+    bounding_box_list.append(bounding_box)
+    center_list.append(center)
+    crop_size_list.append(crop_size)
     return bounding_box_list, center_list, crop_size_list
 
 
@@ -515,10 +514,8 @@ def extract_bounding_box(binary_class_mask):
     """
     binary_class_mask = binary_class_mask.astype('int')
     binary_class_mask = np.equal(binary_class_mask, 1)
+    binary_class_mask = np.squeeze(binary_class_mask, axis=-1)
     shape = binary_class_mask.shape
-    if len(shape) == 4:
-        binary_class_mask = np.squeeze(binary_class_mask, axis=-1)
-        shape = binary_class_mask.shape
     coordinates_x, coordinates_y = extract_keypoints_uv_coordinates(shape)
     bounding_box_list, center_list, crop_size_list = get_bounding_box_features(
         coordinates_x, coordinates_y, binary_class_mask, shape)
@@ -607,13 +604,12 @@ def extract_keypoint_index(scoremap):
         max_index_vec: List of Max Indices.
     """
     # To DO: Check after correcting batch size
-    shape = scoremap.shape
-    scoremap = np.reshape(scoremap, [shape[0], -1])
-    keypoint_index = np.argmax(scoremap, axis=1)
+    scoremap = np.reshape(scoremap, [-1])
+    keypoint_index = np.argmax(scoremap)
     return keypoint_index
 
 
-def extract_keypoints_XY(x_vector, y_vector, maximum_indices, batch_size):
+def extract_keypoints_XY(x_vector, y_vector, maximum_indices):
     """ Extract Keypoint X,Y coordinates.
 
     # Arguments
@@ -626,11 +622,9 @@ def extract_keypoints_XY(x_vector, y_vector, maximum_indices, batch_size):
         keypoints2D: Numpy array of shape (num_keypoints, 1).
     """
     keypoints2D = list()
-    for image_index in range(batch_size):
-        index_choice = maximum_indices[image_index]
-        x_location = np.reshape(x_vector[index_choice], [1])
-        y_location = np.reshape(y_vector[index_choice], [1])
-        keypoints2D.append(np.concatenate([x_location, y_location], 0))
+    x_location = np.reshape(x_vector[maximum_indices], [1])
+    y_location = np.reshape(y_vector[maximum_indices], [1])
+    keypoints2D.append(np.concatenate([x_location, y_location], 0))
     keypoints2D = np.stack(keypoints2D, 0)
     return keypoints2D
 
@@ -645,11 +639,11 @@ def create_2D_grids(shape):
         x_vec: Numpy array.
         y_vec: Numpy array.
     """
-    height, width = shape[1], shape[2]
+    height, width = shape
     x_range = np.expand_dims(np.arange(height), 1)
     y_range = np.expand_dims(np.arange(width), 0)
-    X = np.tile(x_range, [1, shape[2]])
-    Y = np.tile(y_range, [shape[1], 1])
+    X = np.tile(x_range, [1, width])
+    Y = np.tile(y_range, [height, 1])
     X = np.reshape(X, [-1])
     Y = np.reshape(Y, [-1])
     return X, Y
@@ -665,10 +659,9 @@ def find_max_location(scoremap):
         keypoints2D: numpy array of shape (num_keypoints, 1).
     """
     shape = scoremap.shape
-    assert len(shape) == 3, "Scoremap must be 3D."
     x_grid, y_grid = create_2D_grids(shape)
     keypoint_index = extract_keypoint_index(scoremap)
-    keypoints2D = extract_keypoints_XY(x_grid, y_grid, keypoint_index, shape[0])
+    keypoints2D = extract_keypoints_XY(x_grid, y_grid, keypoint_index)
     return keypoints2D
 
 
@@ -720,7 +713,6 @@ def extract_keypoints(scoremaps):
     # Returns
         keypoint_coords: numpy array of size (num_keypoints, 1).
     """
-    scoremaps = np.squeeze(scoremaps, axis=0)
     height, width, num_keypoints = scoremaps.shape
     keypoint2D = np.zeros((num_keypoints, 2))
     for keypoint_arg in range(num_keypoints):
@@ -1169,8 +1161,8 @@ def canonical_to_relative_coordinates(num_keypoints, canonical_coordinates,
                                       rotation_matrix, hand_side):
     hand_arg = np.argmax(hand_side, 1)
     hand_side_mask = np.equal(hand_arg, 1)
-    hand_side_mask = np.reshape(hand_side_mask, [-1, 1, 1])
-    hand_side_mask_3D = np.tile(hand_side_mask, [1, num_keypoints, 3])
+    hand_side_mask = np.reshape(hand_side_mask, [-1, 1])
+    hand_side_mask_3D = np.tile(hand_side_mask, [num_keypoints, 3])
     keypoint_flipped = flip_right_to_left_hand(canonical_coordinates,
                                                hand_side_mask_3D)
     relative_keypoints = np.matmul(keypoint_flipped, rotation_matrix)
