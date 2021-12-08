@@ -13,6 +13,8 @@ from RHDv2 import RIGHT_THUMB_TIP, RIGHT_HAND
 
 from RHDv2 import KINEMATIC_CHAIN_DICT, KINEMATIC_CHAIN_LIST
 
+from paz.backend.image.opencv_image import resize_image, show_image
+
 
 def extract_hand_segment(segmentation_label, hand_arg=1):
     """ Data Pre-processing step: Extract only hand mask from the
@@ -538,32 +540,13 @@ def get_box_coordinates(location, size, shape):
     # Returns
         boxes: Numpy array of shape (batch_size, 4).
     """
-    height, width = shape[1], shape[2]
+    height, width = shape[0], shape[1]
     x_min, y_min = location[:, 0] - size // 2, location[:, 1] - size // 2
     x_max, y_max = x_min + size, y_min + size
     x_min, x_max = x_min / height, x_max / height
     y_min, y_max = y_min / width, y_max / width
-    boxes = np.stack([x_min, y_min, x_max, y_max], -1)
+    boxes = [x_min, y_min, x_max, y_max]
     return boxes
-
-
-def crop_image(image, crop_box):
-    """ Crop image.
-
-    # Arguments
-        image: Numpy array.
-        crop_box: List of four ints.
-
-    # Returns
-        Numpy array.
-    """
-    if type(image) != np.ndarray:
-        raise ValueError(
-            'Recieved Image is not of type numpy array', type(image))
-    else:
-        cropped_image = image[crop_box[0]:crop_box[2], crop_box[1]:crop_box[3],
-                        :]
-    return cropped_image
 
 
 def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
@@ -578,20 +561,39 @@ def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
     # Returns
         Image_cropped: Numpy array of shape (crop_size, crop-size).
     """
+    image = np.squeeze(image, 0)
     image_dimensions = image.shape
     scale = np.reshape(scale, [-1])
     crop_location = crop_center.astype(np.float)
-    crop_size = np.float(crop_size)
     crop_size_scaled = crop_size / scale
     boxes = get_box_coordinates(crop_location, crop_size_scaled,
                                 image_dimensions)
-    crop_size = np.stack([crop_size, crop_size])
-    crop_size = crop_size.astype(np.float)
-    box_indices = np.arange(image_dimensions[0])
-    # TO DO: Refrain using TF in backend
-    image_cropped = tf.image.crop_and_resize(
-        tf.cast(image, tf.float32), boxes, box_indices, crop_size, name='crop')
-    return image_cropped.numpy()
+    box = [int(boxes[0] * image_dimensions[1]),
+           int(boxes[1] * image_dimensions[0]),
+           int(boxes[2] * image_dimensions[1]),
+           int(boxes[3] * image_dimensions[0])]
+    image_cropped = crop_image(image, box)
+    image_cropped = resize_image(image_cropped, (crop_size, crop_size))
+    return image_cropped
+
+
+def crop_image(image, crop_box):
+    """Resize image.
+
+    # Arguments
+        image: Numpy array.
+        crop_box: List of four ints.
+
+    # Returns
+        Numpy array.
+    """
+    if (type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    else:
+        cropped_image = image[crop_box[0]:crop_box[2], crop_box[1]:crop_box[3],
+                        :]
+    return cropped_image
 
 
 def extract_keypoint_index(scoremap):

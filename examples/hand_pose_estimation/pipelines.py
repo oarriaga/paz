@@ -270,10 +270,12 @@ class DetectHandKeypoints(Processor):
                                                 radius=4)
         self.denormalize = pr.DenormalizeImage()
         self.wrap = pr.WrapOutput(['image', 'keypoints2D'])
+        self.expand_dims = pr.ExpandDims(axis=0)
 
     def call(self, image, hand_side=np.array([[1.0, 0.0]])):
         hand_crop, segmentation_map, center, _, crop_size_best = \
             self.localize_hand(image)
+        hand_crop = self.expand_dims(hand_crop)
         score_maps = self.predict_keypoints2D(hand_crop)
         score_maps_resized = self.resize_scoremaps(score_maps)
         hand_side = {'hand_side': hand_side}
