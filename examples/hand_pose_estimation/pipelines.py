@@ -214,10 +214,7 @@ class PostProcessSegmentation(Processor):
         raw_segmentation_map = self.squeeze_input(raw_segmentation_map)
         raw_segmentation_map = self.resize_segmentation_map(
             raw_segmentation_map)
-        # raw_segmentation_map = self.expand_dims(raw_segmentation_map)
         segmentation_map = self.dilate_map(raw_segmentation_map)
-        # segmentation_map = segmentation_map.numpy()
-        segmentation_map = self.squeeze_input(segmentation_map)
         center, bounding_box, crop_size = self.extract_box(segmentation_map)
         crop_size = self.adjust_crop_size(crop_size)
         cropped_image = self.crop_image(image, center, crop_size)
@@ -242,7 +239,6 @@ class ResizeScoreMaps(Processor):
         scoremaps_resized = self.resize_scoremap(scoremaps_transposed)
         scoremaps_resized = self.list_to_array(scoremaps_resized)
         scoremaps_transposed = self.transpose(scoremaps_resized)
-        # scoremaps = self.expand_dims(scoremaps_transposed)
         return scoremaps_transposed
 
 
@@ -254,15 +250,12 @@ class DetectHandKeypoints(Processor):
         preprocess_image = SequentialProcessor(
             [pr.NormalizeImage(), pr.ResizeImage((image_size, image_size)),
              pr.ExpandDims(0)])
-
         postprocess_segmentation = PostProcessSegmentation(image_size,
                                                            crop_shape)
-
         self.localize_hand = pr.Predict(handsegnet, preprocess_image,
                                         postprocess_segmentation)
 
         self.resize_scoremaps = ResizeScoreMaps(crop_shape)
-
         self.merge_dictionaries = MergeDictionaries()
         self.wrap_input = WrapToDictionary(['hand_side'])
 

@@ -32,9 +32,8 @@ class SegmentationDilation(Layer):
                                                segmentation_map_width, 1])
 
             objectmap_dilated = tf.nn.dilation2d(
-                input=objectmap, filters=self.kernel,
-                strides=[1, 1, 1, 1], dilations=[1, 1, 1, 1],
-                padding='SAME', data_format='NHWC')
+                input=objectmap, filters=self.kernel, strides=[1, 1, 1, 1],
+                dilations=[1, 1, 1, 1], padding='SAME', data_format='NHWC')
 
             objectmap_dilated = tf.reshape(objectmap_dilated,
                                            [segmentation_map_height,
@@ -45,6 +44,4 @@ class SegmentationDilation(Layer):
 
         objectmap = tf.reshape(objectmap, [segmentation_map_height,
                                            segmentation_map_width, 1])
-
-        objectmap = tf.stack([objectmap])
         return objectmap.numpy()
