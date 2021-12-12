@@ -59,7 +59,7 @@ def round_filters(filters, width_coefficient, depth_divisor):
 
 
 def round_repeats(repeats, depth_coefficient):
-    """Round number of filters based on depth multiplier.
+    """Round number of repeat blocks based on depth multiplier.
 
     # Arguments
         repeats: Int, number of repeats of multiplier blocks.
@@ -72,7 +72,7 @@ def round_repeats(repeats, depth_coefficient):
     new_repeats = int(math.ceil(depth_coefficient * repeats))
     return new_repeats
 
-
+# TODO: Change name
 def conv_normal_initializer(shape, dtype=None):
     """Initialization for convolutional kernels.
     The main difference with tf.variance_scaling_initializer is that
@@ -155,6 +155,7 @@ def mobile_inverted_residual_bottleneck_block(
         num_blocks: Int, number of Mobile bottleneck conv blocks.
         name: layer name.
     """
+    # TODO: Remove itertools
     conv_id = itertools.count(0)
     batch_norm_id = itertools.count(0)
     filters = input_filters * expand_ratio
@@ -163,7 +164,6 @@ def mobile_inverted_residual_bottleneck_block(
                    kernel_initializer=conv_normal_initializer,
                    name=name + '/' + get_conv_name(conv_id))(inputs)
         x = BatchNormalization(
-            -1, 0.99, 1e-3,
             name=name+'/' + get_batch_norm_name(batch_norm_id))(x)
         x = tf.nn.swish(x)
     else:
@@ -174,7 +174,6 @@ def mobile_inverted_residual_bottleneck_block(
                         depthwise_initializer=conv_normal_initializer,
                         name=name + '/depthwise_conv2d')(x)
     x = BatchNormalization(
-        -1, 0.99, 1e-3,
         name=name + '/' + get_batch_norm_name(batch_norm_id))(x)
     x = tf.nn.swish(x)
 
@@ -196,13 +195,39 @@ def mobile_inverted_residual_bottleneck_block(
                kernel_initializer=conv_normal_initializer,
                name=name + '/' + get_conv_name(conv_id))(x)
     x = BatchNormalization(
-        -1, 0.99, 1e-3,
         name=name + '/' + get_batch_norm_name(batch_norm_id))(x)
     if all(s == 1 for s in strides) and input_filters == output_filters:
         if survival_rate:
             x = get_drop_connect(x, False, survival_rate)
         x = tf.add(x, inputs)
     return x
+
+
+def process_features(x, block_num, input_filters, output_filters,
+                     width_coefficient, depth_coefficient, depth_divisor,
+                     num_repeats, squeeze_excite_ratio, block_id,
+                     survival_rate, kernel_sizes, strides, model_name,
+                     expand_ratios):
+    in_filter = round_filters(input_filters[block_num], width_coefficient,
+                              depth_divisor)
+    out_filter = round_filters(output_filters[block_num], width_coefficient,
+                               depth_divisor)
+    repeats = round_repeats(num_repeats[block_num], depth_coefficient)
+
+    x = mobile_inverted_residual_bottleneck_block(
+        x, survival_rate, kernel_sizes[block_num], in_filter,
+        out_filter, expand_ratios[block_num], strides[block_num],
+        squeeze_excite_ratio, model_name + '/blocks_%d' % block_id)
+
+    block_id = block_id + 1
+    if repeats > 1:
+        for _ in range(repeats - 1):
+            x = mobile_inverted_residual_bottleneck_block(
+                x, survival_rate, kernel_sizes[block_num], out_filter,
+                out_filter, expand_ratios[block_num], [1, 1],
+                squeeze_excite_ratio, model_name + '/blocks_%d' % block_id)
+            block_id = block_id + 1
+    return x, block_id
 
 
 def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
@@ -236,37 +261,26 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
     # Raises
         ValueError: when blocks_args is not specified as list.
     """
-    block_id = itertools.count(0)
+    block_id = 0
     features = []
     (width_coefficient, depth_coefficient,
      survival_rate) = get_efficientnet_params(model_name)
-
     image = Input(tensor=image, shape=input_shape)
     filters = round_filters(input_filters[0], width_coefficient, depth_divisor)
+
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', (1, 1), 1,
                None, False, conv_normal_initializer,
                name=model_name + '/stem/conv2d')(image)
-    x = BatchNormalization(-1, 0.99, 1e-3,
-                           name=model_name + '/stem/batch_normalization')(x)
+    x = BatchNormalization(name=model_name + '/stem/batch_normalization')(x)
     x = tf.nn.swish(x)
+
     for block_num in range(len(kernel_sizes)):
         assert num_repeats[block_num] > 0
-        in_filter = round_filters(input_filters[block_num],
-                                  width_coefficient, depth_divisor)
-        out_filter = round_filters(output_filters[block_num],
-                                   width_coefficient, depth_divisor)
-        repeats = round_repeats(num_repeats[block_num], depth_coefficient)
-        x = mobile_inverted_residual_bottleneck_block(
-            x, survival_rate, kernel_sizes[block_num], in_filter, out_filter,
-            expand_ratios[block_num], strides[block_num], squeeze_excite_ratio,
-            model_name + '/blocks_%d' % next(block_id))
-        if repeats > 1:
-            for _ in range(repeats - 1):
-                x = mobile_inverted_residual_bottleneck_block(
-                    x, survival_rate, kernel_sizes[block_num], out_filter,
-                    out_filter, expand_ratios[block_num], [1, 1],
-                    squeeze_excite_ratio,
-                    model_name + '/blocks_%d' % next(block_id))
+        x, block_id = process_features(
+            x, block_num, input_filters, output_filters, width_coefficient,
+            depth_coefficient, depth_divisor, num_repeats,
+            squeeze_excite_ratio, block_id, survival_rate, kernel_sizes,
+            strides, model_name, expand_ratios)
         if (block_num < len(kernel_sizes) - 1 and
                 strides[block_num + 1][0] == 2):
             features.append(x)
