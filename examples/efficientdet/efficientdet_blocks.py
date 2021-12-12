@@ -33,11 +33,9 @@ def get_top_down_path(min_level, max_level, node_ids):
     id_count = max_level - min_level + 1
     top_down_path_nodes = []
     for level in range(max_level - 1, min_level - 1, -1):
-        top_down_path_nodes.append({
-            'feature_level': level,
-            'inputs_offsets': [node_ids[level][-1],
-                               node_ids[level + 1][-1]]
-        })
+        top_down_path_nodes.append(
+            {'feature_level': level,
+             'inputs_offsets': [node_ids[level][-1], node_ids[level + 1][-1]]})
         node_ids[level].append(id_count)
         id_count = id_count + 1
     return top_down_path_nodes, node_ids
@@ -165,10 +163,9 @@ def bifpn_configuration(min_level, max_level, weight_method):
 class ResampleFeatureMap(Layer):
     """Resample feature maps for downsampling or upsampling
      to create coarser or finer additional feature maps."""
-    def __init__(self, feature_level, target_num_channels,
-                 use_batchnorm=True, conv_after_downsample=False,
-                 pooling_type='max', upsampling_type='nearest',
-                 name='resample_p0'):
+    def __init__(self, feature_level, target_num_channels, use_batchnorm=True,
+                 conv_after_downsample=False, pooling_type='max',
+                 upsampling_type='nearest', name='resample_p0'):
         """
         # Arguments
             feature_level: Int, level of feature to resample.
@@ -189,13 +186,9 @@ class ResampleFeatureMap(Layer):
         self.conv2d = Conv2D(
             self.target_num_channels, (1, 1), (1, 1), 'same',
             'channels_last', name='conv2d')
-        self.batchnorm = BatchNormalization(
-            -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
-        if pooling_type in ['max', 'average']:
-            self.pooling_type = pooling_type
-        else:
-            raise ValueError('Unsupported pooling type {}.'.
-                             format(pooling_type))
+        self.batchnorm = BatchNormalization(name='bn')
+        if pooling_type not in ['max', 'average']:
+            raise ValueError('Unsupported pool type {}.'. format(pooling_type))
 
     def _pool2d(self, features, H, W, H_target, W_target):
         """Pool the inputs to target height and width.
@@ -289,14 +282,13 @@ class ResampleFeatureMap(Layer):
 
 class FPNCells(Layer):
     """Set of FPN Cells."""
-    def __init__(self, fpn_name, min_level, max_level, fpn_weight_method,
+    def __init__(self, min_level, max_level, fpn_weight_method,
                  fpn_cell_repeats, fpn_num_filters,
                  use_batchnorm_for_sampling=True, conv_after_downsample=False,
                  conv_batchnorm_activation_block=False,
                  with_separable_conv=True, name='fpn_cells'):
         """
         # Arguments
-            fpn_name: A string specifying the feature fusion FPN layer.
             min_level: Int, minimum level for features.
             max_level: Int, maximum level for features.
             fpn_weight_method: A string specifying the feature
@@ -316,7 +308,6 @@ class FPNCells(Layer):
             name: Module name.
         """
         super().__init__(name=name)
-        self.fpn_name = fpn_name
         self.min_level = min_level
         self.max_level = max_level
         self.fpn_weight_method = fpn_weight_method
@@ -335,7 +326,7 @@ class FPNCells(Layer):
         self.cells = []
         for repeat_arg in range(self.fpn_cell_repeats):
             self.cells.append(FPNCell(
-                self.fpn_name, self.min_level, self.max_level,
+                self.min_level, self.max_level,
                 self.fpn_weight_method, self.fpn_cell_repeats,
                 self.fpn_num_filters, self.use_batchnorm_for_sampling,
                 self.conv_after_downsample,
@@ -376,14 +367,13 @@ class FPNCells(Layer):
 
 class FPNCell(Layer):
     """A single FPN cell."""
-    def __init__(self, fpn_name, min_level, max_level, fpn_weight_method,
+    def __init__(self, min_level, max_level, fpn_weight_method,
                  fpn_cell_repeats, fpn_num_filters,
                  use_batchnorm_for_sampling, conv_after_downsample,
                  conv_batchnorm_activation_block, with_separable_conv,
                  name='fpn_cell'):
         """
         # Arguments
-            fpn_name: A string specifying the feature fusion FPN layer.
             min_level: Int, minimum level for features.
             max_level: Int, maximum level for features.
             fpn_weight_method: A string specifying the feature
@@ -403,7 +393,6 @@ class FPNCell(Layer):
             name: Module name.
         """
         super().__init__(name=name)
-        self.fpn_name = fpn_name
         self.min_level = min_level
         self.max_level = max_level
         self.fpn_weight_method = fpn_weight_method
@@ -590,8 +579,7 @@ class FeatureNode(Layer):
         self.conv_after_fusion = ConvolutionAfterFusion(
             self.conv_batchnorm_activation_block, self.with_separable_conv,
             self.fpn_num_filters,
-            name='op_after_combine{}'.format(len(features_shape))
-        )
+            name='op_after_combine{}'.format(len(features_shape)))
         self.built = True
         super().build(features_shape)
 
@@ -634,17 +622,10 @@ class ConvolutionAfterFusion(Layer):
         super().__init__(name=name)
         self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
         self.with_separable_conv = with_separable_conv
-        if self.with_separable_conv:
-            self.convolution = SeparableConv2D(
-                fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
-                (1, 1), 1, None, not self.conv_batchnorm_activation_block,
-                name='conv')
-        else:
-            self.convolution = Conv2D(
-                fpn_num_filters, (3, 3), (1, 1), 'same', 'channels_last',
-                use_bias=not self.conv_batchnorm_activation_block, name='conv')
-        self.batchnorm = BatchNormalization(
-            -1, 0.99, 1e-3, True, True, 'zeros', 'ones', name='bn')
+        self.convolution = conv2d_layer(fpn_num_filters, 3, 'same', None,
+                                        with_separable_conv, 'conv',
+                                        tf.zeros_initializer())
+        self.batchnorm = BatchNormalization(name='bn')
 
     def call(self, new_node, training):
         """
@@ -665,234 +646,144 @@ class ConvolutionAfterFusion(Layer):
         return new_node
 
 
-class ClassNet(Layer):
-    """Object class prediction network."""
-    def __init__(self, num_classes=90, num_anchors=9, num_filters=32,
-                 min_level=3, max_level=7, num_repeats=4,
-                 survival_rate=None, with_separable_conv=True,
-                 return_base=False, name='class_net', **kwargs):
-        """Initialize the ClassNet.
+def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
+             min_level=3, max_level=7, num_repeats=4, survival_rate=None,
+             training=False, with_separable_conv=True, return_base=False,
+             name='class_net/'):
+    """Object class prediction network. Initialize the ClassNet.
 
-        # Arguments
-            num_classes: Integer. Number of classes.
-            num_anchors: Integer. Number of anchors.
-            num_filters: Integer. Number of filters for intermediate layers.
-            min_level: Integer. Minimum level for features.
-            max_level: Integer. Maximum level for features.
-            num_repeats: Integer. Number of intermediate layers.
-            with_separable_conv: Bool.
-            True to use separable_conv instead of Conv2D.
-            survival_rate: Float.
-            If a value is set then drop connect will be used.
-            name: String indicating the name of this layer.
-            return_base: Bool.
-            Build the base feature network only. Excluding final class head.
-            **kwargs: other parameters
-        """
-        super().__init__(name=name, **kwargs)
-        self.num_classes = num_classes
-        self.num_anchors = num_anchors
-        self.num_filters = num_filters
-        self.min_level = min_level
-        self.max_level = max_level
-        self.num_repeats = num_repeats
-        self.with_separable_conv = with_separable_conv
-        self.survival_rate = survival_rate
-        self.activation = tf.nn.swish
-        self.conv_blocks = []
-        self.batchnorms = []
-        self.return_base = return_base
+    # Arguments
+        num_classes: Integer. Number of classes.
+        num_anchors: Integer. Number of anchors.
+        num_filters: Integer. Number of filters for intermediate layers.
+        min_level: Integer. Minimum level for features.
+        max_level: Integer. Maximum level for features.
+        num_repeats: Integer. Number of intermediate layers.
+        with_separable_conv: Bool.
+        True to use separable_conv instead of Conv2D.
+        survival_rate: Float.
+        If a value is set then drop connect will be used.
+        name: String indicating the name of this layer.
+        return_base: Bool.
+        Build the base feature network only. Excluding final class head.
+        **kwargs: other parameters
+    """
+    conv_blocks = []
+    for repeat_args in range(num_repeats):
+        conv_blocks.append(conv2d_layer(
+            num_filters, 3, 'same', None, with_separable_conv,
+            name + 'class-%d' % repeat_args, tf.zeros_initializer()))
 
-        for repeat_args in range(self.num_repeats):
-            self.conv_blocks.append(self.conv2d_layer(
-                self.num_filters, 3, tf.zeros_initializer(), None, 'same',
-                'class-%d' % repeat_args))
-            batchnorm_per_level = []
-            for level in range(self.min_level, self.max_level + 1):
-                batchnorm_per_level.append(BatchNormalization(
-                    name='class-%d-bn-%d' % (repeat_args, level)))
-            self.batchnorms.append(batchnorm_per_level)
-        self.classes = self.conv2d_layer(
-            num_classes*num_anchors, 3,
-            tf.constant_initializer(-np.log((1 - 0.01) / 0.01)), None, 'same',
-            'class-predict')
+    batchnorms = []
+    for repeat_args in range(num_repeats):
+        batchnorm_per_level = []
+        for level in range(min_level, max_level + 1):
+            batchnorm_per_level.append(BatchNormalization(
+                name=name + 'class-%d-bn-%d' % (repeat_args, level)))
+        batchnorms.append(batchnorm_per_level)
 
-    def conv_batchnorm_activation(self, image, level, level_id, training):
-        """
-        # Arguments
-            image: Tensor, image features.
-            level: Int, feature level.
-            level_id: Int, level ID of the feature level.
-            training: Bool, mode of using the network.
+    classes = conv2d_layer(num_classes*num_anchors, 3, 'same', None,
+                           with_separable_conv, name + 'class-predict',
+                           tf.constant_initializer(-np.log((1 - 0.01) / 0.01)))
 
-        # Returns
-            image: Tensor, processed image tensor.
-        """
-        conv_block = self.conv_blocks[level]
-        batchnorm = self.batchnorms[level][level_id]
-        original_image = image
-        image = conv_block(image)
-        image = batchnorm(image, training=training)
-        image = self.activation(image)
-        if level > 0 and self.survival_rate:
-            image = get_drop_connect(image, training, self.survival_rate)
-            image = image + original_image
-        return image
-
-    def call(self, features, training, **kwargs):
-        """Call ClassNet.
-
-        # Arguments
-            features: List, feature to be processed by ClassNet head.
-            training: Bool, mode of using the network.
-
-        # Returns
-            class_outputs: List, ClassNet output logits for each level.
-        """
-        class_outputs = []
-        for level_id in range(0, self.max_level - self.min_level + 1):
-            image = features[level_id]
-            for repeat_args in range(self.num_repeats):
-                image = self.conv_batchnorm_activation(
-                    image, repeat_args, level_id, training)
-            if self.return_base:
-                class_outputs.append(image)
-            else:
-                class_outputs.append(self.classes(image))
-        return class_outputs
-
-    def conv2d_layer(self, num_filters, kernel_size, bias_initializer,
-                     activation, padding, name):
-        """Gets the conv2d layer in ClassNet class."""
-        if self.with_separable_conv:
-            conv2d_layer = SeparableConv2D(
-                num_filters, kernel_size, (1, 1), padding, 'channels_last',
-                (1, 1), 1, activation, True,
-                tf.initializers.variance_scaling(),
-                tf.initializers.variance_scaling(), bias_initializer,
-                name=name)
+    class_outputs = []
+    for level_id in range(0, max_level - min_level + 1):
+        image = features[level_id]
+        for repeat_args in range(num_repeats):
+            original_image = image
+            image = conv_blocks[repeat_args](image)
+            image = batchnorms[repeat_args][level_id](image)
+            image = tf.nn.swish(image)
+            if level > 0 and survival_rate:
+                image = get_drop_connect(image, training, survival_rate)
+                image = image + original_image
+        if return_base:
+            class_outputs.append(image)
         else:
-            conv2d_layer = Conv2D(
-                num_filters, kernel_size, (1, 1), padding, 'channels_last',
-                (1, 1), 1, activation, True,
-                tf.random_normal_initializer(stddev=0.01), bias_initializer,
-                name=name)
-        return conv2d_layer
+            class_outputs.append(classes(image))
+
+    return class_outputs
 
 
-class BoxNet(Layer):
-    """Box regression network."""
-    def __init__(self, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-                 num_repeats=4, survival_rate=None, with_separable_conv=True,
-                 return_base=False, name='box_net', **kwargs):
-        """Initialize the BoxNet.
+def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
+           max_level=7, num_repeats=4, survival_rate=None, training=False,
+           with_separable_conv=True, return_base=False, name='box_net/'):
+    """Initialize the BoxNet.
 
-        # Arguments
-            num_classes: Integer. Number of classes.
-            num_anchors: Integer. Number of anchors.
-            num_filters: Integer. Number of filters for intermediate layers.
-            min_level: Integer. Minimum level for features.
-            max_level: Integer. Maximum level for features.
-            num_repeats: Integer. Number of intermediate layers.
-            with_separable_conv: Bool.
-            True to use separable_conv instead of Conv2D.
-            survival_rate: Float.
-            If a value is set then drop connect will be used.
-            name: String indicating the name of this layer.
-            return_base: Bool.
-            Build the base feature network only. Excluding final class head.
-            **kwargs: other parameters
-        """
-        super().__init__(name=name, **kwargs)
-        self.num_anchors = num_anchors
-        self.num_filters = num_filters
-        self.min_level = min_level
-        self.max_level = max_level
-        self.num_repeats = num_repeats
-        self.with_separable_conv = with_separable_conv
-        self.survival_rate = survival_rate
-        self.activation = tf.nn.swish
-        self.conv_blocks = []
-        self.batchnorms = []
-        self.return_base = return_base
+    # Arguments
+        num_classes: Integer. Number of classes.
+        num_anchors: Integer. Number of anchors.
+        num_filters: Integer. Number of filters for intermediate layers.
+        min_level: Integer. Minimum level for features.
+        max_level: Integer. Maximum level for features.
+        num_repeats: Integer. Number of intermediate layers.
+        with_separable_conv: Bool.
+        True to use separable_conv instead of Conv2D.
+        survival_rate: Float.
+        If a value is set then drop connect will be used.
+        name: String indicating the name of this layer.
+        return_base: Bool.
+        Build the base feature network only. Excluding final class head.
+        **kwargs: other parameters
 
-        for repeat_args in range(self.num_repeats):
-            self.conv_blocks.append(self.boxes_layer(
-                self.num_filters, name='box-%d' % repeat_args))
-            batchnorm_per_level = []
-            for level in range(self.min_level, self.max_level + 1):
-                batchnorm_per_level.append(
-                    BatchNormalization(
-                        name='box-%d-bn-%d' % (repeat_args, level)))
-            self.batchnorms.append(batchnorm_per_level)
-        self.boxes = self.boxes_layer(4 * num_anchors, name='box-predict')
+    # Arguments
+        features: List, feature to be processed by BoxNet head.
+        training: Bool, mode of using the network.
 
-    def conv_batchnorm_activation(self, image, level, level_id, training):
-        """
-        # Arguments
-            image: Tensor, image features.
-            level: Int, feature level.
-            level_id: Int, level ID of the feature level.
-            training: Bool, mode of using the network.
+    # Returns
+        class_outputs: List, BoxNet output offsets for each level.
+    """
+    conv_blocks = []
 
-        # Returns
-            image: Tensor, processed image tensor.
-        """
-        conv_block = self.conv_blocks[level]
-        batchnorm = self.batchnorms[level][level_id]
-        original_image = image
-        image = conv_block(image)
-        image = batchnorm(image, training=training)
-        image = self.activation(image)
-        if level > 0 and self.survival_rate:
-            image = get_drop_connect(image, training, self.survival_rate)
-            image = image + original_image
-        return image
+    for repeat_args in range(num_repeats):
+        conv_blocks.append(conv2d_layer(
+            num_filters, 3, 'same', None, with_separable_conv,
+            name + 'box-%d' % repeat_args, tf.zeros_initializer()))
 
-    def call(self, features, training):
-        """Call boxnet.
+    batchnorms = []
+    for repeat_args in range(num_repeats):
+        batchnorm_per_level = []
+        for level in range(min_level, max_level+1):
+            batchnorm_per_level.append(BatchNormalization(
+                name=name + 'box-%d-bn-%d' % (repeat_args, level)))
+        batchnorms.append(batchnorm_per_level)
 
-        # Arguments
-            features: List, feature to be processed by BoxNet head.
-            training: Bool, mode of using the network.
+    boxes = conv2d_layer(4 * num_anchors, 3, 'same', None, with_separable_conv,
+                         name + 'box-predict', tf.zeros_initializer())
 
-        # Returns
-            class_outputs: List, BoxNet output offsets for each level.
-        """
-        box_outputs = []
-        for level_id in range(0, self.max_level - self.min_level + 1):
-            image = features[level_id]
-            for repeat_arg in range(self.num_repeats):
-                image = self.conv_batchnorm_activation(
-                    image, repeat_arg, level_id, training)
-            if self.return_base:
-                box_outputs.append(image)
-            else:
-                box_outputs.append(self.boxes(image))
-        return box_outputs
-
-    def boxes_layer(self, num_filters, name):
-        """Gets the conv2d layer in BoxNet class.
-
-        # Arguments
-            with_separable_conv: Bool.
-            True to use separable_conv instead of Conv2D.
-            num_anchors: Int, number of anchors in the feature map.
-            name: String, module name.
-
-        # Returns
-            convolution_block: TF layer type. Separable conv or Classical
-            conv block.
-        """
-        if self.with_separable_conv:
-            return SeparableConv2D(
-                num_filters, 3, (1, 1), 'same', 'channels_last',
-                (1, 1), 1, None, True, tf.initializers.variance_scaling(),
-                tf.initializers.variance_scaling(),
-                tf.zeros_initializer(), name=name)
+    box_outputs = []
+    for level_id in range(len(features)):
+        image = features[level_id]
+        for repeat_arg in range(num_repeats):
+            original_image = image
+            image = conv_blocks[repeat_arg](image)
+            image = batchnorms[repeat_arg][level_id](image)
+            image = tf.nn.swish(image)
+            if repeat_arg > 0 and survival_rate:
+                image = get_drop_connect(image, False, survival_rate)
+                image = image + original_image
+        if return_base:
+            box_outputs.append(image)
         else:
-            return Conv2D(
-                num_filters, 3, (1, 1), 'same', 'channels_last',
-                (1, 1), 1, None, True,
-                tf.random_normal_initializer(stddev=0.01),
-                tf.zeros_initializer(), name=name)
+            box_outputs.append(boxes(image))
+
+    return box_outputs
+
+
+def conv2d_layer(num_filters, kernel_size, padding, activation,
+                 with_separable_conv, name, bias_initializer):
+    """Gets the conv2d layer in ClassNet class."""
+    if with_separable_conv:
+        conv2d_layer = SeparableConv2D(
+            num_filters, kernel_size, (1, 1), padding, 'channels_last',
+            (1, 1), 1, activation, True,
+            tf.initializers.variance_scaling(),
+            tf.initializers.variance_scaling(), bias_initializer,
+            name=name)
+    else:
+        conv2d_layer = Conv2D(
+            num_filters, kernel_size, (1, 1), padding, 'channels_last',
+            (1, 1), 1, activation, True,
+            tf.random_normal_initializer(stddev=0.01),
+            tf.zeros_initializer(), name=name)
+    return conv2d_layer
