@@ -1,8 +1,10 @@
 import os
 import argparse
+
+import numpy as np
 import tensorflow as tf
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
+#gpus = tf.config.experimental.list_physical_devices('GPU')
+#tf.config.experimental.set_memory_growth(gpus[0], True)
 
 # from tensorflow.python.framework.ops import disable_eager_execution
 # disable_eager_execution()
@@ -22,7 +24,7 @@ from paz.processors import TRAIN, VAL
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-bs', '--batch_size', default=32, type=int,
+parser.add_argument('-bs', '--batch_size', default=2, type=int,
                     help='Batch size for training')
 parser.add_argument('-et', '--evaluation_period', default=10, type=int,
                     help='evaluation frequency')
@@ -38,7 +40,7 @@ parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
 parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
-parser.add_argument('-dp', '--data_path', default='VOCdevkit/',
+parser.add_argument('-dp', '--data_path', default='/media/fabian/Data/Masterarbeit/data/VOCdevkit/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
                     default=[110, 152], help='Epoch learning rate reduction')
@@ -50,8 +52,8 @@ args = parser.parse_args()
 
 optimizer = SGD(args.learning_rate, args.momentum)
 
-data_splits = [['trainval', 'trainval'], 'test']
-data_names = [['VOC2007', 'VOC2012'], 'VOC2007']
+data_splits = ['bird_train_cleaned', 'bird_val_cleaned']
+data_names = ['VOC2012', 'VOC2012']
 
 # loading datasets
 data_managers, datasets, evaluation_data_managers = [], [], []
@@ -65,8 +67,8 @@ for data_name, data_split in zip(data_names, data_splits):
         evaluation_data_managers.append(eval_data_manager)
 
 # instantiating model
-num_classes = data_managers[0].num_classes
-model = SSD300(num_classes, base_weights='VGG', head_weights=None)
+num_classes = 2 #data_managers[0].num_classes
+model = SSD300(num_classes, base_weights=None, head_weights=None)
 model.summary()
 
 # Instantiating loss and metrics
@@ -79,8 +81,18 @@ model.compile(optimizer, loss.compute_loss, metrics)
 # setting data augmentation pipeline
 augmentators = []
 for split in [TRAIN, VAL]:
-    augmentator = AugmentDetection(model.prior_boxes, split)
+    augmentator = AugmentDetection(model.prior_boxes, split, num_classes=num_classes)
     augmentators.append(augmentator)
+
+# Remove everything that is not a bird, lol
+for data in datasets:
+    for sample in data:
+        bird_boxes = list()
+        for box in sample['boxes']:
+            if box[-1] == 3.:
+                box[-1] = 1.
+                bird_boxes.append(box)
+        sample['boxes'] = np.asarray(bird_boxes)
 
 # setting sequencers
 sequencers = []
@@ -97,19 +109,22 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
+
+"""
 evaluate = EvaluateMAP(
     evaluation_data_managers[0],
     DetectSingleShot(model, data_managers[0].class_names, 0.01, 0.45),
     args.evaluation_period,
     args.save_path,
     args.AP_IOU)
+"""
 
 # training
 model.fit(
     sequencers[0],
     epochs=args.num_epochs,
     verbose=1,
-    callbacks=[checkpoint, log, schedule, evaluate],
+    callbacks=[checkpoint, log, schedule],
     validation_data=sequencers[1],
     use_multiprocessing=args.multiprocessing,
     workers=args.workers)

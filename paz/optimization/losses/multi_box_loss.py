@@ -52,7 +52,7 @@ class MultiBoxLoss(object):
         localization_loss = self.localization(y_true, y_pred)
         positive_loss = self.positive_classification(y_true, y_pred)
         negative_loss = self.negative_classification(y_true, y_pred)
-        return localization_loss + positive_loss + negative_loss
+        return positive_loss + negative_loss + localization_loss
 
     def localization(self, y_true, y_pred):
         """Computes localization loss in a batch.

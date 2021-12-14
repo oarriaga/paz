@@ -127,6 +127,7 @@ class DetectSingleShot(Processor):
 
     def call(self, image):
         boxes2D = self.predict(image)
+        print("Boxes: {}".format(boxes2D))
         boxes2D = self.denormalize(image, boxes2D)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
