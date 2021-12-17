@@ -46,7 +46,7 @@ parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for Adam')
 parser.add_argument('-is', '--latent_dimension', default=128, type=int,
                     help='Latent dimension of the auto-encoder')
-parser.add_argument('-ld', '--image_size', default=128, type=int,
+parser.add_argument('-ld', '--image_size', default=400, type=int,
                     help='Size of the side of a square image e.g. 64')
 parser.add_argument('-sp', '--stop_patience', default=7, type=int,
                     help='Number of epochs before doing early stopping')
@@ -80,7 +80,7 @@ parser.add_argument('-sa', '--save_path',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-sf', '--scaling_factor', default=8.0, type=float,
                     help='Downscaling factor of the images')
-parser.add_argument('-ns', '--num_stages', default=3, type=int,
+parser.add_argument('-ns', '--num_stages', default=6, type=int,
                     help='Number of stages for DOPE')
 parser.add_argument('-nc', '--neptune_config',
                     type=str, help='Path to config file where Neptune Token and project name is stored')
@@ -108,7 +108,10 @@ print(losses)
 model.compile(optimizer, losses, metrics=None, run_eagerly=True)
 model.summary()
 
+model.load_weights("/media/fabian/Data/Masterarbeit/data/models/tless06/dope/multiple_hypotheses/dope_model_epoch_6100_weights.h5")
+model.save("/media/fabian/Data/Masterarbeit/data/models/tless06/dope/multiple_hypotheses/dope_model_epoch_6100.h5")
 
+"""
 background_image_paths = glob.glob(os.path.join(args.background_images_directory, '*.jpg'))
 
 processor_train = GeneratedImageGenerator(os.path.join(args.images_directory, "test"), background_image_paths, num_occlusions=0, image_size_input=args.image_size, image_size_output=int(args.image_size/args.scaling_factor), num_stages=args.num_stages, multipleHypotheses=multipleHypotheses)
@@ -197,3 +200,4 @@ for callback in callbacks:
 
 if args.neptune_config is not None:
     neptune.stop()
+"""
