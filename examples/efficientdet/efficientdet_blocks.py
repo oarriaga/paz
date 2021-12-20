@@ -576,10 +576,13 @@ class FeatureNode(Layer):
             self._add_bifpn_weights('ones')
         elif self.weight_method == 'fastattention':
             self._add_bifpn_weights('ones')
-        self.conv_after_fusion = ConvolutionAfterFusion(
-            self.conv_batchnorm_activation_block, self.with_separable_conv,
-            self.fpn_num_filters,
-            name='op_after_combine{}'.format(len(features_shape)))
+
+        self.conv_after_fusion_conv = conv2d_layer(
+            self.fpn_num_filters, 3, 'same', None, self.with_separable_conv, 
+            'op_after_combine{}/conv'.format(len(features_shape)),
+            tf.zeros_initializer())
+        self.bn_after_fusion = BatchNormalization(
+            name='op_after_combine{}/bn'.format(len(features_shape)))
         self.built = True
         super().build(features_shape)
 
@@ -601,49 +604,10 @@ class FeatureNode(Layer):
                 input_node, training, features)
             nodes.append(input_node)
         new_node = self.fuse_features(nodes)
-        new_node = self.conv_after_fusion(new_node)
+        new_node = tf.nn.swish(new_node)
+        new_node = self.conv_after_fusion_conv(new_node)
+        new_node = self.bn_after_fusion(new_node)
         return features + [new_node]
-
-
-class ConvolutionAfterFusion(Layer):
-    """Operation after combining input features during feature fusion."""
-    def __init__(self, conv_batchnorm_activation_block, with_separable_conv,
-                 fpn_num_filters, name='op_after_combine'):
-        """
-        # Arguments
-            fpn_num_filters: Int, FPN filter output size.
-            conv_batchnorm_activation_block: Bool, specifying the presence
-            of convolution - batch normalization - activation function
-            patter in the EfficientDet building blocks.
-            with_separable_conv: Bool, specifying the usage of separable
-            convolution layers in EfficientDet.
-            name: Module name.
-        """
-        super().__init__(name=name)
-        self.conv_batchnorm_activation_block = conv_batchnorm_activation_block
-        self.with_separable_conv = with_separable_conv
-        self.convolution = conv2d_layer(fpn_num_filters, 3, 'same', None,
-                                        with_separable_conv, 'conv',
-                                        tf.zeros_initializer())
-        self.batchnorm = BatchNormalization(name='bn')
-
-    def call(self, new_node, training):
-        """
-        # Arguments
-            new_node: Tensor, feature to be convolved and
-            followed by batch normalization.
-            training: Bool, mode of using the network.
-
-        # Returns
-            new_node: Tensor, convolved, batch normalized features.
-        """
-        if not self.conv_batchnorm_activation_block:
-            new_node = tf.nn.swish(new_node)
-        new_node = self.convolution(new_node)
-        new_node = self.batchnorm(new_node, training=training)
-        if self.conv_batchnorm_activation_block:
-            new_node = tf.nn.swish(new_node)
-        return new_node
 
 
 def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
