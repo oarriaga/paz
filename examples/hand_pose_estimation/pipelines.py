@@ -221,7 +221,7 @@ class PostProcessSegmentation(Processor):
         return cropped_image, segmentation_map, center, bounding_box, crop_size
 
 
-class ResizeScoreMaps(Processor):
+class ResizeScoreMaps(Processor): # Change to Sequential processor
     def __init__(self, crop_shape=(256, 256)):
         super(ResizeScoreMaps, self).__init__()
         self.unpack_inputs = pr.UnpackDictionary(['score_maps'])
