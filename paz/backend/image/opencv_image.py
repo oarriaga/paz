@@ -26,17 +26,36 @@ def cast_image(image, dtype):
     return image.astype(dtype)
 
 
+def crop_image(image, crop_box):
+    """Resize image.
+
+    # Arguments
+        image: Numpy array.
+        crop_box: List of four ints.
+
+    # Returns
+        Numpy array.
+    """
+    if (type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    else:
+        cropped_image = image[crop_box[0]:crop_box[2], crop_box[1]:crop_box[3],
+                        :]
+    return cropped_image
+
+
 def resize_image(image, size):
     """Resize image.
 
     # Arguments
         image: Numpy array.
-        dtype: List of two ints.
+        size: List of two ints.
 
     # Returns
         Numpy array.
     """
-    if(type(image) != np.ndarray):
+    if (type(image) != np.ndarray):
         raise ValueError(
             'Recieved Image is not of type numpy array', type(image))
     else:
