@@ -4,7 +4,7 @@ from tensorflow.keras import Model
 from tensorflow.keras.utils import get_file
 
 BASE_WEIGHT_PATH = (
-    'https://github.com/oarriaga/altamira-data/releases/download/v0.1/')
+    'https://github.com/oarriaga/altamira-data/releases/download/v0.11/')
 
 
 def HandSegmentationNet(input_shape=(320, 320, 3), weights='RHDv2'):
