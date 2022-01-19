@@ -3,14 +3,32 @@ import tensorflow as tf
 import cv2
 
 
-def resize_dims(min_input_size, dims1, dims2, min_scale):
-    '''resize to 512'''
-    dims1_resized = int(min_input_size / min_scale)
-    dims2_resized = int(int((min_input_size / dims1*dims2 + (64-1)) //
-                        64*64) / min_scale)
-    scale_dims1 = dims1 / 200
-    scale_dims2 = dims2_resized / dims1_resized * dims1 / 200
-    return dims1_resized, dims2_resized, scale_dims1, scale_dims2
+def get_dims_x64(dims, multiple=64):
+    dims = dims + (multiple - 1)
+    floor_value = dims // multiple
+    dims = floor_value * multiple
+    return dims
+
+
+def get_transformation_size(input_size, dims1, dims2):
+    '''
+    Resize the short side of the input image to 512 and keep
+    the aspect ratio.
+    '''
+    dims1_resized = int(input_size)
+    dims2_resized = input_size / dims1
+    dims2_resized = dims2_resized * dims2
+    dims2_resized = int(get_dims_x64(dims2_resized, 64))
+    return dims1_resized, dims2_resized
+
+
+def get_transformation_scale(dims1, dims1_resized, dims2_resized,
+                             scaling_factor):
+    scale_dims1 = dims1 / scaling_factor
+    scale_dims2 = dims2_resized / dims1_resized
+    scale_dims2 = scale_dims2 * dims1
+    scale_dims2 = scale_dims2 / scaling_factor
+    return scale_dims1, scale_dims2
 
 
 def calculate_image_center(image):
@@ -20,9 +38,8 @@ def calculate_image_center(image):
     return center_W, center_H
 
 
-def calculate_min_input_size(min_scale, input_size):
-    min_input_size = int((min_scale * input_size + (64-1)) // 64*64)
-    return min_input_size
+def add_offset(x, offset):
+    return (x + offset)
 
 
 def rotate_point(point2D, rotation_angle):
@@ -38,7 +55,7 @@ def calculate_third_point(point2D_a, point2D_b):
     return point2D_a + np.array([-diff[1], diff[0]], dtype=np.float32)
 
 
-def construct_source_image(scale, center, shift=np.array([0., 0.])):
+def get_input_image_points(scale, center, shift=np.array([0., 0.])):
     scale = scale * 200
     image_W = scale[0]
     image_dir = rotate_point([0, image_W * -0.5], 0)
@@ -49,7 +66,7 @@ def construct_source_image(scale, center, shift=np.array([0., 0.])):
     return image
 
 
-def construct_output_image(output_size):
+def get_output_image_points(output_size):
     W = output_size[0]
     H = output_size[1]
     image_dir = np.array([0, W * -0.5], np.float32)
