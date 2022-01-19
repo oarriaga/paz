@@ -1,11 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from munkres import Munkres
-
-
-def reshape(x, newshape):
-    x = np.reshape(x, newshape)
-    return x
+from Munkres import Munkres
 
 
 def non_maximum_supressions(heatmaps):
@@ -23,11 +18,13 @@ def unpack_heatmaps_dimensions(heatmaps):
     return num_images, joints_count, H, W
 
 
-def torch_gather(x, indices, gather_axis=2):
-    x = x.astype(np.int64)
-    indices = tf.cast(indices, tf.int64)
-    all_indices = tf.where(tf.fill(indices.shape, True))
-    gather_locations = reshape(indices, [indices.shape.num_elements()])
+def torch_gather(tags, indices, gather_axis=2):
+    tags = tags.astype(np.int64)
+    indices = indices.astype(np.int64)
+    all_indices = np.ndarray(indices.shape)
+    all_indices.fill(True)
+    all_indices = tf.where(all_indices)
+    gather_locations = indices.flatten()
     gather_indices = []
     for axis in range(len(indices.shape)):
         if axis == gather_axis:
@@ -36,19 +33,17 @@ def torch_gather(x, indices, gather_axis=2):
             gather_indices.append(all_indices[:, axis])
 
     gather_indices = np.stack(gather_indices, axis=-1)
-    gathered = tf.gather_nd(x, gather_indices)
-    return reshape(gathered, indices.shape)
+    gathered = tf.gather_nd(tags, gather_indices)
+    return np.reshape(gathered, indices.shape)
 
 
-def get_top_k_heatmaps_values(heatmaps, max_num_people):
+def get_top_k_heatmaps(heatmaps, max_num_people):
     top_k_heatmaps, indices = tf.math.top_k(heatmaps, max_num_people)
-    return np.squeeze(top_k_heatmaps), indices
+    return np.squeeze(top_k_heatmaps), tensor_to_numpy(indices)
 
 
-def get_top_k_tags(tags, indices, tag_per_joint, num_joints):
+def get_top_k_tags(tags, indices):
     top_k_tags = []
-    if not tag_per_joint:
-        tags = tags.expand(-1, num_joints, -1, -1)
     for arg in range(tags.shape[3]):
         top_k_tags.append(torch_gather(tags[:, :, :, 0], indices))
     top_k_tags = np.stack(top_k_tags, axis=3)
@@ -56,28 +51,26 @@ def get_top_k_tags(tags, indices, tag_per_joint, num_joints):
 
 
 def get_top_k_locations(indices, image_width):
-    x = tensor_to_numpy((indices % image_width)).astype(np.int64)
-    y = tensor_to_numpy((indices / image_width)).astype(np.int64)
+    x = (indices % image_width).astype(np.int64)
+    y = (indices / image_width).astype(np.int64)
     top_k_locations = np.stack((x, y), axis=3)
     return np.squeeze(top_k_locations)
 
 
-def top_k_detections(heatmaps, tags, max_num_people,
-                     tag_per_joint, num_joints):
+def top_k_detections(heatmaps, tags, max_num_people):
     heatmaps = non_maximum_supressions(heatmaps)
     heatmaps = np.transpose(heatmaps, [0, 3, 1, 2])
     num_images, joints_count, H, W = unpack_heatmaps_dimensions(heatmaps)
-    heatmaps = reshape(heatmaps, [num_images, joints_count, -1])
-    tags = reshape(tags, [tags.shape[0], tags.shape[1], W*H, -1])
+    heatmaps = np.reshape(heatmaps, [num_images, joints_count, -1])
+    tags = np.reshape(tags, [tags.shape[0], tags.shape[1], W*H, -1])
 
-    top_k_heatmaps_values, indices = get_top_k_heatmaps_values(heatmaps,
-                                                               max_num_people)
-    top_k_tags = get_top_k_tags(tags, indices, tag_per_joint, num_joints)
+    top_k_heatmaps, indices = get_top_k_heatmaps(heatmaps, max_num_people)
+    top_k_tags = get_top_k_tags(tags, indices)
     top_k_locations = get_top_k_locations(indices, W)
 
     top_k_detections = {'top_k_tags': top_k_tags,
                         'top_k_locations': top_k_locations,
-                        'top_k_heatmaps_values': top_k_heatmaps_values
+                        'top_k_heatmaps': top_k_heatmaps
                         }
     return top_k_detections
 
@@ -98,7 +91,19 @@ def group_keys_and_tags(joint_dict, tag_dict, max_num_people):
 def calculate_norm(joints, grouped_tags, order=2):
     difference = joints[:, None, 3:] - np.array(grouped_tags)[None, :, :]
     norm = np.linalg.norm(difference, ord=order, axis=2)
-    return difference, norm
+    num_added, num_grouped = difference.shape[:2]
+    return norm, num_added, num_grouped
+
+
+def update_norm(norm, num_added, num_grouped):
+    shape = (num_added, (num_added - num_grouped))
+    updated_norm = concatenate_zeros(norm, shape)
+    return updated_norm
+
+
+def round_norm(norm, valid_joints):
+    norm = np.round(norm) * 100 - valid_joints[:, 2:3]
+    return norm
 
 
 def concatenate_zeros(metrix, shape):
@@ -106,10 +111,9 @@ def concatenate_zeros(metrix, shape):
     return concatenated
 
 
-# replace with numpy
-def shortest_L2_distance(scores):
-    munkres = Munkres()
-    lowest_cost_pairs = munkres.compute(scores)
+def shortest_L2_distance(cost):
+    munkres = Munkres(cost)
+    lowest_cost_pairs = munkres.compute()
     lowest_cost_pairs = np.array(lowest_cost_pairs).astype(np.int32)
     return lowest_cost_pairs
 
@@ -126,55 +130,50 @@ def get_valid_tags_and_joints(detections, joint_arg, detection_thresh):
     return valid_tags, valid_joints
 
 
+def extract_grouped_joints(joint_dict):
+    grouped_joints = []
+    for joint_arg in joint_dict:
+        grouped_joints.append(joint_dict[joint_arg])
+    grouped_joints = np.array(grouped_joints).astype(np.float32)
+    return [grouped_joints]
+
+
 def group_joints_by_tag(detections, max_num_people, joint_order,
                         detection_thresh, tag_thresh):
     tags = detections['top_k_tags']
     joint_dict, tag_dict = {}, {}
     default = np.zeros((len(joint_order), tags.shape[2] + 3))
+
     for arg, joint_arg in enumerate(joint_order):
-        valid_tags, valid_joints = get_valid_tags_and_joints(detections,
-                                                             joint_arg,
-                                                             detection_thresh)
+        tags, joints = get_valid_tags_and_joints(
+            detections, joint_arg, detection_thresh)
 
-        if valid_joints.shape[0] == 0:
+        if joints.shape[0] == 0:
             continue
-
         if arg == 0 or len(joint_dict) == 0:
-            update_dictionary(valid_tags, valid_joints, joint_arg, default,
-                              joint_dict, tag_dict)
-
+            update_dictionary(tags, joints, joint_arg, default, joint_dict,
+                              tag_dict)
         else:
-            grouped_keys, grouped_tags = group_keys_and_tags(joint_dict,
-                                                             tag_dict,
-                                                             max_num_people)
-
-            difference, norm = calculate_norm(valid_joints, grouped_tags)
+            grouped_keys, grouped_tags = group_keys_and_tags(
+                joint_dict, tag_dict, max_num_people)
+            norm, num_added, num_grouped = calculate_norm(joints, grouped_tags)
             norm_copy = np.copy(norm)
-
-            norm = np.round(norm) * 100 - valid_joints[:, 2:3]
-            num_added, num_grouped = difference.shape[:2]
-
+            norm = round_norm(norm, joints)
             if num_added > num_grouped:
-                shape = (num_added, (num_added - num_grouped))
-                norm = concatenate_zeros(norm, shape)
+                norm = update_norm(norm, num_added, num_grouped)
 
             lowest_cost_pairs = shortest_L2_distance(norm)
-
-            for row, col in lowest_cost_pairs:
-                if (
-                    row < num_added
-                    and col < num_grouped
-                    and norm_copy[row][col] < tag_thresh
-                   ):
-                    key = grouped_keys[col]
-                    joint_dict[key][joint_arg] = valid_joints[row]
-                    tag_dict[key].append(valid_tags[row])
-
+            for row_arg, col_arg in lowest_cost_pairs:
+                if (row_arg < num_added and col_arg < num_grouped
+                        and norm_copy[row_arg][col_arg] < tag_thresh):
+                    key = grouped_keys[col_arg]
+                    joint_dict[key][joint_arg] = joints[row_arg]
+                    tag_dict[key].append(tags[row_arg])
                 else:
-                    update_dictionary(valid_tags, valid_joints, joint_arg,
-                                      default, joint_dict, tag_dict)
-    grouped_joints = [[joint_dict[arg] for arg in joint_dict]]
-    return list(np.array(grouped_joints).astype(np.float32))
+                    update_dictionary(tags, joints, joint_arg, default,
+                                      joint_dict, tag_dict)
+    grouped_joints = extract_grouped_joints(joint_dict)
+    return grouped_joints
 
 
 def compare_vertical_neighbours(x, y, heatmap_value, offset=0.25):
@@ -274,10 +273,12 @@ def refine_joints_locations(heatmaps, tags, joints_per_person):
     return joints_per_person
 
 
+def get_score(grouped_joints):
+    score = []
+    for joint in grouped_joints:
+        score.append(joint[:, 2].mean())
+    return score
+
+
 def tensor_to_numpy(tensor):
     return tensor.cpu().numpy()
-
-
-def tile_array(tags, num_joints):
-    tags = np.tile(tags, ((num_joints, 1, 1, 1)))
-    return tags
