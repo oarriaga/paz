@@ -1,19 +1,14 @@
 from HandPoseEstimation import HandSegmentationNet, PosePriorNet, PoseNet
 from HandPoseEstimation import ViewPointNet
-from paz.backend.image.opencv_image import load_image, show_image
+from paz.backend.image.opencv_image import load_image, show_image, write_image
 from pipelines import DetectHandKeypoints
 
 use_pretrained = True
-HandSegNet = HandSegmentationNet(weights=None)
-HandPoseNet = PoseNet(weights=None)
-HandPosePriorNet = PosePriorNet(weights=None)
-HandViewPointNet = ViewPointNet(weights=None)
-HandSegNet.load_weights('./pretrained_weights/HandSegNet-RHDv2_weights.hdf5')
-HandPoseNet.load_weights('./pretrained_weights/PoseNet-RHDv2_weights.hdf5')
-HandPosePriorNet.load_weights(
-    './pretrained_weights/PosePriorNet-RHDv2_weights.hdf5')
-HandViewPointNet.load_weights(
-    './pretrained_weights/ViewPointNet-RHDv2_weights.hdf5')
+HandSegNet = HandSegmentationNet()
+HandPoseNet = PoseNet()
+HandPosePriorNet = PosePriorNet()
+HandViewPointNet = ViewPointNet()
+
 pipeline = DetectHandKeypoints(HandSegNet, HandPoseNet, HandPosePriorNet,
                                HandViewPointNet)
 
@@ -21,3 +16,4 @@ img = load_image('./sample.jpg')
 detection = pipeline(img)
 
 show_image(detection['image'].astype('uint8'))
+write_image('./detection.jpg', detection['image'].astype('uint8'))

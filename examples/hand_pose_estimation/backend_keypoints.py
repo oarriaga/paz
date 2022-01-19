@@ -8,7 +8,7 @@ from backend_SE3 import build_rotation_matrix_z, build_affine_matrix
 from RHDv2 import LEFT_MIDDLE_METACARPAL, LEFT_WRIST
 from RHDv2 import LEFT_PINKY_TIP, LEFT_HAND
 from RHDv2 import RIGHT_MIDDLE_METACARPAL, RIGHT_WRIST
-from RHDv2 import RIGHT_THUMB_TIP, RIGHT_HAND
+from RHDv2 import RIGHT_PINKY_TIP, RIGHT_HAND
 from RHDv2 import KINEMATIC_CHAIN_DICT, KINEMATIC_CHAIN_LIST
 
 from paz.backend.image.opencv_image import resize_image, show_image
@@ -96,7 +96,7 @@ def extract_hand_side_keypoints(keypoints3D, dominant_hand):
     if dominant_hand == LEFT_HAND:
         keypoints3D = keypoints3D[LEFT_WRIST:LEFT_PINKY_TIP, :]
     else:
-        keypoints3D = keypoints3D[RIGHT_WRIST:RIGHT_THUMB_TIP, :]
+        keypoints3D = keypoints3D[RIGHT_WRIST:RIGHT_PINKY_TIP, :]
     return keypoints3D
 
 
@@ -269,7 +269,7 @@ def extract_dominant_hand_visibility(keypoint_visibility, dominant_hand):
         keypoint_visibility_21: Numpy array of shape (num_keypoints, 1).
     """
     keypoint_visibility_left = keypoint_visibility[:LEFT_PINKY_TIP]
-    keypoint_visibility_right = keypoint_visibility[RIGHT_WRIST:RIGHT_THUMB_TIP]
+    keypoint_visibility_right = keypoint_visibility[RIGHT_WRIST:RIGHT_PINKY_TIP]
     keypoint_visibility_21 = np.where(dominant_hand[:, 0],
                                       keypoint_visibility_left,
                                       keypoint_visibility_right)
@@ -287,7 +287,7 @@ def extract_dominant_keypoints2D(keypoint_2D, dominant_hand):
         keypoint_visibility_2D_21: Numpy array of shape (num_keypoints, 1).
     """
     keypoint_visibility_left = keypoint_2D[:LEFT_PINKY_TIP, :]
-    keypoint_visibility_right = keypoint_2D[RIGHT_WRIST:RIGHT_THUMB_TIP, :]
+    keypoint_visibility_right = keypoint_2D[RIGHT_WRIST:RIGHT_PINKY_TIP, :]
     keypoint_visibility_2D_21 = np.where(
         dominant_hand[:, :2], keypoint_visibility_left,
         keypoint_visibility_right)
@@ -715,7 +715,7 @@ def transform_visibility_mask(visibility_mask):
 
     visibility_mask = np.concatenate(
         [palm_visibility_left, visibility_mask[LEFT_WRIST: LEFT_PINKY_TIP],
-         palm_visibility_right, visibility_mask[RIGHT_WRIST: RIGHT_THUMB_TIP]],
+         palm_visibility_right, visibility_mask[RIGHT_WRIST: RIGHT_PINKY_TIP]],
         0)
     return visibility_mask
 
@@ -741,7 +741,7 @@ def keypoints_to_palm_coordinates(keypoints):
 
     keypoints = np.concatenate(
         [palm_coordinates_left, keypoints[LEFT_WRIST:LEFT_PINKY_TIP, :],
-         palm_coordinates_right, keypoints[RIGHT_WRIST:RIGHT_THUMB_TIP, :]], 0)
+         palm_coordinates_right, keypoints[RIGHT_WRIST:RIGHT_PINKY_TIP, :]], 0)
 
     return keypoints
 
