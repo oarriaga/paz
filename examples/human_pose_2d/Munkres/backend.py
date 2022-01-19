@@ -1,6 +1,13 @@
 import numpy as np
 
 
+class UnsolvableMatrix(Exception):
+    """
+    Exception raised for unsolvable matrices
+    """
+    pass
+
+
 class DISALLOWED_OBJ(object):
     pass
 
@@ -9,15 +16,10 @@ DISALLOWED = DISALLOWED_OBJ()
 DISALLOWED_PRINTVAL = "D"
 
 
-def generate_cover_matrix(shape):
+def reset_cover_matrix(shape):
     row_covered = np.zeros(shape, dtype=bool)
     col_covered = np.zeros(shape, dtype=bool)
     return row_covered, col_covered
-
-
-def generate_zeros_matrix(shape, dtype):
-    zero_matrix = np.zeros((shape), dtype=dtype)
-    return zero_matrix
 
 
 def pad_matrix(matrix):
@@ -76,9 +78,10 @@ def find_prime_in_row(n, row_arg, marked):
 def get_min_value(series):
     values = []
     for x in series:
-        if x is not DISALLOWED:
-            # print(x)
+        if type(x) is not type(DISALLOWED):
             values.append(x)
+    if len(values) == 0:
+        raise UnsolvableMatrix("One row is entirely DISALLOWED.")
     min_value = np.min(values)
     return min_value
 
@@ -91,6 +94,4 @@ def find_smallest_uncovered(n, row_covered, col_covered, cost_matrix):
                 if cost_matrix[i][j] is not DISALLOWED and \
                         minval > cost_matrix[i][j]:
                     minval = cost_matrix[i][j]
-                if cost_matrix[i][j] is not DISALLOWED:
-                    print('false disallowed', cost_matrix[i][j])
     return minval
