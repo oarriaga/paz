@@ -215,6 +215,8 @@ class PostProcessSegmentation(Processor):
         raw_segmentation_map = self.resize_segmentation_map(
             raw_segmentation_map)
         segmentation_map = self.dilate_map(raw_segmentation_map)
+        if not np.count_nonzero(segmentation_map):
+            return None
         center, bounding_box, crop_size = self.extract_box(segmentation_map)
         crop_size = self.adjust_crop_size(crop_size)
         cropped_image = self.crop_image(image, center, crop_size)
@@ -273,8 +275,11 @@ class DetectHandKeypoints(Processor):
         self.expand_dims = pr.ExpandDims(axis=0)
 
     def call(self, image, hand_side=np.array([[1.0, 0.0]])):
-        hand_crop, segmentation_map, center, _, crop_size_best = \
-            self.localize_hand(image)
+        hand_features = self.localize_hand(image)
+        if hand_features is None:
+            output = self.wrap(image.astype('uint8'), None)
+            return output
+        hand_crop, segmentation_map, center, _, crop_size_best = hand_features
         hand_crop = self.expand_dims(hand_crop)
         score_maps = self.predict_keypoints2D(hand_crop)
         score_maps_resized = self.resize_scoremaps(score_maps)
