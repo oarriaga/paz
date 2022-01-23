@@ -223,7 +223,7 @@ class PostProcessSegmentation(Processor):
         return cropped_image, segmentation_map, center, bounding_box, crop_size
 
 
-class ResizeScoreMaps(Processor): # Change to Sequential processor
+class ResizeScoreMaps(Processor):  # Change to Sequential processor
     def __init__(self, crop_shape=(256, 256)):
         super(ResizeScoreMaps, self).__init__()
         self.unpack_inputs = pr.UnpackDictionary(['score_maps'])
@@ -249,13 +249,13 @@ class DetectHandKeypoints(Processor):
                  image_size=320, crop_shape=(256, 256), num_keypoints=21):
         super(DetectHandKeypoints, self).__init__()
 
-        preprocess_image = SequentialProcessor(
+        self.preprocess_image = SequentialProcessor(
             [pr.NormalizeImage(), pr.ResizeImage((image_size, image_size)),
              pr.ExpandDims(0)])
         postprocess_segmentation = PostProcessSegmentation(image_size,
                                                            crop_shape)
-        self.localize_hand = pr.Predict(handsegnet, preprocess_image,
-                                        postprocess_segmentation)
+        self.localize_hand = pr.Predict(handsegnet,
+                                        postprocess=postprocess_segmentation)
 
         self.resize_scoremaps = ResizeScoreMaps(crop_shape)
         self.merge_dictionaries = MergeDictionaries()
@@ -275,6 +275,7 @@ class DetectHandKeypoints(Processor):
         self.expand_dims = pr.ExpandDims(axis=0)
 
     def call(self, image, hand_side=np.array([[1.0, 0.0]])):
+        image = self.preprocess_image(image)
         hand_features = self.localize_hand(image)
         if hand_features is None:
             output = self.wrap(image.astype('uint8'), None)
@@ -293,7 +294,7 @@ class DetectHandKeypoints(Processor):
         relative_keypoints = self.postprocess_keypoints(canonical_keypoints)
         tranformed_keypoints_2D = self.transform_keypoints(
             keypoints_2D, center, crop_size_best, 256)
-        image = self.draw_keypoint(np.squeeze(hand_crop), keypoints_2D)
+        image = self.draw_keypoint(np.squeeze(image), tranformed_keypoints_2D)
         image = self.denormalize(image)
         output = self.wrap(image.astype('uint8'), keypoints_2D)
         return output
