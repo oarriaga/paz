@@ -271,7 +271,7 @@ class DetectHandKeypoints(Processor):
         self.draw_keypoint = pr.DrawKeypoints2D(num_keypoints, normalized=True,
                                                 radius=4)
         self.denormalize = pr.DenormalizeImage()
-        self.wrap = pr.WrapOutput(['image', 'keypoints2D'])
+        self.wrap = pr.WrapOutput(['image', 'keypoints2D', 'keypoints3D'])
         self.expand_dims = pr.ExpandDims(axis=0)
 
     def call(self, image, hand_side=np.array([[1.0, 0.0]])):
@@ -291,10 +291,10 @@ class DetectHandKeypoints(Processor):
         viewpoints = self.predict_keypoints_angles(score_maps)
         canonical_keypoints = self.merge_dictionaries([rotation_parameters,
                                                        viewpoints])
-        relative_keypoints = self.postprocess_keypoints(canonical_keypoints)
-        tranformed_keypoints_2D = self.transform_keypoints(
-            keypoints_2D, center, crop_size_best, 256)
-        image = self.draw_keypoint(np.squeeze(image), tranformed_keypoints_2D)
+        keypoints3D = self.postprocess_keypoints(canonical_keypoints)
+        keypoints2D = self.transform_keypoints(keypoints_2D, center,
+                                               crop_size_best, 256)
+        image = self.draw_keypoint(np.squeeze(image), keypoints2D)
         image = self.denormalize(image)
-        output = self.wrap(image.astype('uint8'), keypoints_2D)
+        output = self.wrap(image.astype('uint8'), keypoints2D, keypoints3D)
         return output
