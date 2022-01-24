@@ -474,6 +474,8 @@ def get_bounding_box_features(X, Y, binary_class_mask):
     bounding_box = get_bounding_box(X_masked, Y_masked)
     center = get_crop_center(bounding_box)
     crop_size = get_crop_size(bounding_box)
+    bounding_box = [bounding_box[1],bounding_box[0],bounding_box[3],
+                    bounding_box[2]]
     return bounding_box, center, crop_size
 
 
