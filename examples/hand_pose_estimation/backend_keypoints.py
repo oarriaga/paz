@@ -474,6 +474,8 @@ def get_bounding_box_features(X, Y, binary_class_mask):
     bounding_box = get_bounding_box(X_masked, Y_masked)
     center = get_crop_center(bounding_box)
     crop_size = get_crop_size(bounding_box)
+    bounding_box = [bounding_box[1],bounding_box[0],bounding_box[3],
+                    bounding_box[2]]
     return bounding_box, center, crop_size
 
 
@@ -532,7 +534,6 @@ def crop_image_from_coordinates(image, crop_center, crop_size, scale=1.0):
         Image_cropped: Numpy array of shape (crop_size, crop-size).
     """
     image = np.squeeze(image, 0)
-    print(image.shape)
     height, width, channels = image.shape
     scale = np.reshape(scale, [-1])
     crop_location = crop_center.astype(np.float)
@@ -855,7 +856,7 @@ def apply_child_transformations(keypoints3D, bone_index, parent_index,
     rotation_angle_x, rotation_angle_y = transformation_parameters[1:3]
     rotated_keypoints = transformation_parameters[3]
     transformation_parameters = np.stack([length_from_origin, rotation_angle_x,
-                                rotation_angle_y])
+                                          rotation_angle_y])
     return rotated_keypoints, transformation_parameters
 
 
@@ -1101,10 +1102,12 @@ def transform_cropped_keypoints(cropped_keypoints, centers, scale, crop_size):
     # Returns
         keypoints: Tensor (batch x num_keypoints x 3): Transformed coordinates.
     """
+    cropped_keypoints[:, [0, 1]] = cropped_keypoints[:, [1, 0]]
     keypoints = np.copy(cropped_keypoints)
     keypoints = keypoints - (crop_size // 2)
     keypoints = keypoints / scale
     keypoints = keypoints + centers
+    keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
     return keypoints
 
 

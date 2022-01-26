@@ -12,8 +12,8 @@ HandViewPointNet = ViewPointNet()
 pipeline = DetectHandKeypoints(HandSegNet, HandPoseNet, HandPosePriorNet,
                                HandViewPointNet)
 
-img = load_image('./sample.jpg')
-detection = pipeline(img)
+image = load_image('./sample.jpg')
+detection = pipeline(image)
 
 show_image(detection['image'].astype('uint8'))
 write_image('./detection.jpg', detection['image'].astype('uint8'))
