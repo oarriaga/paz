@@ -20,7 +20,7 @@ class Database():
         add_to_database()
     """
 
-    def __init__(self, path, label, database, eigenfaces, mean_face):
+    def __init__(self, path, label, eigenfaces, mean_face):
         self.path = path
         self.label = label
         self.crop = pe.CropFrontalFace()
@@ -46,14 +46,18 @@ class Database():
             dictionary[key] = np.hstack((dictionary[key], values))
         return dictionary
 
-    def add_to_database(self, database):
+    def add_to_database(self, database=None, new_database=False):
         data = self.load_data(self.path, self.label)
         for sample in data:
             image, label = sample['image'], sample['label']
             weight = self.project(image)
             weight = self.expand_dimension(weight)
-            updated_database = self.update_dictionary(database, label, weight)
-        return updated_database
+            if new_database:
+                database = {label: weight}
+                new_database = False
+            else:
+                database = self.update_dictionary(database, label, weight)
+        return database
 
 
 if __name__ == "__main__":
@@ -71,16 +75,23 @@ if __name__ == "__main__":
     mean_face = np.load(os.path.join(args.experiments_path, 'mean_face.npy'))
 
     database_path = os.path.join(args.database_path, 'database.npy')
-    database = np.load(database_path, allow_pickle=True).item()
-
     data_path = {'Octavio': os.path.join(args.database_path, 'images/octavio'),
                  'Proneet': os.path.join(args.database_path, 'images/proneet')
                  }
 
+    # needed_files = ['images', 'database.npy']
+    needed_files = 'database.npy'
+
     write_to_file = False
     for each in data_path:
-        update_database = Database(data_path[each], each, database,
+        update_database = Database(data_path[each], each,
                                    eigenfaces, mean_face)
-        weights_database = update_database.add_to_database(database)
+        # if set(os.listdir(args.database_path)) != set(needed_files):
+        if needed_files not in os.listdir(args.database_path):
+            weights_database = update_database.add_to_database(
+                new_database=True)
+        else:
+            database = np.load(database_path, allow_pickle=True).item()
+            weights_database = update_database.add_to_database(database)
         if write_to_file:
             np.save(database_path, weights_database)
