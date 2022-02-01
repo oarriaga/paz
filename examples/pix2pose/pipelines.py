@@ -231,7 +231,8 @@ class MultiPix2Pose(Processor):
 
 
 class EstimatePoseMasks(Processor):
-    def __init__(self, detect, estimate_pose, offsets, draw=True, valid_class_names=['035_power_drill']):
+    def __init__(self, detect, estimate_pose, offsets, draw=True,
+                 valid_class_names=['035_power_drill']):
         """Pose estimation pipeline using keypoints.
         """
         super(EstimatePoseMasks, self).__init__()

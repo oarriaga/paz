@@ -43,8 +43,8 @@ def build_cube_points3D(width, height, depth):
                      point_5, point_6, point_7, point_8])
 
 
-def _preprocess_image_points2D(image_points2D):
-    """Preprocessing image points for PnPRANSAC
+def preprocess_image_points2D(image_points2D):
+    """Preprocessing image points for openCV's PnPRANSAC
 
     # Arguments
         image_points2D: Array of shape (num_points, 2)
@@ -96,7 +96,7 @@ def solve_PnP_RANSAC(object_points3D, image_points2D, camera_intrinsics,
     """
     if ((len(object_points3D) < 4) or (len(image_points2D) < 4)):
         raise ValueError('Solve PnP requires at least 4 3D and 2D points')
-    image_points2D = _preprocess_image_points2D(image_points2D)
+    image_points2D = preprocess_image_points2D(image_points2D)
     success, rotation_vector, translation, inliers = cv2.solvePnPRansac(
         object_points3D, image_points2D, camera_intrinsics, None,
         flags=cv2.SOLVEPNP_EPNP, reprojectionError=inlier_threshold,
@@ -195,6 +195,7 @@ def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
 
 def replace_lower_than_threshold(source, threshold=1e-3, replacement=0.0):
     """Replace values from source that are lower than the given threshold.
+    This function doesn't create a new array but does replacement in place.
 
     # Arguments
         source: Array.
@@ -230,7 +231,7 @@ def arguments_to_image_points2D(row_args, col_args):
         Array (num_cols, num_rows) representing points2D in UV space.
 
     # Notes
-        Arguments are row args (V) and col args (U). Iamge points are in UV
+        Arguments are row args (V) and col args (U). Image points are in UV
             coordinates; thus, we concatenate them in that order
             i.e. [col_args, row_args]
     """
@@ -290,22 +291,16 @@ def draw_points2D(image, points2D, colors):
     return image
 
 
-def draw_points2D_(image, keypoints, colors, radius=1):
-    for (u, v), (R, G, B) in zip(keypoints, colors):
-        color = (int(R), int(G), int(B))
-        draw_dot(image, (u, v), color, radius)
-    return image
-
-
 def normalize_points2D(points2D, height, width):
     """Transform points2D in image coordinates to normalized coordinates i.e.
         [U, V] -> [-1, 1]. UV have maximum values of [W, H] respectively.
 
              Image plane
 
+                 width
            (0,0)-------->  (U)
              |
-             |
+      height |
              |
              v
 
@@ -549,25 +544,6 @@ def build_rotation_matrix_y(angle):
     return rotation_matrix_y
 
 
-def rotate_image(image, rotation_matrix):
-    """Rotates an image with a symmetry.
-
-    # Arguments
-        image: Array (H, W, 3) with domain [0, 255].
-        rotation_matrix: Array (3, 3).
-
-    # Returns
-        Array (H, W, 3) with domain [0, 255]
-    """
-    mask_image = np.sum(image, axis=-1, keepdims=True) != 0
-    image = image_to_normalized_device_coordinates(image)
-    rotated_image = np.einsum('ij,klj->kli', rotation_matrix, image)
-    rotated_image = normalized_device_coordinates_to_image(rotated_image)
-    rotated_image = np.clip(rotated_image, a_min=0.0, a_max=255.0)
-    rotated_image = rotated_image * mask_image
-    return rotated_image
-
-
 def sample_uniform(min_value, max_value):
     """Samples values inside segment [min_value, max_value)
 
@@ -674,7 +650,6 @@ def compute_norm_SO3(rotation_mesh, rotation):
 def calculate_canonical_rotation(rotation_mesh, rotations):
     norms = [compute_norm_SO3(rotation_mesh, R) for R in rotations]
     closest_rotation_arg = np.argmin(norms)
-    # print(closest_rotation_arg)
     closest_rotation = rotations[closest_rotation_arg]
     canonical_rotation = np.linalg.inv(closest_rotation)
     return canonical_rotation
