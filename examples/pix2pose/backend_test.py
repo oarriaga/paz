@@ -18,6 +18,9 @@ from .backend import build_rotation_matrix_x
 from .backend import build_rotation_matrix_y
 from .backend import build_rotation_matrix_z
 from .backend import compute_norm_SO3
+from .backend import normalize_min_max
+from .backend import extract_bounding_box_corners
+from .backend import compute_vertices_colors
 
 
 @pytest.fixture
@@ -34,6 +37,7 @@ def rotation_matrix_Y_HALF_PI():
                                 [0.0, 1.0, 0.0],
                                 [-1.0, 0.0, 0.0]])
     return rotation_matrix
+
 
 @pytest.fixture
 def rotation_matrix_Z_HALF_PI():
@@ -64,6 +68,17 @@ def points2D():
                      [23, 67],
                      [178, 48],
                      [267, 310]])
+
+
+@pytest.fixture
+def points3D():
+    return np.array([[10, 301, 30],
+                     [145, 253, 12],
+                     [203, 5, 299],
+                     [214, 244, 98],
+                     [23, 67, 16],
+                     [178, 48, 234],
+                     [267, 310, 2]])
 
 
 def test_build_cube_points3D(unit_cube):
@@ -278,3 +293,27 @@ def test_compute_norm_SO3_X_to_Z(rotation_matrix_X_HALF_PI,
 
 
 # calculate_canonical_rotation
+
+
+def test_normalize_min_max():
+    x = np.array([-1.0, 0.0, 1.0])
+    values = normalize_min_max(x, np.min(x), np.max(x))
+    assert np.allclose(values, np.array([0.0, 0.5, 1.0]))
+
+
+def test_extract_corners3D(points3D):
+    bottom_left, top_right = extract_bounding_box_corners(points3D)
+    assert np.allclose(bottom_left, np.array([10, 5, 2]))
+    assert np.allclose(top_right, np.array([267, 310, 299]))
+
+
+def test_compute_vertices_colors(points3D):
+    values = compute_vertices_colors(points3D)
+    colors = np.array([[0, 247, 24],
+                       [133, 207, 8],
+                       [191, 0, 255],
+                       [202, 199, 82],
+                       [12, 51, 12],
+                       [166, 35, 199],
+                       [255, 255, 0]])
+    assert np.allclose(values, colors)

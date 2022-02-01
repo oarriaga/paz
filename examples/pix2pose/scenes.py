@@ -1,13 +1,102 @@
 import numpy as np
 from paz.backend.render import sample_uniformly, split_alpha_channel
+from paz.backend.render import (
+    sample_point_in_sphere, random_perturbation, compute_modelview_matrices)
 from pyrender import (PerspectiveCamera, OffscreenRenderer, DirectionalLight,
-                      RenderFlags, Mesh, Scene)
+                      RenderFlags, Mesh, Scene, Viewer)
 import trimesh
 
-from coloring import color_object
 from backend import to_affine_matrix
 from backend import sample_affine_transform
 from backend import calculate_canonical_rotation
+from backend import compute_vertices_colors
+
+
+def load_obj(path):
+    mesh = trimesh.load(path)
+    return mesh
+
+
+def color_object(path):
+    mesh = load_obj(path)
+    colors = compute_vertices_colors(mesh.vertices)
+    mesh.visual = mesh.visual.to_color()
+    mesh.visual.vertex_colors = colors
+    mesh = Mesh.from_trimesh(mesh, smooth=False)
+    mesh.primitives[0].material.metallicFactor = 0.0
+    mesh.primitives[0].material.roughnessFactor = 1.0
+    mesh.primitives[0].material.alphaMode = 'OPAQUE'
+    return mesh
+
+
+def quick_color_visualize():
+    scene = Scene(bg_color=[0, 0, 0])
+    root = os.path.expanduser('~')
+    mesh_path = '.keras/paz/datasets/ycb_models/035_power_drill/textured.obj'
+    path = os.path.join(root, mesh_path)
+    mesh = color_object(path)
+    scene.add(mesh)
+    Viewer(scene, use_raymond_lighting=True, flags=RenderFlags.FLAT)
+    # mesh_extents = np.array([0.184, 0.187, 0.052])
+
+
+class PixelMaskRenderer():
+    """Render-ready scene composed of a single object and a single moving camera.
+
+    # Arguments
+        path_OBJ: String containing the path to an OBJ file.
+        viewport_size: List, specifying [H, W] of rendered image.
+        y_fov: Float indicating the vertical field of view in radians.
+        distance: List of floats indicating [max_distance, min_distance]
+        light: List of floats indicating [max_light, min_light]
+        top_only: Boolean. If True images are only take from the top.
+        roll: Float, to sample [-roll, roll] rolls of the Z OpenGL camera axis.
+        shift: Float, to sample [-shift, shift] to move in X, Y OpenGL axes.
+    """
+    def __init__(self, path_OBJ, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
+                 distance=[0.3, 0.5], light=[0.5, 30], top_only=False,
+                 roll=None, shift=None):
+        self.distance, self.roll, self.shift = distance, roll, shift
+        self.light_intensity, self.top_only = light, top_only
+        self._build_scene(path_OBJ, viewport_size, light, y_fov)
+        self.renderer = OffscreenRenderer(viewport_size[0], viewport_size[1])
+        self.flags_RGBA = RenderFlags.RGBA
+        self.flags_FLAT = RenderFlags.RGBA | RenderFlags.FLAT
+        self.epsilon = 0.01
+
+    def _build_scene(self, path, size, light, y_fov):
+        self.scene = Scene(bg_color=[0, 0, 0, 0])
+        self.light = self.scene.add(
+            DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
+        self.camera = self.scene.add(
+            PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
+        self.pixel_mesh = self.scene.add(color_object(path))
+        self.mesh = self.scene.add(
+            Mesh.from_trimesh(trimesh.load(path), smooth=True))
+        self.world_origin = self.mesh.mesh.centroid
+
+    def _sample_parameters(self):
+        distance = sample_uniformly(self.distance)
+        camera_origin = sample_point_in_sphere(distance, self.top_only)
+        camera_origin = random_perturbation(camera_origin, self.epsilon)
+        light_intensity = sample_uniformly(self.light_intensity)
+        return camera_origin, light_intensity
+
+    def render(self):
+        camera_origin, intensity = self._sample_parameters()
+        camera_to_world, world_to_camera = compute_modelview_matrices(
+            camera_origin, self.world_origin, self.roll, self.shift)
+        self.light.light.intensity = intensity
+        self.scene.set_pose(self.camera, camera_to_world)
+        self.scene.set_pose(self.light, camera_to_world)
+        self.pixel_mesh.mesh.is_visible = False
+        image, depth = self.renderer.render(self.scene, self.flags_RGBA)
+        self.pixel_mesh.mesh.is_visible = True
+        image, alpha = split_alpha_channel(image)
+        self.mesh.mesh.is_visible = False
+        RGB_mask, _ = self.renderer.render(self.scene, self.flags_FLAT)
+        self.mesh.mesh.is_visible = True
+        return image, alpha, RGB_mask
 
 
 class CanonicalScene():
@@ -182,7 +271,6 @@ if __name__ == "__main__":
     show_image(image)
     """
 
-
     """
     show_image(image)
     for arg in range(0):
@@ -213,7 +301,8 @@ if __name__ == "__main__":
         # error = RGB_mask_pred - RGB_mask
         RGB_mask_pred = RGB_mask_pred.astype('uint8')
         print(image.dtype, RGB_mask_pred.dtype, RGB_mask_true.dtype)
-        # images = np.concatenate([image, RGB_mask_pred, RGB_mask_true], axis=1)
+        # images = np.concatenate(
+            [image, RGB_mask_pred, RGB_mask_true], axis=1)
         images = np.concatenate([image, RGB_mask_pred], axis=1)
         show_image(images)
     """
