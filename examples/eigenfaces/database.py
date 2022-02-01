@@ -46,15 +46,15 @@ class Database():
             dictionary[key] = np.hstack((dictionary[key], values))
         return dictionary
 
-    def add_to_database(self, database=None, new_database=False):
+    def add_to_database(self, database=None, is_new_database=False):
         data = self.load_data(self.path, self.label)
         for sample in data:
             image, label = sample['image'], sample['label']
             weight = self.project(image)
             weight = self.expand_dimension(weight)
-            if new_database:
+            if is_new_database:
                 database = {label: weight}
-                new_database = False
+                is_new_database = False
             else:
                 database = self.update_dictionary(database, label, weight)
         return database
@@ -71,25 +71,34 @@ if __name__ == "__main__":
                         help='Directory for the database')
     args = parser.parse_args()
 
+    image_path = os.path.join(args.database_path, 'images')
+    database_path = os.path.join(args.database_path, 'database.npy')
+
+    if not os.path.exists(image_path):
+        os.makedirs(image_path)
+
+    needed_files = ['eigenvalues.npy', 'eigenfaces.npy', 'mean_face.npy']
+    if set(os.listdir(args.experiments_path)) != set(needed_files):
+        raise FileNotFoundError('''Need necessary files to create database.
+                                Please run eigenface.py first''')
+
     eigenfaces = np.load(os.path.join(args.experiments_path, 'eigenfaces.npy'))
     mean_face = np.load(os.path.join(args.experiments_path, 'mean_face.npy'))
 
-    database_path = os.path.join(args.database_path, 'database.npy')
-    data_path = {'Octavio': os.path.join(args.database_path, 'images/octavio'),
-                 'Proneet': os.path.join(args.database_path, 'images/proneet')
-                 }
+    labels = os.listdir(os.path.join(args.database_path, 'images'))
+    if len(labels) == 0:
+        raise FileNotFoundError('''No image available to create database.
+        To add images follow the directory structure provided in README.md''')
 
-    # needed_files = ['images', 'database.npy']
-    needed_files = 'database.npy'
+    database_files = 'database.npy'
 
-    write_to_file = False
-    for each in data_path:
-        update_database = Database(data_path[each], each,
-                                   eigenfaces, mean_face)
-        # if set(os.listdir(args.database_path)) != set(needed_files):
-        if needed_files not in os.listdir(args.database_path):
+    write_to_file = True
+    for label in labels:
+        data_path = os.path.join(args.database_path, 'images', label)
+        update_database = Database(data_path, label, eigenfaces, mean_face)
+        if database_files not in os.listdir(args.database_path):
             weights_database = update_database.add_to_database(
-                new_database=True)
+                is_new_database=True)
         else:
             database = np.load(database_path, allow_pickle=True).item()
             weights_database = update_database.add_to_database(database)
