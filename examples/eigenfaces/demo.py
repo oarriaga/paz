@@ -4,7 +4,7 @@ import numpy as np
 import processors as pe
 from paz.backend.camera import VideoPlayer
 from paz.backend.camera import Camera
-from demo_pipeline import DetectEigenFaces
+from pipelines import DetectEigenFaces
 
 
 if __name__ == "__main__":
