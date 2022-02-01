@@ -5,10 +5,7 @@ from paz.backend.camera import Camera
 from paz.backend.camera import VideoPlayer
 from paz.applications import SSD300FAT
 
-# from pipelines import Pix2Pose
-# from pipelines import EstimatePoseMasks
 from pipelines import Pix2Pose
-from pipelines import EstimatePoseMasks
 
 
 image_shape = (128, 128, 3)
