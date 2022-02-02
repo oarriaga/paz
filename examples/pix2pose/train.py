@@ -1,6 +1,14 @@
 import os
 import glob
+import json
+import argparse
+from datetime import datetime
+
+from tensorflow.keras.utils import get_file
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import (
+    EarlyStopping, CSVLogger, ModelCheckpoint, ReduceLROnPlateau)
+
 from paz.abstract import GeneratingSequence
 from paz.models.segmentation import UNET_VGG16
 
@@ -9,65 +17,114 @@ from pipelines import DomainRandomization
 from loss import WeightedReconstruction
 from metrics import mean_squared_error as MSE
 
-# global training parameters
-H, W, num_channels = image_shape = [128, 128, 3]
-beta = 3.0
-batch_size = 32
-num_classes = 3
-learning_rate = 0.001
-max_num_epochs = 10
-steps_per_epoch = 1000
-inputs_to_shape = {'input_1': [H, W, 3]}
-labels_to_shape = {'masks': [H, W, 4]}
+MTL_FILE = 'textured.mtl'
+OBJ_FILE = 'textured.obj'
+PNG_FILE = 'texture_map.png'
+cache_subdir = 'paz/datasets/ycb_video/035_power_drill'
+URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.12/'
 
-# global rendering parameters
+MTL_FILEPATH = get_file(MTL_FILE, URL + MTL_FILE, cache_subdir=cache_subdir)
+OBJ_FILEPATH = get_file(OBJ_FILE, URL + OBJ_FILE, cache_subdir=cache_subdir)
+PNG_FILEPATH = get_file(PNG_FILE, URL + PNG_FILE, cache_subdir=cache_subdir)
+
 root_path = os.path.expanduser('~')
-background_wildcard = '.keras/paz/datasets/voc-backgrounds/*.png'
-background_wildcard = os.path.join(root_path, background_wildcard)
-image_paths = glob.glob(background_wildcard)
-num_occlusions = 1
-viewport_size = image_shape[:2]
-light = [1.0, 30]
-y_fov = 3.14159 / 4.0
 
-# power drill parameters
-"""
-OBJ_name = '.keras/paz/datasets/ycb_models/035_power_drill/textured.obj'
-distance = [0.3, 0.5]
-top_only = False
-roll = 3.14159
-shift = 0.05
-"""
+description = 'Training script for pix2pose model'
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument('--obj_path', default=OBJ_FILEPATH, type=str,
+                    help='Path to OBJ model')
+parser.add_argument('--save_path', default='experiments', type=str,
+                    help='Path for saving evaluations')
+parser.add_argument('--model', default='UNET_VGG16', type=str,
+                    choices=['UNET_VGG16'])
+parser.add_argument('--batch_size', default=32, type=int,
+                    help='Batch size used during optimization')
+parser.add_argument('--learning_rate', default=0.001, type=float,
+                    help='Initial learning rate for Adam')
+parser.add_argument('--beta', default=3.0, type=float,
+                    help='Loss Weight for pixels in object')
+parser.add_argument('--max_num_epochs', default=100, type=int,
+                    help='Number of epochs before finishing')
+parser.add_argument('--steps_per_epoch', default=1000, type=int,
+                    help='Steps per epoch')
+parser.add_argument('--stop_patience', default=5, type=int,
+                    help='Early stop patience')
+parser.add_argument('--reduce_patience', default=2, type=int,
+                    help='Reduce learning rate patience')
+parser.add_argument('--run_label', default='RUN_00', type=str,
+                    help='Label used to distinguish between different runs')
+parser.add_argument('--time', type=str,
+                    default=datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+parser.add_argument('--light', nargs='+', type=float, default=[1.0, 30])
+parser.add_argument('--y_fov', default=3.14159 / 4.0, type=float,
+                    help='Field of view angle in radians')
+parser.add_argument('--distance', nargs='+', type=float, default=[0.3, 0.5],
+                    help='Distance from camera to origin in meters')
+parser.add_argument('--top_only', default=0, choices=[0, 1], type=int,
+                    help='Flag for full sphere or top half for rendering')
+parser.add_argument('--roll', default=3.14159, type=float,
+                    help='Threshold for camera roll in radians')
+parser.add_argument('--shift', default=0.05, type=float,
+                    help='Threshold of random shift of camera')
+parser.add_argument('--num_occlusions', default=1, type=int,
+                    help='Number of occlusions added to image')
+parser.add_argument('--image_size', default=128, type=int,
+                    help='Size of the side of a square image e.g. 64')
+parser.add_argument('--background_wildcard', type=str,
+                    help='Wildcard for backgroun images', default=os.path.join(
+                        root_path,
+                        '.keras/paz/datasets/voc-backgrounds/*.png'))
+args = parser.parse_args()
 
-# hammer parameters
-OBJ_name = '.keras/paz/datasets/ycb_models/048_hammer/textured.obj'
-distance = [0.5, 0.6]
-top_only = False
-roll = 3.14159
-shift = 0.05
 
-path_OBJ = os.path.join(root_path, OBJ_name)
+# loading background image paths
+image_paths = glob.glob(args.background_wildcard)
+if len(image_paths) == 0:
+    raise ValueError('Background images not found. Provide path to png images')
 
-renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
-                             light, top_only, roll, shift)
+# setting rendering function
+H, W, num_channels = image_shape = [args.image_size, args.image_size, 3]
+renderer = PixelMaskRenderer(
+    args.obj_path, [H, W], args.y_fov, args.distance, args.light,
+    args.top_only, args.roll, args.shift)
 
+# building full processor
+inputs_to_shape = {'input_1': [H, W, num_channels]}    # inputs RGB
+labels_to_shape = {'masks': [H, W, num_channels + 1]}  # labels RGBMask + alpha
 processor = DomainRandomization(
     renderer, image_shape, image_paths, inputs_to_shape,
-    labels_to_shape, num_occlusions)
+    labels_to_shape, args.num_occlusions)
 
-sequence = GeneratingSequence(processor, batch_size, steps_per_epoch)
+# building python generator
+sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
-weighted_reconstruction = WeightedReconstruction(beta)
+# instantiating the model and loss
+model = UNET_VGG16(num_channels, image_shape, freeze_backbone=True)
+optimizer = Adam(args.learning_rate)
+loss = WeightedReconstruction(args.beta)
+model.compile(optimizer, loss, metrics=MSE)
 
-model = UNET_VGG16(num_classes, image_shape, freeze_backbone=True)
-optimizer = Adam(learning_rate)
-model.compile(optimizer, weighted_reconstruction, metrics=MSE)
+# building experiment path
+experiment_label = '_'.join([model.name, args.run_label])
+experiment_path = os.path.join(args.save_path, experiment_label)
+
+# setting additional callbacks
+log = CSVLogger(os.path.join(experiment_path, 'optimization.log'))
+stop = EarlyStopping('loss', patience=args.stop_patience, verbose=1)
+plateau = ReduceLROnPlateau('loss', patience=args.reduce_patience, verbose=1)
+save_filename = os.path.join(experiment_path, 'model_weights.hdf5')
+save = ModelCheckpoint(save_filename, 'loss', verbose=1, save_best_only=True,
+                       save_weights_only=True)
+callbacks = [log, stop, save, plateau]
+
+# saving hyper-parameters and model summary
+with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
+    json.dump(args.__dict__, filer, indent=4)
+with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
+    model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
 model.fit(
     sequence,
-    epochs=max_num_epochs,
-    # callbacks=[stop, log, save, plateau, draw],
+    epochs=args.max_num_epochs,
     verbose=1,
     workers=0)
-
-model.save_weights('UNET-VGG16_weights_hammer_10.hdf5')
