@@ -35,24 +35,25 @@ def link_joints(a, b, image, joints, color, dataset):
     return image
 
 
-def annotate_joints(image, joints, color):
+def annotate_joints(image, joints):
+    color = [0, 0, 0]
     for joint in joints:
         if joint[2] > 0:
             draw.draw_circle(image, (int(joint[0]), int(joint[1])), color, 2)
     return image
 
 
-def add_joints(image, joints, color, dataset):
+def add_joints(image, joints, dataset):
     part_orders = VISUALISATION_CONFIG[dataset]['part_orders']
-    image = annotate_joints(image, joints, color)
-    for pair in part_orders:
+    part_color = VISUALISATION_CONFIG[dataset]['part_color']
+    for pair_arg, pair in enumerate(part_orders):
+        color = part_color[pair_arg]
         image = link_joints(pair[0], pair[1], image, joints, color, dataset)
+    image = annotate_joints(image, joints)
     return image
 
 
 def draw_skeleton(image, joints, dataset):
     for person in joints:
-        color = np.random.randint(0, 255, size=3)
-        color = [int(i) for i in color]
-        add_joints(image, person, color, dataset=dataset)
+        add_joints(image, person, dataset=dataset)
     return image
