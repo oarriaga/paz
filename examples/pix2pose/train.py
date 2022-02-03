@@ -4,6 +4,7 @@ import json
 import argparse
 from datetime import datetime
 
+import tensorflow as tf
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import (
@@ -14,8 +15,7 @@ from paz.models.segmentation import UNET_VGG16
 
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
-from loss import WeightedReconstruction
-from metrics import mean_squared_error as MSE
+from weighted_reconstruction import WeightedReconstruction
 
 MTL_FILE = 'textured.mtl'
 OBJ_FILE = 'textured.obj'
@@ -98,11 +98,18 @@ processor = DomainRandomization(
 # building python generator
 sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
+
+# metric for labels with alpha mask
+def mean_squared_error(y_true, y_pred):
+    squared_difference = tf.square(y_true[:, :, :, 0:3] - y_pred[:, :, :, 0:3])
+    return tf.reduce_mean(squared_difference, axis=-1)
+
+
 # instantiating the model and loss
 model = UNET_VGG16(num_channels, image_shape, freeze_backbone=True)
 optimizer = Adam(args.learning_rate)
 loss = WeightedReconstruction(args.beta)
-model.compile(optimizer, loss, metrics=MSE)
+model.compile(optimizer, loss, mean_squared_error)
 
 # building experiment path
 experiment_label = '_'.join([model.name, args.run_label])
