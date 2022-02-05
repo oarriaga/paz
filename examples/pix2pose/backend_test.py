@@ -5,7 +5,6 @@ from .backend import build_cube_points3D
 from .backend import preprocess_image_points2D
 from .backend import replace_lower_than_threshold
 from .backend import arguments_to_image_points2D
-# from .backend import points3D_to_RGB
 from .backend import normalize_points2D
 from .backend import denormalize_points2D
 from .backend import homogenous_quaternion_to_rotation_matrix
@@ -21,6 +20,7 @@ from .backend import compute_norm_SO3
 from .backend import normalize_min_max
 from .backend import extract_bounding_box_corners
 from .backend import compute_vertices_colors
+from .backend import project_to_image
 
 
 @pytest.fixture
@@ -317,3 +317,19 @@ def test_compute_vertices_colors(points3D):
                        [166, 35, 199],
                        [255, 255, 0]])
     assert np.allclose(values, colors)
+
+
+def test_project_to_image():
+    points3D = np.array([[1.0, 1.0, 1.0]])
+    translation = np.array([0.0, 0.0, -3.0])
+    rotation = np.array([[0.0, 0.0, -1.0],
+                         [0.0, 1.0, 0.0],
+                         [1.0, 0.0, 0.0]])
+    fx = 1.0
+    fy = 1.0
+    tx = 0.0
+    ty = 0.0
+    camera_intrinsics = np.array([[fx, 0.0, tx], [0.0, fy, ty]])
+    points2D = project_to_image(rotation, translation,
+                                points3D, camera_intrinsics)
+    assert np.allclose(points2D, np.array([0.5, -0.5]))

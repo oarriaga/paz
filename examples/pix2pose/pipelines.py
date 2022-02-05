@@ -1,6 +1,5 @@
-from paz.abstract import SequentialProcessor
+from paz.abstract import SequentialProcessor, Processor, Pose6D
 from paz.pipelines import RandomizeRenderedImage as RandomizeRender
-from paz.abstract.messages import Pose6D
 from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.image import resize_image
 from paz import processors as pr
@@ -8,20 +7,15 @@ from paz import processors as pr
 from processors import (
     GetNonZeroArguments, GetNonZeroValues, ArgumentsToImagePoints2D,
     ImageToNormalizedDeviceCoordinates, Scale, SolveChangingObjectPnPRANSAC,
-    ReplaceLowerThanThreshold)
+    ReplaceLowerThanThreshold, UnwrapDictionary)
 
-from backend import build_cube_points3D
-from backend import denormalize_points2D
-from backend import draw_pose6D
-from backend import draw_mask
-from backend import normalize_points2D
+# TODO replace draw_pose6D with draw_poses6D
+# TODO replace draw_mask with draw_masks
+from backend import draw_pose6D, draw_mask
 
-# from processors import UnwrapDictionary
-# from backend import draw_poses6D
-# from backend import draw_masks
-# from backend import points3D_to_RGB
-# from backend import draw_points2D
-# import numpy as np
+from backend import (
+    build_cube_points3D, denormalize_points2D, normalize_points2D,
+    draw_masks, draw_poses6D)
 
 
 class DomainRandomization(SequentialProcessor):
@@ -137,3 +131,42 @@ class Pix2Pose(pr.Processor):
             results[topic] = image
         results['points2D'], results['pose6D'] = points2D, pose6D
         return results
+
+
+class EstimatePoseMasks(Processor):
+    def __init__(self, detect, estimate_pose, offsets, draw=True,
+                 valid_class_names=['035_power_drill']):
+        """Pose estimation pipeline using keypoints.
+        """
+        super(EstimatePoseMasks, self).__init__()
+        self.detect = detect
+        self.estimate_pose = estimate_pose
+        self.postprocess_boxes = SequentialProcessor(
+            [pr.UnpackDictionary(['boxes2D']),
+             pr.FilterClassBoxes2D(valid_class_names),
+             pr.SquareBoxes2D(),
+             pr.OffsetBoxes2D(offsets)])
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
+        self.unwrap = UnwrapDictionary(['pose6D', 'points2D', 'points3D'])
+        self.draw_boxes2D = pr.DrawBoxes2D(detect.class_names)
+        self.object_sizes = self.estimate_pose.object_sizes
+        self.cube_points3D = build_cube_points3D(*self.object_sizes)
+        self.draw = draw
+
+    def call(self, image):
+        boxes2D = self.postprocess_boxes(self.detect(image))
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        poses6D, points = [], []
+        for crop, box2D in zip(cropped_images, boxes2D):
+            results = self.estimate_pose(crop, box2D)
+            pose6D, points2D, points3D = self.unwrap(results)
+            poses6D.append(pose6D), points.append([points2D, points3D])
+        if self.draw:
+            image = self.draw_boxes2D(image, boxes2D)
+            image = draw_masks(image, points, self.object_sizes)
+            image = draw_poses6D(image, poses6D, self.cube_points3D,
+                                 self.estimate_pose.camera.intrinsics)
+        return self.wrap(image, boxes2D, poses6D)
