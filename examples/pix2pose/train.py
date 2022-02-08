@@ -4,6 +4,7 @@ import json
 import argparse
 from datetime import datetime
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.optimizers import Adam
@@ -12,9 +13,11 @@ from tensorflow.keras.callbacks import (
 
 from paz.abstract import GeneratingSequence
 from paz.models.segmentation import UNET_VGG16
+from paz.optimization.callbacks import DrawInferences
+from paz.backend.camera import Camera
 
 from scenes import PixelMaskRenderer
-from pipelines import DomainRandomization
+from pipelines import DomainRandomization, Pix2Pose
 from weighted_reconstruction import WeightedReconstruction
 
 MTL_FILE = 'textured.mtl'
@@ -45,7 +48,7 @@ parser.add_argument('--beta', default=3.0, type=float,
                     help='Loss Weight for pixels in object')
 parser.add_argument('--max_num_epochs', default=100, type=int,
                     help='Number of epochs before finishing')
-parser.add_argument('--steps_per_epoch', default=1000, type=int,
+parser.add_argument('--steps_per_epoch', default=10, type=int,
                     help='Steps per epoch')
 parser.add_argument('--stop_patience', default=5, type=int,
                     help='Early stop patience')
@@ -54,7 +57,7 @@ parser.add_argument('--reduce_patience', default=2, type=int,
 parser.add_argument('--run_label', default='RUN_00', type=str,
                     help='Label used to distinguish between different runs')
 parser.add_argument('--time', type=str,
-                    default=datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                    default=datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
 parser.add_argument('--light', nargs='+', type=float, default=[1.0, 30])
 parser.add_argument('--y_fov', default=3.14159 / 4.0, type=float,
                     help='Field of view angle in radians')
@@ -68,6 +71,8 @@ parser.add_argument('--shift', default=0.05, type=float,
                     help='Threshold of random shift of camera')
 parser.add_argument('--num_occlusions', default=1, type=int,
                     help='Number of occlusions added to image')
+parser.add_argument('--num_test_images', default=100, type=int,
+                    help='Number of test images')
 parser.add_argument('--image_size', default=128, type=int,
                     help='Size of the side of a square image e.g. 64')
 parser.add_argument('--background_wildcard', type=str,
@@ -95,6 +100,7 @@ processor = DomainRandomization(
     renderer, image_shape, image_paths, inputs_to_shape,
     labels_to_shape, args.num_occlusions)
 
+
 # building python generator
 sequence = GeneratingSequence(processor, args.batch_size, args.steps_per_epoch)
 
@@ -112,7 +118,7 @@ loss = WeightedReconstruction(args.beta)
 model.compile(optimizer, loss, mean_squared_error)
 
 # building experiment path
-experiment_label = '_'.join([model.name, args.run_label])
+experiment_label = '_'.join([model.name, args.run_label, args.time])
 experiment_path = os.path.join(args.save_path, experiment_label)
 
 # setting additional callbacks
@@ -122,7 +128,15 @@ plateau = ReduceLROnPlateau('loss', patience=args.reduce_patience, verbose=1)
 save_filename = os.path.join(experiment_path, 'model_weights.hdf5')
 save = ModelCheckpoint(save_filename, 'loss', verbose=1, save_best_only=True,
                        save_weights_only=True)
-callbacks = [log, stop, save, plateau]
+images = [np.copy(renderer.render()[0]) for _ in range(args.num_test_images)]
+# setting drawing callback
+camera = Camera()
+camera.distortion = np.zeros((4))
+object_sizes = renderer.mesh.mesh.extents * 100  # from meters to milimiters
+camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
+draw_pipeline = Pix2Pose(model, object_sizes, camera, draw=True)
+draw = DrawInferences(experiment_path, images, draw_pipeline)
+callbacks = [log, stop, save, plateau, draw]
 
 # saving hyper-parameters and model summary
 with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
@@ -133,5 +147,6 @@ with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
 model.fit(
     sequence,
     epochs=args.max_num_epochs,
+    callbacks=callbacks,
     verbose=1,
     workers=0)
