@@ -15,6 +15,7 @@ from paz.abstract import GeneratingSequence
 from paz.models.segmentation import UNET_VGG16
 from paz.optimization.callbacks import DrawInferences
 from paz.backend.camera import Camera
+from paz.backend.image import write_image
 
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization, Pix2Pose
@@ -48,7 +49,7 @@ parser.add_argument('--beta', default=3.0, type=float,
                     help='Loss Weight for pixels in object')
 parser.add_argument('--max_num_epochs', default=100, type=int,
                     help='Number of epochs before finishing')
-parser.add_argument('--steps_per_epoch', default=10, type=int,
+parser.add_argument('--steps_per_epoch', default=250, type=int,
                     help='Steps per epoch')
 parser.add_argument('--stop_patience', default=5, type=int,
                     help='Early stop patience')
@@ -129,6 +130,26 @@ save_filename = os.path.join(experiment_path, 'model_weights.hdf5')
 save = ModelCheckpoint(save_filename, 'loss', verbose=1, save_best_only=True,
                        save_weights_only=True)
 images = [np.copy(renderer.render()[0]) for _ in range(args.num_test_images)]
+images = []
+
+
+image_directory = os.path.join(experiment_path, 'original_images')
+if not os.path.exists(image_directory):
+    os.makedirs(image_directory)
+
+for image_arg in range(args.num_test_images):
+    image, alpha, masks = renderer.render()
+    image = np.copy(image)  # TODO: renderer outputs unwritable numpy arrays
+    masks = np.copy(masks)  # TODO: renderer outputs unwritable numpy arrays
+    image_filename = 'image_%03d.png' % image_arg
+    masks_filename = 'masks_%03d.png' % image_arg
+    image_directory = os.path.join(experiment_path, 'original_images')
+    image_filename = os.path.join(image_directory, image_filename)
+    masks_filename = os.path.join(image_directory, masks_filename)
+    write_image(image_filename, image)
+    write_image(masks_filename, masks)
+    images.append(image)
+
 # setting drawing callback
 camera = Camera()
 camera.distortion = np.zeros((4))

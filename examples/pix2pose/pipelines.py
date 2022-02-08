@@ -124,11 +124,11 @@ class Pix2Pose(pr.Processor):
             pose6D = None
         # change_coordinates puts points2D outside image.
         if (self.draw and (box2D is None)):
-            topic = 'image_crop' if box2D is not None else 'image'
             image = draw_mask(image, points2D, points3D, self.object_sizes)
-            image = draw_pose6D(image, pose6D, self.cube_points3D,
-                                self.camera.intrinsics)
-            results[topic] = image
+            # TODO: commented it out for DrawInfferences callback
+            # image = draw_pose6D(image, pose6D, self.cube_points3D,
+            #                     self.camera.intrinsics)
+            results['image'] = image
         results['points2D'], results['pose6D'] = points2D, pose6D
         return results
 
