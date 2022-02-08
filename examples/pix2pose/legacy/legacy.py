@@ -1,6 +1,36 @@
 from tensorflow.keras.losses import Loss
 from tensorflow.keras.losses import mean_squared_error
 import tensorflow as tf
+import numpy as np
+
+
+def sample_random_rotation_matrix():
+    """Samples SO3 in rotation matrix form.
+
+    # Return
+        Array (3, 3).
+
+    # References
+        [Lost in my terminal](http://blog.lostinmyterminal.com/python/2015/05/
+            12/random-rotation-matrix.html)
+        [real-time rendering](from http://www.realtimerendering.com/resources/
+            GraphicsGems/gemsiii/rand_rotation.c)
+    """
+    theta = 2.0 * np.pi * np.random.uniform()
+    phi = 2.0 * np.pi * np.random.uniform()
+    z = 2.0 * np.random.uniform()
+    # random_vector has length sqrt(2) to eliminate 2 in the Householder matrix
+    r = np.sqrt(z)
+    random_vector = np.array(
+        [np.sin(phi) * r, np.cos(phi) * r, np.sqrt(2.0 - z)])
+    sin_theta = np.sin(theta)
+    cos_theta = np.cos(theta)
+    R = np.array([[+cos_theta, +sin_theta, 0.0],
+                  [-sin_theta, +cos_theta, 0.0],
+                  [0.0, 0.0, 1.0]])
+    random_rotation_matrix = (
+        np.outer(random_vector, random_vector) - np.eye(3)).dot(R)
+    return random_rotation_matrix
 
 
 def compute_weighted_symmetric_loss(RGBA_true, RGB_pred, rotations, beta=3.0):

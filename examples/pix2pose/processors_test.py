@@ -10,8 +10,7 @@ from .processors import ArgumentsToImagePoints2D
 from .processors import UnwrapDictionary
 # from .processors import GetNonZeroArguments
 # from .processors import GetNonZeroValues
-# from .processors import Scale
-# from .processors import SolveChangingObjectPnPRANSAC
+from .processors import Scale
 
 
 @pytest.fixture
@@ -36,6 +35,12 @@ def rotation_matrix_Z_HALF_PI():
                                 [1.0, 0.0, 0.0],
                                 [0.0, 0.0, 1.0]])
     return rotation_matrix
+
+
+@pytest.fixture
+def object_sizes():
+    object_sizes = np.array([280, 260, 240])
+    return object_sizes
 
 
 def test_ImageToNormalizedDeviceCoordinates():
@@ -106,3 +111,10 @@ def test_UnwrapDictionary():
     dictionary = {'a': 1, 'b': 2, 'c': 3}
     unwrap = UnwrapDictionary(['b', 'a', 'c'])
     assert unwrap(dictionary) == [2, 1, 3]
+
+
+def test_Scale(object_sizes):
+    scale = Scale(object_sizes)
+    values = np.array([1.0, 0.5, 0.25])
+    scaled_values = scale(values)
+    assert np.allclose(scaled_values, values * object_sizes)

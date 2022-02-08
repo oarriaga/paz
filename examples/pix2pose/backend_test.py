@@ -17,10 +17,12 @@ from .backend import build_rotation_matrix_x
 from .backend import build_rotation_matrix_y
 from .backend import build_rotation_matrix_z
 from .backend import compute_norm_SO3
+from .backend import calculate_canonical_rotation
 from .backend import normalize_min_max
 from .backend import extract_bounding_box_corners
 from .backend import compute_vertices_colors
 from .backend import project_to_image
+from .backend import points3D_to_RGB
 
 
 @pytest.fixture
@@ -79,6 +81,23 @@ def points3D():
                      [23, 67, 16],
                      [178, 48, 234],
                      [267, 310, 2]])
+
+
+@pytest.fixture
+def object_colors():
+    return np.array([[136, 166, 159],
+                     [3, 119, 140],
+                     [56, 132, 189],
+                     [66, 110, 231],
+                     [148, 193, 144],
+                     [33, 174, 120],
+                     [114, 175, 129]])
+
+
+@pytest.fixture
+def object_sizes():
+    object_sizes = np.array([280, 260, 240])
+    return object_sizes
 
 
 def test_build_cube_points3D(unit_cube):
@@ -333,3 +352,16 @@ def test_project_to_image():
     points2D = project_to_image(rotation, translation,
                                 points3D, camera_intrinsics)
     assert np.allclose(points2D, np.array([0.5, -0.5]))
+
+
+def test_calculate_canonical_rotation(rotation_matrix_X_HALF_PI):
+    X_PI = np.matmul(rotation_matrix_X_HALF_PI, rotation_matrix_X_HALF_PI)
+    rotations = [X_PI, rotation_matrix_X_HALF_PI]
+    canonical_rotation = calculate_canonical_rotation(np.eye(3), rotations)
+    assert np.allclose(
+        canonical_rotation, np.linalg.inv(rotation_matrix_X_HALF_PI))
+
+
+def test_points3D_to_RGB(points3D, object_sizes, object_colors):
+    values = points3D_to_RGB(points3D, object_sizes)
+    assert np.allclose(values, object_colors)

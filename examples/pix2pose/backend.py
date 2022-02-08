@@ -245,7 +245,7 @@ def points3D_to_RGB(points3D, object_sizes):
     """Transforms points3D in object frame to RGB color space.
     # Arguments
         points3D: Array (num_points, 3). Points3D a
-        object_sizes: List (3) indicating the
+        object_sizes: Array (3) indicating the
             (width, height, depth) of object.
 
     # Returns
@@ -493,6 +493,58 @@ def normalized_device_coordinates_to_image(image):
     return (image + 1.0) * 127.5
 
 
+def compute_norm_SO3(rotation_mesh, rotation):
+    """Computes norm between SO3 elements.
+    """
+    difference = np.dot(np.linalg.inv(rotation), rotation_mesh) - np.eye(3)
+    distance = np.linalg.norm(difference, ord='fro')
+    return distance
+
+
+def calculate_canonical_rotation(rotation_mesh, rotations):
+    norms = [compute_norm_SO3(rotation_mesh, R) for R in rotations]
+    closest_rotation_arg = np.argmin(norms)
+    closest_rotation = rotations[closest_rotation_arg]
+    canonical_rotation = np.linalg.inv(closest_rotation)
+    return canonical_rotation
+
+
+def normalize_min_max(x, x_min, x_max):
+    """Normalized data using it's maximum and minimum values
+
+    # Arguments
+        x: array
+        x_min: minimum value of x
+        x_max: maximum value of x
+
+    # Returns
+        min-max normalized data
+    """
+    return (x - x_min) / (x_max - x_min)
+
+
+def extract_bounding_box_corners(points3D):
+    """Extracts the (x_min, y_min, z_min) and the (x_max, y_max, z_max)
+        coordinates from an array of  points3D
+    # Arguments
+        points3D: Array (num_points, 3)
+
+    # Returns
+        Left-down-bottom corner (x_min, y_min, z_min) and right-up-top
+            (x_max, y_max, z_max) corner.
+    """
+    XYZ_min = np.min(points3D, axis=0)
+    XYZ_max = np.max(points3D, axis=0)
+    return XYZ_min, XYZ_max
+
+
+def compute_vertices_colors(vertices):
+    corner3D_min, corner3D_max = extract_bounding_box_corners(vertices)
+    normalized_colors = normalize_min_max(vertices, corner3D_min, corner3D_max)
+    colors = (255 * normalized_colors).astype('uint8')
+    return colors
+
+
 def build_rotation_matrix_z(angle):
     """Builds rotation matrix in Z axis.
 
@@ -610,84 +662,3 @@ def sample_affine_transform(min_corner, max_corner):
     rotation_matrix = sample_front_rotation_matrix()
     affine_matrix = to_affine_matrix(rotation_matrix, translation)
     return affine_matrix
-
-
-def sample_random_rotation_matrix():
-    """Samples SO3 in rotation matrix form.
-
-    # Return
-        Array (3, 3).
-
-    # References
-        [Lost in my terminal](http://blog.lostinmyterminal.com/python/2015/05/
-            12/random-rotation-matrix.html)
-        [real-time rendering](from http://www.realtimerendering.com/resources/
-            GraphicsGems/gemsiii/rand_rotation.c)
-    """
-    theta = 2.0 * np.pi * np.random.uniform()
-    phi = 2.0 * np.pi * np.random.uniform()
-    z = 2.0 * np.random.uniform()
-    # random_vector has length sqrt(2) to eliminate 2 in the Householder matrix
-    r = np.sqrt(z)
-    random_vector = np.array(
-        [np.sin(phi) * r, np.cos(phi) * r, np.sqrt(2.0 - z)])
-    sin_theta = np.sin(theta)
-    cos_theta = np.cos(theta)
-    R = np.array([[+cos_theta, +sin_theta, 0.0],
-                  [-sin_theta, +cos_theta, 0.0],
-                  [0.0, 0.0, 1.0]])
-    random_rotation_matrix = (
-        np.outer(random_vector, random_vector) - np.eye(3)).dot(R)
-    return random_rotation_matrix
-
-
-def compute_norm_SO3(rotation_mesh, rotation):
-    """Computes norm between SO3 elements.
-    """
-    difference = np.dot(np.linalg.inv(rotation), rotation_mesh) - np.eye(3)
-    distance = np.linalg.norm(difference, ord='fro')
-    return distance
-
-
-def calculate_canonical_rotation(rotation_mesh, rotations):
-    norms = [compute_norm_SO3(rotation_mesh, R) for R in rotations]
-    closest_rotation_arg = np.argmin(norms)
-    closest_rotation = rotations[closest_rotation_arg]
-    canonical_rotation = np.linalg.inv(closest_rotation)
-    return canonical_rotation
-
-
-def normalize_min_max(x, x_min, x_max):
-    """Normalized data using it's maximum and minimum values
-
-    # Arguments
-        x: array
-        x_min: minimum value of x
-        x_max: maximum value of x
-
-    # Returns
-        min-max normalized data
-    """
-    return (x - x_min) / (x_max - x_min)
-
-
-def extract_bounding_box_corners(points3D):
-    """Extracts the (x_min, y_min, z_min) and the (x_max, y_max, z_max)
-        coordinates from an array of  points3D
-    # Arguments
-        points3D: Array (num_points, 3)
-
-    # Returns
-        Left-down-bottom corner (x_min, y_min, z_min) and right-up-top
-            (x_max, y_max, z_max) corner.
-    """
-    XYZ_min = np.min(points3D, axis=0)
-    XYZ_max = np.max(points3D, axis=0)
-    return XYZ_min, XYZ_max
-
-
-def compute_vertices_colors(vertices):
-    corner3D_min, corner3D_max = extract_bounding_box_corners(vertices)
-    normalized_colors = normalize_min_max(vertices, corner3D_min, corner3D_max)
-    colors = (255 * normalized_colors).astype('uint8')
-    return colors
