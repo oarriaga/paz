@@ -237,7 +237,7 @@ def arguments_to_image_points2D(row_args, col_args):
     """
     row_args = row_args.reshape(-1, 1)
     col_args = col_args.reshape(-1, 1)
-    image_points2D = np.concatenate([col_args, row_args], axis=1)
+    image_points2D = np.concatenate([col_args, row_args], axis=1)  # (U, V)
     return image_points2D
 
 
