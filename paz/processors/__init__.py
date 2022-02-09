@@ -19,6 +19,7 @@ from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
 from .draw import DrawBoxes3D
 from .draw import DrawRandomPolygon
+from .draw import DrawHumanSkeleton
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -45,6 +46,8 @@ from .image import MakeRandomPlainImage
 from .image import ConcatenateAlphaMask
 from .image import BlendRandomCroppedBackground
 from .image import AddOcclusion
+from .image import ImagenetPreprocessInput
+
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
@@ -62,6 +65,12 @@ from .geometric import RandomKeypointTranslation
 from .geometric import RandomKeypointRotation
 from .geometric import RandomRotation
 from .geometric import TranslateImage
+from .geometric import GetTransformationSize
+from .geometric import GetTransformationScale
+from .geometric import GetAffineTransform
+from .geometric import GetImageCenter
+from .geometric import WarpAffine
+
 
 from .keypoints import ChangeKeypointsCoordinateSystem
 from .keypoints import DenormalizeKeypoints
@@ -108,6 +117,21 @@ from ..backend.image.draw import LINE
 
 from ..abstract import Processor
 from ..abstract import SequentialProcessor
+
+
+from .heatmap import TransposeOutput
+from .heatmap import ScaleOutput
+from .heatmap import GetHeatmaps
+from .heatmap import GetTags
+from .heatmap import RemoveLastElement
+from .heatmap import TopKDetections
+from .heatmap import GroupJointsByTag
+from .heatmap import AdjustJointsLocations
+from .heatmap import GetScores
+from .heatmap import RefineJointsLocations
+from .heatmap import TransformJoints
+from .heatmap import ExtractJoints
+from .heatmap import AggregateResults
 
 TRAIN = 0
 VAL = 1

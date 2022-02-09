@@ -19,6 +19,7 @@ from ..backend.image import make_random_plain_image
 from ..backend.image import concatenate_alpha_mask
 from ..backend.image import draw_filled_polygon
 from ..backend.image import gaussian_image_blur
+from ..backend.image import imagenet_preprocess_input
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -432,3 +433,11 @@ class RandomImageCrop(Processor):
         y_max = y_min + H_crop
         cropped_image = image[int(x_min):int(x_max), int(y_min):int(y_max), :]
         return cropped_image
+
+
+class ImagenetPreprocessInput(Processor):
+    def __init__(self):
+        super(ImagenetPreprocessInput, self).__init__()
+
+    def call(self, image):
+        return imagenet_preprocess_input(image)

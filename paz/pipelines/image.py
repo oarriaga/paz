@@ -84,3 +84,57 @@ class DecoderPredictor(SequentialProcessor):
         self.add(pr.DenormalizeImage())
         self.add(pr.CastImage('uint8'))
         self.add(pr.ConvertColorSpace(pr.BGR2RGB))
+
+
+class PreprocessImageHigherHRNet(pr.Processor):
+    """Transform the image according to the HigherHRNet model requirement.
+    # Arguments
+        scaling_factor: Int. scale factor for image dimensions.
+        input_size: Int. resize the first dimension of image to input size.
+        inverse: Boolean. Reverse the affine transform input.
+        image: Numpy array. Input image
+
+    # Returns
+        image: resized and transformed image
+        center: center of the image
+        scale: scaled image dimensions
+    """
+    def __init__(self, scaling_factor=200, input_size=512, inverse=False):
+        super(PreprocessImageHigherHRNet, self).__init__()
+        self.get_image_center = pr.GetImageCenter()
+        self.get_size = pr.GetTransformationSize(input_size)
+        self.get_scale = pr.GetTransformationScale(scaling_factor)
+        self.get_affine_transform = pr.GetAffineTransform(inverse)
+        self.transform_image = pr.SequentialProcessor(
+            [pr.WarpAffine(), pr.ImagenetPreprocessInput(), pr.ExpandDims(0)])
+
+    def call(self, image):
+        center = self.get_image_center(image)
+        size = self.get_size(image)
+        scale = self.get_scale(image, size)
+        transform = self.get_affine_transform(center, scale, size)
+        image = self.transform_image(image, transform, size)
+        return image, center, scale
+
+
+# class InverseTransformKeypoints(pr.Processor):
+#     """Inverse the affine transform to get the keypoint location with respect
+#        to the input image.
+#     # Arguments
+#         keypoints: Numpy array. joints grouped by tag
+#         center: Tuple. center of the imput image
+#         scale: Float. scaled imput image dimension
+#         heatmaps: Numpy array of shape (1, num_joints, H, W)
+
+#     # Returns
+#         transformed_joints: joint location with respect to the input image
+#     """
+#     def __init__(self):
+#         super(InverseTransformKeypoints, self).__init__()
+#         self.get_affine_transform = pr.GetAffineTransform(inverse=True)
+#         self.transform_joints = pr.TransformJoints()
+
+#     def call(self, keypoints, center, scale, shape):
+#         transform = self.get_affine_transform(center, scale, shape)
+#         transformed_joints = self.transform_joints(keypoints, transform)
+#         return transformed_joints

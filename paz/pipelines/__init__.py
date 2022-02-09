@@ -3,6 +3,7 @@ from .image import PreprocessImage
 from .image import AutoEncoderPredictor
 from .image import EncoderPredictor
 from .image import DecoderPredictor
+from .image import PreprocessImageHigherHRNet
 
 from .detection import AugmentBoxes
 from .detection import PreprocessBoxes
@@ -17,6 +18,7 @@ from .detection import HaarCascadeFrontalFace
 from .detection import DetectMiniXceptionFER
 from .detection import DetectKeypoints2D
 from .detection import DetectFaceKeypointNet2D32
+from .detection import DetectHumanPose2D
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -30,3 +32,5 @@ from .classification import MiniXceptionFER
 
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32
+
+from .munkres import Munkres
