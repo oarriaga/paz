@@ -3,6 +3,7 @@ from paz.pipelines import RandomizeRenderedImage as RandomizeRender
 from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.image import resize_image
 from paz import processors as pr
+import cv2
 
 from processors import (
     GetNonZeroArguments, GetNonZeroValues, ArgumentsToImagePoints2D,
@@ -83,7 +84,7 @@ class Pix2Points(pr.Processor):
         RGB_mask = self.predict_RGBMask(image)
         H, W, num_channels = image.shape
         if self.resize:
-            RGB_mask = resize_image(RGB_mask, (W, H))
+            RGB_mask = cv2.resize(RGB_mask, (W, H), cv2.INTER_CUBIC)
         points3D = self.mask_to_points3D(RGB_mask)
         points2D = self.mask_to_points2D(RGB_mask)
         points2D = normalize_points2D(points2D, H, W)
@@ -168,5 +169,6 @@ class EstimatePoseMasks(Processor):
             image = self.draw_boxes2D(image, boxes2D)
             image = draw_masks(image, points, self.object_sizes)
             image = draw_poses6D(image, poses6D, self.cube_points3D,
-                                 self.estimate_pose.camera.intrinsics)
+                                 self.estimate_pose.camera.intrinsics,
+                                 thickness=2)
         return self.wrap(image, boxes2D, poses6D)
