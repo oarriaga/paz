@@ -1,5 +1,6 @@
 *.pyc
 *.hdf5
+*.h5
 *.log
 *.pkl
 *.json
@@ -21,6 +22,8 @@ checkpoint
 *.npy
 *.p
 *.zip
+*.iml
+*.jpeg
 
 !.github/manifest.xml
 
