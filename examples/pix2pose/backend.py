@@ -350,7 +350,7 @@ def denormalize_points2D(points2D, height, width):
     return points2D
 
 
-def draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics):
+def draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics, thickness=2):
     """Draws pose6D by projecting cube3D to image space with camera intrinsics.
 
     # Arguments
@@ -369,11 +369,12 @@ def draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics):
     cube_points2D = project_to_image(
         rotation, translation, cube_points3D, camera_intrinsics)
     cube_points2D = cube_points2D.astype(np.int32)
-    image = draw_cube(image, cube_points2D)
+    image = draw_cube(image, cube_points2D, thickness=thickness)
     return image
 
 
-def draw_poses6D(image, poses6D, cube_points3D, camera_intrinsics):
+def draw_poses6D(image, poses6D, cube_points3D,
+                 camera_intrinsics, thickness=2):
     """Draws pose6D by projecting cube3D to image space with camera intrinsics.
 
     # Arguments
@@ -387,7 +388,8 @@ def draw_poses6D(image, poses6D, cube_points3D, camera_intrinsics):
         Original image array (H, W, 3) with drawn cube points for all poses6D.
     """
     for pose6D in poses6D:
-        image = draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics)
+        image = draw_pose6D(image, pose6D, cube_points3D,
+                            camera_intrinsics, thickness)
     return image
 
 
