@@ -1,12 +1,15 @@
+from re import T
 import numpy as np
 import colorsys
 import random
 import cv2
+from ...datasets import VISUALISATION_CONFIG
 
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
+
 
 def draw_circle(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
@@ -258,3 +261,55 @@ def make_mosaic(images, shape, border=0):
         mosaic[row * padded_H:row * padded_H + image_shape[0],
                col * padded_W:col * padded_W + image_shape[1], :] = image
     return mosaic.astype('uint8')
+
+
+def link_keypoints(image, keypoints, link_args, link_orders, link_colors,
+                   check_scores=False):
+    """ Draw link between the keypoints.
+
+    # Arguments
+        images: Numpy array.
+        keypoints: Keypoint locations in the image. Numpy array.
+        link_args: Keypoint labels. Dictionary
+        link_orders: List of tuple
+        link_colors: Color of each link. List of list
+        check_scores: Condition to draw links. Boolean.
+
+    # Returns
+        A numpy array containing drawn link between the keypoints.
+    """
+    for pair_arg, pair in enumerate(link_orders):
+        color = link_colors[pair_arg]
+        point1 = keypoints[link_args[pair[0]]]
+        point2 = keypoints[link_args[pair[1]]]
+        if check_scores:
+            if point1[2] > 0 and point2[2] > 0:
+                draw_line(image, (int(point1[0]), int(point1[1])),
+                                 (int(point2[0]), int(point2[1])), color, 2)
+        else:
+            draw_line(image, (int(point1[0]), int(point1[1])),
+                             (int(point2[0]), int(point2[1])), color, 2)
+    return image
+
+
+def annotate_keypoints(image, keypoints, keypoint_colors, check_scores=False):
+    """ Draw a circle at keypoints.
+
+    # Arguments
+        images: Numpy array.
+        keypoints: Keypoint locations in the image. Numpy array.
+        keypoint_colors: Color of each keypoint. List of list
+        check_scores: Condition to draw keypoint. Boolean.
+
+    # Returns
+        A numpy array containing circle at each keypoints.
+    """
+    for keypoint_arg, keypoint in enumerate(keypoints):
+        color = keypoint_colors[keypoint_arg]
+        if check_scores:
+            if keypoint[2] > 0:
+                draw_circle(image, (int(keypoint[0]),
+                                    int(keypoint[1])), color, 4)
+        else:
+            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color, 4)
+    return image

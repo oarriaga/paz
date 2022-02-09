@@ -7,7 +7,10 @@ from ..backend.image import put_text
 from ..backend.image import draw_circle
 from ..backend.image import draw_cube
 from ..backend.image import draw_random_polygon
+from ..backend.image import link_keypoints
+from ..backend.image import annotate_keypoints
 from ..backend.keypoints import project_points3D
+from ..datasets import VISUALISATION_CONFIG
 
 
 class DrawBoxes2D(Processor):
@@ -137,3 +140,59 @@ class DrawRandomPolygon(Processor):
 
     def call(self, image):
         return draw_random_polygon(image)
+
+
+class DrawHumanSkeleton(Processor):
+    """ Draw human pose skeleton on image.
+
+    # Arguments
+        images: Numpy array.
+        grouped_joints: Joint locations of all the person model detected
+                        in the image. List of numpy array.
+        dataset: String.
+
+    # Returns
+        A numpy array containing pose skeleton.
+    """
+    def __init__(self, dataset, check_scores):
+        super(DrawHumanSkeleton, self).__init__()
+        self.link_orders = VISUALISATION_CONFIG[dataset]['part_orders']
+        self.link_colors = VISUALISATION_CONFIG[dataset]['part_color']
+        self.link_args = VISUALISATION_CONFIG[dataset]['part_arg']
+        self.keypoint_colors = VISUALISATION_CONFIG[dataset]['joint_color']
+        self.check_scores = check_scores
+
+    def call(self, image, grouped_joints):
+        for one_person_joints in grouped_joints:
+            image = link_keypoints(image, one_person_joints, self.link_args,
+                                   self.link_orders, self.link_colors,
+                                   self.check_scores)
+            image = annotate_keypoints(image, one_person_joints,
+                                       self.keypoint_colors, self.check_scores)
+        return image
+
+
+# link_orders = VISUALISATION_CONFIG['COCO']['part_orders']
+# link_colors = VISUALISATION_CONFIG['COCO']['part_color']
+# link_args = VISUALISATION_CONFIG['COCO']['part_arg']
+# keypoint_colors = VISUALISATION_CONFIG['COCO']['joint_color']
+
+
+# class DrawSkeleton(Processor):
+#     def __init__(self, link_orders, link_colors, link_args, keypoint_colors,
+#                  check_scores):
+#         super(DrawSkeleton, self).__init__()
+#         self.link_orders = link_orders
+#         self.link_colors = link_colors
+#         self.link_args = link_args
+#         self.keypoint_colors = keypoint_colors
+#         self.check_scores = check_scores
+
+#     def call(self, image, grouped_keypoints):
+#         for one_object_joints in grouped_keypoints:
+#             image = link_keypoints(image, one_object_joints, self.link_args,
+#                                    self.link_orders, self.link_colors,
+#                                    self.check_scores)
+#             image = annotate_keypoints(image, one_object_joints,
+#                                        self.keypoint_colors, self.check_scores)
+#         return image
