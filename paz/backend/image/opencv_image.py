@@ -377,3 +377,98 @@ def get_rotation_matrix(center, degrees, scale=1.0):
         Numpy array
     """
     return cv2.getRotationMatrix2D(center, degrees, scale)
+
+
+def get_dims_x64(dimension, multiple=64):
+    """Returns the upper multiple of 64 to the dimension.
+
+    # Arguments
+        dimension: Int.
+        multiple: Int.
+
+    # Returns
+        multiple in 64. Int.
+    """
+    dimension = dimension + (multiple - 1)
+    floor_value = dimension // multiple
+    dimension = floor_value * multiple
+    return dimension
+
+
+def get_transformation_size(input_size, dimension1, dimension2):
+    '''
+    Resize the short side of the input image to input_size and keep
+    the aspect ratio.
+
+    # Arguments
+        input_size: Dimension to be resized. Int.
+        dimension1: Int.
+        dimension2: Int.
+
+    # Returns
+        resized dimension1 and dimension2.
+    '''
+    dimension1_resized = int(input_size)
+    dimension2_resized = input_size / dimension1
+    dimension2_resized = dimension2_resized * dimension2
+    dimension2_resized = int(get_dims_x64(dimension2_resized, 64))
+    return dimension1_resized, dimension2_resized
+
+
+def get_transformation_scale(dimension1, dimension1_resized,
+                             dimension2_resized, scaling_factor):
+    '''
+    Scale resized dimension1 and dimension2.
+
+    # Arguments
+        dimension1: Int.
+        dimension1_resized: Int.
+        dimension1_resized: Int.
+        scaling_factor: Int.
+
+    # Returns
+        scaled dimension1 and dimension2
+    '''
+    scale_dimension1 = dimension1 / scaling_factor
+    scale_dimension2 = dimension2_resized / dimension1_resized
+    scale_dimension2 = scale_dimension2 * dimension1
+    scale_dimension2 = scale_dimension2 / scaling_factor
+    return scale_dimension1, scale_dimension2
+
+
+def calculate_image_center(image):
+    '''
+    Return image center.
+
+    # Arguments
+        image: Numpy array.
+
+    # Returns
+        image center.
+    '''
+    H, W = image.shape[:2]
+    center_W = W / 2.0
+    center_H = H / 2.0
+    return center_W, center_H
+
+
+def compare_vertical_neighbours(x, y, image, offset=0.25):
+    int_x, int_y = int(x), int(y)
+    lower_y = min(int_y + 1, image.shape[1] - 1)
+    upper_y = max(int_y - 1, 0)
+    if image[int_x, lower_y] > image[int_x, upper_y]:
+        y = y + offset
+    else:
+        y = y - offset
+    return y
+
+
+def compare_horizontal_neighbours(x, y, image, offset=0.25):
+    int_x, int_y = int(x), int(y)
+    left_x = max(0, int_x - 1)
+    right_x = min(int_x + 1, image.shape[0] - 1)
+    if image[right_x, int_y] > image[left_x, int_y]:
+        x = x + offset
+    else:
+        x = x - offset
+    return x
