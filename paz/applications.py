@@ -7,3 +7,4 @@ from .pipelines import MiniXceptionFER
 from .pipelines import FaceKeypointNet2D32
 from .pipelines import HeadPoseKeypointNet2D32
 from .pipelines import HaarCascadeFrontalFace
+from .pipelines import DetectHumanPose2D
