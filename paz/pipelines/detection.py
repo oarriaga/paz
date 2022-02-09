@@ -2,12 +2,13 @@ import numpy as np
 
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
-from ..models import SSD512, SSD300, HaarCascadeDetector
-from ..datasets import get_class_names
+from ..models import SSD512, SSD300, HaarCascadeDetector, HigherHRNet
+from ..datasets import get_class_names, JOINT_CONFIG, FLIP_CONFIG
 
-from .image import AugmentImage, PreprocessImage
+from .image import AugmentImage, PreprocessImage, PreprocessImageHigherHRNet
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32
+from .human_pose import GetMultiStageOutputs, GetJoints, InverseTransformJoints
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -462,3 +463,52 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
         super(DetectFaceKeypointNet2D32, self).__init__(
             detect, estimate_keypoints, offsets, radius)
+
+
+class DetectHumanPose2D(Processor):
+    """Detectect human jonts in a image and draw a skeleton over the image.
+    # Arguments
+        model: Modle weights trained on HigherHRNet model.
+        joint_order: List of length 17 (number of joints).
+            where the joints are listed order wise.
+        flipped_joint_order: List of length 17 (number of joints).
+            Flipped list of joint order.
+        dataset: String. Name of the dataset used for training the model.
+        data_with_center: Boolean. True is the model is trained using the
+            center.
+        image: Numpy array. Input image
+
+    # Returns
+        dictonary with the following keys:
+            image: contains the image with skeleton drawn on it.
+            joints: location of joints
+            score: score of detection
+    """
+    def __init__(self, dataset='COCO', data_with_center=False,
+                 max_num_people=30, with_flip=True, draw=True):
+        super(DetectHumanPose2D, self).__init__()
+        joint_order = JOINT_CONFIG[dataset]
+        flipped_joint_order = FLIP_CONFIG[dataset]
+        self.with_flip = with_flip
+        self.draw = draw
+        self.model = HigherHRNet(weights=dataset)
+        self.transform_image = PreprocessImageHigherHRNet()
+        self.predict_multi_stage_output = pr.SequentialProcessor(
+            [GetMultiStageOutputs(self.model, flipped_joint_order, with_flip,
+             data_with_center), pr.AggregateResults(with_flip=self.with_flip)])
+        self.get_joints = GetJoints(max_num_people, joint_order)
+        self.transform_joints = InverseTransformJoints()
+        self.draw_skeleton = pr.DrawHumanSkeleton(dataset, check_scores=True)
+        self.extract_joints = pr.ExtractJoints()
+        self.wrap = pr.WrapOutput(['image', 'joints', 'scores'])
+
+    def call(self, image):
+        resized_image, center, scale = self.transform_image(image)
+        heatmaps, tags = self.predict_multi_stage_output(resized_image)
+        grouped_joints, scores = self.get_joints(heatmaps, tags)
+        shape = [heatmaps.shape[3], heatmaps.shape[2]]
+        joints = self.transform_joints(grouped_joints, center, scale, shape)
+        if self.draw:
+            image = self.draw_skeleton(image, joints)
+        joints = self.extract_joints(joints)
+        return self.wrap(image, joints, scores)
