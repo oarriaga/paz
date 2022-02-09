@@ -5,13 +5,14 @@ from paz.backend.camera import Camera
 from paz.backend.camera import VideoPlayer
 from paz.applications import SSD300FAT
 
-from pipelines import Pix2Pose
+from pipelines import Pix2Pose, EstimatePoseMasks
 
 
 image_shape = (128, 128, 3)
 num_classes = 3
 
 model = UNET_VGG16(num_classes, image_shape, freeze_backbone=True)
+model.load_weights('experiments/UNET-VGG16_RUN_00_08-02-2022_14-39-55/weights.hdf5')
 # model.load_weights('weights/UNET_weights_epochs-10_beta-3.hdf5')
 # model.load_weights('weights/UNET-VGG_solar_panel_canonical_13.hdf5')
 # model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
@@ -22,8 +23,8 @@ camera = Camera(device_id=0)
 # image_size = camera.read().shape[0:2]
 # camera.stop()
 
-# image = load_image('test_image2.jpg')
-image = load_image('images/lab_condition.png')
+image = load_image('images/test_image2.jpg')
+# image = load_image('images/lab_condition.png')
 image_size = image.shape[0:2]
 focal_length = image_size[1]
 image_center = (image_size[1] / 2.0, image_size[0] / 2.0)
@@ -32,18 +33,23 @@ camera.intrinsics = np.array([[focal_length, 0, image_center[0]],
                               [0, focal_length, image_center[1]],
                               [0, 0, 1]])
 # object_sizes = np.array([0.184, 0.187, 0.052])
-epsilon = 0.001
+# object_sizes = np.array([184, 187, 52])
+object_sizes = np.array([1840, 1870, 520])  # power drill
+epsilon = 0.015
 score_thresh = 0.50
 detect = SSD300FAT(score_thresh, draw=False)
-offsets = [0.2, 0.2]
-# estimate_keypoints = Pix2Pose(model, object_sizes, epsilon, True)
-# pipeline = EstimatePoseMasks(detect, estimate_keypoints, camera, offsets)
+offsets = [0.5, 0.5]
+estimate_keypoints = Pix2Pose(model, object_sizes, camera, epsilon, draw=False)
+pipeline = EstimatePoseMasks(detect, estimate_keypoints, offsets)
+predicted_image = pipeline(image)['image']
+show_image(predicted_image)
+from paz.backend.image import write_image
+write_image('images/predicted_power_drill.png', predicted_image)
 
-
-object_sizes = np.array([1840, 1870, 520])  # power drill
-object_sizes = np.array([15000, 15000, 2000])  # solar panel
-object_sizes = np.array([15000, 15000, 2000])  # solar panel
-estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=True)
+# object_sizes = np.array([1840, 1870, 520])  # power drill
+# object_sizes = np.array([15000, 15000, 2000])  # solar panel
+# object_sizes = np.array([15000, 15000, 2000])  # solar panel
+# estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=True)
 # image = image[768:1324, 622:784]
 # image = image[622:784, 768:1324]
 
@@ -53,10 +59,10 @@ estimate_pose = Pix2Pose(model, object_sizes, camera, epsilon, draw=True)
 # show_image(estimate_pose(image_hammer)['image'])
 
 # show_image(image)
-image_clamp = image[670:1000, 1000:1400]
+# image_clamp = image[670:1000, 1000:1400]
 # image_hammer = image[460:1030, 740:1340]
-model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
-show_image(estimate_pose(image_clamp)['image'])
+# model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
+# show_image(estimate_pose(image_clamp)['image'])
 
 """
 image = load_image('images/zed_left_1011.png')
