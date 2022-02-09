@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 from ..abstract import Processor
 
@@ -10,7 +11,11 @@ from ..backend.image import warp_affine
 from ..backend.image import translate_image
 from ..backend.image import sample_scaled_translation
 from ..backend.image import get_rotation_matrix
+from ..backend.image import get_transformation_size
+from ..backend.image import get_transformation_scale
+from ..backend.image import calculate_image_center
 from ..backend.keypoints import translate_keypoints
+from ..backend.keypoints import rotate_point
 
 
 class RandomFlipBoxesLeftRight(Processor):
@@ -454,3 +459,120 @@ class TranslateImage(Processor):
 
     def call(self, image, translation):
         return translate_image(image, translation, self.fill_color)
+
+
+class GetTransformationSize(Processor):
+    """Calculate the transformation size for the imgae.
+    The size is tuple of length two indicating the x, y values.
+
+    # Arguments
+        image: Numpy array
+    """
+    def __init__(self, input_size):
+        super(GetTransformationSize, self).__init__()
+        self.input_size = input_size
+
+    def call(self, image):
+        H, W = image.shape[:2]
+        if W < H:
+            # for portrait image
+            W, H = get_transformation_size(self.input_size, W, H)
+        else:
+            # for landscape image
+            H, W = get_transformation_size(self.input_size, H, W)
+        size = (W, H)
+        return size
+
+
+class GetTransformationScale(Processor):
+    """Calculate the transformation scale for the imgae.
+    The scale is a numpy array of size two indicating the
+    width and height scale.
+
+    # Arguments
+        image: Numpy array
+        size: Tuple of length 2
+    """
+    def __init__(self, scaling_factor):
+        super(GetTransformationScale, self).__init__()
+        self.scaling_factor = scaling_factor
+
+    def call(self, image, size):
+        H, W = image.shape[:2]
+        dims1_resized, dims2_resized = size
+        if W < H:
+            scale_W, scale_H = get_transformation_scale(
+                W, dims1_resized, dims2_resized, self.scaling_factor)
+        else:
+            scale_H, scale_W = get_transformation_scale(
+                H, dims2_resized, dims1_resized, self.scaling_factor)
+        scale = np.array([scale_W, scale_H])
+        return scale
+
+
+class GetAffineTransform(Processor):
+    def __init__(self, inverse):
+        super(GetAffineTransform, self).__init__()
+        self.inverse = inverse
+
+    def _calculate_third_point(self, point2D_a, point2D_b):
+        diff = point2D_a - point2D_b
+        return point2D_a + np.array([-diff[1], diff[0]], dtype=np.float32)
+
+    def _get_input_image_points(self, scale, center):
+        scale = scale * 200 # check why this multiplication
+        image_W = scale[0]
+        # change name image_dir
+        image_dir = rotate_point([0, image_W * -0.5], 0)
+        image = np.zeros((3, 2), dtype=np.float32)
+        image[0, :] = center
+        image[1, :] = center + image_dir
+        image[2:, :] = self._calculate_third_point(image[0, :], image[1, :])
+        return image
+
+    def _get_output_image_points(self, output_size):
+        W = output_size[0]
+        H = output_size[1]
+        image_dir = np.array([0, W * -0.5], np.float32)
+        image = np.zeros((3, 2), dtype=np.float32)
+        # change to divide by 2
+        image[0, :] = [W * 0.5, H * 0.5]
+        image[1, :] = np.array([W * 0.5, H * 0.5]) + image_dir
+        image[2:, :] = self._calculate_third_point(image[0, :], image[1, :])
+        return image
+
+    def call(self, center, scale, size):
+        if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
+            scale = np.array([scale, scale])
+        source_points = self._get_input_image_points(scale, center)
+        output_points = self._get_output_image_points(size)
+        if self.inverse:
+            # make a backend function get_affine_transform
+            transform = cv2.getAffineTransform(output_points, source_points)
+        else:
+            transform = cv2.getAffineTransform(source_points, output_points)
+        return transform
+
+
+class GetImageCenter(Processor):
+    def __init__(self, offset=0.5):
+        super(GetImageCenter, self).__init__()
+        self.offset = offset
+
+    def _add_offset(self, x, offset):
+        return (x + offset)
+
+    def call(self, image):
+        center_W, center_H = calculate_image_center(image)
+        center_W = int(self._add_offset(center_W, self.offset))
+        center_H = int(self._add_offset(center_H, self.offset))
+        return np.array([center_W, center_H])
+
+
+class WarpAffine(Processor):
+    def __init__(self):
+        super(WarpAffine, self).__init__()
+
+    def call(self, image, transform, size):
+        image = cv2.warpAffine(image, transform, size)
+        return image
