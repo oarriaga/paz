@@ -6,27 +6,6 @@ from .keypoints import FaceKeypointNet2D32
 import numpy as np
 
 
-FACE_KEYPOINTNET3D = np.array([
-    [-220, 678, 1138],  # left--center-eye
-    [+220, 678, 1138],  # right-center-eye
-    [-131, 676, 1107],  # left--eye close to nose
-    [-294, 610, 1123],  # left--eye close to ear
-    [+131, 676, 1107],  # right-eye close to nose
-    [+294, 610, 1123],  # right-eye close to ear
-    [-106, 758, 1224],  # left--eyebrow close to nose
-    [-375, 585, 1208],  # left--eyebrow close to ear
-    [+106, 758, 1224],  # right-eyebrow close to nose
-    [+375, 585, 1208],  # right-eyebrow close to ear
-    [0.0, 909, 919],  # nose
-    [-183, 691, 683],  # lefty-lip
-    [+183, 691, 683],  # right-lip
-    [0.0, 826, 754],  # up---lip
-    [0.0, 815, 645],  # down-lip
-])
-
-FACE_KEYPOINTNET3D = FACE_KEYPOINTNET3D - np.mean(FACE_KEYPOINTNET3D, axis=0)
-
-
 class EstimatePoseKeypoints(Processor):
     def __init__(self, detect, estimate_keypoints, camera, offsets,
                  model_points, class_to_dimensions, radius=3, thickness=1):
@@ -46,8 +25,8 @@ class EstimatePoseKeypoints(Processor):
                 from the ``esimate_keypoints`` function.
             class_to_dimensions: Dictionary with keys being the class labels
                 of the predicted ``Box2D`` messages and the values a list of
-                two integers indicating the height and width of the object.
-                e.g. {'PowerDrill': [30, 20]}.
+                three integers indicating the width, height and depth of the
+                object e.g. {'PowerDrill': [30, 20, 10]}.
             radius: Int. radius of keypoint to be drawn.
             thickness: Int. thickness of 3D box.
 
@@ -55,6 +34,7 @@ class EstimatePoseKeypoints(Processor):
             A function that takes an RGB image and outputs the following
             inferences as keys of a dictionary:
                 ``image``, ``boxes2D``, ``keypoints`` and ``poses6D``.
+
         """
         super(EstimatePoseKeypoints, self).__init__()
         self.num_keypoints = estimate_keypoints.num_keypoints
@@ -68,7 +48,8 @@ class EstimatePoseKeypoints(Processor):
         self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
         self.solve_PNP = pr.SolvePNP(model_points, camera)
         self.draw_keypoints = pr.DrawKeypoints2D(self.num_keypoints, radius)
-        self.draw_box = pr.DrawBoxes3D(camera, class_to_dimensions, thickness)
+        self.draw_box = pr.DrawBoxes3D(camera, class_to_dimensions,
+                                       thickness=thickness)
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'keypoints', 'poses6D'])
 
     def call(self, image):
@@ -114,9 +95,44 @@ class HeadPoseKeypointNet2D32(EstimatePoseKeypoints):
             inferences as keys of a dictionary:
                 ``image``, ``boxes2D``, ``keypoints`` and ``poses6D``.
         """
-    def __init__(self, camera, offsets=[0, 0], radius=3, thickness=1):
+    def __init__(self, camera, offsets=[0, 0], radius=5, thickness=2):
         detect = HaarCascadeFrontalFace(draw=False)
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
+        """
+                               4--------1
+                              /|       /|
+                             / |      / |
+                            3--------2  |
+                            |  8_____|__5
+                            | /      | /
+                            |/       |/
+                            7--------6
+
+                   Z (depth)
+                  /
+                 /_____X (width)
+                 |
+                 |
+                 Y (height)
+        """
+        KEYPOINTS3D = np.array([
+            [-220, 1138, 678],  # left--center-eye
+            [+220, 1138, 678],  # right-center-eye
+            [-131, 1107, 676],  # left--eye close to nose
+            [-294, 1123, 610],  # left--eye close to ear
+            [+131, 1107, 676],  # right-eye close to nose
+            [+294, 1123, 610],  # right-eye close to ear
+            [-106, 1224, 758],  # left--eyebrow close to nose
+            [-375, 1208, 585],  # left--eyebrow close to ear
+            [+106, 1224, 758],  # right-eyebrow close to nose
+            [+375, 1208, 585],  # right-eyebrow close to ear
+            [0.0, 919, 909],  # nose
+            [-183, 683, 691],  # lefty-lip
+            [+183, 683, 691],  # right-lip
+            [0.0, 754, 826],  # up---lip
+            [0.0, 645, 815],  # down-lip
+        ])
+        KEYPOINTS3D = KEYPOINTS3D - np.mean(KEYPOINTS3D, axis=0)
         super(HeadPoseKeypointNet2D32, self).__init__(
             detect, estimate_keypoints, camera, offsets,
-            FACE_KEYPOINTNET3D, {None: [900.0, 600.0]}, radius, thickness)
+            KEYPOINTS3D, {None: [900, 1200, 800]}, radius, thickness)
