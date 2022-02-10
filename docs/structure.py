@@ -107,7 +107,8 @@ PAGES = [
             draw.draw_rectangle,
             draw.lincolor,
             draw.put_text,
-            draw.make_mosaic
+            draw.make_mosaic,
+            draw.draw_points2D
         ],
     },
 
@@ -301,7 +302,8 @@ PAGES = [
             processors.DrawBoxes2D,
             processors.DrawKeypoints2D,
             processors.DrawBoxes3D,
-            processors.DrawRandomPolygon
+            processors.DrawRandomPolygon,
+            processors.DrawPose6D
         ]
     },
 
@@ -319,7 +321,6 @@ PAGES = [
             processors.RandomKeypointRotation
         ]
     },
-
 
 
     {
@@ -454,6 +455,17 @@ PAGES = [
             pipelines.HeadPoseKeypointNet2D32
         ]
     },
+
+    {
+        'page': 'pipelines/masks.md',
+        'classes': [
+            pipelines.RGBMaskToImagePoints2D,
+            pipelines.RGBMaskToObjectPoints3D,
+            pipelines.PredictRGBMask,
+            pipelines.Pix2Points
+        ]
+    },
+
 
 
     {
