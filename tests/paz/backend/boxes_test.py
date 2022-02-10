@@ -6,7 +6,7 @@ from paz.backend.boxes import compute_ious
 from paz.backend.boxes import denormalize_box
 from paz.backend.boxes import to_corner_form
 from paz.backend.boxes import to_center_form
-from paz.backend.quaternion import rotation_vector_to_quaternion
+# from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.boxes import encode
 from paz.backend.boxes import match
 from paz.backend.boxes import decode
@@ -134,11 +134,6 @@ def test_to_center_form(boxes):
     boxes = to_center_form(box_A)
     boxes_A_result = to_corner_form(boxes)
     assert(boxes_A_result.all() == box_A.all())
-
-
-def test_rotation_vector_to_quaternion(rotation_vector, quaternion_target):
-    result = rotation_vector_to_quaternion(rotation_vector)
-    assert np.allclose(result, quaternion_target)
 
 
 def test_match_box(boxes_with_label, target_unique_matches):
