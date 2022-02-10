@@ -6,7 +6,6 @@ from paz.backend.boxes import compute_ious
 from paz.backend.boxes import denormalize_box
 from paz.backend.boxes import to_corner_form
 from paz.backend.boxes import to_center_form
-# from paz.backend.quaternion import rotation_vector_to_quaternion
 from paz.backend.boxes import encode
 from paz.backend.boxes import match
 from paz.backend.boxes import decode
@@ -14,9 +13,21 @@ from paz.backend.boxes import flip_left_right
 from paz.backend.boxes import to_image_coordinates
 from paz.backend.boxes import to_normalized_coordinates
 from paz.models.detection.utils import create_prior_boxes
+from paz.backend.boxes import extract_bounding_box_corners
 
 # from paz.datasets import VOC
 # from paz.core.ops import get_ground_truths
+
+
+@pytest.fixture
+def points3D():
+    return np.array([[10, 301, 30],
+                     [145, 253, 12],
+                     [203, 5, 299],
+                     [214, 244, 98],
+                     [23, 67, 16],
+                     [178, 48, 234],
+                     [267, 310, 2]])
 
 
 @pytest.fixture
@@ -181,6 +192,12 @@ def test_to_normalized_coordinates_pass_by_value(boxes_with_label):
     initial_boxes_with_label = boxes_with_label.copy()
     to_normalized_coordinates(boxes_with_label, np.ones((10, 10)))
     assert np.all(initial_boxes_with_label == boxes_with_label)
+
+
+def test_extract_corners3D(points3D):
+    bottom_left, top_right = extract_bounding_box_corners(points3D)
+    assert np.allclose(bottom_left, np.array([10, 5, 2]))
+    assert np.allclose(top_right, np.array([267, 310, 299]))
 
 
 # def test_data_loader_check():

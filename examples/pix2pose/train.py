@@ -16,10 +16,10 @@ from paz.models.segmentation import UNET_VGG16
 from paz.optimization.callbacks import DrawInferences
 from paz.backend.camera import Camera
 from paz.backend.image import write_image
+from paz.optimization.losses import WeightedReconstruction
 
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization, Pix2Pose
-from weighted_reconstruction import WeightedReconstruction
 
 MTL_FILE = 'textured.mtl'
 OBJ_FILE = 'textured.obj'

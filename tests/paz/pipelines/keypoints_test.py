@@ -120,7 +120,7 @@ def test_keypoints_DetectFaceKeypointNet2D32(
     # TODO openCV is not deterministic with it's predictions
     print(predicted_keypoints)
     for label, preds in zip(
-        keypoints_DetectFaceKeypointNet2D32, predicted_keypoints):
+            keypoints_DetectFaceKeypointNet2D32, predicted_keypoints):
         assert np.allclose(label, preds)
 
 
