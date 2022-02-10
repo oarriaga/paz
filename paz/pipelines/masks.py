@@ -45,6 +45,7 @@ class RGBMaskToImagePoints2D(SequentialProcessor):
 
 class Pix2Points(Processor):
     """Predicts RGB_mask and corresponding points2D and points3D.
+
     # Arguments
         model: Keras segmentation model.
         object_sizes: Array (3) determining the (width, height, depth)
