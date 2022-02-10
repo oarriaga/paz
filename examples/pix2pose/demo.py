@@ -35,7 +35,7 @@ camera.intrinsics = np.array([[focal_length, 0, image_center[0]],
 # object_sizes = np.array([0.184, 0.187, 0.052])
 # object_sizes = np.array([184, 187, 52])
 object_sizes = np.array([1840, 1870, 520])  # power drill
-epsilon = 0.015
+epsilon = 0.15
 score_thresh = 0.50
 detect = SSD300FAT(score_thresh, draw=False)
 offsets = [0.5, 0.5]

@@ -2,90 +2,10 @@ import numpy as np
 
 from paz.backend.boxes import extract_bounding_box_corners
 from paz.backend.image import normalize_min_max
-from paz.backend.image.draw import draw_cube
-from paz.backend.keypoints import points3D_to_RGB
-from paz.backend.keypoints import project_to_image
-
 from paz.backend.groups import build_rotation_matrix_x
 from paz.backend.groups import build_rotation_matrix_y
 from paz.backend.groups import build_rotation_matrix_z
 from paz.backend.groups import to_affine_matrix
-from paz.backend.groups import quaternion_to_rotation_matrix
-
-
-def draw_mask(image, points2D, points3D, object_sizes):
-    colors = points3D_to_RGB(points3D, object_sizes)
-    image = draw_points2D(image, points2D, colors)
-    return image
-
-
-# TODO change to processor
-def draw_masks(image, points, object_sizes):
-    for points2D, points3D in points:
-        colors = points3D_to_RGB(points3D, object_sizes)
-        image = draw_points2D(image, points2D, colors)
-    return image
-
-
-def draw_points2D(image, points2D, colors):
-    """Draws a pixel for all points2D in UV space using only numpy.
-
-    # Arguments
-        image: Array (H, W).
-        keypoints: Array (num_points, U, V). Keypoints in image space
-        colors: Array (num_points, 3). Colors in RGB space.
-
-    # Returns
-        Array with drawn points.
-    """
-    points2D = points2D.astype(int)
-    U = points2D[:, 0]
-    V = points2D[:, 1]
-    image[V, U, :] = colors
-    return image
-
-
-def draw_pose6D(image, pose6D, cube_points3D, camera_intrinsics, thickness=2):
-    """Draws pose6D by projecting cube3D to image space with camera intrinsics.
-
-    # Arguments
-        image: Array (H, W, 3)
-        pose6D: paz message Pose6D with quaternion and translation values.
-        cube3D: Array (8, 3). Cube 3D points in object frame.
-        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
-            focal lenghts and last column the image center translation.
-
-    # Returns
-        Original image array (H, W, 3) with drawn cube points.
-    """
-    quaternion, translation = pose6D.quaternion, pose6D.translation
-    rotation = quaternion_to_rotation_matrix(quaternion)
-    rotation = np.squeeze(rotation, axis=2)
-    cube_points2D = project_to_image(
-        rotation, translation, cube_points3D, camera_intrinsics)
-    cube_points2D = cube_points2D.astype(np.int32)
-    image = draw_cube(image, cube_points2D, thickness=thickness)
-    return image
-
-
-def draw_poses6D(image, poses6D, cube_points3D,
-                 camera_intrinsics, thickness=2):
-    """Draws pose6D by projecting cube3D to image space with camera intrinsics.
-
-    # Arguments
-        image: Array (H, W, 3)
-        pose6D: List paz messages Pose6D with quaternions and translations.
-        cube3D: Array (8, 3). Cube 3D points in object frame.
-        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
-            focal lenghts and last column the image center translation.
-
-    # Returns
-        Original image array (H, W, 3) with drawn cube points for all poses6D.
-    """
-    for pose6D in poses6D:
-        image = draw_pose6D(image, pose6D, cube_points3D,
-                            camera_intrinsics, thickness)
-    return image
 
 
 def compute_vertices_colors(vertices):
