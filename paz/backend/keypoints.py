@@ -154,10 +154,12 @@ def project_points3D(points3D, pose6D, camera):
     # Returns
         Numpy array of shape ``(num_points, 2)``
     """
-    point2D, jacobian = cv2.projectPoints(
+    points2D, jacobian = cv2.projectPoints(
         points3D, pose6D.rotation_vector, pose6D.translation,
         camera.intrinsics, camera.distortion)
-    return point2D
+    # openCV adds a dimension to projection i.e. (num_points, 1, 2)
+    points2D = np.squeeze(points2D, axis=1)
+    return points2D
 
 
 def project_to_image(rotation, translation, points3D, camera_intrinsics):
