@@ -10,6 +10,8 @@ from ..backend.image import GREEN
 from ..backend.image import draw_random_polygon
 from ..backend.keypoints import project_points3D
 from ..backend.keypoints import build_cube_points3D
+from ..backend.groups import quaternion_to_rotation_matrix
+from ..backend.keypoints import project_to_image
 
 
 class DrawBoxes2D(Processor):
@@ -132,3 +134,34 @@ class DrawRandomPolygon(Processor):
 
     def call(self, image):
         return draw_random_polygon(image)
+
+
+class DrawPose6D(Processor):
+    """Draws pose6D by projecting cube3D to image space with camera intrinsics.
+
+    # Arguments
+        image: Array (H, W, 3)
+        pose6D: paz message Pose6D with quaternion and translation values.
+        cube3D: Array (8, 3). Cube 3D points in object frame.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+
+    # Returns
+        Original image array (H, W, 3) with drawn cube points.
+
+    # Note
+        This function uses a numpy project function instead of openCV.
+    """
+    def __init__(self, cube_points3D, camera_intrinsics, thickness=2):
+        self.cube_points3D = cube_points3D
+        self.camera_intrinsics = camera_intrinsics
+        self.thickness = thickness
+
+    def call(self, image, pose6D):
+        quaternion, translation = pose6D.quaternion, pose6D.translation
+        rotation = quaternion_to_rotation_matrix(quaternion)
+        cube_points2D = project_to_image(
+            rotation, translation, self.cube_points3D, self.camera_intrinsics)
+        cube_points2D = cube_points2D.astype(np.int32)
+        image = draw_cube(image, cube_points2D, thickness=self.thickness)
+        return image
