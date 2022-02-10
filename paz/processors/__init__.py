@@ -19,6 +19,7 @@ from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
 from .draw import DrawBoxes3D
 from .draw import DrawRandomPolygon
+from .draw import DrawPose6D
 
 from .image import CastImage
 from .image import SubtractMeanImage
