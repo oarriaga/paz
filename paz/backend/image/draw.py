@@ -8,6 +8,7 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
 
+
 def draw_circle(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
 
@@ -110,42 +111,43 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=FILLED):
 
 
 def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
-    """ Draws a cube in image.
+    """Draws a cube in image.
 
     # Arguments
-        image: Numpy array of shape ``[H, W, 3]``.
+        image: Numpy array of shape (H, W, 3).
         points: List of length 8  having each element a list
-            of length two indicating ``(y, x)`` openCV coordinates.
+            of length two indicating (U, V) openCV coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer indicating the thickness of the line to be drawn.
         radius: Integer indicating the radius of corner points to be drawn.
 
     # Returns
-        Numpy array with shape ``[H, W, 3]``. Image with cube.
+        Numpy array with shape (H, W, 3). Image with cube.
     """
-    # color = color[::-1]  # transform to BGR for openCV
+    if points.shape != (8, 2):
+        raise ValueError('Cube points 2D must be of shape (8, 2)')
 
     # draw bottom
-    draw_line(image, points[0][0], points[1][0], color, thickness)
-    draw_line(image, points[1][0], points[2][0], color, thickness)
-    draw_line(image, points[3][0], points[2][0], color, thickness)
-    draw_line(image, points[3][0], points[0][0], color, thickness)
+    draw_line(image, points[0], points[1], color, thickness)
+    draw_line(image, points[1], points[2], color, thickness)
+    draw_line(image, points[3], points[2], color, thickness)
+    draw_line(image, points[3], points[0], color, thickness)
 
     # draw top
-    draw_line(image, points[4][0], points[5][0], color, thickness)
-    draw_line(image, points[6][0], points[5][0], color, thickness)
-    draw_line(image, points[6][0], points[7][0], color, thickness)
-    draw_line(image, points[4][0], points[7][0], color, thickness)
+    draw_line(image, points[4], points[5], color, thickness)
+    draw_line(image, points[6], points[5], color, thickness)
+    draw_line(image, points[6], points[7], color, thickness)
+    draw_line(image, points[4], points[7], color, thickness)
 
     # draw sides
-    draw_line(image, points[0][0], points[4][0], color, thickness)
-    draw_line(image, points[7][0], points[3][0], color, thickness)
-    draw_line(image, points[5][0], points[1][0], color, thickness)
-    draw_line(image, points[2][0], points[6][0], color, thickness)
+    draw_line(image, points[0], points[4], color, thickness)
+    draw_line(image, points[7], points[3], color, thickness)
+    draw_line(image, points[5], points[1], color, thickness)
+    draw_line(image, points[2], points[6], color, thickness)
 
     # draw X mark on top
-    draw_line(image, points[4][0], points[6][0], color, thickness)
-    draw_line(image, points[5][0], points[7][0], color, thickness)
+    draw_line(image, points[4], points[6], color, thickness)
+    draw_line(image, points[5], points[7], color, thickness)
 
     # draw dots
     [draw_dot(image, np.squeeze(point), color, radius) for point in points]
