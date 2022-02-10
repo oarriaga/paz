@@ -260,3 +260,21 @@ def make_mosaic(images, shape, border=0):
         mosaic[row * padded_H:row * padded_H + image_shape[0],
                col * padded_W:col * padded_W + image_shape[1], :] = image
     return mosaic.astype('uint8')
+
+
+def draw_points2D(image, points2D, colors):
+    """Draws a pixel for all points2D in UV space using only numpy.
+
+    # Arguments
+        image: Array (H, W).
+        keypoints: Array (num_points, U, V). Keypoints in image space
+        colors: Array (num_points, 3). Colors in RGB space.
+
+    # Returns
+        Array with drawn points.
+    """
+    points2D = points2D.astype(int)
+    U = points2D[:, 0]
+    V = points2D[:, 1]
+    image[V, U, :] = colors
+    return image
