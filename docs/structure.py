@@ -2,9 +2,9 @@ from paz.backend import boxes
 from paz.backend import camera
 from paz.backend import render
 from paz.backend import keypoints
-from paz.backend import quaternion
+from paz.backend import groups
+from paz.backend import image
 from paz.backend.image import draw
-from paz.backend.image import opencv_image
 from paz.abstract import messages
 from paz.abstract import processor
 from paz.abstract import loader
@@ -41,7 +41,8 @@ PAGES = [
             boxes.to_center_form,
             boxes.to_one_hot,
             boxes.to_normalized_coordinates,
-            boxes.to_corner_form
+            boxes.to_corner_form,
+            boxes.extract_bounding_box_corners
         ],
     },
 
@@ -49,9 +50,14 @@ PAGES = [
     {
         'page': 'backend/keypoints.md',
         'functions': [
+            keypoints.build_cube_points3D,
+            keypoints.normalize_keypoints2D,
+            keypoints.denormalize_keypoints2D,
+            keypoints.project_to_image,
+            keypoints.solve_PnP_RANSAC,
+            keypoints.arguments_to_image_points2D,
+            keypoints.points3D_to_RGB,
             keypoints.cascade_classifier,
-            keypoints.denormalize_keypoints,
-            keypoints.normalize_keypoints,
             keypoints.project_points3D,
             keypoints.solve_PNP,
             keypoints.translate_keypoints
@@ -60,9 +66,18 @@ PAGES = [
 
 
     {
-        'page': 'backend/quaternion.md',
+        'page': 'backend/groups.md',
         'functions': [
-            quaternion.rotation_vector_to_quaternion
+            groups.rotation_vector_to_quaternion,
+            groups.homogenous_quaternion_to_rotation_matrix,
+            groups.quaternion_to_rotation_matrix,
+            groups.to_affine_matrix,
+            groups.rotation_vector_to_rotation_matrix,
+            groups.build_rotation_matrix_x,
+            groups.build_rotation_matrix_y,
+            groups.build_rotation_matrix_z,
+            groups.compute_norm_SO3,
+            groups.calculate_canonical_rotation
         ],
     },
 
@@ -100,29 +115,35 @@ PAGES = [
     {
         'page': 'backend/image.md',
         'functions': [
-            opencv_image.cast_image,
-            opencv_image.resize_image,
-            opencv_image.convert_color_space,
-            opencv_image.load_image,
-            opencv_image.random_saturation,
-            opencv_image.random_brightness,
-            opencv_image.random_contrast,
-            opencv_image.random_hue,
-            opencv_image.random_flip_left_right,
-            opencv_image.show_image,
-            opencv_image.warp_affine,
-            opencv_image.write_image,
-            opencv_image.random_shape_crop,
-            opencv_image.make_random_plain_image,
-            opencv_image.blend_alpha_channel,
-            opencv_image.concatenate_alpha_mask,
-            opencv_image.split_and_normalize_alpha_channel,
-            opencv_image.gaussian_image_blur,
-            opencv_image.median_image_blur,
-            opencv_image.random_image_blur,
-            opencv_image.translate_image,
-            opencv_image.sample_scaled_translation,
-            opencv_image.get_rotation_matrix
+            image.resize_image,
+            image.convert_color_space,
+            image.load_image,
+            image.show_image,
+            image.warp_affine,
+            image.write_image,
+            image.gaussian_image_blur,
+            image.median_image_blur,
+            image.get_rotation_matrix,
+            image.cast_image,
+            image.random_saturation,
+            image.random_brightness,
+            image.random_contrast,
+            image.random_hue,
+            image.flip_left_right,
+            image.random_flip_left_right,
+            image.crop_image,
+            image.image_to_normalized_device_coordinates,
+            image.normalized_device_coordinates_to_image,
+            image.random_shape_crop,
+            image.make_random_plain_image,
+            image.blend_alpha_channel,
+            image.concatenate_alpha_mask,
+            image.split_and_normalize_alpha_channel,
+            image.random_image_blur,
+            image.translate_image,
+            image.sample_scaled_translation,
+            image.replace_lower_than_threshold,
+            image.normalize_min_max
         ],
     },
 
@@ -228,7 +249,9 @@ PAGES = [
             losses.KeypointNetLoss,
             losses.DiceLoss,
             losses.FocalLoss,
-            losses.JaccardLoss
+            losses.JaccardLoss,
+            losses.WeightedReconstruction,
+            losses.WeightedReconstructionWithError
         ],
     },
 
@@ -262,7 +285,12 @@ PAGES = [
             processors.ConcatenateAlphaMask,
             processors.BlendRandomCroppedBackground,
             processors.AddOcclusion,
-            processors.TranslateImage
+            processors.TranslateImage,
+            processors.ImageToNormalizedDeviceCoordinates,
+            processors.NormalizedDeviceCoordinatesToImage,
+            processors.ReplaceLowerThanThreshold,
+            processors.GetNonZeroValues,
+            processors.GetNonZeroArguments
         ]
     },
 
@@ -324,14 +352,18 @@ PAGES = [
             processors.PartitionKeypoints,
             processors.ProjectKeypoints,
             processors.RemoveKeypointsDepth,
-            processors.TranslateKeypoints
+            processors.TranslateKeypoints,
+            processors.DenormalizeKeypoints2D,
+            processors.NormalizeKeypoints2D,
+            processors.ArgumentsToImageKeypoints2D,
         ]
     },
 
     {
         'page': 'processors/pose.md',
         'classes': [
-            processors.SolvePNP
+            processors.SolvePNP,
+            processors.SolveChangingObjectPnPRANSAC
         ]
     },
 
@@ -342,6 +374,16 @@ PAGES = [
             processors.Render
         ]
     },
+
+    {
+        'page': 'processors/groups.md',
+        'classes': [
+            processors.ToAffineMatrix,
+            processors.RotationVectorToQuaternion,
+            processors.RotationVectorToRotationMatrix,
+        ]
+    },
+
 
 
     {
@@ -364,7 +406,9 @@ PAGES = [
             processors.Concatenate,
             processors.SelectElement,
             processors.StochasticProcessor,
-            processors.Stochastic
+            processors.Stochastic,
+            processors.UnwrapDictionary,
+            processors.Scale
         ]
     },
 
