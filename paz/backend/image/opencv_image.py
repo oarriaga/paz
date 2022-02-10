@@ -11,14 +11,18 @@ HSV2RGB = cv2.COLOR_HSV2RGB
 _CHANNELS_TO_FLAG = {1: cv2.IMREAD_GRAYSCALE,
                      3: cv2.IMREAD_COLOR,
                      4: cv2.IMREAD_UNCHANGED}
+CUBIC = cv2.INTER_CUBIC
+BILINEAR = cv2.INTER_LINEAR
 
 
-def resize_image(image, size):
+def resize_image(image, size, method=BILINEAR):
     """Resize image.
 
     # Arguments
         image: Numpy array.
         size: List of two ints.
+        method: Flag indicating interpolation method i.e.
+            paz.backend.image.CUBIC
 
     # Returns
         Numpy array.
@@ -27,7 +31,7 @@ def resize_image(image, size):
         raise ValueError(
             'Recieved Image is not of type numpy array', type(image))
     else:
-        return cv2.resize(image, size)
+        return cv2.resize(image, size, interpolation=method)
 
 
 def convert_color_space(image, flag):
