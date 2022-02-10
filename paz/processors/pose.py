@@ -89,4 +89,5 @@ class SolveChangingObjectPnPRANSAC(Processor):
         success, rotation_vector, translation = solve_PnP_RANSAC(
             object_points3D, image_points2D, self.camera_intrinsics,
             self.inlier_thresh, self.num_iterations)
+        rotation_vector = np.squeeze(rotation_vector)
         return success, rotation_vector, translation
