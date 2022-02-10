@@ -23,7 +23,7 @@ def draw_circle(image, point, color=GREEN, radius=5):
         Numpy array with shape ``[H, W, 3]``. Image with circle.
     """
     cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
-    inner_radius = int(.8 * radius)
+    inner_radius = int(0.8 * radius)
     # color = color[::-1]  # transform to BGR for openCV
     cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
     return image
