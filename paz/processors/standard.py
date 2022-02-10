@@ -410,3 +410,25 @@ class Stochastic(Processor):
         if self.probability >= np.random.rand():
             return self.function(X)
         return X
+
+
+class UnwrapDictionary(Processor):
+    """Unwraps a dictionry into a list given the key order.
+    """
+    def __init__(self, keys):
+        super(UnwrapDictionary, self).__init__()
+        self.keys = keys
+
+    def call(self, dictionary):
+        return [dictionary[key] for key in self.keys]
+
+
+class Scale(Processor):
+    """Scales an input.
+    """
+    def __init__(self, scales):
+        super(Scale, self).__init__()
+        self.scales = scales
+
+    def call(self, values):
+        return self.scales * values

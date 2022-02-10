@@ -19,6 +19,9 @@ from ..backend.image import make_random_plain_image
 from ..backend.image import concatenate_alpha_mask
 from ..backend.image import draw_filled_polygon
 from ..backend.image import gaussian_image_blur
+from ..backend.image import normalized_device_coordinates_to_image
+from ..backend.image import image_to_normalized_device_coordinates
+from ..backend.image import replace_lower_than_threshold
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -432,3 +435,54 @@ class RandomImageCrop(Processor):
         y_max = y_min + H_crop
         cropped_image = image[int(x_min):int(x_max), int(y_min):int(y_max), :]
         return cropped_image
+
+
+class ImageToNormalizedDeviceCoordinates(Processor):
+    """Map image value from [0, 255] -> [-1, 1].
+    """
+    def __init__(self):
+        super(ImageToNormalizedDeviceCoordinates, self).__init__()
+
+    def call(self, image):
+        return image_to_normalized_device_coordinates(image)
+
+
+class NormalizedDeviceCoordinatesToImage(Processor):
+    """Map normalized value from [-1, 1] -> [0, 255].
+    """
+    def __init__(self):
+        super(NormalizedDeviceCoordinatesToImage, self).__init__()
+
+    def call(self, image):
+        return normalized_device_coordinates_to_image(image)
+
+
+class ReplaceLowerThanThreshold(Processor):
+    def __init__(self, threshold=1e-8, replacement=0.0):
+        super(ReplaceLowerThanThreshold, self).__init__()
+        self.threshold = threshold
+        self.replacement = replacement
+
+    def call(self, values):
+        return replace_lower_than_threshold(
+            values, self.threshold, self.replacement)
+
+
+class GetNonZeroValues(Processor):
+    def __init__(self):
+        super(GetNonZeroValues, self).__init__()
+
+    def call(self, array):
+        channel_wise_sum = np.sum(array, axis=2)
+        non_zero_arguments = np.nonzero(channel_wise_sum)
+        return array[non_zero_arguments]
+
+
+class GetNonZeroArguments(Processor):
+    def __init__(self):
+        super(GetNonZeroArguments, self).__init__()
+
+    def call(self, array):
+        channel_wise_sum = np.sum(array, axis=2)
+        non_zero_rows, non_zero_columns = np.nonzero(channel_wise_sum)
+        return non_zero_rows, non_zero_columns

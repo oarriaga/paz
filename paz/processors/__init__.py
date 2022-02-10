@@ -45,6 +45,11 @@ from .image import MakeRandomPlainImage
 from .image import ConcatenateAlphaMask
 from .image import BlendRandomCroppedBackground
 from .image import AddOcclusion
+from .image import ImageToNormalizedDeviceCoordinates
+from .image import NormalizedDeviceCoordinatesToImage
+from .image import ReplaceLowerThanThreshold
+from .image import GetNonZeroArguments
+from .image import GetNonZeroValues
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
@@ -70,6 +75,9 @@ from .keypoints import PartitionKeypoints
 from .keypoints import ProjectKeypoints
 from .keypoints import RemoveKeypointsDepth
 from .keypoints import TranslateKeypoints
+from .keypoints import DenormalizeKeypoints2D
+from .keypoints import NormalizeKeypoints2D
+from .keypoints import ArgumentsToImageKeypoints2D
 
 from .standard import ControlMap
 from .standard import ExpandDomain
@@ -89,9 +97,15 @@ from .standard import Concatenate
 from .standard import SelectElement
 from .standard import StochasticProcessor
 from .standard import Stochastic
+from .standard import UnwrapDictionary
+from .standard import Scale
 
 from .pose import SolvePNP
+from .pose import SolveChangingObjectPnPRANSAC
 
+from .groups import ToAffineMatrix
+from .groups import RotationVectorToQuaternion
+from .groups import RotationVectorToRotationMatrix
 
 from ..backend.image.opencv_image import RGB2BGR
 from ..backend.image.opencv_image import BGR2RGB
