@@ -22,6 +22,7 @@ from ..backend.image import gaussian_image_blur
 from ..backend.image import normalized_device_coordinates_to_image
 from ..backend.image import image_to_normalized_device_coordinates
 from ..backend.image import replace_lower_than_threshold
+from ..backend.image import BILINEAR, CUBIC
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -174,12 +175,13 @@ class ResizeImage(Processor):
     # Arguments
         size: List of two ints.
     """
-    def __init__(self, shape):
+    def __init__(self, shape, method=BILINEAR):
         self.shape = shape
+        self.method = method
         super(ResizeImage, self).__init__()
 
     def call(self, image):
-        return resize_image(image, self.shape)
+        return resize_image(image, self.shape, self.method)
 
 
 class ResizeImages(Processor):
