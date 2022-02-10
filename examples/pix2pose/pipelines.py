@@ -1,3 +1,4 @@
+import numpy as np
 from paz import processors as pr
 from paz.abstract import SequentialProcessor, Processor, Pose6D
 from paz.pipelines import RandomizeRenderedImage as RandomizeRender
@@ -7,6 +8,8 @@ from paz.backend.keypoints import build_cube_points3D
 from paz.backend.keypoints import denormalize_keypoints2D
 from paz.backend.image.draw import draw_points2D
 from paz.backend.keypoints import points3D_to_RGB
+from paz.pipelines import SSD300FAT
+from paz.models import UNET_VGG16
 
 
 class DomainRandomization(SequentialProcessor):
@@ -24,10 +27,24 @@ class DomainRandomization(SequentialProcessor):
                                     {1: labels_to_shape}))
 
 
-class Pix2Pose(pr.Processor):
+class RGBMaskToPose6D(pr.Processor):
+    """Predicts pose6D from an RGB mask
+
+    # Arguments
+        model: Keras segmentation model.
+        object_sizes: Array (3) determining the (width, height, depth)
+        camera: PAZ Camera with intrinsic matrix.
+        epsilon: Float. Values below this value would be replaced by 0.
+        resize: Boolean. If True RGB mask is resized to original shape.
+        class_name: Str indicating object name.
+        draw: Boolean. If True drawing functions are applied to output image.
+
+    # Returns
+        Dictionary with inferred points2D, points3D, pose6D and image.
+    """
     def __init__(self, model, object_sizes, camera, epsilon=0.15,
                  resize=False, class_name=None, draw=True):
-
+        super(RGBMaskToPose6D, self).__init__()
         self.model = model
         self.resize = resize
         self.object_sizes = object_sizes
@@ -74,12 +91,23 @@ class Pix2Pose(pr.Processor):
         return results
 
 
-class EstimatePoseMasks(Processor):
+class Pix2Pose(Processor):
+    """Predicts pose6D from an RGB mask
+
+    # Arguments
+        detect: Function for estimating bounding boxes2D.
+        estimate_pose: Function for estimating pose6D.
+        offsets: Float between [0, 1] indicating ratio of increase of box2D.
+        valid_class_names: List of strings indicating class names to be kept.
+        draw: Boolean. If True drawing functions are applied to output image.
+
+    # Returns
+        Dictionary with inferred boxes2D, poses6D and image.
+    """
+
     def __init__(self, detect, estimate_pose, offsets, draw=True,
                  valid_class_names=['035_power_drill']):
-        """Pose estimation pipeline using keypoints.
-        """
-        super(EstimatePoseMasks, self).__init__()
+        super(Pix2Pose, self).__init__()
         self.detect = detect
         self.estimate_pose = estimate_pose
         self.postprocess_boxes = SequentialProcessor(
@@ -116,3 +144,25 @@ class EstimatePoseMasks(Processor):
             for pose6D in poses6D:
                 image = self.draw_pose6D(image, pose6D)
         return self.wrap(image, boxes2D, poses6D)
+
+
+class RGBMaskToPowerDrillPose6D(RGBMaskToPose6D):
+    def __init__(self, camera, weights=None, epsilon=0.15,
+                 resize=False, draw=True):
+        model = UNET_VGG16(3, (128, 128, 3))
+        model.load_weights('experiments/UNET-VGG16_RUN_00_08-02-2022_14-39-55/weights.hdf5')
+        # segment.load_weights(weights)
+        object_sizes = np.array([1840, 1870, 520])
+        class_name = '035_power_drill'
+        super(RGBMaskToPowerDrillPose6D, self).__init__(
+            model, object_sizes, camera, epsilon, resize, class_name, draw)
+
+
+class Pix2PosePowerDrill(Pix2Pose):
+    def __init__(self, camera, score_thresh=0.50, epsilon=0.15,
+                 offsets=[0.5, 0.5], draw=True):
+        valid_class_names = ['035_power_drill']
+        detect = SSD300FAT(score_thresh, draw=False)
+        estimate_pose = RGBMaskToPowerDrillPose6D(camera, epsilon, draw=False)
+        super(Pix2PosePowerDrill, self).__init__(
+            detect, estimate_pose, offsets, draw, valid_class_names)
