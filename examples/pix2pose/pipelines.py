@@ -1,22 +1,15 @@
 from paz.abstract import SequentialProcessor, Processor, Pose6D
 from paz.pipelines import RandomizeRenderedImage as RandomizeRender
-from paz.backend.quaternion import rotation_vector_to_quaternion
-from paz.backend.image import resize_image
+from paz.backend.groups.quaternion import rotation_vector_to_quaternion
 from paz import processors as pr
 import cv2
 
-from processors import (
-    GetNonZeroArguments, GetNonZeroValues, ArgumentsToImagePoints2D,
-    ImageToNormalizedDeviceCoordinates, Scale, SolveChangingObjectPnPRANSAC,
-    ReplaceLowerThanThreshold, UnwrapDictionary)
-
-# TODO replace draw_pose6D with draw_poses6D
 # TODO replace draw_mask with draw_masks
-from backend import draw_pose6D, draw_mask
-
-from backend import (
-    build_cube_points3D, denormalize_points2D, normalize_points2D,
-    draw_masks, draw_poses6D)
+from backend import draw_mask
+from backend import draw_masks, draw_poses6D
+from paz.backend.keypoints import build_cube_points3D
+from paz.backend.keypoints import normalize_keypoints2D
+from paz.backend.keypoints import denormalize_keypoints2D
 
 
 class DomainRandomization(SequentialProcessor):
@@ -42,7 +35,7 @@ class PredictRGBMask(SequentialProcessor):
         self.add(pr.ExpandDims(0))
         self.add(pr.Predict(model))
         self.add(pr.Squeeze(0))
-        self.add(ReplaceLowerThanThreshold(epsilon))
+        self.add(pr.ReplaceLowerThanThreshold(epsilon))
         self.add(pr.DenormalizeImage())
         self.add(pr.CastImage('uint8'))
 
@@ -50,23 +43,23 @@ class PredictRGBMask(SequentialProcessor):
 class RGBMaskToObjectPoints3D(SequentialProcessor):
     def __init__(self, object_sizes):
         super(RGBMaskToObjectPoints3D, self).__init__()
-        self.add(GetNonZeroValues())
-        self.add(ImageToNormalizedDeviceCoordinates())
-        self.add(Scale(object_sizes / 2.0))
+        self.add(pr.GetNonZeroValues())
+        self.add(pr.ImageToNormalizedDeviceCoordinates())
+        self.add(pr.Scale(object_sizes / 2.0))
 
 
 class RGBMaskToImagePoints2D(SequentialProcessor):
     def __init__(self, output_shape):
         super(RGBMaskToImagePoints2D, self).__init__()
-        self.add(GetNonZeroArguments())
-        self.add(ArgumentsToImagePoints2D())
+        self.add(pr.GetNonZeroArguments())
+        self.add(pr.ArgumentsToImageKeypoints2D())
 
 
 class SolveChangingObjectPnP(SequentialProcessor):
     def __init__(self, camera_intrinsics, inlier_thresh=5, num_iterations=100):
         super(SolveChangingObjectPnP, self).__init__()
         self.MIN_REQUIRED_POINTS = 4
-        self.add(SolveChangingObjectPnPRANSAC(
+        self.add(pr.SolveChangingObjectPnPRANSAC(
             camera_intrinsics, inlier_thresh, num_iterations))
 
 
@@ -87,7 +80,7 @@ class Pix2Points(pr.Processor):
             RGB_mask = cv2.resize(RGB_mask, (W, H), cv2.INTER_CUBIC)
         points3D = self.mask_to_points3D(RGB_mask)
         points2D = self.mask_to_points2D(RGB_mask)
-        points2D = normalize_points2D(points2D, H, W)
+        points2D = normalize_keypoints2D(points2D, H, W)
         return self.wrap(points2D, points3D, RGB_mask)
 
 
@@ -108,7 +101,7 @@ class Pix2Pose(pr.Processor):
         results = self.pix2points(image)
         points2D, points3D = results['points2D'], results['points3D']
         H, W, num_channels = image.shape
-        points2D = denormalize_points2D(points2D, H, W)
+        points2D = denormalize_keypoints2D(points2D, H, W)
         if box2D is not None:
             points2D = self.change_coordinates(points2D, box2D)
             self.class_name = box2D.class_name
@@ -150,7 +143,7 @@ class EstimatePoseMasks(Processor):
         self.clip = pr.ClipBoxes2D()
         self.crop = pr.CropBoxes2D()
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
-        self.unwrap = UnwrapDictionary(['pose6D', 'points2D', 'points3D'])
+        self.unwrap = pr.UnwrapDictionary(['pose6D', 'points2D', 'points3D'])
         self.draw_boxes2D = pr.DrawBoxes2D(detect.class_names)
         self.object_sizes = self.estimate_pose.object_sizes
         self.cube_points3D = build_cube_points3D(*self.object_sizes)

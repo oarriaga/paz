@@ -111,8 +111,8 @@ class DrawBoxes3D(Processor):
 
     def call(self, image, pose6D):
         points3D = self.class_to_points[pose6D.class_name]
-        args = (points3D, pose6D, self.camera)
-        points2D = project_points3D(*args).astype(np.int32)
+        points2D = project_points3D(points3D, pose6D, self.camera)
+        points2D = points2D.astype(np.int32)
         draw_cube(image, points2D, self.color, self.thickness, self.radius)
         return image
 
