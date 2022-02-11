@@ -6,8 +6,12 @@ from ..backend.image import draw_rectangle
 from ..backend.image import put_text
 from ..backend.image import draw_circle
 from ..backend.image import draw_cube
+from ..backend.image import GREEN
 from ..backend.image import draw_random_polygon
 from ..backend.keypoints import project_points3D
+from ..backend.keypoints import build_cube_points3D
+from ..backend.groups import quaternion_to_rotation_matrix
+from ..backend.keypoints import project_to_image
 
 
 class DrawBoxes2D(Processor):
@@ -81,7 +85,8 @@ class DrawKeypoints2D(Processor):
 
 
 class DrawBoxes3D(Processor):
-    def __init__(self, camera, class_to_dimensions, thickness=1):
+    def __init__(self, camera, class_to_dimensions,
+                 color=GREEN, thickness=5, radius=2):
         """Draw boxes 3D of multiple objects
 
         # Arguments
@@ -90,35 +95,27 @@ class DrawBoxes3D(Processor):
                 class names and as value a list [model_height, model_width]
             thickness: Int. Thickness of 3D box
         """
-        # model_height=.1, model_width=0.08):
         super(DrawBoxes3D, self).__init__()
         self.camera = camera
         self.class_to_dimensions = class_to_dimensions
-        self.class_to_points = self._make_points(self.class_to_dimensions)
+        self.class_to_points = self._build_class_to_points(class_to_dimensions)
+        self.color = color
+        self.radius = radius
         self.thickness = thickness
 
-    def _make_points(self, class_to_dimensions):
+    def _build_class_to_points(self, class_to_dimensions):
         class_to_points = {}
         for class_name, dimensions in self.class_to_dimensions.items():
-            height, width = dimensions
-            point_1 = [+width, -height, +width]
-            point_2 = [+width, -height, -width]
-            point_3 = [-width, -height, -width]
-            point_4 = [-width, -height, +width]
-            point_5 = [+width, +height, +width]
-            point_6 = [+width, +height, -width]
-            point_7 = [-width, +height, -width]
-            point_8 = [-width, +height, +width]
-            points = [point_1, point_2, point_3, point_4,
-                      point_5, point_6, point_7, point_8]
-            class_to_points[class_name] = np.array(points)
+            width, height, depth = dimensions
+            points = build_cube_points3D(width, height, depth)
+            class_to_points[class_name] = points
         return class_to_points
 
     def call(self, image, pose6D):
         points3D = self.class_to_points[pose6D.class_name]
-        args = (points3D, pose6D, self.camera)
-        points2D = project_points3D(*args).astype(np.int32)
-        draw_cube(image, points2D, thickness=self.thickness)
+        points2D = project_points3D(points3D, pose6D, self.camera)
+        points2D = points2D.astype(np.int32)
+        draw_cube(image, points2D, self.color, self.thickness, self.radius)
         return image
 
 
@@ -137,3 +134,34 @@ class DrawRandomPolygon(Processor):
 
     def call(self, image):
         return draw_random_polygon(image)
+
+
+class DrawPose6D(Processor):
+    """Draws pose6D by projecting cube3D to image space with camera intrinsics.
+
+    # Arguments
+        image: Array (H, W, 3)
+        pose6D: paz message Pose6D with quaternion and translation values.
+        cube3D: Array (8, 3). Cube 3D points in object frame.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+
+    # Returns
+        Original image array (H, W, 3) with drawn cube points.
+
+    # Note
+        This function uses a numpy project function instead of openCV.
+    """
+    def __init__(self, cube_points3D, camera_intrinsics, thickness=2):
+        self.cube_points3D = cube_points3D
+        self.camera_intrinsics = camera_intrinsics
+        self.thickness = thickness
+
+    def call(self, image, pose6D):
+        quaternion, translation = pose6D.quaternion, pose6D.translation
+        rotation = quaternion_to_rotation_matrix(quaternion)
+        cube_points2D = project_to_image(
+            rotation, translation, self.cube_points3D, self.camera_intrinsics)
+        cube_points2D = cube_points2D.astype(np.int32)
+        image = draw_cube(image, cube_points2D, thickness=self.thickness)
+        return image

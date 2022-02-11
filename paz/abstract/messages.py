@@ -1,4 +1,4 @@
-from ..backend.quaternion import rotation_vector_to_quaternion
+from ..backend.groups.quaternion import rotation_vector_to_quaternion
 
 
 class Box2D(object):

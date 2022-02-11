@@ -1,9 +1,14 @@
+from warnings import warn
+
 import numpy as np
 
 from ..abstract import Processor
+from ..backend.keypoints import translate_keypoints
+from ..backend.keypoints import arguments_to_image_points2D
+from ..backend.keypoints import normalize_keypoints2D
+from ..backend.keypoints import denormalize_keypoints2D
 from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
-from ..backend.keypoints import translate_keypoints
 
 
 class ProjectKeypoints(Processor):
@@ -26,18 +31,34 @@ class ProjectKeypoints(Processor):
         return keypoints
 
 
-class DenormalizeKeypoints(Processor):
+class NormalizeKeypoints2D(Processor):
+    """Transform keypoints in image-size coordinates to normalized coordinates.
+
+    # Arguments
+        image_size: List of two ints indicating ''(height, width)''
+    """
+    def __init__(self, image_size):
+        self.image_size = image_size
+        super(NormalizeKeypoints2D, self).__init__()
+
+    def call(self, keypoints):
+        height, width = self.image_size[0:2]
+        keypoints = normalize_keypoints2D(keypoints, height, width)
+        return keypoints
+
+
+class DenormalizeKeypoints2D(Processor):
     """Transform normalized keypoints coordinates into image-size coordinates.
 
     # Arguments
         image_size: List of two floats having height and width of image.
     """
     def __init__(self):
-        super(DenormalizeKeypoints, self).__init__()
+        super(DenormalizeKeypoints2D, self).__init__()
 
     def call(self, keypoints, image):
         height, width = image.shape[0:2]
-        keypoints = denormalize_keypoints(keypoints, height, width)
+        keypoints = denormalize_keypoints2D(keypoints, height, width)
         return keypoints
 
 
@@ -49,11 +70,28 @@ class NormalizeKeypoints(Processor):
     """
     def __init__(self, image_size):
         self.image_size = image_size
+        warn('DEPRECATED please use normalize_points2D')
         super(NormalizeKeypoints, self).__init__()
 
     def call(self, keypoints):
         height, width = self.image_size[0:2]
         keypoints = normalize_keypoints(keypoints, height, width)
+        return keypoints
+
+
+class DenormalizeKeypoints(Processor):
+    """Transform normalized keypoints coordinates into image-size coordinates.
+
+    # Arguments
+        image_size: List of two floats having height and width of image.
+    """
+    def __init__(self):
+        warn('DEPRECATED please use denomarlize_points2D')
+        super(DenormalizeKeypoints, self).__init__()
+
+    def call(self, keypoints, image):
+        height, width = image.shape[0:2]
+        keypoints = denormalize_keypoints(keypoints, height, width)
         return keypoints
 
 
@@ -106,3 +144,36 @@ class TranslateKeypoints(Processor):
 
     def call(self, keypoints, translation):
         return translate_keypoints(keypoints, translation)
+
+
+class ArgumentsToImageKeypoints2D(Processor):
+    """Convert array arguments into UV coordinates.
+
+              Image plane
+
+           (0,0)-------->  (U)
+             |
+             |
+             |
+             v
+
+            (V)
+
+    # Arguments
+        row_args: Array (num_rows).
+        col_args: Array (num_cols).
+
+    # Returns
+        Array (num_cols, num_rows) representing points2D in UV space.
+
+    # Notes
+        Arguments are row args (V) and col args (U). Image points are in UV
+            coordinates; thus, we concatenate them in that order
+            i.e. [col_args, row_args]
+    """
+    def __init__(self):
+        super(ArgumentsToImageKeypoints2D, self).__init__()
+
+    def call(self, row_args, col_args):
+        image_points2D = arguments_to_image_points2D(row_args, col_args)
+        return image_points2D

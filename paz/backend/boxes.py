@@ -504,3 +504,18 @@ def to_normalized_coordinates(boxes, image):
     normalized_boxes[:, 1] = boxes[:, 1] / height
     normalized_boxes[:, 3] = boxes[:, 3] / height
     return normalized_boxes
+
+
+def extract_bounding_box_corners(points3D):
+    """Extracts the (x_min, y_min, z_min) and the (x_max, y_max, z_max)
+        coordinates from an array of  points3D
+    # Arguments
+        points3D: Array (num_points, 3)
+
+    # Returns
+        Left-down-bottom corner (x_min, y_min, z_min) and right-up-top
+            (x_max, y_max, z_max) corner.
+    """
+    XYZ_min = np.min(points3D, axis=0)
+    XYZ_max = np.max(points3D, axis=0)
+    return XYZ_min, XYZ_max

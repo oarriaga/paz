@@ -30,3 +30,11 @@ from .classification import MiniXceptionFER
 
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32
+
+from .masks import RGBMaskToImagePoints2D
+from .masks import RGBMaskToObjectPoints3D
+from .masks import PredictRGBMask
+from .masks import Pix2Points
+
+from .pose import RGBMaskToPowerDrillPose6D
+from .pose import PIX2POSEPowerDrill

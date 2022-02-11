@@ -8,6 +8,7 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
 
+
 def draw_circle(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
 
@@ -22,7 +23,7 @@ def draw_circle(image, point, color=GREEN, radius=5):
         Numpy array with shape ``[H, W, 3]``. Image with circle.
     """
     cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
-    inner_radius = int(.8 * radius)
+    inner_radius = int(0.8 * radius)
     # color = color[::-1]  # transform to BGR for openCV
     cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
     return image
@@ -110,42 +111,43 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=FILLED):
 
 
 def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
-    """ Draws a cube in image.
+    """Draws a cube in image.
 
     # Arguments
-        image: Numpy array of shape ``[H, W, 3]``.
+        image: Numpy array of shape (H, W, 3).
         points: List of length 8  having each element a list
-            of length two indicating ``(y, x)`` openCV coordinates.
+            of length two indicating (U, V) openCV coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer indicating the thickness of the line to be drawn.
         radius: Integer indicating the radius of corner points to be drawn.
 
     # Returns
-        Numpy array with shape ``[H, W, 3]``. Image with cube.
+        Numpy array with shape (H, W, 3). Image with cube.
     """
-    # color = color[::-1]  # transform to BGR for openCV
+    if points.shape != (8, 2):
+        raise ValueError('Cube points 2D must be of shape (8, 2)')
 
     # draw bottom
-    draw_line(image, points[0][0], points[1][0], color, thickness)
-    draw_line(image, points[1][0], points[2][0], color, thickness)
-    draw_line(image, points[3][0], points[2][0], color, thickness)
-    draw_line(image, points[3][0], points[0][0], color, thickness)
+    draw_line(image, points[0], points[1], color, thickness)
+    draw_line(image, points[1], points[2], color, thickness)
+    draw_line(image, points[3], points[2], color, thickness)
+    draw_line(image, points[3], points[0], color, thickness)
 
     # draw top
-    draw_line(image, points[4][0], points[5][0], color, thickness)
-    draw_line(image, points[6][0], points[5][0], color, thickness)
-    draw_line(image, points[6][0], points[7][0], color, thickness)
-    draw_line(image, points[4][0], points[7][0], color, thickness)
+    draw_line(image, points[4], points[5], color, thickness)
+    draw_line(image, points[6], points[5], color, thickness)
+    draw_line(image, points[6], points[7], color, thickness)
+    draw_line(image, points[4], points[7], color, thickness)
 
     # draw sides
-    draw_line(image, points[0][0], points[4][0], color, thickness)
-    draw_line(image, points[7][0], points[3][0], color, thickness)
-    draw_line(image, points[5][0], points[1][0], color, thickness)
-    draw_line(image, points[2][0], points[6][0], color, thickness)
+    draw_line(image, points[0], points[4], color, thickness)
+    draw_line(image, points[7], points[3], color, thickness)
+    draw_line(image, points[5], points[1], color, thickness)
+    draw_line(image, points[2], points[6], color, thickness)
 
     # draw X mark on top
-    draw_line(image, points[4][0], points[6][0], color, thickness)
-    draw_line(image, points[5][0], points[7][0], color, thickness)
+    draw_line(image, points[4], points[6], color, thickness)
+    draw_line(image, points[5], points[7], color, thickness)
 
     # draw dots
     [draw_dot(image, np.squeeze(point), color, radius) for point in points]
@@ -258,3 +260,21 @@ def make_mosaic(images, shape, border=0):
         mosaic[row * padded_H:row * padded_H + image_shape[0],
                col * padded_W:col * padded_W + image_shape[1], :] = image
     return mosaic.astype('uint8')
+
+
+def draw_points2D(image, points2D, colors):
+    """Draws a pixel for all points2D in UV space using only numpy.
+
+    # Arguments
+        image: Array (H, W).
+        keypoints: Array (num_points, U, V). Keypoints in image space
+        colors: Array (num_points, 3). Colors in RGB space.
+
+    # Returns
+        Array with drawn points.
+    """
+    points2D = points2D.astype(int)
+    U = points2D[:, 0]
+    V = points2D[:, 1]
+    image[V, U, :] = colors
+    return image

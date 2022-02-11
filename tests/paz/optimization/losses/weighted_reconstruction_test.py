@@ -1,17 +1,13 @@
 import pytest
 import numpy as np
 
-from .weighted_reconstruction import split_alpha_mask
-from .weighted_reconstruction import compute_foreground_loss
-from .weighted_reconstruction import compute_background_loss
-from .weighted_reconstruction import compute_weighted_reconstruction_loss
-from .weighted_reconstruction import (
-    compute_weighted_reconstruction_loss_with_error)
-from .weighted_reconstruction import (
+from paz.optimization.losses.segmentation.weighted_reconstruction import (
+    split_alpha_mask, compute_background_loss, compute_foreground_loss,
+    compute_weighted_reconstruction_loss,
+    compute_weighted_reconstruction_loss_with_error,
+    normalized_device_coordinates_to_normalized_image,
     normalized_image_to_normalized_device_coordinates,
-    normalized_device_coordinates_to_normalized_image)
-from .weighted_reconstruction import WeightedReconstruction
-from .weighted_reconstruction import WeightedReconstructionWithError
+    WeightedReconstruction, WeightedReconstructionWithError)
 
 
 @pytest.fixture
@@ -107,7 +103,6 @@ def test_WeightedReconstructionWithError(RGBA_true, RGBE_pred):
     compute_loss = WeightedReconstructionWithError(beta=3.0)
     loss = compute_loss(RGBA_true, RGBE_pred)
     assert np.allclose(loss, 1.5)
-
 
 
 # def test_error_prediction_loss(RGBA_true, RGBE_pred):
