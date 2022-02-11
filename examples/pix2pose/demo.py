@@ -3,16 +3,10 @@ from paz.backend.image import show_image, load_image
 from paz.backend.camera import Camera
 from paz.backend.image import write_image
 
-from pipelines import Pix2PosePowerDrill
+from paz.pipelines import PIX2POSEPowerDrill
 
 
-camera = Camera(device_id=0)
-
-image = load_image('images/test_image2.jpg')
-# image = load_image('images/lab_condition.png')
-
-
-def approximate_intrincs(image):
+def approximate_intrinsics(image):
     image_size = image.shape[0:2]
     focal_length = image_size[1]
     image_center = (image_size[1] / 2.0, image_size[0] / 2.0)
@@ -22,9 +16,14 @@ def approximate_intrincs(image):
     return camera_intrinsics
 
 
-camera.intrinsics = approximate_intrincs(image)
+image = load_image('images/test_image2.jpg')
+camera = Camera(device_id=0)
+camera.intrinsics = approximate_intrinsics(image)
 camera.distortion = np.zeros((4))
-pipeline = Pix2PosePowerDrill(camera)
-predicted_image = pipeline(image)['image']
+
+pipeline = PIX2POSEPowerDrill(camera)
+
+inferences = pipeline(image)
+predicted_image = inferences['image']
 show_image(predicted_image)
 write_image('images/predicted_power_drill.png', predicted_image)

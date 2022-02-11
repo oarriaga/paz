@@ -35,3 +35,6 @@ from .masks import RGBMaskToImagePoints2D
 from .masks import RGBMaskToObjectPoints3D
 from .masks import PredictRGBMask
 from .masks import Pix2Points
+
+from .pose import RGBMaskToPowerDrillPose6D
+from .pose import PIX2POSEPowerDrill
