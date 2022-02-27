@@ -116,7 +116,16 @@ def translate_keypoints(keypoints, translation):
     return keypoints + translation
 
 
-def rotate_point(point2D, rotation_angle):
+def rotate_keypoint(point2D, rotation_angle):
+    """Rotate keypoint.
+
+    # Arguments
+        point2D: keypoint [x, y]
+        rotation angle: Int. Angle of rotation.
+
+    # Returns
+        List of x and y rotated points
+    """
     rotation_angle = np.pi * rotation_angle / 180
     sn, cs = np.sin(rotation_angle), np.cos(rotation_angle)
     x_rotated = (point2D[0] * cs) - (point2D[1] * sn)
@@ -124,27 +133,26 @@ def rotate_point(point2D, rotation_angle):
     return [x_rotated, y_rotated]
 
 
-def transform_point(point, transform):
-    point = np.array([point[0], point[1], 1.]).T
-    point_transformed = np.dot(transform, point)
-    return point_transformed
+def transform_keypoint(keypoint, transform):
+    """ Transform keypoint.
+
+    # Arguments
+        keypoint2D: keypoint [x, y]
+        transform: Numpy array. Transformation matrix
+    """
+    keypoint = np.array([keypoint[0], keypoint[1], 1.]).T
+    transformed_keypoint = np.dot(transform, keypoint)
+    return transformed_keypoint
 
 
-def add_offset_to_point(point_location, offset=0):
-    y, x = point_location
+def add_offset_to_point(keypoint_location, offset=0):
+    """ Add offset to keypoint location
+
+    # Arguments
+        keypoint_location: keypoint [y, x]
+        offset: Float.
+    """
+    y, x = keypoint_location
     y = y + offset
     x = x + offset
     return y, x
-
-
-def get_top_k_keypoints(heatmaps, k):
-    num_of_objects, num_of_keypoints = heatmaps.shape[:2]
-    indices = np.zeros((num_of_objects, num_of_keypoints, k))
-    values = np.zeros((num_of_objects, num_of_keypoints, k))
-    for object_arg in range(num_of_objects):
-        for keypoint_arg in range(num_of_keypoints):
-            top_k_indices = np.argsort(heatmaps[object_arg][keypoint_arg])[-k:]
-            top_k_values = heatmaps[object_arg][keypoint_arg][top_k_indices]
-            indices[object_arg][keypoint_arg] = top_k_indices
-            values[object_arg][keypoint_arg] = top_k_values
-    return np.squeeze(values), indices
