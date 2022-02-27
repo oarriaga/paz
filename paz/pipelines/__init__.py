@@ -24,6 +24,8 @@ from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
 from .keypoints import EstimateKeypoints2D
 from .keypoints import FaceKeypointNet2D32
+from .keypoints import GetKeypoints
+from .keypoints import TransformKeypoints
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage
@@ -33,4 +35,4 @@ from .classification import MiniXceptionFER
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32
 
-from .munkres import Munkres
+from .heatmaps import GetHeatmapsAndTags
