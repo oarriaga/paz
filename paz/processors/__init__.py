@@ -67,6 +67,7 @@ from .geometric import RandomRotation
 from .geometric import TranslateImage
 from .geometric import GetTransformationSize
 from .geometric import GetTransformationScale
+from .geometric import GetSourceDestinationPoints
 from .geometric import GetAffineTransform
 from .geometric import GetImageCenter
 from .geometric import WarpAffine
@@ -119,19 +120,22 @@ from ..abstract import Processor
 from ..abstract import SequentialProcessor
 
 
-from .heatmap import TransposeOutput
-from .heatmap import ScaleOutput
-from .heatmap import GetHeatmaps
-from .heatmap import GetTags
-from .heatmap import RemoveLastElement
-from .heatmap import TopKDetections
-from .heatmap import GroupJointsByTag
-from .heatmap import AdjustJointsLocations
-from .heatmap import GetScores
-from .heatmap import RefineJointsLocations
-from .heatmap import TransformJoints
-from .heatmap import ExtractJoints
-from .heatmap import AggregateResults
+from .heatmaps import TransposeOutput
+from .heatmaps import ScaleOutput
+from .heatmaps import GetHeatmaps
+from .heatmaps import GetTags
+from .heatmaps import RemoveLastElement
+from .heatmaps import AggregateResults
+from .heatmaps import TopKDetections
+from .heatmaps import GroupKeypointsByTag
+from .heatmaps import AdjustKeypointsLocations
+from .heatmaps import GetScores
+from .heatmaps import RefineKeypointsLocations
+from .heatmaps import TransformKeypoints
+from .heatmaps import ExtractKeypointsLocations
+
+from .munkres import Munkres
+
 
 TRAIN = 0
 VAL = 1
