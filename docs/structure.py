@@ -3,6 +3,8 @@ from paz.backend import camera
 from paz.backend import render
 from paz.backend import keypoints
 from paz.backend import quaternion
+from paz.backend import heatmaps
+from paz.backend import standard
 from paz.backend.image import draw
 from paz.backend.image import opencv_image
 from paz.abstract import messages
@@ -54,7 +56,10 @@ PAGES = [
             keypoints.normalize_keypoints,
             keypoints.project_points3D,
             keypoints.solve_PNP,
-            keypoints.translate_keypoints
+            keypoints.translate_keypoints,
+            keypoints.rotate_keypoint,
+            keypoints.transform_keypoint,
+            keypoints.add_offset_to_point
         ],
     },
 
@@ -92,7 +97,9 @@ PAGES = [
             draw.draw_rectangle,
             draw.lincolor,
             draw.put_text,
-            draw.make_mosaic
+            draw.make_mosaic,
+            draw.draw_keypoints_link,
+            draw.draw_keypoints
         ],
     },
 
@@ -122,7 +129,9 @@ PAGES = [
             opencv_image.random_image_blur,
             opencv_image.translate_image,
             opencv_image.sample_scaled_translation,
-            opencv_image.get_rotation_matrix
+            opencv_image.get_rotation_matrix,
+            opencv_image.calculate_image_center,
+            opencv_image.get_affine_transform
         ],
     },
 
@@ -130,7 +139,6 @@ PAGES = [
     {
         'page': 'backend/render.md',
         'functions': [
-            render.calculate_norm,
             render.compute_modelview_matrices,
             render.get_look_at_transform,
             render.random_perturbation,
@@ -143,6 +151,36 @@ PAGES = [
             render.scale_translation,
             render.split_alpha_channel,
             render.translate_camera,
+        ],
+    },
+
+
+    {
+        'page': 'backend/heatmaps.md',
+        'functions': [
+            heatmaps.get_keypoints_heatmap,
+            heatmaps.get_tags_heatmap,
+            heatmaps.get_keypoints_locations,
+            heatmaps.get_top_k_keypoints_numpy,
+            heatmaps.get_valid_detections
+        ],
+    },
+
+
+    {
+        'page': 'backend/standard.md',
+        'functions': [
+            standard.get_upper_multiple,
+            standard.resize_with_same_aspect_ratio,
+            standard.get_transformation_scale,
+            standard.compare_vertical_neighbours,
+            standard.compare_horizontal_neighbours,
+            standard.get_all_indices_of_array,
+            standard.gather_nd,
+            standard.calculate_norm,
+            standard.tensor_to_numpy,
+            standard.pad_matrix,
+            standard.max_pooling_2d,
         ],
     },
 
@@ -181,6 +219,14 @@ PAGES = [
             models.UNET_VGG19,
             models.UNET_RESNET50,
             models.UNET
+        ],
+    },
+
+
+    {
+        'page': 'models/pose_estimation.md',
+        'functions': [
+            models.HigherHRNet
         ],
     },
 
@@ -273,7 +319,8 @@ PAGES = [
             processors.DrawBoxes2D,
             processors.DrawKeypoints2D,
             processors.DrawBoxes3D,
-            processors.DrawRandomPolygon
+            processors.DrawRandomPolygon,
+            processors.DrawHumanSkeleton,
         ]
     },
 
@@ -288,7 +335,13 @@ PAGES = [
             processors.RandomTranslation,
             processors.RandomRotation,
             processors.RandomKeypointTranslation,
-            processors.RandomKeypointRotation
+            processors.RandomKeypointRotation,
+            processors.GetTransformationSize,
+            processors.GetTransformationScale,
+            processors.GetSourceDestinationPoints,
+            processors.GetAffineTransform,
+            processors.GetImageCenter,
+            processors.WarpAffine,
         ]
     },
 
@@ -325,6 +378,34 @@ PAGES = [
             processors.ProjectKeypoints,
             processors.RemoveKeypointsDepth,
             processors.TranslateKeypoints
+        ]
+    },
+
+
+    {
+        'page': 'processors/heatmaps.md',
+        'classes': [
+            processors.TransposeOutput,
+            processors.ScaleOutput,
+            processors.GetHeatmaps,
+            processors.GetTags,
+            processors.RemoveLastElement,
+            processors.AggregateResults,
+            processors.TopKDetections,
+            processors.GroupKeypointsByTag,
+            processors.AdjustKeypointsLocations,
+            processors.GetScores,
+            processors.RefineKeypointsLocations,
+            processors.TransformKeypoints,
+            processors.ExtractKeypointsLocations,
+        ]
+    },
+
+
+    {
+        'page': 'processors/munkres.md',
+        'classes': [
+            processors.Munkres
         ]
     },
 
@@ -376,6 +457,7 @@ PAGES = [
             pipelines.PreprocessImage,
             pipelines.DecoderPredictor,
             pipelines.EncoderPredictor,
+            pipelines.PreprocessImageHigherHRNet
         ]
     },
 
@@ -388,6 +470,15 @@ PAGES = [
             pipelines.PreprocessBoxes,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
+            pipelines.DetectHumanPose2D,
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/heatmaps.md',
+        'classes': [
+            pipelines.GetHeatmapsAndTags
         ]
     },
 
@@ -399,6 +490,8 @@ PAGES = [
             pipelines.KeypointNetSharedAugmentation,
             pipelines.EstimateKeypoints2D,
             pipelines.DetectKeypoints2D,
+            pipelines.GetKeypoints,
+            pipelines.TransformKeypoints,
         ]
     },
 
