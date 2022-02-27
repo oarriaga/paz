@@ -99,11 +99,14 @@ class PreprocessImageHigherHRNet(pr.Processor):
         center: center of the image
         scale: scaled image dimensions
     """
-    def __init__(self, scaling_factor=200, input_size=512, inverse=False):
+    def __init__(self, scaling_factor=200, input_size=512, inverse=False,
+                 multiple=64):
         super(PreprocessImageHigherHRNet, self).__init__()
         self.get_image_center = pr.GetImageCenter()
-        self.get_size = pr.GetTransformationSize(input_size)
+        self.get_size = pr.GetTransformationSize(input_size, multiple)
         self.get_scale = pr.GetTransformationScale(scaling_factor)
+        self.get_source_destination_point = pr.GetSourceDestinationPoints(
+            scaling_factor)
         self.get_affine_transform = pr.GetAffineTransform(inverse)
         self.transform_image = pr.SequentialProcessor(
             [pr.WarpAffine(), pr.ImagenetPreprocessInput(), pr.ExpandDims(0)])
@@ -112,29 +115,8 @@ class PreprocessImageHigherHRNet(pr.Processor):
         center = self.get_image_center(image)
         size = self.get_size(image)
         scale = self.get_scale(image, size)
-        transform = self.get_affine_transform(center, scale, size)
+        source_point, destination_point = self.get_source_destination_point(
+            center, scale, size)
+        transform = self.get_affine_transform(source_point, destination_point)
         image = self.transform_image(image, transform, size)
         return image, center, scale
-
-
-# class InverseTransformKeypoints(pr.Processor):
-#     """Inverse the affine transform to get the keypoint location with respect
-#        to the input image.
-#     # Arguments
-#         keypoints: Numpy array. joints grouped by tag
-#         center: Tuple. center of the imput image
-#         scale: Float. scaled imput image dimension
-#         heatmaps: Numpy array of shape (1, num_joints, H, W)
-
-#     # Returns
-#         transformed_joints: joint location with respect to the input image
-#     """
-#     def __init__(self):
-#         super(InverseTransformKeypoints, self).__init__()
-#         self.get_affine_transform = pr.GetAffineTransform(inverse=True)
-#         self.transform_joints = pr.TransformJoints()
-
-#     def call(self, keypoints, center, scale, shape):
-#         transform = self.get_affine_transform(center, scale, shape)
-#         transformed_joints = self.transform_joints(keypoints, transform)
-#         return transformed_joints
