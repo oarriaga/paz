@@ -3,7 +3,6 @@ import numpy as np
 import colorsys
 import random
 import cv2
-from ...datasets import VISUALISATION_CONFIG
 
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
@@ -263,8 +262,8 @@ def make_mosaic(images, shape, border=0):
     return mosaic.astype('uint8')
 
 
-def link_keypoints(image, keypoints, link_args, link_orders, link_colors,
-                   check_scores=False):
+def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
+                        check_scores=False):
     """ Draw link between the keypoints.
 
     # Arguments
@@ -292,7 +291,7 @@ def link_keypoints(image, keypoints, link_args, link_orders, link_colors,
     return image
 
 
-def annotate_keypoints(image, keypoints, keypoint_colors, check_scores=False):
+def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False):
     """ Draw a circle at keypoints.
 
     # Arguments
@@ -309,7 +308,7 @@ def annotate_keypoints(image, keypoints, keypoint_colors, check_scores=False):
         if check_scores:
             if keypoint[2] > 0:
                 draw_circle(image, (int(keypoint[0]),
-                                    int(keypoint[1])), color, 4)
+                                    int(keypoint[1])), color, 6)
         else:
-            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color, 4)
+            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color, 6)
     return image

@@ -28,11 +28,8 @@ from .opencv_image import random_image_blur
 from .opencv_image import translate_image
 from .opencv_image import sample_scaled_translation
 from .opencv_image import get_rotation_matrix
-from .opencv_image import get_transformation_size
-from .opencv_image import get_transformation_scale
 from .opencv_image import calculate_image_center
-from .opencv_image import compare_vertical_neighbours
-from .opencv_image import compare_horizontal_neighbours
+from .opencv_image import get_affine_transform
 
 from .draw import draw_random_polygon
 from .draw import draw_circle
@@ -45,7 +42,7 @@ from .draw import draw_random_polygon
 from .draw import draw_filled_polygon
 from .draw import lincolor
 from .draw import make_mosaic
-from .draw import link_keypoints
-from .draw import annotate_keypoints
+from .draw import draw_keypoints_link
+from .draw import draw_keypoints
 
 from .tensorflow_image import imagenet_preprocess_input
