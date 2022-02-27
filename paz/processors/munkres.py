@@ -1,20 +1,9 @@
-"""
-This module provides an implementation of the Munkres algorithm.
-
-# References
-https://brc2.com/the-algorithm-workshop/
-https://software.clapper.org/munkres/
-https://github.com/bmc/munkres
-"""
-
-
 import numpy as np
 from ..abstract import Processor
 
 from ..backend.munkres import UnsolvableMatrix
 from ..backend.munkres import DISALLOWED_OBJ
-from ..backend.munkres import reset_cover_matrix
-from ..backend.munkres import pad_matrix
+from ..backend.munkres import get_cover_matrix
 from ..backend.munkres import find_uncovered_zero
 from ..backend.munkres import find_star_in_row
 from ..backend.munkres import find_star_in_col
@@ -22,19 +11,22 @@ from ..backend.munkres import find_prime_in_row
 from ..backend.munkres import get_min_value
 from ..backend.munkres import find_smallest_uncovered
 
+from ..backend.standard import pad_matrix
+
 DISALLOWED = DISALLOWED_OBJ()
 
 
 class Munkres(Processor):
-    def __init__(self, cost_matrix):
+    """
+    Provides an implementation of the Munkres algorithm.
+
+    # References
+    https://brc2.com/the-algorithm-workshop/
+    https://software.clapper.org/munkres/
+    https://github.com/bmc/munkres
+    """
+    def __init__(self):
         super(Munkres, self).__init__()
-        self.H, self.W = np.array(cost_matrix).shape[:2]
-        self.cost_matrix = pad_matrix(cost_matrix)
-        self.n = len(self.cost_matrix)
-        self.marked = np.zeros((self.n, self.n), dtype=np.int)
-        self.path = np.zeros((self.n * 2, self.n * 2), dtype=np.int)
-        self.row_covered = np.zeros((self.n, 1), dtype=bool)
-        self.col_covered = np.zeros((self.n, 1), dtype=bool)
         self.Z0_r = 0
         self.Z0_c = 0
         self.done = False
@@ -45,7 +37,15 @@ class Munkres(Processor):
                       5: self._step5,
                       6: self._step6}
 
-    def compute(self):
+    def compute(self, cost_matrix):
+        self.H, self.W = np.array(cost_matrix).shape[:2]
+        self.cost_matrix = pad_matrix(cost_matrix, padding='square')
+        self.n = len(self.cost_matrix)
+        self.marked = np.zeros((self.n, self.n), dtype=np.int)
+        self.path = np.zeros((self.n * 2, self.n * 2), dtype=np.int)
+        self.row_covered = np.zeros((self.n, 1), dtype=bool)
+        self.col_covered = np.zeros((self.n, 1), dtype=bool)
+
         step = 1
         while not self.done:
             step_func = self.steps[step]
@@ -101,7 +101,7 @@ class Munkres(Processor):
                     self.row_covered[row] = True
                     self.col_covered[col] = True
                     break
-        self.row_covered, self.col_covered = reset_cover_matrix((self.n, 1))
+        self.row_covered, self.col_covered = get_cover_matrix((self.n, 1))
         return 3
 
     def _step3(self):
@@ -189,7 +189,7 @@ class Munkres(Processor):
                 path[count][1] = col
 
         self._convert_path(path, count)
-        self.row_covered, self.col_covered = reset_cover_matrix((self.n, 1))
+        self.row_covered, self.col_covered = get_cover_matrix((self.n, 1))
         self._erase_primes()
         return 3
 
