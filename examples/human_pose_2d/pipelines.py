@@ -143,7 +143,7 @@ class AggregateResults(pr.Processor):
             [pe.CalculateHeatmapsAverage(with_flip),
              pe.AggregateHeatmapsAverage(project2image)])
         self.aggregate_tags = pr.SequentialProcessor(
-            [pe.ExpandTagsDimension(), pe.Concatenate(4)])
+            [pe.ExpandTagsDimension(), pr.Concatenate(4)])
 
     def call(self, heatmaps, tags):
         return self.aggregate_heatmaps(heatmaps), self.aggregate_tags(tags)

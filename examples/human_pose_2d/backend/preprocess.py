@@ -55,13 +55,13 @@ def calculate_third_point(point2D_a, point2D_b):
     return point2D_a + np.array([-diff[1], diff[0]], dtype=np.float32)
 
 
-def get_input_image_points(scale, center, shift=np.array([0., 0.])):
+def get_input_image_points(scale, center):
     scale = scale * 200
     image_W = scale[0]
     image_dir = rotate_point([0, image_W * -0.5], 0)
     image = np.zeros((3, 2), dtype=np.float32)
-    image[0, :] = center + scale * shift
-    image[1, :] = center + image_dir + scale * shift
+    image[0, :] = center
+    image[1, :] = center + image_dir
     image[2:, :] = calculate_third_point(image[0, :], image[1, :])
     return image
 

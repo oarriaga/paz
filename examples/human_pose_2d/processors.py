@@ -201,16 +201,6 @@ class AggregateHeatmapsAverage(pr.Processor):
         return final_heatmaps
 
 
-class Concatenate(pr.Processor):
-    def __init__(self, axis):
-        super(Concatenate, self).__init__()
-        self.axis = axis
-
-    def call(self, x):
-        x = np.concatenate(x, self.axis)
-        return x
-
-
 class ExpandTagsDimension(pr.Processor):
     def __init__(self):
         super(ExpandTagsDimension, self).__init__()
