@@ -58,9 +58,28 @@ coco_part_color = [[198, 26, 255],
                    [26, 255, 198],
                    [26, 255, 255]]
 
+coco_joint_color = [[198, 26, 255],
+                    [255, 26, 255],
+                    [255, 26, 198],
+                    [140, 26, 255],
+                    [255, 26, 140],
+                    [83, 26, 255],
+                    [255, 83, 26],
+                    [198, 255, 26],
+                    [255, 198, 26],
+                    [140, 255, 26],
+                    [255, 140, 26],
+                    [77, 77, 255],
+                    [26, 255, 140],
+                    [26, 140, 255],
+                    [26, 255, 198],
+                    [26, 83, 255],
+                    [26, 255, 255]]
+
 
 VISUALISATION_CONFIG = {
     'COCO': {'part_labels': coco_part_labels,
              'part_arg': coco_part_arg,
              'part_orders': coco_part_orders,
-             'part_color': coco_part_color}}
+             'part_color': coco_part_color,
+             'joint_color': coco_joint_color}}

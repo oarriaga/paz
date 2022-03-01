@@ -35,21 +35,22 @@ def link_joints(a, b, image, joints, color, dataset):
     return image
 
 
-def annotate_joints(image, joints):
-    color = [0, 0, 0]
-    for joint in joints:
+def annotate_joints(image, joints, color_list):
+    for joint_arg, joint in enumerate(joints):
+        color = color_list[joint_arg]
         if joint[2] > 0:
-            draw.draw_circle(image, (int(joint[0]), int(joint[1])), color, 2)
+            draw.draw_circle(image, (int(joint[0]), int(joint[1])), color, 6)
     return image
 
 
 def add_joints(image, joints, dataset):
     part_orders = VISUALISATION_CONFIG[dataset]['part_orders']
     part_color = VISUALISATION_CONFIG[dataset]['part_color']
+    joint_color = VISUALISATION_CONFIG[dataset]['joint_color']
     for pair_arg, pair in enumerate(part_orders):
         color = part_color[pair_arg]
         image = link_joints(pair[0], pair[1], image, joints, color, dataset)
-    image = annotate_joints(image, joints)
+    image = annotate_joints(image, joints, joint_color)
     return image
 
 
