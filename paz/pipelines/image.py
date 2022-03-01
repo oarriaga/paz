@@ -84,3 +84,39 @@ class DecoderPredictor(SequentialProcessor):
         self.add(pr.DenormalizeImage())
         self.add(pr.CastImage('uint8'))
         self.add(pr.ConvertColorSpace(pr.BGR2RGB))
+
+
+class PreprocessImageHigherHRNet(pr.Processor):
+    """Transform the image according to the HigherHRNet model requirement.
+    # Arguments
+        scaling_factor: Int. scale factor for image dimensions.
+        input_size: Int. resize the first dimension of image to input size.
+        inverse: Boolean. Reverse the affine transform input.
+        image: Numpy array. Input image
+
+    # Returns
+        image: resized and transformed image
+        center: center of the image
+        scale: scaled image dimensions
+    """
+    def __init__(self, scaling_factor=200, input_size=512, inverse=False,
+                 multiple=64):
+        super(PreprocessImageHigherHRNet, self).__init__()
+        self.get_image_center = pr.GetImageCenter()
+        self.get_size = pr.GetTransformationSize(input_size, multiple)
+        self.get_scale = pr.GetTransformationScale(scaling_factor)
+        self.get_source_destination_point = pr.GetSourceDestinationPoints(
+            scaling_factor)
+        self.get_affine_transform = pr.GetAffineTransform(inverse)
+        self.transform_image = pr.SequentialProcessor(
+            [pr.WarpAffine(), pr.ImagenetPreprocessInput(), pr.ExpandDims(0)])
+
+    def call(self, image):
+        center = self.get_image_center(image)
+        size = self.get_size(image)
+        scale = self.get_scale(image, size)
+        source_point, destination_point = self.get_source_destination_point(
+            center, scale, size)
+        transform = self.get_affine_transform(source_point, destination_point)
+        image = self.transform_image(image, transform, size)
+        return image, center, scale

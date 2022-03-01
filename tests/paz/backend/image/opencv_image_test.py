@@ -130,3 +130,11 @@ def test_passes(image_with_face_fullpath):
     with pytest.raises(Exception):
         opencv_image.load_image(image_with_face_fullpath, 2)
         opencv_image.load_image(image_with_face_fullpath, 5)
+
+
+@pytest.mark.parametrize("image_center", [[64, 64]])
+def test_calculate_image_center(load_image, image_shape, rgb_channel,
+                                image_center):
+    test_image = load_image(image_shape, rgb_channel)
+    center_W, center_H = opencv_image.calculate_image_center(test_image)
+    assert image_center == [center_W, center_H]

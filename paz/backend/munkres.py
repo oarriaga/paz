@@ -16,19 +16,15 @@ DISALLOWED = DISALLOWED_OBJ()
 DISALLOWED_PRINTVAL = "D"
 
 
-def reset_cover_matrix(shape):
+def get_cover_matrix(shape):
+    """Returns the initialized row and column cover matrix.
+
+    # Arguments
+        shape: Tuple. Shape of the cover matrix.
+    """
     row_covered = np.zeros(shape, dtype=bool)
     col_covered = np.zeros(shape, dtype=bool)
     return row_covered, col_covered
-
-
-def pad_matrix(matrix):
-    H, W = np.array(matrix).shape
-    if H > W:
-        padding = ((0, 0), (0, H - W))
-    else:
-        padding = ((0, W - H), (0, 0))
-    return np.pad(matrix, padding, mode='constant', constant_values=0)
 
 
 def find_uncovered_zero(n, cost_matrix, row_covered, col_covered, i0, j0):

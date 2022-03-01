@@ -89,7 +89,7 @@ def show_image(image, name='image', wait=True):
         cv2.destroyAllWindows()
 
 
-def warp_affine(image, matrix, fill_color=[0, 0, 0]):
+def warp_affine(image, matrix, fill_color=[0, 0, 0], size=None):
     """ Transforms `image` using an affine `matrix` transformation.
 
     # Arguments
@@ -97,7 +97,10 @@ def warp_affine(image, matrix, fill_color=[0, 0, 0]):
         matrix: Numpy array of shape (2,3) indicating affine transformation.
         fill_color: List/tuple representing BGR use for filling empty space.
     """
-    height, width = image.shape[:2]
+    if size is not None:
+        width, height = size
+    else:
+        height, width = image.shape[:2]
     return cv2.warpAffine(
         image, matrix, (width, height), borderValue=fill_color)
 
@@ -157,3 +160,17 @@ def get_rotation_matrix(center, degrees, scale=1.0):
         Numpy array
     """
     return cv2.getRotationMatrix2D(center, degrees, scale)
+
+
+def get_affine_transform(source_points, destination_points):
+    '''
+    Return the transformation matrix.
+
+    # Arguments
+        source_points: Numpy array.
+        destination_points: Numpy array.
+
+    # Returns
+        Transformation matrix.
+    '''
+    return cv2.getAffineTransform(source_points, destination_points)

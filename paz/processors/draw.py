@@ -8,10 +8,13 @@ from ..backend.image import draw_circle
 from ..backend.image import draw_cube
 from ..backend.image import GREEN
 from ..backend.image import draw_random_polygon
+from ..backend.image import draw_keypoints_link
+from ..backend.image import draw_keypoints
 from ..backend.keypoints import project_points3D
 from ..backend.keypoints import build_cube_points3D
 from ..backend.groups import quaternion_to_rotation_matrix
 from ..backend.keypoints import project_to_image
+from ..datasets import VISUALISATION_CONFIG
 
 
 class DrawBoxes2D(Processor):
@@ -164,4 +167,33 @@ class DrawPose6D(Processor):
             rotation, translation, self.cube_points3D, self.camera_intrinsics)
         cube_points2D = cube_points2D.astype(np.int32)
         image = draw_cube(image, cube_points2D, thickness=self.thickness)
+
+
+class DrawHumanSkeleton(Processor):
+    """ Draw human pose skeleton on image.
+
+    # Arguments
+        images: Numpy array.
+        grouped_joints: Joint locations of all the person model detected
+                        in the image. List of numpy array.
+        dataset: String.
+
+    # Returns
+        A numpy array containing pose skeleton.
+    """
+    def __init__(self, dataset, check_scores):
+        super(DrawHumanSkeleton, self).__init__()
+        self.link_orders = VISUALISATION_CONFIG[dataset]['part_orders']
+        self.link_colors = VISUALISATION_CONFIG[dataset]['part_color']
+        self.link_args = VISUALISATION_CONFIG[dataset]['part_arg']
+        self.keypoint_colors = VISUALISATION_CONFIG[dataset]['joint_color']
+        self.check_scores = check_scores
+
+    def call(self, image, grouped_joints):
+        for one_person_joints in grouped_joints:
+            image = draw_keypoints_link(
+                image, one_person_joints, self.link_args, self.link_orders,
+                self.link_colors, self.check_scores)
+            image = draw_keypoints(image, one_person_joints,
+                                   self.keypoint_colors, self.check_scores)
         return image
