@@ -1,5 +1,7 @@
 # (PAZ) Perception for Autonomous Systems
-![Python package](https://github.com/oarriaga/paz/workflows/Python%20package/badge.svg) [![PyPI upload](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml)     [![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
+[![Unit testing](https://github.com/oarriaga/paz/actions/workflows/python-package.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-package.yml)
+[![PyPI upload](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml)
+[![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
 
 Hierarchical perception library in Python.
 
