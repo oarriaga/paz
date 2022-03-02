@@ -17,7 +17,7 @@ class GetHeatmapsAndTags(pr.Processor):
         Tags: Numpy array of shape (1, num_keypoints, H, W)
     """
     def __init__(self, model, flipped_keypoint_order, with_flip,
-                 data_with_center, project2image=True, axes=[0, 3, 1, 2]):
+                 data_with_center, scale_output=True, axes=[0, 3, 1, 2]):
         super(GetHeatmapsAndTags, self).__init__()
         self.with_flip = with_flip
         self.predict = pr.SequentialProcessor(
@@ -27,7 +27,7 @@ class GetHeatmapsAndTags(pr.Processor):
         self.postprocess = pr.SequentialProcessor()
         if data_with_center:
             self.postprocess.add(pr.RemoveLastElement())
-        if project2image:
+        if scale_output:
             self.postprocess.add(pr.ScaleOutput(2, full_scaling=True))
 
     def call(self, image):
