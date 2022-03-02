@@ -507,9 +507,9 @@ class GetSourceDestinationPoints(Processor):
     """Returns the source and destination points for affine transformation.
 
     # Arguments
-        center: Numpy array. Center coordinates of image
-        scale: Numpy array. Scale of width and height of image
-        size: Numpy array. Size of image
+        center: Numpy array of shape (2,). Center coordinates of image
+        scale: Numpy array of shape (2,). Scale of width and height of image
+        size: List of length 2. Size of image
     """
     def __init__(self, scaling_factor):
         super(GetSourceDestinationPoints, self).__init__()
@@ -545,25 +545,6 @@ class GetSourceDestinationPoints(Processor):
         source_point = self._get_transformation_source_point(scale, center)
         destination_point = self._get_transformation_destination_point(size)
         return source_point, destination_point
-
-
-class GetAffineTransform(Processor):
-    """Returns the affine transform of the image.
-
-    # Arguments
-        source_point: Numpy array
-        destination_point: Numpy array
-    """
-    def __init__(self, inverse):
-        super(GetAffineTransform, self).__init__()
-        self.inverse = inverse
-
-    def call(self, source_point, destination_point):
-        if self.inverse:
-            transform = get_affine_transform(destination_point, source_point)
-        else:
-            transform = get_affine_transform(source_point, destination_point)
-        return transform
 
 
 class GetImageCenter(Processor):

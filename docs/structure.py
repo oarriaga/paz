@@ -371,7 +371,6 @@ PAGES = [
             processors.GetTransformationSize,
             processors.GetTransformationScale,
             processors.GetSourceDestinationPoints,
-            processors.GetAffineTransform,
             processors.GetImageCenter,
             processors.WarpAffine,
         ]

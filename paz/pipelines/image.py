@@ -1,5 +1,6 @@
 from ..abstract import SequentialProcessor
 from .. import processors as pr
+from ..backend.image import get_affine_transform
 
 
 class AugmentImage(SequentialProcessor):
@@ -99,15 +100,13 @@ class PreprocessImageHigherHRNet(pr.Processor):
         center: center of the image
         scale: scaled image dimensions
     """
-    def __init__(self, scaling_factor=200, input_size=512, inverse=False,
-                 multiple=64):
+    def __init__(self, scaling_factor=200, input_size=512, multiple=64):
         super(PreprocessImageHigherHRNet, self).__init__()
         self.get_image_center = pr.GetImageCenter()
         self.get_size = pr.GetTransformationSize(input_size, multiple)
         self.get_scale = pr.GetTransformationScale(scaling_factor)
         self.get_source_destination_point = pr.GetSourceDestinationPoints(
             scaling_factor)
-        self.get_affine_transform = pr.GetAffineTransform(inverse)
         self.transform_image = pr.SequentialProcessor(
             [pr.WarpAffine(), pr.ImagenetPreprocessInput(), pr.ExpandDims(0)])
 
@@ -117,6 +116,6 @@ class PreprocessImageHigherHRNet(pr.Processor):
         scale = self.get_scale(image, size)
         source_point, destination_point = self.get_source_destination_point(
             center, scale, size)
-        transform = self.get_affine_transform(source_point, destination_point)
+        transform = get_affine_transform(source_point, destination_point)
         image = self.transform_image(image, transform, size)
         return image, center, scale

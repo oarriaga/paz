@@ -4,6 +4,7 @@ from .. import processors as pr
 from .renderer import RenderTwoViews
 from ..models import KeypointNet2D
 from tensorflow.keras.utils import get_file
+from ..backend.image import get_affine_transform
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -183,15 +184,17 @@ class TransformKeypoints(pr.Processor):
     """
     def __init__(self, inverse=False):
         super(TransformKeypoints, self).__init__()
+        self.inverse = inverse
         self.get_source_destination_point = pr.GetSourceDestinationPoints(
             scaling_factor=200)
-        self.get_affine_transform = pr.GetAffineTransform(inverse=inverse)
         self.transform_keypoints = pr.TransformKeypoints()
 
     def call(self, grouped_keypoints, center, scale, shape):
         source_point, destination_point = self.get_source_destination_point(
             center, scale, shape)
-        transform = self.get_affine_transform(source_point, destination_point)
+        if self.inverse:
+            source_point, destination_point = destination_point, source_point
+        transform = get_affine_transform(source_point, destination_point)
         transformed_keypoints = self.transform_keypoints(grouped_keypoints,
                                                          transform)
         return transformed_keypoints

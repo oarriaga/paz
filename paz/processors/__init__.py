@@ -74,7 +74,6 @@ from .geometric import TranslateImage
 from .geometric import GetTransformationSize
 from .geometric import GetTransformationScale
 from .geometric import GetSourceDestinationPoints
-from .geometric import GetAffineTransform
 from .geometric import GetImageCenter
 from .geometric import WarpAffine
 
