@@ -1,3 +1,4 @@
+from re import T
 import numpy as np
 import colorsys
 import random
@@ -277,4 +278,55 @@ def draw_points2D(image, points2D, colors):
     U = points2D[:, 0]
     V = points2D[:, 1]
     image[V, U, :] = colors
+
+
+def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
+                        check_scores=False):
+    """ Draw link between the keypoints.
+
+    # Arguments
+        images: Numpy array.
+        keypoints: Keypoint(k0, k1, ...) locations in the image. Numpy array.
+        link_args: Keypoint labels. Dictionary. {'k0':0, 'k1':1, ...}
+        link_orders: List of tuple. [('k0', 'k1'),('kl', 'k2'), ...]
+        link_colors: Color of each link. List of list
+        check_scores: Condition to draw links. Boolean.
+
+    # Returns
+        A numpy array containing drawn link between the keypoints.
+    """
+    for pair_arg, pair in enumerate(link_orders):
+        color = link_colors[pair_arg]
+        point1 = keypoints[link_args[pair[0]]]
+        point2 = keypoints[link_args[pair[1]]]
+        if check_scores:
+            if point1[2] > 0 and point2[2] > 0:
+                draw_line(image, (int(point1[0]), int(point1[1])),
+                                 (int(point2[0]), int(point2[1])), color, 2)
+        else:
+            draw_line(image, (int(point1[0]), int(point1[1])),
+                             (int(point2[0]), int(point2[1])), color, 2)
+    return image
+
+
+def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False):
+    """ Draw a circle at keypoints.
+
+    # Arguments
+        images: Numpy array.
+        keypoints: Keypoint locations in the image. Numpy array.
+        keypoint_colors: Color of each keypoint. List of list
+        check_scores: Condition to draw keypoint. Boolean.
+
+    # Returns
+        A numpy array containing circle at each keypoints.
+    """
+    for keypoint_arg, keypoint in enumerate(keypoints):
+        color = keypoint_colors[keypoint_arg]
+        if check_scores:
+            if keypoint[2] > 0:
+                draw_circle(image, (int(keypoint[0]),
+                                    int(keypoint[1])), color, 6)
+        else:
+            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color, 6)
     return image

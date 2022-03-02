@@ -369,3 +369,45 @@ def denormalize_keypoints(keypoints, height, width):
         x, y = int(round(x)), int(round(y))
         keypoints[keypoint_arg][:2] = [x, y]
     return keypoints
+
+
+def rotate_keypoint(point2D, rotation_angle):
+    """Rotate keypoint.
+
+    # Arguments
+        point2D: keypoint [x, y]
+        rotation angle: Int. Angle of rotation.
+
+    # Returns
+        List of x and y rotated points
+    """
+    rotation_angle = np.pi * rotation_angle / 180
+    sin_n, cos_n = np.sin(rotation_angle), np.cos(rotation_angle)
+    x_rotated = (point2D[0] * cos_n) - (point2D[1] * sin_n)
+    y_rotated = (point2D[0] * sin_n) + (point2D[1] * cos_n)
+    return [x_rotated, y_rotated]
+
+
+def transform_keypoint(keypoint, transform):
+    """ Transform keypoint.
+
+    # Arguments
+        keypoint2D: keypoint [x, y]
+        transform: Numpy array. Transformation matrix
+    """
+    keypoint = np.array([keypoint[0], keypoint[1], 1.]).T
+    transformed_keypoint = np.dot(transform, keypoint)
+    return transformed_keypoint
+
+
+def add_offset_to_point(keypoint_location, offset=0):
+    """ Add offset to keypoint location
+
+    # Arguments
+        keypoint_location: keypoint [y, x]
+        offset: Float.
+    """
+    y, x = keypoint_location
+    y = y + offset
+    x = x + offset
+    return y, x
