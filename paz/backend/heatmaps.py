@@ -5,13 +5,13 @@ def get_keypoints_heatmap(heatmaps, num_keypoints, indices=None, axis=1):
     """Extract the heatmaps that only contains the keypoints.
 
     # Arguments
-        heatmaps: Numpy array.
+        heatmaps: Numpy array of shape (1, 2*num_keypoints, H, W)
         num_keypoints: Int.
         indices: List. Indices of the heatmaps to extract.
         axis: Int.
 
     # Returns
-        keypoints: Numpy array.
+        keypoints: Numpy array of shape (1, num_keypoints, H, W)
     """
     keypoints = np.take(heatmaps, np.arange(num_keypoints), axis)
     if indices is not None:
@@ -23,13 +23,13 @@ def get_tags_heatmap(heatmaps, num_keypoints, indices=None, axis=1):
     """Extract the heatmaps that only contains the tags.
 
     # Arguments
-        Tags: Numpy array.
+        heatmaps: Numpy array of shape (1, 2*num_keypoints, H, W)
         num_keypoints: Int.
         indices: List. Indices of the heatmaps to extract.
         axis: Int.
 
     # Returns
-        tags: Numpy array.
+        tags: Numpy array of shape (1, num_keypoints, H, W)
     """
     n = heatmaps.shape[axis]
     tags = np.take(heatmaps, np.arange(num_keypoints, n), axis)
@@ -58,7 +58,8 @@ def get_top_k_keypoints_numpy(heatmaps, k):
     """Numpy implementation of get_top_k_keypoints from heatmaps.
 
     # Arguments
-        heatmaps: Numpy array.
+        heatmaps: Keypoints heatmaps. Numpy array of shape
+                  (1, num_keypoints, H, W)
         k: Int. Maximum number of instances to return.
 
     # Returns
