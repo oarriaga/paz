@@ -296,7 +296,6 @@ def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
         A numpy array containing drawn link between the keypoints.
     """
     for pair_arg, pair in enumerate(link_orders):
-        print(link_args)
         color = link_colors[pair_arg]
         point1 = keypoints[link_args[pair[0]]]
         point2 = keypoints[link_args[pair[1]]]

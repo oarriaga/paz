@@ -215,7 +215,7 @@ def max_pooling_2d(image, pool_size=3, strides=1,  padding='same'):
 
     image = pad_matrix(image, pool_size, strides, padding)
     H, W = image.shape[:2]
-    for y in range(0, H-pool_size+1, strides):
-        for x in range(0, W-pool_size+1, strides):
+    for y in range(0, H - pool_size + 1, strides):
+        for x in range(0, W - pool_size + 1, strides):
             max_image[y][x] = np.max(image[y:y+pool_size, x:x+pool_size])
     return max_image

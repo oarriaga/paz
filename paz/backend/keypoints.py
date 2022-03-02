@@ -369,6 +369,8 @@ def denormalize_keypoints(keypoints, height, width):
         x, y = int(round(x)), int(round(y))
         keypoints[keypoint_arg][:2] = [x, y]
     return keypoints
+
+
 def rotate_keypoint(point2D, rotation_angle):
     """Rotate keypoint.
 
@@ -380,9 +382,9 @@ def rotate_keypoint(point2D, rotation_angle):
         List of x and y rotated points
     """
     rotation_angle = np.pi * rotation_angle / 180
-    sn, cs = np.sin(rotation_angle), np.cos(rotation_angle)
-    x_rotated = (point2D[0] * cs) - (point2D[1] * sn)
-    y_rotated = (point2D[0] * sn) + (point2D[1] * cs)
+    sin_n, cos_n = np.sin(rotation_angle), np.cos(rotation_angle)
+    x_rotated = (point2D[0] * cos_n) - (point2D[1] * sin_n)
+    y_rotated = (point2D[0] * sin_n) + (point2D[1] * cos_n)
     return [x_rotated, y_rotated]
 
 
