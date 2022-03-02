@@ -286,9 +286,9 @@ def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
 
     # Arguments
         images: Numpy array.
-        keypoints: Keypoint locations in the image. Numpy array.
-        link_args: Keypoint labels. Dictionary
-        link_orders: List of tuple
+        keypoints: Keypoint(k0, k1, ...) locations in the image. Numpy array.
+        link_args: Keypoint labels. Dictionary. {'k0':0, 'k1':1, ...}
+        link_orders: List of tuple. [('k0', 'k1'),('kl', 'k2'), ...]
         link_colors: Color of each link. List of list
         check_scores: Condition to draw links. Boolean.
 
@@ -296,6 +296,7 @@ def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
         A numpy array containing drawn link between the keypoints.
     """
     for pair_arg, pair in enumerate(link_orders):
+        print(link_args)
         color = link_colors[pair_arg]
         point1 = keypoints[link_args[pair[0]]]
         point2 = keypoints[link_args[pair[1]]]

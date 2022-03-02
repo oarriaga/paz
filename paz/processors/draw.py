@@ -177,6 +177,7 @@ class DrawHumanSkeleton(Processor):
         grouped_joints: Joint locations of all the person model detected
                         in the image. List of numpy array.
         dataset: String.
+        check_scores: Boolean. Flag to check score before drawing.
 
     # Returns
         A numpy array containing pose skeleton.
