@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     # rotation_matrix = build_rotation_matrix_x(np.pi / 2.0)
     rotation_matrix = build_rotation_matrix_x(np.pi / (6))
-    pointcloud_B = sample_pointcloud(pointcloud_A, dropout=0.74)
+    pointcloud_B = sample_pointcloud(pointcloud_A, dropout=0.75)
     pointcloud_B = rotate_pointcloud(pointcloud_B, rotation_matrix)
     # pointcloud_B = translate_pointcloud(pointcloud_B, np.array([[0.3, -0.05, 0.0]]))
     # pointcloud_B = translate_pointcloud(pointcloud_B, np.array([[0.05, -0.05, 0.01]]))
@@ -62,9 +62,11 @@ if __name__ == "__main__":
     scene.add(pointcloud_mesh_B)
     pyrender.Viewer(scene, use_raymond_lighting=True)
 
-    affine_transform, distances, arg = iterative_closes_point(pointcloud_B, pointcloud_A)
+    affine_transform, distances, arg = iterative_closes_point(
+        pointcloud_B, pointcloud_A, tolerance=1e-9)
 
     scene = pyrender.Scene()
-    scene.add(pointcloud_mesh_A, pose=affine_transform)
-    # scene.add(pointcloud_mesh_B, pose=affine_transform)
+    scene.add(pointcloud_mesh_A)
+    scene.add(pointcloud_mesh_B, pose=affine_transform)
+    # scene.add(pointcloud_mesh_B)
     pyrender.Viewer(scene, use_raymond_lighting=True)

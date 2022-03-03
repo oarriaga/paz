@@ -2,27 +2,13 @@ from paz import processors as pr
 from paz.pipelines import RandomizeRenderedImage
 import numpy as np
 
-import numpy as np
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import random_perturbation, sample_point_in_sphere
 from paz.backend.render import compute_modelview_matrices
+
 from pyrender import PerspectiveCamera, OffscreenRenderer, DirectionalLight
 from pyrender import RenderFlags, Mesh, Scene
 import trimesh
-
-
-class DrawNormalizedKeypoints(pr.Processor):
-    def __init__(self, num_keypoints, radius=3, image_normalized=False):
-        super(DrawNormalizedKeypoints, self).__init__()
-        self.denormalize = pr.DenormalizeKeypoints()
-        self.remove_depth = pr.RemoveKeypointsDepth()
-        self.draw = pr.DrawKeypoints2D(num_keypoints, radius, image_normalized)
-
-    def call(self, image, keypoints):
-        keypoints = self.denormalize(keypoints, image)
-        keypoints = self.remove_depth(keypoints)
-        image = self.draw(image, keypoints)
-        return image
 
 
 class SingleView():
@@ -78,42 +64,82 @@ class SingleView():
         return image, alpha, world_to_camera
 
 
-def project(xyzw, focal_length):
-    z = xyzw[:, :, 2:3] + 1e-8
-    x = - (focal_length / z) * xyzw[:, :, 0:1]
-    y = - (focal_length / z) * xyzw[:, :, 1:2]
-    return np.concatenate([x, y, z], axis=2)
+def remove_keypoints_depth(keypoints):
+    return keypoints[:, :2]
 
 
-def project_keypoints(keypoints, world_to_camera):
+def flip_keypoints_height(keypoints, height):
+    keypoints[:, 1] = height - keypoints[:, 1]
+    return keypoints
+
+
+def project_to_image(keypoints3D, focal_length, epsilon=1e-8):
+    """Projects 3D keypoints to an image using the pinhole camera model.
+
+    # Arguments
+        keypoints3D: Array (num_keypoints, 3).
+        focal_length: Float bigger than zero.
+        epsilon: Float bigger than zero.
+    """
+    z = keypoints3D[:, 2:3] + epsilon
+    x = - (focal_length / z) * keypoints3D[:, 0:1]
+    y = - (focal_length / z) * keypoints3D[:, 1:2]
+    return np.concatenate([x, y, z], axis=1)
+
+
+def project_keypoints(keypoints, world_to_camera, focal_length):
     """Projects homogenous keypoints (4D) in the camera coordinates system
         into image coordinates using a projective transformation.
 
     # Arguments
-        keypoints: Numpy array of shape ''(num_keypoints, 3)''
+        keypoints: Numpy array of shape ''(num_keypoints, 4)''
     """
-    keypoints = np.matmul(keypoints, world_to_camera.T)
-    keypoints = np.expand_dims(keypoints, 0)
-    keypoints = project(keypoints)[0]
+
+    keypoints = np.matmul(world_to_camera, keypoints.T).T
+    keypoints = project_to_image(keypoints, focal_length)
     return keypoints
 
 
-def render_random_sample(render, augment, keypoints):
+def split_affine_matrix(affine_matrix):
+    rotation = affine_matrix[:3, :3]
+    translation = affine_matrix[3, :3]
+    return rotation, translation
+
+
+def render_random_sample(render, augment, keypoints, focal_length):
+    """Renders an image with rotated objects and keypoints.
+    """
     image, alpha_mask, world_to_camera = render()
     input_image = augment(image, alpha_mask)
-    keypoints = project_keypoints(keypoints, world_to_camera)
+    keypoints = project_keypoints(keypoints, world_to_camera, focal_length)
     return input_image, keypoints
+
+
+class DrawNormalizedKeypoints(pr.Processor):
+    def __init__(self, num_keypoints, radius=3, image_normalized=False):
+        super(DrawNormalizedKeypoints, self).__init__()
+        self.denormalize = pr.DenormalizeKeypoints2D()
+        self.draw = pr.DrawKeypoints2D(num_keypoints, radius, image_normalized)
+
+    def call(self, image, keypoints):
+        keypoints = remove_keypoints_depth(keypoints)
+        keypoints = self.denormalize(keypoints, image)
+        keypoints = flip_keypoints_height(keypoints, image.shape[0])
+        image = self.draw(image, keypoints)
+        return image
 
 
 class RenderRandomSample(pr.Processor):
     def __init__(self, render, augment, keypoints):
         super(RenderRandomSample, self).__init__()
         self.render, self.augment = render, augment
+        self.focal_length = render.renderer.camera.camera.get_projection_matrix()[0, 0]
         self.keypoints = keypoints
 
     def call(self):
-        input_image, keyponts = render_random_sample(
-            self.render, self.augment, self.keypoints)
+        input_image, keypoints = render_random_sample(
+            self.render, self.augment, self.keypoints, self.focal_length)
+        return input_image, keypoints
 
 
 class RandomKeypointsRender(pr.SequentialProcessor):
@@ -129,47 +155,51 @@ class RandomKeypointsRender(pr.SequentialProcessor):
                                     {1: {'keypoints': [len(keypoints), 3]}}))
 
 
+if __name__ == "__main__":
+    # TODO fix denormalize keypoints flip
+    # TODO remove affine 1 in keypoints
+    # TODO use project_to_image PAZ function instead of the one developed here.
 
-import os
-import numpy as np
-from glob import glob
+    import os
+    from glob import glob
 
-from pipelines import DrawNormalizedKeypoints
-from pipelines import RandomKeypointsRender
-from paz.backend.image import show_image
-from paz.backend.image import load_image
+    from paz.backend.image import show_image
 
-# filepath = '/home/octavio/.keras/paz/datasets/ycb_models/obj_000001.ply'
-# filepath = '/home/octavio/Repositories/solar_panels/solar_panel_02/meshes/obj/base_link.obj'
+    data_path = '/home/octavio/.keras/paz/datasets/ycb_models/'
+    class_name = '035_power_drill'
+    filepath = os.path.join(data_path, class_name, 'textured.obj')
+    image_shape = (512, 512)
+    y_fov = 3.14159 / 4.0
+    distance = [0.3, 0.5]
+    light = [0.5, 30]
+    top_only = False
+    roll = None
+    shift = None
+    occlusions = 3
+    # image_paths = glob('/home/octavio/JPEGImages/*.jpg')
+    image_paths = glob(
+        '/home/octavio/.keras/paz/datasets/voc-backgrounds/*.png')
+    x_offset = y_offset = z_offset = 0.05
+    keypoints = np.array([[x_offset, 0.0, 0.0, 1.0],
+                          [0.0, y_offset, 0.0, 1.0],
+                          [0.0, 0.0, z_offset, 1.0],
+                          [0.0, 0.0, 0.0, 1.0]])
 
-data_path = '/home/octavio/.keras/paz/datasets/ycb_models/'
-class_name = '035_power_drill'
-filepath = os.path.join(data_path, class_name, 'textured.obj')
-image_shape = (512, 512)
-y_fov = 3.14159 / 4.0
-distance = [0.3, 0.5]
-light = [0.5, 30]
-top_only = False
-roll = None
-shift = None
-occlusions = 3
-# image_paths = glob('/home/octavio/JPEGImages/*.jpg')
-image_paths = glob('/home/octavio/.keras/paz/datasets/voc-backgrounds/*.png')
-x_offset = y_offset = z_offset = 0.05
-keypoints = np.array([[x_offset, 0.0, 0.0, 1.0],
-                      [0.0, y_offset, 0.0, 1.0],
-                      [0.0, 0.0, z_offset, 1.0]])
+    args = (filepath, image_shape, y_fov, distance,
+            light, top_only, roll, shift)
+    scene = SingleView(*args)
+    # scene.camera.camera.get_projection_matrix()[0, 0]
+    image, alpha_channel, world_to_camera = scene.render()
+    processor = RandomKeypointsRender(
+        scene, keypoints, image_paths, occlusions)
+    draw_normalized_keypoints = DrawNormalizedKeypoints(
+        len(keypoints), 10, True)
 
-args = (filepath, image_shape, y_fov, distance, light, top_only, roll, shift)
-scene = SingleView(*args)
-image, alpha_channel, world_to_camera = scene.render()
-processor = RandomKeypointsRender(scene, keypoints, image_paths, occlusions)
-draw_normalized_keypoints = DrawNormalizedKeypoints(len(keypoints), 10, True)
-
-for arg in range(100):
-    sample = processor()
-    image = sample['inputs']['image']
-    keypoints = sample['labels']['keypoints']
-    image = draw_normalized_keypoints(image, keypoints)
-    image = (255.0 * image).astype('uint8')
-    show_image(image)
+    for arg in range(100):
+        sample = processor()
+        image = sample['inputs']['image']
+        keypoints = sample['labels']['keypoints']
+        print(image.shape, keypoints.shape)
+        image = draw_normalized_keypoints(image, keypoints)
+        image = (255.0 * image).astype('uint8')
+        show_image(image)
