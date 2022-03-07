@@ -1,9 +1,9 @@
-from Munkres.munkres import Munkres
-from Munkres.backend import DISALLOWED_OBJ
-import Munkres.backend as B
+from paz.processors import Munkres
+from paz.backend import munkres
 import pytest
 
-DISALLOWED = DISALLOWED_OBJ()
+
+DISALLOWED = munkres.DISALLOWED_OBJ()
 
 
 @pytest.fixture
@@ -90,9 +90,9 @@ def col_covered():
 
 
 def test_matrix_cost(cost_matrices):
+    m = Munkres()
     for cost_matrix, expected_total in cost_matrices:
-        m = Munkres(cost_matrix)
-        indexes = m.compute()
+        indexes = m.compute(cost_matrix)
         total_cost = 0
         for r, c in indexes:
             x = cost_matrix[r][c]
@@ -100,13 +100,7 @@ def test_matrix_cost(cost_matrices):
         assert expected_total == total_cost
 
 
-@pytest.mark.parametrize("shape", [(4, 4)])
-def test_pad_matrix(rectangular_cost_matrix, shape):
-    cost_matrix = B.pad_matrix(rectangular_cost_matrix)
-    assert (cost_matrix.shape == shape)
-
-
 @pytest.mark.parametrize("expected_min_value", [1])
 def test_get_min_value(rectangular_cost_matrix, expected_min_value):
-    min_value = B.get_min_value(rectangular_cost_matrix[0])
+    min_value = munkres.get_min_value(rectangular_cost_matrix[0])
     assert (min_value == expected_min_value)

@@ -23,6 +23,7 @@ from ..backend.image import normalized_device_coordinates_to_image
 from ..backend.image import image_to_normalized_device_coordinates
 from ..backend.image import replace_lower_than_threshold
 from ..backend.image import BILINEAR, CUBIC
+from ..backend.image.tensorflow_image import imagenet_preprocess_input
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
@@ -488,3 +489,11 @@ class GetNonZeroArguments(Processor):
         channel_wise_sum = np.sum(array, axis=2)
         non_zero_rows, non_zero_columns = np.nonzero(channel_wise_sum)
         return non_zero_rows, non_zero_columns
+
+
+class ImagenetPreprocessInput(Processor):
+    def __init__(self):
+        super(ImagenetPreprocessInput, self).__init__()
+
+    def call(self, image):
+        return imagenet_preprocess_input(image)

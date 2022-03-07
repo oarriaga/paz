@@ -20,6 +20,7 @@ from .draw import DrawKeypoints2D
 from .draw import DrawBoxes3D
 from .draw import DrawRandomPolygon
 from .draw import DrawPose6D
+from .draw import DrawHumanSkeleton
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -51,6 +52,8 @@ from .image import NormalizedDeviceCoordinatesToImage
 from .image import ReplaceLowerThanThreshold
 from .image import GetNonZeroArguments
 from .image import GetNonZeroValues
+from .image import ImagenetPreprocessInput
+
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
@@ -68,6 +71,12 @@ from .geometric import RandomKeypointTranslation
 from .geometric import RandomKeypointRotation
 from .geometric import RandomRotation
 from .geometric import TranslateImage
+from .geometric import GetTransformationSize
+from .geometric import GetTransformationScale
+from .geometric import GetSourceDestinationPoints
+from .geometric import GetImageCenter
+from .geometric import WarpAffine
+
 
 from .keypoints import ChangeKeypointsCoordinateSystem
 from .keypoints import DenormalizeKeypoints
@@ -123,6 +132,24 @@ from ..backend.image.draw import LINE
 
 from ..abstract import Processor
 from ..abstract import SequentialProcessor
+
+
+from .heatmaps import TransposeOutput
+from .heatmaps import ScaleOutput
+from .heatmaps import GetHeatmaps
+from .heatmaps import GetTags
+from .heatmaps import RemoveLastElement
+from .heatmaps import AggregateResults
+from .heatmaps import TopKDetections
+from .heatmaps import GroupKeypointsByTag
+from .heatmaps import AdjustKeypointsLocations
+from .heatmaps import GetScores
+from .heatmaps import RefineKeypointsLocations
+from .heatmaps import TransformKeypoints
+from .heatmaps import ExtractKeypointsLocations
+
+from .munkres import Munkres
+
 
 TRAIN = 0
 VAL = 1

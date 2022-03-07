@@ -288,3 +288,19 @@ def normalize_min_max(x, x_min, x_max):
         min-max normalized data
     """
     return (x - x_min) / (x_max - x_min)
+
+
+def calculate_image_center(image):
+    '''
+    Return image center.
+
+    # Arguments
+        image: Numpy array.
+
+    # Returns
+        image center.
+    '''
+    H, W = image.shape[:2]
+    center_W = W / 2.0
+    center_H = H / 2.0
+    return center_W, center_H

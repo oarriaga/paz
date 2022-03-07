@@ -5,3 +5,6 @@ from .open_images import OpenImages
 from .ferplus import FERPlus
 from .fer import FER
 from .cityscapes import CityScapes
+from .coco import JOINT_CONFIG
+from .coco import FLIP_CONFIG
+from .coco import VISUALISATION_CONFIG

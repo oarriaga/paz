@@ -3,7 +3,7 @@ import os
 import numpy as np
 from tensorflow.keras.utils import get_file
 from paz.backend.image import load_image
-from pipelines import DetectHumanPose2D
+from paz.applications import DetectHumanPose2D
 
 
 @pytest.fixture
@@ -133,24 +133,18 @@ def flipped_joint_order():
 
 
 def test_DetectHumanPose2D_single_person(image_with_single_person,
-                                         joint_order, flipped_joint_order,
-                                         dataset, data_with_center,
                                          labeled_joint_single_person,
                                          labeled_scores_single_person):
-    detect = DetectHumanPose2D(joint_order, flipped_joint_order,
-                               dataset, data_with_center)
+    detect = DetectHumanPose2D()
     inferences = detect(image_with_single_person)
     assert np.allclose(inferences['scores'], labeled_scores_single_person)
-    assert np.allclose(inferences['joints'], labeled_joint_single_person)
+    assert np.allclose(inferences['keypoints'], labeled_joint_single_person)
 
 
 def test_DetectHumanPose2D_multi_person(image_with_multi_person,
-                                        joint_order, flipped_joint_order,
-                                        dataset, data_with_center,
                                         labeled_joint_multi_person,
                                         labeled_scores_multi_person):
-    detect = DetectHumanPose2D(joint_order, flipped_joint_order,
-                               dataset, data_with_center)
+    detect = DetectHumanPose2D()
     inferences = detect(image_with_multi_person)
     assert np.allclose(inferences['scores'], labeled_scores_multi_person)
-    assert np.allclose(inferences['joints'], labeled_joint_multi_person)
+    assert np.allclose(inferences['keypoints'], labeled_joint_multi_person)
