@@ -1,9 +1,9 @@
 
 import numpy as np
-from .config import *
-from .kinematics import *
-from .network import *
-from .utils import *
+from config import *
+from kinematics import *
+from network import *
+from utils import *
 
 
 class ModelDet:

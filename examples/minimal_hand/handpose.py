@@ -1,4 +1,4 @@
-from examples.minimal_hand.minimal_hand_estimator import MinimalHandEstimator
+from minimal_hand_estimator import MinimalHandEstimator
 from paz.abstract import Processor
 
 from paz import processors as pr

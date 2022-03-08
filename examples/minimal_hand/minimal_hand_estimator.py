@@ -2,9 +2,9 @@ import numpy as np
 import pytransform3d.transformations as pt
 import pytransform3d.rotations as pr
 
-from .wrappers import ModelPipeline
-from .kinematics import mpii_to_mano, MANOHandJoints, mano_to_mpii
-from .hand_mesh import HandMesh
+from wrappers import ModelPipeline
+from kinematics import mpii_to_mano, MANOHandJoints, mano_to_mpii
+from hand_mesh import HandMesh
 
 class MinimalHandEstimator(object):
     """Mano Param detector.

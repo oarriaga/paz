@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 
 from paz.backend.camera import Camera, VideoPlayer
-from pipelines.handpose import MANOHandPoseEstimation
+from handpose import MANOHandPoseEstimation
 
 description = 'Demo script for estimating 6D pose-heads from face-keypoints'
 parser = argparse.ArgumentParser(description=description)

@@ -1,8 +1,8 @@
-from .kinematics import *
+from kinematics import *
 import json
 import pytransform3d.rotations as pr
 
-from .config import *
+from config import *
 
 
 class HandMesh():
