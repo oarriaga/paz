@@ -1,6 +1,6 @@
 """Mesh representation of the MANO hand model.
 See `here <https://mano.is.tue.mpg.de/>`_ for details on the model.
-Their code has been refactored and documented here from Dr. Alexander Fabisch / DFKI-RIC.
+Their code has been refactored and documented by Alexander Fabisch (DFKI GmbH, Robotics Innovation Center).
 """
 import json
 from scipy import sparse
@@ -211,12 +211,6 @@ def hand_vertices(J, weights, kintree_table, v_template, posedirs, pose=None):
     v_posed = v_template + posedirs.dot(lrotmin(pose))
     vertices = forward_kinematic(pose, v_posed, J, weights, kintree_table)
     return vertices
-
-
-try:
-    from mano_fast import hand_vertices
-except ImportError:
-    pass  # using Python version
 
 
 def lrotmin(p):

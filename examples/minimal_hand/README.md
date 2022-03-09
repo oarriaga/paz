@@ -18,7 +18,7 @@ for more details, please checkout files
 ## Installation
 ### Install dependencies
 - pypaz
-- pytransform3d==1.11.0
+- pytransform3d==1.12.1
 
 ### Prepare MANO hand model
 1. Download MANO model from [here](https://mano.is.tue.mpg.de/) and unzip it.
