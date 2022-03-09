@@ -1,6 +1,13 @@
 """Mesh representation of the MANO hand model.
 See `here <https://mano.is.tue.mpg.de/>`_ for details on the model.
 Their code has been refactored and documented by Alexander Fabisch (DFKI GmbH, Robotics Innovation Center).
+
+License Notice
+Software Copyright License for non-commercial scientific research purposes
+This project uses and modifies the MANO model and components from the software to generate the 3D hand mesh model
+Please read carefully and respect the license of the publisher
+License: [https://mano.is.tue.mpg.de/license.html](https://mano.is.tue.mpg.de/license.html)
+
 """
 import json
 from scipy import sparse
