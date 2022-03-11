@@ -11,11 +11,11 @@ class MinimalHandEstimator(object):
     """
 
     def __init__(self):
-        self.model = ModelPipeline(left=True) #Attetion: Needs to be left=True! Because pretrained models are
+        self.model = ModelPipeline(left=True) #Attention, needs to be left=True! Because pretrained models are
         #trained for left-hand-only
 
         #load hand_mesh to use its ref_pose
-        self.hand_mesh = HandMesh(left=True) #Attetion, decides which ref_pose is loaded! should be left here
+        self.hand_mesh = HandMesh(left=True) #Attention, decides which ref_pose is loaded! should be left here
         #because of pretrained models support only left hand
 
         self.mpii_to_mano = mpii_to_mano

@@ -15,21 +15,21 @@ for more details, please checkout files
 - minimal_hand_estimator.py
 - prepare_mano.py
 
-
-
-## System architecture
-![System Architecture](doc/system_architecture_01.PNG)
-
-
-## Prepare MANO hand model
-![System Architecture](doc/system_architecture_02.PNG)
-
 ## Installation
 ### Install dependencies
 - pypaz
-- pytransform3d==1.11.0
+- pytransform3d==1.12.1
 
 ### Prepare MANO hand model
+
+####License Notice
+####Software Copyright License for non-commercial scientific research purposes
+This project uses and modifies the MANO model and components from the software to generate the 3D hand mesh model
+
+Please read carefully and respect the license of the publisher
+
+License: [https://mano.is.tue.mpg.de/license.html](https://mano.is.tue.mpg.de/license.html) 
+
 1. Download MANO model from [here](https://mano.is.tue.mpg.de/) and unzip it.
 2. In `config.py`, set `OFFICIAL_MANO_LEFT_PATH` to the **left hand** model 'MANO_LEFT.pkl'.
 3. In `config.py`, set `OFFICIAL_MANO_RIGHT_PATH` to the **right hand** model 'MANO_RIGHT.pkl'.
@@ -50,4 +50,3 @@ for more details, please checkout files
 1. `python paz_demo.py`
 2. Put your **right hand** in front of the camera. The pre-trained model is for left hand, but the input would be flipped internally.
 3. Press `ESC` to quit.
-
