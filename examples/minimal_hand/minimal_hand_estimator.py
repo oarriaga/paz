@@ -74,128 +74,79 @@ class MinimalHandEstimator(object):
     Convert absolute joint angles to relative joint angles
     """
     def calculate_handstate_joint_angles_from_min_hand_absolute_angles(self, quats):
-        # Calculate Minimal_Hand to MANO Transformation
-        joint_orientations = np.zeros(shape=(21, 3, 3))
 
-        # For each quaternion:
-        # Transformation: rotation of ref_joint i + global position of rotated ref_joint i
-        rotated_ref_joints_transformations = self.rotated_ref_joints_transformations(quats)
+        # rotate reference joints and get posed hand sceleton J
+        J = self.rotated_ref_joints_from_quats(quats)
 
-        # For each quaternion:
+        # combine each joint with absolute rotation to transformation: t_posed_super_rotated
+        t_posed_super_rotated = np.zeros(shape=(21, 4, 4))
         for i in range(21):
-
-            # Calc Transformation: inverted rotation of ref_joint i + ?,?,? translation
-            joint_transformation_i_pos_no_matter = pt.transform_from(
+            t_posed_super_rotated[i] = pt.transform_from(
                 pr.matrix_from_quaternion(quats[i]),
-                [999,999,999]
-            )
-            joint_transformation_i_pos_no_matter_inverted = pt.invert_transform(joint_transformation_i_pos_no_matter)
-
-            # Concatenate transformation:
-            #   A(absolute rotation and translation from ref_joint i to absolute_joint i)
-            # + B(inverted absolute quaternion i + ?,?,? translation)
-            T_joint = pt.concat(
-                rotated_ref_joints_transformations[i],
-                joint_transformation_i_pos_no_matter_inverted
+                J[i]
             )
 
-            # Compute position and quaternion from transformation matrix T_joint
-            # Position and orientation quaternion: (x, y, z, qw, qx, qy, qz)
-            Q_joint = pt.pq_from_transform(T_joint)
+        t_relative = np.zeros(shape=(21, 3, 3))
 
-            # keep only orientation in var: Q_orientation
-            Q_orientation = np.array([Q_joint[3], Q_joint[4], Q_joint[5], Q_joint[6]])
+        # For each quaternion Q:
+        for i in range(len(quats)):
+
+            # Calc transformation with inverted rotation of Qi
+            T_abs_rotations_i_inverted = pt.invert_transform(
+                pt.transform_from(
+                    pr.matrix_from_quaternion(quats[i]),
+                    [0, 0, 0]  # translation does not matter
+                )
+            )
 
             # Update Q_orientation if joint i has a parent (substract parents orientation)
             parent_index = MANOHandJoints.parents[i]
             if parent_index is not None:
-
-                # Concatenate transformation:
-                #   A(absolute rotation and translation from parent's ref_joint to parent's absolute_joint)
-                # + B(inverted absolute quaternion i + ?,?,? translation)
-                T_joint_parent = pt.concat(
-                    rotated_ref_joints_transformations[parent_index],
-                    joint_transformation_i_pos_no_matter_inverted
+                # Concatenate transformation get rotation difference (child to parent):
+                # posed and super rotated joint i
+                # inverted rotation of Qi
+                t_posed_rotation_child_to_parent_i = pt.concat(
+                    t_posed_super_rotated[parent_index],
+                    T_abs_rotations_i_inverted
                 )
 
-                # Compute position and quaternion from transformation matrix T_joint
-                # Position and orientation quaternion: (x, y, z, qw, qx, qy, qz)
-                Q_parent_joint = pt.pq_from_transform(T_joint_parent)
-                Q_orientation_parent = np.array([Q_parent_joint[3], Q_parent_joint[4], Q_parent_joint[5], Q_parent_joint[6]])
+                # clear out translationand keep only rotation
+                t = pt.pq_from_transform(t_posed_rotation_child_to_parent_i)
+                t_rotation_child_to_parent_i = np.array([t[3], t[4], t[5], t[6]])
 
-                #Concatenate Q_orientation with inverted Q_orientation_parent
-                Q_orientation = pr.concatenate_quaternions(
-                    Q_orientation,
-                    pr.q_conj(Q_orientation_parent)
+                t_relative[i] = pr.matrix_from_quaternion(
+                    pr.q_conj(t_rotation_child_to_parent_i)
                 )
-
-            joint_orientations[i] = pr.matrix_from_quaternion(Q_orientation)
 
         # Generate final array with 16 joint angles
         joint_angles = np.zeros(shape=(21, 3))
 
-        # Map of childs array_index = joint_index => parent_joint_index
-        childs = [
-            [1,4,7,10,13], # root_joint has multiple childs
-            2,3,16,5,6,17,8,9,18,11,12,19,14,15,20 #other joints have exactly one parent
-        ]
         # Root joint gets same orientation like absolute root quaternion
-        joint_orientations[0] = pr.matrix_from_quaternion(quats[0])
         joint_angles[0] = pr.compact_axis_angle_from_matrix(
-            joint_orientations[0]
+            pr.matrix_from_quaternion(quats[0])
         )
 
+        # Map of childs array_index = joint_index => parent_joint_index
+        childs = [
+            [1, 4, 7, 10, 13],  # root_joint has multiple childs
+            2, 3, 16, 5, 6, 17, 8, 9, 18, 11, 12, 19, 14, 15, 20  # other joints have exactly one parent
+        ]
         # Joint 1-15 gets calculated orientation of child's join
-        for i in range(1,16):
+        for i in range(1, 16):
             joint_angles[i] = pr.compact_axis_angle_from_matrix(
-                joint_orientations[childs[i]]
+                t_relative[childs[i]]
             )
 
         return joint_angles
 
-    def rotation_matrices_from_quats(self, quat):
-        mats = np.zeros(shape=(21, 3, 3))
-        for j in range(MANOHandJoints.n_joints):
-            mats[j] = pr.matrix_from_quaternion(quat[j])
-        return mats
+    """
+    Rotate reference joints by estimated absolute quats
+    """
 
-    def ref_joints_from_quats(self, quat):
-        mats = np.stack(self.rotation_matrices_from_quats(quat), 0)
+    def rotated_ref_joints_from_quats(self, quat):
+        rotation_matrices = np.zeros(shape=(21, 3, 3))
+        for j in range(len(quat)):
+            rotation_matrices[j] = pr.matrix_from_quaternion(quat[j])
+        mats = np.stack(rotation_matrices, 0)
         joint_xyz = np.matmul(mats, self.hand_mesh.ref_pose)[..., 0]
         return joint_xyz
-
-    def joints_from_quats(self, quat):
-        """
-        Set absolute (global) rotation for the hand.
-
-        Parameters
-        ----------
-        quat : np.ndarray, shape [J, 4]
-          Absolute rotations for each joint in quaternion.
-
-        Returns
-        -------
-        np.ndarray, joints [J, 3]
-          Ref_pose rotated by quaternions
-        """
-        mats = np.stack(self.rotation_matrices_from_quats(quat), 0)
-        pose = np.matmul(mats, self.hand_mesh.ref_pose)
-        joint_xyz = [None] * MANOHandJoints.n_joints
-        for j in range(MANOHandJoints.n_joints):
-            joint_xyz[j] = pose[j]
-            parent = MANOHandJoints.parents[j]
-            if parent is not None:
-                joint_xyz[j] += joint_xyz[parent]
-        joint_xyz = np.stack(joint_xyz, 0)[..., 0]
-
-        return joint_xyz
-
-    def rotated_ref_joints_transformations(self, quats):
-        J = self.ref_joints_from_quats(quats)
-        A = np.zeros(shape=(21, 4, 4))
-        for i in range(21):
-            A[i] = pt.transform_from(
-                pr.matrix_from_quaternion(quats[i]),
-                J[i]
-            )
-        return A
