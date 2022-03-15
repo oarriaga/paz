@@ -6,7 +6,7 @@ from paz.backend.image.opencv_image import write_image
 if __name__ == "__main__":
 
     model = EFFICIENTDETD0()
-    image_size = 512
+    image_size = model.input_shape[1]
     input_image, image_scales = efficientdet_preprocess(raw_images, image_size)
     outputs = model(input_image)
     image, detections = efficientdet_postprocess(
