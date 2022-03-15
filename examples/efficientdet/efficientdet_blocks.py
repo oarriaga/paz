@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer, BatchNormalization
 from tensorflow.keras.layers import Conv2D, SeparableConv2D, UpSampling2D
 from tensorflow.keras.layers import MaxPooling2D
+from utils import get_drop_connect
 
 
 def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
@@ -119,7 +120,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
             image = batchnorms[repeat_arg][level_id](image)
             image = tf.nn.swish(image)
             if repeat_arg > 0 and survival_rate:
-                image = get_drop_connect(image, False, survival_rate)
+                image = get_drop_connect(image, training, survival_rate)
                 image = image + original_image
         if return_base:
             box_outputs.append(image)
