@@ -52,6 +52,6 @@ class MANOHandPoseEstimation(Processor):
 
             joint_angles, absolute_joint_angle_quaternions, global_pos_joints = self.hand_estimator.predict(image)
 
-        #print(joint_angles)
+        print(joint_angles)
 
         return self.wrap(joint_angles, absolute_joint_angle_quaternions, image, input_image,global_pos_joints)
