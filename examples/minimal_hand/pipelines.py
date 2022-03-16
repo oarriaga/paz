@@ -28,7 +28,7 @@ class MANOHandPoseEstimation(Processor):
 
     def call(self, input_image, flip_input_image=False):
         H, W = input_image.shape[:2]
-        scale = np.array([H/self.size, W/self.size])
+        scale = np.array([W/self.size, H/self.size])
         image = self.resize_img(input_image)
         if flip_input_image:
             image = flip_left_right(image)
@@ -36,9 +36,9 @@ class MANOHandPoseEstimation(Processor):
         joint_angles, absolute_joint_angle_quaternions, global_pos_joints, uv = \
             self.hand_estimator.predict(image)
 
-        uv = np.flip(uv, axis=1)
-        uv = [uv*scale * 4]
-        image = self.draw_skeleton(input_image, uv)
+        uv_ = np.flip(uv, axis=1)
+        uv_ = [uv_*scale * 4]
+        image = self.draw_skeleton(input_image, uv_)
         return self.wrap(joint_angles, absolute_joint_angle_quaternions,
                          image, global_pos_joints, uv)
 
