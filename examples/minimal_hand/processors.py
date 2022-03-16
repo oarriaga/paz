@@ -3,6 +3,28 @@ from paz.processors import Processor
 from paz.backend.image import draw_keypoints_link
 from paz.backend.image import draw_keypoints
 from joint_config import VISUALISATION_CONFIG
+from wrappers import ModelPipeline
+from backend import get_scaling_factor
+
+
+class DetectHandKeypoints(Processor):
+    def __init__(self):
+        super(DetectHandKeypoints, self).__init__()
+        self.model = ModelPipeline(left=True)
+
+    def call(self, image):
+        keypoints_3D, theta_mpii, keypoints_2D = self.model.process(image)
+        return keypoints_3D, keypoints_2D
+
+
+class GetScalingFactor(Processor):
+    def __init__(self, scaling_factor):
+        super(GetScalingFactor, self).__init__()
+        self.scaling_factor = scaling_factor
+
+    def call(self, image, size):
+        return get_scaling_factor(image, size, self.scaling_factor)
+
 
 class DrawHandSkeleton(Processor):
     """ Draw human pose skeleton on image.
@@ -25,11 +47,10 @@ class DrawHandSkeleton(Processor):
         self.keypoint_colors = VISUALISATION_CONFIG[dataset]['joint_color']
         self.check_scores = check_scores
 
-    def call(self, image, grouped_joints):
-        for one_person_joints in grouped_joints:
-            image = draw_keypoints_link(
-                image, one_person_joints, self.link_args, self.link_orders,
-                self.link_colors, self.check_scores)
-            image = draw_keypoints(image, one_person_joints,
-                                   self.keypoint_colors, self.check_scores)
+    def call(self, image, keypoints):
+        image = draw_keypoints_link(
+            image, keypoints, self.link_args, self.link_orders,
+            self.link_colors, self.check_scores)
+        image = draw_keypoints(image, keypoints,
+                               self.keypoint_colors, self.check_scores)
         return image
