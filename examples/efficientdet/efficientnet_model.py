@@ -265,7 +265,7 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
     features = []
     (width_coefficient, depth_coefficient,
      survival_rate) = get_efficientnet_params(model_name)
-    image = Input(tensor=image, shape=input_shape)
+    image = Input(tensor=image, shape=input_shape, name='image')
     filters = round_filters(input_filters[0], width_coefficient, depth_divisor)
 
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', (1, 1), 1,

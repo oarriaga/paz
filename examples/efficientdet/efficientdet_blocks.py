@@ -54,7 +54,7 @@ def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
             image = conv_blocks[repeat_args](image)
             image = batchnorms[repeat_args][level_id](image)
             image = tf.nn.swish(image)
-            if level > 0 and survival_rate:
+            if repeat_args > 0 and survival_rate:
                 image = get_drop_connect(image, training, survival_rate)
                 image = image + original_image
         if return_base:
@@ -165,6 +165,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P7_U = UpSampling2D()(P7_in)
         P6_td = FuseFeature(name=f'fpn_cells/cell_{id}/fnode0/add')(
             [P6_in, P7_U], fpn_weight_method)
+        # P6_td = FuseFeature([P6_in, P7_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode0/add')
         P6_td = tf.nn.swish(P6_td)
         P6_td = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -181,6 +182,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P6_U = UpSampling2D()(P6_td)
         P5_td = FuseFeature(name=f'fpn_cells/cell_{id}/fnode1/add')(
             [P5_in_1, P6_U], fpn_weight_method)
+        # P5_td = FuseFeature([P5_in_1, P6_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode1/add')
         P5_td = tf.nn.swish(P5_td)
         P5_td = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -197,6 +199,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P5_U = UpSampling2D()(P5_td)
         P4_td = FuseFeature(name=f'fpn_cells/cell_{id}/fnode2/add')(
             [P4_in_1, P5_U], fpn_weight_method)
+        # P4_td = FuseFeature([P4_in_1, P5_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode2/add')
         P4_td = tf.nn.swish(P4_td)
         P4_td = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -213,6 +216,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P4_U = UpSampling2D()(P4_td)
         P3_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode3/add')(
             [P3_in, P4_U], fpn_weight_method)
+        # P3_out = FuseFeature([P3_in, P4_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode3/add')
         P3_out = tf.nn.swish(P3_out)
         P3_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -229,6 +233,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P3_D = MaxPooling2D(3, 2, 'same')(P3_out)
         P4_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode4/add')(
             [P4_in_2, P4_td, P3_D], fpn_weight_method)
+        # P4_out = FuseFeature([P4_in_2, P4_td, P3_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode4/add')
         P4_out = tf.nn.swish(P4_out)
         P4_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -245,6 +250,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P4_D = MaxPooling2D(3, 2, 'same')(P4_out)
         P5_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode5/add')(
             [P5_in_2, P5_td, P4_D], fpn_weight_method)
+        # P5_out = FuseFeature([P5_in_2, P5_td, P4_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode5/add')
         P5_out = tf.nn.swish(P5_out)
         P5_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -255,6 +261,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P5_D = MaxPooling2D(3, 2, 'same')(P5_out)
         P6_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode6/add')(
             [P6_in, P6_td, P5_D], fpn_weight_method)
+        # P6_out = FuseFeature([P6_in, P6_td, P5_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode6/add')
         P6_out = tf.nn.swish(P6_out)
         P6_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -265,6 +272,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P6_D = MaxPooling2D(3, 2, 'same')(P6_out)
         P7_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode7/add')(
             [P7_in, P6_D], fpn_weight_method)
+        # P7_out = FuseFeature([P7_in, P6_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode7/add')
         P7_out = tf.nn.swish(P7_out)
         P7_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -278,6 +286,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P7_U = UpSampling2D()(P7_in)
         P6_td = FuseFeature(name=f'fpn_cells/cell_{id}/fnode0/add')(
             [P6_in, P7_U], fpn_weight_method)
+        # P6_td = FuseFeature([P6_in, P7_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode0/add')
         P6_td = tf.nn.swish(P6_td)
         P6_td = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -288,6 +297,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P6_U = UpSampling2D()(P6_td)
         P5_td = FuseFeature(name=f'fpn_cells/cell_{id}/fnode1/add')(
             [P5_in, P6_U], fpn_weight_method)
+        # P5_td = FuseFeature([P5_in, P6_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode1/add')
         P5_td = tf.nn.swish(P5_td)
         P5_td = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -298,6 +308,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P5_U = UpSampling2D()(P5_td)
         P4_td = FuseFeature(name=f'fpn_cells/cell_{id}/fnode2/add')(
             [P4_in, P5_U], fpn_weight_method)
+        # P4_td = FuseFeature([P4_in, P5_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode2/add')
         P4_td = tf.nn.swish(P4_td)
         P4_td = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -308,6 +319,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P4_U = UpSampling2D()(P4_td)
         P3_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode3/add')(
             [P3_in, P4_U], fpn_weight_method)
+        # P3_out = FuseFeature([P3_in, P4_U], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode3/add')
         P3_out = tf.nn.swish(P3_out)
         P3_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -318,6 +330,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P3_D = MaxPooling2D(3, 2, 'same')(P3_out)
         P4_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode4/add')(
             [P4_in, P4_td, P3_D], fpn_weight_method)
+        # P4_out = FuseFeature([P4_in, P4_td, P3_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode4/add')
         P4_out = tf.nn.swish(P4_out)
         P4_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -328,6 +341,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P4_D = MaxPooling2D(3, 2, 'same')(P4_out)
         P5_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode5/add')(
             [P5_in, P5_td, P4_D], fpn_weight_method)
+        # P5_out = FuseFeature([P5_in, P5_td, P4_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode5/add')
         P5_out = tf.nn.swish(P5_out)
         P5_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -338,6 +352,7 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P5_D = MaxPooling2D(3, 2, 'same')(P5_out)
         P6_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode6/add')(
             [P6_in, P6_td, P5_D], fpn_weight_method)
+        # P6_out = FuseFeature([P6_in, P6_td, P5_D], fpn_weight_method, name=f'fpn_cells/cell_{id}/fnode6/add')
         P6_out = tf.nn.swish(P6_out)
         P6_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -348,6 +363,9 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
         P6_D = MaxPooling2D(3, 2, 'same')(P6_out)
         P7_out = FuseFeature(name=f'fpn_cells/cell_{id}/fnode7/add')(
             [P7_in, P6_D], fpn_weight_method)
+        # P7_out = FuseFeature([P7_in, P6_D],
+        #                      fpn_weight_method,
+        #                      name=f'fpn_cells/cell_{id}/fnode7/add')
         P7_out = tf.nn.swish(P7_out)
         P7_out = SeparableConv2D(
             num_channels, 3, 1, 'same', use_bias=True,
@@ -356,6 +374,25 @@ def BiFPN(features, num_channels, id, fpn_weight_method):
             name=f'fpn_cells/cell_{id}/fnode7/op_after_combine12/bn')(P7_out)
 
     return P3_out, P4_out, P5_out, P6_out, P7_out
+
+
+# def FuseFeature(inputs, fpn_weight_method, name):
+#     input_shape = len(inputs) if isinstance(inputs, list) else inputs.shape[0]
+#     num_in = input_shape
+#     w_init = tf.keras.initializers.constant(1 / num_in)
+#     w = tf.Variable(initial_value=w_init(shape=(num_in,), dtype='float32'), name=name, trainable=True)
+#     if fpn_weight_method == 'fastattention':
+#         w = tf.keras.activations.relu(w)
+#         x = tf.reduce_sum(
+#             [w[i] * inputs[i] for i in range(len(inputs))], 0)
+#         x = x / (tf.reduce_sum(w) + 0.0001)
+#     elif fpn_weight_method == 'sum':
+#         x = inputs[0]
+#         for node in inputs[1:]:
+#             x = x + node
+#     else:
+#         raise ValueError('FPN weight fusion is not defined')
+#     return x
 
 
 class FuseFeature(Layer):
