@@ -4,13 +4,11 @@ import tensorflow as tf
 
 
 import numpy as np
-from paz.models import SSD300
 from efficientdet import EFFICIENTDETD0
 from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
 from detection import AugmentDetection
-# from paz.pipelines import AugmentDetection
 
 
 class ShowBoxes(Processor):
@@ -37,7 +35,7 @@ class ShowBoxes(Processor):
         return image, boxes2D
 
 
-size = 300
+size = 512
 split = 'train'
 epochs = 120
 batch_size = 30
@@ -46,14 +44,13 @@ data_manager = VOC('VOCdevkit/')
 data = data_manager.load_data()
 
 class_names = data_manager.class_names
-# model = SSD300(base_weights='VGG', head_weights=None)
 model = EFFICIENTDETD0()
 prior_boxes = model.prior_boxes
 
-testor_encoder = AugmentDetection(prior_boxes)
+testor_encoder = AugmentDetection(prior_boxes, size=size)
 testor_decoder = ShowBoxes(class_names, prior_boxes)
 sample_arg = 0
-for sample_arg in range(1000):
+for sample_arg in range(2):
     sample = data[sample_arg]
     wrapped_outputs = testor_encoder(sample)
     print(wrapped_outputs['labels'])

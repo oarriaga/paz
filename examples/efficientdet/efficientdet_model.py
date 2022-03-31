@@ -5,17 +5,8 @@ from efficientdet_blocks import ClassNet, BoxNet
 from utils import create_multibox_head
 from efficientnet_model import EfficientNet
 from efficientdet_blocks import BiFPN
-import h5py
-def read_hdf5(path):
-    """A function to read weights from h5 file."""
-    weights = {}
-    keys = []
-    with h5py.File(path, 'r') as f:
-        f.visit(keys.append)
-        for key in keys:
-            if ':' in key:
-                weights[f[key].name] = f[key][()]
-    return weights
+
+
 WEIGHT_PATH = (
     '/media/deepan/externaldrive1/project_repos/paz_versions/paz/weights/')
 
@@ -56,7 +47,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         anchor boxes.
         aspect_ratios: List, specifying the aspect ratio of the
         survival_rate: Float, specifying the survival probability
-        name: Module name
+
     # Returns
         model: EfficientDet model specified in model_name with the following:
         class_outputs: Tensor, Logits for all classes corresponding to
@@ -95,7 +86,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
     if (((base_weights == 'COCO') and (head_weights == 'COCO')) or
             ((base_weights == 'COCO') and (head_weights == 'None'))):
         weights_path = (WEIGHT_PATH + model_name + '_' +
-                        str(base_weights) + '_' + str(head_weights) +'.h5')
+                        str(base_weights) + '_' + str(head_weights) + '.h5')
         model.load_weights(weights_path)
 
     model.prior_boxes = get_prior_boxes(

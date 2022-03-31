@@ -1,8 +1,10 @@
 
 from paz import processors as pr
-from paz.abstract import SequentialProcessor
+from paz.abstract import SequentialProcessor, Processor
 from processors import MatchBoxes
-
+from utils import efficientdet_preprocess
+from efficientdet_postprocess import process_outputs
+from utils import get_class_name_efficientdet
 
 class AugmentImage(SequentialProcessor):
     """Augments an RGB image by randomly changing contrast, brightness
@@ -21,7 +23,7 @@ class PreprocessImage(SequentialProcessor):
     ``mean`` is given it is substracted from image and it not the image gets
     normalized.
 
-    # Arguments
+    # Argumeqnts
         shape: List of two Ints.
         mean: List of three Ints indicating the per-channel mean to be
             subtracted.
@@ -30,10 +32,13 @@ class PreprocessImage(SequentialProcessor):
         super(PreprocessImage, self).__init__()
         self.add(pr.ResizeImage(shape))
         self.add(pr.CastImage(float))
-        if mean is None:
-            self.add(pr.NormalizeImage())
-        else:
-            self.add(pr.SubtractMeanImage(mean))
+        self.add(pr.SubtractMeanImage(pr.RGB_IMAGENET_MEAN))
+        self.add(pr.DivideStandardDeviationImage(pr.RGB_IMAGENET_STDEV))
+        # if mean is None:
+        #     self.add(pr.NormalizeImage())
+        # else:
+        #     print('Normal')
+        #     self.add(pr.SubtractMeanImage(mean))
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -88,7 +93,7 @@ class AugmentDetection(SequentialProcessor):
     """
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
-                 variances=[0.1, 0.1, 0.2, 0.2]):
+                 variances=[1, 1, 1, 1]):
         super(AugmentDetection, self).__init__()
         # image processors
         self.augment_image = AugmentImage()
@@ -111,3 +116,38 @@ class AugmentDetection(SequentialProcessor):
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {1: {'boxes': [len(prior_boxes), 4 + num_classes]}}))
+
+
+class DetectSingleShot_EfficientDet(Processor):
+    """Single-shot object detection prediction.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating the class names.
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        mean: List of three elements indicating the per channel mean.
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+    """
+    def __init__(self, model, class_names, score_thresh, nms_thresh):
+        self.model = model
+        self.class_names = class_names
+        self.score_thresh = score_thresh
+        self.nms_thresh = nms_thresh
+        self.image_size = model.input_shape[1]
+        super(DetectSingleShot_EfficientDet, self).__init__()
+        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+
+    def call(self, image):
+        image, image_scales = efficientdet_preprocess(image, self.image_size)
+        outputs = self.model(image)
+        outputs = process_outputs(outputs)
+        postprocessing = SequentialProcessor(
+            [pr.Squeeze(axis=None),
+             pr.DecodeBoxes(self.model.prior_boxes, variances=[1, 1, 1, 1]),
+             pr.ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
+             pr.FilterBoxes(get_class_name_efficientdet('VOC'), 0.4)])
+        outputs = postprocessing(outputs)
+        draw_boxes2D = pr.DrawBoxes2D(get_class_name_efficientdet('VOC'))
+        image = draw_boxes2D(image.astype('uint8'), outputs)
+        return self.wrap(image, outputs)

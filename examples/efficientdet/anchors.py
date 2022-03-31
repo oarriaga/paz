@@ -64,12 +64,10 @@ class Anchors():
                     anchor_configs[level].append(
                         ((feat_sizes[0]['height'] /
                           float(feat_sizes[level]['height']),
-                         feat_sizes[0]['width'] /
+                          feat_sizes[0]['width'] /
                           float(feat_sizes[level]['width'])),
                          scale_octave / float(self.num_scales),
-                         aspect,
-                         self.anchor_scales[level - self.min_level]
-                         ))
+                         aspect, self.anchor_scales[level - self.min_level]))
         return anchor_configs
 
     def get_aspect_ratio(self, aspect):

@@ -11,21 +11,20 @@ gpus = tf.config.experimental.list_physical_devices('GPU')
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler
-from detection import AugmentDetection
-from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
 from paz.abstract import ProcessingSequence
 from paz.optimization.callbacks import EvaluateMAP
-from paz.pipelines import DetectSingleShot
 from paz.processors import TRAIN, VAL
+from detection import AugmentDetection
+from detection import DetectSingleShot_EfficientDet
 from efficientdet import EFFICIENTDETD0
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=1, type=int,
                     help='Batch size for training')
-parser.add_argument('-et', '--evaluation_period', default=10, type=int,
+parser.add_argument('-et', '--evaluation_period', default=1, type=int,
                     help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
                     help='Initial learning rate for SGD')
@@ -100,7 +99,8 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 evaluate = EvaluateMAP(
     evaluation_data_managers[0],
-    DetectSingleShot(model, data_managers[0].class_names, 0.01, 0.45),
+    DetectSingleShot_EfficientDet(model, data_managers[0].class_names,
+                                  0.01, 0.45),
     args.evaluation_period,
     args.save_path,
     args.AP_IOU)

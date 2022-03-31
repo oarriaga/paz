@@ -72,7 +72,7 @@ def round_repeats(repeats, depth_coefficient):
     new_repeats = int(math.ceil(depth_coefficient * repeats))
     return new_repeats
 
-# TODO: Change name
+
 def conv_normal_initializer(shape, dtype=None):
     """Initialization for convolutional kernels.
     The main difference with tf.variance_scaling_initializer is that
@@ -88,6 +88,7 @@ def conv_normal_initializer(shape, dtype=None):
     # Returns
         an initialization for the variable
     """
+    # TODO: Change name
     kernel_height, kernel_width, _, output_filters = shape
     fan_output = int(kernel_height * kernel_width * output_filters)
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
