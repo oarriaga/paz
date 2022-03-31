@@ -167,6 +167,7 @@ class DrawPose6D(Processor):
             rotation, translation, self.cube_points3D, self.camera_intrinsics)
         cube_points2D = cube_points2D.astype(np.int32)
         image = draw_cube(image, cube_points2D, thickness=self.thickness)
+        return image
 
 
 class DrawHumanSkeleton(Processor):
