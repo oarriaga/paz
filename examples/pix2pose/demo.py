@@ -4,6 +4,7 @@ from paz.backend.camera import Camera
 from paz.backend.image import write_image
 
 from paz.pipelines import PIX2POSEPowerDrill
+from paz.backend.camera import VideoPlayer
 
 
 def approximate_intrinsics(image):
@@ -16,14 +17,23 @@ def approximate_intrinsics(image):
     return camera_intrinsics
 
 
-image = load_image('images/test_image2.jpg')
-camera = Camera(device_id=0)
+# image = load_image('images/test_image2.jpg')
+camera = Camera(device_id=4)
+camera.start()
+image = camera.read()
+camera.stop()
+
+
 camera.intrinsics = approximate_intrinsics(image)
 camera.distortion = np.zeros((4))
 
-pipeline = PIX2POSEPowerDrill(camera)
-
+pipeline = PIX2POSEPowerDrill(camera, offsets=[0.25, 0.25], epsilon=0.015)
+"""
 inferences = pipeline(image)
 predicted_image = inferences['image']
 show_image(predicted_image)
 write_image('images/predicted_power_drill.png', predicted_image)
+"""
+player = VideoPlayer((640*3, 480*3), pipeline, camera)
+# player = VideoPlayer((640, 480), pipeline, camera)
+player.run()

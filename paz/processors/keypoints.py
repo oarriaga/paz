@@ -70,7 +70,7 @@ class NormalizeKeypoints(Processor):
     """
     def __init__(self, image_size):
         self.image_size = image_size
-        warn('DEPRECATED please use normalize_points2D')
+        warn('DEPRECATED please use normalize_keypoints2D')
         super(NormalizeKeypoints, self).__init__()
 
     def call(self, keypoints):
@@ -86,7 +86,7 @@ class DenormalizeKeypoints(Processor):
         image_size: List of two floats having height and width of image.
     """
     def __init__(self):
-        warn('DEPRECATED please use denomarlize_points2D')
+        warn('DEPRECATED please use denormalize_keypoints2D')
         super(DenormalizeKeypoints, self).__init__()
 
     def call(self, keypoints, image):
