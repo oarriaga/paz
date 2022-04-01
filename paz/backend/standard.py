@@ -194,7 +194,7 @@ def pad_matrix(matrix, pool_size=(3, 3), strides=(1, 1),
     return np.pad(matrix, padding, mode='constant', constant_values=value)
 
 
-def max_pooling_2d(image, pool_size=3, strides=1,  padding='same'):
+def max_pooling_2d(image, pool_size=3, strides=1, padding='same'):
     """Returns the maximum pooled value of an image.
 
     # Arguments
@@ -217,5 +217,5 @@ def max_pooling_2d(image, pool_size=3, strides=1,  padding='same'):
     H, W = image.shape[:2]
     for y in range(0, H - pool_size + 1, strides):
         for x in range(0, W - pool_size + 1, strides):
-            max_image[y][x] = np.max(image[y:y+pool_size, x:x+pool_size])
+            max_image[y][x] = np.max(image[y:y + pool_size, x:x + pool_size])
     return max_image
