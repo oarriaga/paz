@@ -17,19 +17,15 @@ from paz.optimization.callbacks import DrawInferences
 from paz.backend.camera import Camera
 from paz.backend.image import write_image
 from paz.optimization.losses import WeightedReconstruction
+from paz.pipelines.pose import RGBMaskToPose6D
 
 from scenes import PixelMaskRenderer
-from pipelines import DomainRandomization, Pix2Pose
+from pipelines import DomainRandomization
 
-MTL_FILE = 'textured.mtl'
 OBJ_FILE = 'textured.obj'
-PNG_FILE = 'texture_map.png'
 cache_subdir = 'paz/datasets/ycb_video/035_power_drill'
 URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.12/'
-
-MTL_FILEPATH = get_file(MTL_FILE, URL + MTL_FILE, cache_subdir=cache_subdir)
 OBJ_FILEPATH = get_file(OBJ_FILE, URL + OBJ_FILE, cache_subdir=cache_subdir)
-PNG_FILEPATH = get_file(PNG_FILE, URL + PNG_FILE, cache_subdir=cache_subdir)
 
 root_path = os.path.expanduser('~')
 
@@ -129,14 +125,12 @@ plateau = ReduceLROnPlateau('loss', patience=args.reduce_patience, verbose=1)
 save_filename = os.path.join(experiment_path, 'model_weights.hdf5')
 save = ModelCheckpoint(save_filename, 'loss', verbose=1, save_best_only=True,
                        save_weights_only=True)
-images = [np.copy(renderer.render()[0]) for _ in range(args.num_test_images)]
-images = []
-
 
 image_directory = os.path.join(experiment_path, 'original_images')
 if not os.path.exists(image_directory):
     os.makedirs(image_directory)
 
+images = []
 for image_arg in range(args.num_test_images):
     image, alpha, masks = renderer.render()
     image = np.copy(image)  # TODO: renderer outputs unwritable numpy arrays
@@ -153,9 +147,10 @@ for image_arg in range(args.num_test_images):
 # setting drawing callback
 camera = Camera()
 camera.distortion = np.zeros((4))
+camera.intrinsics_from_HFOV(image_shape=(args.image_size, args.image_size))
 object_sizes = renderer.mesh.mesh.extents * 100  # from meters to milimiters
-camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
-draw_pipeline = Pix2Pose(model, object_sizes, camera, draw=True)
+# camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
+draw_pipeline = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
 draw = DrawInferences(experiment_path, images, draw_pipeline)
 callbacks = [log, stop, save, plateau, draw]
 
