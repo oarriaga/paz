@@ -134,7 +134,7 @@ if __name__ == "__main__":
     from paz.models.segmentation import UNET_VGG16
     camera = Camera()
     # camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
-    camera.intrinsics_from_HFOV()
+    camera.intrinsics_from_HFOV(image_shape=(128, 128))
     # from meters to milimiters
     object_sizes = renderer.mesh.mesh.extents * 100
     model = UNET_VGG16(3, image_shape, freeze_backbone=True)
