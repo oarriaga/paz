@@ -205,7 +205,7 @@ class RGBMaskToPose6D(pr.Processor):
             colors = points3D_to_RGB(points3D, self.object_sizes)
             image = draw_points2D(image, points2D, colors)
             image = self.draw_pose6D(image, pose6D)
-            results['image'] = image
+        results['image'] = image
         results['points2D'], results['pose6D'] = points2D, pose6D
         return results
 
