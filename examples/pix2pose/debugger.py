@@ -5,6 +5,8 @@ from paz.backend.camera import Camera
 from paz.pipelines.pose import RGBMaskToPose6D
 from paz.models.segmentation import UNET_VGG16
 from scenes import PixelMaskRenderer
+from paz.backend.image import (
+    blend_alpha_channel, make_random_plain_image, concatenate_alpha_mask)
 
 root_path = os.path.expanduser('~')
 num_occlusions = 1
@@ -42,9 +44,12 @@ show_image(results['image'])
 
 for arg in range(100):
     image, alpha, RGBA_mask = renderer.render()
-    results = estimate_pose(image.copy())
+    RGBA = concatenate_alpha_mask(image, alpha)
+    background = make_random_plain_image(image.shape)
+    image_with_background = blend_alpha_channel(RGBA, background)
+    results = estimate_pose(image_with_background.copy())
     image = np.concatenate(
-        [image, RGBA_mask[..., 0:3], results['image']], axis=1)
+        [image_with_background, RGBA_mask[..., 0:3], results['image']], axis=1)
     H, W = image.shape[:2]
     image = resize_image(image, (W * 3, H * 3))
     show_image(image)
