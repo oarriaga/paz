@@ -1,0 +1,50 @@
+import os
+import numpy as np
+from paz.backend.image import show_image, resize_image
+from paz.backend.camera import Camera
+from paz.pipelines.pose import RGBMaskToPose6D
+from paz.models.segmentation import UNET_VGG16
+from scenes import PixelMaskRenderer
+
+root_path = os.path.expanduser('~')
+num_occlusions = 1
+image_shape = (128, 128, 3)
+viewport_size = image_shape[:2]
+y_fov = 3.14159 / 4.0
+light = [1.0, 30]
+top_only = False
+roll = 3.14159
+shift = 0.05
+
+path_OBJ = '/home/octavio/052_extra_large_clamp_rotated/textured.obj'
+# OBJ_name = '.keras/paz/datasets/ycb_models/037_scissors/textured.obj'
+# path_OBJ = os.path.join(root_path, OBJ_name)
+distance = [0.30, 0.35]
+
+renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
+                             light, top_only, roll, shift)
+
+camera = Camera()
+camera.intrinsics_from_HFOV(image_shape=(128, 128))
+# from meters to milimiters
+object_sizes = renderer.mesh.mesh.extents * 100
+model = UNET_VGG16(3, image_shape, freeze_backbone=True)
+# model.load_weights('experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/model_weights.hdf5')
+# model.load_weights('experiments/UNET-VGG16_RUN_00_06-04-2022_11-20-18/model_weights.hdf5')
+model.load_weights('experiments/UNET-VGG16_RUN_00_07-04-2022_13-28-04/model_weights.hdf5')
+estimate_pose = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
+image, alpha, RGBA_mask = renderer.render()
+image = np.copy(image)  # TODO: renderer outputs unwritable numpy arrays
+show_image(image)
+results = estimate_pose(image)
+show_image(results['image'])
+
+
+for arg in range(100):
+    image, alpha, RGBA_mask = renderer.render()
+    results = estimate_pose(image.copy())
+    image = np.concatenate(
+        [image, RGBA_mask[..., 0:3], results['image']], axis=1)
+    H, W = image.shape[:2]
+    image = resize_image(image, (W * 3, H * 3))
+    show_image(image)
