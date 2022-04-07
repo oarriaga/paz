@@ -3,37 +3,9 @@ from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import (
     sample_point_in_sphere, random_perturbation, compute_modelview_matrices)
 from pyrender import (PerspectiveCamera, OffscreenRenderer, DirectionalLight,
-                      RenderFlags, Mesh, Scene, Viewer)
+                      RenderFlags, Mesh, Scene)
 import trimesh
-from backend import compute_vertices_colors
-
-
-def load_obj(path):
-    mesh = trimesh.load(path)
-    return mesh
-
-
-def color_object(path):
-    mesh = load_obj(path)
-    colors = compute_vertices_colors(mesh.vertices)
-    mesh.visual = mesh.visual.to_color()
-    mesh.visual.vertex_colors = colors
-    mesh = Mesh.from_trimesh(mesh, smooth=False)
-    mesh.primitives[0].material.metallicFactor = 0.0
-    mesh.primitives[0].material.roughnessFactor = 1.0
-    mesh.primitives[0].material.alphaMode = 'OPAQUE'
-    return mesh
-
-
-def quick_color_visualize():
-    scene = Scene(bg_color=[0, 0, 0])
-    root = os.path.expanduser('~')
-    mesh_path = '.keras/paz/datasets/ycb_models/035_power_drill/textured.obj'
-    path = os.path.join(root, mesh_path)
-    mesh = color_object(path)
-    scene.add(mesh)
-    Viewer(scene, use_raymond_lighting=True, flags=RenderFlags.FLAT)
-    # mesh_extents = np.array([0.184, 0.187, 0.052])
+from .utils import color_object
 
 
 class PixelMaskRenderer():
@@ -114,31 +86,35 @@ if __name__ == "__main__":
     # ------------------------------------------------------------
     # Training scene for hammer
     # ------------------------------------------------------------
-    # OBJ_name = '.keras/paz/datasets/ycb_models/048_hammer/textured.obj'
-    OBJ_name = '.keras/paz/datasets/ycb_models/037_scissors/textured.obj'
+    OBJ_name = '.keras/paz/datasets/ycb_models/048_hammer/textured.obj'
+    # OBJ_name = '.keras/paz/datasets/ycb_models/037_scissors/textured.obj'
+    # OBJ_name = '.keras/paz/datasets/ycb_models/'
+    # '051_large_clamp/textured.obj'
+    # OBJ_name = '/home/octavio/.keras/paz/datasets/'
+    # 'new_052_large_clamp/textured.obj'
     path_OBJ = os.path.join(root_path, OBJ_name)
     distance = [0.30, 0.35]
 
     renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
                                  light, top_only, roll, shift)
-    """
-    for arg in range(10):
+    for arg in range(100):
         image, alpha, RGBA_mask = renderer.render()
         image = np.concatenate([image, RGBA_mask[..., 0:3]], axis=1)
         H, W = image.shape[:2]
         image = resize_image(image, (W * 3, H * 3))
         show_image(image)
+    # inference
     """
     from paz.backend.camera import Camera
     from paz.pipelines.pose import RGBMaskToPose6D
     from paz.models.segmentation import UNET_VGG16
     camera = Camera()
-    # camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
     camera.intrinsics_from_HFOV(image_shape=(128, 128))
     # from meters to milimiters
     object_sizes = renderer.mesh.mesh.extents * 100
     model = UNET_VGG16(3, image_shape, freeze_backbone=True)
-    model.load_weights('experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/model_weights.hdf5')
+    # model.load_weights('experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/model_weights.hdf5')
+    model.load_weights('experiments/UNET-VGG16_RUN_00_06-04-2022_11-20-18/model_weights.hdf5')
     estimate_pose = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
 
     image, alpha, RGBA_mask = renderer.render()
@@ -146,3 +122,4 @@ if __name__ == "__main__":
     show_image(image)
     results = estimate_pose(image)
     show_image(results['image'])
+    """
