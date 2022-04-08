@@ -194,6 +194,6 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21):
     uv = uv[0]
 
     model = Model(image, outputs=[xyz, uv, delta])
-    model_path = 'h5_model/detnet_weights.hdf5'
+    model_path = 'model_weights/detnet_weights.hdf5'
     model.load_weights(model_path)
     return model
