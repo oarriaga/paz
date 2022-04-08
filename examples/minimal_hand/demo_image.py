@@ -1,6 +1,6 @@
 import argparse
 import os
-from paz.backend.image import load_image, write_image
+from paz.backend.image import load_image, show_image
 from pipelines import MANOHandPoseEstimation
 
 description = 'Demo script for estimating 6D pose-heads from face-keypoints'
@@ -10,9 +10,9 @@ parser.add_argument('-i', '--images_path', type=str,
                     help='Directory for the test images')
 args = parser.parse_args()
 
-image = load_image(os.path.join(args.images_path, 'hand3.jpg'))
+image = load_image(os.path.join(args.images_path, 'hand11.jpg'))
 detect = MANOHandPoseEstimation()
 inferences = detect(image)
 
 image = inferences['image']
-write_image('./output/result.jpg', image)
+show_image(image)
