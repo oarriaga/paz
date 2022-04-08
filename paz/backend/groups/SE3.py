@@ -1,4 +1,3 @@
-# I know it's not much but it's honest work :')
 import numpy as np
 
 

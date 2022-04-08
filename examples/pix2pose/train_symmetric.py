@@ -18,8 +18,11 @@ from paz.backend.camera import Camera
 from paz.backend.image import write_image
 from paz.optimization.losses import WeightedReconstruction
 from paz.pipelines.pose import RGBMaskToPose6D
+from paz.backend.render import compute_modelview_matrices
+from paz.backend.groups.SO3 import (
+    build_rotation_matrix_z, build_rotation_matrix_x)
 
-from scenes import PixelMaskRenderer
+from scenes import CanonicalPosePixelMaskRenderer
 from pipelines import DomainRandomization
 
 OBJ_FILE = 'textured.obj'
@@ -58,14 +61,6 @@ parser.add_argument('--time', type=str,
 parser.add_argument('--light', nargs='+', type=float, default=[1.0, 30])
 parser.add_argument('--y_fov', default=3.14159 / 4.0, type=float,
                     help='Field of view angle in radians')
-parser.add_argument('--distance', nargs='+', type=float, default=[0.3, 0.5],
-                    help='Distance from camera to origin in meters')
-parser.add_argument('--top_only', default=0, choices=[0, 1], type=int,
-                    help='Flag for full sphere or top half for rendering')
-parser.add_argument('--roll', default=3.14159, type=float,
-                    help='Threshold for camera roll in radians')
-parser.add_argument('--shift', default=0.05, type=float,
-                    help='Threshold of random shift of camera')
 parser.add_argument('--num_occlusions', default=1, type=int,
                     help='Number of occlusions added to image')
 parser.add_argument('--num_test_images', default=100, type=int,
@@ -84,11 +79,22 @@ image_paths = glob.glob(args.background_wildcard)
 if len(image_paths) == 0:
     raise ValueError('Background images not found. Provide path to png images')
 
+
+# setting symmetries
+translation = np.array([0.0, 0.0, 0.33])
+camera_pose, y = compute_modelview_matrices(translation, np.zeros((3)))
+align_z = build_rotation_matrix_z(np.pi / 2)
+camera_pose[:3, :3] = np.matmul(align_z, camera_pose[:3, :3])
+min_corner = [-0.05, -0.02, -0.05]
+max_corner = [+0.05, +0.02, +0.01]
+angles = [0.0, np.pi]
+symmetries = np.array([build_rotation_matrix_x(angle) for angle in angles])
+
 # setting rendering function
 H, W, num_channels = image_shape = [args.image_size, args.image_size, 3]
-renderer = PixelMaskRenderer(
-    args.obj_path, [H, W], args.y_fov, args.distance, args.light,
-    args.top_only, args.roll, args.shift)
+renderer = CanonicalPosePixelMaskRenderer(
+    args.obj_path, camera_pose, min_corner, max_corner,
+    symmetries, [H, W], args.y_fov, args.light)
 
 # building full processor
 inputs_to_shape = {'input_1': [H, W, num_channels]}    # inputs RGB

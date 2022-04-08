@@ -1,7 +1,7 @@
-# I know it's not much but it's honest work :')
 import numpy as np
 
-import cv2  # REMOVE THIS IMPORT
+# TODO: rmeove cv2 import by computing explicitly rodriguez formula
+import cv2
 
 
 def rotation_vector_to_rotation_matrix(rotation_vector):
