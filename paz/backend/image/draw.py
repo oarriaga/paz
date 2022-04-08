@@ -281,7 +281,7 @@ def draw_points2D(image, points2D, colors):
 
 
 def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
-                        check_scores=False):
+                        check_scores=False, link_width=2):
     """ Draw link between the keypoints.
 
     # Arguments
@@ -302,14 +302,17 @@ def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
         if check_scores:
             if point1[2] > 0 and point2[2] > 0:
                 draw_line(image, (int(point1[0]), int(point1[1])),
-                                 (int(point2[0]), int(point2[1])), color, 2)
+                                 (int(point2[0]), int(point2[1])),
+                          color, link_width)
         else:
             draw_line(image, (int(point1[0]), int(point1[1])),
-                             (int(point2[0]), int(point2[1])), color, 2)
+                             (int(point2[0]), int(point2[1])),
+                      color, link_width)
     return image
 
 
-def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False):
+def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False,
+                   keypoint_radius=6):
     """ Draw a circle at keypoints.
 
     # Arguments
@@ -326,7 +329,8 @@ def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False):
         if check_scores:
             if keypoint[2] > 0:
                 draw_circle(image, (int(keypoint[0]),
-                                    int(keypoint[1])), color, 6)
+                                    int(keypoint[1])), color, keypoint_radius)
         else:
-            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color, 6)
+            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color,
+                        keypoint_radius)
     return image
