@@ -44,101 +44,53 @@ hand_part_orders = [('wrist', 'thumb_cmc'),
                     ('pinky_dip', 'pinky_tip')]
 
 
-hand_part_color = [[198, 26, 255],
-                   [255, 26, 255],
-                   [255, 26, 198],
-                   [140, 26, 255],
-                   [255, 26, 140],
-                   [83, 26, 255],
-                   [255, 83, 26],
-                   [255, 255, 26],
-                   [77, 77, 255],
-                   [26, 255, 140],
-                   [26, 198, 255],
-                   [198, 255, 26],
-                   [140, 255, 26],
-                   [255, 198, 26],
-                   [255, 140, 26],
-                   [26, 140, 255],
-                   [26, 83, 255],
-                   [26, 255, 198],
-                   [26, 255, 198],
-                   [26, 255, 255]]
+hand_part_color = [[179, 0, 36],
+                   [227, 25, 28],
+                   [252, 78, 41],
+                   [253, 141, 60],
+                   [135, 221, 63],
+                   [188, 223, 63],
+                   [219, 219, 0],
+                   [255, 255, 0],
+                   [100, 221, 23],
+                   [108, 223, 35],
+                   [123, 226, 58],
+                   [154, 233, 104],
+                   [4, 68, 252],
+                   [17, 103, 177],
+                   [24, 123, 205],
+                   [42, 157, 244],
+                   [143, 0, 255],
+                   [160, 38, 255],
+                   [177, 77, 255],
+                   [193, 115, 255]]
 
 
-hand_joint_color = [[198, 26, 255],
-                    [255, 26, 255],
-                    [255, 26, 198],
-                    [140, 26, 255],
-                    [255, 26, 140],
-                    [83, 26, 255],
-                    [255, 83, 26],
-                    [198, 255, 26],
-                    [255, 198, 26],
-                    [140, 255, 26],
-                    [255, 140, 26],
-                    [77, 77, 255],
-                    [26, 255, 140],
-                    [26, 140, 255],
-                    [26, 255, 198],
-                    [26, 255, 198],
-                    [26, 255, 198],
-                    [26, 255, 198],
-                    [26, 255, 198],
-                    [26, 83, 255],
-                    [26, 255, 255]]
+hand_joint_color = [[140, 26, 255],
+                    [179, 0, 36],
+                    [227, 25, 28],
+                    [252, 78, 41],
+                    [253, 141, 60],
+                    [135, 221, 63],
+                    [188, 223, 63],
+                    [219, 219, 0],
+                    [255, 255, 0],
+                    [100, 221, 23],
+                    [108, 223, 35],
+                    [123, 226, 58],
+                    [154, 233, 104],
+                    [4, 68, 252],
+                    [17, 103, 177],
+                    [24, 123, 205],
+                    [42, 157, 244],
+                    [143, 0, 255],
+                    [160, 38, 255],
+                    [177, 77, 255],
+                    [193, 115, 255]]
 
 
-VISUALISATION_CONFIG = {
-    'hand': {'part_labels': hand_part_labels,
-             'part_arg': hand_part_arg,
-             'part_orders': hand_part_orders,
-             'part_color': hand_part_color,
-             'joint_color': hand_joint_color}}
-
-
-
-"""The 21 hand landmarks."""
-# WRIST = 0
-# THUMB_CMC = 1
-# THUMB_MCP = 2
-# THUMB_IP = 3
-# THUMB_TIP = 4
-# INDEX_FINGER_MCP = 5
-# INDEX_FINGER_PIP = 6
-# INDEX_FINGER_DIP = 7
-# INDEX_FINGER_TIP = 8
-# MIDDLE_FINGER_MCP = 9
-# MIDDLE_FINGER_PIP = 10
-# MIDDLE_FINGER_DIP = 11
-# MIDDLE_FINGER_TIP = 12
-# RING_FINGER_MCP = 13
-# RING_FINGER_PIP = 14
-# RING_FINGER_DIP = 15
-# RING_FINGER_TIP = 16
-# PINKY_MCP = 17
-# PINKY_PIP = 18
-# PINKY_DIP = 19
-# PINKY_TIP = 20
-
-# wrist = 0
-# thumb_cmc = 1
-# thumb_mcp = 2
-# thumb_ip = 3
-# thumb_tip = 4
-# index_finger_mcp = 5
-# index_finger_pip = 6
-# index_finger_dip = 7
-# index_finger_tip = 8
-# middle_finger_mcp = 9
-# middle_finger_pip = 10
-# middle_finger_dip = 11
-# middle_finger_tip = 12
-# ring_finger_mcp = 13
-# ring_finger_pip = 14
-# ring_finger_dip = 15
-# ring_finger_tip = 16
-# pinky_mcp = 17
-# pinky_pip = 18
-# pinky_dip = 19
-# pinky_tip = 20
+VISUALISATION_CONFIG = {'part_labels': hand_part_labels,
+                        'part_arg': hand_part_arg,
+                        'part_orders': hand_part_orders,
+                        'part_color': hand_part_color,
+                        'joint_color': hand_joint_color}
