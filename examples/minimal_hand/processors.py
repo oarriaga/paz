@@ -3,18 +3,7 @@ from paz.processors import Processor
 from paz.backend.image import draw_keypoints_link
 from paz.backend.image import draw_keypoints
 from joint_config import VISUALISATION_CONFIG
-from wrappers import ModelPipeline
 from backend import get_scaling_factor
-
-
-class DetectHandKeypoints(Processor):
-    def __init__(self):
-        super(DetectHandKeypoints, self).__init__()
-        self.model = ModelPipeline(left=True)
-
-    def call(self, image):
-        keypoints_3D, theta_mpii, keypoints_2D = self.model.process(image)
-        return keypoints_3D, keypoints_2D
 
 
 class GetScalingFactor(Processor):
@@ -33,24 +22,23 @@ class DrawHandSkeleton(Processor):
         images: Numpy array.
         grouped_joints: Joint locations of all the person model detected
                         in the image. List of numpy array.
-        dataset: String.
         check_scores: Boolean. Flag to check score before drawing.
 
     # Returns
         A numpy array containing pose skeleton.
     """
-    def __init__(self, dataset, check_scores=False):
+    def __init__(self, check_scores=False):
         super(DrawHandSkeleton, self).__init__()
-        self.link_orders = VISUALISATION_CONFIG[dataset]['part_orders']
-        self.link_colors = VISUALISATION_CONFIG[dataset]['part_color']
-        self.link_args = VISUALISATION_CONFIG[dataset]['part_arg']
-        self.keypoint_colors = VISUALISATION_CONFIG[dataset]['joint_color']
+        self.link_orders = VISUALISATION_CONFIG['part_orders']
+        self.link_colors = VISUALISATION_CONFIG['part_color']
+        self.link_args = VISUALISATION_CONFIG['part_arg']
+        self.keypoint_colors = VISUALISATION_CONFIG['joint_color']
         self.check_scores = check_scores
 
-    def call(self, image, keypoints):
+    def call(self, image, keypoints, link_width=2, keypoint_radius=4):
         image = draw_keypoints_link(
             image, keypoints, self.link_args, self.link_orders,
-            self.link_colors, self.check_scores)
-        image = draw_keypoints(image, keypoints,
-                               self.keypoint_colors, self.check_scores)
+            self.link_colors, self.check_scores, link_width)
+        image = draw_keypoints(image, keypoints, self.keypoint_colors,
+                               self.check_scores, keypoint_radius)
         return image
