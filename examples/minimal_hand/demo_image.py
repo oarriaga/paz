@@ -10,7 +10,7 @@ parser.add_argument('-i', '--images_path', type=str,
                     help='Directory for the test images')
 args = parser.parse_args()
 
-image = load_image(os.path.join(args.images_path, 'hand11.jpg'))
+image = load_image(os.path.join(args.images_path, 'hand2.jpg'))
 detect = MANOHandPoseEstimation()
 inferences = detect(image)
 
