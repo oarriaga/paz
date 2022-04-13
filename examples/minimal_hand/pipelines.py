@@ -6,12 +6,9 @@ from models.detnet import DetNet
 from models.iknet import ModelIK
 
 
-from backend import xyz_to_delta
-from backend import mano_to_mpii
-from backend import mpii_to_mano
-from joint_config import MPIIHandJoints
 from backend import relative_angle_quaternions
 from joint_config import MANO_REF_JOINTS, IK_UNIT_LENGTH
+from joint_config import MANOHandJoints, MPIIHandJoints
 
 
 class HandPoseEstimation(pr.Processor):
@@ -24,6 +21,7 @@ class HandPoseEstimation(pr.Processor):
         self.expand_dims = pr.ExpandDims(axis=0)
         self.hand_pose_estimator = hand_estimator
         self.draw_skeleton = pe.DrawHandSkeleton()
+        self.mpii_to_mano = pe.MapJointConfig(MANOHandJoints, MPIIHandJoints)
         self.wrap = pr.WrapOutput(['relative_joint_angles',
                                    'absolute_joint_angle',
                                    'keypoints3D', 'keypoints2D'])
@@ -39,7 +37,7 @@ class HandPoseEstimation(pr.Processor):
 
         keypoints3D, theta_mpii, keypoints2D = self.hand_pose_estimator(image)
         theta_mpii = np.squeeze(theta_mpii)
-        absolute_joint_angle = mpii_to_mano(theta_mpii)  # quaternions
+        absolute_joint_angle = self.mpii_to_mano(theta_mpii) 
         relative_joint_angles = relative_angle_quaternions(absolute_joint_angle)
 
 
@@ -48,7 +46,7 @@ class HandPoseEstimation(pr.Processor):
         # if self.draw:
         #     image = self.draw_skeleton(input_image, keypoints2D)
 
-        keypoints3D = mpii_to_mano(keypoints3D)  # quaternions
+        keypoints3D = self.mpii_to_mano(keypoints3D)  # quaternions
         return self.wrap(relative_joint_angles, absolute_joint_angle,
                          keypoints3D, keypoints2D)
 
@@ -62,17 +60,19 @@ class MANOHandPoseEstimation(HandPoseEstimation):
 class HandPoseEstimatorModel(pr.Processor):
     def __init__(self, left=True):
         super(HandPoseEstimatorModel, self).__init__()
+        self.mano_to_mpii = pe.MapJointConfig(MPIIHandJoints, MANOHandJoints)
+        self.calculate_orientation = pe.CalculateOrientationFromCoordinates(
+            MPIIHandJoints)
+
         if left:
             mano_ref_xyz = MANO_REF_JOINTS
         else:
             pass
             # -1 * first coloumn
 
-        mpii_ref_xyz = mano_to_mpii(mano_ref_xyz) / IK_UNIT_LENGTH
-        mpii_ref_xyz -= mpii_ref_xyz[9:10]
-        mpii_ref_delta, mpii_ref_length = xyz_to_delta(mpii_ref_xyz,
-                                                       MPIIHandJoints)
-        mpii_ref_delta = mpii_ref_delta * mpii_ref_length
+        mpii_ref_xyz = self.mano_to_mpii(mano_ref_xyz) / IK_UNIT_LENGTH
+        mpii_ref_xyz = mpii_ref_xyz - mpii_ref_xyz[9:10]
+        mpii_ref_delta = self.calculate_orientation(mpii_ref_xyz)
 
         self.mpii_ref_xyz = mpii_ref_xyz
         self.mpii_ref_delta = mpii_ref_delta
@@ -83,9 +83,8 @@ class HandPoseEstimatorModel(pr.Processor):
     def call(self, image):
         xyz, uv = self.det_model.predict(image)[:2]
 
-        delta, length = xyz_to_delta(xyz, MPIIHandJoints)
+        delta = self.calculate_orientation(xyz)
 
-        delta = delta * length
         pack = np.concatenate(
             [xyz, delta, self.mpii_ref_xyz, self.mpii_ref_delta], 0)
         pack = np.expand_dims(pack, 0)

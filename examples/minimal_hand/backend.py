@@ -2,7 +2,7 @@
 import numpy as np
 import pytransform3d.rotations as pr
 import pytransform3d.transformations as pt
-from joint_config import MANOHandJoints, MPIIHandJoints
+from joint_config import MANOHandJoints
 from joint_config import MANO_REF_JOINTS
 
 
@@ -15,63 +15,43 @@ def get_scaling_factor(image, size, scaling_factor):
     return np.array([W_scale * scaling_factor, H_scale * scaling_factor])
 
 
-def mano_to_mpii(mano):
+def map_joint_config(joints, joint_config1, joint_config2):
     """
-    Map data from MANOHandJoints order to MPIIHandJoints order.
+    Map data from joint_config1 to joint_config2.
 
     Parameters
     ----------
     mano : np.ndarray, [21, ...]
-        Data in MANOHandJoints order. Note that the joints are along axis 0.
+        Data in joint_config1. Note that the joints are along axis 0.
 
     Returns
     -------
     np.ndarray
-        Data in MPIIHandJoints order.
+        Data in joint_config2.
     """
-    mpii = []
-    for j in range(MPIIHandJoints.n_joints):
-        mpii.append(
-        mano[MANOHandJoints.labels.index(MPIIHandJoints.labels[j])]
-        )
-    mpii = np.stack(mpii, 0)
-    return mpii
+    mapped_joints = []
+
+    for joint_arg in range(joint_config1.num_joints):
+        joint_label = joint_config1.labels[joint_arg]
+        joint_index_in_joint_config2 = joint_config2.labels.index(joint_label)
+        joint_in_joint_config2 = joints[joint_index_in_joint_config2]
+        mapped_joints.append(joint_in_joint_config2)
+    mapped_joints = np.stack(mapped_joints, 0)
+    return mapped_joints
 
 
-def mpii_to_mano(mpii):
-  """
-  Map data from MPIIHandJoints order to MANOHandJoints order.
-
-  Parameters
-  ----------
-  mpii : np.ndarray, [21, ...]
-    Data in MPIIHandJoints order. Note that the joints are along axis 0.
-
-  Returns
-  -------
-  np.ndarray
-    Data in MANOHandJoints order.
-  """
-  mano = []
-  for j in range(MANOHandJoints.n_joints):
-    mano.append(
-      mpii[MPIIHandJoints.labels.index(MANOHandJoints.labels[j])]
-    )
-  mano = np.stack(mano, 0)
-  return mano
-
-
-def xyz_to_delta(xyz, joints_def):
+def keypoints3D_to_delta(keypoints3D, joints_config):
     """
-    Compute bone orientations from joint coordinates (child joint - parent joint).
+    Compute bone orientations from joint coordinates
+    (child joint - parent joint).
     The returned vectors are normalized.
     For the root joint, it will be a zero vector.
 
     Parameters
     ----------
-    xyz : np.ndarray, shape [J, 3]
+    keypoints3D : np.ndarray, shape [J, 3]
         Joint coordinates.
-    joints_def : object
+    joints_config : object
         An object that defines the kinematic skeleton, e.g. MPIIHandJoints.
 
     Returns
@@ -79,21 +59,16 @@ def xyz_to_delta(xyz, joints_def):
     np.ndarray, shape [J, 3]
         The **unit** vectors from each child joint to its parent joint.
         For the root joint, it's are zero vector.
-    np.ndarray, shape [J, 1]
-        The length of each bone (from child joint to parent joint).
-        For the root joint, it's zero.
     """
     delta = []
-    for j in range(joints_def.n_joints):
-        p = joints_def.parents[j]
-        if p is None:
+    for joint_arg in range(joints_config.num_joints):
+        parent = joints_config.parents[joint_arg]
+        if parent is None:
             delta.append(np.zeros(3))
         else:
-            delta.append(xyz[j] - xyz[p])
+            delta.append(keypoints3D[joint_arg] - keypoints3D[parent])
     delta = np.stack(delta, 0)
-    lengths = np.linalg.norm(delta, axis=-1, keepdims=True)
-    delta /= np.maximum(lengths, np.finfo(xyz.dtype).eps)
-    return delta, lengths
+    return delta
 
 
 def relative_angle_quaternions(quats):
@@ -180,7 +155,7 @@ def hand_mesh(left=True):
         # include case for left == False
         pass
     ref_pose = []
-    for j in range(MANOHandJoints.n_joints):
+    for j in range(MANOHandJoints.num_joints):
         parent = MANOHandJoints.parents[j]
         if parent is None:
             ref_pose.append(joints[j])

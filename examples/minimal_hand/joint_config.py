@@ -125,7 +125,7 @@ IK_UNIT_LENGTH = 0.09473151311686484
 
 
 class MANOHandJoints:
-    n_joints = 21
+    num_joints = 21
 
     labels = [
         'W', #0
@@ -152,7 +152,7 @@ class MANOHandJoints:
 
 
 class MPIIHandJoints:
-    n_joints = 21
+    num_joints = 21
 
     labels = [
         'W', #0

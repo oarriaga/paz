@@ -3,7 +3,7 @@ from paz.processors import Processor
 from paz.backend.image import draw_keypoints_link
 from paz.backend.image import draw_keypoints
 from joint_config import VISUALISATION_CONFIG
-from backend import get_scaling_factor
+from backend import get_scaling_factor, map_joint_config, keypoints3D_to_delta
 
 
 class GetScalingFactor(Processor):
@@ -42,3 +42,25 @@ class DrawHandSkeleton(Processor):
         image = draw_keypoints(image, keypoints, self.keypoint_colors,
                                self.check_scores, keypoint_radius)
         return image
+
+
+class MapJointConfig(Processor):
+    def __init__(self, joint_config1, joint_config2):
+        super(MapJointConfig, self).__init__()
+        self.joint_config1 = joint_config1
+        self.joint_config2 = joint_config2
+
+    def call(self, joints):
+        mapped_joints = map_joint_config(joints, self.joint_config1,
+                                         self.joint_config2)
+        return mapped_joints
+
+
+class CalculateOrientationFromCoordinates(Processor):
+    def __init__(self, joint_config):
+        super(CalculateOrientationFromCoordinates, self).__init__()
+        self.joint_config = joint_config
+
+    def call(self, coordinates):
+        delta = keypoints3D_to_delta(coordinates, self.joint_config)
+        return delta
