@@ -3,6 +3,8 @@
 # SingleBox, MultiBox the problem is that SingleInference might
 # not necessarily take a box
 # TODO change append values to append_values_keys, append_values_list
+# TODO verify that default offsets are provided for power drill
+# TODO: Divide sizes by 10000 to obtain meters
 
 from paz import processors as pr
 from paz.pipelines import RandomizeRenderedImage as RandomizeRender
@@ -282,14 +284,14 @@ class SingleInferenceMultiClassPIX2POSE6D(Processor):
 
     def _build_pix2points(self, name_to_model, name_to_size, epsilon, resize):
         name_to_pix2points = {}
-        for name, model in name_to_model.values():
+        for name, model in name_to_model.items():
             pix2points = Pix2Points(model, name_to_size[name], epsilon, resize)
             name_to_pix2points[name] = pix2points
         return name_to_pix2points
 
     def _build_name_to_draw(self, name_to_size, camera):
         name_to_draw = {}
-        for name, object_sizes in name_to_size.values():
+        for name, object_sizes in name_to_size.items():
             draw = DrawPose6D(object_sizes, camera.intrinsics)
             name_to_draw[name] = draw
         return name_to_draw
@@ -340,41 +342,43 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
     # Returns
         Dictionary with inferred boxes2D, poses6D and image.
     """
-    def __init__(self, name_to_model, name_to_size, offsets, camera,
+    def __init__(self, detect, name_to_model, name_to_size, offsets, camera,
                  epsilon=0.15, resize=False, draw=True):
         super(MultiInferenceMultiClassPIX2POSE, self).__init__()
         if set(name_to_model.keys()) != set(name_to_size.keys()):
             raise ValueError('models and sizes must have same class names')
-
+        self.detect = detect
         self.name_to_pix2points = self._build_pix2points(
             name_to_model, name_to_size, epsilon, resize)
         valid_names = list(self.name_to_model.keys())
         self.postprocess_boxes = PostprocessBoxes2D(offsets, valid_names)
         self.draw_boxes2D = pr.DrawBoxes2D(valid_names)
         self.draw_RGBmask = self._build_draw_RGBmask(name_to_size)
-        self.draw_poses6D = self._build_draw_poses6D(name_to_size, camera)
+        self.draw_pose6D = self._build_draw_pose6D(name_to_size, camera)
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'points3D', 'poses6D'])
+        self.solvePnP = pr.SolveChangingObjectPnPRANSAC(camera.intrinsics)
         self.clip = pr.ClipBoxes2D()
         self.crop = pr.CropBoxes2D()
         self.draw = draw
 
     def _build_pix2points(self, name_to_model, name_to_size, epsilon, resize):
         name_to_pix2points = {}
-        for name, model in name_to_model.values():
+        print(name_to_model)
+        for name, model in name_to_model.items():
             pix2points = Pix2Points(model, name_to_size[name], epsilon, resize)
             name_to_pix2points[name] = pix2points
         return name_to_pix2points
 
-    def _build_draw_poses6D(self, name_to_size, camera):
+    def _build_draw_pose6D(self, name_to_size, camera):
         name_to_draw = {}
-        for name, object_sizes in name_to_size.values():
+        for name, object_sizes in name_to_size.items():
             draw = DrawPose6D(object_sizes, camera.intrinsics)
             name_to_draw[name] = draw
         return name_to_draw
 
     def _build_draw_RGBmask(self, name_to_size):
         name_to_draw = {}
-        for name, object_sizes in name_to_size.values():
+        for name, object_sizes in name_to_size.items():
             draw = DrawRGBMasks(object_sizes)
             name_to_draw[name] = draw
         return name_to_draw
@@ -389,10 +393,11 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
         if len(points3D) > self.solvePnP.MIN_REQUIRED_POINTS:
             success, R, T = self.solvePnP(points3D, points2D)
             if success:
-                pose6D = Pose6D.from_rotation_vector(R, T, self.class_name)
+                pose6D = Pose6D.from_rotation_vector(R, T, box2D.class_name)
         return points2D, points3D, pose6D
 
-    def call(self, image, boxes2D):
+    def call(self, image):
+        boxes2D = self.detect(image)['boxes2D']
         boxes2D = self.postprocess_boxes(boxes2D)
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
@@ -402,8 +407,55 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
             append_lists(inferences, [points2D, points3D, poses6D])
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
-            for box2D in boxes2D:
+            for box2D, pose6D in zip(boxes2D, poses6D):
                 name = box2D.class_name
-                image = self.draw_RGBmask[name](image, points2D, points3D)
-                image = self.draw_poses6D[name](image, poses6D)
+                # image = self.draw_RGBmask[name](image, points2D, points3D)
+                image = self.draw_pose6D[name](image, pose6D)
         return self.wrap(image, boxes2D, points3D, poses6D)
+
+
+class PIX2Tools6D(MultiInferenceMultiClassPIX2POSE):
+    """
+    # TODO: Divide sizes by 10000 to obtain meters
+    """
+    def __init__(self, camera, score_thresh=0.45, nms_thresh=0.15,
+                 offsets=[0.25, 0.25], epsilon=0.15, resize=False, draw=True):
+
+        self.detect = SSD300FAT(score_thresh, nms_thresh, draw=False)
+        self.name_to_sizes = self._build_name_to_sizes()
+        self.name_to_model = self._build_name_to_model()
+        # change camera position as argument
+        super(PIX2Tools6D, self).__init__(
+            self.detect, self.name_to_model, self.name_to_sizes, offsets,
+            camera, epsilon, resize, draw)
+
+    def _build_name_to_model(self):
+        UNET_power_drill = UNET_VGG16(3, (128, 128, 3))
+        URL = ('https://github.com/oarriaga/altamira-data/'
+               'releases/download/v0.13/')
+        name = 'UNET-VGG16_POWERDRILL_weights.hdf5'
+        weights_path = get_file(name, URL + name, cache_subdir='paz/models')
+        UNET_power_drill.load_weights(weights_path)
+
+        UNET_large_clamp = UNET_VGG16(3, (128, 128, 3))
+        UNET_large_clamp.load_weights(
+            'experiments/UNET-VGG16_RUN_00_07-04-2022_13-28-04/'
+            'model_weights.hdf5')
+
+        UNET_scissors = UNET_VGG16(3, (128, 128, 3))
+        UNET_scissors.load_weights(
+            'experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/'
+            'model_weights.hdf5')
+
+        name_to_model = {'035_power_drill': UNET_power_drill,
+                         '051_large_clamp': UNET_large_clamp,
+                         '037_scissors': UNET_scissors
+                         }
+        return name_to_model
+
+    def _build_name_to_sizes(self):
+        name_to_sizes = {'035_power_drill': np.array([1840, 1874, 572]),
+                         '051_large_clamp': np.array([2022, 1652, 362]),
+                         '037_scissors': np.array([960, 2014, 156])
+                         }
+        return name_to_sizes
