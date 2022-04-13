@@ -2,11 +2,8 @@
 import numpy as np
 import pytransform3d.rotations as pr
 import pytransform3d.transformations as pt
-import json
-from hand_mesh import HandMesh
-
-
-
+from joint_config import MANOHandJoints, MPIIHandJoints
+from joint_config import MANO_REF_JOINTS
 
 
 def get_scaling_factor(image, size, scaling_factor):
@@ -16,72 +13,6 @@ def get_scaling_factor(image, size, scaling_factor):
     H_scale = H / size[0]
     W_scale = W / size[1]
     return np.array([W_scale * scaling_factor, H_scale * scaling_factor])
-
-
-def load_json(path):
-    """
-    Load pickle data.
-    Parameter
-    ---------
-    path: Path to pickle file.
-    Return
-    ------
-    Data in pickle file.
-    """
-    with open(path) as f:
-        data = json.load(f)
-        x = data
-    return data
-
-
-class MANOHandJoints:
-    n_joints = 21
-
-    labels = [
-        'W', #0
-        'I0', 'I1', 'I2', #3
-        'M0', 'M1', 'M2', #6
-        'L0', 'L1', 'L2', #9
-        'R0', 'R1', 'R2', #12
-        'T0', 'T1', 'T2', #15
-        'I3', 'M3', 'L3', 'R3', 'T3' #20, tips are manually added (not in MANO)
-    ]
-
-    # finger tips are not joints in MANO, we label them on the mesh manually
-    mesh_mapping = {16: 333, 17: 444, 18: 672, 19: 555, 20: 744}
-
-    parents = [
-        None,
-        0, 1, 2,
-        0, 4, 5,
-        0, 7, 8,
-        0, 10, 11,
-        0, 13, 14,
-        3, 6, 9, 12, 15
-    ]
-
-
-class MPIIHandJoints:
-    n_joints = 21
-
-    labels = [
-        'W', #0
-        'T0', 'T1', 'T2', 'T3', #4
-        'I0', 'I1', 'I2', 'I3', #8
-        'M0', 'M1', 'M2', 'M3', #12
-        'R0', 'R1', 'R2', 'R3', #16
-        'L0', 'L1', 'L2', 'L3', #20
-    ]
-
-    parents = [
-        None,
-        0, 1, 2, 3,
-        0, 5, 6, 7,
-        0, 9, 10, 11,
-        0, 13, 14, 15,
-        0, 17, 18, 19
-    ]
-
 
 
 def mano_to_mpii(mano):
@@ -165,7 +96,7 @@ def xyz_to_delta(xyz, joints_def):
     return delta, lengths
 
 
-def calculate_handstate_joint_angles_from_min_hand_absolute_angles(quats):
+def relative_angle_quaternions(quats):
 
     # rotate reference joints and get posed hand sceleton J
     J = rotated_ref_joints_from_quats(quats)
@@ -233,10 +164,27 @@ def calculate_handstate_joint_angles_from_min_hand_absolute_angles(quats):
 
 
 def rotated_ref_joints_from_quats(quat):
-    hand_mesh = HandMesh(left=True)
+    ref_pose = hand_mesh()
     rotation_matrices = np.zeros(shape=(21, 3, 3))
     for j in range(len(quat)):
         rotation_matrices[j] = pr.matrix_from_quaternion(quat[j])
     mats = np.stack(rotation_matrices, 0)
-    joint_xyz = np.matmul(mats, hand_mesh.ref_pose)[..., 0]
+    joint_xyz = np.matmul(mats, ref_pose)[..., 0]
     return joint_xyz
+
+
+def hand_mesh(left=True):
+    if left:
+        joints = MANO_REF_JOINTS
+    else:
+        # include case for left == False
+        pass
+    ref_pose = []
+    for j in range(MANOHandJoints.n_joints):
+        parent = MANOHandJoints.parents[j]
+        if parent is None:
+            ref_pose.append(joints[j])
+        else:
+            ref_pose.append(joints[j] - joints[parent])
+    ref_pose = np.expand_dims(np.stack(ref_pose, 0), -1)
+    return ref_pose
