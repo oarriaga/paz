@@ -5,6 +5,7 @@
 # TODO change append values to append_values_keys, append_values_list
 # TODO verify that default offsets are provided for power drill
 # TODO: Divide sizes by 10000 to obtain meters
+# TODO change MultiInference for MultiInstance?
 
 from paz import processors as pr
 from paz.pipelines import RandomizeRenderedImage as RandomizeRender
@@ -37,6 +38,12 @@ class DomainRandomization(SequentialProcessor):
 
 
 class PostprocessBoxes2D(SequentialProcessor):
+    """Filters, squares and offsets 2D bounding boxes
+
+    # Arguments
+        valid_names: List of strings containing class names to keep.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+    """
     def __init__(self, offsets, valid_names=None):
         super(PostprocessBoxes2D, self).__init__()
         if valid_names is not None:
@@ -46,6 +53,13 @@ class PostprocessBoxes2D(SequentialProcessor):
 
 
 def append_values(dictionary, lists, keys):
+    """Append dictionary values to lists
+
+    # Arguments
+        dictionary: dict
+        lists: List of lists
+        keys: Keys to dictionary values
+    """
     if len(keys) != len(lists):
         assert ValueError('keys and lists must have same length')
     for key_arg, key in enumerate(keys):
@@ -54,16 +68,26 @@ def append_values(dictionary, lists, keys):
 
 
 def append_lists(intro_lists, outro_lists):
+    """Appends multiple new values in intro lists to multiple outro lists
+
+    # Arguments
+        intro_lists: List of lists
+        outro_lists: List of lists
+
+    # Returns
+        Lists with new values of intro lists
+    """
     for intro_list, outro_list in zip(intro_lists, outro_lists):
         outro_list.append(intro_list)
     return outro_lists
 
 
-def unwrap(dictionary, keys):
-    return [dictionary[key] for key in keys]
-
-
 class AppendValues(Processor):
+    """Append dictionary values to lists
+
+    # Arguments
+        keys: Keys to dictionary values
+    """
     def __init__(self, keys):
         super(AppendValues, self).__init__()
         self.keys = keys
@@ -72,30 +96,45 @@ class AppendValues(Processor):
         return append_values(dictionary, lists, self.keys)
 
 
-def draw_RGB_mask(image, instance_points2D, instance_points3D, object_sizes):
-    color = points3D_to_RGB(instance_points3D, object_sizes)
-    image = draw_points2D(image, instance_points2D, color)
-    return image
+def draw_RGB_mask(image, points2D, points3D, object_sizes):
+    """Draws RGB mask by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
 
+    # Arguments
+        image: Array (H, W, 3).
+        points2D: Array (num_points, 2)
+        points3D: Array (num_points, 3)
+        object_sizes: Array (x_size, y_size, z_size)
 
-def draw_RGB_masks(image, points2D, points3D, object_sizes):
-    for instance_points2D, instance_points3D in zip(points2D, points3D):
-        # color = points3D_to_RGB(instance_points3D, object_sizes)
-        # image = draw_points2D(image, instance_points2D, color)
-        image = draw_RGB_mask(
-            image, instance_points2D, instance_points3D, object_sizes)
+    # Returns
+        Image array with drawn masks
+    """
+    color = points3D_to_RGB(points3D, object_sizes)
+    image = draw_points2D(image, points2D, color)
     return image
 
 
 class DrawRGBMask(Processor):
+    """Draws RGB mask by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        object_sizes: Array (x_size, y_size, z_size)
+    """
     def __init__(self, object_sizes):
         super(DrawRGBMask, self).__init__()
         self.object_sizes = object_sizes
 
-    def call(self, image, instance_points2D, instance_points3D):
-        image = draw_RGB_mask(image, instance_points2D,
-                              instance_points3D, self.object_sizes)
+    def call(self, image, points2D, points3D):
+        image = draw_RGB_mask(image, points2D, points3D, self.object_sizes)
         return image
+
+
+def draw_RGB_masks(image, points2D, points3D, object_sizes):
+    for instance_points2D, instance_points3D in zip(points2D, points3D):
+        image = draw_RGB_mask(
+            image, instance_points2D, instance_points3D, object_sizes)
+    return image
 
 
 class DrawRGBMasks(Processor):
@@ -108,6 +147,19 @@ class DrawRGBMasks(Processor):
 
 
 def draw_pose6D(image, pose6D, points3D, intrinsics, thickness):
+    """Draws cube in image by projecting points3D with intrinsics and pose6D.
+
+    # Arguments
+        image: Array (H, W).
+        pose6D: paz.abstract.Pose6D instance.
+        intrinsics: Array (3, 3). Camera intrinsics for projecting
+            3D rays into 2D image.
+        points3D: Array (num_points, 3).
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
     quaternion, translation = pose6D.quaternion, pose6D.translation
     rotation = quaternion_to_rotation_matrix(quaternion)
     points2D = project_to_image(rotation, translation, points3D, intrinsics)
@@ -116,6 +168,17 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness):
 
 
 class DrawPoses6D(Processor):
+    """Draws multiple cubes in image by projecting points3D.
+
+    # Arguments
+        object_sizes: Array (3) indicating (x, y, z) sizes of object.
+        camera_intrinsics: Array (3, 3).
+            Camera intrinsics for projecting 3D rays into 2D image.
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
     def __init__(self, object_sizes, camera_intrinsics, thickness=2):
         self.points3D = build_cube_points3D(*object_sizes)
         self.intrinsics = camera_intrinsics
@@ -133,6 +196,17 @@ class DrawPoses6D(Processor):
 
 
 class DrawPose6D(Processor):
+    """Draws a single cube in image by projecting points3D.
+
+    # Arguments
+        object_sizes: Array (3) indicating (x, y, z) sizes of object.
+        camera_intrinsics: Array (3, 3).
+            Camera intrinsics for projecting 3D rays into 2D image.
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
     def __init__(self, object_sizes, camera_intrinsics, thickness=2):
         self.points3D = build_cube_points3D(*object_sizes)
         self.intrinsics = camera_intrinsics
@@ -147,6 +221,15 @@ class DrawPose6D(Processor):
 
 
 def translate_points2D_origin(points2D, coordinates):
+    """Translates points2D to a different origin
+
+    # Arguments
+        points2D: Array (num_points, 2)
+        coordinates: Array (4) containing (x_min, y_min, x_max, y_max)
+
+    # Returns
+        Translated points2D array (num_points, 2)
+    """
     x_min, y_min, x_max, y_max = coordinates
     points2D[:, 0] = points2D[:, 0] + x_min
     points2D[:, 1] = points2D[:, 1] + y_min
@@ -154,14 +237,16 @@ def translate_points2D_origin(points2D, coordinates):
 
 
 class SingleInferencePIX2POSE6D(Processor):
-    """Predicts pose6D from an RGB mask
+    """Predicts a single pose6D from an image. Optionally if a box2D message is
+        given it translates the predicted points2D to new origin located at
+        box2D top-left corner.
 
     # Arguments
         model: Keras segmentation model.
         object_sizes: Array (3) determining the (width, height, depth)
         camera: PAZ Camera with intrinsic matrix.
         epsilon: Float. Values below this value would be replaced by 0.
-        resize: Boolean. If True RGB mask is resized to original shape.
+        resize: Boolean. If True RGB mask is resized before computing PnP.
         class_name: Str indicating object name.
         draw: Boolean. If True drawing functions are applied to output image.
 
@@ -202,9 +287,15 @@ class SingleInferencePIX2POSE6D(Processor):
 
 
 class MultiInferencePIX2POSE(Processor):
-    """Predicts pose6D from an RGB mask
+    """Predicts poses6D of multiple instances the same object from a single image.
 
     # Arguments
+        estimate_pose: Function that takes as input an image and outputs a
+            dictionary with points2D, points3D and pose6D messages e.g
+            SingleInferencePIX2POSE6D
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+        camera: PAZ Camera with intrinsic matrix.
+        draw: Boolean. If True drawing functions are applied to output image.
 
     # Returns
         Dictionary with inferred boxes2D, poses6D and image.
@@ -242,6 +333,19 @@ class MultiInferencePIX2POSE(Processor):
 
 
 class PIX2SinglePowerDrillPose6D(SingleInferencePIX2POSE6D):
+    """Predicts the pose6D of the YCB 035_power_drill object from an image.
+        Optionally if a box2D message is given it translates the predicted
+        points2D to new origin located at box2D top-left corner.
+
+    # Arguments
+        camera: PAZ Camera with intrinsic matrix.
+        epsilon: Float. Values below this value would be replaced by 0.
+        resize: Boolean. If True RGB mask is resized before computing PnP.
+        draw: Boolean. If True drawing functions are applied to output image.
+
+    # Returns
+        Dictionary with inferred points2D, points3D, pose6D and image.
+    """
     def __init__(self, camera, epsilon=0.15, resize=False, draw=True):
         model = UNET_VGG16(3, (128, 128, 3))
         URL = ('https://github.com/oarriaga/altamira-data/'
@@ -257,6 +361,19 @@ class PIX2SinglePowerDrillPose6D(SingleInferencePIX2POSE6D):
 
 
 class PIX2MultiPowerDrillPoses6D(MultiInferencePIX2POSE):
+    """Predicts poses6D of multiple instances the YCB 035_power_drill object
+        from an image.
+
+    # Arguments
+        camera: PAZ Camera with intrinsic matrix.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+        epsilon: Float. Values below this value would be replaced by 0.
+        resize: Boolean. If True RGB mask is resized before computing PnP.
+        draw: Boolean. If True drawing functions are applied to output image.
+
+    # Returns
+        Dictionary with inferred boxes2D, poses6D and image.
+    """
     def __init__(self, camera, offsets, epsilon=0.15, resize=False, draw=True):
         estimate_pose = PIX2SinglePowerDrillPose6D(
             camera, epsilon, resize, draw=False)
@@ -266,16 +383,17 @@ class PIX2MultiPowerDrillPoses6D(MultiInferencePIX2POSE):
 
 class PIX2POSEPowerDrill(Processor):
     """PIX2POSE inference pipeline with SSD300 trained on FAT and UNET-VGG16
-        trained with domain randomization for the object power drill.
+        trained with domain randomization for the YCB object 035_power_drill.
 
     # Arguments
         score_thresh: Float between [0, 1] for object detector.
         nms_thresh: Float between [0, 1] indicating the non-maximum supression.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
         epsilon: Float. Values below this value would be replaced by 0.
-        offsets: List of 2 between [0, 1] indicating percentage increase of box
-            dimensions.
         draw: Boolean. If ``True`` prediction are drawn in the returned image.
 
+    # Returns
+        Dictionary with inferred boxes2D, poses6D and image.
     """
     def __init__(self, camera, score_thresh=0.50, nms_thresh=0.45,
                  offsets=[0.5, 0.5], epsilon=0.15, resize=False, draw=True):
@@ -287,81 +405,26 @@ class PIX2POSEPowerDrill(Processor):
         return self.estimate_pose(image, self.detect(image)['boxes2D'])
 
 
-class SingleInferenceMultiClassPIX2POSE6D(Processor):
-    def __init__(self, name_to_model, name_to_size, camera,
-                 epsilon=0.15, resize=False, draw=True):
-        super(SingleInferencePIX2POSE6D, self).__init__()
-        if set(name_to_model.keys()) != set(name_to_size.keys()):
-            raise ValueError('models and sizes must have same class names')
-        self.name_to_pix2points = self._build_pix2points(
-            name_to_model, name_to_size, epsilon, resize)
-        self.name_to_draw = self._build_name_to_draw(name_to_size, camera)
-        self.solvePnP = pr.SolveChangingObjectPnPRANSAC(camera.intrinsics)
-        self.wrap = pr.WrapOutput(['image', 'points2D', 'points3D', 'pose6D'])
-        self.camera = camera
-        self.draw = draw
-
-    def _build_pix2points(self, name_to_model, name_to_size, epsilon, resize):
-        name_to_pix2points = {}
-        for name, model in name_to_model.items():
-            pix2points = Pix2Points(model, name_to_size[name], epsilon, resize)
-            name_to_pix2points[name] = pix2points
-        return name_to_pix2points
-
-    def _build_name_to_draw(self, name_to_size, camera):
-        name_to_draw = {}
-        for name, object_sizes in name_to_size.items():
-            draw = DrawPose6D(object_sizes, camera.intrinsics)
-            name_to_draw[name] = draw
-        return name_to_draw
-
-    def _single_inference(self, crop, box2D):
-        inferences = self.name_to_pix2points[box2D.class_name](crop)
-        points2D = inferences['points2D']
-        points3D = inferences['points3D']
-        points2D = denormalize_keypoints2D(points2D, *crop.shape[:2])
-        points2D = translate_points2D_origin(points2D, box2D.coordinates)
-        pose6D = None
-        if len(points3D) > self.solvePnP.MIN_REQUIRED_POINTS:
-            success, R, T = self.solvePnP(points3D, points2D)
-            if success:
-                pose6D = Pose6D.from_rotation_vector(R, T, self.class_name)
-        return points2D, points3D, pose6D
-
-    def call(self, image, boxes2D):
-        boxes2D = self.postprocess_boxes(boxes2D)
-        boxes2D = self.clip(image, boxes2D)
-        cropped_images = self.crop(image, boxes2D)
-        poses6D, points2D, points3D = [], [], []
-        for crop, box2D in zip(cropped_images, boxes2D):
-            set_points2D, set_points3D, pose6D = self._single_inference(
-                crop, box2D)
-            poses6D.append(pose6D)
-            points2D.append(set_points2D)
-            points3D.append(set_points3D)
-        if self.draw:
-            image = self.draw_boxes2D(image, boxes2D)
-            image = self.draw_RGBmask(image, points2D, points3D)
-            image = self.draw_poses6D(image, poses6D)
-        return self.wrap(image, boxes2D, poses6D)
-
-        if (self.draw and (pose6D is not None)):
-            colors = points3D_to_RGB(points3D, self.object_sizes)
-            image = draw_points2D(image, points2D, colors)
-            image = self.name_to_draw[box2D.class_name](image, pose6D)
-        inferences = self.wrap(image, points2D, points3D, pose6D)
-        return inferences
-
-
 class MultiInferenceMultiClassPIX2POSE(Processor):
-    """Predicts pose6D from an RGB mask
+    """Predicts poses6D of multiple instances of multiple objects from an image
 
     # Arguments
+        detect: Function that takes as input an image and outputs a dictionary
+            containing Boxes2D messages.
+        name_to_model: Dictionary with class name as key and as value a
+            Keras segmentation model.
+        name_to_size: Dictionary with class name as key and as value the
+            object sizes.
+        camera: PAZ Camera with intrinsic matrix.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+        epsilon: Float. Values below this value would be replaced by 0.
+        resize: Boolean. If True RGB mask is resized before computing PnP.
+        draw: Boolean. If True drawing functions are applied to output image.
 
     # Returns
         Dictionary with inferred boxes2D, poses6D and image.
     """
-    def __init__(self, detect, name_to_model, name_to_size, offsets, camera,
+    def __init__(self, detect, name_to_model, name_to_size, camera, offsets,
                  epsilon=0.15, resize=False, draw=True):
         super(MultiInferenceMultiClassPIX2POSE, self).__init__()
         if set(name_to_model.keys()) != set(name_to_size.keys()):
@@ -398,7 +461,6 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
     def _build_draw_RGBmask(self, name_to_size):
         name_to_draw = {}
         for name, object_sizes in name_to_size.items():
-            # draw = DrawRGBMasks(object_sizes)
             draw = DrawRGBMask(object_sizes)
             name_to_draw[name] = draw
         return name_to_draw
@@ -435,9 +497,21 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
         return self.wrap(image, boxes2D, points3D, poses6D)
 
 
-class PIX2Tools6D(MultiInferenceMultiClassPIX2POSE):
-    """
-    # TODO: Divide sizes by 10000 to obtain meters
+class PIX2YCBTools6D(MultiInferenceMultiClassPIX2POSE):
+    """Predicts poses6D of multiple instances of the YCB tools:
+        '035_power_drill', '051_large_clamp', '037_scissors'
+
+    # Arguments
+        camera: PAZ Camera with intrinsic matrix.
+        score_thresh: Float between [0, 1] for filtering Boxes2D.
+        nsm_thresh: Float between [0, 1] non-maximum-supression filtering.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+        epsilon: Float. Values below this value would be replaced by 0.
+        resize: Boolean. If True RGB mask is resized before computing PnP.
+        draw: Boolean. If True drawing functions are applied to output image.
+
+    # Returns
+        Dictionary with inferred boxes2D, poses6D and image.
     """
     def __init__(self, camera, score_thresh=0.45, nms_thresh=0.15,
                  offsets=[0.25, 0.25], epsilon=0.15, resize=False, draw=True):
@@ -445,10 +519,9 @@ class PIX2Tools6D(MultiInferenceMultiClassPIX2POSE):
         self.detect = SSD300FAT(score_thresh, nms_thresh, draw=False)
         self.name_to_sizes = self._build_name_to_sizes()
         self.name_to_model = self._build_name_to_model()
-        # change camera position as argument
-        super(PIX2Tools6D, self).__init__(
-            self.detect, self.name_to_model, self.name_to_sizes, offsets,
-            camera, epsilon, resize, draw)
+        super(PIX2YCBTools6D, self).__init__(
+            self.detect, self.name_to_model, self.name_to_sizes, camera,
+            offsets, epsilon, resize, draw)
 
     def _build_name_to_model(self):
         UNET_power_drill = UNET_VGG16(3, (128, 128, 3))
