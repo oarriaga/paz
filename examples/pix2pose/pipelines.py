@@ -72,11 +72,30 @@ class AppendValues(Processor):
         return append_values(dictionary, lists, self.keys)
 
 
+def draw_RGB_mask(image, instance_points2D, instance_points3D, object_sizes):
+    color = points3D_to_RGB(instance_points3D, object_sizes)
+    image = draw_points2D(image, instance_points2D, color)
+    return image
+
+
 def draw_RGB_masks(image, points2D, points3D, object_sizes):
     for instance_points2D, instance_points3D in zip(points2D, points3D):
-        color = points3D_to_RGB(instance_points3D, object_sizes)
-        image = draw_points2D(image, instance_points2D, color)
+        # color = points3D_to_RGB(instance_points3D, object_sizes)
+        # image = draw_points2D(image, instance_points2D, color)
+        image = draw_RGB_mask(
+            image, instance_points2D, instance_points3D, object_sizes)
     return image
+
+
+class DrawRGBMask(Processor):
+    def __init__(self, object_sizes):
+        super(DrawRGBMask, self).__init__()
+        self.object_sizes = object_sizes
+
+    def call(self, image, instance_points2D, instance_points3D):
+        image = draw_RGB_mask(image, instance_points2D,
+                              instance_points3D, self.object_sizes)
+        return image
 
 
 class DrawRGBMasks(Processor):
@@ -379,7 +398,8 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
     def _build_draw_RGBmask(self, name_to_size):
         name_to_draw = {}
         for name, object_sizes in name_to_size.items():
-            draw = DrawRGBMasks(object_sizes)
+            # draw = DrawRGBMasks(object_sizes)
+            draw = DrawRGBMask(object_sizes)
             name_to_draw[name] = draw
         return name_to_draw
 
@@ -409,8 +429,9 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
             image = self.draw_boxes2D(image, boxes2D)
             for box2D, pose6D in zip(boxes2D, poses6D):
                 name = box2D.class_name
-                # image = self.draw_RGBmask[name](image, points2D, points3D)
                 image = self.draw_pose6D[name](image, pose6D)
+            for box2D, p2D, p3D in zip(boxes2D, points2D, points3D):
+                image = self.draw_RGBmask[name](image, p2D, p3D)
         return self.wrap(image, boxes2D, points3D, poses6D)
 
 
