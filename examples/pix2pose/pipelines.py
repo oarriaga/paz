@@ -354,7 +354,7 @@ class PIX2SinglePowerDrillPose6D(SingleInferencePIX2POSE6D):
         weights_path = get_file(name, URL + name, cache_subdir='paz/models')
         print('Loading %s model weights' % weights_path)
         model.load_weights(weights_path)
-        object_sizes = np.array([1840, 1870, 520])
+        object_sizes = np.array([1840, 1870, 520]) / 10000
         class_name = '035_power_drill'
         super(PIX2SinglePowerDrillPose6D, self).__init__(
             model, object_sizes, camera, epsilon, resize, class_name, draw)
@@ -548,8 +548,9 @@ class PIX2YCBTools6D(MultiInferenceMultiClassPIX2POSE):
         return name_to_model
 
     def _build_name_to_sizes(self):
-        name_to_sizes = {'035_power_drill': np.array([1840, 1874, 572]),
-                         '051_large_clamp': np.array([2022, 1652, 362]),
-                         '037_scissors': np.array([960, 2014, 156])
-                         }
+        name_to_sizes = {
+            '035_power_drill': np.array([1840, 1874, 572]) / 10000,
+            '051_large_clamp': np.array([2022, 1652, 362]) / 10000,
+            '037_scissors': np.array([960, 2014, 156]) / 10000
+        }
         return name_to_sizes
