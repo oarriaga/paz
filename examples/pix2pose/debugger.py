@@ -19,9 +19,10 @@ top_only = False
 roll = 3.14159
 shift = 0.05
 
-path_OBJ = '/home/octavio/052_extra_large_clamp_rotated/textured.obj'
-# OBJ_name = '.keras/paz/datasets/ycb_models/037_scissors/textured.obj'
-# path_OBJ = os.path.join(root_path, OBJ_name)
+# path_OBJ = '/home/octavio/052_extra_large_clamp_rotated/textured.obj'
+OBJ_name = '.keras/paz/datasets/ycb_models/037_scissors/textured.obj'
+path_OBJ = os.path.join(root_path, OBJ_name)
+# path_OBJ = '/home/octavio/.keras/paz/datasets/ycb_models/035_power_drill/textured.obj'
 distance = [0.30, 0.35]
 
 renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
@@ -30,11 +31,13 @@ renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
 camera = Camera()
 camera.intrinsics_from_HFOV(image_shape=(128, 128))
 # from meters to milimiters
-object_sizes = renderer.mesh.mesh.extents * 100
+# object_sizes = renderer.mesh.mesh.extents * 100
+object_sizes = renderer.mesh.mesh.extents * 10000
+print(object_sizes)
 model = UNET_VGG16(3, image_shape, freeze_backbone=True)
-# model.load_weights('experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/model_weights.hdf5')
+model.load_weights('experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/model_weights.hdf5')
 # model.load_weights('experiments/UNET-VGG16_RUN_00_06-04-2022_11-20-18/model_weights.hdf5')
-model.load_weights('experiments/UNET-VGG16_RUN_00_07-04-2022_13-28-04/model_weights.hdf5')
+# model.load_weights('experiments/UNET-VGG16_RUN_00_07-04-2022_13-28-04/model_weights.hdf5')
 # estimate_pose = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
 estimate_pose = SingleInferencePIX2POSE6D(model, object_sizes, camera)
 
