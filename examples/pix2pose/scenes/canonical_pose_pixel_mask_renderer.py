@@ -1,105 +1,19 @@
 import numpy as np
-from paz.backend.render import sample_uniformly, split_alpha_channel
-from paz.backend.render import (
-    sample_point_in_sphere, random_perturbation, compute_modelview_matrices)
-from pyrender import (PerspectiveCamera, OffscreenRenderer, DirectionalLight,
-                      RenderFlags, Mesh, Scene, Viewer)
 import trimesh
+from pyrender import (PerspectiveCamera, OffscreenRenderer, DirectionalLight,
+                      RenderFlags, Mesh, Scene)
 
-from backend import to_affine_matrix
-from backend import sample_affine_transform
-from backend import calculate_canonical_rotation
-from backend import compute_vertices_colors
-
-
-def load_obj(path):
-    mesh = trimesh.load(path)
-    return mesh
+from paz.backend.groups import calculate_canonical_rotation, to_affine_matrix
+from paz.backend.render import (sample_uniformly, split_alpha_channel,
+                                compute_modelview_matrices)
+from .utils import sample_affine_transform, color_object
 
 
-def color_object(path):
-    mesh = load_obj(path)
-    colors = compute_vertices_colors(mesh.vertices)
-    mesh.visual = mesh.visual.to_color()
-    mesh.visual.vertex_colors = colors
-    mesh = Mesh.from_trimesh(mesh, smooth=False)
-    mesh.primitives[0].material.metallicFactor = 0.0
-    mesh.primitives[0].material.roughnessFactor = 1.0
-    mesh.primitives[0].material.alphaMode = 'OPAQUE'
-    return mesh
-
-
-def quick_color_visualize():
-    scene = Scene(bg_color=[0, 0, 0])
-    root = os.path.expanduser('~')
-    mesh_path = '.keras/paz/datasets/ycb_models/035_power_drill/textured.obj'
-    path = os.path.join(root, mesh_path)
-    mesh = color_object(path)
-    scene.add(mesh)
-    Viewer(scene, use_raymond_lighting=True, flags=RenderFlags.FLAT)
-    # mesh_extents = np.array([0.184, 0.187, 0.052])
-
-
-class PixelMaskRenderer():
-    """Render-ready scene composed of a single object and a single moving camera.
-
-    # Arguments
-        path_OBJ: String containing the path to an OBJ file.
-        viewport_size: List, specifying [H, W] of rendered image.
-        y_fov: Float indicating the vertical field of view in radians.
-        distance: List of floats indicating [max_distance, min_distance]
-        light: List of floats indicating [max_light, min_light]
-        top_only: Boolean. If True images are only take from the top.
-        roll: Float, to sample [-roll, roll] rolls of the Z OpenGL camera axis.
-        shift: Float, to sample [-shift, shift] to move in X, Y OpenGL axes.
+class CanonicalPosePixelMaskRenderer():
     """
-    def __init__(self, path_OBJ, viewport_size=(128, 128), y_fov=3.14159 / 4.0,
-                 distance=[0.3, 0.5], light=[0.5, 30], top_only=False,
-                 roll=None, shift=None):
-        self.distance, self.roll, self.shift = distance, roll, shift
-        self.light_intensity, self.top_only = light, top_only
-        self._build_scene(path_OBJ, viewport_size, light, y_fov)
-        self.renderer = OffscreenRenderer(viewport_size[0], viewport_size[1])
-        self.flags_RGBA = RenderFlags.RGBA
-        self.flags_FLAT = RenderFlags.RGBA | RenderFlags.FLAT
-        self.epsilon = 0.01
-
-    def _build_scene(self, path, size, light, y_fov):
-        self.scene = Scene(bg_color=[0, 0, 0, 0])
-        self.light = self.scene.add(
-            DirectionalLight([1.0, 1.0, 1.0], np.mean(light)))
-        self.camera = self.scene.add(
-            PerspectiveCamera(y_fov, aspectRatio=np.divide(*size)))
-        self.pixel_mesh = self.scene.add(color_object(path))
-        self.mesh = self.scene.add(
-            Mesh.from_trimesh(trimesh.load(path), smooth=True))
-        self.world_origin = self.mesh.mesh.centroid
-
-    def _sample_parameters(self):
-        distance = sample_uniformly(self.distance)
-        camera_origin = sample_point_in_sphere(distance, self.top_only)
-        camera_origin = random_perturbation(camera_origin, self.epsilon)
-        light_intensity = sample_uniformly(self.light_intensity)
-        return camera_origin, light_intensity
-
-    def render(self):
-        camera_origin, intensity = self._sample_parameters()
-        camera_to_world, world_to_camera = compute_modelview_matrices(
-            camera_origin, self.world_origin, self.roll, self.shift)
-        self.light.light.intensity = intensity
-        self.scene.set_pose(self.camera, camera_to_world)
-        self.scene.set_pose(self.light, camera_to_world)
-        self.pixel_mesh.mesh.is_visible = False
-        image, depth = self.renderer.render(self.scene, self.flags_RGBA)
-        self.pixel_mesh.mesh.is_visible = True
-        image, alpha = split_alpha_channel(image)
-        self.mesh.mesh.is_visible = False
-        RGB_mask, _ = self.renderer.render(self.scene, self.flags_FLAT)
-        self.mesh.mesh.is_visible = True
-        return image, alpha, RGB_mask
-
-
-class CanonicalScene():
+    # Refereces
+        - On Object Symmetries and 6D Pose Estimation from Images
+    """
     def __init__(self, path_OBJ, camera_pose, min_corner, max_corner,
                  symmetric_transforms, viewport_size=(128, 128),
                  y_fov=3.14159 / 4.0, light_intensity=[0.5, 30]):
@@ -180,7 +94,9 @@ class CanonicalScene():
 
 if __name__ == "__main__":
     import os
-    from paz.backend.image import show_image
+    from paz.backend.image import show_image, resize_image
+    # from backend import build_rotation_matrix_x
+    from backend import build_rotation_matrix_y
     from backend import build_rotation_matrix_x
     from backend import build_rotation_matrix_z
 
@@ -195,6 +111,7 @@ if __name__ == "__main__":
     # model = UNET_VGG16(3, image_shape, freeze_backbone=True)
 
     # solar panel parameters
+    """
     OBJ_name = 'single_solar_panel_02.obj'
     path_OBJ = os.path.join(root_path, OBJ_name)
     angles = np.linspace(0, 2 * np.pi, 7)[:6]
@@ -210,12 +127,12 @@ if __name__ == "__main__":
     renderer.scene.ambient_light = [1.0, 1.0, 1.0]
     image = renderer.render_symmetries()
     show_image(image)
-
     """
     # large clamp parameters
     # REMEMBER TO CHANGE THE Ns coefficient to values between [0, 1] in
     # textured.mtl. For example change 96.07 to .967
-    OBJ_name = '.keras/paz/datasets/ycb_models/051_large_clamp/textured.obj'
+    # OBJ_name = '.keras/paz/datasets/ycb_models/051_large_clamp/textured.obj'
+    """
     path_OBJ = os.path.join(root_path, OBJ_name)
     translation = np.array([0.0, 0.0, 0.25])
     camera_pose, y = compute_modelview_matrices(translation, np.zeros((3)))
@@ -232,7 +149,44 @@ if __name__ == "__main__":
     renderer.scene.ambient_light = [1.0, 1.0, 1.0]
     image = renderer.render_symmetries()
     show_image(image)
+
+    for arg in range(100):
+        image, alpha, RGBA_mask = renderer.render()
+        image = np.concatenate([image, RGBA_mask[..., 0:3]], axis=1)
+        H, W = image.shape[:2]
+        image = resize_image(image, (W * 3, H * 3))
+        show_image(image)
     """
+    OBJ_name = '/home/octavio/052_extra_large_clamp_rotated/textured.obj'
+    path_OBJ = os.path.join(root_path, OBJ_name)
+    # translation = np.array([0.0, 0.0, 0.25])
+    translation = np.array([0.0, 0.0, 0.33])
+    camera_pose, y = compute_modelview_matrices(translation, np.zeros((3)))
+    align_z = build_rotation_matrix_z(np.pi / 2)
+    camera_pose[:3, :3] = np.matmul(align_z, camera_pose[:3, :3])
+    min_corner = [-0.05, -0.02, -0.05]
+    max_corner = [+0.05, +0.02, +0.01]
+    # model.load_weights('weights/UNET-VGG_large_clamp_canonical_10.hdf5')
+
+    angles = [0.0, np.pi]
+    symmetries = np.array([build_rotation_matrix_x(angle) for angle in angles])
+    # symmetries = np.array([np.eye(3) for angle in angles])
+    renderer = CanonicalPosePixelMaskRenderer(
+        path_OBJ, camera_pose, min_corner, max_corner, symmetries)
+    renderer.scene.ambient_light = [1.0, 1.0, 1.0]
+    image = renderer.render_symmetries()
+    H, W = image.shape[:2]
+    image = resize_image(image, (W * 3, H * 3))
+    show_image(image)
+    show_image(image)
+
+    for arg in range(100):
+        image, alpha, RGBA_mask = renderer.render()
+        image = np.concatenate([image, RGBA_mask[..., 0:3]], axis=1)
+        H, W = image.shape[:2]
+        image = resize_image(image, (W * 3, H * 3))
+        show_image(image)
+
     """
     # -------------------------------------------------------------
     # Training scene for hammer

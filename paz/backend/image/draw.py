@@ -1,4 +1,3 @@
-from re import T
 import numpy as np
 import colorsys
 import random
@@ -278,6 +277,7 @@ def draw_points2D(image, points2D, colors):
     U = points2D[:, 0]
     V = points2D[:, 1]
     image[V, U, :] = colors
+    return image
 
 
 def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,

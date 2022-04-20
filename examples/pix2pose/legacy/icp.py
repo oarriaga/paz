@@ -15,7 +15,7 @@ def calculate_affine_matrix(pointcloud_A, pointcloud_B):
         R: mxm rotation matrix
         t: mx1 translation vector
     '''
-    assert pointcloud_A.shape == pointcloud_B.shape
+    # assert pointcloud_A.shape == pointcloud_B.shape
     # translate points to their centroids
     centroid3D_A = np.mean(pointcloud_A, axis=0)
     centroid3D_B = np.mean(pointcloud_B, axis=0)
@@ -34,15 +34,15 @@ def calculate_affine_matrix(pointcloud_A, pointcloud_B):
 
     # compute translation
     translation3D = centroid3D_B.T - np.dot(rotation_matrix, centroid3D_A.T)
-
+    print(translation3D.shape)
     affine_matrix = to_affine_matrix(rotation_matrix, translation3D)
     return affine_matrix
 
 
 def to_affine_matrix(rotation_matrix, translation_vector):
     translation_vector = translation_vector.reshape(3, 1)
-    affine = np.concatenate([rotation_matrix, translation_vector], axis=0)
-    affine = np.concatenate([affine, np.array([[0.0, 0.0, 0.0, 1.0]])], axis=1)
+    affine = np.concatenate([rotation_matrix, translation_vector], axis=1)
+    affine = np.concatenate([affine, np.array([[0.0, 0.0, 0.0, 1.0]])], axis=0)
     return affine
 
 
@@ -55,7 +55,7 @@ def nearest_neighbor(pointcloud_A, pointcloud_B):
         distances: Euclidean distances of the nearest neighbor
         indices: dst indices of the nearest neighbor
     '''
-    assert pointcloud_A.shape == pointcloud_B.shape
+    # assert pointcloud_A.shape == pointcloud_B.shape
     model = NearestNeighbors(n_neighbors=1)
     model.fit(pointcloud_B)
     distances, indices = model.kneighbors(pointcloud_A, return_distance=True)
@@ -64,7 +64,8 @@ def nearest_neighbor(pointcloud_A, pointcloud_B):
 
 def add_homogenous_coordinate(keypoints3D):
     num_keypoints = len(keypoints3D)
-    ones = np.ones_like(num_keypoints).reshape(-1, 1)
+    # ones = np.ones_like(num_keypoints).reshape(-1, 1)
+    ones = np.ones(num_keypoints).reshape(-1, 1)
     homogenous_keypoints3D = np.concatenate([keypoints3D, ones], axis=1)
     return homogenous_keypoints3D
 
@@ -83,7 +84,7 @@ def iterative_closes_point(pointcloud_A, pointcloud_B, initial_pose=None,
         distances: Euclidean distances (errors) of the nearest neighbor
         i: number of iterations to converge
     '''
-    assert pointcloud_A.shape == pointcloud_B.shape
+    # assert pointcloud_A.shape == pointcloud_B.shape
     pointcloud_A = add_homogenous_coordinate(pointcloud_A)
     pointcloud_B = add_homogenous_coordinate(pointcloud_B)
     pointcloud_A_0 = np.copy(pointcloud_A)
@@ -92,11 +93,16 @@ def iterative_closes_point(pointcloud_A, pointcloud_B, initial_pose=None,
     previous_error = 0
     for iteration_arg in range(max_iterations):
         distances, indices = nearest_neighbor(pointcloud_A, pointcloud_B)
-        affine_matrix = calculate_affine_matrix(pointcloud_A, pointcloud_B)
+        print(indices.shape, pointcloud_A.shape, pointcloud_B.shape)
+        pointcloud_B = pointcloud_B[indices]
+        print(pointcloud_B.shape)
+        print('***********************')
+        affine_matrix = calculate_affine_matrix(pointcloud_A[:, :3], pointcloud_B[:, :3])
         pointcloud_A = np.dot(affine_matrix, pointcloud_A.T).T
         mean_error = np.mean(distances)
+        print(mean_error)
         if np.abs(previous_error - mean_error) < tolerance:
             break
         previous_error = mean_error
-    affine_transform = calculate_affine_matrix(pointcloud_A_0, pointcloud_A)
+    affine_transform = calculate_affine_matrix(pointcloud_A_0[:, :3], pointcloud_A[:, :3])
     return affine_transform, distances, iteration_arg

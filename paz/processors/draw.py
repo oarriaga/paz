@@ -161,12 +161,15 @@ class DrawPose6D(Processor):
         self.thickness = thickness
 
     def call(self, image, pose6D):
+        if pose6D is None:
+            return image
         quaternion, translation = pose6D.quaternion, pose6D.translation
         rotation = quaternion_to_rotation_matrix(quaternion)
         cube_points2D = project_to_image(
             rotation, translation, self.cube_points3D, self.camera_intrinsics)
         cube_points2D = cube_points2D.astype(np.int32)
         image = draw_cube(image, cube_points2D, thickness=self.thickness)
+        return image
 
 
 class DrawHumanSkeleton(Processor):
