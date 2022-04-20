@@ -18,6 +18,7 @@ from paz.backend.camera import Camera
 from paz.backend.image import write_image
 from paz.optimization.losses import WeightedReconstruction
 from paz.pipelines.pose import RGBMaskToPose6D
+from pipelines import SingleInferencePIX2POSE6D
 
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
