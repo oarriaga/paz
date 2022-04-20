@@ -82,20 +82,6 @@ def append_lists(intro_lists, outro_lists):
     return outro_lists
 
 
-class AppendValues(Processor):
-    """Append dictionary values to lists
-
-    # Arguments
-        keys: Keys to dictionary values
-    """
-    def __init__(self, keys):
-        super(AppendValues, self).__init__()
-        self.keys = keys
-
-    def call(self, dictionary, lists):
-        return append_values(dictionary, lists, self.keys)
-
-
 def draw_RGB_mask(image, points2D, points3D, object_sizes):
     """Draws RGB mask by transforming points3D to RGB space and putting in
         them in their 2D coordinates (points2D)
@@ -114,6 +100,27 @@ def draw_RGB_mask(image, points2D, points3D, object_sizes):
     return image
 
 
+def draw_RGB_masks(image, points2D, points3D, object_sizes):
+    for instance_points2D, instance_points3D in zip(points2D, points3D):
+        image = draw_RGB_mask(
+            image, instance_points2D, instance_points3D, object_sizes)
+    return image
+
+
+class AppendValues(Processor):
+    """Append dictionary values to lists
+
+    # Arguments
+        keys: Keys to dictionary values
+    """
+    def __init__(self, keys):
+        super(AppendValues, self).__init__()
+        self.keys = keys
+
+    def call(self, dictionary, lists):
+        return append_values(dictionary, lists, self.keys)
+
+
 class DrawRGBMask(Processor):
     """Draws RGB mask by transforming points3D to RGB space and putting in
         them in their 2D coordinates (points2D)
@@ -128,13 +135,6 @@ class DrawRGBMask(Processor):
     def call(self, image, points2D, points3D):
         image = draw_RGB_mask(image, points2D, points3D, self.object_sizes)
         return image
-
-
-def draw_RGB_masks(image, points2D, points3D, object_sizes):
-    for instance_points2D, instance_points3D in zip(points2D, points3D):
-        image = draw_RGB_mask(
-            image, instance_points2D, instance_points3D, object_sizes)
-    return image
 
 
 class DrawRGBMasks(Processor):
@@ -236,7 +236,7 @@ def translate_points2D_origin(points2D, coordinates):
     return points2D
 
 
-class SingleInferencePIX2POSE6D(Processor):
+class SingleInstancePIX2POSE6D(Processor):
     """Predicts a single pose6D from an image. Optionally if a box2D message is
         given it translates the predicted points2D to new origin located at
         box2D top-left corner.
@@ -255,7 +255,7 @@ class SingleInferencePIX2POSE6D(Processor):
     """
     def __init__(self, model, object_sizes, camera,
                  epsilon=0.15, resize=False, class_name=None, draw=True):
-        super(SingleInferencePIX2POSE6D, self).__init__()
+        super(SingleInstancePIX2POSE6D, self).__init__()
         self.camera = camera
         self.pix2points = Pix2Points(model, object_sizes, epsilon, resize)
         self.solvePnP = pr.SolveChangingObjectPnPRANSAC(self.camera.intrinsics)
@@ -286,13 +286,13 @@ class SingleInferencePIX2POSE6D(Processor):
         return inferences
 
 
-class MultiInferencePIX2POSE(Processor):
+class MultiInstancePIX2POSE6D(Processor):
     """Predicts poses6D of multiple instances the same object from a single image.
 
     # Arguments
         estimate_pose: Function that takes as input an image and outputs a
             dictionary with points2D, points3D and pose6D messages e.g
-            SingleInferencePIX2POSE6D
+            SingleInstancePIX2POSE6D
         offsets: List of length two containing floats e.g. (x_scale, y_scale)
         camera: PAZ Camera with intrinsic matrix.
         draw: Boolean. If True drawing functions are applied to output image.
@@ -301,7 +301,7 @@ class MultiInferencePIX2POSE(Processor):
         Dictionary with inferred boxes2D, poses6D and image.
     """
     def __init__(self, estimate_pose, offsets, camera=None, draw=True):
-        super(MultiInferencePIX2POSE, self).__init__()
+        super(MultiInstancePIX2POSE6D, self).__init__()
         self.draw = draw
         self.estimate_pose = estimate_pose
         self.object_sizes = self.estimate_pose.object_sizes
@@ -332,7 +332,7 @@ class MultiInferencePIX2POSE(Processor):
         return self.wrap(image, boxes2D, poses6D)
 
 
-class PIX2SinglePowerDrillPose6D(SingleInferencePIX2POSE6D):
+class SinglePowerDrillPIX2POSE6D(SingleInstancePIX2POSE6D):
     """Predicts the pose6D of the YCB 035_power_drill object from an image.
         Optionally if a box2D message is given it translates the predicted
         points2D to new origin located at box2D top-left corner.
@@ -356,11 +356,11 @@ class PIX2SinglePowerDrillPose6D(SingleInferencePIX2POSE6D):
         model.load_weights(weights_path)
         object_sizes = np.array([1840, 1870, 520]) / 10000
         class_name = '035_power_drill'
-        super(PIX2SinglePowerDrillPose6D, self).__init__(
+        super(SinglePowerDrillPIX2POSE6D, self).__init__(
             model, object_sizes, camera, epsilon, resize, class_name, draw)
 
 
-class PIX2MultiPowerDrillPoses6D(MultiInferencePIX2POSE):
+class MultiPowerDrillPIX2POSE6D(MultiInstancePIX2POSE6D):
     """Predicts poses6D of multiple instances the YCB 035_power_drill object
         from an image.
 
@@ -375,9 +375,9 @@ class PIX2MultiPowerDrillPoses6D(MultiInferencePIX2POSE):
         Dictionary with inferred boxes2D, poses6D and image.
     """
     def __init__(self, camera, offsets, epsilon=0.15, resize=False, draw=True):
-        estimate_pose = PIX2SinglePowerDrillPose6D(
+        estimate_pose = SinglePowerDrillPIX2POSE6D(
             camera, epsilon, resize, draw=False)
-        super(PIX2MultiPowerDrillPoses6D, self).__init__(
+        super(MultiPowerDrillPIX2POSE6D, self).__init__(
             estimate_pose, offsets, camera, draw)
 
 
@@ -398,14 +398,14 @@ class PIX2POSEPowerDrill(Processor):
     def __init__(self, camera, score_thresh=0.50, nms_thresh=0.45,
                  offsets=[0.5, 0.5], epsilon=0.15, resize=False, draw=True):
         self.detect = SSD300FAT(score_thresh, nms_thresh, draw=False)
-        self.estimate_pose = PIX2MultiPowerDrillPoses6D(
+        self.estimate_pose = MultiPowerDrillPIX2POSE6D(
             camera, offsets, epsilon, resize, draw)
 
     def call(self, image):
         return self.estimate_pose(image, self.detect(image)['boxes2D'])
 
 
-class MultiInferenceMultiClassPIX2POSE(Processor):
+class MultiInstanceMultiClassPIX2POSE6D(Processor):
     """Predicts poses6D of multiple instances of multiple objects from an image
 
     # Arguments
@@ -426,7 +426,7 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
     """
     def __init__(self, detect, name_to_model, name_to_size, camera, offsets,
                  epsilon=0.15, resize=False, draw=True):
-        super(MultiInferenceMultiClassPIX2POSE, self).__init__()
+        super(MultiInstanceMultiClassPIX2POSE6D, self).__init__()
         if set(name_to_model.keys()) != set(name_to_size.keys()):
             raise ValueError('models and sizes must have same class names')
         self.detect = detect
@@ -497,7 +497,7 @@ class MultiInferenceMultiClassPIX2POSE(Processor):
         return self.wrap(image, boxes2D, points3D, poses6D)
 
 
-class PIX2YCBTools6D(MultiInferenceMultiClassPIX2POSE):
+class PIX2YCBTools6D(MultiInstanceMultiClassPIX2POSE6D):
     """Predicts poses6D of multiple instances of the YCB tools:
         '035_power_drill', '051_large_clamp', '037_scissors'
 
