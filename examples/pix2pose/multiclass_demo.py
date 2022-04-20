@@ -6,7 +6,7 @@ image = load_image('images/unit_test.png')
 # image = load_image('images/group_photo_onefourth.png')
 print(image.shape)
 camera = Camera()
-camera.intrinsics_from_HFOV(70, image.shape)
+camera.intrinsics_from_HFOV(55, image.shape)
 pipeline = PIX2YCBTools6D(camera)
 
 inferences = pipeline(image)
