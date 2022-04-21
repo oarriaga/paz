@@ -7,7 +7,11 @@ from .pipelines import MiniXceptionFER
 from .pipelines import FaceKeypointNet2D32
 from .pipelines import HeadPoseKeypointNet2D32
 from .pipelines import HaarCascadeFrontalFace
-from .pipelines import RGBMaskToPowerDrillPose6D
+
+from .pipelines import SinglePowerDrillPIX2POSE6D
+from .pipelines import MultiPowerDrillPIX2POSE6D
 from .pipelines import PIX2POSEPowerDrill
+from .pipelines import PIX2YCBTools6D
+
 from .pipelines import DetectHumanPose2D
 from .pipelines import MinimalHandPoseEstimation

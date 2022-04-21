@@ -20,8 +20,11 @@ from .draw import DrawKeypoints2D
 from .draw import DrawBoxes3D
 from .draw import DrawRandomPolygon
 from .draw import DrawPose6D
+from .draw import DrawPoses6D
 from .draw import DrawHumanSkeleton
 from .draw import DrawHandSkeleton
+from .draw import DrawRGBMask
+from .draw import DrawRGBMasks
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -111,6 +114,7 @@ from .standard import StochasticProcessor
 from .standard import Stochastic
 from .standard import UnwrapDictionary
 from .standard import Scale
+from .standard import AppendValues
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
