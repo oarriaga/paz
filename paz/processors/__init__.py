@@ -21,6 +21,7 @@ from .draw import DrawBoxes3D
 from .draw import DrawRandomPolygon
 from .draw import DrawPose6D
 from .draw import DrawHumanSkeleton
+from .draw import DrawHandSkeleton
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -88,6 +89,7 @@ from .keypoints import TranslateKeypoints
 from .keypoints import DenormalizeKeypoints2D
 from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
+from .keypoints import ScaleKeypoints
 
 from .standard import ControlMap
 from .standard import ExpandDomain

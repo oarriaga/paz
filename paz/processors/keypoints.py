@@ -9,6 +9,7 @@ from ..backend.keypoints import normalize_keypoints2D
 from ..backend.keypoints import denormalize_keypoints2D
 from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
+from ..backend.image import get_scaling_factor
 
 
 class ProjectKeypoints(Processor):
@@ -177,3 +178,24 @@ class ArgumentsToImageKeypoints2D(Processor):
     def call(self, row_args, col_args):
         image_points2D = arguments_to_image_points2D(row_args, col_args)
         return image_points2D
+
+
+class ScaleKeypoints(Processor):
+    """Scale keypoints to input image shape.
+
+    # Arguments
+        keypoints: Array. Detected keypoints by the model
+        image: Array. Input image.
+
+    # Returns
+        Scaled keypoints: Array. keypoints scaled to input image shape.
+    """
+    def __init__(self, scale=1, shape=(128, 128)):
+        super(ScaleKeypoints, self).__init__()
+        self.scale = scale
+        self.shape = shape
+
+    def call(self, keypoints, image):
+        scale = get_scaling_factor(image, self.scale, self.shape)
+        scaled_keypoints = keypoints * scale
+        return np.array(scaled_keypoints, dtype=np.uint)
