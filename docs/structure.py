@@ -58,14 +58,14 @@ PAGES = [
             keypoints.project_to_image,
             keypoints.solve_PnP_RANSAC,
             keypoints.arguments_to_image_points2D,
-            keypoints.points3D_to_RGB,
             keypoints.cascade_classifier,
             keypoints.project_points3D,
             keypoints.solve_PNP,
             keypoints.translate_keypoints,
             keypoints.rotate_keypoint,
             keypoints.transform_keypoint,
-            keypoints.add_offset_to_point
+            keypoints.add_offset_to_point,
+            keypoints.translate_points2D_origin
         ],
     },
 
@@ -115,7 +115,10 @@ PAGES = [
             draw.make_mosaic,
             draw.draw_points2D,
             draw.draw_keypoints_link,
-            draw.draw_keypoints
+            draw.draw_keypoints,
+            draw.points3D_to_RGB,
+            draw.draw_RGB_mask,
+            draw.draw_RGB_masks
         ],
     },
 
@@ -194,6 +197,8 @@ PAGES = [
     {
         'page': 'backend/standard.md',
         'functions': [
+            standard.append_lists,
+            standard.append_values,
             standard.get_upper_multiple,
             standard.resize_with_same_aspect_ratio,
             standard.get_transformation_scale,
@@ -352,7 +357,10 @@ PAGES = [
             processors.DrawBoxes3D,
             processors.DrawRandomPolygon,
             processors.DrawPose6D,
+            processors.DrawPoses6D,
             processors.DrawHumanSkeleton,
+            processors.DrawRGBMask,
+            processors.DrawRGBMasks
         ]
     },
 
@@ -491,7 +499,8 @@ PAGES = [
             processors.StochasticProcessor,
             processors.Stochastic,
             processors.UnwrapDictionary,
-            processors.Scale
+            processors.Scale,
+            processors.AppendValues
         ]
     },
 
@@ -514,6 +523,7 @@ PAGES = [
             pipelines.AugmentBoxes,
             pipelines.AugmentDetection,
             pipelines.PreprocessBoxes,
+            pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
             pipelines.DetectHumanPose2D,
@@ -546,7 +556,10 @@ PAGES = [
         'page': 'pipelines/pose.md',
         'classes': [
             pipelines.EstimatePoseKeypoints,
-            pipelines.HeadPoseKeypointNet2D32
+            pipelines.HeadPoseKeypointNet2D32,
+            pipelines.SingleInstancePIX2POSE6D,
+            pipelines.MultiInstancePIX2POSE6D,
+            pipelines.MultiInstanceMultiClassPIX2POSE6D
         ]
     },
 
@@ -583,6 +596,10 @@ PAGES = [
             pipelines.FaceKeypointNet2D32,
             pipelines.HeadPoseKeypointNet2D32,
             pipelines.HaarCascadeFrontalFace,
+            pipelines.SinglePowerDrillPIX2POSE6D,
+            pipelines.MultiPowerDrillPIX2POSE6D,
+            pipelines.PIX2POSEPowerDrill,
+            pipelines.PIX2YCBTools6D
         ]
     },
 
