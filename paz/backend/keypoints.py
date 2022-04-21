@@ -220,6 +220,22 @@ def project_to_image(rotation, translation, points3D, camera_intrinsics):
     return projected_points2D
 
 
+def translate_points2D_origin(points2D, coordinates):
+    """Translates points2D to a different origin
+
+    # Arguments
+        points2D: Array (num_points, 2)
+        coordinates: Array (4) containing (x_min, y_min, x_max, y_max)
+
+    # Returns
+        Translated points2D array (num_points, 2)
+    """
+    x_min, y_min, x_max, y_max = coordinates
+    points2D[:, 0] = points2D[:, 0] + x_min
+    points2D[:, 1] = points2D[:, 1] + y_min
+    return points2D
+
+
 def translate_keypoints(keypoints, translation):
     """Translate keypoints.
 
@@ -324,24 +340,6 @@ def arguments_to_image_points2D(row_args, col_args):
     col_args = col_args.reshape(-1, 1)
     image_points2D = np.concatenate([col_args, row_args], axis=1)  # (U, V)
     return image_points2D
-
-
-def points3D_to_RGB(points3D, object_sizes):
-    """Transforms points3D in object frame to RGB color space.
-    # Arguments
-        points3D: Array (num_points, 3). Points3D a
-        object_sizes: Array (3) indicating the
-            (width, height, depth) of object.
-
-    # Returns
-        Array of ints (num_points, 3) in RGB space.
-    """
-    # TODO add domain and codomain transform as comments
-    colors = points3D / (0.5 * object_sizes)
-    colors = colors + 1.0
-    colors = colors * 127.5
-    colors = colors.astype(np.uint8)
-    return colors
 
 
 def normalize_keypoints(keypoints, height, width):
