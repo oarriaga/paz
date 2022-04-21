@@ -36,7 +36,7 @@ def bottleneck(tensor, filters, expansion, downsample=None, name=None):
     x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name + '.bn1')(x)
     x = ReLU(name=name + '.relu')(x)
     x = Conv2D(filters, 3, padding='same',
-               use_bias=False, name=name+'.conv2')(x)
+               use_bias=False, name=name + '.conv2')(x)
     x = BatchNormalization(momentum=0.1, epsilon=1.0e-5, name=name + '.bn2')(x)
     x = ReLU()(x)
     x = Conv2D(filters * expansion, 1, use_bias=False, name=name + '.conv3')(x)
@@ -54,12 +54,12 @@ def bottleneck(tensor, filters, expansion, downsample=None, name=None):
 def basic_block(tensor, filters, name=None):
     residual = tensor
     x = Conv2D(filters, 3, padding='same',
-               use_bias=False, name=name+'.conv1')(tensor)
-    x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name+'.bn1')(x)
-    x = ReLU(name=name+'.relu')(x)
+               use_bias=False, name=name + '.conv1')(tensor)
+    x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name + '.bn1')(x)
+    x = ReLU(name=name + '.relu')(x)
     x = Conv2D(filters, 3, padding='same',
-               use_bias=False, name=name+'.conv2')(x)
-    x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name+'.bn2')(x)
+               use_bias=False, name=name + '.conv2')(x)
+    x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name + '.bn2')(x)
     x = Add()([x, residual])
     x = ReLU()(x)
     return x
@@ -72,8 +72,8 @@ def transition_block(tensor, alpha, name):
     else:
         filters = in_channels * alpha
     x = ZeroPadding2D(padding=(1, 1))(tensor)
-    x = Conv2D(filters, 3, strides=2, use_bias=False, name=name+'0.0')(x)
-    x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name+'0.1')(x)
+    x = Conv2D(filters, 3, strides=2, use_bias=False, name=name + '0.0')(x)
+    x = BatchNormalization(momentum=0.1, epsilon=1e-05, name=name + '0.1')(x)
     x = ReLU()(x)
     return x
 
@@ -85,7 +85,7 @@ def blocks_in_branch(tensors, stage, in_channels, name):
     for arg in range(stage):
         filters = in_channels * (2 ** arg)
         tensors[arg] = basic_block(tensors[arg], filters,
-                                   name=name[:18]+str(arg)+'.'+name[18:])
+                                   name=name[:18] + str(arg) + '.' + name[18:])
     return tensors
 
 
@@ -99,7 +99,7 @@ def final_layers(num_keypoints, with_AE_loss=None, num_deconv=1):
     final_layers.append(x)
 
     for arg in range(num_deconv):
-        if with_AE_loss[arg+1]:
+        if with_AE_loss[arg + 1]:
             output_channels = num_keypoints * 2
         else:
             output_channels = num_keypoints
@@ -117,8 +117,9 @@ def deconv_layers(tensor, output_channels, num_deconv=1):
                                name='deconv_layers.0.0.1')(x)
         x = ReLU()(x)
         for block in range(4):
-            x = basic_block(x, output_channels,
-                            name='deconv_layers.0.'+str(block+1)+'.'+'0')
+            x = basic_block(
+                x, output_channels,
+                name='deconv_layers.0.' + str(block + 1) + '.' + '0')
     return x
 
 
@@ -151,7 +152,7 @@ def fuse_layers(tensors, stage, output_branches, filters=32, name=None):
             elif steps < 0:  # downsample
                 y_flag = False
                 iterations = 0
-                for k in range((-1*steps) - 1):
+                for k in range((-1 * steps) - 1):
                     iterations += 1
                     if y_flag:
                         name1 = get_names(name, branch_arg, stage_arg, 1.0)
@@ -236,7 +237,7 @@ def HigherHRNet(weights='COCO', input_shape=(None, None, 3), num_keypoints=17,
                    downsample=True, name='layer1' + '.0')
     for block in range(3):
         x = bottleneck(x, filters=64, expansion=4,
-                       downsample=None, name='layer1'+'.'+str(block+1))
+                       downsample=None, name='layer1' + '.' + str(block + 1))
 
     x_list = []
     # Creation of the first two branches (one full and one half resolution)
@@ -251,7 +252,7 @@ def HigherHRNet(weights='COCO', input_shape=(None, None, 3), num_keypoints=17,
     # Stage 2 -----------------------------------------------------------------
     for block in range(4):
         x_list = blocks_in_branch(x_list, stage=2, in_channels=32,
-                                  name='stage2.0.branches.'+str(block))
+                                  name='stage2.0.branches.' + str(block))
     x_list = fuse_layers(x_list, stage=2, output_branches=2,
                          name='stage2.0.fuse_layers')
     x_list.append(transition_block(x_list[1], 2, name='transition2.2.'))
@@ -263,7 +264,7 @@ def HigherHRNet(weights='COCO', input_shape=(None, None, 3), num_keypoints=17,
             x_list = blocks_in_branch(x_list, stage=3,
                                       in_channels=32, name=name)
         x_list = fuse_layers(x_list, stage=3, output_branches=3,
-                             name='stage3.'+str(module)+'.fuse_layers')
+                             name='stage3.' + str(module) + '.fuse_layers')
     x_list.append(transition_block(x_list[2], 2, name='transition3.3.'))
 
     # Stage 4 -----------------------------------------------------------------

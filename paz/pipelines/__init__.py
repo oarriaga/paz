@@ -19,7 +19,6 @@ from .detection import HaarCascadeFrontalFace
 from .detection import DetectMiniXceptionFER
 from .detection import DetectKeypoints2D
 from .detection import DetectFaceKeypointNet2D32
-from .detection import DetectHumanPose2D
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -27,6 +26,7 @@ from .keypoints import EstimateKeypoints2D
 from .keypoints import FaceKeypointNet2D32
 from .keypoints import GetKeypoints
 from .keypoints import TransformKeypoints
+from .keypoints import HigherHRNetHumanPose2D
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage

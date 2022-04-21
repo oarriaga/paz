@@ -526,7 +526,6 @@ PAGES = [
             pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
-            pipelines.DetectHumanPose2D,
         ]
     },
 
@@ -548,6 +547,7 @@ PAGES = [
             pipelines.DetectKeypoints2D,
             pipelines.GetKeypoints,
             pipelines.TransformKeypoints,
+            pipelines.HigherHRNetHumanPose2D
         ]
     },
 
@@ -591,6 +591,7 @@ PAGES = [
             pipelines.SSD300VOC,
             pipelines.SSD512YCBVideo,
             pipelines.SSD300FAT,
+            pipelines.HigherHRNetHumanPose2D,
             pipelines.DetectMiniXceptionFER,
             pipelines.MiniXceptionFER,
             pipelines.FaceKeypointNet2D32,
