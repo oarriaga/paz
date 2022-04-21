@@ -7,4 +7,5 @@ from .fer import FER
 from .cityscapes import CityScapes
 from .coco import JOINT_CONFIG
 from .coco import FLIP_CONFIG
-from .coco import VISUALISATION_CONFIG
+from .coco import HUMAN_JOINT_CONFIG
+from .CMU_poanoptic import MINIMAL_HAND_CONFIG

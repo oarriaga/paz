@@ -158,7 +158,8 @@ PAGES = [
             image.sample_scaled_translation,
             image.get_rotation_matrix,
             image.calculate_image_center,
-            image.get_affine_transform
+            image.get_affine_transform,
+            image.get_scaling_factor
         ],
     },
 
@@ -237,7 +238,8 @@ PAGES = [
         'functions': [
             models.KeypointNet,
             models.KeypointNet2D,
-            models.Projector
+            models.Projector,
+            models.DetNet
         ],
     },
 
@@ -359,6 +361,7 @@ PAGES = [
             processors.DrawPose6D,
             processors.DrawPoses6D,
             processors.DrawHumanSkeleton,
+            processors.DrawHandSkeleton,
             processors.DrawRGBMask,
             processors.DrawRGBMasks
         ]
@@ -547,7 +550,9 @@ PAGES = [
             pipelines.DetectKeypoints2D,
             pipelines.GetKeypoints,
             pipelines.TransformKeypoints,
-            pipelines.HigherHRNetHumanPose2D
+            pipelines.HigherHRNetHumanPose2D,
+            pipelines.HandPoseEstimation,
+            pipelines.MinimalHandPoseEstimation
         ]
     },
 
@@ -600,7 +605,8 @@ PAGES = [
             pipelines.SinglePowerDrillPIX2POSE6D,
             pipelines.MultiPowerDrillPIX2POSE6D,
             pipelines.PIX2POSEPowerDrill,
-            pipelines.PIX2YCBTools6D
+            pipelines.PIX2YCBTools6D,
+            pipelines.MinimalHandPoseEstimation
         ]
     },
 
