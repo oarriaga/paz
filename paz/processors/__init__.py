@@ -22,6 +22,7 @@ from .draw import DrawRandomPolygon
 from .draw import DrawPose6D
 from .draw import DrawPoses6D
 from .draw import DrawHumanSkeleton
+from .draw import DrawHandSkeleton
 from .draw import DrawRGBMask
 from .draw import DrawRGBMasks
 
@@ -91,6 +92,7 @@ from .keypoints import TranslateKeypoints
 from .keypoints import DenormalizeKeypoints2D
 from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
+from .keypoints import ScaleKeypoints
 
 from .standard import ControlMap
 from .standard import ExpandDomain

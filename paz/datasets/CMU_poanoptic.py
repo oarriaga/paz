@@ -89,8 +89,8 @@ hand_joint_color = [[140, 26, 255],
                     [193, 115, 255]]
 
 
-VISUALISATION_CONFIG = {'part_labels': hand_part_labels,
-                        'part_arg': hand_part_arg,
-                        'part_orders': hand_part_orders,
-                        'part_color': hand_part_color,
-                        'joint_color': hand_joint_color}
+MINIMAL_HAND_CONFIG = {'part_labels': hand_part_labels,
+                       'part_arg': hand_part_arg,
+                       'part_orders': hand_part_orders,
+                       'part_color': hand_part_color,
+                       'joint_color': hand_joint_color}

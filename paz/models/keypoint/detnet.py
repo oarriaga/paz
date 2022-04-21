@@ -1,7 +1,8 @@
 
 import numpy as np
+import os
 import tensorflow as tf
-
+from tensorflow.keras.utils import get_file
 from tensorflow.keras.layers import MaxPool2D
 from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import BatchNormalization
@@ -12,6 +13,10 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.initializers import VarianceScaling
 from tensorflow.keras.initializers import truncated_normal
 from tensorflow.keras.models import Model
+
+
+WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/releases/download'
+               '/v0.14/detnet_weights.hdf5')
 
 
 def zero_padding(tensor, pad_1, pad_2):
@@ -68,16 +73,17 @@ def resnet50(tensor, name, training):
     x = block(tensor, 64, 7, 2, name + '/conv1', training)
 
     for arg in range(2):
-        x = bottleneck(x, 256, 1, name + '/block1/unit%d' % (arg+1), training)
+        x = bottleneck(
+            x, 256, 1, name + '/block1/unit%d' % (arg + 1), training)
     x = bottleneck(x, 256, 2, name + '/block1/unit3', training)
 
     for arg in range(4):
-        x = bottleneck(x, 512, 1, name + '/block2/unit%d' % (arg+1),
-                       training, 2)
+        x = bottleneck(
+            x, 512, 1, name + '/block2/unit%d' % (arg + 1), training, 2)
 
     for arg in range(6):
-        x = bottleneck(x, 1024, 1, name + '/block3/unit%d' % (arg+1),
-                       training, 4)
+        x = bottleneck(
+            x, 1024, 1, name + '/block3/unit%d' % (arg + 1), training, 4)
 
     x = block(x, 256, 3, 1, name + '/squeeze', training)
     return x
@@ -182,18 +188,20 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21):
         features = concatenate([features, lmap], -1)
 
     hmap = hmaps[-1]
-    dmap = dmaps[-1]
     lmap = lmaps[-1]
 
     uv = tf_hmap_to_uv(hmap)
-    delta = tf.gather_nd(
-        tf.transpose(dmap, perm=[0, 3, 1, 2, 4]), uv, batch_dims=2)[0]
     xyz = tf.gather_nd(
         tf.transpose(lmap, perm=[0, 3, 1, 2, 4]), uv, batch_dims=2)[0]
 
     uv = uv[0]
 
-    model = Model(image, outputs=[xyz, uv, delta])
-    model_path = 'model_weights/detnet_weights.hdf5'
-    model.load_weights(model_path)
+    model = Model(image, outputs=[xyz, uv])
+
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download'
+           '/v0.14/detnet_weights.hdf5')
+    filename = os.path.basename(URL)
+    weights_path = get_file(filename, URL, cache_subdir='paz/models')
+    print('==> Loading %s model weights' % weights_path)
+    model.load_weights(weights_path)
     return model

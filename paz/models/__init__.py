@@ -7,6 +7,7 @@ from .keypoint.keypointnet import KeypointNetShared
 from .keypoint.keypointnet import KeypointNet2D
 from .keypoint.hrnet import HRNetResidual
 from .keypoint.hrnet import HRNetDense
+from .keypoint.detnet import DetNet
 from .classification import build_xception
 from .classification import MiniXception
 from .segmentation import UNET

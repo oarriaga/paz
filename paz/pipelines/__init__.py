@@ -27,6 +27,8 @@ from .keypoints import EstimateKeypoints2D
 from .keypoints import FaceKeypointNet2D32
 from .keypoints import GetKeypoints
 from .keypoints import TransformKeypoints
+from .keypoints import HandPoseEstimation
+from .keypoints import MinimalHandPoseEstimation
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage

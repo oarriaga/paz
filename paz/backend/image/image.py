@@ -304,3 +304,21 @@ def calculate_image_center(image):
     center_W = W / 2.0
     center_H = H / 2.0
     return center_W, center_H
+
+
+def get_scaling_factor(image, scale=1, shape=(128, 128)):
+    '''
+    Return scaling factor for the image.
+
+    # Arguments
+        image: Numpy array.
+        scale: Int.
+        shape: Tuple of integers. eg. (128, 128)
+
+    # Returns
+        scaling factor: Numpy array of size 2
+    '''
+    H, W = image.shape[:2]
+    H_scale = H / shape[0]
+    W_scale = W / shape[1]
+    return np.array([W_scale * scale, H_scale * scale])

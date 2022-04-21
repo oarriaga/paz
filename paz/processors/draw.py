@@ -16,7 +16,8 @@ from ..backend.keypoints import project_points3D
 from ..backend.keypoints import build_cube_points3D
 from ..backend.groups import quaternion_to_rotation_matrix
 from ..backend.keypoints import project_to_image
-from ..datasets import VISUALISATION_CONFIG
+from ..datasets import HUMAN_JOINT_CONFIG
+from ..datasets import MINIMAL_HAND_CONFIG
 
 
 class DrawBoxes2D(Processor):
@@ -230,10 +231,10 @@ class DrawHumanSkeleton(Processor):
     """
     def __init__(self, dataset, check_scores):
         super(DrawHumanSkeleton, self).__init__()
-        self.link_orders = VISUALISATION_CONFIG[dataset]['part_orders']
-        self.link_colors = VISUALISATION_CONFIG[dataset]['part_color']
-        self.link_args = VISUALISATION_CONFIG[dataset]['part_arg']
-        self.keypoint_colors = VISUALISATION_CONFIG[dataset]['joint_color']
+        self.link_orders = HUMAN_JOINT_CONFIG[dataset]['part_orders']
+        self.link_colors = HUMAN_JOINT_CONFIG[dataset]['part_color']
+        self.link_args = HUMAN_JOINT_CONFIG[dataset]['part_arg']
+        self.keypoint_colors = HUMAN_JOINT_CONFIG[dataset]['joint_color']
         self.check_scores = check_scores
 
     def call(self, image, grouped_joints):
@@ -243,6 +244,33 @@ class DrawHumanSkeleton(Processor):
                 self.link_colors, self.check_scores)
             image = draw_keypoints(image, one_person_joints,
                                    self.keypoint_colors, self.check_scores)
+        return image
+
+
+class DrawHandSkeleton(Processor):
+    """ Draw hand pose skeleton on image.
+
+    # Arguments
+        image: Array (H, W, 3)
+        keypoints: Array. All the joint locations detected by model
+                        in the image.
+    # Returns
+        A numpy array containing pose skeleton.
+    """
+    def __init__(self, check_scores=False):
+        super(DrawHandSkeleton, self).__init__()
+        self.link_orders = MINIMAL_HAND_CONFIG['part_orders']
+        self.link_colors = MINIMAL_HAND_CONFIG['part_color']
+        self.link_args = MINIMAL_HAND_CONFIG['part_arg']
+        self.keypoint_colors = MINIMAL_HAND_CONFIG['joint_color']
+        self.check_scores = check_scores
+
+    def call(self, image, keypoints, link_width=2, keypoint_radius=4):
+        image = draw_keypoints_link(
+            image, keypoints, self.link_args, self.link_orders,
+            self.link_colors, self.check_scores, link_width)
+        image = draw_keypoints(image, keypoints, self.keypoint_colors,
+                               self.check_scores, keypoint_radius)
         return image
 
 
