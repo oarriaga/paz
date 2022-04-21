@@ -334,3 +334,58 @@ def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False,
             draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color,
                         keypoint_radius)
     return image
+
+
+def points3D_to_RGB(points3D, object_sizes):
+    """Transforms points3D in object frame to RGB color space.
+    # Arguments
+        points3D: Array (num_points, 3). Points3D a
+        object_sizes: Array (3) indicating the
+            (width, height, depth) of object.
+
+    # Returns
+        Array of ints (num_points, 3) in RGB space.
+    """
+    # TODO add domain and codomain transform as comments
+    colors = points3D / (0.5 * object_sizes)
+    colors = colors + 1.0
+    colors = colors * 127.5
+    colors = colors.astype(np.uint8)
+    return colors
+
+
+def draw_RGB_mask(image, points2D, points3D, object_sizes):
+    """Draws RGB mask by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        image: Array (H, W, 3).
+        points2D: Array (num_points, 2)
+        points3D: Array (num_points, 3)
+        object_sizes: Array (x_size, y_size, z_size)
+
+    # Returns
+        Image array with drawn masks
+    """
+    color = points3D_to_RGB(points3D, object_sizes)
+    image = draw_points2D(image, points2D, color)
+    return image
+
+
+def draw_RGB_masks(image, points2D, points3D, object_sizes):
+    """Draws RGB masks by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        image: Array (H, W, 3).
+        points2D: Array (num_samples, num_points, 2)
+        points3D: Array (num_samples, num_points, 3)
+        object_sizes: Array (x_size, y_size, z_size)
+
+    # Returns
+        Image array with drawn masks
+    """
+    for instance_points2D, instance_points3D in zip(points2D, points3D):
+        image = draw_RGB_mask(
+            image, instance_points2D, instance_points3D, object_sizes)
+    return image
