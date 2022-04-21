@@ -2,6 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
+from ..backend.standard import append_values
 
 
 class ControlMap(Processor):
@@ -432,3 +433,17 @@ class Scale(Processor):
 
     def call(self, values):
         return self.scales * values
+
+
+class AppendValues(Processor):
+    """Append dictionary values to lists
+
+    # Arguments
+        keys: Keys to dictionary values
+    """
+    def __init__(self, keys):
+        super(AppendValues, self).__init__()
+        self.keys = keys
+
+    def call(self, dictionary, lists):
+        return append_values(dictionary, lists, self.keys)
