@@ -1,3 +1,4 @@
+import pytest
 import os
 import numpy as np
 from tensorflow.keras.utils import get_file
@@ -8,7 +9,8 @@ from paz.backend.camera import Camera
 from paz.pipelines import PIX2YCBTools6D
 
 
-def boxes2D():
+@pytest.fixture
+def true_boxes2D():
     boxes = [
         Box2D(np.array([691, 324, 850, 510]), 0.9741702079, "037_scissors"),
         Box2D(np.array([326, 471, 550, 679]), 0.8022266626, "035_power_drill"),
@@ -17,7 +19,8 @@ def boxes2D():
     return boxes
 
 
-def poses6D():
+@pytest.fixture
+def true_poses6D():
     quaternion = [-0.04797872994777336, -0.21049879282908107,
                   0.937455586206986, 0.27306651859833425]
     translation = [0.5038849913659514, 0.09749278429483288, 1.1208797474903172]
@@ -45,6 +48,7 @@ def poses6D():
     return [pose6D_1, pose6D_2, pose6D_3, pose6D_4]
 
 
+@pytest.fixture
 def image_with_YCB_objects():
     URL = ('https://github.com/oarriaga/altamira-data/releases/download'
            '/v0.9.1/image_with_YCB_objects.jpg')
@@ -70,14 +74,10 @@ def assert_poses6D(true_poses6D, pred_poses6D):
         assert (true_pose6D.class_name == true_pose6D.class_name)
 
 
-def test_PIX2YCBTools6D():
-    image = image_with_YCB_objects()
-    true_boxes2D = boxes2D()
-    true_poses6D = poses6D()
-
+def test_PIX2YCBTools6D(image_with_YCB_objects, true_boxes2D, true_poses6D):
     camera = Camera()
-    camera.intrinsics_from_HFOV(55, image.shape)
+    camera.intrinsics_from_HFOV(55, image_with_YCB_objects.shape)
     pipeline = PIX2YCBTools6D(camera)
-    inferences = pipeline(image)
+    inferences = pipeline(image_with_YCB_objects)
     assert_boxes2D(true_boxes2D, inferences['boxes2D'])
     assert_poses6D(true_poses6D, inferences['poses6D'])
