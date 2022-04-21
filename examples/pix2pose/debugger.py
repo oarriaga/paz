@@ -3,7 +3,7 @@ import numpy as np
 from paz.backend.image import show_image, resize_image
 from paz.backend.camera import Camera
 # from paz.pipelines.pose import RGBMaskToPose6D
-from pipelines import SingleInferencePIX2POSE6D
+from paz.pipelines import SingleInstancePIX2POSE6D
 from paz.models.segmentation import UNET_VGG16
 from scenes import PixelMaskRenderer
 from paz.backend.image import (
@@ -39,7 +39,8 @@ model.load_weights('experiments/UNET-VGG16_RUN_00_04-04-2022_12-29-44/model_weig
 # model.load_weights('experiments/UNET-VGG16_RUN_00_06-04-2022_11-20-18/model_weights.hdf5')
 # model.load_weights('experiments/UNET-VGG16_RUN_00_07-04-2022_13-28-04/model_weights.hdf5')
 # estimate_pose = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
-estimate_pose = SingleInferencePIX2POSE6D(model, object_sizes, camera)
+# estimate_pose = SingleInferencePIX2POSE6D(model, object_sizes, camera)
+estimate_pose = SingleInstancePIX2POSE6D(model, object_sizes, camera)
 
 image, alpha, RGBA_mask = renderer.render()
 image = np.copy(image)  # TODO: renderer outputs unwritable numpy arrays

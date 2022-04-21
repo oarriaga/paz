@@ -5,7 +5,7 @@ from paz.abstract import Box2D, Pose6D
 
 from paz.backend.image import load_image
 from paz.backend.camera import Camera
-from pipelines import PIX2YCBTools6D
+from paz.pipelines import PIX2YCBTools6D
 
 
 def boxes2D():

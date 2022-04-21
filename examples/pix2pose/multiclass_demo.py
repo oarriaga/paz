@@ -1,6 +1,6 @@
 from paz.backend.image import show_image, load_image, resize_image
 from paz.backend.camera import Camera
-from pipelines import PIX2YCBTools6D
+from paz.pipelines import PIX2YCBTools6D
 
 image = load_image('images/unit_test.png')
 # image = load_image('images/group_photo_onefourth.png')
