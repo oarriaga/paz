@@ -78,7 +78,7 @@ coco_joint_color = [[198, 26, 255],
                     [26, 255, 255]]
 
 
-VISUALISATION_CONFIG = {
+HUMAN_JOINT_CONFIG = {
     'COCO': {'part_labels': coco_part_labels,
              'part_arg': coco_part_arg,
              'part_orders': coco_part_orders,
