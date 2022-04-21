@@ -10,3 +10,4 @@ from .pipelines import HaarCascadeFrontalFace
 from .pipelines import RGBMaskToPowerDrillPose6D
 from .pipelines import PIX2POSEPowerDrill
 from .pipelines import DetectHumanPose2D
+from .pipelines import MinimalHandPoseEstimation
