@@ -189,26 +189,21 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Detection and Segmentation](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/hrnet.py)|[HRNet](https://arxiv.org/abs/1908.07919)|
 |[Semantic segmentation](https://github.com/oarriaga/paz/blob/master/paz/models/segmentation/unet.py)|[U-NET](https://arxiv.org/abs/1505.04597)|      
-|[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[KeypointNet2D](https://arxiv.org/abs/1807.03146)          |
+|[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[Pix2Pose](https://arxiv.org/abs/1908.07433)          |
 |[Implicit orientation](https://github.com/oarriaga/paz/blob/master/examples/implicit_orientation_learning/model.py)        |[AutoEncoder](https://arxiv.org/abs/1902.01275)            |
 |[Emotion classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/xception.py)       |[MiniXception](https://arxiv.org/abs/1710.07557)           |
 |[Discovery of Keypoints](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)      |[KeypointNet](https://arxiv.org/abs/1807.03146)            |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)  |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)           |
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)  |
+|[Hand pose estimation](https://github.com/oarriaga/paz/blob/refactor_readme/paz/models/keypoint/detnet.py)            |[DetNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
+
 
 ## Motivation
 Even though there are multiple high-level computer vision libraries in different deep learning frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
 
-### Why Keras over other frameworks/libraries?
-In simple terms, I have always felt the API of Keras to be more mature.
-It allowed me to express my ideas at the level of complexity that was required. 
-Keras was often misinterpreted as an inflexible or a beginners framework; however, once you learn to abstract `Layer`, `Callbacks`, `Loss`, `Metrics` or `Model`, the API remained intact and helpful for more complicated ideas. 
-It allowed me to automate and write down experiments with no extra boilerplate.
-Furthermore, one could always have created a custom training loop.
-
 As a final remark, I would like to mention, that I feel that we might tend to forget the great effort and emotional status behind every (open-source) project.
-I feel it's easy to blurry a company name with the individuals behind their project, and we forget that there is someone feeling our criticism and our praise.
+I feel it's easy to blurry a company name with the individuals behind their work, and we forget that there is someone feeling our criticism and our praise.
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration.
 
