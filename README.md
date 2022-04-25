@@ -24,9 +24,9 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="360">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="360"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="350">|
 
-|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) |                       |                 |
+|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | Hand pose estimation  |                 |
 |---------------------------|-----------------------|-----------------|
-| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="330">|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330">|
+| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/minimal_hand_example.png" width="330"> |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330"> | 
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
