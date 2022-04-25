@@ -1,20 +1,15 @@
 from tensorflow.keras.utils import get_file
-from ..abstract import SequentialProcessor, Processor
-from .. import processors as pr
 
 from .renderer import RenderTwoViews
-from ..models import KeypointNet2D
-from ..models import DetNet
-
-from .. import processors as pr
-from ..abstract import SequentialProcessor, Processor
-from ..models import KeypointNet2D, HigherHRNet
-from ..backend.image import get_affine_transform
-from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 from .image import PreprocessImageHigherHRNet
 from .heatmaps import GetHeatmapsAndTags
-from .renderer import RenderTwoViews
-from ..backend.image import flip_left_right
+
+from .. import processors as pr
+from ..abstract import SequentialProcessor, Processor
+from ..models import KeypointNet2D, HigherHRNet, DetNet
+
+from ..backend.image import get_affine_transform, flip_left_right
+from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -257,7 +252,7 @@ class HigherHRNetHumanPose2D(Processor):
             image = self.draw_skeleton(image, keypoints)
         keypoints = self.extract_keypoints_locations(keypoints)
         return self.wrap(image, keypoints, scores)
-      
+
 
 class HandPoseEstimation(Processor):
     """Hand keypoints detection pipeline.
