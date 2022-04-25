@@ -13,5 +13,5 @@ from .pipelines import MultiPowerDrillPIX2POSE6D
 from .pipelines import PIX2POSEPowerDrill
 from .pipelines import PIX2YCBTools6D
 
-from .pipelines import DetectHumanPose2D
+from .pipelines import HigherHRNetHumanPose2D
 from .pipelines import MinimalHandPoseEstimation

@@ -1,12 +1,15 @@
-from ..abstract import SequentialProcessor, Processor
-from .. import processors as pr
+from tensorflow.keras.utils import get_file
 
 from .renderer import RenderTwoViews
-from ..models import KeypointNet2D
-from ..models import DetNet
-from tensorflow.keras.utils import get_file
-from ..backend.image import get_affine_transform
-from ..backend.image import flip_left_right
+from .image import PreprocessImageHigherHRNet
+from .heatmaps import GetHeatmapsAndTags
+
+from .. import processors as pr
+from ..abstract import SequentialProcessor, Processor
+from ..models import KeypointNet2D, HigherHRNet, DetNet
+
+from ..backend.image import get_affine_transform, flip_left_right
+from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -200,6 +203,55 @@ class TransformKeypoints(Processor):
         transformed_keypoints = self.transform_keypoints(grouped_keypoints,
                                                          transform)
         return transformed_keypoints
+
+
+class HigherHRNetHumanPose2D(Processor):
+    """Estimate human pose 2D keypoints and draw a skeleton.
+
+    # Arguments
+        model: Weights trained on HigherHRNet model.
+        keypoint_order: List of length 17 (number of keypoints).
+            where the keypoints are listed order wise.
+        flipped_keypoint_order: List of length 17 (number of keypoints).
+            Flipped list of keypoint order.
+        dataset: String. Name of the dataset used for training the model.
+        data_with_center: Boolean. True is the model is trained using the
+            center.
+
+    # Returns
+        dictonary with the following keys:
+            image: contains the image with skeleton drawn on it.
+            keypoints: location of keypoints
+            score: score of detection
+    """
+    def __init__(self, dataset='COCO', data_with_center=False,
+                 max_num_people=30, with_flip=True, draw=True):
+        super(HigherHRNetHumanPose2D, self).__init__()
+        keypoint_order = JOINT_CONFIG[dataset]
+        flipped_keypoint_order = FLIP_CONFIG[dataset]
+        self.with_flip = with_flip
+        self.draw = draw
+        self.model = HigherHRNet(weights=dataset)
+        self.transform_image = PreprocessImageHigherHRNet()
+        self.get_heatmaps_and_tags = pr.SequentialProcessor(
+            [GetHeatmapsAndTags(self.model, flipped_keypoint_order,
+             with_flip, data_with_center), pr.AggregateResults(with_flip)])
+        self.get_keypoints = GetKeypoints(max_num_people, keypoint_order)
+        self.transform_keypoints = TransformKeypoints(inverse=True)
+        self.draw_skeleton = pr.DrawHumanSkeleton(dataset, check_scores=True)
+        self.extract_keypoints_locations = pr.ExtractKeypointsLocations()
+        self.wrap = pr.WrapOutput(['image', 'keypoints', 'scores'])
+
+    def call(self, image):
+        resized_image, center, scale = self.transform_image(image)
+        heatmaps, tags = self.get_heatmaps_and_tags(resized_image)
+        keypoints, scores = self.get_keypoints(heatmaps, tags)
+        shape = [heatmaps.shape[3], heatmaps.shape[2]]
+        keypoints = self.transform_keypoints(keypoints, center, scale, shape)
+        if self.draw:
+            image = self.draw_skeleton(image, keypoints)
+        keypoints = self.extract_keypoints_locations(keypoints)
+        return self.wrap(image, keypoints, scores)
 
 
 class HandPoseEstimation(Processor):
