@@ -1,17 +1,16 @@
-import argparse
 import os
+from tensorflow.keras.utils import get_file
 from paz.backend.image import load_image, show_image
-from pipelines import MANOHandPoseEstimation
+from paz.applications import MinimalHandPoseEstimation
 
-description = 'Demo script for estimating 6D pose-heads from face-keypoints'
-parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-i', '--images_path', type=str,
-                    default='images',
-                    help='Directory for the test images')
-args = parser.parse_args()
 
-image = load_image(os.path.join(args.images_path, 'hand2.jpg'))
-detect = MANOHandPoseEstimation()
+URL = ('https://github.com/oarriaga/altamira-data/releases/download'
+       '/v0.14/image_with_hand.png')
+filename = os.path.basename(URL)
+fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+image = load_image(fullpath)
+
+detect = MinimalHandPoseEstimation()
 inferences = detect(image)
 
 image = inferences['image']

@@ -7,7 +7,6 @@ from paz.backend.keypoints import denormalize_keypoints2D
 from paz.backend.keypoints import normalize_keypoints2D
 from paz.backend.keypoints import arguments_to_image_points2D
 from paz.backend.keypoints import project_to_image
-from paz.backend.keypoints import points3D_to_RGB
 
 
 @pytest.fixture
@@ -109,8 +108,3 @@ def test_project_to_image():
     points2D = project_to_image(rotation, translation,
                                 points3D, camera_intrinsics)
     assert np.allclose(points2D, np.array([0.5, -0.5]))
-
-
-def test_points3D_to_RGB(points3D, object_sizes, object_colors):
-    values = points3D_to_RGB(points3D, object_sizes)
-    assert np.allclose(values, object_colors)

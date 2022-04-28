@@ -1,6 +1,36 @@
 import numpy as np
 
 
+def append_values(dictionary, lists, keys):
+    """Append dictionary values to lists
+
+    # Arguments
+        dictionary: dict
+        lists: List of lists
+        keys: Keys to dictionary values
+    """
+    if len(keys) != len(lists):
+        assert ValueError('keys and lists must have same length')
+    for key_arg, key in enumerate(keys):
+        lists[key_arg].append(dictionary[key])
+    return lists
+
+
+def append_lists(intro_lists, outro_lists):
+    """Appends multiple new values in intro lists to multiple outro lists
+
+    # Arguments
+        intro_lists: List of lists
+        outro_lists: List of lists
+
+    # Returns
+        Lists with new values of intro lists
+    """
+    for intro_list, outro_list in zip(intro_lists, outro_lists):
+        outro_list.append(intro_list)
+    return outro_lists
+
+
 def get_upper_multiple(x, multiple=64):
     """Returns the upper multiple of 'multiple' to the x.
 

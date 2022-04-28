@@ -90,6 +90,7 @@ hand_joint_color = [[140, 26, 255],
                     [193, 115, 255]]
 
 
+<<<<<<< HEAD:examples/minimal_hand/joint_config.py
 VISUALISATION_CONFIG = {'part_labels': hand_part_labels,
                         'part_arg': hand_part_arg,
                         'part_orders': hand_part_orders,
@@ -171,3 +172,10 @@ class MPIIHandJoints:
         0, 13, 14, 15,
         0, 17, 18, 19
     ]
+=======
+MINIMAL_HAND_CONFIG = {'part_labels': hand_part_labels,
+                       'part_arg': hand_part_arg,
+                       'part_orders': hand_part_orders,
+                       'part_color': hand_part_color,
+                       'joint_color': hand_joint_color}
+>>>>>>> master:paz/datasets/CMU_poanoptic.py
