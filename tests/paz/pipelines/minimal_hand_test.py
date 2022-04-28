@@ -69,5 +69,5 @@ def keypoints2D():
 def test_MinimalHandPoseEstimation(image, keypoints3D, keypoints2D):
     detect = MinimalHandPoseEstimation()
     inferences = detect(image)
-    assert np.allclose(inferences['keypoints3D'], keypoints3D)
-    assert np.allclose(inferences['keypoints2D'], keypoints2D)
+    assert np.allclose(inferences['keypoints3D'], keypoints3D, rtol=1e-03)
+    assert np.allclose(inferences['keypoints2D'], keypoints2D, rtol=1e-03)
