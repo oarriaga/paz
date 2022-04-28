@@ -183,8 +183,8 @@ The following models are implemented in PAZ and they can be trained with your ow
 
 | Task (link to implementation)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|                
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|                
 |[Probabilistic keypoint est.](https://github.com/oarriaga/paz/blob/master/examples/probabilistic_keypoint_estimation/model.py) |[Gaussian Mixture CNN](https://www.robots.ox.ac.uk/~vgg/publications/2018/Neumann18a/)   |
 |[Detection and Segmentation](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/hrnet.py)|[HRNet](https://arxiv.org/abs/1908.07919)|
