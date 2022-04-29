@@ -91,26 +91,26 @@ def resnet50(tensor, name, training):
 
 def net_2d(features, num_keypoints, name, training=False):
     x = block(features, 256, 3, 1, name + '/project', training)
-    hmap = Conv2D(num_keypoints, 1, strides=1, padding='SAME',
-                  activation=tf.sigmoid, name=name + '/prediction/conv2d',
-                  kernel_initializer=truncated_normal(stddev=0.01))(x)
-    return hmap
+    heat_map = Conv2D(num_keypoints, 1, strides=1, padding='SAME',
+                      activation=tf.sigmoid, name=name + '/prediction/conv2d',
+                      kernel_initializer=truncated_normal(stddev=0.01))(x)
+    return heat_map
 
 
 def net_3d(features, num_keypoints, name, need_norm=False, training=False):
     x = block(features, 256, 3, 1, name + '/project', training)
-    dmap = Conv2D(num_keypoints * 3, 1, strides=1, padding='SAME',
-                  name=name + '/prediction/conv2d',
-                  kernel_initializer=truncated_normal(stddev=0.01))(x)
+    delta_map = Conv2D(num_keypoints * 3, 1, strides=1, padding='SAME',
+                       name=name + '/prediction/conv2d',
+                       kernel_initializer=truncated_normal(stddev=0.01))(x)
     if need_norm:
-        dmap_norm = tf.norm(dmap, axis=-1, keepdims=True)
-        dmap = dmap / tf.maximum(dmap_norm, 1e-6)
+        delta_map_norm = tf.norm(delta_map, axis=-1, keepdims=True)
+        delta_map = delta_map / tf.maximum(delta_map_norm, 1e-6)
 
     H, W = features.get_shape()[1:3]
-    dmap = tf.reshape(dmap, [-1, H, W, num_keypoints, 3])
+    delta_map = tf.reshape(delta_map, [-1, H, W, num_keypoints, 3])
     if need_norm:
-        return dmap, dmap_norm
-    return dmap
+        return delta_map, delta_map_norm
+    return delta_map
 
 
 def get_pose_tile(N):
@@ -123,10 +123,10 @@ def get_pose_tile(N):
     return pose_tile
 
 
-def tf_hmap_to_uv(hmap):
-    shape = tf.shape(hmap)
-    hmap = tf.reshape(hmap, (shape[0], -1, shape[3]))
-    argmax = tf.math.argmax(hmap, axis=1, output_type=tf.int32)
+def tf_heatmap_to_uv(heatmap):
+    shape = tf.shape(heatmap)
+    heatmap = tf.reshape(heatmap, (shape[0], -1, shape[3]))
+    argmax = tf.math.argmax(heatmap, axis=1, output_type=tf.int32)
     argmax_x = argmax // shape[2]
     argmax_y = argmax % shape[2]
     uv = tf.stack((argmax_x, argmax_y), axis=1)
@@ -138,24 +138,19 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21):
     """
     DetNet: Estimating 3D keypoint positions from input color image.
     # Arguments
-    -------
         input_shape: Shape for 128x128 RGB image of **left hand**.
                      List of integers. Input shape to the model including only
                      spatial and channel resolution e.g. (128, 128, 3).
         num_keypoints: Int. Number of keypoints.
 
-    Returns
-    -------
+    # Returns
     xvy: np.ndarray, shape [21, 3]
       Normalized 3D keypoint locations.
     np.ndarray, shape [21, 2]
       The uv coordinates of the keypoints on the heat map, whose resolution is
       32x32.
-    np.ndarray, shape [21, 3]
-      Orientaion of the bone
 
     # Reference
-    -------
         - [Monocular Real-time Hand Shape and Motion Capture using Multi-modal
            Data](https://arxiv.org/abs/2003.09572)
     """
@@ -168,32 +163,36 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21):
     pose_tile = get_pose_tile(tf.shape(x)[0])
     features = concatenate([features, pose_tile], -1)
 
-    hmaps = []
-    dmaps = []
-    lmaps = []
-    n_stack = 1
-    for i in range(n_stack):
-        hmap = net_2d(features, num_keypoints, name + '/hmap_%d' % i, False)
-        hmaps.append(hmap)
-        features = concatenate([features, hmap], axis=-1)
+    heat_maps = []
+    delta_maps = []
+    location_maps = []
 
-        dmap = net_3d(features, num_keypoints, name + '/dmap_%d' % i, False)
-        dmaps.append(dmap)
-        dmap = tf.reshape(dmap, [-1, 32, 32, num_keypoints * 3])
-        features = concatenate([features, dmap], -1)
+    num_stack = 1
+    for arg in range(num_stack):
+        heat_map = net_2d(
+            features, num_keypoints, name + '/hmap_%d' % arg, False)
+        heat_maps.append(heat_map)
+        features = concatenate([features, heat_map], axis=-1)
 
-        lmap = net_3d(features, num_keypoints, name + '/lmap_%d' % i, False)
-        lmaps.append(lmap)
-        lmap = tf.reshape(lmap, [-1, 32, 32, num_keypoints * 3])
-        features = concatenate([features, lmap], -1)
+        delta_map = net_3d(
+            features, num_keypoints, name + '/dmap_%d' % arg, False)
+        delta_maps.append(delta_map)
+        delta_map = tf.reshape(delta_map, [-1, 32, 32, num_keypoints * 3])
+        features = concatenate([features, delta_map], -1)
 
-    hmap = hmaps[-1]
-    lmap = lmaps[-1]
+        location_map = net_3d(
+            features, num_keypoints, name + '/lmap_%d' % arg, False)
+        location_maps.append(location_map)
+        location_map = tf.reshape(
+            location_map, [-1, 32, 32, num_keypoints * 3])
+        features = concatenate([features, location_map], -1)
 
-    uv = tf_hmap_to_uv(hmap)
+    heat_map = heat_maps[-1]
+    location_map = location_maps[-1]
+
+    uv = tf_heatmap_to_uv(heat_map)
     xyz = tf.gather_nd(
-        tf.transpose(lmap, perm=[0, 3, 1, 2, 4]), uv, batch_dims=2)[0]
-
+        tf.transpose(location_map, perm=[0, 3, 1, 2, 4]), uv, batch_dims=2)[0]
     uv = uv[0]
 
     model = Model(image, outputs=[xyz, uv])
