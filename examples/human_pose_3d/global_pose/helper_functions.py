@@ -54,10 +54,13 @@ def s3d(poses3d):
         sum_bl: sum of length of all bones in the 3d skeleton
     """
     sum_bl = np.zeros(poses3d.shape[0])  # sum of bone lengths, each entry is for each person
-    poses3d = np.reshape(poses3d, (poses3d.shape[0], 32, -1))
+    poses3d = np.reshape(poses3d, (poses3d.shape[0], 16, -1))
 
-    start_joints = np.array([1, 2, 3, 1, 7, 8, 1, 13, 14, 15, 14, 18, 19, 14, 26, 27]) - 1
-    end_joints = np.array([2, 3, 4, 7, 8, 9, 13, 14, 15, 16, 18, 19, 20, 26, 27, 28]) - 1
+    # start_joints = np.array([1, 2, 3, 1, 7, 8, 1, 13, 14, 15, 14, 18, 19, 14, 26, 27]) - 1
+    # end_joints = np.array([2, 3, 4, 7, 8, 9, 13, 14, 15, 16, 18, 19, 20, 26, 27, 28]) - 1
+    #TODO: CHECK THIS PART THE INDICES!!!!
+    start_joints = np.array([1, 2, 3, 1, 5, 6, 1, 8, 9, 9, 11, 12, 9, 14, 15]) - 1
+    end_joints = np.array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) - 1
 
     for idx, person in enumerate(poses3d):
         for i in np.arange(len(start_joints)):

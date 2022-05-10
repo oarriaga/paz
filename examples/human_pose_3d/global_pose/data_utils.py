@@ -60,6 +60,22 @@ COCO_NAMES[15] = 'LFoot'
 COCO_NAMES[16] = 'RFoot'
 
 
+def filter_moving_joints_3d(poses3d):
+    """
+    Selects 16 moving joints (Neck/Nose excluded) from 32 predicted joints in 3d
+
+    Args
+        poses3d: Nx96 points in camera coordinates
+    Returns
+        p3d: Nx48 points (moving joints)
+    """
+    reshaped = np.reshape(poses3d, [poses3d.shape[0], 32, 3])
+    idx = [0,1,2,3,6,7,8,12,13,15,17,18,19,25,26,27]
+    p3d = reshaped[:,idx,:]
+    p3d = p3d.reshape(poses3d.shape[0],-1)
+    return p3d
+
+
 def preprocess_2d_data(poses_2d):
     """Preprocesses 2d detections loaded from text file by creating some extra joints
        and converting COCO joint order to H36M.

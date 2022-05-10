@@ -111,8 +111,13 @@ def show2Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=Fals
 
     RADIUS = 450 # space around the subject
     xroot, yroot = vals[0,0,0], vals[0,0,1]
-    ax.set_xlim([-RADIUS+xroot, RADIUS+xroot])
-    ax.set_ylim([-RADIUS+yroot, RADIUS+yroot])
+    # ax.set_xlim([-RADIUS+xroot, RADIUS+xroot])
+    # ax.set_ylim([-RADIUS+yroot, RADIUS+yroot])
+    # ax.set_xlim([0, 800])
+    # ax.set_ylim([0, 600])
+
+    ax.set_xlim([0, 1280])
+    ax.set_ylim([0, 720])
     if add_labels:
         ax.set_xlabel("x")
         ax.set_ylabel("z")

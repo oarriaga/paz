@@ -6,6 +6,7 @@ import numpy as np
 from scipy.optimize import *
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import copy
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from linear_model import mse_loss
@@ -15,7 +16,7 @@ import helper_functions
 
 
 def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
-    """Optimization function to minimize the distance betweeen 2d poses and projection of 3d poses
+    """Optimization function to minimize the distance between 2d poses and projection of 3d poses
 
     Args
         initial_root_translation: initial guess of absolute position of root joint in camera space
@@ -28,8 +29,7 @@ def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
     """
     # add root translation to poses3d
     initial_root_translation = np.reshape(initial_root_translation, (-1, 3))
-    new_poses3d = poses3d + np.tile(initial_root_translation, (1, 32))
-
+    new_poses3d = poses3d + np.tile(initial_root_translation, (1, 16))
     # Project all poses translation 3D to 2D
     ppts = helper_functions.proj_3d_to_2d(new_poses3d.reshape((-1, 3)), f, img_center)
     ppts = ppts.reshape((Ki.shape[0],-1,2))
@@ -38,7 +38,8 @@ def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
 
     for i in range(Ki.shape[0]):
         person_sum += np.sum(np.linalg.norm(Ki[i] - ppts[i], axis=1))
-    print(f"sum: {person_sum}")
+    # print(f"sum: {person_sum}")
+
     return person_sum
 
 
@@ -58,6 +59,7 @@ def predict_3d_poses():
     with open(path_2d, 'rb') as fp:
         poses_2d = pickle.load(fp)
     poses_2d = data_utils.preprocess_2d_data(poses_2d)
+    print(f"poses_2d : {poses_2d} {poses_2d.shape}")
 
     # Normalize 2d poses
     mu = data_mean_2d[dim_to_use_2d]
@@ -65,7 +67,7 @@ def predict_3d_poses():
     enc_in = np.divide((poses_2d - mu), stddev)
 
     # load the model
-    model_path = 'SCRATCH/3d-pose-baseline/saved_model/baseline_model'
+    model_path = '/home/kashmira/SCRATCH/3d-pose-baseline/saved_model/baseline_model'
     # latter part added because custom loss is defined, is a TF bug
     model = tf.keras.models.load_model(model_path, custom_objects={'mse_loss': mse_loss})
     print("\n==> Model loaded!")
@@ -74,23 +76,24 @@ def predict_3d_poses():
     poses3d = model.predict(enc_in)
 
     # denormalize
-    poses2d_unnorm = data_utils.unNormalizeData(enc_in, data_mean_2d, data_std_2d, dim_to_ignore_2d)
     poses3d = data_utils.unNormalizeData(poses3d, data_mean_3d, data_std_3d, dim_to_ignore_3d)
     step_time = (time.time() - start_time)
     print(f"\nPred done in {step_time}s")
     poses3d_copy = poses3d.copy()
 
-    return poses_2d, poses2d_unnorm, poses3d, poses3d_copy, start_time
+    return poses_2d, poses3d, poses3d_copy, start_time
 
 
 def translate_root():
     """Finds the optimal translation of root joint for each person to give a good enough estimate
     of the global human pose in camera coordinates"""
 
-    poses_2d, poses2d_unnorm, poses3d, poses3d_copy, start_time = predict_3d_poses()
+    poses_2d, poses3d, poses3d_copy, start_time = predict_3d_poses()
     start_time_1 = time.time()
 
-    Ki = poses2d_unnorm.astype(np.float32) # 2d poses
+    p3d_17 = data_utils.filter_moving_joints_3d(poses3d)
+    Ki = poses_2d.astype(np.float32) # 2d poses
+
     # get human root joint in 2d
     root_2d = poses_2d[:, :2]
 
@@ -98,12 +101,12 @@ def translate_root():
     f = 699.195                                  # change as per camera intrinsics
 
     s2d = helper_functions.s2d(poses_2d)
-    s3d = helper_functions.s3d(poses3d)
+    s3d = helper_functions.s3d(p3d_17)
 
     initial_root_translation = helper_functions.init_translation(f, root_2d, img_center, s2d, s3d)
     initial_root_translation = initial_root_translation.flatten()
 
-    root_translation = least_squares(optimize_trans, initial_root_translation, verbose=0, args=(poses3d, Ki, f, img_center))
+    root_translation = least_squares(optimize_trans, initial_root_translation, verbose=0, args=(p3d_17, Ki, f, img_center))
 
     print(f"\nOPTIMIZATION result : {root_translation}\n{root_translation.x}\n{root_translation.x.shape}")
 
