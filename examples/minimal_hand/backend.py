@@ -146,8 +146,7 @@ def normalize_quaternion(quaternion):
 
 def matrix_from_quaternion(quaternion):
     quaternion = normalize_quaternion(quaternion)
-    w0, q1, q2, q3 = quaternion
-    rotation_matrix = quaternion_to_rotation_matrix(np.array([q1, q2, q3, w0]))
+    rotation_matrix = quaternion_to_rotation_matrix(quaternion)
     return rotation_matrix
 
 
@@ -190,13 +189,13 @@ def quaternion_conjugate(quaternion):
     """Estimate conjugate of a quaternion.
 
     # Arguments
-        quaternion: Array containing quaternion value [w0, q1, q2, q3].
+        quaternion: Array containing quaternion value [q1, q2, q3, w0].
 
     # Returns
-        quaternion: Array containing quaternion value [w0, -q1, -q2, -q3].
+        quaternion: Array containing quaternion value [-q1, -q2, -q3, w0].
     """
-    w0, q1, q2, q3 = quaternion
-    return np.array([w0, -q1, -q2, -q3])
+    q1, q2, q3, w0 = quaternion
+    return np.array([-q1, -q2, -q3, w0])
 
 
 def rotation_matrix_to_quaternion(rotation_matrix):
@@ -206,7 +205,7 @@ def rotation_matrix_to_quaternion(rotation_matrix):
         Rotation matrix [3, 3].
 
     # Returns
-        quaternion: Array containing quaternion value [w0, q1, q2, q3].
+        quaternion: Array containing quaternion value [q1, q2, q3, w0].
     """
     rotation_matrix = rotation_matrix[:3, :3]
     trace = np.trace(rotation_matrix)
@@ -214,7 +213,7 @@ def rotation_matrix_to_quaternion(rotation_matrix):
     q1 = 0.25 * (rotation_matrix[2, 1] - rotation_matrix[1, 2]) / w0
     q2 = 0.25 * (rotation_matrix[0, 2] - rotation_matrix[2, 0]) / w0
     q3 = 0.25 * (rotation_matrix[1, 0] - rotation_matrix[0, 1]) / w0
-    quaternion = np.array([w0, q1, q2, q3])
+    quaternion = np.array([q1, q2, q3, w0])
     return quaternion
 
 
