@@ -1,45 +1,67 @@
 
-import numpy as np
+import os
 import tensorflow as tf
+from tensorflow.keras.utils import get_file
+from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import truncated_normal
 from tensorflow.keras.regularizers import l2
-from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Input, Activation, Reshape
 from tensorflow.keras.models import Model
+import numpy as np
 
 
-def dense(layer, n_units):
-    layer = tf.keras.layers.Dense(
-        n_units, activation=None, kernel_regularizer=l2(0.5 * (1.0)),
-        kernel_initializer=truncated_normal(stddev=0.01))(layer)
-    return layer
+WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/releases/download/'
+               'v0.14/iknet_weight.hdf5')
 
 
-def block(layer, n_units, training):
-    layer = dense(layer, n_units)
-    layer = BatchNormalization()(layer, training)
-    return layer
+def dense(x, num_units):
+    x = Dense(num_units, activation=None, kernel_regularizer=l2(0.5 * 1.0),
+              kernel_initializer=truncated_normal(stddev=0.01))(x)
+    return x
 
+
+def block(x, num_units):
+    x = dense(x, num_units)
+    x = BatchNormalization()(x)
+    return x
+
+
+def normalize(x): 
+    norm = tf.norm(x, axis=-1, keepdims=True)
+    norm = tf.maximum(norm, 1e-6)
+    normalized_x = x / norm
+    return normalized_x
+
+
+def reorder_quaternions(quaternions):
+    w = tf.expand_dims(quaternions[:, :, 0], -1)
+    qs = quaternions[:, :, 1:4]
+    quaternions = tf.concat((qs, w), axis=-1)
+    return quaternions
+    
 
 def IKNet(input_shape=(84, 3), num_keypoints=21, depth=6, width=1024):
     input = Input(shape=input_shape, dtype=tf.float32)
-    layer = tf.reshape(input, [1, input_shape[0]*3])
+    x = Reshape([1, -1])(input)
 
-    for arg in range(depth):
-        layer = block(layer, width, training=False)
-        layer = tf.sigmoid(layer)
-    theta_raw = dense(layer, num_keypoints * 4)
-    theta_raw = tf.reshape(theta_raw, [-1, num_keypoints, 4])
-    norm = tf.norm(tensor=theta_raw, axis=-1, keepdims=True)
-    eps = np.finfo(np.float32).eps
-    norm = tf.maximum(norm, eps)
+    for depth_arg in range(depth):
+        x = block(x, width)
+        x = Activation('sigmoid')(x)
+    x = dense(x, num_keypoints * 4)
+    x = Reshape([num_keypoints, 4])(x)
+    x = normalize(x)
 
-    theta_positive = theta_raw / norm
-    theta_negative = theta_positive * -1
-    theta = tf.where(tf.tile(theta_positive[:, :, 0:1] > 0, [1, 1, 4]),
-                     theta_positive, theta_negative)
+    x1 = tf.tile(x[:, :, 0:1] > 0, [1, 1, 4])
+    quaternions = tf.where(x1, x, -x)
+    quaternions = reorder_quaternions(quaternions)
 
-    model = Model(input, outputs=[theta])
-    model_path = 'model_weights/iknet_weight.hdf5'
-    model.load_weights(model_path)
+    model = Model(input, outputs=[quaternions])
+
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download/'
+           'v0.14/iknet_weight.hdf5')
+    filename = os.path.basename(URL)
+    weights_path = get_file(filename, URL, cache_subdir='paz/models')
+    print('==> Loading %s model weights' % weights_path)
+    model.load_weights(weights_path)
     return model
