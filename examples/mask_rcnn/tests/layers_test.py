@@ -3,11 +3,13 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Input, Lambda
 
-from mask_rcnn.config import Config
-from mask_rcnn.layers import ProposalLayer, DetectionTargetLayer
-from mask_rcnn.layers import DetectionLayer, PyramidROIAlign
-from mask_rcnn.utils import norm_boxes_graph, fpn_classifier_graph
-from mask_rcnn.model import MaskRCNN
+from ..config import Config
+
+from ..layers import ProposalLayer, DetectionTargetLayer
+from ..layers import DetectionLayer, PyramidROIAlign
+from ..utils import norm_boxes_graph, fpn_classifier_graph
+from ..model import MaskRCNN
+from ..layer_utils import batch_slice
 
 
 class MaskRCNNConfig(Config):
@@ -25,8 +27,13 @@ def config():
 
 @pytest.fixture
 def model():
+    train_bn = MaskRCNNConfig().TRAIN_BN
+    image_shape = MaskRCNNConfig().IMAGE_SHAPE
+    backbone = MaskRCNNConfig().BACKBONE
+    top_down_pyramid_size = MaskRCNNConfig().TOP_DOWN_PYRAMID_SIZE
     base_model = MaskRCNN(config=MaskRCNNConfig(),
-                          model_dir='../../mask_rcnn')
+                          model_dir='../../mask_rcnn',train_bn=train_bn, image_shape=image_shape,
+                          backbone=backbone, top_down_pyramid_size=top_down_pyramid_size)
     return base_model
 
 
@@ -73,16 +80,23 @@ def FPN_classifier(proposal_layer, feature_maps, config):
 @pytest.fixture
 def proposal_layer(RPN_model, anchors, config):
     _, RPN_class, RPN_box = RPN_model
-    return ProposalLayer(proposal_count=2000,
-                         nms_threshold=0.7,
-                         name='ROI',
-                         config=config)([RPN_class, RPN_box, anchors])
+    return ProposalLayer(proposal_count=2000, nms_threshold=0.7, name='ROI',
+                         rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
+                         pre_nms_limit=config.PRE_NMS_LIMIT,
+                         images_per_gpu=config.IMAGES_PER_GPU) \
+        ([RPN_class, RPN_box, anchors])
 
 
 @pytest.fixture
 def detection_target_layer(proposal_layer, ground_truth, config):
     class_ids, boxes, masks = ground_truth
-    target_layer = DetectionTargetLayer(config)
+    target_layer = DetectionTargetLayer( images_per_gpu= config.IMAGES_PER_GPU,
+                                         mask_shape=config.MASK_SHAPE,
+                                         train_rois_per_image=config.TRAIN_ROIS_PER_IMAGE,
+                                         roi_positive_ratio=config.ROI_POSITIVE_RATIO,
+                                         bbox_std_dev = config.BBOX_STD_DEV,
+                                         use_mini_mask=config.USE_MINI_MASK
+                                         )
     return target_layer([proposal_layer, class_ids, boxes, masks])
 
 
@@ -107,14 +121,18 @@ def test_detection_target_layer(detection_target_layer, shapes):
 @pytest.mark.parametrize('shape', [(1, 100, 6)])
 def test_detection_layer(proposal_layer, FPN_classifier, config, shape):
     mrcnn_class, mrcnn_bbox = FPN_classifier
-    detections = DetectionLayer(config, name='mrcnn_detection')(
-                        [proposal_layer, mrcnn_class, mrcnn_bbox])
+    detections = DetectionLayer(batch_size=config.BATCH_SIZE, window=config.WINDOW,
+                                bbox_std_dev=config.BBOX_STD_DEV,
+                                images_per_gpu=config.IMAGES_PER_GPU,
+                                detection_max_instances=config.DETECTION_MAX_INSTANCES,
+                                detection_min_confidence=config.DETECTION_MIN_CONFIDENCE,
+                                detection_nms_threshold=config.DETECTION_NMS_THRESHOLD,
+                                name='mrcnn_detection')\
+         ([proposal_layer, mrcnn_class, mrcnn_bbox])
     assert detections.shape == shape
 
 
 @pytest.mark.parametrize('shape', [(1024, 1024, 3)])
 def test_pyramid_ROI_align(proposal_layer, feature_maps, shape):
-    ROI_align = PyramidROIAlign([7, 7])(
-                                [proposal_layer, shape] + feature_maps)
+    ROI_align = PyramidROIAlign([7, 7])([proposal_layer, shape] + feature_maps)
     assert K.int_shape(ROI_align) == (1, None, 7, 7, 256)
-
