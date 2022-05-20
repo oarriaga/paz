@@ -1,9 +1,9 @@
 import numpy as np
 from paz.abstract import Processor
-from mask_rcnn.utils import resize_image, normalize_image
-from mask_rcnn.utils import compute_backbone_shapes, norm_boxes
-from mask_rcnn.utils import generate_pyramid_anchors, denorm_boxes
-from mask_rcnn.utils import unmold_mask
+from .utils import resize_image, normalize_image
+from .utils import compute_backbone_shapes, norm_boxes
+from .utils import generate_pyramid_anchors, denorm_boxes
+from .utils import unmold_mask
 
 
 class NormalizeImages(Processor):
@@ -29,11 +29,8 @@ class ResizeImages(Processor):
     def call(self, images):
         resized_images, windows = [], []
         for image in images:
-            resized_image, window, _, _, _ = resize_image(
-                image,
-                min_dim=self.IMAGE_MIN_DIM,
-                min_scale=self.IMAGE_MIN_SCALE,
-                max_dim=self.IMAGE_MAX_DIM,
+            resized_image, window, _, _, _ = resize_image(image, min_dim=self.IMAGE_MIN_DIM,
+                min_scale=self.IMAGE_MIN_SCALE, max_dim=self.IMAGE_MAX_DIM,
                 mode=self.IMAGE_RESIZE_MODE)
             resized_images.append(resized_image)
             windows.append(window)
@@ -81,8 +78,7 @@ class PostprocessInputs(Processor):
     def __init__(self):
         super(PostprocessInputs, self).__init__()
 
-    def call(self, images, normalized_images, windows,
-             detections, predicted_masks):
+    def call(self, images, normalized_images, windows, detections, predicted_masks):
         results = []
         for index, image in enumerate(images):
             boxes, class_ids, scores, masks = self.postprocess(
