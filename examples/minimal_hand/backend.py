@@ -1,6 +1,7 @@
 import numpy as np
 from paz.datasets import MANOHandJoints
 from paz.datasets import MANO_REF_JOINTS
+from paz.datasets import MPIIHandJoints
 from paz.backend.groups import quaternion_to_rotation_matrix
 from paz.backend.groups import to_affine_matrix
 
@@ -66,67 +67,75 @@ def keypoints3D_to_delta(keypoints3D, joints_config):
     return delta
 
 
-def calculate_relative_angle(absolute_angles, num_joints=21):
-    rotated_ref_joints = rotate_ref_joints(absolute_angles)
+def calculate_relative_angle(absolute_angles):
+    ref_joints = hand_mesh(MANO_REF_JOINTS)
+    absolute_rotation = joints_quaternions_to_rotations(absolute_angles)
+    rotated_ref_joints = rotate_keypoints(absolute_rotation, ref_joints)
+    rotated_ref_joints_transform = construct_joints_transform(
+        absolute_rotation, rotated_ref_joints)
+    relative_angles = get_relative_angle(
+        absolute_rotation, rotated_ref_joints_transform)
 
-    # combine each joint with absolute rotation to transformation:
-    rotated_ref_joint_transform = np.zeros(shape=(num_joints, 4, 4))
-    for joint_arg in range(num_joints):
-        rotation_matrix = matrix_from_quaternion(absolute_angles[joint_arg])
-        rotated_ref_joint_transform[joint_arg] = to_affine_matrix(
-            rotation_matrix, rotated_ref_joints[joint_arg])
-
-    relative_angles = get_relative_angle(absolute_angles,
-                                         rotated_ref_joint_transform)
-
-    # Generate final array with 16 joint angles
-    joint_angles = np.zeros(shape=(num_joints, 3))
-
-    # Root joint gets same orientation like absolute root quaternion
-    root_joint_angle = matrix_from_quaternion(absolute_angles[0])
-    joint_angles[0] = rotation_matrix_to_compact_axis_angle(root_joint_angle)
-
-    # Joint 1-15 gets calculated orientation of child's join
-    for joint_arg in range(1, 16):
-        joint_angles[joint_arg] = rotation_matrix_to_compact_axis_angle(
-            relative_angles[MANOHandJoints.childs[joint_arg]])
+    joint_angles = np.zeros(shape=(len(absolute_rotation), 3))
+    joint_angles[0] = rotation_matrix_to_compact_axis_angle(absolute_rotation[0])
+    childs = MANOHandJoints.childs
+    joint_angles[1:len(childs), :] = relative_angles[childs[1:], :]
     return joint_angles
 
 
-def get_relative_angle(absolute_angles, ref_joint_transform, num_joints=21):
-    relative_angles = np.zeros(shape=(num_joints, 3, 3))
-    for absolute_arg in range(len(absolute_angles)):
-        rotation = matrix_from_quaternion(absolute_angles[absolute_arg])
-        transform = to_affine_matrix(rotation, np.array([0, 0, 0]))
+def get_relative_angle(absolute_rotation, ref_joint_transform, num_joints=21):
+    relative_angles = np.zeros(shape=(num_joints, 3))
+    for absolute_arg in range(len(absolute_rotation)):
+        transform = to_affine_matrix(
+            absolute_rotation[absolute_arg], np.array([0, 0, 0]))
         inverted_transform = np.linalg.inv(transform)
         parent_arg = MANOHandJoints.parents[absolute_arg]
-
         if parent_arg is not None:
-            child_to_parent_arg_transform = np.dot(
-                inverted_transform, ref_joint_transform[parent_arg])
-
-            joint_arg_relative_quaternion = rotation_matrix_to_quaternion(
-                child_to_parent_arg_transform)
-            relative_angles[absolute_arg] = matrix_from_quaternion(
-                quaternion_conjugate(joint_arg_relative_quaternion))
+            child_to_parent_transform = np.dot(
+                inverted_transform, ref_joint_transform[parent_arg])[:3, :3]
+            parent_to_child_rotation = calculate_matrix_inverse(
+                child_to_parent_transform)
+            parent_to_child_rotation = rotation_matrix_to_compact_axis_angle(
+                parent_to_child_rotation)
+            relative_angles[absolute_arg] = parent_to_child_rotation
     return relative_angles
 
 
-def rotate_ref_joints(quat):
-    ref_pose = hand_mesh()
-    rotation_matrices = np.zeros(shape=(21, 3, 3))
-    for j in range(len(quat)):
-        rotation_matrices[j] = matrix_from_quaternion(quat[j])
-    rotation_matrices = np.stack(rotation_matrices, 0)
-    joint_xyz = np.matmul(rotation_matrices, ref_pose)[..., 0]
+def calculate_matrix_inverse(matrix):
+    quaternion = rotation_matrix_to_quaternion(matrix)
+    quaternion_conjugate = get_quaternion_conjugate(quaternion)
+    inverse_matrix = quaternion_to_rotation_matrix(quaternion_conjugate)
+    return inverse_matrix
+
+
+def construct_joints_transform(rotations, translations):
+    joints_transform = np.zeros(shape=(len(rotations), 4, 4))
+    for joint_arg in range(len(rotations)):
+        joints_transform[joint_arg] = to_affine_matrix(
+            rotations[joint_arg], translations[joint_arg])
+    return joints_transform
+
+
+def joints_quaternions_to_rotations(quaternions):
+    joints_rotations = np.zeros(shape=(len(quaternions), 3, 3))
+    for joint_arg in range(len(quaternions)):
+        rotation_matrix = quaternion_to_rotation_matrix(quaternions[joint_arg])
+        joints_rotations[joint_arg] = rotation_matrix
+    return joints_rotations
+
+
+def rotate_keypoints(rotation_matrix, keypoints):
+    joint_xyz = np.matmul(rotation_matrix, keypoints)[..., 0]
     return joint_xyz
+# ***********************************************************************
 
 
-def hand_mesh(left=True):
+def hand_mesh(joint_config=MANO_REF_JOINTS, left=True):
     if left:
-        joints = MANO_REF_JOINTS
+        joints = joint_config
     else:
         joints = transform_column_to_negative(joints)
+
     ref_pose = []
     for j in range(MANOHandJoints.num_joints):
         parent = MANOHandJoints.parents[j]
@@ -134,20 +143,10 @@ def hand_mesh(left=True):
             ref_pose.append(joints[j])
         else:
             ref_pose.append(joints[j] - joints[parent])
+
+    # make a config file just for that
     ref_pose = np.expand_dims(np.stack(ref_pose, 0), -1)
     return ref_pose
-
-
-def normalize_quaternion(quaternion):
-    norm = np.linalg.norm(quaternion)
-    normalized_quaternion = quaternion / norm
-    return normalized_quaternion
-
-
-def matrix_from_quaternion(quaternion):
-    quaternion = normalize_quaternion(quaternion)
-    rotation_matrix = quaternion_to_rotation_matrix(quaternion)
-    return rotation_matrix
 
 
 def rotation_matrix_to_axis_angle(rotation_matrix):
@@ -185,7 +184,7 @@ def rotation_matrix_to_compact_axis_angle(matrix):
     return compact_axis_angle
 
 
-def quaternion_conjugate(quaternion):
+def get_quaternion_conjugate(quaternion):
     """Estimate conjugate of a quaternion.
 
     # Arguments
