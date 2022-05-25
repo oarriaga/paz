@@ -10,7 +10,12 @@ from ..backend.image import warp_affine
 from ..backend.image import translate_image
 from ..backend.image import sample_scaled_translation
 from ..backend.image import get_rotation_matrix
+from ..backend.image import calculate_image_center
+from ..backend.image import get_affine_transform
 from ..backend.keypoints import translate_keypoints
+from ..backend.keypoints import rotate_keypoint
+from ..backend.standard import resize_with_same_aspect_ratio
+from ..backend.standard import get_transformation_scale
 
 
 class RandomFlipBoxesLeftRight(Processor):
@@ -454,3 +459,126 @@ class TranslateImage(Processor):
 
     def call(self, image, translation):
         return translate_image(image, translation, self.fill_color)
+
+
+class GetTransformationSize(Processor):
+    """Calculate the transformation size for the imgae.
+    The size is tuple of length two indicating the x, y values.
+
+    # Arguments
+        image: Numpy array
+    """
+    def __init__(self, input_size, multiple):
+        super(GetTransformationSize, self).__init__()
+        self.input_size = input_size
+        self.multiple = multiple
+
+    def call(self, image):
+        size = resize_with_same_aspect_ratio(image, self.input_size,
+                                             self.multiple)
+        H, W = image.shape[:2]
+        if W < H:
+            size[0], size[1] = size[1], size[0]
+        return size
+
+
+class GetTransformationScale(Processor):
+    """Calculate the transformation scale for the imgae.
+    The scale is a numpy array of size two indicating the
+    width and height scale.
+
+    # Arguments
+        image: Numpy array
+        size: Numpy array of length 2
+    """
+    def __init__(self, scaling_factor):
+        super(GetTransformationScale, self).__init__()
+        self.scaling_factor = scaling_factor
+
+    def call(self, image, size):
+        scale = get_transformation_scale(image, size, self.scaling_factor)
+        H, W = image.shape[:2]
+        if W < H:
+            scale[0], scale[1] = scale[1], scale[0]
+        return scale
+
+
+class GetSourceDestinationPoints(Processor):
+    """Returns the source and destination points for affine transformation.
+
+    # Arguments
+        center: Numpy array of shape (2,). Center coordinates of image
+        scale: Numpy array of shape (2,). Scale of width and height of image
+        size: List of length 2. Size of image
+    """
+    def __init__(self, scaling_factor):
+        super(GetSourceDestinationPoints, self).__init__()
+        self.scaling_factor = scaling_factor
+
+    def _calculate_third_point(self, point2D_a, point2D_b):
+        difference = point2D_a - point2D_b
+        return point2D_a + np.array([-difference[1],
+                                     difference[0]], dtype=np.float32)
+
+    def _get_transformation_source_point(self, scale, center):
+        scale = scale * self.scaling_factor
+        center_W = scale[0] / 2
+        direction_vector = rotate_keypoint([0, -center_W], 0)
+        points = np.zeros((3, 2), dtype=np.float32)
+        points[0, :] = center
+        points[1, :] = center + direction_vector
+        points[2:, :] = self._calculate_third_point(points[0, :], points[1, :])
+        return points
+
+    def _get_transformation_destination_point(self, output_size):
+        center_W, center_H = np.array(output_size[:2]) / 2
+        direction_vector = np.array([0, -center_W], np.float32)
+        points = np.zeros((3, 2), dtype=np.float32)
+        points[0, :] = [center_W, center_H]
+        points[1, :] = np.array([center_W, center_H]) + direction_vector
+        points[2:, :] = self._calculate_third_point(points[0, :], points[1, :])
+        return points
+
+    def call(self, center, scale, size):
+        if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
+            scale = np.array([scale, scale])
+        source_point = self._get_transformation_source_point(scale, center)
+        destination_point = self._get_transformation_destination_point(size)
+        return source_point, destination_point
+
+
+class GetImageCenter(Processor):
+    """Calculate the center of the image and add an offset to the center.
+
+    # Arguments
+        image: Numpy array
+        offset: Float
+    """
+    def __init__(self, offset=0.5):
+        super(GetImageCenter, self).__init__()
+        self.offset = offset
+
+    def _add_offset(self, x, offset):
+        return (x + offset)
+
+    def call(self, image):
+        center_W, center_H = calculate_image_center(image)
+        center_W = int(self._add_offset(center_W, self.offset))
+        center_H = int(self._add_offset(center_H, self.offset))
+        return np.array([center_W, center_H])
+
+
+class WarpAffine(Processor):
+    """Applies an affine transformation to an image
+
+    # Arguments
+        image: Numpy array
+        transform: Numpy array. Transformation matrix
+        size: Numpy array. Transformation size
+    """
+    def __init__(self):
+        super(WarpAffine, self).__init__()
+
+    def call(self, image, transform, size):
+        image = warp_affine(image, transform, size=size)
+        return image

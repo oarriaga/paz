@@ -9,7 +9,7 @@ import tensorflow.keras.backend as K
 
 
 # Mock input image.
-file_name = 'img2.png'
+file_name = '/home/manummk95/Desktop/efficientdet_BKP/paz/examples/efficientdet/img.jpg'
 loader = LoadImage()
 raw_images = loader(file_name)
 

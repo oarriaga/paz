@@ -506,18 +506,16 @@ def to_normalized_coordinates(boxes, image):
     return normalized_boxes
 
 
-def scale_box(predictions, image_scales=None):
-    """
+def extract_bounding_box_corners(points3D):
+    """Extracts the (x_min, y_min, z_min) and the (x_max, y_max, z_max)
+        coordinates from an array of  points3D
     # Arguments
-        image: Numpy array.
-        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
-    # Returns
-        Numpy array of shape `[num_boxes, N]`.
-    """
+        points3D: Array (num_points, 3)
 
-    if image_scales is not None:
-        boxes = predictions[:, :4]
-        scales = image_scales[np.newaxis][np.newaxis]
-        boxes = boxes * scales
-        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
-    return predictions
+    # Returns
+        Left-down-bottom corner (x_min, y_min, z_min) and right-up-top
+            (x_max, y_max, z_max) corner.
+    """
+    XYZ_min = np.min(points3D, axis=0)
+    XYZ_max = np.max(points3D, axis=0)
+    return XYZ_min, XYZ_max

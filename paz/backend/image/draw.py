@@ -8,6 +8,7 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
 
+
 def draw_circle(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
 
@@ -22,7 +23,7 @@ def draw_circle(image, point, color=GREEN, radius=5):
         Numpy array with shape ``[H, W, 3]``. Image with circle.
     """
     cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
-    inner_radius = int(.8 * radius)
+    inner_radius = int(0.8 * radius)
     # color = color[::-1]  # transform to BGR for openCV
     cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
     return image
@@ -110,42 +111,43 @@ def draw_dot(image, point, color=GREEN, radius=5, filled=FILLED):
 
 
 def draw_cube(image, points, color=GREEN, thickness=2, radius=5):
-    """ Draws a cube in image.
+    """Draws a cube in image.
 
     # Arguments
-        image: Numpy array of shape ``[H, W, 3]``.
+        image: Numpy array of shape (H, W, 3).
         points: List of length 8  having each element a list
-            of length two indicating ``(y, x)`` openCV coordinates.
+            of length two indicating (U, V) openCV coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer indicating the thickness of the line to be drawn.
         radius: Integer indicating the radius of corner points to be drawn.
 
     # Returns
-        Numpy array with shape ``[H, W, 3]``. Image with cube.
+        Numpy array with shape (H, W, 3). Image with cube.
     """
-    # color = color[::-1]  # transform to BGR for openCV
+    if points.shape != (8, 2):
+        raise ValueError('Cube points 2D must be of shape (8, 2)')
 
     # draw bottom
-    draw_line(image, points[0][0], points[1][0], color, thickness)
-    draw_line(image, points[1][0], points[2][0], color, thickness)
-    draw_line(image, points[3][0], points[2][0], color, thickness)
-    draw_line(image, points[3][0], points[0][0], color, thickness)
+    draw_line(image, points[0], points[1], color, thickness)
+    draw_line(image, points[1], points[2], color, thickness)
+    draw_line(image, points[3], points[2], color, thickness)
+    draw_line(image, points[3], points[0], color, thickness)
 
     # draw top
-    draw_line(image, points[4][0], points[5][0], color, thickness)
-    draw_line(image, points[6][0], points[5][0], color, thickness)
-    draw_line(image, points[6][0], points[7][0], color, thickness)
-    draw_line(image, points[4][0], points[7][0], color, thickness)
+    draw_line(image, points[4], points[5], color, thickness)
+    draw_line(image, points[6], points[5], color, thickness)
+    draw_line(image, points[6], points[7], color, thickness)
+    draw_line(image, points[4], points[7], color, thickness)
 
     # draw sides
-    draw_line(image, points[0][0], points[4][0], color, thickness)
-    draw_line(image, points[7][0], points[3][0], color, thickness)
-    draw_line(image, points[5][0], points[1][0], color, thickness)
-    draw_line(image, points[2][0], points[6][0], color, thickness)
+    draw_line(image, points[0], points[4], color, thickness)
+    draw_line(image, points[7], points[3], color, thickness)
+    draw_line(image, points[5], points[1], color, thickness)
+    draw_line(image, points[2], points[6], color, thickness)
 
     # draw X mark on top
-    draw_line(image, points[4][0], points[6][0], color, thickness)
-    draw_line(image, points[5][0], points[7][0], color, thickness)
+    draw_line(image, points[4], points[6], color, thickness)
+    draw_line(image, points[5], points[7], color, thickness)
 
     # draw dots
     [draw_dot(image, np.squeeze(point), color, radius) for point in points]
@@ -258,3 +260,132 @@ def make_mosaic(images, shape, border=0):
         mosaic[row * padded_H:row * padded_H + image_shape[0],
                col * padded_W:col * padded_W + image_shape[1], :] = image
     return mosaic.astype('uint8')
+
+
+def draw_points2D(image, points2D, colors):
+    """Draws a pixel for all points2D in UV space using only numpy.
+
+    # Arguments
+        image: Array (H, W).
+        keypoints: Array (num_points, U, V). Keypoints in image space
+        colors: Array (num_points, 3). Colors in RGB space.
+
+    # Returns
+        Array with drawn points.
+    """
+    points2D = points2D.astype(int)
+    U = points2D[:, 0]
+    V = points2D[:, 1]
+    image[V, U, :] = colors
+    return image
+
+
+def draw_keypoints_link(image, keypoints, link_args, link_orders, link_colors,
+                        check_scores=False, link_width=2):
+    """ Draw link between the keypoints.
+
+    # Arguments
+        images: Numpy array.
+        keypoints: Keypoint(k0, k1, ...) locations in the image. Numpy array.
+        link_args: Keypoint labels. Dictionary. {'k0':0, 'k1':1, ...}
+        link_orders: List of tuple. [('k0', 'k1'),('kl', 'k2'), ...]
+        link_colors: Color of each link. List of list
+        check_scores: Condition to draw links. Boolean.
+
+    # Returns
+        A numpy array containing drawn link between the keypoints.
+    """
+    for pair_arg, pair in enumerate(link_orders):
+        color = link_colors[pair_arg]
+        point1 = keypoints[link_args[pair[0]]]
+        point2 = keypoints[link_args[pair[1]]]
+        if check_scores:
+            if point1[2] > 0 and point2[2] > 0:
+                draw_line(image, (int(point1[0]), int(point1[1])),
+                                 (int(point2[0]), int(point2[1])),
+                          color, link_width)
+        else:
+            draw_line(image, (int(point1[0]), int(point1[1])),
+                             (int(point2[0]), int(point2[1])),
+                      color, link_width)
+    return image
+
+
+def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False,
+                   keypoint_radius=6):
+    """ Draw a circle at keypoints.
+
+    # Arguments
+        images: Numpy array.
+        keypoints: Keypoint locations in the image. Numpy array.
+        keypoint_colors: Color of each keypoint. List of list
+        check_scores: Condition to draw keypoint. Boolean.
+
+    # Returns
+        A numpy array containing circle at each keypoints.
+    """
+    for keypoint_arg, keypoint in enumerate(keypoints):
+        color = keypoint_colors[keypoint_arg]
+        if check_scores:
+            if keypoint[2] > 0:
+                draw_circle(image, (int(keypoint[0]),
+                                    int(keypoint[1])), color, keypoint_radius)
+        else:
+            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color,
+                        keypoint_radius)
+    return image
+
+
+def points3D_to_RGB(points3D, object_sizes):
+    """Transforms points3D in object frame to RGB color space.
+    # Arguments
+        points3D: Array (num_points, 3). Points3D a
+        object_sizes: Array (3) indicating the
+            (width, height, depth) of object.
+
+    # Returns
+        Array of ints (num_points, 3) in RGB space.
+    """
+    # TODO add domain and codomain transform as comments
+    colors = points3D / (0.5 * object_sizes)
+    colors = colors + 1.0
+    colors = colors * 127.5
+    colors = colors.astype(np.uint8)
+    return colors
+
+
+def draw_RGB_mask(image, points2D, points3D, object_sizes):
+    """Draws RGB mask by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        image: Array (H, W, 3).
+        points2D: Array (num_points, 2)
+        points3D: Array (num_points, 3)
+        object_sizes: Array (x_size, y_size, z_size)
+
+    # Returns
+        Image array with drawn masks
+    """
+    color = points3D_to_RGB(points3D, object_sizes)
+    image = draw_points2D(image, points2D, color)
+    return image
+
+
+def draw_RGB_masks(image, points2D, points3D, object_sizes):
+    """Draws RGB masks by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        image: Array (H, W, 3).
+        points2D: Array (num_samples, num_points, 2)
+        points3D: Array (num_samples, num_points, 3)
+        object_sizes: Array (x_size, y_size, z_size)
+
+    # Returns
+        Image array with drawn masks
+    """
+    for instance_points2D, instance_points3D in zip(points2D, points3D):
+        image = draw_RGB_mask(
+            image, instance_points2D, instance_points3D, object_sizes)
+    return image

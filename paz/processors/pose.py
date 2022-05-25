@@ -3,6 +3,7 @@ import numpy as np
 from ..abstract import Processor, Pose6D
 from ..backend.keypoints import solve_PNP
 from ..backend.keypoints import LEVENBERG_MARQUARDT
+from ..backend.keypoints import solve_PnP_RANSAC
 
 
 class SolvePNP(Processor):
@@ -39,3 +40,54 @@ class SolvePNP(Processor):
             self.points3D, keypoints, self.camera, self.solver)
 
         return Pose6D.from_rotation_vector(rotation, translation)
+
+
+class SolveChangingObjectPnPRANSAC(Processor):
+    """Returns rotation (Roc) and translation (Toc) vectors that transform
+        3D points in object frame to camera frame.
+
+                               O------------O
+                              /|           /|
+                             / |          / |
+                            O------------O  |
+                            |  |    z    |  |
+                            |  O____|____|__O
+                            |  /    |___y|  /   object
+                            | /    /     | /  coordinates
+                            |/    x      |/
+                            O------------O
+                                   ___
+                   Z                |
+                  /                 | Rco, Tco
+                 /_____X     <------|
+                 |
+                 |    camera
+                 Y  coordinates
+
+    # Arguments
+        object_points3D: Array (num_points, 3). Points 3D in object reference
+            frame. Represented as (0) in image above.
+        image_points2D: Array (num_points, 2). Points in 2D in camera UV space.
+        camera_intrinsics: Array of shape (3, 3). Diagonal elements represent
+            focal lenghts and last column the image center translation.
+        inlier_threshold: Number of inliers for RANSAC method.
+        num_iterations: Maximum number of iterations.
+
+    # Returns
+        Boolean indicating success, rotation vector in axis-angle form (3)
+            and translation vector (3).
+    """
+
+    def __init__(self, camera_intrinsics, inlier_thresh=5, num_iterations=100):
+        super(SolveChangingObjectPnPRANSAC, self).__init__()
+        self.camera_intrinsics = camera_intrinsics
+        self.inlier_thresh = inlier_thresh
+        self.num_iterations = num_iterations
+        self.MIN_REQUIRED_POINTS = 4
+
+    def call(self, object_points3D, image_points2D):
+        success, rotation_vector, translation = solve_PnP_RANSAC(
+            object_points3D, image_points2D, self.camera_intrinsics,
+            self.inlier_thresh, self.num_iterations)
+        rotation_vector = np.squeeze(rotation_vector)
+        return success, rotation_vector, translation

@@ -1,15 +1,6 @@
 import numpy as np
 
 
-def calculate_norm(vector):
-    """Calculates the norm of vector.
-
-    # Arguments
-        x: List of spatial coordinates (x, y, z)
-    """
-    return np.linalg.norm(vector)
-
-
 def sample_point_in_full_sphere(distance=1.0):
     """Get a point of the top of the unit sphere.
 

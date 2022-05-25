@@ -8,6 +8,8 @@ from ..datasets import get_class_names
 from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32
+from .keypoints import TransformKeypoints
+from .heatmaps import GetHeatmapsAndTags
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -84,6 +86,21 @@ class AugmentDetection(SequentialProcessor):
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {1: {'boxes': [len(prior_boxes), 4 + num_classes]}}))
+
+
+class PostprocessBoxes2D(SequentialProcessor):
+    """Filters, squares and offsets 2D bounding boxes
+
+    # Arguments
+        valid_names: List of strings containing class names to keep.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+    """
+    def __init__(self, offsets, valid_names=None):
+        super(PostprocessBoxes2D, self).__init__()
+        if valid_names is not None:
+            self.add(pr.FilterClassBoxes2D(valid_names))
+        self.add(pr.SquareBoxes2D())
+        self.add(pr.OffsetBoxes2D(offsets))
 
 
 class DetectSingleShot(Processor):

@@ -6,8 +6,18 @@ from ..backend.image import draw_rectangle
 from ..backend.image import put_text
 from ..backend.image import draw_circle
 from ..backend.image import draw_cube
+from ..backend.image import GREEN
 from ..backend.image import draw_random_polygon
+from ..backend.image import draw_keypoints_link
+from ..backend.image import draw_keypoints
+from ..backend.image import draw_RGB_mask
+from ..backend.image import draw_RGB_masks
 from ..backend.keypoints import project_points3D
+from ..backend.keypoints import build_cube_points3D
+from ..backend.groups import quaternion_to_rotation_matrix
+from ..backend.keypoints import project_to_image
+from ..datasets import HUMAN_JOINT_CONFIG
+from ..datasets import MINIMAL_HAND_CONFIG
 
 
 class DrawBoxes2D(Processor):
@@ -48,10 +58,6 @@ class DrawBoxes2D(Processor):
     def call(self, image, boxes2D):
         for box2D in boxes2D:
             x_min, y_min, x_max, y_max = box2D.coordinates
-            x_min = int(x_min)
-            y_min = int(y_min)
-            x_max = int(x_max)
-            y_max = int(y_max)
             class_name = box2D.class_name
             color = self.class_to_color[class_name]
             if self.weighted:
@@ -85,7 +91,8 @@ class DrawKeypoints2D(Processor):
 
 
 class DrawBoxes3D(Processor):
-    def __init__(self, camera, class_to_dimensions, thickness=1):
+    def __init__(self, camera, class_to_dimensions,
+                 color=GREEN, thickness=5, radius=2):
         """Draw boxes 3D of multiple objects
 
         # Arguments
@@ -94,35 +101,27 @@ class DrawBoxes3D(Processor):
                 class names and as value a list [model_height, model_width]
             thickness: Int. Thickness of 3D box
         """
-        # model_height=.1, model_width=0.08):
         super(DrawBoxes3D, self).__init__()
         self.camera = camera
         self.class_to_dimensions = class_to_dimensions
-        self.class_to_points = self._make_points(self.class_to_dimensions)
+        self.class_to_points = self._build_class_to_points(class_to_dimensions)
+        self.color = color
+        self.radius = radius
         self.thickness = thickness
 
-    def _make_points(self, class_to_dimensions):
+    def _build_class_to_points(self, class_to_dimensions):
         class_to_points = {}
         for class_name, dimensions in self.class_to_dimensions.items():
-            height, width = dimensions
-            point_1 = [+width, -height, +width]
-            point_2 = [+width, -height, -width]
-            point_3 = [-width, -height, -width]
-            point_4 = [-width, -height, +width]
-            point_5 = [+width, +height, +width]
-            point_6 = [+width, +height, -width]
-            point_7 = [-width, +height, -width]
-            point_8 = [-width, +height, +width]
-            points = [point_1, point_2, point_3, point_4,
-                      point_5, point_6, point_7, point_8]
-            class_to_points[class_name] = np.array(points)
+            width, height, depth = dimensions
+            points = build_cube_points3D(width, height, depth)
+            class_to_points[class_name] = points
         return class_to_points
 
     def call(self, image, pose6D):
         points3D = self.class_to_points[pose6D.class_name]
-        args = (points3D, pose6D, self.camera)
-        points2D = project_points3D(*args).astype(np.int32)
-        draw_cube(image, points2D, thickness=self.thickness)
+        points2D = project_points3D(points3D, pose6D, self.camera)
+        points2D = points2D.astype(np.int32)
+        draw_cube(image, points2D, self.color, self.thickness, self.radius)
         return image
 
 
@@ -141,3 +140,166 @@ class DrawRandomPolygon(Processor):
 
     def call(self, image):
         return draw_random_polygon(image)
+
+
+def draw_pose6D(image, pose6D, points3D, intrinsics, thickness):
+    """Draws cube in image by projecting points3D with intrinsics and pose6D.
+
+    # Arguments
+        image: Array (H, W).
+        pose6D: paz.abstract.Pose6D instance.
+        intrinsics: Array (3, 3). Camera intrinsics for projecting
+            3D rays into 2D image.
+        points3D: Array (num_points, 3).
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
+    quaternion, translation = pose6D.quaternion, pose6D.translation
+    rotation = quaternion_to_rotation_matrix(quaternion)
+    points2D = project_to_image(rotation, translation, points3D, intrinsics)
+    image = draw_cube(image, points2D.astype(np.int32), thickness=thickness)
+    return image
+
+
+class DrawPoses6D(Processor):
+    """Draws multiple cubes in image by projecting points3D.
+
+    # Arguments
+        object_sizes: Array (3) indicating (x, y, z) sizes of object.
+        camera_intrinsics: Array (3, 3).
+            Camera intrinsics for projecting 3D rays into 2D image.
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
+    def __init__(self, object_sizes, camera_intrinsics, thickness=2):
+        self.points3D = build_cube_points3D(*object_sizes)
+        self.intrinsics = camera_intrinsics
+        self.thickness = thickness
+
+    def call(self, image, poses6D):
+        if poses6D is None:
+            return image
+        if not isinstance(poses6D, list):
+            raise ValueError('Poses6D must be a list of Pose6D messages')
+        for pose6D in poses6D:
+            image = draw_pose6D(
+                image, pose6D, self.points3D, self.intrinsics, self.thickness)
+        return image
+
+
+class DrawPose6D(Processor):
+    """Draws a single cube in image by projecting points3D.
+
+    # Arguments
+        object_sizes: Array (3) indicating (x, y, z) sizes of object.
+        camera_intrinsics: Array (3, 3).
+            Camera intrinsics for projecting 3D rays into 2D image.
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
+    def __init__(self, object_sizes, camera_intrinsics, thickness=2):
+        self.points3D = build_cube_points3D(*object_sizes)
+        self.intrinsics = camera_intrinsics
+        self.thickness = thickness
+
+    def call(self, image, pose6D):
+        if pose6D is None:
+            return image
+        image = draw_pose6D(
+            image, pose6D, self.points3D, self.intrinsics, self.thickness)
+        return image
+
+
+class DrawHumanSkeleton(Processor):
+    """ Draw human pose skeleton on image.
+
+    # Arguments
+        images: Numpy array.
+        grouped_joints: Joint locations of all the person model detected
+                        in the image. List of numpy array.
+        dataset: String.
+        check_scores: Boolean. Flag to check score before drawing.
+
+    # Returns
+        A numpy array containing pose skeleton.
+    """
+    def __init__(self, dataset, check_scores):
+        super(DrawHumanSkeleton, self).__init__()
+        self.link_orders = HUMAN_JOINT_CONFIG[dataset]['part_orders']
+        self.link_colors = HUMAN_JOINT_CONFIG[dataset]['part_color']
+        self.link_args = HUMAN_JOINT_CONFIG[dataset]['part_arg']
+        self.keypoint_colors = HUMAN_JOINT_CONFIG[dataset]['joint_color']
+        self.check_scores = check_scores
+
+    def call(self, image, grouped_joints):
+        for one_person_joints in grouped_joints:
+            image = draw_keypoints_link(
+                image, one_person_joints, self.link_args, self.link_orders,
+                self.link_colors, self.check_scores)
+            image = draw_keypoints(image, one_person_joints,
+                                   self.keypoint_colors, self.check_scores)
+        return image
+
+
+class DrawHandSkeleton(Processor):
+    """ Draw hand pose skeleton on image.
+
+    # Arguments
+        image: Array (H, W, 3)
+        keypoints: Array. All the joint locations detected by model
+                        in the image.
+    # Returns
+        A numpy array containing pose skeleton.
+    """
+    def __init__(self, check_scores=False):
+        super(DrawHandSkeleton, self).__init__()
+        self.link_orders = MINIMAL_HAND_CONFIG['part_orders']
+        self.link_colors = MINIMAL_HAND_CONFIG['part_color']
+        self.link_args = MINIMAL_HAND_CONFIG['part_arg']
+        self.keypoint_colors = MINIMAL_HAND_CONFIG['joint_color']
+        self.check_scores = check_scores
+
+    def call(self, image, keypoints, link_width=2, keypoint_radius=4):
+        image = draw_keypoints_link(
+            image, keypoints, self.link_args, self.link_orders,
+            self.link_colors, self.check_scores, link_width)
+        image = draw_keypoints(image, keypoints, self.keypoint_colors,
+                               self.check_scores, keypoint_radius)
+        return image
+
+
+class DrawRGBMask(Processor):
+    """Draws RGB mask by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        object_sizes: Array (x_size, y_size, z_size)
+    """
+    def __init__(self, object_sizes):
+        super(DrawRGBMask, self).__init__()
+        self.object_sizes = object_sizes
+
+    def call(self, image, points2D, points3D):
+        image = draw_RGB_mask(image, points2D, points3D, self.object_sizes)
+        return image
+
+
+class DrawRGBMasks(Processor):
+    """Draws RGB masks by transforming points3D to RGB space and putting in
+        them in their 2D coordinates (points2D)
+
+    # Arguments
+        object_sizes: Array (x_size, y_size, z_size)
+    """
+    def __init__(self, object_sizes):
+        super(DrawRGBMasks, self).__init__()
+        self.object_sizes = object_sizes
+
+    def call(self, image, points2D, points3D):
+        return draw_RGB_masks(image, points2D, points3D, self.object_sizes)

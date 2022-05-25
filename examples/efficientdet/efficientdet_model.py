@@ -8,7 +8,7 @@ from efficientdet_blocks import BiFPN
 
 
 WEIGHT_PATH = (
-    '/media/deepan/externaldrive1/project_repos/paz_versions/paz/weights/')
+    '/home/manummk95/Downloads/weights/')
 
 
 def EfficientDet(num_classes, base_weights, head_weights, input_shape,
