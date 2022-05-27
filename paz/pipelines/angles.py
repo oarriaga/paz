@@ -1,8 +1,8 @@
 from paz import processors as pr
 from paz.models import IKNet
 from paz.datasets import MPIIHandJoints
-from backend import compute_relative_angle
-from backend import transform_column_to_negative
+from paz.backend.angles import compute_relative_angle
+from paz.backend.standard import transform_column_to_negative
 
 
 class IKNetHandJointAngles(pr.Processor):
