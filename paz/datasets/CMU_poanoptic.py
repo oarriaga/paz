@@ -90,12 +90,11 @@ hand_joint_color = [[140, 26, 255],
                     [193, 115, 255]]
 
 
-<<<<<<< HEAD:examples/minimal_hand/joint_config.py
-VISUALISATION_CONFIG = {'part_labels': hand_part_labels,
-                        'part_arg': hand_part_arg,
-                        'part_orders': hand_part_orders,
-                        'part_color': hand_part_color,
-                        'joint_color': hand_joint_color}
+MINIMAL_HAND_CONFIG = {'part_labels': hand_part_labels,
+                       'part_arg': hand_part_arg,
+                       'part_orders': hand_part_orders,
+                       'part_color': hand_part_color,
+                       'joint_color': hand_joint_color}
 
 
 MANO_REF_JOINTS = np.array(
@@ -122,60 +121,71 @@ MANO_REF_JOINTS = np.array(
      [-0.003715698261416634, -0.01635903331447523, 0.09410496964595245]])
 
 
+MPII_REF_JOINTS = np.array([[-0.99924976, 0.01561216, 0.0354427],
+                            [-0.74495521, -0.14824392, 0.30792697],
+                            [-0.53770379, -0.13883537, 0.558103],
+                            [-0.30317002, -0.19618662, 0.71142176],
+                            [-0.02856714, -0.22446067, 0.96352525],
+                            [-0.06928206, -0.03928359, 0.25380709],
+                            [0.27568132, 0.00303977, 0.27721079],
+                            [0.50956244, -0.01066658, 0.27600616],
+                            [0.77477083, -0.02060624, 0.26214581],
+                            [0., 0., 0.],
+                            [0.32916895, 0.01964846, -0.05905647],
+                            [0.57095375, 0.00643106, -0.10069535],
+                            [0.84451634, 0.01311267, -0.15696599],
+                            [-0.13643704, -0.02616297, -0.24612351],
+                            [0.16245268, -0.00434333, -0.29994444],
+                            [0.41073873, -0.02216329, -0.38052812],
+                            [0.67033013, -0.02615401, -0.45917176],
+                            [-0.27312421, -0.08931944, -0.42068156],
+                            [-0.09351757, -0.08866681, -0.5526205],
+                            [0.07397581, -0.09596275, -0.66168566],
+                            [0.26070401, -0.1101406, -0.76655779]])
+
+
 IK_UNIT_LENGTH = 0.09473151311686484
 
 
 class MANOHandJoints:
     num_joints = 21
 
-    labels = [
-        'W', #0
-        'I0', 'I1', 'I2', #3
-        'M0', 'M1', 'M2', #6
-        'L0', 'L1', 'L2', #9
-        'R0', 'R1', 'R2', #12
-        'T0', 'T1', 'T2', #15
-        'I3', 'M3', 'L3', 'R3', 'T3' #20, tips are manually added (not in MANO)
-    ]
+    labels = ['W',
+              'I0', 'I1', 'I2',
+              'M0', 'M1', 'M2',
+              'L0', 'L1', 'L2',
+              'R0', 'R1', 'R2',
+              'T0', 'T1', 'T2',
+              'I3', 'M3', 'L3', 'R3', 'T3']
 
-    # finger tips are not joints in MANO, we label them on the mesh manually
-    mesh_mapping = {16: 333, 17: 444, 18: 672, 19: 555, 20: 744}
+    parents = [None,
+               0, 1, 2,
+               0, 4, 5,
+               0, 7, 8,
+               0, 10, 11,
+               0, 13, 14,
+               3, 6, 9, 12, 15]
 
-    parents = [
-        None,
-        0, 1, 2,
-        0, 4, 5,
-        0, 7, 8,
-        0, 10, 11,
-        0, 13, 14,
-        3, 6, 9, 12, 15
-    ]
+    childs = [[1, 4, 7, 10, 13],  # root_joint has multiple childs
+              2, 3, 16, 5, 6, 17, 8, 9, 18, 11, 12, 19, 14, 15, 20]
 
 
 class MPIIHandJoints:
     num_joints = 21
 
-    labels = [
-        'W', #0
-        'T0', 'T1', 'T2', 'T3', #4
-        'I0', 'I1', 'I2', 'I3', #8
-        'M0', 'M1', 'M2', 'M3', #12
-        'R0', 'R1', 'R2', 'R3', #16
-        'L0', 'L1', 'L2', 'L3', #20
-    ]
+    labels = ['W',
+              'T0', 'T1', 'T2', 'T3',
+              'I0', 'I1', 'I2', 'I3',
+              'M0', 'M1', 'M2', 'M3',
+              'R0', 'R1', 'R2', 'R3',
+              'L0', 'L1', 'L2', 'L3']
 
-    parents = [
-        None,
-        0, 1, 2, 3,
-        0, 5, 6, 7,
-        0, 9, 10, 11,
-        0, 13, 14, 15,
-        0, 17, 18, 19
-    ]
-=======
-MINIMAL_HAND_CONFIG = {'part_labels': hand_part_labels,
-                       'part_arg': hand_part_arg,
-                       'part_orders': hand_part_orders,
-                       'part_color': hand_part_color,
-                       'joint_color': hand_joint_color}
->>>>>>> master:paz/datasets/CMU_poanoptic.py
+    parents = [None,
+               0, 1, 2, 3,
+               0, 5, 6, 7,
+               0, 9, 10, 11,
+               0, 13, 14, 15,
+               0, 17, 18, 19]
+
+    childs = [[1, 5, 9, 13, 17],  # root_joint has multiple childs
+              2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15, 16, 18, 19, 20]
