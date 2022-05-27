@@ -93,6 +93,7 @@ from .keypoints import DenormalizeKeypoints2D
 from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
+from .keypoints import CalculateOrientationFromCoordinates
 
 from .standard import ControlMap
 from .standard import ExpandDomain
