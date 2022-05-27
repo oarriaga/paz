@@ -2,6 +2,7 @@ from warnings import warn
 
 import cv2
 import numpy as np
+from .standard import transform_column_to_negative
 
 UPNP = cv2.SOLVEPNP_UPNP
 LEVENBERG_MARQUARDT = cv2.SOLVEPNP_ITERATIVE
@@ -423,3 +424,65 @@ def add_offset_to_point(keypoint_location, offset=0):
     y = y + offset
     x = x + offset
     return y, x
+
+
+def flip_keypoints_wrt_image(keypoints, image_size=(32, 32), axis=1):
+    """Flio the detected keypoints with respect to image
+
+    # Arguments
+        keypoints: Numpy array 
+        image_size: list/tuple
+        axis: int
+
+    # Returns
+        flipped_keypoints: Numpy array
+    """
+    keypoints[:, axis] = image_size[axis] - keypoints[:, axis]
+    return keypoints
+
+
+def keypoints3D_to_delta(keypoints3D, joints_config):
+    """Compute bone orientations from joint coordinates
+       (child joint - parent joint). The returned vectors are normalized.
+       For the root joint, it will be a zero vector.
+
+    # Arguments
+        keypoints3D : Numpy array [num_joints, 3]. Joint coordinates.
+        joints_config : joint configuration of the joints. e.g. MPIIHandJoints.
+
+    # Returns
+        Numpy array [num_joints, 3]. The unit vectors from each child joint to
+        its parent joint. For the root joint, it's are zero vector.
+    """
+    delta = []
+    for joint_arg in range(joints_config.num_joints):
+        parent = joints_config.parents[joint_arg]
+        if parent is None:
+            delta.append(np.zeros(3))
+        else:
+            delta.append(keypoints3D[joint_arg] - keypoints3D[parent])
+    delta = np.stack(delta, 0)
+    return delta
+
+
+def rotate_keypoints_with_rotation_matrix(rotation_matrix, keypoints):
+    """Rotatate the keypoints by using rotation matrix
+
+    # Arguments
+        Rotation matrix [N, 3, 3].
+        keypoints [N, 3, 1]
+
+    # Returns
+        Rotated keypoints [N, 3, 1]
+    """
+    keypoint_xyz = np.einsum('ijk, ikl -> ij', rotation_matrix, keypoints)
+    return keypoint_xyz
+
+
+def get_reference_keypoints(joint_config, right_hand=False):
+    keypoints = joint_config.ref_joints
+    if right_hand:
+        keypoints = transform_column_to_negative(keypoints)
+    ref_pose = keypoints3D_to_delta(keypoints, joint_config)
+    ref_pose = np.expand_dims(ref_pose, -1)
+    return ref_pose

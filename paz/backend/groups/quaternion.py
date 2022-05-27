@@ -107,3 +107,35 @@ def get_quaternion_conjugate(quaternion):
     """
     q1, q2, q3, w0 = quaternion
     return np.array([-q1, -q2, -q3, w0])
+
+
+def keypoints_quaternions_to_rotations(quaternions):
+    """Transform quaternion vectors to rotation matrix vector.
+
+    # Arguments
+        quaternions [N, 4].
+
+    # Returns
+        Rotated matrices [N, 3, 3]
+    """
+    keypoints_rotations = np.zeros(shape=(len(quaternions), 3, 3))
+    for keypoint_arg in range(len(quaternions)):
+        rotation_matrix = quaternion_to_rotation_matrix(
+            quaternions[keypoint_arg])
+        keypoints_rotations[keypoint_arg] = rotation_matrix
+    return keypoints_rotations
+
+
+def calculate_rotation_matrix_inverse(matrix):
+    """Calculate the inverse of ratation matrix using quaternions.
+
+    # Arguments
+        Rotation matrix [3, 3]
+
+    # Returns
+        Rotation matrix inverse [3, 3]
+    """
+    quaternion = rotation_matrix_to_quaternion(matrix)
+    quaternion_conjugate = get_quaternion_conjugate(quaternion)
+    inverse_matrix = quaternion_to_rotation_matrix(quaternion_conjugate)
+    return inverse_matrix
