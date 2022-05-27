@@ -9,6 +9,7 @@ from ..abstract import SequentialProcessor, Processor
 from ..models import KeypointNet2D, HigherHRNet, DetNet
 
 from ..backend.image import get_affine_transform, flip_left_right
+from ..backend.keypoints import flip_keypoints_wrt_image
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 
@@ -254,38 +255,27 @@ class HigherHRNetHumanPose2D(Processor):
         return self.wrap(image, keypoints, scores)
 
 
-class HandPoseEstimation(Processor):
-    """Hand keypoints detection pipeline.
-
-    # Arguments
-        hand_estimator: Keras model for predicting keypoints.
-        shape: Tuple. Shape the input image to be reshaped. eg (128, 128)
-        draw: Boolean indicating if inferences should be drawn.
-    """
-    def __init__(self, hand_estimator, shape=(128, 128), draw=True):
-        super(HandPoseEstimation).__init__()
+class DetNetHandKeypoints(pr.Processor):
+    def __init__(self, shape=(128, 128), draw=True, right_hand=False):
+        super(DetNetHandKeypoints).__init__()
         self.draw = draw
-        self.preprocess = SequentialProcessor(
+        self.right_hand = right_hand
+        self.preprocess = pr.SequentialProcessor(
             [pr.ResizeImage(shape), pr.ExpandDims(axis=0)])
-        self.hand_estimator = hand_estimator
+        self.hand_estimator = DetNet()
         self.scale_keypoints = pr.ScaleKeypoints(scale=4, shape=shape)
         self.draw_skeleton = pr.DrawHandSkeleton()
         self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D'])
 
     def call(self, input_image):
         image = self.preprocess(input_image)
+        if self.right_hand:
+            image = flip_left_right(image)
         keypoints3D, keypoints2D = self.hand_estimator.predict(image)
         keypoints2D = flip_left_right(keypoints2D)
+        if self.right_hand:
+            keypoints2D = flip_keypoints_wrt_image(keypoints2D)
         keypoints2D = self.scale_keypoints(keypoints2D, input_image)
         if self.draw:
             image = self.draw_skeleton(input_image, keypoints2D)
         return self.wrap(image, keypoints3D, keypoints2D)
-
-
-class MinimalHandPoseEstimation(HandPoseEstimation):
-    """
-        Minimal hand keypoints detection using DetNet model.
-    """
-    def __init__(self):
-        detect_hand = DetNet()
-        super(MinimalHandPoseEstimation, self).__init__(detect_hand)
