@@ -70,9 +70,9 @@ def keypoints3D_to_delta(keypoints3D, joints_config):
     return delta
 
 
-def compute_relative_angle(absolute_angles):
+def compute_relative_angle(absolute_angles, right_hand=False):
     """Compute the realtive joint rotation for the minimal hand joints and map
-       it in the kinematic chain form.
+       it in the MPII kinematic chain form.
 
     # Arguments
         absolute_angles : Numpy array [num_joints, 4].
@@ -86,7 +86,7 @@ def compute_relative_angle(absolute_angles):
     """
     absolute_angles = map_joint_config(
         absolute_angles, MPIIHandJoints, MANOHandJoints)
-    ref_keypoints = get_reference_keypoints(MANO_REF_JOINTS)
+    ref_keypoints = get_reference_keypoints(MANO_REF_JOINTS, right_hand)
     absolute_rotation = keypoints_quaternions_to_rotations(absolute_angles)
     rotated_ref_keypoints = rotate_keypoints(absolute_rotation, ref_keypoints)
     rotated_ref_keypoints_transform = construct_keypoints_transform(
@@ -94,35 +94,15 @@ def compute_relative_angle(absolute_angles):
     relative_angles = calculate_relative_angle(
         absolute_rotation, rotated_ref_keypoints_transform)
 
+    relative_angles = map_joint_config(
+        relative_angles, MANOHandJoints, MPIIHandJoints)
     joint_angles = np.zeros(shape=(len(absolute_rotation), 3))
     joint_angles[0] = rotation_matrix_to_compact_axis_angle(
         absolute_rotation[0])
-    childs = MANOHandJoints.childs
+    childs = MPIIHandJoints.childs
     joint_angles[1:len(childs), :] = relative_angles[childs[1:], :]
+    # joint_angles[childs[1:], :] = relative_angles[childs[1:], :]
     return joint_angles
-
-
-# for mpii config
-# def calculate_relative_angle(absolute_angles):
-#     absolute_angles = map_joint_config(
-#         absolute_angles, MPIIHandJoints, MANOHandJoints)
-#     ref_keypoints = get_reference_joints(MANO_REF_JOINTS)
-#     absolute_rotation = keypoints_quaternions_to_rotations(absolute_angles)
-#     rotated_ref_keypoints = rotate_keypoints(absolute_rotation, ref_keypoints)
-#     rotated_ref_keypoints_transform = construct_keypoints_transform(
-#         absolute_rotation, rotated_ref_keypoints)
-#     relative_angles = calculate_relative_angle(
-#         absolute_rotation, rotated_ref_keypoints_transform)
-
-#     relative_angles = map_joint_config(
-#         relative_angles, MANOHandJoints, MPIIHandJoints)
-#     joint_angles = np.zeros(shape=(len(absolute_rotation), 3))
-#     joint_angles[0] = rotation_matrix_to_compact_axis_angle(absolute_rotation[0])
-#     childs = MPIIHandJoints.childs
-#     joint_angles[childs[1:], :] = relative_angles[childs[1:], :]
-##     joint_angles[1:len(childs), :] = relative_angles[childs[1:], :]
-
-#     return joint_angles
 
 
 def calculate_relative_angle(absolute_rotation, ref_keypoint_transform):
@@ -219,11 +199,11 @@ def rotate_keypoints(rotation_matrix, keypoints):
     return keypoint_xyz
 
 
-def get_reference_keypoints(keypoints=MANO_REF_JOINTS, left=False):
-    if left:
+def get_reference_keypoints(keypoints=MANO_REF_JOINTS, right_hand=False):
+    if right_hand:
         keypoints = transform_column_to_negative(keypoints)
     ref_pose = keypoints3D_to_delta(keypoints, MANOHandJoints)
-    ref_pose = np.expand_dims(ref_pose, -1)  
+    ref_pose = np.expand_dims(ref_pose, -1)
     return ref_pose
 
 
@@ -294,7 +274,7 @@ def rotation_matrix_to_quaternion(rotation_matrix):
     return quaternion
 
 
-def transform_column_to_negative(self, array, column=0):
+def transform_column_to_negative(array, column=0):
     """Transforms a column of an array to negative value.
 
     # Arguments
@@ -305,4 +285,19 @@ def transform_column_to_negative(self, array, column=0):
         array: Numpy array
     """
     array[:, column] = -array[:, column]
-    return
+    return array
+
+
+def flip_keypoints_wrt_image(keypoints, image_size=(32, 32), axis=1):
+    """Flio the detected keypoints with respect to image
+
+    # Arguments
+        keypoints: Numpy array 
+        image_size: list/tuple
+        axis: int
+
+    # Returns
+        flipped_keypoints: Numpy array
+    """
+    keypoints[:, axis] = image_size[axis] - keypoints[:, axis]
+    return keypoints
