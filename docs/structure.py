@@ -65,7 +65,11 @@ PAGES = [
             keypoints.rotate_keypoint,
             keypoints.transform_keypoint,
             keypoints.add_offset_to_point,
-            keypoints.translate_points2D_origin
+            keypoints.translate_points2D_origin,
+            keypoints.flip_keypoints_wrt_image,
+            keypoints.keypoints3D_to_delta,
+            keypoints.rotate_keypoints_with_rotation_matrix,
+            keypoints.get_reference_keypoints
         ],
     },
 
@@ -76,13 +80,20 @@ PAGES = [
             groups.rotation_vector_to_quaternion,
             groups.homogenous_quaternion_to_rotation_matrix,
             groups.quaternion_to_rotation_matrix,
+            groups.rotation_matrix_to_quaternion,
+            groups.get_quaternion_conjugate,
+            groups.keypoints_quaternions_to_rotations,
+            groups.calculate_rotation_matrix_inverse,
             groups.to_affine_matrix,
+            groups.construct_keypoints_transform,
             groups.rotation_vector_to_rotation_matrix,
             groups.build_rotation_matrix_x,
             groups.build_rotation_matrix_y,
             groups.build_rotation_matrix_z,
             groups.compute_norm_SO3,
-            groups.calculate_canonical_rotation
+            groups.calculate_canonical_rotation,
+            groups.rotation_matrix_to_axis_angle,
+            groups.rotation_matrix_to_compact_axis_angle,
         ],
     },
 
@@ -211,6 +222,8 @@ PAGES = [
             standard.tensor_to_numpy,
             standard.pad_matrix,
             standard.max_pooling_2d,
+            standard.transform_column_to_negative,
+            standard.map_joint_config
         ],
     },
 
@@ -239,7 +252,9 @@ PAGES = [
             models.KeypointNet,
             models.KeypointNet2D,
             models.Projector,
-            models.DetNet
+            models.DetNet,
+            models.IKNet,
+            
         ],
     },
 
@@ -422,6 +437,8 @@ PAGES = [
             processors.DenormalizeKeypoints2D,
             processors.NormalizeKeypoints2D,
             processors.ArgumentsToImageKeypoints2D,
+            processors.ScaleKeypoints,
+            processors.CalculateOrientationFromCoordinates,
         ]
     },
 
@@ -529,6 +546,7 @@ PAGES = [
             pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
+            pipelines.MinimalHandPoseEstimation,
         ]
     },
 
@@ -551,8 +569,7 @@ PAGES = [
             pipelines.GetKeypoints,
             pipelines.TransformKeypoints,
             pipelines.HigherHRNetHumanPose2D,
-            pipelines.HandPoseEstimation,
-            pipelines.MinimalHandPoseEstimation
+            pipelines.DetNetHandKeypoints,
         ]
     },
 
@@ -585,6 +602,14 @@ PAGES = [
         'classes': [
             pipelines.RandomizeRenderedImage,
             pipelines.RenderTwoViews,
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/angles.md',
+        'classes': [
+            pipelines.IKNetHandJointAngles
         ]
     },
 
