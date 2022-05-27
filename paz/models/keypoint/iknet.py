@@ -8,7 +8,6 @@ from tensorflow.keras.initializers import truncated_normal
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Input, Activation, Reshape
 from tensorflow.keras.models import Model
-import numpy as np
 
 
 WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/releases/download/'
@@ -27,7 +26,7 @@ def block(x, num_units):
     return x
 
 
-def normalize(x): 
+def normalize(x):
     norm = tf.norm(x, axis=-1, keepdims=True)
     norm = tf.maximum(norm, 1e-6)
     normalized_x = x / norm
@@ -39,9 +38,24 @@ def reorder_quaternions(quaternions):
     qs = quaternions[:, :, 1:4]
     quaternions = tf.concat((qs, w), axis=-1)
     return quaternions
-    
+
 
 def IKNet(input_shape=(84, 3), num_keypoints=21, depth=6, width=1024):
+    """IKNet: Estimate absolute joint angle for the minimal hand keypoints.
+
+    # Arguments
+        input_shape: [num_keypoint x 4, 3]. Contains 3D keypoints, bone
+                     orientation, refrence keypoint, refrence bone orientation.
+        num_keypoints: Int. Number of keypoints.
+
+    # Returns
+        Tensorflow-Keras model.
+        absolute joint angle in quaternion representation.
+
+    # Reference
+        - [Monocular Real-time Hand Shape and Motion Capture using Multi-modal
+           Data](https://arxiv.org/abs/2003.09572)
+    """
     input = Input(shape=input_shape, dtype=tf.float32)
     x = Reshape([1, -1])(input)
 
