@@ -75,3 +75,67 @@ def quaternion_to_rotation_matrix(quaternion):
     """
     matrix = homogenous_quaternion_to_rotation_matrix(quaternion)
     return matrix
+
+
+def rotation_matrix_to_quaternion(rotation_matrix):
+    """Transforms rotation matrix to quaternion.
+
+    # Arguments
+        Rotation matrix [3, 3].
+
+    # Returns
+        quaternion: Array containing quaternion value [q1, q2, q3, w0].
+    """
+    rotation_matrix = rotation_matrix[:3, :3]
+    trace = np.trace(rotation_matrix)
+    w0 = np.sqrt(1.0 + trace) / 2
+    q1 = 0.25 * (rotation_matrix[2, 1] - rotation_matrix[1, 2]) / w0
+    q2 = 0.25 * (rotation_matrix[0, 2] - rotation_matrix[2, 0]) / w0
+    q3 = 0.25 * (rotation_matrix[1, 0] - rotation_matrix[0, 1]) / w0
+    quaternion = np.array([q1, q2, q3, w0])
+    return quaternion
+
+
+def get_quaternion_conjugate(quaternion):
+    """Estimate conjugate of a quaternion.
+
+    # Arguments
+        quaternion: Array containing quaternion value [q1, q2, q3, w0].
+
+    # Returns
+        quaternion: Array containing quaternion value [-q1, -q2, -q3, w0].
+    """
+    q1, q2, q3, w0 = quaternion
+    return np.array([-q1, -q2, -q3, w0])
+
+
+def keypoints_quaternions_to_rotations(quaternions):
+    """Transform quaternion vectors to rotation matrix vector.
+
+    # Arguments
+        quaternions [N, 4].
+
+    # Returns
+        Rotated matrices [N, 3, 3]
+    """
+    keypoints_rotations = np.zeros(shape=(len(quaternions), 3, 3))
+    for keypoint_arg in range(len(quaternions)):
+        rotation_matrix = quaternion_to_rotation_matrix(
+            quaternions[keypoint_arg])
+        keypoints_rotations[keypoint_arg] = rotation_matrix
+    return keypoints_rotations
+
+
+def calculate_rotation_matrix_inverse(matrix):
+    """Calculate the inverse of ratation matrix using quaternions.
+
+    # Arguments
+        Rotation matrix [3, 3]
+
+    # Returns
+        Rotation matrix inverse [3, 3]
+    """
+    quaternion = rotation_matrix_to_quaternion(matrix)
+    quaternion_conjugate = get_quaternion_conjugate(quaternion)
+    inverse_matrix = quaternion_to_rotation_matrix(quaternion_conjugate)
+    return inverse_matrix

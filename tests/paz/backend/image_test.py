@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 
 from paz.backend.image import replace_lower_than_threshold
 from paz.backend.image import image_to_normalized_device_coordinates
 from paz.backend.image import normalized_device_coordinates_to_image
 from paz.backend.image import normalize_min_max
+from paz.backend.image import get_scaling_factor
 
 
 def test_replace_lower_than_threshold():
@@ -34,3 +36,8 @@ def test_normalize_min_max():
     assert np.allclose(values, np.array([0.0, 0.5, 1.0]))
 
 
+@pytest.mark.parametrize("output_scaling_factor", [[12, 8]])
+def test_get_scaling_factor(output_scaling_factor, scale=2, shape=(128, 128)):
+    image = np.ones((512, 768, 3))
+    scaling_factor = get_scaling_factor(image, scale, shape)
+    assert np.allclose(output_scaling_factor, scaling_factor)

@@ -8,8 +8,8 @@ from ..datasets import get_class_names
 from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32
-from .keypoints import TransformKeypoints
-from .heatmaps import GetHeatmapsAndTags
+from .keypoints import DetNetHandKeypoints
+from .angles import IKNetHandJointAngles
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -479,3 +479,36 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
         super(DetectFaceKeypointNet2D32, self).__init__(
             detect, estimate_keypoints, offsets, radius)
+
+
+class MinimalHandPoseEstimation(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
+       Estimate absolute and relative joint angle for the minimal hand joints
+       using the 3D keypoint locations.
+
+    # Arguments
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+        absolute_angles: Array [num_joints, 4]. quaternion repesentation
+        relative_angles: Array [num_joints, 3]. axis-angle repesentation
+    """
+    def __init__(self, draw=True, right_hand=False):
+        super(MinimalHandPoseEstimation, self).__init__()
+        self.keypoints_estimator = DetNetHandKeypoints(draw=draw,
+                                                       right_hand=right_hand)
+        self.angle_estimator = IKNetHandJointAngles(right_hand)
+        self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D',
+                                   'absolute_angles', 'relative_angles'])
+
+    def call(self, image):
+        keypoints = self.keypoints_estimator(image)
+        angles = self.angle_estimator(keypoints['keypoints3D'])
+        return self.wrap(keypoints['image'], keypoints['keypoints3D'],
+                         keypoints['keypoints2D'], angles['absolute_angles'],
+                         angles['relative_angles'])
