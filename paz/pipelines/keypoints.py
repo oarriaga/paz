@@ -256,6 +256,20 @@ class HigherHRNetHumanPose2D(Processor):
 
 
 class DetNetHandKeypoints(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
+
+    # Arguments
+        shape: List/tuple. Input image shape for DetNet model.
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+        input_image: Array
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+    """
     def __init__(self, shape=(128, 128), draw=True, right_hand=False):
         super(DetNetHandKeypoints).__init__()
         self.draw = draw

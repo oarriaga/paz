@@ -482,6 +482,22 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
 
 
 class MinimalHandPoseEstimation(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
+       Estimate absolute and relative joint angle for the minimal hand joints
+       using the 3D keypoint locations.
+
+    # Arguments
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+        absolute_angles: Array [num_joints, 4]. quaternion repesentation
+        relative_angles: Array [num_joints, 3]. axis-angle repesentation
+    """
     def __init__(self, draw=True, right_hand=False):
         super(MinimalHandPoseEstimation, self).__init__()
         self.keypoints_estimator = DetNetHandKeypoints(draw=draw,

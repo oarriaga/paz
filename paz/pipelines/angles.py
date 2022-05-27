@@ -6,6 +6,18 @@ from paz.backend.standard import transform_column_to_negative
 
 
 class IKNetHandJointAngles(pr.Processor):
+    """Estimate absolute and relative joint angle for the minimal hand joints
+       using the 3D keypoint locations.
+
+    # Arguments
+        right_hand: Boolean. If 'True', estimate angles for right hand, else
+                    estimate angles for left hand.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+
+    # Returns
+        absolute_angles: Array [num_joints, 4]. quaternion repesentation
+        relative_angles: Array [num_joints, 3]. axis-angle repesentation
+    """
     def __init__(self, right_hand=False, config=MPIIHandJoints):
         super(IKNetHandJointAngles, self).__init__()
         self.calculate_orientation = pr.CalculateOrientationFromCoordinates(
