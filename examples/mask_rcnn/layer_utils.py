@@ -556,8 +556,10 @@ def compute_ROI_level(boxes, image_shape):
     """Used by PyramidROIAlign
 
     # Arguments:
-        boxes
-        image_shape
+        boxes: [batch, num_boxes, (y1, x1, y2, x2)] in normalized
+                coordinates. Possibly padded with zeros if not enough
+                boxes to fill the array
+        image_shape: shape of image
     """
 
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=2)
@@ -577,9 +579,12 @@ def apply_ROI_pooling(roi_level, boxes, feature_maps, pool_shape):
 
     # Arguments:
         roi_level
-        boxes
-        features_maps
-        pool_shape
+        boxes: [batch, num_boxes, (y1, x1, y2, x2)] in normalized
+                coordinates. Possibly padded with zeros if not enough
+                boxes to fill the array
+        features_maps: List of feature maps from different levels
+                      of the pyramid. Each is [batch, height, width, channels]
+        pool_shape: [pool_height, pool_width] of the output pooled regions
     """
 
     pooled, box_to_level = [], []
@@ -603,9 +608,13 @@ def rearrange_pooled_features(pooled, box_to_level, boxes):
     """Used by PyramidROIAlign
 
     # Arguments:
-        pooled
+        pooled: [batch, num_boxes, pool_height, pool_width, channels].
+                The width and height are those specific in the pool_shape in the layer
+                constructor.
         box_to_level
-        boxes
+        boxes: [batch, num_boxes, (y1, x1, y2, x2)] in normalized
+                coordinates. Possibly padded with zeros if not enough
+                boxes to fill the array
     """
 
     sorting_tensor = (box_to_level[:, 0] * 100000) + box_to_level[:, 1]
