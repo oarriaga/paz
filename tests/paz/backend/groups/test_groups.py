@@ -10,6 +10,8 @@ from paz.backend.groups import build_rotation_matrix_y
 from paz.backend.groups import build_rotation_matrix_z
 from paz.backend.groups import compute_norm_SO3
 from paz.backend.groups import calculate_canonical_rotation
+from paz.backend.groups import rotation_matrix_to_axis_angle
+from paz.backend.groups import rotation_matrix_to_compact_axis_angle
 
 
 @pytest.fixture
@@ -179,3 +181,27 @@ def test_calculate_canonical_rotation(rotation_matrix_X_HALF_PI):
     canonical_rotation = calculate_canonical_rotation(np.eye(3), rotations)
     assert np.allclose(
         canonical_rotation, np.linalg.inv(rotation_matrix_X_HALF_PI))
+
+
+@pytest.fixture
+def rotation_matrix():
+    rotation_matrix = np.array([[0.99394977, -0.02341585, -0.10731083],
+                                [0.02910355, 0.9982362, 0.05174612],
+                                [0.10590983, -0.05455617, 0.99287811]])
+    return rotation_matrix
+
+
+@pytest.mark.parametrize(
+    "axis_angle", [[-0.43571813, -0.87396149, 0.21526963, 0.12228879]])
+def test_rotation_matrix_to_axis_angle(rotation_matrix, axis_angle):
+    estimated_axis_angle = rotation_matrix_to_axis_angle(rotation_matrix)
+    assert np.allclose(axis_angle, estimated_axis_angle)
+
+
+@pytest.mark.parametrize(
+    "compact_axis_angle", [[-0.05328344, -0.10687569, 0.02632506]])
+def test_rotation_matrix_to_compact_axis_angle(
+        rotation_matrix, compact_axis_angle):
+    estimated_compact_axis_angle = rotation_matrix_to_compact_axis_angle(
+        rotation_matrix)
+    assert np.allclose(compact_axis_angle, estimated_compact_axis_angle)
