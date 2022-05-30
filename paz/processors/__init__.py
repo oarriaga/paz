@@ -157,6 +157,9 @@ from .heatmaps import ExtractKeypointsLocations
 
 from .munkres import Munkres
 
+from .angles import MapJointConfig
+from .angles import ComputeRelativeAngles
+
 
 TRAIN = 0
 VAL = 1

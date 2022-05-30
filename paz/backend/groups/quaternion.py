@@ -126,7 +126,7 @@ def keypoints_quaternions_to_rotations(quaternions):
     return keypoints_rotations
 
 
-def calculate_rotation_matrix_inverse(matrix):
+def invert_rotation_matrix(matrix):
     """Calculate the inverse of ratation matrix using quaternions.
 
     # Arguments
@@ -134,6 +134,8 @@ def calculate_rotation_matrix_inverse(matrix):
 
     # Returns
         Rotation matrix inverse [3, 3]
+        
+    # Note: computation_cost
     """
     quaternion = rotation_matrix_to_quaternion(matrix)
     quaternion_conjugate = get_quaternion_conjugate(quaternion)

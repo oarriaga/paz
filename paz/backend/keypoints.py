@@ -384,7 +384,7 @@ def denormalize_keypoints(keypoints, height, width):
     return keypoints
 
 
-def rotate_keypoint(point2D, rotation_angle):
+def rotate_point2D(point2D, rotation_angle):
     """Rotate keypoint.
 
     # Arguments
@@ -427,7 +427,7 @@ def add_offset_to_point(keypoint_location, offset=0):
 
 
 def flip_keypoints_wrt_image(keypoints, image_size=(32, 32), axis=1):
-    """Flio the detected keypoints with respect to image
+    """Flip the detected keypoints with respect to image
 
     # Arguments
         keypoints: Numpy array 
@@ -465,7 +465,7 @@ def keypoints3D_to_delta(keypoints3D, joints_config):
     return delta
 
 
-def rotate_keypoints_with_rotation_matrix(rotation_matrix, keypoints):
+def rotate_points3D(rotation_matrix, keypoints):
     """Rotatate the keypoints by using rotation matrix
 
     # Arguments
@@ -479,8 +479,8 @@ def rotate_keypoints_with_rotation_matrix(rotation_matrix, keypoints):
     return keypoint_xyz
 
 
-def get_reference_keypoints(joint_config, right_hand=False):
-    keypoints = joint_config.ref_joints
+def get_links_origin(joint_config, right_hand=False):
+    keypoints = joint_config.links_origin
     if right_hand:
         keypoints = transform_column_to_negative(keypoints)
     ref_pose = keypoints3D_to_delta(keypoints, joint_config)
