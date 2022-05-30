@@ -19,6 +19,7 @@
 checkpoint
 *.coverage
 *.npy
+.DS_Store
 
 !.github/manifest.xml
 

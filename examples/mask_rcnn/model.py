@@ -80,7 +80,7 @@ def upsample_block(y, x, filters, up_sample_name='None', fpn_name='None', fpn_ad
     return p
 
 
-def build_backbone(image_shape, backbone_features, fpn_size, train_bn):
+def build_backbone(image_shape, backbone_features, fpn_size, train_bn): #TODO: documentation
     height, width = image_shape[:2]
     raise_exception(height, width)
     input_image = Input(shape=[None, None, image_shape[2]], name='input_image')

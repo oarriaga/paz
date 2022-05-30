@@ -3,7 +3,7 @@ import numpy as np
 from tensorflow.keras.layers import Layer
 
 
-def box_refinement_graph(box, prior_box):
+def box_refinement(box, prior_box):
     """Compute refinement needed to transform box to prior_box
 
     # Arguments:
@@ -13,66 +13,29 @@ def box_refinement_graph(box, prior_box):
 
     box = tf.cast(box, tf.float32)
     prior_box = tf.cast(prior_box, tf.float32)
-    x_box= box[:,0]
-    y_box= box[:,1]
+    x_box = box[:, 0]
+    y_box = box[:, 1]
 
-    height = box[:, 2] - x_box
-    width = box[:, 3] - y_box
-    center_y = x_box + 0.5 * height
-    center_x = y_box + 0.5 * width
+    H = box[:, 2] - x_box
+    W = box[:, 3] - y_box
+    center_y = x_box + (0.5 * H)
+    center_x = y_box + (0.5 * W)
 
-    prior_height = prior_box[:, 2] - prior_box[:, 0]
-    prior_width = prior_box[:, 3] - prior_box[:, 1]
-    prior_center_y = prior_box[:, 0] + 0.5 * prior_height
-    prior_center_x = prior_box[:, 1] + 0.5 * prior_width
+    prior_H = prior_box[:, 2] - prior_box[:, 0]
+    prior_W = prior_box[:, 3] - prior_box[:, 1]
+    prior_center_y = prior_box[:, 0] + (0.5 * prior_H)
+    prior_center_x = prior_box[:, 1] + (0.5 * prior_W)
 
-    dy = (prior_center_y - center_y) / height
-    dx = (prior_center_x - center_x) / width
-    dh = tf.math.log(prior_height / height)
-    dw = tf.math.log(prior_width / width)
+    dy = (prior_center_y - center_y) / H
+    dx = (prior_center_x - center_x) / W
+    dh = tf.math.log(prior_H / H)
+    dw = tf.math.log(prior_W / W)
 
     result = tf.stack([dy, dx, dh, dw], axis=1)
     return result
 
 
-def batch_slice(inputs, graph_function, batch_size, names=None):
-    """Splits inputs into slices and feeds each slice to a copy of the given
-       computation graph and then combines the results.
-
-    # Arguments:
-        inputs: list of tensors. All must have the same first dimension length
-        graph_function: Function that returns a tensor that's part of a graph.
-        batch_size: number of slices to divide the data into.
-        names: If provided, assigns names to the resulting tensors.
-    """
-
-    if not isinstance(inputs, list):
-        inputs = [inputs]
-    outputs = []
-    for sample in range(batch_size):  # i = sample_arg
-        inputs_slice = [x[sample] for x in inputs]
-        output_slice = graph_function(*inputs_slice)
-        if not isinstance(output_slice, (tuple, list)):
-            output_slice = [output_slice]
-        outputs.append(output_slice)
-    outputs = list(zip(*outputs))
-
-    if names is None:
-        names = [None] * len(outputs)
-
-    result = [tf.stack(o, axis=0, name=n)
-              for o, n in zip(outputs, names)] #explicit for loop
-
-    #for o, n in zip(outputs,names):
-        #result = [tf.stack(o, axis=0, name=n)]
-
-    if len(result) == 1:
-        result = result[0]
-
-    return result
-
-
-def trim_zeros_graph(boxes, name='trim_zeros'):
+def trim_zeros(boxes, name='trim_zeros'):
     """Often boxes are represented with matrices of shape [N, 4] and
        are padded with zeros. This removes zero boxes.
 
@@ -86,7 +49,43 @@ def trim_zeros_graph(boxes, name='trim_zeros'):
     return boxes, non_zeros
 
 
-def apply_box_deltas_graph(boxes, deltas):
+def slice_batch(inputs, function, batch_size, names=None):
+    """Splits inputs into slices and feeds each slice to a copy of the given
+       computation graph and then combines the results.
+
+    # Arguments:
+        inputs: list of tensors. All must have the same first dimension length
+        graph_function: Function that returns a tensor that's part of a graph.
+        batch_size: number of slices to divide the data into.
+        names: If provided, assigns names to the resulting tensors.
+    """
+
+    if not isinstance(inputs, list):
+        inputs = [inputs]
+    outputs = []
+    for sample in range(batch_size):          #TODO:sample_arg, split functions for loop
+        inputs_slice = [x[sample] for x in inputs]
+        output_slice = function(*inputs_slice)
+        if not isinstance(output_slice, (tuple, list)):
+            output_slice = [output_slice]
+        outputs.append(output_slice)
+    outputs = list(zip(*outputs))
+
+    if names is None:
+        names = [None] * len(outputs)
+
+    results = []
+    for o, n in zip(outputs,names):   #TODO: o, n rename
+        result = tf.stack(o, axis=0, name=n)
+        results.append(result)
+
+    if len(results) == 1:
+        results = results[0]
+
+    return results
+
+
+def apply_box_deltas(boxes, deltas):
     """Applies the given deltas to the given boxes.
 
     # Arguments:
@@ -94,26 +93,26 @@ def apply_box_deltas_graph(boxes, deltas):
         deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
     """
 
-    height = boxes[:, 2] - boxes[:, 0]
-    width = boxes[:, 3] - boxes[:, 1]
-    center_y = boxes[:, 0] + 0.5 * height
-    center_x = boxes[:, 1] + 0.5 * width
+    H = boxes[:, 2] - boxes[:, 0]
+    W = boxes[:, 3] - boxes[:, 1]
+    center_y = boxes[:, 0] + (0.5 * H)
+    center_x = boxes[:, 1] + (0.5 * W)
 
-    center_y = center_y + (deltas[:, 0] * height) #a= a + b
-    center_x = center_x + (deltas[:, 1] * width)
-    height = height * tf.exp(deltas[:, 2])
-    width = width * tf.exp(deltas[:, 3])
+    center_y = center_y + (deltas[:, 0] * H)
+    center_x = center_x + (deltas[:, 1] * W)
+    H = H * tf.exp(deltas[:, 2])
+    W = W * tf.exp(deltas[:, 3])
 
-    y_min = center_y - 0.5 * height
-    x_min = center_x - 0.5 * width
-    y_max = y_min + height
-    x_max = x_min + width
+    y_min = center_y - (0.5 * H)
+    x_min = center_x - (0.5 * W)
+    y_max = y_min + H
+    x_max = x_min + W
     result = tf.stack([y_min, x_min, y_max, x_max], axis=1,
                       name='apply_box_deltas_out')
     return result
 
 
-def clip_boxes_graph(boxes, window):
+def clip_boxes(boxes, window):
     """Clips boxes for given window size
 
     # Arguments:
@@ -122,16 +121,22 @@ def clip_boxes_graph(boxes, window):
     """
 
     window_y_min, window_x_min, window_y_max, window_x_max = \
-        tf.split(window, 4)
+        tf.split(window, 4)    #TODO: rename Window
+
+    #windows = tf.split(window, 4)
+    #window_y_min = windows [0]
+    #window_x_min, ... = windows
+
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
     y_min = tf.maximum(tf.minimum(y_min, window_y_max), window_y_min)
     x_min = tf.maximum(tf.minimum(x_min, window_x_max), window_x_min)
     y_max = tf.maximum(tf.minimum(y_max, window_y_max), window_y_min)
-    x_max = tf.maximum(tf.minimum(x_max, window_x_max), window_x_min)  #tf.clip
+    x_max = tf.maximum(tf.minimum(x_max, window_x_max), window_x_min)
 
     clipped = tf.concat([y_min, x_min, y_max, x_max], axis=1,
                         name='clipped_boxes')
-    clipped.set_shape((clipped.shape[0], 4))
+
+    #clipped.set_shape((clipped.shape[0], 4))     #TODO: Check impact during trianing
     return clipped
 
 
@@ -147,7 +152,8 @@ def get_top_detections(scores, keep, nms_keep, detection_max_instances):
 
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
                                 tf.expand_dims(nms_keep, 0))
-    keep = tf.sparse.to_dense(keep)[0]     #avoid this
+
+    keep = tf.sparse.to_dense(keep)[0]     # Important step
     roi_count = detection_max_instances
     class_scores_keep = tf.gather(scores, keep)
     num_keep = tf.minimum(tf.shape(class_scores_keep)[0], roi_count)
@@ -155,7 +161,7 @@ def get_top_detections(scores, keep, nms_keep, detection_max_instances):
     return tf.gather(keep, top_ids)
 
 
-def NMS_map(pre_nms_elements, keep, unique_class_id,
+def NMS_map(box_data, keep, unique_class_id,
             detection_max_instances, detection_nms_threshold):
     """Used by top detection layer in apply NMS
 
@@ -167,17 +173,16 @@ def NMS_map(pre_nms_elements, keep, unique_class_id,
         detection_nms_threshold
     """
 
-    class_ids, scores, rois = pre_nms_elements
+    class_ids, scores, rois = box_data
     ids = tf.where(tf.equal(class_ids, unique_class_id))[:, 0]
 
     class_keep = tf.image.non_max_suppression(tf.gather(rois, ids), tf.gather(scores, ids),
                                               max_output_size=detection_max_instances,
                                               iou_threshold=detection_nms_threshold)
-    class_keep = tf.gather(keep, tf.gather(ids, class_keep))  #ixs = class_ids explicit variables
+    class_keep = tf.gather(keep, tf.gather(ids, class_keep))
     gap = detection_max_instances - tf.shape(class_keep)[0]
     class_keep = tf.pad(class_keep, [(0, gap)], mode='CONSTANT', constant_values=-1)
-    class_keep.set_shape([detection_max_instances])
-
+    #class_keep.set_shape([detection_max_instances])    #TODO: Check impact during training
     return class_keep
 
 
@@ -200,10 +205,13 @@ def apply_NMS(class_ids, scores, refined_rois, keep,
     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
 
     pre_nms_elements = [pre_nms_class_ids, pre_nms_scores, pre_nms_rois]
-    nms_keep = tf.map_fn(lambda x: NMS_map(pre_nms_elements, keep, x,
-                                           detection_max_instances, detection_nms_threshold), #lambda remove
-                         unique_pre_nms_class_ids, dtype=tf.int64)
 
+    nms_keep=[]
+    for arg in [unique_pre_nms_class_ids]:
+        nms_keep.append(NMS_map(pre_nms_elements, keep, arg,
+                                detection_max_instances, detection_nms_threshold))
+    nms_keep = tf.stack(nms_keep)
+    nms_keep= tf.dtypes.cast(nms_keep, tf.int64)
     return merge_results(nms_keep)
 
 
@@ -231,7 +239,7 @@ def filter_low_confidence(class_scores, keep, detection_min_confidence):
         class_scores >= detection_min_confidence)[:, 0]
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
                                 tf.expand_dims(confidence, 0))
-    return tf.sparse.to_dense(keep)[0]
+    return tf.sparse.to_dense(keep)[0]    #Important step
 
 
 def zero_pad_detections(detections, detection_max_instances):
@@ -250,19 +258,21 @@ def trim_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit):
     """Used by proposal layer
 
     # Arguments:
-        scores
-        deltas
-        anchors
-        images_per_gpu
-        pre_nms_limit
+        scores: [N] Predicted target class values
+        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        anchors: [batch, num_anchors, (y_min, x_min, y_max, x_max)] anchors
+                 in normalized coordinates
+        images_per_gpu: Number of images to train with on each GPU
+        pre_nms_limit: type int, ROIs kept after tf.nn.top_k
+                       and before non-maximum suppression
     """
 
     pre_nms_limit = tf.minimum(pre_nms_limit, tf.shape(anchors)[1])
     indices = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
                           name='top_anchors').indices
-    scores = batch_slice([scores, indices], tf.gather, images_per_gpu)
-    deltas = batch_slice([deltas, indices], tf.gather, images_per_gpu)
-    pre_nms_anchors = batch_slice([anchors, indices], tf.gather,
+    scores = slice_batch([scores, indices], tf.gather, images_per_gpu)
+    deltas = slice_batch([deltas, indices], tf.gather, images_per_gpu)
+    pre_nms_anchors = slice_batch([anchors, indices], tf.gather,
                                   images_per_gpu, names=['pre_nms_anchors'])
     return scores, deltas, pre_nms_anchors
 
@@ -271,13 +281,13 @@ def apply_box_delta(pre_nms_anchors, deltas, images_per_gpu):
     """Used by proposal layer
 
     # Arguments:
-        pre_nms_anchors
-        deltas
-        images_per_gpu
+        pre_nms_anchors: [N, (y_min, x_min, y_max, x_max)] boxes to update
+        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        images_per_gpu: Number of images to train with on each GPU
     """
 
-    boxes = batch_slice([pre_nms_anchors, deltas],
-                        apply_box_deltas_graph, images_per_gpu,
+    boxes = slice_batch([pre_nms_anchors, deltas],
+                        apply_box_deltas, images_per_gpu,
                         names=['refined_anchors'])
     return boxes
 
@@ -286,14 +296,24 @@ def clip_image_boundaries(boxes, images_per_gpu):
     """Used by proposal layer
 
     # Arguments:
-        boxes
-        images_per_gpu
+        boxes: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        images_per_gpu: Number of images to train with on each GPU
     """
-
-    window = np.array([0, 0, 1, 1], dtype=np.float32)
-    boxes = batch_slice(boxes, lambda x: clip_boxes_graph(x, window), #TODO: Remove lambda
-                        images_per_gpu, names=['refined_anchors_clipped'])
+    global window1
+    window1 = np.array([0, 0, 1, 1], dtype=np.float32)
+    boxes = slice_batch(boxes, clip_boxes_to_window_size, images_per_gpu,
+                        names=['refined_anchors_clipped'])
     return boxes
+
+
+def clip_boxes_to_window_size(x):
+    """Used tp clip boundaries of images after proposals
+
+        # Arguments:
+            x: [N, (dy, dx, log(dh), log(dw))] proposed image
+            window: Numpy array of size [1x4]
+        """
+    return clip_boxes(x,window1)
 
 
 def pad_ROI_priors(num_positives, num_negatives, roi_priors,
@@ -310,13 +330,10 @@ def pad_ROI_priors(num_positives, num_negatives, roi_priors,
 
     roi_class_ids, roi_boxes, _ = roi_priors
     num_samples = num_negatives + num_positives
-    roi_boxes = tf.pad(roi_boxes,
-                       [(0, num_samples), (0, 0)])
-    roi_class_ids = tf.pad(roi_class_ids,
-                           [(0, num_samples)])
+    roi_boxes = tf.pad(roi_boxes, [(0, num_samples), (0, 0)])
+    roi_class_ids = tf.pad(roi_class_ids, [(0, num_samples)])
     deltas = tf.pad(deltas, [(0, num_samples), (0, 0)])
-    masks = tf.pad(masks, [[0, num_samples],
-                  (0, 0), (0, 0)])
+    masks = tf.pad(masks, [[0, num_samples], (0, 0), (0, 0)])
     return roi_class_ids, deltas, masks
 
 
@@ -337,7 +354,7 @@ def pad_ROI(positive_rois, negative_rois, train_rois_per_image):
     return rois, num_positives, num_negatives
 
 
-def update_priors(overlaps, positive_indices, positive_rois, priors, bbox_std_dev):
+def update_priors(overlaps, positive_indices, positive_rois, priors, bbox_standard_deviation):
     """Used by Detection target layer in detection_target_graph
 
         # Arguments:
@@ -349,22 +366,34 @@ def update_priors(overlaps, positive_indices, positive_rois, priors, bbox_std_de
         """
 
     class_ids, boxes, masks = priors
+    global positive_overlaps
     positive_overlaps = tf.gather(overlaps, positive_indices)
-    roi_gt_box_assignment = tf.cond(
+
+    roi_true_box_assignment = tf.cond(
         tf.greater(tf.shape(positive_overlaps)[1], 0),
-        true_fn=lambda: tf.argmax(positive_overlaps, axis=1), #TODO: remove lambda
-        false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
-    )
-    roi_prior_boxes = tf.gather(boxes, roi_gt_box_assignment)
-    roi_prior_class_ids = tf.gather(class_ids, roi_gt_box_assignment)
-    deltas = box_refinement_graph(positive_rois, roi_prior_boxes)
-    deltas /= bbox_std_dev
+        true_fn = true_fn, false_fn = false_fn )
+
+    roi_prior_boxes = tf.gather(boxes, roi_true_box_assignment)
+    roi_prior_class_ids = tf.gather(class_ids, roi_true_box_assignment)
+    deltas = box_refinement(positive_rois, roi_prior_boxes)
+    deltas /= bbox_standard_deviation
+
     transposed_masks = tf.expand_dims(tf.transpose(masks, [2, 0, 1]), -1)
-    roi_masks = tf.gather(transposed_masks, roi_gt_box_assignment)
+    roi_masks = tf.gather(transposed_masks, roi_true_box_assignment)
     return deltas, [roi_prior_class_ids, roi_prior_boxes, roi_masks]
 
 
-def compute_target_masks(positive_rois, roi_priors, mask_shape, use_mini_mask):
+def true_fn():    #TODO: compute_biggest_overlap
+    return tf.argmax(positive_overlaps, axis=1)
+
+
+def false_fn():   #TODO: get_empty_list
+    return tf.cast(tf.constant([]), tf.int64)
+
+
+###TODO from here
+
+def compute_target_masks(positive_rois, roi_priors, mask_shape, use_mini_mask):   #TODO:mini_mask -->rename
     """Used by Detection target layer in detection_target_graph
 
     # Arguments:
@@ -379,8 +408,8 @@ def compute_target_masks(positive_rois, roi_priors, mask_shape, use_mini_mask):
     if use_mini_mask:
         boxes = transform_ROI_coordinates(positive_rois, roi_boxes)
     box_ids = tf.range(0, tf.shape(roi_masks)[0])
-    masks = tf.image.crop_and_resize(tf.cast(roi_masks, tf.float32), boxes,
-                                         box_ids, mask_shape)
+    masks = tf.image.crop_and_resize(tf.cast(roi_masks, tf.float32), boxes,   #TODO: cast separate line
+                                     box_ids, mask_shape)
     masks = tf.squeeze(masks, axis=3)
     return tf.round(masks)
 
@@ -396,16 +425,16 @@ def transform_ROI_coordinates(boxes, roi_boxes):
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
     roi_y_min, roi_x_min, roi_y_max, roi_x_max = tf.split(roi_boxes, 4,
                                                           axis=1)
-    height = roi_y_max - roi_y_min
-    width = roi_x_max - roi_x_min
-    y_min = (y_min - roi_y_min) / height
-    x_min = (x_min - roi_x_min) / width
-    y_max = (y_max - roi_y_min) / height
-    x_max = (x_max - roi_x_min) / width
+    H = roi_y_max - roi_y_min
+    W = roi_x_max - roi_x_min
+    y_min = (y_min - roi_y_min) / H
+    x_min = (x_min - roi_x_min) / W
+    y_max = (y_max - roi_y_min) / H
+    x_max = (x_max - roi_x_min) / W
     return tf.concat([y_min, x_min, y_max, x_max], 1)
 
 
-def remove_zero_padding(proposals, ground_truth):
+def remove_zero_padding(proposals, ground_truth):         #TODO: ground_truth -->define explicit values
     """Used by Detection target layer in refine_instances
 
     # Arguments:
@@ -414,13 +443,12 @@ def remove_zero_padding(proposals, ground_truth):
     """
 
     class_ids, boxes, masks = ground_truth
-    proposals, _ = trim_zeros_graph(proposals, name='trim_proposals')
-    boxes, non_zeros = trim_zeros_graph(boxes,
-                                        name='trim_prior_boxes')
+    proposals, _ = trim_zeros(proposals, name='trim_proposals')
+    boxes, non_zeros = trim_zeros(boxes, name='trim_prior_boxes')
     class_ids = tf.boolean_mask(class_ids, non_zeros,
                                 name='trim_prior_class_ids')
     masks = tf.gather(masks, tf.where(non_zeros)[:, 0], axis=2,
-                        name='trim_prior_masks')
+                      name='trim_prior_masks')
 
     return proposals, [class_ids, boxes, masks]
 
@@ -433,8 +461,7 @@ def refine_instances(proposals, ground_truth):
         ground_truth
     """
 
-    proposals, ground_truth = remove_zero_padding(proposals,
-                                                           ground_truth)
+    proposals, ground_truth = remove_zero_padding(proposals, ground_truth)
     class_ids, boxes, masks = ground_truth
     crowd_ix = tf.where(class_ids < 0)[:, 0]
     non_crowd_ix = tf.where(class_ids > 0)[:, 0]
@@ -464,10 +491,9 @@ def compute_ROI_overlaps(proposals, boxes, crowd_boxes, overlaps,
 
     roi_iou_max = tf.reduce_max(overlaps, axis=1)
     positive_roi_bool = (roi_iou_max >= 0.5)
-    positive_indices = tf.where(positive_roi_bool)[:, 0]
+    positive_indices = tf.where(positive_roi_bool)[:, 0]    #TODO: Define functions positive and negative indices
     negative_indices = tf.where(tf.logical_and(
                                 roi_iou_max < 0.5, no_crowd_bool))[:, 0]
-
     return gather_ROIs(proposals, positive_indices, negative_indices,
                        train_rois_per_image, roi_positive_ratio)
 
@@ -488,7 +514,7 @@ def gather_ROIs(proposals, positive_indices, negative_indices,
     positive_indices = tf.random.shuffle(positive_indices)[:positive_count]
     positive_count = tf.shape(positive_indices)[0]
 
-    ratio = 1.0 / roi_positive_ratio
+    ratio = 1.0 / roi_positive_ratio                                   #TODO: split into two functions
     negative_count = tf.cast(ratio * tf.cast(positive_count, tf.float32),
                                  tf.int32) - positive_count
     negative_indices = tf.random.shuffle(negative_indices)[:negative_count]
@@ -498,7 +524,7 @@ def gather_ROIs(proposals, positive_indices, negative_indices,
     return positive_indices, positive_rois, negative_rois
 
 
-def compute_overlaps_graph(boxes_a, boxes_b):
+def compute_overlaps_graph(boxes_a, boxes_b):          #TODO: rename IOU, split into two functions
     """Used by Detection target layer in compute_ROI_overlaps
 
     # Arguments:
@@ -535,19 +561,21 @@ def compute_ROI_level(boxes, image_shape):
     """Used by PyramidROIAlign
 
     # Arguments:
-        boxes
-        image_shape
+        boxes: [batch, num_boxes, (y1, x1, y2, x2)] in normalized
+                coordinates. Possibly padded with zeros if not enough
+                boxes to fill the array
+        image_shape: shape of image
     """
 
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=2)
-    height = y_max - y_min
-    width = x_max - x_min
+    H = y_max - y_min
+    W = x_max - x_min
     image_area = tf.cast(image_shape[0] * image_shape[1], tf.float32)
 
-    roi_level = tf.experimental.numpy.log2(
-        tf.sqrt(height * width) / (224.0 / tf.sqrt(image_area)))
+    roi_level = tf.experimental.numpy.log2(                 #TODO: remove experimental packages
+        tf.sqrt(H * W) / (224.0 / tf.sqrt(image_area)))
     roi_level = tf.minimum(5, tf.maximum(
-        2, 4 + tf.cast(tf.round(roi_level), tf.int32)))
+        2, 4 + tf.cast(tf.round(roi_level), tf.int32)))    #TODO: split the lines
     return tf.squeeze(roi_level, 2)
 
 
@@ -556,9 +584,12 @@ def apply_ROI_pooling(roi_level, boxes, feature_maps, pool_shape):
 
     # Arguments:
         roi_level
-        boxes
-        features_maps
-        pool_shape
+        boxes: [batch, num_boxes, (y1, x1, y2, x2)] in normalized
+                coordinates. Possibly padded with zeros if not enough
+                boxes to fill the array
+        features_maps: List of feature maps from different levels
+                      of the pyramid. Each is [batch, height, width, channels]
+        pool_shape: [pool_height, pool_width] of the output pooled regions
     """
 
     pooled, box_to_level = [], []
@@ -571,7 +602,7 @@ def apply_ROI_pooling(roi_level, boxes, feature_maps, pool_shape):
         level_boxes = tf.stop_gradient(level_boxes)
         box_indices = tf.stop_gradient(box_indices)
         pooled.append(tf.image.crop_and_resize(
-            feature_maps[index], level_boxes, box_indices, pool_shape,
+            feature_maps[index], level_boxes, box_indices, pool_shape,  #TODO: split the lines
             method='bilinear'))
     pooled = tf.concat(pooled, axis=0)
     box_to_level = tf.concat(box_to_level, axis=0)
@@ -582,12 +613,16 @@ def rearrange_pooled_features(pooled, box_to_level, boxes):
     """Used by PyramidROIAlign
 
     # Arguments:
-        pooled
+        pooled: [batch, num_boxes, pool_height, pool_width, channels].
+                The width and height are those specific in the pool_shape in the layer
+                constructor.
         box_to_level
-        boxes
+        boxes: [batch, num_boxes, (y1, x1, y2, x2)] in normalized
+                coordinates. Possibly padded with zeros if not enough
+                boxes to fill the array
     """
 
-    sorting_tensor = box_to_level[:, 0] * 100000 + box_to_level[:, 1]
+    sorting_tensor = (box_to_level[:, 0] * 100000) + box_to_level[:, 1]  #TODO: Big num? 10000, check ROI_level-->box_to_level
     top_k_indices = tf.nn.top_k(sorting_tensor, k=tf.shape(
         box_to_level)[0]).indices[::-1]
     top_k_indices = tf.gather(box_to_level[:, 2], top_k_indices)
@@ -596,34 +631,102 @@ def rearrange_pooled_features(pooled, box_to_level, boxes):
     return tf.reshape(pooled, shape)
 
 
-def compute_output_shape(input_shape, arg, layer='None'):
-    """Used by to compute output shapes for different layers #keras output layer shape
+def NMS(boxes, scores, proposal_count, nms_threshold):   #TODO: compute_Non_max_suppression
+    """Used by Proposal Layer
 
-    # Arguments:
-        input_shape
-        arg: arguments for layers
-        layer : layer used
-    """
+        # Arguments:
+            boxes
+            scores
+            proposal_count
+            nms_threshold
+        """
 
-    if layer == 'DetectionLayer':
-        detection_max_instances = arg
-        return (None, detection_max_instances, 6)
-    elif layer == 'ProposalLayer':
-        proposal_count = arg
-        return (None, proposal_count, 4)
-    elif layer == 'DetectionTargetLayer':
-        train_rois_per_image, mask_shape = arg
-        return [
-            (None, train_rois_per_image, 4),  # ROIs
-            (None, train_rois_per_image),  # class_ids
-            (None, train_rois_per_image, 4),  # deltas
-            (None, train_rois_per_image, mask_shape[0],
-             mask_shape[1])  # masks
-        ]
-    elif layer == 'PyramidROIAlign':
-        pool_shape = arg
-        return input_shape[0][:2] + pool_shape + (input_shape[2][-1],)
+    indices = tf.image.non_max_suppression(
+        boxes, scores, proposal_count,
+        nms_threshold, name='rpn_non_max_suppression')
+    proposals = tf.gather(boxes, indices)
+    padding = tf.maximum(proposal_count - tf.shape(proposals)[0], 0)  #TODO: num_proposals = tf.shape(proposals)[0]
+    proposals = tf.pad(proposals, [(0, padding), (0, 0)])
+    return proposals
 
-    else:
-        print("Invalid layer name")
-        return 0
+
+def refine_detections_graph(rois, probs, deltas, bbox_std_dev, windows, detection_min_confidence,  #TODO: split the function, remove graph name
+                            detection_max_instances, detection_nms_threshold):
+    """Used by Detection Layer
+
+            # Arguments:
+                rois
+                probs
+                deltas
+                bbox_std_dev
+                windows
+                detection_min_confidence
+                detection_max_instances
+                detection_nms_threshold
+            """
+
+    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
+    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
+    class_scores = tf.gather_nd(probs, indices)
+    deltas_specific = tf.gather_nd(deltas, indices)
+
+    refined_rois = apply_box_deltas(
+        rois, deltas_specific * bbox_std_dev)
+    refined_rois = clip_boxes(refined_rois, windows)
+    keep = tf.where(class_ids > 0)[:, 0]
+
+    if detection_min_confidence:
+        keep = filter_low_confidence(class_scores, keep, detection_min_confidence)
+
+    nms_keep = apply_NMS(class_ids, class_scores, refined_rois, keep,
+                         detection_max_instances, detection_nms_threshold)
+    keep = get_top_detections(class_scores, keep, nms_keep, detection_max_instances)
+
+    detections = tf.concat([
+        tf.gather(refined_rois, keep),
+        tf.cast(tf.gather(class_ids, keep),
+                dtype=tf.float32)[..., tf.newaxis],
+        tf.gather(class_scores, keep)[..., tf.newaxis]], axis=1)
+
+    return zero_pad_detections(detections, detection_max_instances)
+
+
+def detection_targets_graph(proposals, prior_class_ids, prior_boxes,       #TODO: rename graph, split the functions
+                            prior_masks, train_rois_per_image, roi_positive_ratio,
+                            mask_shape, use_mini_mask, bbox_std_dev):
+    """Used by Detection Target Layer
+
+                # Arguments:
+                    proposals
+                    prior_class_ids
+                    prior_boxes,
+                    prior_masks
+                    train_rois_per_image
+                    roi_positive_ratio
+                    mask_shape
+                    use_mini_mask
+                    bbox_std_dev
+                """
+
+    asserts = [
+        tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
+                       name='roi_assertion'),
+    ]
+    with tf.control_dependencies(asserts):
+        proposals = tf.identity(proposals)
+    ground_truth = [prior_class_ids, prior_boxes, prior_masks]
+    refined_priors, crowd_boxes = refine_instances(proposals, ground_truth)    #TODO: Unpack ground_truth
+    _, refined_boxes, _ = refined_priors
+
+    overlaps = compute_overlaps_graph(proposals, refined_boxes)
+    positive_indices, positive_rois, negative_rois = \
+        compute_ROI_overlaps(proposals, refined_boxes, crowd_boxes,
+                             overlaps, train_rois_per_image, roi_positive_ratio)
+    deltas, roi_priors = update_priors(overlaps, positive_indices,
+                                       positive_rois, refined_priors, bbox_std_dev)
+    masks = compute_target_masks(positive_rois, roi_priors, mask_shape, use_mini_mask)
+    rois, num_negatives, num_positives = pad_ROI(positive_rois,
+                                                 negative_rois, train_rois_per_image)
+    roi_class_ids, deltas, masks = pad_ROI_priors(num_positives, num_negatives, roi_priors,
+                                                  deltas, masks)
+    return rois, roi_class_ids, deltas, masks
