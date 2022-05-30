@@ -93,7 +93,8 @@ def proposal_layer(RPN_model, anchors, config):
     return ProposalLayer(proposal_count=2000, nms_threshold=0.7, name='ROI',
                          rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
                          pre_nms_limit=config.PRE_NMS_LIMIT,
-                         images_per_gpu=config.IMAGES_PER_GPU)\
+                         images_per_gpu=config.IMAGES_PER_GPU,
+                         batch_size= config.BATCH_SIZE)\
         ([RPN_class, RPN_box, anchors])
 
 
@@ -120,8 +121,10 @@ def proposal_layer_apply_box_delta(proposal_layer_trim_by_score,config):
 def proposal_layer_NMS(proposal_layer_apply_box_delta, proposal_layer_trim_by_score, config):
     boxes = proposal_layer_apply_box_delta
     scores, __, __ = proposal_layer_trim_by_score
+    proposal_count = tf.repeat(2000, config.BATCH_SIZE)
+    threshold = tf.repeat(0.7, config.BATCH_SIZE)
 
-    proposals = slice_batch([boxes, scores], NMS(2000,0.7),
+    proposals = slice_batch([boxes, scores, proposal_count, threshold], NMS,
                             config.IMAGES_PER_GPU)
     return proposals
 
@@ -212,7 +215,8 @@ def detection_target_layer(proposal_layer, ground_truth, config):
                                         train_rois_per_image=config.TRAIN_ROIS_PER_IMAGE,
                                         roi_positive_ratio=config.ROI_POSITIVE_RATIO,
                                         bbox_std_dev=config.BBOX_STD_DEV,
-                                        use_mini_mask=config.USE_MINI_MASK
+                                        use_mini_mask=config.USE_MINI_MASK,
+                                        batch_size= config.BATCH_SIZE
                                         )
     return target_layer([proposal_layer, class_ids, boxes, masks])
 
@@ -337,11 +341,11 @@ def test_proposal_layer(proposal_layer, ROI_shape):
 def test_proposal_layer_nms(proposal_layer_trim_by_score, proposal_layer_apply_box_delta):
     scores, deltas, pre_nms_anchors = proposal_layer_trim_by_score
     boxes = proposal_layer_apply_box_delta
-    #proposals = proposal_layer_NMS
+    proposals = proposal_layer_NMS
     assert deltas.shape[2] == 4
     assert pre_nms_anchors.shape[2] == 4
     assert boxes.shape[2] == 4
-    #assert proposals
+    assert proposals
 
 
 @pytest.mark.parametrize('shapes', [[(3,), (2,), (3,), (4,)]])
