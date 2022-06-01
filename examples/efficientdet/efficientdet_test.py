@@ -89,7 +89,11 @@ def test_all_efficientdet_models(get_models_base_path):
         reference_model = model_from_json(loaded_model_json,
                                           custom_objects=custom_objects)
         K.clear_session()
-        assert implemented_model().get_config() == reference_model.get_config()
+        assert (implemented_model().get_config() ==
+                reference_model.get_config()), ('EFFICIENTDETD' +
+                                                str(model_id) +
+                                                " architecture"
+                                                " mismatch")
 
 
 # def test_feature_fusion_sum():
