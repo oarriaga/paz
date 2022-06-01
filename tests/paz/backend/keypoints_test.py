@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
-from paz.backend.keypoints import rotate_keypoint
+from paz.backend.keypoints import rotate_point2D
 from paz.backend.keypoints import transform_keypoint
 from paz.backend.keypoints import add_offset_to_point
-from paz.backend.keypoints import rotate_keypoints_with_rotation_matrix
+from paz.backend.keypoints import rotate_keypoints3D
 
 
 @pytest.fixture(params=[[2, 1]])
@@ -34,7 +34,7 @@ def offset(request):
 
 @pytest.fixture
 def keypoint3D():
-    keypoint = np.array([[4, 3, 9]]).T
+    keypoint = np.array([[4, 3, 9]])
     return keypoint
 
 
@@ -47,8 +47,8 @@ def rotation_matrix():
 
 
 @pytest.mark.parametrize("rotated_keypoint", [np.array([1, -2])])
-def test_rotate_point(point2D_a, rotated_keypoint):
-    point = rotate_keypoint(point2D_a, -90)
+def test_rotate_point2D(point2D_a, rotated_keypoint):
+    point = rotate_point2D(point2D_a, -90)
     point = (np.array(point)).astype(np.int8)
     assert np.allclose(point, rotated_keypoint)
 
@@ -69,6 +69,6 @@ def test_add_offset_to_point(keypoint, offset, shifted_keypoint):
 @pytest.mark.parametrize(
     "rotated_keypoint", [[2.93975406, 3.57683788, 9.1958738]])
 def test_rotate_keypoints(rotation_matrix, keypoint3D, rotated_keypoint):
-    calculated_rotated_keypoint = rotate_keypoints_with_rotation_matrix(
-        np.expand_dims(rotation_matrix, 0), np.expand_dims(keypoint3D, 0))
+    calculated_rotated_keypoint = rotate_keypoints3D(
+        np.expand_dims(rotation_matrix, 0), keypoint3D)
     assert np.allclose(rotated_keypoint, calculated_rotated_keypoint)

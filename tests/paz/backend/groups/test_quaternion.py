@@ -4,7 +4,6 @@ from paz.backend.groups.quaternion import rotation_vector_to_quaternion
 from paz.backend.groups.quaternion import get_quaternion_conjugate
 from paz.backend.groups.quaternion import rotation_matrix_to_quaternion
 from paz.backend.groups.quaternion import quaternion_to_rotation_matrix
-from paz.backend.groups.quaternion import calculate_rotation_matrix_inverse
 
 
 @pytest.fixture
@@ -23,14 +22,6 @@ def rotation_matrix():
                                 [0.02910355, 0.9982362, 0.05174612],
                                 [0.10590983, -0.05455617, 0.99287811]])
     return rotation_matrix
-
-
-@pytest.fixture
-def inverse_rotation_matrix():
-    inverse_rotation_matrix = np.array([[0.9939498, 0.02910355, 0.10590985],
-                                        [-0.02341585, 0.99823616, -0.05455617],
-                                        [-0.10731081, 0.05174612, 0.99287806]])
-    return inverse_rotation_matrix
 
 
 @pytest.fixture()
@@ -56,10 +47,3 @@ def test_rotation_matrix_to_quaternion(rotation_matrix, quaternion):
         estimated_quaternion)
     assert np.allclose(quaternion, estimated_quaternion)
     assert np.allclose(rotation_matrix, estimates_rotation_matrix)
-
-
-def test_calculate_rotation_matrix_inverse(rotation_matrix,
-                                           inverse_rotation_matrix):
-    calculated_inverse = calculate_rotation_matrix_inverse(rotation_matrix)
-    assert np.allclose(calculated_inverse, inverse_rotation_matrix)
-    assert np.allclose(calculated_inverse, np.linalg.inv(rotation_matrix))
