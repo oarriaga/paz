@@ -6,7 +6,7 @@ from tensorflow.keras.layers import (DepthwiseConv2D, Conv2D,
                                      BatchNormalization, Input)
 
 
-def get_efficientnet_params(model_name):
+def get_efficientnet_scaling_coefficients(model_name):
     """Default efficientnet scaling coefficients and
     image name based on model name.
     The value of each model name in the key represents:
@@ -22,17 +22,17 @@ def get_efficientnet_params(model_name):
         efficientnetparams: Dictionary, parameters corresponding to
         width coefficient, depth coefficient, survival rate
     """
-    efficientnet_params = {'efficientnet-b0': (1.0, 1.0, 0.8),
-                           'efficientnet-b1': (1.0, 1.1, 0.8),
-                           'efficientnet-b2': (1.1, 1.2, 0.7),
-                           'efficientnet-b3': (1.2, 1.4, 0.7),
-                           'efficientnet-b4': (1.4, 1.8, 0.6),
-                           'efficientnet-b5': (1.6, 2.2, 0.6),
-                           'efficientnet-b6': (1.8, 2.6, 0.5),
-                           'efficientnet-b7': (2.0, 3.1, 0.5),
-                           'efficientnet-b8': (2.2, 3.6, 0.5),
-                           'efficientnet-l2': (4.3, 5.3, 0.5)}
-    return efficientnet_params[model_name]
+    efficientnet_scaling_coefficients = {'efficientnet-b0': (1.0, 1.0, 0.8),
+                                         'efficientnet-b1': (1.0, 1.1, 0.8),
+                                         'efficientnet-b2': (1.1, 1.2, 0.7),
+                                         'efficientnet-b3': (1.2, 1.4, 0.7),
+                                         'efficientnet-b4': (1.4, 1.8, 0.6),
+                                         'efficientnet-b5': (1.6, 2.2, 0.6),
+                                         'efficientnet-b6': (1.8, 2.6, 0.5),
+                                         'efficientnet-b7': (2.0, 3.1, 0.5),
+                                         'efficientnet-b8': (2.2, 3.6, 0.5),
+                                         'efficientnet-l2': (4.3, 5.3, 0.5)}
+    return efficientnet_scaling_coefficients[model_name]
 
 
 def round_filters(filters, width_coefficient, depth_divisor):
@@ -40,9 +40,8 @@ def round_filters(filters, width_coefficient, depth_divisor):
 
     # Arguments
         filters: Int, filters to be rounded based on depth multiplier.
-        with_coefficient: Float, scaling coefficient for network width.
+        width_coefficient: Float, scaling coefficient for network width.
         depth_divisor: Int, multiplier for the depth of the network.
-        skip: Bool, skip rounding filters based on multiplier.
 
     # Returns
         new_filters: Int, rounded filters based on depth multiplier.
@@ -64,7 +63,6 @@ def round_repeats(repeats, depth_coefficient):
     # Arguments
         repeats: Int, number of repeats of multiplier blocks.
         depth_coefficient: Float, scaling coefficient for network depth.
-        skip: Bool, skip rounding filters based on multiplier.
 
     # Returns
         new_repeats: Int, repeats of blocks based on multiplier.
@@ -89,8 +87,8 @@ def conv_normal_initializer(shape, dtype=None):
         an initialization for the variable
     """
     # TODO: Change name
-    kernel_height, kernel_width, _, output_filters = shape
-    fan_output = int(kernel_height * kernel_width * output_filters)
+    kernel_height, kernel_width, _, outro_filters = shape
+    fan_output = int(kernel_height * kernel_width * outro_filters)
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
@@ -128,7 +126,7 @@ def get_conv_name(conv_id):
     return name
 
 
-def get_batch_norm_name(batch_norm_id):
+def name_batch_norm(batch_norm_id):
     if not next(batch_norm_id):
         name_appender = ""
     else:
@@ -138,7 +136,7 @@ def get_batch_norm_name(batch_norm_id):
 
 
 def mobile_inverted_residual_bottleneck_block(
-        inputs, survival_rate, kernel_size, input_filters, output_filters,
+        inputs, survival_rate, kernel_size, intro_filters, outro_filters,
         expand_ratio, strides, squeeze_excite_ratio, name=''):
     """A class of MBConv: Mobile Inverted Residual Bottleneck. As provided in
     the paper: https://arxiv.org/pdf/1801.04381.pdf and
@@ -148,8 +146,8 @@ def mobile_inverted_residual_bottleneck_block(
     # Arguments
         kernel_size: Int, kernel size of the conv block filters.
         num_repeats: Int, number of block repeats.
-        input_filters: Int, input filters for the blocks to construct.
-        output_filters: Int, output filters for the blocks to construct.
+        intro_filters: Int, input filters for the blocks to construct.
+        outro_filters: Int, output filters for the blocks to construct.
         expand_ratio: Int, ratio to expand the conv block in repeats.
         strides: List, strides in height and weight of conv filter.
         squeeze_excite_ratio: Float, squeeze excite block ratio.
@@ -159,13 +157,13 @@ def mobile_inverted_residual_bottleneck_block(
     # TODO: Remove itertools
     conv_id = itertools.count(0)
     batch_norm_id = itertools.count(0)
-    filters = input_filters * expand_ratio
+    filters = intro_filters * expand_ratio
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
                    kernel_initializer=conv_normal_initializer,
                    name=name + '/' + get_conv_name(conv_id))(inputs)
         x = BatchNormalization(
-            name=name+'/' + get_batch_norm_name(batch_norm_id))(x)
+            name=name+'/' + name_batch_norm(batch_norm_id))(x)
         x = tf.nn.swish(x)
     else:
         x = inputs
@@ -175,11 +173,11 @@ def mobile_inverted_residual_bottleneck_block(
                         depthwise_initializer=conv_normal_initializer,
                         name=name + '/depthwise_conv2d')(x)
     x = BatchNormalization(
-        name=name + '/' + get_batch_norm_name(batch_norm_id))(x)
+        name=name + '/' + name_batch_norm(batch_norm_id))(x)
     x = tf.nn.swish(x)
 
     # Squeeze excitation layer
-    num_reduced_filters = max(1, int(input_filters * squeeze_excite_ratio))
+    num_reduced_filters = max(1, int(intro_filters * squeeze_excite_ratio))
     se_tensor = tf.reduce_mean(x, [1, 2], keepdims=True)
     se_tensor = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
                        kernel_initializer=conv_normal_initializer,
@@ -192,50 +190,202 @@ def mobile_inverted_residual_bottleneck_block(
     x = se_tensor * x
 
     # Output processing
-    x = Conv2D(output_filters, 1, padding='same', use_bias=False,
+    x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
                kernel_initializer=conv_normal_initializer,
                name=name + '/' + get_conv_name(conv_id))(x)
     x = BatchNormalization(
-        name=name + '/' + get_batch_norm_name(batch_norm_id))(x)
-    if all(s == 1 for s in strides) and input_filters == output_filters:
+        name=name + '/' + name_batch_norm(batch_norm_id))(x)
+    if all(s == 1 for s in strides) and intro_filters == outro_filters:
         if survival_rate:
             x = get_drop_connect(x, False, survival_rate)
         x = tf.add(x, inputs)
     return x
 
 
-def process_features(x, block_num, input_filters, output_filters,
-                     width_coefficient, depth_coefficient, depth_divisor,
-                     num_repeats, squeeze_excite_ratio, block_id,
-                     survival_rate, kernel_sizes, strides, model_name,
-                     expand_ratios):
-    in_filter = round_filters(input_filters[block_num], width_coefficient,
-                              depth_divisor)
-    out_filter = round_filters(output_filters[block_num], width_coefficient,
-                               depth_divisor)
-    repeats = round_repeats(num_repeats[block_num], depth_coefficient)
+def get_mb_conv_block_params(block_arg, intro_filters, outro_filters,
+                             width_coefficient, depth_coefficient,
+                             depth_divisor, num_repeats):
+    """Compute parameters of the MBConv block.
 
+    # Arguments
+        width_coefficient: Float, scaling coefficient for network width.
+        intro_filters: List, input filters of the blocks.
+        outro_filters: List, output filters of the blocks.
+        width_coefficient: Float, scaling coefficient for network width.
+        depth_coefficient: Float, multiplier for the depth of the network.
+        depth_divisor: Int, multiplier for the depth of the network.
+        num_repeats: Int, number of block repeats.
+
+    # Returns
+        intro_filter: Int rounded block input filter.
+        outro_filter: Int rounded block output filter.
+        repeats: Int rounded repeat of each MBConv block.
+
+    """
+    intro_filter = round_filters(intro_filters[block_arg], width_coefficient,
+                                 depth_divisor)
+    outro_filter = round_filters(outro_filters[block_arg], width_coefficient,
+                                 depth_divisor)
+    repeats = round_repeats(num_repeats[block_arg], depth_coefficient)
+
+    return intro_filter, outro_filter, repeats
+
+
+def get_mb_conv_block_features(x, block_id, block_arg, survival_rate,
+                               kernel_sizes, intro_filter, outro_filter,
+                               expand_ratios, strides, repeats,
+                               squeeze_excite_ratio, model_name):
+    """Computes features from a given MBConv block.
+
+    # Arguments
+        kernel_sizes: List, kernel size of various
+            EfficientNet blocks.
+        intro_filters: List, input filters of the blocks.
+        outro_filters: List, output filters of the blocks.
+        repeats: Int, number of block repeats.
+        squeeze_excite_ratio: Float, squeeze excite block ratio.
+        survival_rate: Float, survival probability to drop input convolution
+            features.
+        strides: List, strides in height and weight of conv filter.
+        model_name: String, name of the EfficientNet backbone
+
+    # Returns
+        A `Tensor` of type `float32` which is the features from this
+            layer.
+        block_id: Int, the block identifier.
+    """
     x = mobile_inverted_residual_bottleneck_block(
-        x, survival_rate, kernel_sizes[block_num], in_filter,
-        out_filter, expand_ratios[block_num], strides[block_num],
+        x, survival_rate, kernel_sizes[block_arg], intro_filter,
+        outro_filter, expand_ratios[block_arg], strides[block_arg],
         squeeze_excite_ratio, model_name + '/blocks_%d' % block_id)
 
     block_id = block_id + 1
     if repeats > 1:
         for _ in range(repeats - 1):
             x = mobile_inverted_residual_bottleneck_block(
-                x, survival_rate, kernel_sizes[block_num], out_filter,
-                out_filter, expand_ratios[block_num], [1, 1],
+                x, survival_rate, kernel_sizes[block_arg], outro_filter,
+                outro_filter, expand_ratios[block_arg], [1, 1],
                 squeeze_excite_ratio, model_name + '/blocks_%d' % block_id)
             block_id = block_id + 1
+
     return x, block_id
+
+
+def process_features(x, block_arg, intro_filters, outro_filters,
+                     width_coefficient, depth_coefficient, depth_divisor,
+                     num_repeats, squeeze_excite_ratio, block_id,
+                     survival_rate, kernel_sizes, strides, model_name,
+                     expand_ratios):
+    """Computes features from a given MBConv block.
+
+    # Arguments
+        input_shape: Tuple, shape of the input image.
+        intro_filters: List, input filters of the blocks.
+        outro_filters: List, output filters of the blocks.
+        width_coefficient: Float, scaling coefficient for network width.
+        depth_coefficient: Float, multiplier for the depth of the network.
+        depth_divisor: Int, multiplier for the depth of the network.
+        num_repeats: Int, number of block repeats.
+        squeeze_excite_ratio: Float, squeeze excite block ratio.
+        survival_rate: Float, survival probability to drop input convolution
+            features.
+        kernel_sizes: List, kernel size of various
+            EfficientNet blocks.
+        strides: List, strides in height and weight of conv filter.
+
+    # Returns
+        x: A `Tensor` of type `float32` which is the features from this
+            layer.
+        block_id: Int, the block identifier.
+    """
+    (intro_filter,
+     outro_filter, repeats) = get_mb_conv_block_params(block_arg,
+                                                       intro_filters,
+                                                       outro_filters,
+                                                       width_coefficient,
+                                                       depth_coefficient,
+                                                       depth_divisor,
+                                                       num_repeats)
+
+    x, block_id = get_mb_conv_block_features(x, block_id, block_arg,
+                                             survival_rate, kernel_sizes,
+                                             intro_filter, outro_filter,
+                                             expand_ratios, strides, repeats,
+                                             squeeze_excite_ratio, model_name)
+
+    return x, block_id
+
+
+def conv_layer_1(image, input_shape, intro_filters, width_coefficient,
+                 depth_divisor, model_name):
+    """Construct the first convolutional layer of EfficientNet.
+
+    # Arguments
+        input_shape: Tuple, shape of the input image.
+        intro_filters: List, input filters for the blocks to construct.
+        width_coefficient: Float, scaling coefficient for network width.
+        depth_divisor: Int, multiplier for the depth of the network.
+        model_name: String, name of the EfficientNet backbone
+
+    # Returns
+        x: A `Tensor` of type `float32` which is the features from this
+            layer.
+    """
+    image = Input(tensor=image, shape=input_shape, name='image')
+    filters = round_filters(intro_filters[0], width_coefficient, depth_divisor)
+
+    x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
+               None, False, conv_normal_initializer,
+               name=model_name + '/stem/conv2d')(image)
+    x = BatchNormalization(name=model_name + '/stem/batch_normalization')(x)
+    x = tf.nn.swish(x)
+    return x
+
+
+def MB_conv_blocks(x, kernel_sizes, intro_filters, outro_filters,
+                   width_coefficient, depth_coefficient, depth_divisor,
+                   num_repeats, squeeze_excite_ratio, survival_rate, strides,
+                   model_name, expand_ratios):
+    """Construct the blocks of MBConv: Mobile Inverted Residual Bottleneck.
+
+    # Arguments
+        kernel_sizes: List, kernel size of various
+            EfficientNet blocks.
+        intro_filters: List, input filters of the blocks.
+        outro_filters: List, output filters of the blocks.
+        depth_coefficient: Float, multiplier for the depth of the network.
+        depth_divisor: Int, multiplier for the depth of the network.
+        num_repeats: Int, number of block repeats.
+        squeeze_excite_ratio: Float, squeeze excite block ratio.
+        survival_rate: Float, survival probability to drop input convolution
+            features.
+        strides: List, strides in height and weight of conv filter.
+        model_name: String, name of the EfficientNet backbone
+
+    # Returns
+        features: A list of Tensor which is the features from this
+            layer(s).
+    """
+    block_id, features = 0, []
+    for block_arg in range(len(kernel_sizes)):
+        x, block_id = process_features(
+            x, block_arg, intro_filters, outro_filters, width_coefficient,
+            depth_coefficient, depth_divisor, num_repeats,
+            squeeze_excite_ratio, block_id, survival_rate, kernel_sizes,
+            strides, model_name, expand_ratios)
+        if (block_arg < len(kernel_sizes) - 1 and
+                strides[block_arg + 1][0] == 2):
+            features.append(x)
+        elif block_arg == len(kernel_sizes) - 1:
+            features.append(x)
+    return features
 
 
 def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
                  squeeze_excite_ratio=0.25, kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  num_repeats=[1, 2, 2, 3, 3, 4, 1],
-                 input_filters=[32, 16, 24, 40, 80, 112, 192],
-                 output_filters=[16, 24, 40, 80, 112, 192, 320],
+                 intro_filters=[32, 16, 24, 40, 80, 112, 192],
+                 outro_filters=[16, 24, 40, 80, 112, 192, 320],
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]]):
@@ -243,7 +393,8 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
     https://arxiv.org/pdf/1905.11946.pdf
     Initializes an 'Model' instance.
     # Arguments
-        with_coefficient: Float, scaling coefficient for network width.
+        model_name: String, name of the EfficientNet backbone
+        width_coefficient: Float, scaling coefficient for network width.
         depth_coefficient: Float, scaling coefficient for network depth.
         survival_rate: Float, survival of the final fully connected layer
         units.
@@ -253,8 +404,8 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
         depth_divisor: Int, multiplier for the depth of the network.
         kernel_size: Int, kernel size of the conv block filters.
         num_repeats: Int, number of block repeats.
-        input_filters: Int, input filters for the blocks to construct.
-        output_filters: Int, output filters for the blocks to construct.
+        intro_filters: Int, input filters for the blocks to construct.
+        outro_filters: Int, output filters for the blocks to construct.
         expand_ratio: Int, ratio to expand the conv block in repeats.
         strides: List, strides in height and weight of conv filter.
         squeeze_excite_ratio: Float, squeeze excite block ratio.
@@ -262,29 +413,17 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
     # Raises
         ValueError: when blocks_args is not specified as list.
     """
-    block_id = 0
-    features = []
+
+    assert (num_repeats > np.zeros_like(num_repeats)).sum() == len(num_repeats)
+
     (width_coefficient, depth_coefficient,
-     survival_rate) = get_efficientnet_params(model_name)
-    image = Input(tensor=image, shape=input_shape, name='image')
-    filters = round_filters(input_filters[0], width_coefficient, depth_divisor)
+     survival_rate) = get_efficientnet_scaling_coefficients(model_name)
 
-    x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', (1, 1), 1,
-               None, False, conv_normal_initializer,
-               name=model_name + '/stem/conv2d')(image)
-    x = BatchNormalization(name=model_name + '/stem/batch_normalization')(x)
-    x = tf.nn.swish(x)
-
-    for block_num in range(len(kernel_sizes)):
-        assert num_repeats[block_num] > 0
-        x, block_id = process_features(
-            x, block_num, input_filters, output_filters, width_coefficient,
-            depth_coefficient, depth_divisor, num_repeats,
-            squeeze_excite_ratio, block_id, survival_rate, kernel_sizes,
-            strides, model_name, expand_ratios)
-        if (block_num < len(kernel_sizes) - 1 and
-                strides[block_num + 1][0] == 2):
-            features.append(x)
-        elif block_num == len(kernel_sizes) - 1:
-            features.append(x)
+    x = conv_layer_1(image, input_shape, intro_filters, width_coefficient,
+                     depth_divisor, model_name)
+    features = MB_conv_blocks(x, kernel_sizes, intro_filters, outro_filters,
+                              width_coefficient, depth_coefficient,
+                              depth_divisor, num_repeats, squeeze_excite_ratio,
+                              survival_rate, strides, model_name,
+                              expand_ratios)
     return features

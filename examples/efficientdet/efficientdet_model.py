@@ -8,7 +8,7 @@ from efficientdet_blocks import BiFPN
 
 
 WEIGHT_PATH = (
-    '/home/manummk95/Downloads/weights/')
+    '/home/manummk95/Desktop/efficientdet_working/required/weights/')
 
 
 def EfficientDet(num_classes, base_weights, head_weights, input_shape,

@@ -1,13 +1,6 @@
 import os
 import argparse
 import tensorflow as tf
-gpus = tf.config.experimental.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(gpus[0], True)
-
-# from tensorflow.python.framework.ops import disable_eager_execution
-# disable_eager_execution()
-# import tensorflow as tf
-# tf.compat.v1.experimental.output_all_intermediates(True)
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler
@@ -19,6 +12,13 @@ from paz.processors import TRAIN, VAL
 from detection import AugmentDetection
 from detection import DetectSingleShot_EfficientDet
 from efficientdet import EFFICIENTDETD0
+gpus = tf.config.experimental.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(gpus[0], True)
+
+# from tensorflow.python.framework.ops import disable_eager_execution
+# disable_eager_execution()
+# import tensorflow as tf
+# tf.compat.v1.experimental.output_all_intermediates(True)
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)

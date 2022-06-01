@@ -1,15 +1,18 @@
 import tensorflow as tf
 import paz.processors as pr
+import necessary_imports as ni
 from paz.abstract import SequentialProcessor
 from paz.processors.image import LoadImage
-from paz.processors.image import RGB_IMAGENET_MEAN, RGB_IMAGENET_STDEV
+from paz.processors.image import RGB_IMAGENET_MEAN
+from necessary_imports import RGB_IMAGENET_STDEV
 from tensorflow.keras.layers import Flatten, Concatenate
 from tensorflow.keras.layers import Reshape, Activation
 import tensorflow.keras.backend as K
 
 
 # Mock input image.
-file_name = '/home/manummk95/Desktop/efficientdet_BKP/paz/examples/efficientdet/img.jpg'
+file_name = ('/home/manummk95/Desktop/efficientdet_BKP/paz/'
+             'examples/efficientdet/img.jpg')
 loader = LoadImage()
 raw_images = loader(file_name)
 
@@ -84,8 +87,8 @@ def efficientdet_preprocess(image, image_size):
     preprocessing = SequentialProcessor([
         pr.CastImage(float),
         pr.SubtractMeanImage(mean=RGB_IMAGENET_MEAN),
-        pr.DivideStandardDeviationImage(standard_deviation=RGB_IMAGENET_STDEV),
-        pr.ScaledResize(image_size=image_size),
+        ni.DivideStandardDeviationImage(standard_deviation=RGB_IMAGENET_STDEV),
+        ni.ScaledResize(image_size=image_size),
         ])
     image, image_scale = preprocessing(image)
     return image, image_scale

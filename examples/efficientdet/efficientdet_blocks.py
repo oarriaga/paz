@@ -383,8 +383,8 @@ def BiFPN(features, num_filters, id, fpn_weight_method):
 
 
 class FuseFeature(Layer):
-    def __init__(self, name):
-        super().__init__(name=name)
+    def __init__(self, name, **kwargs):
+        super().__init__(name=name, **kwargs)
 
     def build(self, input_shape):
         num_in = len(input_shape)

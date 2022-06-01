@@ -1,5 +1,6 @@
 import numpy as np
 import paz.processors as pr
+import necessary_imports as ni
 from paz.abstract import SequentialProcessor
 from utils import get_class_name_efficientdet
 
@@ -53,9 +54,13 @@ def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
     postprocessing = SequentialProcessor(
         [pr.Squeeze(axis=None),
          pr.DecodeBoxes(model.prior_boxes, variances=[1, 1, 1, 1]),
-         pr.ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
+         ni.ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
          pr.FilterBoxes(get_class_name_efficientdet('COCO'), 0.4)])
     outputs = postprocessing(outputs)
     draw_boxes2D = pr.DrawBoxes2D(get_class_name_efficientdet('COCO'))
+    for output_box2D in outputs:
+        x_min, y_min, x_max, y_max = output_box2D.coordinates
+        output_box2D.coordinates = (int(x_min), int(y_min),
+                                    int(x_max), int(y_max))
     image = draw_boxes2D(raw_images.astype('uint8'), outputs)
     return image, outputs
