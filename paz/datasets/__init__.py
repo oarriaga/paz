@@ -9,3 +9,6 @@ from .coco import JOINT_CONFIG
 from .coco import FLIP_CONFIG
 from .coco import HUMAN_JOINT_CONFIG
 from .CMU_poanoptic import MINIMAL_HAND_CONFIG
+from .CMU_poanoptic import IK_UNIT_LENGTH
+from .CMU_poanoptic import MANOHandJoints
+from .CMU_poanoptic import MPIIHandJoints

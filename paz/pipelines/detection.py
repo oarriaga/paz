@@ -8,8 +8,6 @@ from ..datasets import get_class_names
 from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32
-from .keypoints import TransformKeypoints
-from .heatmaps import GetHeatmapsAndTags
 
 
 class AugmentBoxes(SequentialProcessor):

@@ -1,3 +1,4 @@
+from paz.backend import angles
 from paz.backend import boxes
 from paz.backend import camera
 from paz.backend import render
@@ -24,6 +25,16 @@ EXCLUDE = {}
 # backend.pipelines *
 
 PAGES = [
+    {
+        'page': 'backend/angles.md',
+        'functions': [
+            angles.calculate_relative_angle,
+            angles.reorder_relative_angles,
+            angles.change_link_order
+        ],
+    },
+
+
     {
         'page': 'backend/boxes.md',
         'functions': [
@@ -62,10 +73,15 @@ PAGES = [
             keypoints.project_points3D,
             keypoints.solve_PNP,
             keypoints.translate_keypoints,
-            keypoints.rotate_keypoint,
+            keypoints.rotate_point2D,
             keypoints.transform_keypoint,
             keypoints.add_offset_to_point,
-            keypoints.translate_points2D_origin
+            keypoints.translate_points2D_origin,
+            keypoints.flip_keypoints_left_right,
+            keypoints.compute_orientation_vector,
+            keypoints.rotate_keypoints3D,
+            keypoints.flip_along_x_axis,
+            keypoints.uv_to_vu
         ],
     },
 
@@ -76,13 +92,19 @@ PAGES = [
             groups.rotation_vector_to_quaternion,
             groups.homogenous_quaternion_to_rotation_matrix,
             groups.quaternion_to_rotation_matrix,
+            groups.rotation_matrix_to_quaternion,
+            groups.get_quaternion_conjugate,
+            groups.quaternions_to_rotation_matrices,
             groups.to_affine_matrix,
+            groups.to_affine_matrices,
             groups.rotation_vector_to_rotation_matrix,
             groups.build_rotation_matrix_x,
             groups.build_rotation_matrix_y,
             groups.build_rotation_matrix_z,
             groups.compute_norm_SO3,
-            groups.calculate_canonical_rotation
+            groups.calculate_canonical_rotation,
+            groups.rotation_matrix_to_axis_angle,
+            groups.rotation_matrix_to_compact_axis_angle,
         ],
     },
 
@@ -210,7 +232,7 @@ PAGES = [
             standard.calculate_norm,
             standard.tensor_to_numpy,
             standard.pad_matrix,
-            standard.max_pooling_2d,
+            standard.max_pooling_2d
         ],
     },
 
@@ -239,7 +261,9 @@ PAGES = [
             models.KeypointNet,
             models.KeypointNet2D,
             models.Projector,
-            models.DetNet
+            models.DetNet,
+            models.IKNet,
+            
         ],
     },
 
@@ -309,6 +333,15 @@ PAGES = [
             losses.WeightedReconstruction,
             losses.WeightedReconstructionWithError
         ],
+    },
+    
+    
+    {   
+        'page': 'processors/angles.md',
+        'classes': [
+            processors.ChangeLinkOrder,
+            processors.CalculateRelativeAngles,
+        ]
     },
 
 
@@ -422,6 +455,8 @@ PAGES = [
             processors.DenormalizeKeypoints2D,
             processors.NormalizeKeypoints2D,
             processors.ArgumentsToImageKeypoints2D,
+            processors.ScaleKeypoints,
+            processors.ComputeOrientationVector,
         ]
     },
 
@@ -509,6 +544,14 @@ PAGES = [
 
 
     {
+        'page': 'pipelines/angles.md',
+        'classes': [
+            pipelines.IKNetHandJointAngles
+        ]
+    },
+
+
+    {
         'page': 'pipelines/image.md',
         'classes': [
             pipelines.AugmentImage,
@@ -528,7 +571,7 @@ PAGES = [
             pipelines.PreprocessBoxes,
             pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
-            pipelines.DetectHaarCascade,
+            pipelines.DetectHaarCascade
         ]
     },
 
@@ -551,7 +594,7 @@ PAGES = [
             pipelines.GetKeypoints,
             pipelines.TransformKeypoints,
             pipelines.HigherHRNetHumanPose2D,
-            pipelines.HandPoseEstimation,
+            pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation
         ]
     },
@@ -606,6 +649,7 @@ PAGES = [
             pipelines.MultiPowerDrillPIX2POSE6D,
             pipelines.PIX2POSEPowerDrill,
             pipelines.PIX2YCBTools6D,
+            pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation
         ]
     },

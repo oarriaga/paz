@@ -93,6 +93,7 @@ from .keypoints import DenormalizeKeypoints2D
 from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
+from .keypoints import ComputeOrientationVector
 
 from .standard import ControlMap
 from .standard import ExpandDomain
@@ -155,6 +156,9 @@ from .heatmaps import TransformKeypoints
 from .heatmaps import ExtractKeypointsLocations
 
 from .munkres import Munkres
+
+from .angles import ChangeLinkOrder
+from .angles import CalculateRelativeAngles
 
 
 TRAIN = 0

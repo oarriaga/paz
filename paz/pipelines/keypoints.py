@@ -7,8 +7,11 @@ from .heatmaps import GetHeatmapsAndTags
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
 from ..models import KeypointNet2D, HigherHRNet, DetNet
+from .angles import IKNetHandJointAngles
+
 
 from ..backend.image import get_affine_transform, flip_left_right
+from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 
@@ -254,38 +257,74 @@ class HigherHRNetHumanPose2D(Processor):
         return self.wrap(image, keypoints, scores)
 
 
-class HandPoseEstimation(Processor):
-    """Hand keypoints detection pipeline.
+class DetNetHandKeypoints(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
 
     # Arguments
-        hand_estimator: Keras model for predicting keypoints.
-        shape: Tuple. Shape the input image to be reshaped. eg (128, 128)
-        draw: Boolean indicating if inferences should be drawn.
+        shape: List/tuple. Input image shape for DetNet model.
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+        input_image: Array
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
     """
-    def __init__(self, hand_estimator, shape=(128, 128), draw=True):
-        super(HandPoseEstimation).__init__()
+    def __init__(self, shape=(128, 128), draw=True, right_hand=False):
+        super(DetNetHandKeypoints).__init__()
         self.draw = draw
-        self.preprocess = SequentialProcessor(
+        self.right_hand = right_hand
+        self.preprocess = pr.SequentialProcessor(
             [pr.ResizeImage(shape), pr.ExpandDims(axis=0)])
-        self.hand_estimator = hand_estimator
+        self.hand_estimator = DetNet()
         self.scale_keypoints = pr.ScaleKeypoints(scale=4, shape=shape)
         self.draw_skeleton = pr.DrawHandSkeleton()
         self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D'])
 
     def call(self, input_image):
         image = self.preprocess(input_image)
+        if self.right_hand:
+            image = flip_left_right(image)
         keypoints3D, keypoints2D = self.hand_estimator.predict(image)
-        keypoints2D = flip_left_right(keypoints2D)
+        if self.right_hand:
+            keypoints2D = flip_keypoints_left_right(keypoints2D)
+        keypoints2D = uv_to_vu(keypoints2D)
         keypoints2D = self.scale_keypoints(keypoints2D, input_image)
         if self.draw:
             image = self.draw_skeleton(input_image, keypoints2D)
         return self.wrap(image, keypoints3D, keypoints2D)
 
 
-class MinimalHandPoseEstimation(HandPoseEstimation):
+class MinimalHandPoseEstimation(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
+       Estimate absolute and relative joint angle for the minimal hand joints
+       using the 3D keypoint locations.
+
+    # Arguments
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+        absolute_angles: Array [num_joints, 4]. quaternion repesentation
+        relative_angles: Array [num_joints, 3]. axis-angle repesentation
     """
-        Minimal hand keypoints detection using DetNet model.
-    """
-    def __init__(self):
-        detect_hand = DetNet()
-        super(MinimalHandPoseEstimation, self).__init__(detect_hand)
+    def __init__(self, draw=True, right_hand=False):
+        super(MinimalHandPoseEstimation, self).__init__()
+        self.keypoints_estimator = DetNetHandKeypoints(draw=draw,
+                                                       right_hand=right_hand)
+        self.angle_estimator = IKNetHandJointAngles(right_hand=right_hand)
+        self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D',
+                                   'absolute_angles', 'relative_angles'])
+
+    def call(self, image):
+        keypoints = self.keypoints_estimator(image)
+        angles = self.angle_estimator(keypoints['keypoints3D'])
+        return self.wrap(keypoints['image'], keypoints['keypoints3D'],
+                         keypoints['keypoints2D'], angles['absolute_angles'],
+                         angles['relative_angles'])

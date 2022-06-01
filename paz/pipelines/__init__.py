@@ -27,7 +27,7 @@ from .keypoints import FaceKeypointNet2D32
 from .keypoints import GetKeypoints
 from .keypoints import TransformKeypoints
 from .keypoints import HigherHRNetHumanPose2D
-from .keypoints import HandPoseEstimation
+from .keypoints import DetNetHandKeypoints
 from .keypoints import MinimalHandPoseEstimation
 
 from .renderer import RenderTwoViews
@@ -51,3 +51,5 @@ from .masks import PredictRGBMask
 from .masks import Pix2Points
 
 from .heatmaps import GetHeatmapsAndTags
+
+from .angles import IKNetHandJointAngles
