@@ -249,38 +249,3 @@ def max_pooling_2d(image, pool_size=3, strides=1, padding='same'):
         for x in range(0, W - pool_size + 1, strides):
             max_image[y][x] = np.max(image[y:y + pool_size, x:x + pool_size])
     return max_image
-
-
-def transform_column_to_negative(array, column=0):
-    """Transforms a column of an array to negative value.
-
-    # Arguments
-        array: Array
-        column: int/list
-
-    # Returns
-        array: Array
-    """
-    array[:, column] = -array[:, column]
-    return array
-
-
-def map_joint_config(joints, joint_config1, joint_config2):
-    """Map data from joint_config1 to joint_config2.
-
-    # Arguments
-        joints: Array
-        joint_config1: joint configuration of the joints
-        joint_config2: joint configuration the joints to be converted
-
-    # Returns
-        Array: joints maped to the joint_config2
-    """
-    mapped_joints = []
-    for joint_arg in range(joint_config2.num_joints):
-        joint_label = joint_config2.labels[joint_arg]
-        joint_index_in_joint_config1 = joint_config1.labels.index(joint_label)
-        joint_in_joint_config1 = joints[joint_index_in_joint_config1]
-        mapped_joints.append(joint_in_joint_config1)
-    mapped_joints = np.stack(mapped_joints, 0)
-    return mapped_joints

@@ -22,19 +22,19 @@ def to_affine_matrix(rotation_matrix, translation):
     return affine_matrix
 
 
-def construct_keypoints_transform(rotations, translations):
-    """Construct vectorised transformation matrix from ratation matrix vector
-    and translation vector.
+def to_affine_matrices(rotations, translations):
+    """Construct affine matrices for rotation matrices vector and
+       translation vector.
 
     # Arguments
         ratations: Rotation matrix vector [N, 3, 3].
-        translations: Translation vector [N, 3, 1].
+        translations: Translation vector [N, 3].
 
     # Returns
         Transformation matrix [N, 4, 4]
     """
-    keypoints_transform = np.zeros(shape=(len(rotations), 4, 4))
-    for keypoint_arg in range(len(rotations)):
-        keypoints_transform[keypoint_arg] = to_affine_matrix(
-            rotations[keypoint_arg], translations[keypoint_arg])
-    return keypoints_transform
+    affine_matrices = []
+    for rotation, translation in zip(rotations, translations):
+        transformation = to_affine_matrix(rotation, translation)
+        affine_matrices.append(transformation)
+    return np.array(affine_matrices)

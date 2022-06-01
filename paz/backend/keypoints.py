@@ -2,7 +2,6 @@ from warnings import warn
 
 import cv2
 import numpy as np
-from .standard import transform_column_to_negative
 
 UPNP = cv2.SOLVEPNP_UPNP
 LEVENBERG_MARQUARDT = cv2.SOLVEPNP_ITERATIVE
@@ -406,7 +405,7 @@ def transform_keypoint(keypoint, transform):
 
     # Arguments
         keypoint2D: keypoint [x, y]
-        transform: Numpy array. Transformation matrix
+        transform: Array. Transformation matrix
     """
     keypoint = np.array([keypoint[0], keypoint[1], 1.]).T
     transformed_keypoint = np.dot(transform, keypoint)
@@ -426,37 +425,39 @@ def add_offset_to_point(keypoint_location, offset=0):
     return y, x
 
 
-def flip_keypoints_wrt_image(keypoints, image_size=(32, 32), axis=1):
-    """Flip the detected keypoints with respect to image
+def flip_keypoints_left_right(keypoints, image_size=(32, 32)):
+    """Flip the detected 2D keypoints left to right.
 
     # Arguments
-        keypoints: Numpy array 
+        keypoints: Array
         image_size: list/tuple
         axis: int
 
     # Returns
         flipped_keypoints: Numpy array
     """
-    keypoints[:, axis] = image_size[axis] - keypoints[:, axis]
+    x_coordinates, y_coordinates = np.split(keypoints, 2, axis=1)
+    flipped_x = image_size[0] - x_coordinates
+    keypoints = np.concatenate((flipped_x, y_coordinates), axis=1)
     return keypoints
 
 
-def keypoints3D_to_delta(keypoints3D, joints_config):
+def compute_orientation_vector(keypoints3D, parents):
     """Compute bone orientations from joint coordinates
        (child joint - parent joint). The returned vectors are normalized.
        For the root joint, it will be a zero vector.
 
     # Arguments
-        keypoints3D : Numpy array [num_joints, 3]. Joint coordinates.
-        joints_config : joint configuration of the joints. e.g. MPIIHandJoints.
+        keypoints3D : Numpy array [num_keypoints, 3]. Joint coordinates.
+        parents: Parents of the keypoints from kinematic chain
 
     # Returns
-        Numpy array [num_joints, 3]. The unit vectors from each child joint to
+        Array [num_keypoints, 3]. The unit vectors from each child joint to
         its parent joint. For the root joint, it's are zero vector.
     """
     delta = []
-    for joint_arg in range(joints_config.num_joints):
-        parent = joints_config.parents[joint_arg]
+    for joint_arg in range(len(parents)):
+        parent = parents[joint_arg]
         if parent is None:
             delta.append(np.zeros(3))
         else:
@@ -465,24 +466,39 @@ def keypoints3D_to_delta(keypoints3D, joints_config):
     return delta
 
 
-def rotate_points3D(rotation_matrix, keypoints):
+def rotate_keypoints3D(rotation_matrix, keypoints):
     """Rotatate the keypoints by using rotation matrix
 
     # Arguments
         Rotation matrix [N, 3, 3].
-        keypoints [N, 3, 1]
+        keypoints [N, 3]
 
     # Returns
-        Rotated keypoints [N, 3, 1]
+        Rotated keypoints [N, 3]
     """
-    keypoint_xyz = np.einsum('ijk, ikl -> ij', rotation_matrix, keypoints)
+    keypoint_xyz = np.einsum('ijk, ik -> ij', rotation_matrix, keypoints)
     return keypoint_xyz
 
 
-def get_links_origin(joint_config, right_hand=False):
-    keypoints = joint_config.links_origin
-    if right_hand:
-        keypoints = transform_column_to_negative(keypoints)
-    ref_pose = keypoints3D_to_delta(keypoints, joint_config)
-    ref_pose = np.expand_dims(ref_pose, -1)
-    return ref_pose
+def flip_along_x_axis(keypoints, axis=0):
+    """Flip the keypoints along the x axis.
+
+    # Arguments
+        keypoints: Array
+        axis: int/list
+
+    # Returns
+        Flipped keypoints: Array
+    # """
+    x, y, z = np.split(keypoints, 3, axis=1)
+    keypoints = np.concatenate((-x, y, z), axis=1)
+    return keypoints
+
+
+def uv_to_vu(keypoints):
+    """Flips the uv coordinates to vu.
+
+    # Arguments
+        keypoints: Array.
+    """
+    return keypoints[:, ::-1]

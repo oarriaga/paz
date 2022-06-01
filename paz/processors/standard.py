@@ -3,8 +3,6 @@ import numpy as np
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
 from ..backend.standard import append_values
-from ..backend.standard import map_joint_config
-
 
 
 class ControlMap(Processor):

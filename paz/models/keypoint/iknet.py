@@ -34,7 +34,7 @@ def normalize(x):
 
 
 def reorder_quaternions(quaternions):
-    w = tf.expand_dims(quaternions[:, :, 0], -1)
+    w = quaternions[:, :, 0:1]
     qs = quaternions[:, :, 1:4]
     quaternions = tf.concat((qs, w), axis=-1)
     return quaternions
@@ -66,8 +66,8 @@ def IKNet(input_shape=(84, 3), num_keypoints=21, depth=6, width=1024):
     x = Reshape([num_keypoints, 4])(x)
     x = normalize(x)
 
-    x1 = tf.tile(x[:, :, 0:1] > 0, [1, 1, 4])
-    quaternions = tf.where(x1, x, -x)
+    positive_mask = tf.tile(x[:, :, 0:1] > 0, [1, 1, 4])
+    quaternions = tf.where(positive_mask, x, -x)
     quaternions = reorder_quaternions(quaternions)
 
     model = Model(input, outputs=[quaternions])
@@ -78,4 +78,5 @@ def IKNet(input_shape=(84, 3), num_keypoints=21, depth=6, width=1024):
     weights_path = get_file(filename, URL, cache_subdir='paz/models')
     print('==> Loading %s model weights' % weights_path)
     model.load_weights(weights_path)
+    print(model.layers[1].output)
     return model

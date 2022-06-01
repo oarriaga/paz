@@ -9,7 +9,7 @@ from ..backend.keypoints import normalize_keypoints2D
 from ..backend.keypoints import denormalize_keypoints2D
 from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
-from ..backend.keypoints import keypoints3D_to_delta
+from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
 
 
@@ -202,19 +202,19 @@ class ScaleKeypoints(Processor):
         return np.array(scaled_keypoints, dtype=np.uint)
 
 
-class CalculateOrientationFromCoordinates(Processor):
+class ComputeOrientationVector(Processor):
     """Calculate the orientation of keypoints links with 3D keypoints.
 
     # Arguments
-        coordinates: Array. 3D keypoints
+        keypoints: Array. 3D keypoints
 
     # Returns
-        delta: Array. Orientation of keypoint links
+        orientation: Array. Orientation of keypoint links
     """
-    def __init__(self, joint_config):
-        super(CalculateOrientationFromCoordinates, self).__init__()
-        self.joint_config = joint_config
+    def __init__(self, parents):
+        super(ComputeOrientationVector, self).__init__()
+        self.parents = parents
 
-    def call(self, coordinates):
-        delta = keypoints3D_to_delta(coordinates, self.joint_config)
-        return delta
+    def call(self, keypoints):
+        orientation = compute_orientation_vector(keypoints, self.parents)
+        return orientation

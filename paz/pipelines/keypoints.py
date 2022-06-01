@@ -11,7 +11,7 @@ from .angles import IKNetHandJointAngles
 
 
 from ..backend.image import get_affine_transform, flip_left_right
-from ..backend.keypoints import flip_keypoints_wrt_image
+from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 
@@ -288,9 +288,9 @@ class DetNetHandKeypoints(pr.Processor):
         if self.right_hand:
             image = flip_left_right(image)
         keypoints3D, keypoints2D = self.hand_estimator.predict(image)
-        keypoints2D = flip_left_right(keypoints2D)
         if self.right_hand:
-            keypoints2D = flip_keypoints_wrt_image(keypoints2D)
+            keypoints2D = flip_keypoints_left_right(keypoints2D)
+        keypoints2D = uv_to_vu(keypoints2D)
         keypoints2D = self.scale_keypoints(keypoints2D, input_image)
         if self.draw:
             image = self.draw_skeleton(input_image, keypoints2D)
@@ -318,7 +318,7 @@ class MinimalHandPoseEstimation(pr.Processor):
         super(MinimalHandPoseEstimation, self).__init__()
         self.keypoints_estimator = DetNetHandKeypoints(draw=draw,
                                                        right_hand=right_hand)
-        self.angle_estimator = IKNetHandJointAngles(right_hand)
+        self.angle_estimator = IKNetHandJointAngles(right_hand=right_hand)
         self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D',
                                    'absolute_angles', 'relative_angles'])
 
