@@ -55,7 +55,6 @@ def convolution_block(inputs, filters, stride, name, padd='valid'):
         Keras/tensorflow tensor.
     """
     x = Conv2D(filters, stride, padding=padd, name=name)(inputs)
-
     return x
 
 
@@ -67,8 +66,7 @@ def upsample_block(y, x, filters, up_sample_name='None', fpn_name='None', fpn_ad
     # Arguments
         x: Keras/tensorflow tensor.
         y: Keras/tensorflow tensor.
-        filters: Int. Number of filters
-        branch: Tensor to be concatated to the upsamples ``x`` tensor.
+        filters: Int. Number of filters.
 
     # Returns
         A Keras tensor.
@@ -76,11 +74,21 @@ def upsample_block(y, x, filters, up_sample_name='None', fpn_name='None', fpn_ad
     upsample = UpSampling2D(size=(2, 2), name=up_sample_name)(y)
     conv2d = convolution_block(x, filters, (1, 1), name=fpn_name)
     p = Add(name=fpn_add_name)([upsample, conv2d])
-
     return p
 
 
-def build_backbone(image_shape, backbone_features, fpn_size, train_bn): #TODO: documentation
+def build_backbone(image_shape, backbone_features, fpn_size, train_bn):
+    """Builds ``BACKBONE`` class for mask-RCNN.
+
+    # Arguments
+        image_shape: [H,W].
+        backbone_features
+        fpn_size
+        train_bn
+
+    # Returns
+        Model.
+    """
     height, width = image_shape[:2]
     raise_exception(height, width)
     input_image = Input(shape=[None, None, image_shape[2]], name='input_image')
@@ -90,7 +98,15 @@ def build_backbone(image_shape, backbone_features, fpn_size, train_bn): #TODO: d
     return model
 
 def build_layers(C2, C3, C4, C5, fpn_size):
+    """Builds `layers for mask-RCNN backbone.
 
+    # Arguments
+        C2, C3, C4, C5: channel sizes
+        fpn_size
+
+    # Returns
+        Model layers.
+    """
     P5 = convolution_block(C5, fpn_size, (1, 1), name='fpn_c5p5')
     P4 = upsample_block(P5, C4, fpn_size, up_sample_name='fpn_p5upsampled', fpn_name='fpn_c4p4',
                         fpn_add_name='fpn_p4add')
@@ -104,11 +120,20 @@ def build_layers(C2, C3, C4, C5, fpn_size):
     P4 = convolution_block(P4, fpn_size, (3, 3), name='fpn_p4', padd='SAME')
     P5 = convolution_block(P5, fpn_size, (3, 3), name='fpn_p5', padd='SAME')
     P6 = MaxPooling2D(pool_size=(1, 1), strides=2, name='fpn_p6')(P5)
-
     return(P2, P3, P4, P5, P6)
 
 
 def get_backbone_features(image, backbone_features, train_BN):
+    """Gets backbone features for mask-RCNN backbone.
+
+    # Arguments
+        image
+        backbone_features
+        train_BN
+
+    # Returns
+        Model layers.
+    """
     if callable(backbone_features):
         _, C2, C3, C4, C5 = backbone_features(image, stage5=True, train_bn=train_BN)
     else:
@@ -118,6 +143,12 @@ def get_backbone_features(image, backbone_features, train_BN):
 
 
 def raise_exception( height, width):
+    """Raise exception when image is not a multiple of 2
+
+    # Arguments
+        height, width : size of image
+
+    """
 
     if height / 2 ** 6 != int(height / 2 ** 6) or width / 2 ** 6 != int(width / 2 ** 6):
         raise Exception('Image size must be dividable by 2 atleast'
@@ -125,6 +156,11 @@ def raise_exception( height, width):
 
 
 def get_imagenet_weights():
+    """Define path for weights default
+
+    # Returns
+        weights_file.
+    """
     weight_path = 'https://github.com/fchollet/deep-learning-models/'\
                        'releases/download/v0.2/'\
                        'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
@@ -135,6 +171,16 @@ def get_imagenet_weights():
 
 
 def RPN_model(config, fpn_size, rpn_feature_maps):
+    """Build complete region specific network
+
+    # Arguments
+        config
+        fpn_size
+        rpn_feature_masks
+
+    # Returns
+        Model output.
+    """
     rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
                             len(config.RPN_ANCHOR_RATIOS),
                             fpn_size)
@@ -147,6 +193,15 @@ def RPN_model(config, fpn_size, rpn_feature_maps):
 
 
 def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
+    """Build all the layers by selecting the model
+
+    # Arguments
+        model
+        layer_regex
+        keras_model
+    # Returns
+        Model output.
+    """
     if verbose > 0 and keras_model is None:
         log('Selecting layers to train')
 
