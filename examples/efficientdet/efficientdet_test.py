@@ -10,7 +10,8 @@ import pytest
 from tensorflow.keras.models import model_from_json
 from efficientnet_model import conv_normal_initializer
 from efficientdet_blocks import FuseFeature
-
+from efficientnet_model import EfficientNet
+from tensorflow.keras.layers import Input
 
 @pytest.fixture
 def get_models_base_path():
@@ -71,29 +72,62 @@ def test_efficientnet_se_block():
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
-def test_all_efficientdet_models(get_models_base_path):
+@pytest.mark.parametrize(('input_shape, backbone, feature_shape,'
+                          'feature_channels'),
+                         [
+                             (512,  'efficientnet-b0', (256, 128, 64, 32, 16),
+                              (16, 24, 40, 112, 320)),
+                             (640,  'efficientnet-b1', (320, 160, 80, 40, 20),
+                              (16, 24, 40, 112, 320)),
+                             (768,  'efficientnet-b2', (384, 192, 96, 48, 24),
+                              (16, 24, 48, 120, 352)),
+                             (896,  'efficientnet-b3', (448, 224, 112, 56, 28),
+                              (24, 32, 48, 136, 384)),
+                             (1024, 'efficientnet-b4', (512, 256, 128, 64, 32),
+                              (24, 32, 56, 160, 448)),
+                             (1280, 'efficientnet-b5', (640, 320, 160, 80, 40),
+                              (24, 40, 64, 176, 512)),
+                             (1280, 'efficientnet-b6', (640, 320, 160, 80, 40),
+                              (32, 40, 72, 200, 576)),
+                             (1536, 'efficientnet-b6', (768, 384, 192, 96, 48),
+                              (32, 40, 72, 200, 576))
+                         ])
+def test_efficientnet_features(input_shape, backbone, feature_shape,
+                               feature_channels):
+    shape = (input_shape, input_shape, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EfficientNet(image, backbone, shape)
+    assert len(branch_tensors) == 5
+    for branch_tensor, feature_shape_per_tensor, feature_channel  \
+            in zip(branch_tensors, feature_shape, feature_channels):
+        target_shape = (None, feature_shape_per_tensor,
+                        feature_shape_per_tensor, feature_channel)
+        assert branch_tensor.shape == target_shape
 
-    implemented_models = [EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
-                          EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
-                          EFFICIENTDETD6, EFFICIENTDETD7]
 
-    custom_objects = {"conv_normal_initializer": conv_normal_initializer,
-                      "FuseFeature": FuseFeature}
-    for model_id, implemented_model in enumerate(implemented_models):
-        K.clear_session()
-        reference_model_path = (get_models_base_path + 'EFFICIENTDETD' +
-                                str(model_id) + '.json')
-        reference_model_file = open(reference_model_path, 'r')
-        loaded_model_json = reference_model_file.read()
-        reference_model_file.close()
-        reference_model = model_from_json(loaded_model_json,
-                                          custom_objects=custom_objects)
-        K.clear_session()
-        assert (implemented_model().get_config() ==
-                reference_model.get_config()), ('EFFICIENTDETD' +
-                                                str(model_id) +
-                                                " architecture"
-                                                " mismatch")
+# def test_all_efficientdet_models(get_models_base_path):
+
+#     implemented_models = [EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
+#                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
+#                           EFFICIENTDETD6, EFFICIENTDETD7]
+
+#     custom_objects = {"conv_normal_initializer": conv_normal_initializer,
+#                       "FuseFeature": FuseFeature}
+#     for model_id, implemented_model in enumerate(implemented_models):
+#         K.clear_session()
+#         reference_model_path = (get_models_base_path + 'EFFICIENTDETD' +
+#                                 str(model_id) + '.json')
+#         reference_model_file = open(reference_model_path, 'r')
+#         loaded_model_json = reference_model_file.read()
+#         reference_model_file.close()
+#         reference_model = model_from_json(loaded_model_json,
+#                                           custom_objects=custom_objects)
+#         K.clear_session()
+#         assert (implemented_model().get_config() ==
+#                 reference_model.get_config()), ('EFFICIENTDETD' +
+#                                                 str(model_id) +
+#                                                 " architecture"
+#                                                 " mismatch")
 
 
 # def test_feature_fusion_sum():
