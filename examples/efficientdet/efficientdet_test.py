@@ -127,7 +127,7 @@ def test_all_efficientdet_model_architectures(models_base_path,
                                               implemented_model,
                                               model_id):
     custom_objects = {"conv_normal_initializer": conv_normal_initializer,
-                      "FuseFeature": FuseFeature}    
+                      "FuseFeature": FuseFeature}
     K.clear_session()
     reference_model_path = (models_base_path + 'EFFICIENTDETD' +
                             str(model_id) + '.json')
@@ -142,20 +142,29 @@ def test_all_efficientdet_model_architectures(models_base_path,
                                             + " architecture mismatch")
 
 
-@pytest.mark.parametrize('model, preprocessed_inputs',
+@pytest.mark.parametrize('model, model_idx, preprocessed_inputs',
                          [
-                             (EFFICIENTDETD0, (1,)),
+                             (EFFICIENTDETD0, 0, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD1, 1, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD2, 2, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD3, 3, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD4, 4, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD5, 5, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD6, 6, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD7, 7, (1, 2, 3, 4, 5))
                          ])
 def test_all_efficientdet_model_result(model_input_output_base_path, model,
-                                       preprocessed_inputs):
+                                       model_idx, preprocessed_inputs):
     for preprocessed_input_idx in preprocessed_inputs:
         preprocessed_input_file = model_input_output_base_path + \
-            'inputs/test_image_' + str(preprocessed_input_idx) + '.npy'
+            'EFFICIENTDETD' + str(model_idx) + '/inputs/test_image_' + \
+            str(preprocessed_input_idx) + '.npy'
         with open(preprocessed_input_file, 'rb') as f:
             preprocessed_input = np.load(f)
 
         target_model_output_file = model_input_output_base_path + \
-            'outputs/model_output_' + str(preprocessed_input_idx) + '.npy'
+            'EFFICIENTDETD' + str(model_idx) + '/outputs/model_output_' + \
+            str(preprocessed_input_idx) + '.npy'
         with open(target_model_output_file, 'rb') as f:
             target_model_output = np.load(target_model_output_file)
 
