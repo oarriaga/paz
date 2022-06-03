@@ -43,9 +43,9 @@ class InferenceGraph():
 
         rpn_rois = ProposalLayer(
             proposal_count=self.POST_NMS_ROIS_INFERENCE,
-            nms_threshold= self.RPN_NMS_THRESHOLD, rpn_bbox_std_dev= self.rpn_bbox_std_dev,
-            pre_nms_limit= self.pre_nms_limit, images_per_gpu = self.images_per_gpu,
-            name='ROI')([rpn_class, rpn_bbox, anchors])
+            nms_threshold=self.RPN_NMS_THRESHOLD, rpn_bbox_std_dev=self.rpn_bbox_std_dev,
+            pre_nms_limit=self.pre_nms_limit, images_per_gpu=self.images_per_gpu,
+            batch_size=self.batch_size,name='ROI')([rpn_class, rpn_bbox, anchors])
 
         _, classes, mrcnn_bbox = fpn_classifier_graph(rpn_rois,
                                                       feature_maps[:-1],

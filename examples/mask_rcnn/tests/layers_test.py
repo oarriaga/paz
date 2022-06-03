@@ -13,10 +13,10 @@ from ..model import MaskRCNN
 from ..layer_utils import slice_batch, compute_ROI_level, apply_ROI_pooling
 from ..layer_utils import rearrange_pooled_features, trim_by_score, \
                           apply_box_delta, clip_image_boundaries
-from ..layer_utils import refine_instances, compute_overlaps_graph, \
+from ..layer_utils import refine_instances, compute_IOU, \
                           compute_ROI_overlaps, pad_ROI, pad_ROI_priors
 from ..layer_utils import update_priors, compute_target_masks, \
-                          apply_box_deltas, clip_boxes, NMS
+                          apply_box_deltas, clip_boxes, compute_NMS
 from ..layer_utils import filter_low_confidence, apply_NMS, get_top_detections, zero_pad_detections
 
 
@@ -124,7 +124,7 @@ def proposal_layer_NMS(proposal_layer_apply_box_delta, proposal_layer_trim_by_sc
     proposal_count = tf.repeat(2000, config.BATCH_SIZE)
     threshold = tf.repeat(0.7, config.BATCH_SIZE)
 
-    proposals = slice_batch([boxes, scores, proposal_count, threshold], NMS,
+    proposals = slice_batch([boxes, scores, proposal_count, threshold], compute_NMS,
                             config.IMAGES_PER_GPU)
     return proposals
 
@@ -235,12 +235,12 @@ def detection_target_layer_refine_instances(proposal_layer, ground_truth, config
 
 
 @pytest.fixture
-def detection_target_layer_compute_overlaps_graph(proposal_layer,
+def detection_target_layer_compute_IOU(proposal_layer,
                                                   detection_target_layer_refine_instances):
     refined_priors, crowd_boxes = detection_target_layer_refine_instances
     _, refined_boxes, _ = refined_priors
 
-    overlaps = compute_overlaps_graph(proposal_layer, refined_boxes)
+    overlaps = compute_IOU([proposal_layer], [refined_boxes])
 
     return overlaps
 
@@ -248,11 +248,11 @@ def detection_target_layer_compute_overlaps_graph(proposal_layer,
 @pytest.fixture
 def detection_target_layer_compute_ROI_overlaps(proposal_layer,
                                                 detection_target_layer_refine_instances,
-                                                detection_target_layer_compute_overlaps_graph,
+                                                detection_target_layer_compute_IOU,
                                                 config):
     refined_priors, crowd_boxes = detection_target_layer_refine_instances
     _, refined_boxes, _ = refined_priors
-    overlaps = detection_target_layer_compute_overlaps_graph
+    overlaps = detection_target_layer_compute_IOU
 
     positive_indices, positive_rois, negative_rois = \
          compute_ROI_overlaps(proposal_layer, refined_boxes, crowd_boxes,
@@ -263,11 +263,11 @@ def detection_target_layer_compute_ROI_overlaps(proposal_layer,
 
 @pytest.fixture
 def detection_target_layer_update_priors(detection_target_layer_refine_instances,
-                                         detection_target_layer_compute_overlaps_graph,
+                                         detection_target_layer_compute_IOU,
                                          detection_target_layer_compute_ROI_overlaps,
                                          config):
     refined_priors, crowd_boxes = detection_target_layer_refine_instances
-    overlaps = detection_target_layer_compute_overlaps_graph
+    overlaps = detection_target_layer_compute_IOU
     positive_indices, positive_rois, negative_rois = detection_target_layer_compute_ROI_overlaps
 
     deltas, roi_priors = update_priors(overlaps, positive_indices,
@@ -350,24 +350,23 @@ def test_proposal_layer_nms(proposal_layer_trim_by_score, proposal_layer_apply_b
 
 @pytest.mark.parametrize('shapes', [[(3,), (2,), (3,), (4,)]])
 def test_detection_target_layer(detection_target_layer, shapes):
-   ROIs, target_class, target_box, target_mask = detection_target_layer
-   mask_shape = (28, 28)
-   results_shape = [K.shape(ROIs).shape, K.shape(target_class).shape,
-                     K.shape(target_box).shape, K.shape(target_mask).shape]
-   assert shapes == results_shape
-   assert target_mask.shape[-2:] == mask_shape
-   assert ROIs.shape[2] == target_box.shape[2] == 4
+    ROIs, target_class, target_box, target_mask = detection_target_layer
+    mask_shape = (28, 28)
+    results_shape = [K.shape(ROIs).shape, K.shape(target_class).shape,
+                    K.shape(target_box).shape, K.shape(target_mask).shape]
+    assert shapes == results_shape
+    assert target_mask.shape[-2:] == mask_shape
+    assert ROIs.shape[2] == target_box.shape[2] == 4
 
 
 # def test_detection_target_layer_functions(detection_target_layer_refine_instances,
-#                                           detection_target_layer_compute_overlaps_graph,
+#                                           detection_target_layer_compute_IOU,
 #                                           detection_target_layer_compute_ROI_overlaps,
 #                                           detection_target_pad_ROI):
 #     refined_priors, crowd_boxes = detection_target_layer_refine_instances
-#     overlaps = detection_target_layer_compute_overlaps_graph
+#     overlaps = detection_target_layer_compute_IOU
 #     positive_indices, positive_rois, negative_rois = detection_target_layer_compute_ROI_overlaps
 #     rois, roi_class_ids, deltas, masks = detection_target_pad_ROI
-#
 #     assert refined_priors
 #     assert overlaps
 #     assert positive_indices
@@ -390,22 +389,16 @@ def test_detection_layer(proposal_layer, FPN_classifier, config, shape):
     assert detections.shape == shape
 
 
-
 # def test_detection_layer_functions(detection_layer_box_delta_graph, detection_layer_apply_NMS,
 #                                    detection_layer_get_top_detections):
 #     refined_rois, keep = detection_layer_box_delta_graph
 #     nms_keep, class_scores = detection_layer_apply_NMS
 #     keep = detection_layer_get_top_detections
-#
 #     assert refined_rois
 #     assert keep
 #     assert nms_keep
 #     assert class_scores
 
-
-# def test_detection_layer_FPN_classifier(detection_layer_box_delta_graph):
-#     refined_rois, keep = detection_layer_box_delta_graph
-#     assert refined_rois
 
 @pytest.mark.parametrize('shape', [(1024, 1024, 3)])
 def test_pyramid_ROI_align(proposal_layer, feature_maps, shape):

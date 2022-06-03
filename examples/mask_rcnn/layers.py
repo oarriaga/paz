@@ -2,15 +2,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
-from .layer_utils import slice_batch
-from .layer_utils import filter_low_confidence, apply_NMS,trim_by_score
-from .layer_utils import get_top_detections, zero_pad_detections, apply_box_delta, \
-                         clip_image_boundaries, refine_instances
-from .layer_utils import compute_overlaps_graph, compute_ROI_overlaps, update_priors, \
-                         compute_target_masks, pad_ROI, pad_ROI_priors
+from .layer_utils import slice_batch, trim_by_score, compute_NMS, refine_detections
+from .layer_utils import apply_box_delta, clip_image_boundaries, detection_targets
 from .layer_utils import compute_ROI_level, apply_ROI_pooling, rearrange_pooled_features
-from .layer_utils import clip_boxes, apply_box_deltas, NMS, refine_detections_graph
-from .layer_utils import trim_zeros, box_refinement, detection_targets_graph
 
 
 class DetectionLayer(Layer):
@@ -40,17 +34,16 @@ class DetectionLayer(Layer):
 
         std_dev_batch = tf.repeat(self.bbox_std_dev, self.batch_size)
         std_dev_batch = tf.cast(std_dev_batch, dtype=tf.float32)
-        window_batch = tf.repeat(self.window, self.batch_size)
-        detection_min_confidence_batch = tf.repeat(self.detection_min_confidence, self.batch_size)
-        detection_max_instances_batch = tf.repeat(self.detection_max_instances, self.batch_size)
-        detection_nms_threshold_batch = tf.repeat(self.detection_nms_threshold, self.batch_size)
+        window_batch = tf.repeat([self.window], self.batch_size, axis=0)
+        detection_min_confidence_batch = np.repeat(self.detection_min_confidence, self.batch_size)
+        detection_max_instances_batch = np.repeat(self.detection_max_instances, self.batch_size)
+        detection_nms_threshold_batch = np.repeat(self.detection_nms_threshold, self.batch_size)
+        detection_nms_threshold_batch = tf.cast(detection_nms_threshold_batch, dtype=tf.float32)
 
         detections_batch = slice_batch(
             [rois, mrcnn_class, mrcnn_bbox, std_dev_batch, window_batch,
              detection_min_confidence_batch, detection_max_instances_batch,
-             detection_nms_threshold_batch ],
-            refine_detections_graph,
-            self.images_per_gpu)
+             detection_nms_threshold_batch], refine_detections, self.images_per_gpu)
         return tf.reshape(detections_batch,
                           [self.batch_size, self.detection_max_instances, 6])
 
@@ -95,7 +88,8 @@ class ProposalLayer(Layer):
         proposal_count = tf.repeat(self.proposal_count, self.batch_size)
         threshold = tf.repeat(self.nms_threshold, self.batch_size)
 
-        proposals = slice_batch([boxes, scores, proposal_count, threshold], NMS, self.images_per_gpu)
+        proposals = slice_batch([boxes, scores, proposal_count, threshold], compute_NMS,
+                                self.images_per_gpu)
         return proposals
 
 
@@ -134,18 +128,17 @@ class DetectionTargetLayer(Layer):
     def __call__(self, inputs):
         proposals, prior_class_ids, prior_boxes, prior_masks = inputs
         names = ['rois', 'target_class_ids', 'target_bbox', 'target_mask']
-        train_rois_per_image = tf.repeat(self.train_rois_per_image, self.batch_size)
-        roi_positive_ratio = tf.repeat(self.roi_positive_ratio, self.batch_size)
-        roi_positive_ratio = tf.cast(roi_positive_ratio, dtype=tf.int32)
-        mask_shape = tf.repeat(self.mask_shape, self.batch_size)
-        use_mini_mask = tf.repeat(self.use_mini_mask, self.batch_size)
+        train_rois_per_image = np.repeat(self.train_rois_per_image, self.batch_size)
+        roi_positive_ratio = np.repeat(self.roi_positive_ratio, self.batch_size)
+        mask_shape = tf.repeat([self.mask_shape], self.batch_size, axis=0)
+        use_mini_mask = np.repeat(self.use_mini_mask, self.batch_size)
         bbox_std_dev = tf.repeat(self.bbox_std_dev, self.batch_size)
         bbox_std_dev = tf.cast(bbox_std_dev, dtype=tf.float32)
 
         outputs = slice_batch(
             [proposals, prior_class_ids, prior_boxes, prior_masks, train_rois_per_image,
-             roi_positive_ratio.numpy(), mask_shape, use_mini_mask, bbox_std_dev],
-            detection_targets_graph, self.images_per_gpu, names=names)
+             roi_positive_ratio, mask_shape, use_mini_mask, bbox_std_dev],
+            detection_targets, self.images_per_gpu, names=names)
         return outputs
 
 
