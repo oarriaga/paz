@@ -9,14 +9,20 @@ import pytest
 from tensorflow.keras.models import model_from_json
 from efficientnet_model import conv_normal_initializer
 from efficientdet_blocks import FuseFeature
-from efficientnet_model import EfficientNet
 from tensorflow.keras.layers import Input
+import numpy as np
 
 
 @pytest.fixture
-def get_models_base_path():
+def models_base_path():
     return ("/home/manummk95/Desktop/efficientdet_working/"
-            "required/efficientdet_architectures/")
+            "required/test_files/efficientdet_architectures/")
+
+
+@pytest.fixture
+def model_input_output_base_path():
+    return ("/home/manummk95/Desktop/efficientdet_working/"
+            "required/test_files/test_model_outputs/")
 
 
 def get_test_images(image_size, batch_size=1):
@@ -117,12 +123,13 @@ def test_efficientnet_features(input_shape, backbone, feature_shape,
                              (EFFICIENTDETD6, 6),
                              (EFFICIENTDETD7, 7),
                          ])
-def test_all_efficientdet_models(get_models_base_path, implemented_model,
-                                 model_id):
+def test_all_efficientdet_model_architectures(models_base_path,
+                                              implemented_model,
+                                              model_id):
     custom_objects = {"conv_normal_initializer": conv_normal_initializer,
                       "FuseFeature": FuseFeature}    
     K.clear_session()
-    reference_model_path = (get_models_base_path + 'EFFICIENTDETD' +
+    reference_model_path = (models_base_path + 'EFFICIENTDETD' +
                             str(model_id) + '.json')
     reference_model_file = open(reference_model_path, 'r')
     loaded_model_json = reference_model_file.read()
@@ -134,6 +141,26 @@ def test_all_efficientdet_models(get_models_base_path, implemented_model,
             reference_model.get_config()), ('EFFICIENTDETD' + str(model_id)
                                             + " architecture mismatch")
 
+
+@pytest.mark.parametrize('model, preprocessed_inputs',
+                         [
+                             (EFFICIENTDETD0, (1,)),
+                         ])
+def test_all_efficientdet_model_result(model_input_output_base_path, model,
+                                       preprocessed_inputs):
+    for preprocessed_input_idx in preprocessed_inputs:
+        preprocessed_input_file = model_input_output_base_path + \
+            'inputs/test_image_' + str(preprocessed_input_idx) + '.npy'
+        with open(preprocessed_input_file, 'rb') as f:
+            preprocessed_input = np.load(f)
+
+        target_model_output_file = model_input_output_base_path + \
+            'outputs/model_output_' + str(preprocessed_input_idx) + '.npy'
+        with open(target_model_output_file, 'rb') as f:
+            target_model_output = np.load(target_model_output_file)
+
+        assert np.all(model()(preprocessed_input).numpy() ==
+                      target_model_output), 'Model result not as expected'
 
 # def test_feature_fusion_sum():
 #     nodes1 = tf.constant([1, 3])
