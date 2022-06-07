@@ -51,7 +51,6 @@ args = parser.parse_args()
 
 # loading datasets
 data_managers, datasets = [], []
-
 for split in [pr.TRAIN, pr.VAL, pr.TEST]:
     data_manager = HandDataset(args.data_path, split)
     data = data_manager.load_data()
@@ -102,6 +101,7 @@ save_name = os.path.join(experiment_path, 'model_weights.hdf5')
 save = ModelCheckpoint(save_name, verbose=1, save_best_only=True,
                        save_weights_only=True)
 
+"""
 # training
 model.fit(
     sequencers[0],
@@ -111,3 +111,4 @@ model.fit(
     validation_data=sequencers[1],
     use_multiprocessing=True,
     workers=6)
+"""
