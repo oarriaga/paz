@@ -13,8 +13,9 @@ class HandDataset(Loader):
         split_to_directory = {pr.TRAIN: 'training_dataset/training_data',
                               pr.VAL: 'validation_dataset/validation_data',
                               pr.TEST: 'test_dataset/test_data'}
+        names = ['background', 'hand']
         path = os.path.join(path, split_to_directory[split])
-        super(HandDataset, self).__init__(path, split, None, 'HandDataset')
+        super(HandDataset, self).__init__(path, split, names, 'HandDataset')
 
     def _check_sanity(self, image_paths, label_paths):
         assert len(image_paths) == len(label_paths)
@@ -33,8 +34,12 @@ class HandDataset(Loader):
         label_paths = glob.glob(labels_wildcard)
         label_paths = sorted(label_paths)
         self._check_sanity(image_paths, label_paths)
-        boxes = self._preprocess_mat_files(label_paths, image_paths)
-        return image_paths, boxes
+        boxes_data = self._preprocess_mat_files(label_paths, image_paths)
+        data = []
+        for image_path, box_data in zip(image_paths, boxes_data):
+            sample = {'image': image_path, 'boxes': box_data}
+            data.append(sample)
+        return data
 
     def _preprocess_mat_files(self, label_paths, image_paths):
         boxes = []
@@ -80,16 +85,15 @@ if __name__ == '__main__':
     path = os.path.join(root_path, 'hand_dataset/hand_dataset/')
     data_manager = HandDataset(path, pr.TRAIN)
     data = data_manager.load_data()
-    data_manager.path
-    image_paths, labels = data
 
     class_names = ['background', 'hand']
     draw_boxes = pr.SequentialProcessor()
+    draw_boxes.add(pr.UnpackDictionary(['image', 'boxes']))
     draw_boxes.add(pr.ControlMap(pr.ToBoxes2D(class_names), [1], [1]))
     draw_boxes.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
     draw_boxes.add(pr.ControlMap(pr.DenormalizeBoxes2D(), [0, 1], [1], {0: 0}))
     draw_boxes.add(pr.DrawBoxes2D(class_names))
     draw_boxes.add(pr.ShowImage())
 
-    for image_path, box_data in zip(image_paths, labels):
-        draw_boxes(image_path, box_data)
+    for sample in data:
+        draw_boxes(sample)

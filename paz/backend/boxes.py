@@ -146,7 +146,7 @@ def mask_classes(boxes, positive_mask, ignoring_mask):
     return boxes
 
 
-def match(boxes, prior_boxes, positive_iou=0.5, negative_iou=0.0):
+def match_beta(boxes, prior_boxes, positive_iou=0.5, negative_iou=0.0):
     """Matches each prior box with a ground truth box (box from `boxes`).
     It then selects which matched box will be considered positive e.g. iou > .5
     and returns for each prior box a ground truth box that is either positive
@@ -177,7 +177,7 @@ def match(boxes, prior_boxes, positive_iou=0.5, negative_iou=0.0):
     return matched_boxes
 
 
-def match2(boxes, prior_boxes, iou_threshold=0.5):
+def match(boxes, prior_boxes, iou_threshold=0.5):
     """Matches each prior box with a ground truth box (box from `boxes`).
     It then selects which matched box will be considered positive e.g. iou > .5
     and returns for each prior box a ground truth box that is either positive
