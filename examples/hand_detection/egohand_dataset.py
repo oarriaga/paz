@@ -80,8 +80,3 @@ if __name__ == "__main__":
 
     for sample in data:
         draw_boxes(sample)
-
-
-# directory = 'CARDS_COURTYARD_H_S'
-# path = os.path.join(base_path, directory)
-# image_paths, boxes = preprocess_dataset(path)
