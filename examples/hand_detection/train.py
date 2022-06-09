@@ -10,17 +10,17 @@ from tensorflow.keras.callbacks import (
 import paz.processors as pr
 from paz.abstract import ProcessingSequence
 from paz.pipelines import AugmentDetection
-from paz.models import SSD300
 from paz.optimization import MultiBoxLoss
 
 from hand_dataset import HandDataset
+from paz.models import SSD300
 
 root_path = os.path.expanduser('~')
 DEFAULT_DATA_PATH = os.path.join(root_path, 'hand_dataset/hand_dataset/')
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('--batch_size', default=32, type=int,
+parser.add_argument('--batch_size', default=18, type=int,
                     help='Batch size for training')
 parser.add_argument('--evaluation_frequency', default=10, type=int,
                     help='evaluation frequency')
@@ -28,7 +28,7 @@ parser.add_argument('--stop_patience', default=5, type=int,
                     help='Early stop patience')
 parser.add_argument('--reduce_patience', default=2, type=int,
                     help='Reduce learning rate patience')
-parser.add_argument('--learning_rate', default=0.001, type=float,
+parser.add_argument('--learning_rate', default=0.0001, type=float,
                     help='Initial learning rate for SGD')
 parser.add_argument('--momentum', default=0.9, type=float,
                     help='Momentum for SGD')
@@ -57,10 +57,16 @@ for split in [pr.TRAIN, pr.VAL, pr.TEST]:
     data_managers.append(data_manager)
     datasets.append(data)
 
+from egohand_dataset import EgoHands
+path = os.path.join(root_path, 'Downloads/egohands/_LABELLED_SAMPLES/')
+data_manager = EgoHands(path)
+ego_data = data_manager.load_data()
+datasets[0].extend(ego_data)
+
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = SSD300(num_classes, base_weights='VGG',
-               head_weights=None, trainable_base=False)
+model = SSD300(num_classes, base_weights='VOC', trainable_base=False)
+
 
 # Instantiating loss and metrics
 optimizer = SGD(args.learning_rate, args.momentum)
@@ -101,7 +107,6 @@ save_name = os.path.join(experiment_path, 'model_weights.hdf5')
 save = ModelCheckpoint(save_name, verbose=1, save_best_only=True,
                        save_weights_only=True)
 
-"""
 # training
 model.fit(
     sequencers[0],
@@ -111,4 +116,3 @@ model.fit(
     validation_data=sequencers[1],
     use_multiprocessing=True,
     workers=6)
-"""
