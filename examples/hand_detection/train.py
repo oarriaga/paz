@@ -12,7 +12,7 @@ from paz.abstract import ProcessingSequence
 from paz.pipelines import AugmentDetection
 from paz.optimization import MultiBoxLoss
 
-from hand_dataset import HandDataset
+from open_images import OpenImagesV6
 from paz.models import SSD300
 
 root_path = os.path.expanduser('~')
@@ -50,6 +50,7 @@ args = parser.parse_args()
 
 
 # loading datasets
+"""
 data_managers, datasets = [], []
 for split in [pr.TRAIN, pr.VAL, pr.TEST]:
     data_manager = HandDataset(args.data_path, split)
@@ -62,6 +63,15 @@ path = os.path.join(root_path, 'Downloads/egohands/_LABELLED_SAMPLES/')
 data_manager = EgoHands(path)
 ego_data = data_manager.load_data()
 datasets[0].extend(ego_data)
+"""
+
+data_managers, datasets = [], []
+for split in [pr.TRAIN, pr.VAL, pr.TEST]:
+    data_manager = OpenImagesV6(args.data_path, split)
+    data = data_manager.load_data()
+    data_managers.append(data_manager)
+    datasets.append(data)
+
 
 # instantiating model
 num_classes = data_managers[0].num_classes
