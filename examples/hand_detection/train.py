@@ -65,9 +65,10 @@ ego_data = data_manager.load_data()
 datasets[0].extend(ego_data)
 """
 
+path = os.path.join(root_path, '/home/octavio/fiftyone/open-images-v6/')
 data_managers, datasets = [], []
 for split in [pr.TRAIN, pr.VAL, pr.TEST]:
-    data_manager = OpenImagesV6(args.data_path, split)
+    data_manager = OpenImagesV6(path, split, ['background', 'Human hand'])
     data = data_manager.load_data()
     data_managers.append(data_manager)
     datasets.append(data)
@@ -75,7 +76,8 @@ for split in [pr.TRAIN, pr.VAL, pr.TEST]:
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = SSD300(num_classes, base_weights='VOC', trainable_base=False)
+model = SSD300(num_classes, base_weights='VOC', head_weights=None,
+               trainable_base=False)
 
 
 # Instantiating loss and metrics

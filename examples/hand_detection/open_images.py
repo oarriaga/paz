@@ -15,7 +15,7 @@ class OpenImagesV6(Loader):
         # TODO MAKE CHECK THAT CLASS NAMES ALWAYS HAVE BACKGROUND CLASS
         self._split_to_name = {
             pr.TRAIN: 'train', pr.VAL: 'validation', pr.TEST: 'test'}
-        split_name = self._split_to_name[pr.TRAIN]
+        split_name = self._split_to_name[self.split]
         self.image_paths = self._get_image_paths(split_name)
         self.machine_to_human_name = self._build_machine_to_human(split_name)
         self.root_image_path = self._build_root_image_path(split_name)
@@ -82,16 +82,19 @@ class OpenImagesV6(Loader):
 if __name__ == '__main__':
     root_path = os.path.expanduser('~')
     path = os.path.join(root_path, '/home/octavio/fiftyone/open-images-v6/')
-    data_manager = OpenImagesV6(path, pr.TRAIN, ['background', 'Human hand'])
-    train_data = data_manager.load_data()
+
+    train_data_manager = OpenImagesV6(
+        path, pr.TRAIN, ['background', 'Human hand'])
+    train_data = train_data_manager.load_data()
     print('Number of training samples', len(train_data))
 
-    data_manager = OpenImagesV6(path, pr.VAL, ['background', 'Human hand'])
-    validation_data = data_manager.load_data()
+    val_data_manager = OpenImagesV6(path, pr.VAL, ['background', 'Human hand'])
+    validation_data = val_data_manager.load_data()
     print('Number of validation samples', len(validation_data))
 
-    data_manager = OpenImagesV6(path, pr.TEST, ['background', 'Human hand'])
-    test_data = data_manager.load_data()
+    test_data_manager = OpenImagesV6(
+        path, pr.TEST, ['background', 'Human hand'])
+    test_data = test_data_manager.load_data()
     print('Number of test samples', len(test_data))
 
     class_names = ['background', 'hand']
@@ -103,5 +106,5 @@ if __name__ == '__main__':
     draw_boxes.add(pr.DrawBoxes2D(class_names))
     draw_boxes.add(pr.ShowImage())
 
-    for sample in train_data:
+    for sample in validation_data:
         draw_boxes(sample)
