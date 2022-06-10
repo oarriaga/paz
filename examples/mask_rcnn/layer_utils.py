@@ -49,7 +49,7 @@ def trim_zeros(boxes, name='trim_zeros'):
     return boxes, non_zeros
 
 
-def slice_batch(inputs, function, batch_size, names=None):
+def slice_batch(inputs, constants, function, batch_size, names=None):
     """Splits inputs into slices and feeds each slice to a copy of the given
        computation graph and then combines the results.
 
@@ -64,10 +64,14 @@ def slice_batch(inputs, function, batch_size, names=None):
         inputs = [inputs]
     outputs = []
     for sample_arg in range(batch_size):
+
         input_slices = []
         for x in inputs:
             input_slice=x[sample_arg]
             input_slices.append(input_slice)
+        for y in constants:
+            input_slices.append(y)
+
         output_slice = function(*input_slices)
         if not isinstance(output_slice, (tuple, list)):
             output_slice = [output_slice]
@@ -271,9 +275,9 @@ def trim_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit):
     pre_nms_limit = tf.minimum(pre_nms_limit, tf.shape(anchors)[1])
     indices = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
                           name='top_anchors').indices
-    scores = slice_batch([scores, indices], tf.gather, images_per_gpu)
-    deltas = slice_batch([deltas, indices], tf.gather, images_per_gpu)
-    pre_nms_anchors = slice_batch([anchors, indices], tf.gather,
+    scores = slice_batch([scores, indices], [], tf.gather, images_per_gpu)
+    deltas = slice_batch([deltas, indices], [], tf.gather, images_per_gpu)
+    pre_nms_anchors = slice_batch([anchors, indices], [], tf.gather,
                                   images_per_gpu, names=['pre_nms_anchors'])
     return scores, deltas, pre_nms_anchors
 
@@ -287,7 +291,7 @@ def apply_box_delta(pre_nms_anchors, deltas, images_per_gpu):
         images_per_gpu: Number of images to train with on each GPU
     """
 
-    boxes = slice_batch([pre_nms_anchors, deltas],apply_box_deltas,
+    boxes = slice_batch([pre_nms_anchors, deltas], [], apply_box_deltas,
                         images_per_gpu, names=['refined_anchors'])
     return boxes
 
@@ -301,7 +305,7 @@ def clip_image_boundaries(boxes, images_per_gpu):
     """
     global window1
     window1 = np.array([0, 0, 1, 1], dtype=np.float32)
-    boxes = slice_batch(boxes, clip_boxes_to_window_size, images_per_gpu,
+    boxes = slice_batch(boxes,[], clip_boxes_to_window_size, images_per_gpu,
                         names=['refined_anchors_clipped'])
     return boxes
 
@@ -713,21 +717,27 @@ def refine_detections(rois, probs, deltas, bbox_std_dev, windows, detection_min_
                 detection_nms_threshold
             """
 
-    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
-    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
-    class_scores = tf.gather_nd(probs, indices)
-    deltas_specific = tf.gather_nd(deltas, indices)
+    class_ids, class_scores, deltas_specific = compute_delta_specific(probs,deltas)
+
     refined_rois = compute_refined_rois(rois, deltas_specific * bbox_std_dev, windows)
 
-    keep = compute_keep(class_ids, class_scores,detection_min_confidence, refined_rois,
+    keep = compute_keep(class_ids, class_scores,refined_rois,detection_min_confidence,
                         detection_max_instances, detection_nms_threshold)
-
     gather_refined_rois = tf.gather(refined_rois, keep)
     gather_class_ids = tf.cast(tf.gather(class_ids, keep),dtype=tf.float32)[..., tf.newaxis]
     gather_class_scores = tf.gather(class_scores, keep)[..., tf.newaxis]
 
     detections = tf.concat([gather_refined_rois, gather_class_ids, gather_class_scores], axis=1)
     return zero_pad_detections(detections, detection_max_instances)
+
+
+def compute_delta_specific(probs,deltas):
+    """Used by Detection Layer"""
+    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
+    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
+    class_scores = tf.gather_nd(probs, indices)
+    deltas_specific = tf.gather_nd(deltas, indices)
+    return class_ids, class_scores, deltas_specific
 
 
 def compute_refined_rois(rois, deltas, windows):
@@ -743,7 +753,7 @@ def compute_refined_rois(rois, deltas, windows):
     return refined_rois
 
 
-def compute_keep(class_ids, class_scores,detection_min_confidence, refined_rois,
+def compute_keep(class_ids, class_scores,refined_rois, detection_min_confidence,
                  detection_max_instances, detection_nms_threshold):
     """Used by Detection Layer
 
