@@ -48,6 +48,7 @@ def test_efficientdet_model():
     images = get_test_images(image_size)
     output_shape = list(detector(images).shape)
     assert output_shape == expected_output_shape, 'Class outputs length fail'
+    del detector
 
 
 def test_efficientnet_model():
@@ -55,13 +56,14 @@ def test_efficientnet_model():
     images = get_test_images(image_size)
     features = EfficientNet(images, 'efficientnet-b0', (512, 512, 3))
     assert len(features) == 5, 'EfficientNet model features length mismatch'
+    del features
 
 
 def test_efficientnet_bottleneck_block():
     images = get_test_images(128, 10)
     output_shape = EfficientNet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
-        kernel_sizes=[3], num_repeats=[3], intro_filters=[3],
+        kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6])[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
@@ -71,7 +73,7 @@ def test_efficientnet_se_block():
     images = get_test_images(128, 10)
     output_shape = EfficientNet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
-        kernel_sizes=[3], num_repeats=[3], intro_filters=[3],
+        kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6],
         squeeze_excite_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
@@ -110,6 +112,7 @@ def test_efficientnet_features(input_shape, backbone, feature_shape,
                         feature_shape_per_tensor, feature_channel)
         assert branch_tensor.shape == target_shape, ("Shape of features"
                                                      "mismatch")
+    del branch_tensors
 
 
 @pytest.mark.parametrize('implemented_model, model_id',
@@ -123,9 +126,9 @@ def test_efficientnet_features(input_shape, backbone, feature_shape,
                              (EFFICIENTDETD6, 6),
                              (EFFICIENTDETD7, 7),
                          ])
-def test_all_efficientdet_model_architectures(models_base_path,
-                                              implemented_model,
-                                              model_id):
+def test_efficientdet_architecture(models_base_path,
+                                   implemented_model,
+                                   model_id):
     custom_objects = {"conv_normal_initializer": conv_normal_initializer,
                       "FuseFeature": FuseFeature}
     K.clear_session()
@@ -140,6 +143,7 @@ def test_all_efficientdet_model_architectures(models_base_path,
     assert (implemented_model().get_config() ==
             reference_model.get_config()), ('EFFICIENTDETD' + str(model_id)
                                             + " architecture mismatch")
+    del implemented_model, reference_model
 
 
 @pytest.mark.parametrize('model, model_idx, preprocessed_inputs',
@@ -153,8 +157,8 @@ def test_all_efficientdet_model_architectures(models_base_path,
                              (EFFICIENTDETD6, 6, (1, 2, 3, 4, 5)),
                              (EFFICIENTDETD7, 7, (1, 2, 3, 4, 5))
                          ])
-def test_all_efficientdet_model_result(model_input_output_base_path, model,
-                                       model_idx, preprocessed_inputs):
+def test_efficientdet_result(model_input_output_base_path, model,
+                             model_idx, preprocessed_inputs):
     for preprocessed_input_idx in preprocessed_inputs:
         preprocessed_input_file = model_input_output_base_path + \
             'EFFICIENTDETD' + str(model_idx) + '/inputs/test_image_' + \
@@ -170,6 +174,7 @@ def test_all_efficientdet_model_result(model_input_output_base_path, model,
 
         assert np.all(model()(preprocessed_input).numpy() ==
                       target_model_output), 'Model result not as expected'
+    del model
 
 # def test_feature_fusion_sum():
 #     nodes1 = tf.constant([1, 3])

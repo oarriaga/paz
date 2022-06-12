@@ -1,18 +1,18 @@
 import math
 import numpy as np
 import tensorflow as tf
-import itertools
+from necessary_imports import incrementer
 from tensorflow.keras.layers import (DepthwiseConv2D, Conv2D,
                                      BatchNormalization, Input)
 
 
-def get_efficientnet_scaling_coefficients(model_name):
+def get_scaling_coefficients(model_name):
     """Default efficientnet scaling coefficients and
     image name based on model name.
     The value of each model name in the key represents:
-    (width_coefficient, depth_coefficient, survival_rate).
+    (W_coefficient, D_coefficient, survival_rate).
     with_coefficient: scaling coefficient for network width.
-    depth_coefficient: scaling coefficient for network depth.
+    D_coefficient: scaling coefficient for network depth.
     survival_rate: survival rate for final fully connected layers.
 
     # Arguments
@@ -22,52 +22,52 @@ def get_efficientnet_scaling_coefficients(model_name):
         efficientnetparams: Dictionary, parameters corresponding to
         width coefficient, depth coefficient, survival rate
     """
-    efficientnet_scaling_coefficients = {'efficientnet-b0': (1.0, 1.0, 0.8),
-                                         'efficientnet-b1': (1.0, 1.1, 0.8),
-                                         'efficientnet-b2': (1.1, 1.2, 0.7),
-                                         'efficientnet-b3': (1.2, 1.4, 0.7),
-                                         'efficientnet-b4': (1.4, 1.8, 0.6),
-                                         'efficientnet-b5': (1.6, 2.2, 0.6),
-                                         'efficientnet-b6': (1.8, 2.6, 0.5),
-                                         'efficientnet-b7': (2.0, 3.1, 0.5),
-                                         'efficientnet-b8': (2.2, 3.6, 0.5),
-                                         'efficientnet-l2': (4.3, 5.3, 0.5)}
-    return efficientnet_scaling_coefficients[model_name]
+    scaling_coefficients = {'efficientnet-b0': (1.0, 1.0, 0.8),
+                            'efficientnet-b1': (1.0, 1.1, 0.8),
+                            'efficientnet-b2': (1.1, 1.2, 0.7),
+                            'efficientnet-b3': (1.2, 1.4, 0.7),
+                            'efficientnet-b4': (1.4, 1.8, 0.6),
+                            'efficientnet-b5': (1.6, 2.2, 0.6),
+                            'efficientnet-b6': (1.8, 2.6, 0.5),
+                            'efficientnet-b7': (2.0, 3.1, 0.5),
+                            'efficientnet-b8': (2.2, 3.6, 0.5),
+                            'efficientnet-l2': (4.3, 5.3, 0.5)}
+    return scaling_coefficients[model_name]
 
 
-def round_filters(filters, width_coefficient, depth_divisor):
+def round_filters(filters, W_coefficient, D_divisor):
     """Round number of filters based on depth multiplier.
 
     # Arguments
         filters: Int, filters to be rounded based on depth multiplier.
-        width_coefficient: Float, scaling coefficient for network width.
-        depth_divisor: Int, multiplier for the depth of the network.
+        W_coefficient: Float, scaling coefficient for network width.
+        D_divisor: Int, multiplier for the depth of the network.
 
     # Returns
         new_filters: Int, rounded filters based on depth multiplier.
     """
-    filters = filters * width_coefficient
-    min_depth = depth_divisor
-    half_depth = depth_divisor / 2
-    threshold = int(filters + half_depth) // depth_divisor * depth_divisor
-    new_filters = max(min_depth, threshold)
+    filters = filters * W_coefficient
+    min_D = D_divisor
+    half_D = D_divisor / 2
+    threshold = int(filters + half_D) // D_divisor * D_divisor
+    new_filters = max(min_D, threshold)
     if new_filters < 0.9 * filters:
-        new_filters = new_filters + depth_divisor
+        new_filters = new_filters + D_divisor
     new_filters = int(new_filters)
     return new_filters
 
 
-def round_repeats(repeats, depth_coefficient):
+def round_repeats(repeats, D_coefficient):
     """Round number of repeat blocks based on depth multiplier.
 
     # Arguments
         repeats: Int, number of repeats of multiplier blocks.
-        depth_coefficient: Float, scaling coefficient for network depth.
+        D_coefficient: Float, scaling coefficient for network depth.
 
     # Returns
         new_repeats: Int, repeats of blocks based on multiplier.
     """
-    new_repeats = int(math.ceil(depth_coefficient * repeats))
+    new_repeats = int(math.ceil(D_coefficient * repeats))
     return new_repeats
 
 
@@ -86,9 +86,8 @@ def conv_normal_initializer(shape, dtype=None):
     # Returns
         an initialization for the variable
     """
-    # TODO: Change name
-    kernel_height, kernel_width, _, outro_filters = shape
-    fan_output = int(kernel_height * kernel_width * outro_filters)
+    kernel_H, kernel_W, _, outro_filters = shape
+    fan_output = int(kernel_H * kernel_W * outro_filters)
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
@@ -117,7 +116,7 @@ def get_drop_connect(features, is_training, survival_rate):
     return output
 
 
-def get_conv_name(conv_id):
+def name_conv_layer(conv_id):
     if not next(conv_id):
         name_appender = ""
     else:
@@ -145,7 +144,7 @@ def mobile_inverted_residual_bottleneck_block(
 
     # Arguments
         kernel_size: Int, kernel size of the conv block filters.
-        num_repeats: Int, number of block repeats.
+        repeats: Int, number of block repeats.
         intro_filters: Int, input filters for the blocks to construct.
         outro_filters: Int, output filters for the blocks to construct.
         expand_ratio: Int, ratio to expand the conv block in repeats.
@@ -154,14 +153,13 @@ def mobile_inverted_residual_bottleneck_block(
         num_blocks: Int, number of Mobile bottleneck conv blocks.
         name: layer name.
     """
-    # TODO: Remove itertools
-    conv_id = itertools.count(0)
-    batch_norm_id = itertools.count(0)
+    conv_id = incrementer(0)
+    batch_norm_id = incrementer(0)
     filters = intro_filters * expand_ratio
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
                    kernel_initializer=conv_normal_initializer,
-                   name=name + '/' + get_conv_name(conv_id))(inputs)
+                   name=name + '/' + name_conv_layer(conv_id))(inputs)
         x = BatchNormalization(
             name=name+'/' + name_batch_norm(batch_norm_id))(x)
         x = tf.nn.swish(x)
@@ -176,23 +174,23 @@ def mobile_inverted_residual_bottleneck_block(
         name=name + '/' + name_batch_norm(batch_norm_id))(x)
     x = tf.nn.swish(x)
 
-    # Squeeze excitation layer
+    # Squeeze excitation (se) layer
     num_reduced_filters = max(1, int(intro_filters * squeeze_excite_ratio))
-    se_tensor = tf.reduce_mean(x, [1, 2], keepdims=True)
-    se_tensor = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
-                       kernel_initializer=conv_normal_initializer,
-                       name=name + '/se/conv2d')(se_tensor)
-    se_tensor = tf.nn.swish(se_tensor)
-    se_tensor = Conv2D(filters, 1, padding='same', use_bias=True,
-                       kernel_initializer=conv_normal_initializer,
-                       name=name + '/se/conv2d_1')(se_tensor)
-    se_tensor = tf.sigmoid(se_tensor)
-    x = se_tensor * x
+    se = tf.reduce_mean(x, [1, 2], keepdims=True)
+    se = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
+                kernel_initializer=conv_normal_initializer,
+                name=name + '/se/conv2d')(se)
+    se = tf.nn.swish(se)
+    se = Conv2D(filters, 1, padding='same', use_bias=True,
+                kernel_initializer=conv_normal_initializer,
+                name=name + '/se/conv2d_1')(se)
+    se = tf.sigmoid(se)
+    x = se * x
 
     # Output processing
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
                kernel_initializer=conv_normal_initializer,
-               name=name + '/' + get_conv_name(conv_id))(x)
+               name=name + '/' + name_conv_layer(conv_id))(x)
     x = BatchNormalization(
         name=name + '/' + name_batch_norm(batch_norm_id))(x)
     if all(s == 1 for s in strides) and intro_filters == outro_filters:
@@ -202,19 +200,19 @@ def mobile_inverted_residual_bottleneck_block(
     return x
 
 
-def get_mb_conv_block_params(block_arg, intro_filters, outro_filters,
-                             width_coefficient, depth_coefficient,
-                             depth_divisor, num_repeats):
+def MBconv_block_parameters(block_arg, intro_filters, outro_filters,
+                            W_coefficient, D_coefficient,
+                            D_divisor, repeats):
     """Compute parameters of the MBConv block.
 
     # Arguments
-        width_coefficient: Float, scaling coefficient for network width.
+        W_coefficient: Float, scaling coefficient for network width.
         intro_filters: List, input filters of the blocks.
         outro_filters: List, output filters of the blocks.
-        width_coefficient: Float, scaling coefficient for network width.
-        depth_coefficient: Float, multiplier for the depth of the network.
-        depth_divisor: Int, multiplier for the depth of the network.
-        num_repeats: Int, number of block repeats.
+        W_coefficient: Float, scaling coefficient for network width.
+        D_coefficient: Float, multiplier for the depth of the network.
+        D_divisor: Int, multiplier for the depth of the network.
+        repeats: Int, number of block repeats.
 
     # Returns
         intro_filter: Int rounded block input filter.
@@ -222,19 +220,20 @@ def get_mb_conv_block_params(block_arg, intro_filters, outro_filters,
         repeats: Int rounded repeat of each MBConv block.
 
     """
-    intro_filter = round_filters(intro_filters[block_arg], width_coefficient,
-                                 depth_divisor)
-    outro_filter = round_filters(outro_filters[block_arg], width_coefficient,
-                                 depth_divisor)
-    repeats = round_repeats(num_repeats[block_arg], depth_coefficient)
+    num_intro_filters = intro_filters[block_arg]
+    num_outro_filters = outro_filters[block_arg]
+    intro_filter = round_filters(num_intro_filters, W_coefficient, D_divisor)
+    outro_filter = round_filters(num_outro_filters, W_coefficient, D_divisor)
+
+    repeats = round_repeats(repeats[block_arg], D_coefficient)
 
     return intro_filter, outro_filter, repeats
 
 
-def get_mb_conv_block_features(x, block_id, block_arg, survival_rate,
-                               kernel_sizes, intro_filter, outro_filter,
-                               expand_ratios, strides, repeats,
-                               squeeze_excite_ratio, model_name):
+def MBconv_block_features(x, block_id, block_arg, survival_rate,
+                          kernel_sizes, intro_filter, outro_filter,
+                          expand_ratios, strides, repeats,
+                          squeeze_excite_ratio, model_name):
     """Computes features from a given MBConv block.
 
     # Arguments
@@ -272,8 +271,8 @@ def get_mb_conv_block_features(x, block_id, block_arg, survival_rate,
 
 
 def process_features(x, block_arg, intro_filters, outro_filters,
-                     width_coefficient, depth_coefficient, depth_divisor,
-                     num_repeats, squeeze_excite_ratio, block_id,
+                     W_coefficient, D_coefficient, D_divisor,
+                     repeats, squeeze_excite_ratio, block_id,
                      survival_rate, kernel_sizes, strides, model_name,
                      expand_ratios):
     """Computes features from a given MBConv block.
@@ -282,10 +281,10 @@ def process_features(x, block_arg, intro_filters, outro_filters,
         input_shape: Tuple, shape of the input image.
         intro_filters: List, input filters of the blocks.
         outro_filters: List, output filters of the blocks.
-        width_coefficient: Float, scaling coefficient for network width.
-        depth_coefficient: Float, multiplier for the depth of the network.
-        depth_divisor: Int, multiplier for the depth of the network.
-        num_repeats: Int, number of block repeats.
+        W_coefficient: Float, scaling coefficient for network width.
+        D_coefficient: Float, multiplier for the depth of the network.
+        D_divisor: Int, multiplier for the depth of the network.
+        repeats: Int, number of block repeats.
         squeeze_excite_ratio: Float, squeeze excite block ratio.
         survival_rate: Float, survival probability to drop input convolution
             features.
@@ -298,41 +297,34 @@ def process_features(x, block_arg, intro_filters, outro_filters,
             layer.
         block_id: Int, the block identifier.
     """
-    (intro_filter,
-     outro_filter, repeats) = get_mb_conv_block_params(block_arg,
-                                                       intro_filters,
-                                                       outro_filters,
-                                                       width_coefficient,
-                                                       depth_coefficient,
-                                                       depth_divisor,
-                                                       num_repeats)
+    (intro_filter, outro_filter, repeats) = MBconv_block_parameters(
+        block_arg, intro_filters, outro_filters, W_coefficient,
+        D_coefficient, D_divisor, repeats)
 
-    x, block_id = get_mb_conv_block_features(x, block_id, block_arg,
-                                             survival_rate, kernel_sizes,
-                                             intro_filter, outro_filter,
-                                             expand_ratios, strides, repeats,
-                                             squeeze_excite_ratio, model_name)
+    x, block_id = MBconv_block_features(x, block_id, block_arg,
+                                        survival_rate, kernel_sizes,
+                                        intro_filter, outro_filter,
+                                        expand_ratios, strides, repeats,
+                                        squeeze_excite_ratio, model_name)
 
     return x, block_id
 
 
-def conv_layer_1(image, input_shape, intro_filters, width_coefficient,
-                 depth_divisor, model_name):
+def conv_block_1(image, intro_filters, W_coefficient,
+                 D_divisor, model_name):
     """Construct the first convolutional layer of EfficientNet.
 
     # Arguments
-        input_shape: Tuple, shape of the input image.
         intro_filters: List, input filters for the blocks to construct.
-        width_coefficient: Float, scaling coefficient for network width.
-        depth_divisor: Int, multiplier for the depth of the network.
+        W_coefficient: Float, scaling coefficient for network width.
+        D_divisor: Int, multiplier for the depth of the network.
         model_name: String, name of the EfficientNet backbone
 
     # Returns
         x: A `Tensor` of type `float32` which is the features from this
             layer.
     """
-    image = Input(tensor=image, shape=input_shape, name='image')
-    filters = round_filters(intro_filters[0], width_coefficient, depth_divisor)
+    filters = round_filters(intro_filters[0], W_coefficient, D_divisor)
 
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
                None, False, conv_normal_initializer,
@@ -342,10 +334,10 @@ def conv_layer_1(image, input_shape, intro_filters, width_coefficient,
     return x
 
 
-def MB_conv_blocks(x, kernel_sizes, intro_filters, outro_filters,
-                   width_coefficient, depth_coefficient, depth_divisor,
-                   num_repeats, squeeze_excite_ratio, survival_rate, strides,
-                   model_name, expand_ratios):
+def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters,
+                  W_coefficient, D_coefficient, D_divisor,
+                  repeats, squeeze_excite_ratio, survival_rate, strides,
+                  model_name, expand_ratios):
     """Construct the blocks of MBConv: Mobile Inverted Residual Bottleneck.
 
     # Arguments
@@ -353,9 +345,9 @@ def MB_conv_blocks(x, kernel_sizes, intro_filters, outro_filters,
             EfficientNet blocks.
         intro_filters: List, input filters of the blocks.
         outro_filters: List, output filters of the blocks.
-        depth_coefficient: Float, multiplier for the depth of the network.
-        depth_divisor: Int, multiplier for the depth of the network.
-        num_repeats: Int, number of block repeats.
+        D_coefficient: Float, multiplier for the depth of the network.
+        D_divisor: Int, multiplier for the depth of the network.
+        repeats: Int, number of block repeats.
         squeeze_excite_ratio: Float, squeeze excite block ratio.
         survival_rate: Float, survival probability to drop input convolution
             features.
@@ -369,21 +361,24 @@ def MB_conv_blocks(x, kernel_sizes, intro_filters, outro_filters,
     block_id, features = 0, []
     for block_arg in range(len(kernel_sizes)):
         x, block_id = process_features(
-            x, block_arg, intro_filters, outro_filters, width_coefficient,
-            depth_coefficient, depth_divisor, num_repeats,
+            x, block_arg, intro_filters, outro_filters, W_coefficient,
+            D_coefficient, D_divisor, repeats,
             squeeze_excite_ratio, block_id, survival_rate, kernel_sizes,
             strides, model_name, expand_ratios)
-        if (block_arg < len(kernel_sizes) - 1 and
-                strides[block_arg + 1][0] == 2):
-            features.append(x)
-        elif block_arg == len(kernel_sizes) - 1:
+
+        is_last_block = block_arg == len(kernel_sizes) - 1
+        if not is_last_block:
+            next_block_stride = strides[block_arg + 1][0]
+            if next_block_stride == 2:
+                features.append(x)
+        elif is_last_block:
             features.append(x)
     return features
 
 
-def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
+def EfficientNet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
                  squeeze_excite_ratio=0.25, kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
-                 num_repeats=[1, 2, 2, 3, 3, 4, 1],
+                 repeats=[1, 2, 2, 3, 3, 4, 1],
                  intro_filters=[32, 16, 24, 40, 80, 112, 192],
                  outro_filters=[16, 24, 40, 80, 112, 192, 320],
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
@@ -394,16 +389,16 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
     Initializes an 'Model' instance.
     # Arguments
         model_name: String, name of the EfficientNet backbone
-        width_coefficient: Float, scaling coefficient for network width.
-        depth_coefficient: Float, scaling coefficient for network depth.
+        W_coefficient: Float, scaling coefficient for network width.
+        D_coefficient: Float, scaling coefficient for network depth.
         survival_rate: Float, survival of the final fully connected layer
         units.
         name: A string of layer name.
         num_classes: Int, specifying the number of class in the
         output.
-        depth_divisor: Int, multiplier for the depth of the network.
+        D_divisor: Int, multiplier for the depth of the network.
         kernel_size: Int, kernel size of the conv block filters.
-        num_repeats: Int, number of block repeats.
+        repeats: Int, number of block repeats.
         intro_filters: Int, input filters for the blocks to construct.
         outro_filters: Int, output filters for the blocks to construct.
         expand_ratio: Int, ratio to expand the conv block in repeats.
@@ -414,16 +409,17 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), depth_divisor=8,
         ValueError: when blocks_args is not specified as list.
     """
 
-    assert (num_repeats > np.zeros_like(num_repeats)).sum() == len(num_repeats)
+    assert (repeats > np.zeros_like(repeats)).sum() == len(repeats)
 
-    (width_coefficient, depth_coefficient,
-     survival_rate) = get_efficientnet_scaling_coefficients(model_name)
+    scaling_coefficients = get_scaling_coefficients(model_name)
+    W_coefficient, D_coefficient, survival_rate = scaling_coefficients
 
-    x = conv_layer_1(image, input_shape, intro_filters, width_coefficient,
-                     depth_divisor, model_name)
-    features = MB_conv_blocks(x, kernel_sizes, intro_filters, outro_filters,
-                              width_coefficient, depth_coefficient,
-                              depth_divisor, num_repeats, squeeze_excite_ratio,
-                              survival_rate, strides, model_name,
-                              expand_ratios)
+    image = Input(tensor=image, shape=input_shape, name='image')
+    x = conv_block_1(image, intro_filters, W_coefficient,
+                     D_divisor, model_name)
+    features = MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters,
+                             W_coefficient, D_coefficient,
+                             D_divisor, repeats, squeeze_excite_ratio,
+                             survival_rate, strides, model_name,
+                             expand_ratios)
     return features
