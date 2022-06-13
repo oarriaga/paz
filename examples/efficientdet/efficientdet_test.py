@@ -1,16 +1,16 @@
+import numpy as np
+# from examples.efficientdet.efficientdet_blocks import FeatureNode
+import pytest
 import tensorflow as tf
 from tensorflow.keras import backend as K
-from efficientnet_model import EfficientNet
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import model_from_json
+
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-# from examples.efficientdet.efficientdet_blocks import FeatureNode
-import pytest
-from tensorflow.keras.models import model_from_json
-from efficientnet_model import conv_normal_initializer
 from efficientdet_blocks import FuseFeature
-from tensorflow.keras.layers import Input
-import numpy as np
+from efficientnet_model import EfficientNet, conv_normal_initializer
 
 
 @pytest.fixture

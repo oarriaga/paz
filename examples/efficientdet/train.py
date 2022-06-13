@@ -1,17 +1,18 @@
-import os
 import argparse
+import os
+
 import tensorflow as tf
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
-from paz.optimization.callbacks import LearningRateScheduler
+from paz.abstract import ProcessingSequence
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
-from paz.abstract import ProcessingSequence
-from paz.optimization.callbacks import EvaluateMAP
+from paz.optimization.callbacks import EvaluateMAP, LearningRateScheduler
 from paz.processors import TRAIN, VAL
-from detection import AugmentDetection
-from detection import DetectSingleShot_EfficientDet
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
+from tensorflow.keras.optimizers import SGD
+
+from detection import AugmentDetection, DetectSingleShot_EfficientDet
 from efficientdet import EFFICIENTDETD0
+
 gpus = tf.config.experimental.list_physical_devices('GPU')
 # tf.config.experimental.set_memory_growth(gpus[0], True)
 

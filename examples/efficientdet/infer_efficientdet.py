@@ -1,7 +1,8 @@
-from efficientdet import EFFICIENTDETD0
-from utils import raw_images, efficientdet_preprocess
-from efficientdet_postprocess import efficientdet_postprocess
 from paz.backend.image.opencv_image import write_image
+
+from efficientdet import EFFICIENTDETD0
+from efficientdet_postprocess import efficientdet_postprocess
+from utils import efficientdet_preprocess, raw_images
 
 if __name__ == "__main__":
 

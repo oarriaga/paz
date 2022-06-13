@@ -1,9 +1,11 @@
 import math
+
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import (BatchNormalization, Conv2D,
+                                     DepthwiseConv2D, Input)
+
 from necessary_imports import incrementer
-from tensorflow.keras.layers import (DepthwiseConv2D, Conv2D,
-                                     BatchNormalization, Input)
 
 
 def get_scaling_coefficients(model_name):

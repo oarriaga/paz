@@ -1,7 +1,8 @@
 import numpy as np
 import paz.processors as pr
-import necessary_imports as ni
 from paz.abstract import SequentialProcessor
+
+import necessary_imports as ni
 from utils import get_class_name_efficientdet
 
 

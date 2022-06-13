@@ -2,7 +2,6 @@ import numpy as np
 from paz.abstract import Processor
 from paz.backend.image.opencv_image import resize_image
 
-
 # Taken from efficientdet -> /paz/paz/processors/image.py
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 BGR_IMAGENET_STDEV = (B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV)

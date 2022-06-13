@@ -1,8 +1,9 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, BatchNormalization
-from tensorflow.keras.layers import Conv2D, SeparableConv2D, UpSampling2D
-from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import (BatchNormalization, Conv2D, Layer,
+                                     MaxPooling2D, SeparableConv2D,
+                                     UpSampling2D)
+
 from utils import get_drop_connect
 
 
@@ -16,7 +17,8 @@ def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
         features: List, feature to be processed by ClassNet head.
         num_classes: Integer. Number of classes.
         num_anchors: Integer. Number of anchors.
-        num_filters: Integer. Number of filters for intermediate layers.
+        num_filters: Integer. Number of filters for intermediate
+                     layers.
         min_level: Integer. Minimum level for features.
         max_level: Integer. Maximum level for features.
         repeats: Integer. Number of intermediate layers.
@@ -26,7 +28,8 @@ def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
         with_separable_conv: Bool.
         True to use separable_conv instead of Conv2D.
         return_base: Bool.
-        Build the base feature network only. Excluding final class head.
+        Build the base feature network only. Excluding final
+        class head.
         name: String indicating the name of this layer.
 
     # Returns
@@ -77,7 +80,8 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     # Arguments
         features: List, feature to be processed by BoxNet head.
         num_anchors: Integer. Number of anchors.
-        num_filters: Integer. Number of filters for intermediate layers.
+        num_filters: Integer. Number of filters for intermediate
+                     layers.
         min_level: Integer. Minimum level for features.
         max_level: Integer. Maximum level for features.
         repeats: Integer. Number of intermediate layers.
@@ -87,7 +91,8 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
         with_separable_conv: Bool.
         True to use separable_conv instead of Conv2D.
         return_base: Bool.
-        Build the base feature network only. Excluding final class head.
+        Build the base feature network only. Excluding final
+        class head.
         name: String indicating the name of this layer.
 
     # Returns
@@ -141,7 +146,8 @@ def conv2d_layer(num_filters, kernel_size, padding, activation,
         with_separable_conv: Bool.
         True to use separable_conv instead of Conv2D.
         name: String. Name of conv layer.
-        bias_initializer: String or TF Function. Bias initialization.
+        bias_initializer: String or TF Function. Bias
+                          initialization.
 
     # Returns
         conv2d_layer: TF conv layer.
@@ -169,7 +175,8 @@ def BiFPN(features, num_filters, id, fpn_weight_method):
     features: List, feature to be processed by BiFPN.
     num_filters: Integer. Number of filters for intermediate layers.
     id: Integer. Represents the BiFPN repetition count.
-    fpn_weight_method: String representing the feature fusion method in BiFPN.
+    fpn_weight_method: String representing the feature fusion method
+                       in BiFPN.
 
     # Returns
     features: List, features after BiFPN for the class and box heads.
@@ -255,10 +262,12 @@ class FuseFeature(Layer):
         """
         # Arguments
         inputs: Tensor. Features to be fused.
-        fpn_weight_method: String representing the feature fusion method.
+        fpn_weight_method: String representing the feature fusion
+                           method.
 
         # Returns
-        x: feature after combining by the feature fusion method in BiFPN.
+        x: feature after combining by the feature fusion method in
+           BiFPN.
         """
         if fpn_weight_method == 'fastattention':
             w = tf.keras.activations.relu(self.w)
@@ -277,6 +286,25 @@ class FuseFeature(Layer):
 def propagate_downwards(previous_layer_feature, current_feature, id,
                         fpn_weight_method, depth_idx, features,
                         num_filters):
+    """Propagates features in downward direction starting from the
+    features of top most layer of EfficientNet backbone.
+
+    # Arguments
+        previous_layer_feature :Tensor, feature from the relatively
+                                top layer.
+        current_feature :Tensor, feature from the current layer.
+        id :Int, the ID or index of the BiFPN block.
+        fpn_weight_method :string, String representing the feature
+                           fusion method.
+        depth_idx :Int, the depth of the feature of BiFPN layer.
+        features :List, the features returned from EfficientNet
+                  backbone.
+        num_filters :Int, Number of filters for intermediate layers.
+
+    # Returns
+        current_feature_td: Tensor, tensor resulting from
+                            down propagation in BiFPN layer.
+    """
     is_non_repeated_block = id == 0
     layer_not_P7 = depth_idx > 0
     if is_non_repeated_block and layer_not_P7:
@@ -297,15 +325,41 @@ def propagate_downwards(previous_layer_feature, current_feature, id,
               f'op_after_combine{len(features)+depth_idx}/conv'))(
                                                current_feature_td)
 
-    return BatchNormalization(
+    current_feature_td = BatchNormalization(
         name=(f'fpn_cells/cell_{id}/fnode{depth_idx}/'
               f'op_after_combine{len(features)+depth_idx}/bn'))(
                                              current_feature_td)
+    return current_feature_td
 
 
 def propagate_upwards(current_layer_feature, next_input, next_td, id,
                       feature_tds, depth_idx, fpn_weight_method,
                       num_filters, features):
+    """Propagates features in upward direction starting from the
+    features of bottom most layer of EfficientNet backbone.
+
+    # Arguments
+        current_layer_feature :Tensor, Tensor, feature from the
+                               current layer.
+        next_input :Tensor, Tensor, feature from the relatively
+                    top layer.
+        next_td : Tensor, The feature tensor from the relatively
+                    top layer as result of upward or downward
+                    propagation.
+        id :Int, the ID or index of the BiFPN block.
+        feature_tds: List, the list of features as a result of
+                     upward or downward propagation.
+        depth_idx :Int, the depth of the feature of BiFPN layer.
+        fpn_weight_method :string, String representing the feature
+                           fusion method.
+        num_filters :Int, Number of filters for intermediate layers.
+        features :List, the features returned from EfficientNet
+                  backbone.
+
+    # Returns
+        current_feature_td :Tensor, Tensor, tensor resulting from
+                            upward propagation in BiFPN layer.
+    """
     current_layer_feature_D = MaxPooling2D(3, 2, 'same')(current_layer_feature)
 
     is_non_repeated_block = id == 0
@@ -358,11 +412,29 @@ def propagate_upwards(current_layer_feature, next_input, next_td, id,
     next_out = tf.nn.swish(next_out)
     next_out = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True,
                                name=layer_names[1])(next_out)
-    return BatchNormalization(name=layer_names[2])(next_out)
+    next_out = BatchNormalization(name=layer_names[2])(next_out)
+    return next_out
 
 
 def preprocess_features(depth_idx, input_feature, num_filters,
                         features, id, is_propagate_downwards):
+    """Perform pre-processing on features before applying
+    downward propagation or upward propagation.
+
+    # Arguments
+        depth_idx :Int, the depth of the feature of BiFPN layer.
+        input_feature :Tensor, feature from the current layer.
+        num_filters :Int, Number of filters for intermediate layers.
+        features :List, the features returned from EfficientNet
+                  backbone.
+        id :Int, the ID or index of the BiFPN block.
+        is_propagate_downwards :Bool, Boolean flag indicating if
+                                propagation is in upward or
+                                downward direction.
+
+    # Returns
+        preprocessed_feature: Tensor, the preprocessed feature.
+    """
     is_layer_P7 = depth_idx == 0
 
     if is_propagate_downwards:
@@ -385,26 +457,70 @@ def preprocess_features(depth_idx, input_feature, num_filters,
                            (f'fpn_cells/cell_{id}/fnode{depth_idx}/resample_0_'
                             f'{3-depth_idx}_{len(features)+depth_idx}/bn')]
 
-            return preprocess_features_partly(input_feature, num_filters,
-                                              layer_names)
+            preprocessed_feature = preprocess_features_partly(
+                                                    input_feature, num_filters,
+                                                    layer_names)
+            return preprocessed_feature
     else:
         layer_names = [(f'fpn_cells/cell_{id}/fnode{len(features)-1+depth_idx}'
                         f'/resample_0_{1+depth_idx}_{9+depth_idx}/conv2d'),
                        (f'fpn_cells/cell_{id}/fnode{len(features)-1+depth_idx}'
                         f'/resample_0_{1+depth_idx}_{9+depth_idx}/bn')]
 
-        return preprocess_features_partly(input_feature, num_filters,
-                                          layer_names)
+        preprocessed_feature = preprocess_features_partly(input_feature,
+                                                          num_filters,
+                                                          layer_names)
+        return preprocessed_feature
 
 
 def preprocess_features_partly(input_feature, num_filters, layer_names):
+    """Perform a part of feature preprocessing such as
+    applying Conv2D and BatchNormalization.
+
+    # Arguments
+        input_feature :Tensor, feature from the current layer.
+        num_filters :Int, Number of filters for intermediate layers.
+        layer_names :List, name of the layers.
+
+    # Returns
+        partly_processed_feature: Tensor, the partly preprocessed
+                                  feature.
+    """
     partly_processed_feature = Conv2D(num_filters, 1, 1, 'same',
                                       name=layer_names[0])(input_feature)
-    return BatchNormalization(name=layer_names[1])(partly_processed_feature)
+    partly_processed_feature = BatchNormalization(name=layer_names[1])(
+                                                partly_processed_feature)
+    return partly_processed_feature
 
 
 def compute_next_input(id, features, feature_tds, depth_idx,
                        P6_in, P7_in, next_input, next_td):
+    """Computes next input feature for upward propagation.
+
+    # Arguments
+        id :Int, the ID or index of the BiFPN block.
+        features :List, the features returned from EfficientNet
+                  backbone.
+        feature_tds :Tensor, the feature resulting for upward
+                     or downward propagation.
+        depth_idx :Int, the depth of the feature of BiFPN layer.
+        P6_in :Tensor, the output tensor from the P6 layer
+               of EfficientNet.
+        P7_in :Tensor, the output tensor from the P7 layer
+               of EfficientNet.
+        next_input :Tensor, the feature tensor from the relatively
+                    top layer.
+        next_td :Tensor, the feature tensor from the relatively
+                    top layer as result of upward or downward
+                    propagation.
+
+    # Returns
+        next_input :Tensor, the next input feature for upward
+                    propagation.
+        next_td :Tensor, the next input feature for upward
+                    propagation generated from previous iteration of
+                    upward propagation.
+    """
     is_non_repeating_block = id == 0
 
     if is_non_repeating_block:

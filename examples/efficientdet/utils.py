@@ -1,14 +1,12 @@
-import tensorflow as tf
 import paz.processors as pr
-import necessary_imports as ni
-from paz.abstract import SequentialProcessor
-from paz.processors.image import LoadImage
-from paz.processors.image import RGB_IMAGENET_MEAN
-from necessary_imports import RGB_IMAGENET_STDEV
-from tensorflow.keras.layers import Flatten, Concatenate
-from tensorflow.keras.layers import Reshape, Activation
+import tensorflow as tf
 import tensorflow.keras.backend as K
+from paz.abstract import SequentialProcessor
+from paz.processors.image import RGB_IMAGENET_MEAN, LoadImage
+from tensorflow.keras.layers import Activation, Concatenate, Flatten, Reshape
 
+import necessary_imports as ni
+from necessary_imports import RGB_IMAGENET_STDEV
 
 # Mock input image.
 file_name = ('/home/manummk95/Desktop/efficientdet_BKP/paz/'

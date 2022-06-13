@@ -1,9 +1,9 @@
 from paz import processors as pr
-from paz.abstract import SequentialProcessor, Processor
-from processors import MatchBoxes
-from utils import efficientdet_preprocess
+from paz.abstract import Processor, SequentialProcessor
+
 from efficientdet_postprocess import process_outputs
-from utils import get_class_name_efficientdet
+from processors import MatchBoxes
+from utils import efficientdet_preprocess, get_class_name_efficientdet
 
 
 class AugmentImage(SequentialProcessor):
