@@ -195,7 +195,7 @@ class VideoPlayer(object):
             fourCC: String. Indicates the four character code of the video.
             e.g. XVID, MJPG, X264.
         """
-        self.start()
+        self.camera.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
@@ -208,6 +208,43 @@ class VideoPlayer(object):
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        self.stop()
+        self.camera.stop()
+        writer.release()
+        cv2.destroyAllWindows()
+
+    def record_from_file(self, video_file_path, name='video.avi',
+                         fps=20, fourCC='XVID'):
+        """Load video and records continuous inference using ``pipeline``.
+
+        # Arguments
+            video_file_path: String. Path to the video file.
+            name: String. Output video name. Must include the postfix .avi.
+            fps: Int. Frames per second.
+            fourCC: String. Indicates the four character code of the video.
+            e.g. XVID, MJPG, X264.
+        """
+
+        fourCC = cv2.VideoWriter_fourcc(*fourCC)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+
+        video = cv2.VideoCapture(video_file_path)
+        if (video.isOpened() is False):
+            print("Error opening video  file")
+
+        while(video.isOpened()):
+            is_frame_received, frame = video.read()
+            if not is_frame_received:
+                print("Frame not received. Exiting ...")
+                break
+            if is_frame_received is True:
+                output = self.pipeline(frame)
+                if output is None:
+                    continue
+                image = resize_image(output['image'], tuple(self.image_size))
+                show_image(image, 'inference', wait=False)
+                writer.write(image)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
         writer.release()
         cv2.destroyAllWindows()
