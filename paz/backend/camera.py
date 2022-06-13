@@ -195,7 +195,7 @@ class VideoPlayer(object):
             fourCC: String. Indicates the four character code of the video.
             e.g. XVID, MJPG, X264.
         """
-        self.start()
+        self.camera.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
@@ -208,6 +208,6 @@ class VideoPlayer(object):
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        self.stop()
+        self.camera.stop()
         writer.release()
         cv2.destroyAllWindows()
