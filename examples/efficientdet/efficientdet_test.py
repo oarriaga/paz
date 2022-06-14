@@ -1,7 +1,28 @@
+import numpy as np
+# from examples.efficientdet.efficientdet_blocks import FeatureNode
+import pytest
 import tensorflow as tf
-from efficientnet_model import EfficientNet
-from efficientdet import EFFICIENTDETD0
-from examples.efficientdet.efficientdet_blocks import FeatureNode
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import model_from_json
+
+from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
+                          EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
+                          EFFICIENTDETD6, EFFICIENTDETD7)
+from efficientdet_blocks import FuseFeature
+from efficientnet_model import EfficientNet, conv_normal_initializer
+
+
+@pytest.fixture
+def models_base_path():
+    return ("/home/manummk95/Desktop/efficientdet_working/"
+            "required/test_files/efficientdet_architectures/")
+
+
+@pytest.fixture
+def model_input_output_base_path():
+    return ("/home/manummk95/Desktop/efficientdet_working/"
+            "required/test_files/test_model_outputs/")
 
 
 def get_test_images(image_size, batch_size=1):
@@ -27,6 +48,7 @@ def test_efficientdet_model():
     images = get_test_images(image_size)
     output_shape = list(detector(images).shape)
     assert output_shape == expected_output_shape, 'Class outputs length fail'
+    del detector
 
 
 def test_efficientnet_model():
@@ -34,14 +56,15 @@ def test_efficientnet_model():
     images = get_test_images(image_size)
     features = EfficientNet(images, 'efficientnet-b0', (512, 512, 3))
     assert len(features) == 5, 'EfficientNet model features length mismatch'
+    del features
 
 
 def test_efficientnet_bottleneck_block():
     images = get_test_images(128, 10)
     output_shape = EfficientNet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
-        kernel_sizes=[3], num_repeats=[3], input_filters=[3],
-        output_filters=[6], expand_ratios=[6])[0].shape
+        kernel_sizes=[3], repeats=[3], intro_filters=[3],
+        outro_filters=[6], expand_ratios=[6])[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
@@ -50,55 +73,152 @@ def test_efficientnet_se_block():
     images = get_test_images(128, 10)
     output_shape = EfficientNet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
-        kernel_sizes=[3], num_repeats=[3], input_filters=[3],
-        output_filters=[6], expand_ratios=[6],
+        kernel_sizes=[3], repeats=[3], intro_filters=[3],
+        outro_filters=[6], expand_ratios=[6],
         squeeze_excite_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
-def test_feature_fusion_sum():
-    nodes1 = tf.constant([1, 3])
-    nodes2 = tf.constant([1, 3])
-    feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False, 'sum',
-                               None)
-    output_node = feature_node.fuse_features([nodes1, nodes2])
-    expected_node = tf.constant([2, 6], dtype=tf.int32)
-    check_equality = tf.math.equal(output_node, expected_node)
-    check_flag = tf.reduce_all(check_equality)
-    assert check_flag, 'Feature fusion - \'sum\' mismatch'
+@pytest.mark.parametrize(('input_shape, backbone, feature_shape,'
+                          'feature_channels'),
+                         [
+                             (512,  'efficientnet-b0', (256, 128, 64, 32, 16),
+                              (16, 24, 40, 112, 320)),
+                             (640,  'efficientnet-b1', (320, 160, 80, 40, 20),
+                              (16, 24, 40, 112, 320)),
+                             (768,  'efficientnet-b2', (384, 192, 96, 48, 24),
+                              (16, 24, 48, 120, 352)),
+                             (896,  'efficientnet-b3', (448, 224, 112, 56, 28),
+                              (24, 32, 48, 136, 384)),
+                             (1024, 'efficientnet-b4', (512, 256, 128, 64, 32),
+                              (24, 32, 56, 160, 448)),
+                             (1280, 'efficientnet-b5', (640, 320, 160, 80, 40),
+                              (24, 40, 64, 176, 512)),
+                             (1280, 'efficientnet-b6', (640, 320, 160, 80, 40),
+                              (32, 40, 72, 200, 576)),
+                             (1536, 'efficientnet-b6', (768, 384, 192, 96, 48),
+                              (32, 40, 72, 200, 576))
+                         ])
+def test_efficientnet_features(input_shape, backbone, feature_shape,
+                               feature_channels):
+    shape = (input_shape, input_shape, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EfficientNet(image, backbone, shape)
+    assert len(branch_tensors) == 5, "Number of features mismatch"
+    for branch_tensor, feature_shape_per_tensor, feature_channel  \
+            in zip(branch_tensors, feature_shape, feature_channels):
+        target_shape = (None, feature_shape_per_tensor,
+                        feature_shape_per_tensor, feature_channel)
+        assert branch_tensor.shape == target_shape, ("Shape of features"
+                                                     "mismatch")
+    del branch_tensors
 
 
-def test_feature_fusion_attention():
-    nodes1 = tf.constant([1, 3], dtype=tf.float32)
-    nodes2 = tf.constant([1, 3], dtype=tf.float32)
-    feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False,
-                               'attention', None)
-    feature_node.build((10, 128, 128, 3))
-    output_node = feature_node.fuse_features([nodes1, nodes2])
-    expected_node = tf.constant([1.0, 3.0], dtype=tf.float32)
-    check_equality = tf.math.equal(output_node, expected_node)
-    check_flag = tf.reduce_all(check_equality)
-    assert check_flag, 'Feature fusion - attention method mismatch'
+@pytest.mark.parametrize('implemented_model, model_id',
+                         [
+                             (EFFICIENTDETD0, 0),
+                             (EFFICIENTDETD1, 1),
+                             (EFFICIENTDETD2, 2),
+                             (EFFICIENTDETD3, 3),
+                             (EFFICIENTDETD4, 4),
+                             (EFFICIENTDETD5, 5),
+                             (EFFICIENTDETD6, 6),
+                             (EFFICIENTDETD7, 7),
+                         ])
+def test_efficientdet_architecture(models_base_path,
+                                   implemented_model,
+                                   model_id):
+    custom_objects = {"conv_normal_initializer": conv_normal_initializer,
+                      "FuseFeature": FuseFeature}
+    K.clear_session()
+    reference_model_path = (models_base_path + 'EFFICIENTDETD' +
+                            str(model_id) + '.json')
+    reference_model_file = open(reference_model_path, 'r')
+    loaded_model_json = reference_model_file.read()
+    reference_model_file.close()
+    reference_model = model_from_json(loaded_model_json,
+                                      custom_objects=custom_objects)
+    K.clear_session()
+    assert (implemented_model().get_config() ==
+            reference_model.get_config()), ('EFFICIENTDETD' + str(model_id)
+                                            + " architecture mismatch")
+    del implemented_model, reference_model
 
 
-def test_feature_fusion_fastattention():
-    nodes1 = tf.constant([1, 3], dtype=tf.float32)
-    nodes2 = tf.constant([1, 3], dtype=tf.float32)
-    feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False,
-                               'fastattention', None)
-    feature_node.build((10, 128, 128, 3))
-    output_node = feature_node.fuse_features([nodes1, nodes2])
-    expected_node = tf.constant([0.99995005, 2.9998503], dtype=tf.float32)
-    check_equality = tf.math.equal(output_node, expected_node)
-    check_flag = tf.reduce_all(check_equality)
-    assert check_flag, 'Feature fusion - fastattention method mismatch'
+@pytest.mark.parametrize('model, model_idx, preprocessed_inputs',
+                         [
+                             (EFFICIENTDETD0, 0, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD1, 1, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD2, 2, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD3, 3, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD4, 4, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD5, 5, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD6, 6, (1, 2, 3, 4, 5)),
+                             (EFFICIENTDETD7, 7, (1, 2, 3, 4, 5))
+                         ])
+def test_efficientdet_result(model_input_output_base_path, model,
+                             model_idx, preprocessed_inputs):
+    for preprocessed_input_idx in preprocessed_inputs:
+        preprocessed_input_file = model_input_output_base_path + \
+            'EFFICIENTDETD' + str(model_idx) + '/inputs/test_image_' + \
+            str(preprocessed_input_idx) + '.npy'
+        with open(preprocessed_input_file, 'rb') as f:
+            preprocessed_input = np.load(f)
+
+        target_model_output_file = model_input_output_base_path + \
+            'EFFICIENTDETD' + str(model_idx) + '/outputs/model_output_' + \
+            str(preprocessed_input_idx) + '.npy'
+        with open(target_model_output_file, 'rb') as f:
+            target_model_output = np.load(target_model_output_file)
+
+        assert np.all(model()(preprocessed_input).numpy() ==
+                      target_model_output), 'Model result not as expected'
+    del model
+
+# def test_feature_fusion_sum():
+#     nodes1 = tf.constant([1, 3])
+#     nodes2 = tf.constant([1, 3])
+#     feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False, 'sum',
+#                                None)
+#     output_node = feature_node.fuse_features([nodes1, nodes2])
+#     expected_node = tf.constant([2, 6], dtype=tf.int32)
+#     check_equality = tf.math.equal(output_node, expected_node)
+#     check_flag = tf.reduce_all(check_equality)
+#     assert check_flag, 'Feature fusion - \'sum\' mismatch'
 
 
-test_efficientdet_model()
-test_efficientnet_model()
-test_efficientnet_bottleneck_block()
-test_efficientnet_se_block()
-test_feature_fusion_sum()
-test_feature_fusion_attention()
-test_feature_fusion_fastattention()
+# def test_feature_fusion_attention():
+#     nodes1 = tf.constant([1, 3], dtype=tf.float32)
+#     nodes2 = tf.constant([1, 3], dtype=tf.float32)
+#     feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False,
+#                                'attention', None)
+#     feature_node.build((10, 128, 128, 3))
+#     output_node = feature_node.fuse_features([nodes1, nodes2])
+#     expected_node = tf.constant([1.0, 3.0], dtype=tf.float32)
+#     check_equality = tf.math.equal(output_node, expected_node)
+#     check_flag = tf.reduce_all(check_equality)
+#     assert check_flag, 'Feature fusion - attention method mismatch'
+
+
+# def test_feature_fusion_fastattention():
+#     nodes1 = tf.constant([1, 3], dtype=tf.float32)
+#     nodes2 = tf.constant([1, 3], dtype=tf.float32)
+#     feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False,
+#                                'fastattention', None)
+#     feature_node.build((10, 128, 128, 3))
+#     output_node = feature_node.fuse_features([nodes1, nodes2])
+#     expected_node = tf.constant([0.99995005, 2.9998503], dtype=tf.float32)
+#     check_equality = tf.math.equal(output_node, expected_node)
+#     check_flag = tf.reduce_all(check_equality)
+#     assert check_flag, 'Feature fusion - fastattention method mismatch'
+
+
+# test_efficientdet_model()
+# test_efficientnet_model()
+# test_efficientnet_bottleneck_block()
+# test_efficientnet_se_block()
+# test_all_efficientdet_models(get_model_path)
+# test_feature_fusion_sum()
+# test_feature_fusion_attention()
+# test_feature_fusion_fastattention()

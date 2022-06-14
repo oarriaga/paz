@@ -1,14 +1,13 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
-from anchors import get_prior_boxes
-from efficientdet_blocks import ClassNet, BoxNet
-from utils import create_multibox_head
-from efficientnet_model import EfficientNet
-from efficientdet_blocks import BiFPN
 
+from anchors import get_prior_boxes
+from efficientdet_blocks import BiFPN, BoxNet, ClassNet
+from efficientnet_model import EfficientNet
+from utils import create_multibox_head
 
 WEIGHT_PATH = (
-    '/media/deepan/externaldrive1/project_repos/paz_versions/paz/weights/')
+    '/home/manummk95/Desktop/efficientdet_working/required/weights/')
 
 
 def EfficientDet(num_classes, base_weights, head_weights, input_shape,

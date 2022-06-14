@@ -1,10 +1,11 @@
-
 from paz import processors as pr
-from paz.abstract import SequentialProcessor, Processor
-from processors import MatchBoxes
-from utils import efficientdet_preprocess
+from paz.abstract import Processor, SequentialProcessor
+
+import necessary_imports as ni
 from efficientdet_postprocess import process_outputs
-from utils import get_class_name_efficientdet
+from processors import MatchBoxes
+from utils import efficientdet_preprocess, get_class_name_efficientdet
+
 
 class AugmentImage(SequentialProcessor):
     """Augments an RGB image by randomly changing contrast, brightness
@@ -33,7 +34,7 @@ class PreprocessImage(SequentialProcessor):
         self.add(pr.ResizeImage(shape))
         self.add(pr.CastImage(float))
         self.add(pr.SubtractMeanImage(pr.RGB_IMAGENET_MEAN))
-        self.add(pr.DivideStandardDeviationImage(pr.RGB_IMAGENET_STDEV))
+        self.add(ni.DivideStandardDeviationImage(ni.RGB_IMAGENET_STDEV))
         # if mean is None:
         #     self.add(pr.NormalizeImage())
         # else:
@@ -145,7 +146,7 @@ class DetectSingleShot_EfficientDet(Processor):
         postprocessing = SequentialProcessor(
             [pr.Squeeze(axis=None),
              pr.DecodeBoxes(self.model.prior_boxes, variances=[1, 1, 1, 1]),
-             pr.ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
+             ni.ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
              pr.FilterBoxes(get_class_name_efficientdet('VOC'), 0.4)])
         outputs = postprocessing(outputs)
         draw_boxes2D = pr.DrawBoxes2D(get_class_name_efficientdet('VOC'))

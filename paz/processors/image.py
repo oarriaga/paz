@@ -19,14 +19,16 @@ from ..backend.image import make_random_plain_image
 from ..backend.image import concatenate_alpha_mask
 from ..backend.image import draw_filled_polygon
 from ..backend.image import gaussian_image_blur
+from ..backend.image import normalized_device_coordinates_to_image
+from ..backend.image import image_to_normalized_device_coordinates
+from ..backend.image import replace_lower_than_threshold
+from ..backend.image import BILINEAR, CUBIC
+from ..backend.image.tensorflow_image import imagenet_preprocess_input
 
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
 RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
-B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3 , 57.1, 58.4
-BGR_IMAGENET_STDEV = (B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV)
-RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
 
 
 class CastImage(Processor):
@@ -174,12 +176,13 @@ class ResizeImage(Processor):
     # Arguments
         size: List of two ints.
     """
-    def __init__(self, shape):
+    def __init__(self, shape, method=BILINEAR):
         self.shape = shape
+        self.method = method
         super(ResizeImage, self).__init__()
 
     def call(self, image):
-        return resize_image(image, self.shape)
+        return resize_image(image, self.shape, self.method)
 
 
 class ResizeImages(Processor):
@@ -437,61 +440,60 @@ class RandomImageCrop(Processor):
         return cropped_image
 
 
-class DivideStandardDeviationImage(Processor):
-    """Divide channel-wise standard deviation to image.
-
-    # Arguments
-        mean: List of length 3, containing the channel-wise mean.
+class ImageToNormalizedDeviceCoordinates(Processor):
+    """Map image value from [0, 255] -> [-1, 1].
     """
-    def __init__(self, standard_deviation):
-        self.standard_deviation = standard_deviation
-        super(DivideStandardDeviationImage, self).__init__()
+    def __init__(self):
+        super(ImageToNormalizedDeviceCoordinates, self).__init__()
 
     def call(self, image):
-        return image / self.standard_deviation
+        return image_to_normalized_device_coordinates(image)
 
 
-class ScaledResize(Processor):
-    """Resizes image by returning the scales to original image.
-
-    # Arguments
-        image_size: Int, desired size of the model input.
-
-    # Returns
-        output_images: Numpy array, image resized to match
-        image size.
-        image_scales: Numpy array, scale to reconstruct the
-        raw image from the output_images.
+class NormalizedDeviceCoordinatesToImage(Processor):
+    """Map normalized value from [-1, 1] -> [0, 255].
     """
-    def __init__(self, image_size):
-        self.image_size = image_size
-        super(ScaledResize, self).__init__()
+    def __init__(self):
+        super(NormalizedDeviceCoordinatesToImage, self).__init__()
 
     def call(self, image):
-        """
-        # Arguments
-            image: Numpy array, raw input image.
-        """
-        crop_offset_y = np.array(0)
-        crop_offset_x = np.array(0)
-        height = np.array(image.shape[0]).astype('float32')
-        width = np.array(image.shape[1]).astype('float32')
-        image_scale_y = np.array(self.image_size).astype('float32') / height
-        image_scale_x = np.array(self.image_size).astype('float32') / width
-        image_scale = np.minimum(image_scale_x, image_scale_y)
-        scaled_height = (height * image_scale).astype('int32')
-        scaled_width = (width * image_scale).astype('int32')
-        scaled_image = resize_image(image, (scaled_width, scaled_height))
-        scaled_image = scaled_image[
-                       crop_offset_y: crop_offset_y + self.image_size,
-                       crop_offset_x: crop_offset_x + self.image_size,
-                       :]
-        output_images = np.zeros((self.image_size,
-                                  self.image_size,
-                                  image.shape[2]))
-        output_images[:scaled_image.shape[0],
-        :scaled_image.shape[1],
-        :scaled_image.shape[2]] = scaled_image
-        image_scale = 1 / image_scale
-        output_images = output_images[np.newaxis]
-        return output_images, image_scale
+        return normalized_device_coordinates_to_image(image)
+
+
+class ReplaceLowerThanThreshold(Processor):
+    def __init__(self, threshold=1e-8, replacement=0.0):
+        super(ReplaceLowerThanThreshold, self).__init__()
+        self.threshold = threshold
+        self.replacement = replacement
+
+    def call(self, values):
+        return replace_lower_than_threshold(
+            values, self.threshold, self.replacement)
+
+
+class GetNonZeroValues(Processor):
+    def __init__(self):
+        super(GetNonZeroValues, self).__init__()
+
+    def call(self, array):
+        channel_wise_sum = np.sum(array, axis=2)
+        non_zero_arguments = np.nonzero(channel_wise_sum)
+        return array[non_zero_arguments]
+
+
+class GetNonZeroArguments(Processor):
+    def __init__(self):
+        super(GetNonZeroArguments, self).__init__()
+
+    def call(self, array):
+        channel_wise_sum = np.sum(array, axis=2)
+        non_zero_rows, non_zero_columns = np.nonzero(channel_wise_sum)
+        return non_zero_rows, non_zero_columns
+
+
+class ImagenetPreprocessInput(Processor):
+    def __init__(self):
+        super(ImagenetPreprocessInput, self).__init__()
+
+    def call(self, image):
+        return imagenet_preprocess_input(image)
