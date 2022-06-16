@@ -65,8 +65,9 @@ class AugmentDetection(SequentialProcessor):
         super(AugmentDetection, self).__init__()
         # image processors
         self.augment_image = AugmentImage()
-        self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
+        # self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
         self.preprocess_image = PreprocessImage((size, size), mean)
+        self.preprocess_image.insert(0, pr.ConvertColorSpace(pr.RGB2BGR))
 
         # box processors
         self.augment_boxes = AugmentBoxes()

@@ -1,14 +1,18 @@
+import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 from paz.models import SSD300
 from paz.pipelines import DetectSingleShot
 from paz.backend.camera import VideoPlayer, Camera
+from model import SSD512Custom
 
+# weights_path = 'experiments/ADAM_WEIGHTS.hdf5'
+weights_path = 'experiments/SSD512Custom_RUN_00_13-06-2022_08-10-10/model_weights.hdf5'
 
-# weights_path = 'experiments/SSD300_RUN_00_07-06-2022_13-17-39/model_weights.hdf5'
-weights_path = 'experiments/SSD300_RUN_00_08-06-2022_10-52-57/model_weights.hdf5'
 class_names = ['background', 'hand']
-model = SSD300(len(class_names), None, None)
+model = SSD512Custom(2)
+# model = SSD300(len(class_names), None, None)
 model.load_weights(weights_path)
-score_thresh = 0.2
+score_thresh = 0.4
 
 nms_thresh = 0.45
 detect = DetectSingleShot(model, class_names, score_thresh, nms_thresh)

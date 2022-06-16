@@ -3,7 +3,8 @@ import json
 import argparse
 from datetime import datetime
 
-from tensorflow.keras.optimizers import SGD
+# from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import (
     CSVLogger, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau)
 
@@ -20,7 +21,7 @@ DEFAULT_DATA_PATH = os.path.join(root_path, 'hand_dataset/hand_dataset/')
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('--batch_size', default=18, type=int,
+parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--evaluation_frequency', default=10, type=int,
                     help='evaluation frequency')
@@ -65,7 +66,7 @@ ego_data = data_manager.load_data()
 datasets[0].extend(ego_data)
 """
 
-path = os.path.join(root_path, '/home/octavio/fiftyone/open-images-v6/')
+path = os.path.join(root_path, '/home/octavio/Datasets/fiftyone/open-images-v6/')
 data_managers, datasets = [], []
 for split in [pr.TRAIN, pr.VAL, pr.TEST]:
     data_manager = OpenImagesV6(path, split, ['background', 'Human hand'])
@@ -76,12 +77,20 @@ for split in [pr.TRAIN, pr.VAL, pr.TEST]:
 
 # instantiating model
 num_classes = data_managers[0].num_classes
+from model import SSD512Custom
+
+model = SSD512Custom(num_classes, trainable_base=True)
+"""
 model = SSD300(num_classes, base_weights='VOC', head_weights=None,
-               trainable_base=False)
+               trainable_base=True)
+model.load_weights('experiments/SSD300_RUN_00_10-06-2022_16-55-40/model_weights.hdf5')
+"""
+size = model.input_shape[1]
 
 
 # Instantiating loss and metrics
-optimizer = SGD(args.learning_rate, args.momentum)
+# optimizer = SGD(args.learning_rate, args.momentum)
+optimizer = Adam(args.learning_rate, amsgrad=True)
 loss = MultiBoxLoss()
 metrics = {'boxes': [loss.localization,
                      loss.positive_classification,
@@ -91,8 +100,11 @@ model.compile(optimizer, loss.compute_loss, metrics)
 # build augmentation pipelines
 augmentators = []
 for split in [pr.TRAIN, pr.VAL]:
-    augmentator = AugmentDetection(model.prior_boxes, split, num_classes)
+    augmentator = AugmentDetection(model.prior_boxes, split, num_classes, size)
     augmentators.append(augmentator)
+
+# EXPERIMENTAL: removes RandomSampleCrop
+augmentators[0].augment_boxes.pop(2)
 
 # build sequencers
 sequencers = []

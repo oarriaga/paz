@@ -82,7 +82,7 @@ class HandDataset(Loader):
 
 if __name__ == '__main__':
     root_path = os.path.expanduser('~')
-    path = os.path.join(root_path, 'hand_dataset/hand_dataset/')
+    path = os.path.join(root_path, 'Datasets/hand_dataset/')
     data_manager = HandDataset(path, pr.TRAIN)
     data = data_manager.load_data()
 

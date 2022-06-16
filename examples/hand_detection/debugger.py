@@ -7,7 +7,8 @@ from paz import processors as pr
 from paz.models import SSD300
 from paz.pipelines import AugmentDetection
 
-from hand_dataset import HandDataset
+# from hand_dataset import HandDataset
+from open_images import OpenImagesV6
 
 batch_size = 32
 num_classes = 2
@@ -16,7 +17,8 @@ class_names = ['background', 'hand']
 
 root_path = os.path.expanduser('~')
 data_path = os.path.join(root_path, 'hand_dataset/hand_dataset/')
-data_manager = HandDataset(data_path, pr.TRAIN)
+data_path = os.path.join(root_path, '/home/octavio/fiftyone/open-images-v6/')
+data_manager = OpenImagesV6(data_path, pr.TRAIN, ['background', 'Human hand'])
 data = data_manager.load_data()
 model = SSD300(num_classes, base_weights='VGG',
                head_weights=None, trainable_base=False)
@@ -52,7 +54,7 @@ class ShowBoxes(pr.Processor):
 
 show_boxes = ShowBoxes(class_names, model.prior_boxes)
 
-batch = sequence.__getitem__(100)
+batch = sequence.__getitem__(65)
 for sample_arg in range(batch_size):
     batch_images, batch_boxes = batch[0]['image'], batch[1]['boxes']
     image, boxes = batch_images[sample_arg], batch_boxes[sample_arg]

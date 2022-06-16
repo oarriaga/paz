@@ -6,7 +6,7 @@ We use the recommended tool for downloading specific classes from the OpenImages
 
 This requires to install the fiftyone download API:
 ```
-pip install --user fiftyone --user
+pip install --user fiftyone 
 ```
 
 Now you can call this simple script to download the partial set for hands
@@ -22,5 +22,8 @@ pip uninstall opencv-python-headless
 
 
 ## TODO
-Integrate the following dataset:
-    - http://vision.soic.indiana.edu/projects/egohands/
+- Update prior boxes with training bounding boxes
+
+SSD512 + unfrozen base (+updated prior boxes) with a batch size 32 on OpenImagesV6 dataset
+
+
