@@ -203,22 +203,25 @@ def apply_NMS(class_ids, scores, refined_rois, keep,
         detection_max_instances
         detection_nms_threshold
     """
+    global max_instances, nms_threshold, pre_nms_elements, keeps
 
     pre_nms_class_ids = tf.gather(class_ids, keep)
     pre_nms_scores = tf.gather(scores, keep)
     pre_nms_rois = tf.gather(refined_rois, keep)
     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
-
     pre_nms_elements = [pre_nms_class_ids, pre_nms_scores, pre_nms_rois]
 
-    nms_keep=[]
-    for arg in [unique_pre_nms_class_ids]:
-        nms_value = NMS_map(pre_nms_elements, keep, arg,
-                            detection_max_instances, detection_nms_threshold)
-        nms_keep.append(nms_value)
-    nms_keep = tf.stack(nms_keep)
-    nms_keep= tf.dtypes.cast(nms_keep, tf.int64)
+    max_instances = detection_max_instances
+    nms_threshold = detection_nms_threshold
+    keeps = keep
+
+    nms_keep = tf.map_fn(NMS_map_call,unique_pre_nms_class_ids,dtype=tf.int64)
     return merge_results(nms_keep)
+
+
+def NMS_map_call(xx):
+    return NMS_map(pre_nms_elements, keeps, xx, max_instances,
+                   nms_threshold)
 
 
 def merge_results(nms_keep):
