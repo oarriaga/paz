@@ -10,7 +10,6 @@ def box_refinement(box, prior_box):
         box: [N, (y_min, x_min, y_max, x_max)]
         prior_box: Ground-truth box [N, (y_min, x_min, y_max, x_max)]
     """
-
     box = tf.cast(box, tf.float32)
     prior_box = tf.cast(prior_box, tf.float32)
     x_box = box[:, 0]
@@ -43,7 +42,6 @@ def trim_zeros(boxes, name='trim_zeros'):
         boxes: [N, 4] matrix of boxes.
         non_zeros: [N] a 1D boolean mask identifying the rows to keep
     """
-
     non_zeros = tf.cast(tf.reduce_sum(tf.abs(boxes), axis=1), tf.bool)
     boxes = tf.boolean_mask(boxes, non_zeros, name=name)
     return boxes, non_zeros
@@ -59,7 +57,6 @@ def slice_batch(inputs, constants, function, batch_size, names=None):
         batch_size: number of slices to divide the data into.
         names: If provided, assigns names to the resulting tensors.
     """
-
     if not isinstance(inputs, list):
         inputs = [inputs]
     outputs = []
@@ -99,7 +96,6 @@ def apply_box_deltas(boxes, deltas):
         boxes: [N, (y_min, x_min, y_max, x_max)] boxes to update
         deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
     """
-
     H = boxes[:, 2] - boxes[:, 0]
     W = boxes[:, 3] - boxes[:, 1]
     center_y = boxes[:, 0] + (0.5 * H)
@@ -140,7 +136,6 @@ def clip_boxes(boxes, window):
 
     clipped = tf.concat([y_min, x_min, y_max, x_max], axis=1,
                         name='clipped_boxes')
-
     #clipped.set_shape((clipped.shape[0], 4))     #TODO: Check impact during trianing
     return clipped
 
@@ -154,7 +149,6 @@ def get_top_detections(scores, keep, nms_keep, detection_max_instances):
         nms_keep
         detection_max_instances
     """
-
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
                                 tf.expand_dims(nms_keep, 0))
 
@@ -177,7 +171,6 @@ def NMS_map(box_data, keep, unique_class_id,
         detection_max_instances
         detection_nms_threshold
     """
-
     class_ids, scores, rois = box_data
     ids = tf.where(tf.equal(class_ids, unique_class_id))[:, 0]
 
@@ -215,7 +208,7 @@ def apply_NMS(class_ids, scores, refined_rois, keep,
     nms_threshold = detection_nms_threshold
     keeps = keep
 
-    nms_keep = tf.map_fn(NMS_map_call,unique_pre_nms_class_ids,dtype=tf.int64)
+    nms_keep = tf.map_fn(NMS_map_call, unique_pre_nms_class_ids, dtype=tf.int64)
     return merge_results(nms_keep)
 
 
@@ -230,7 +223,6 @@ def merge_results(nms_keep):
     # Arguments:
         nms_keep
     """
-
     nms_keep = tf.reshape(nms_keep, [-1])
     return tf.gather(nms_keep, tf.where(nms_keep > -1)[:, 0])
 
@@ -243,7 +235,6 @@ def filter_low_confidence(class_scores, keep, detection_min_confidence):
         keep
         detection_min_confidence
     """
-
     confidence = tf.where(class_scores >= detection_min_confidence)[:, 0]
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
                                 tf.expand_dims(confidence, 0))
@@ -257,9 +248,86 @@ def zero_pad_detections(detections, detection_max_instances):
         detections
         detection_max_instances
     """
-
     gap = detection_max_instances - tf.shape(detections)[0]
     return tf.pad(detections, [(0, gap), (0, 0)], 'CONSTANT')
+
+
+def compute_delta_specific(probs, deltas):
+    """Used by Detection Layer
+
+    # Arguments:
+        rois
+        deltas
+        windows
+    """
+    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
+    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
+    class_scores = tf.gather_nd(probs, indices)
+    deltas_specific = tf.gather_nd(deltas, indices)
+    return class_ids, class_scores, deltas_specific
+
+
+def compute_refined_rois(rois, deltas, windows):
+    """Used by Detection Layer
+
+    # Arguments:
+        rois
+        deltas
+        windows
+    """
+    refined_rois = apply_box_deltas(rois, deltas)
+    refined_rois = clip_boxes(refined_rois, windows)
+    return refined_rois
+
+
+def compute_keep(class_ids, class_scores,refined_rois, detection_min_confidence,
+                 detection_max_instances, detection_nms_threshold):
+    """Used by Detection Layer
+
+    # Arguments:
+        class_ids
+        class_scores
+        refined_rois
+        detection_min_confidence
+        detection_max_instances
+        detection_nms_threshold
+    """
+    keep = tf.where(class_ids > 0)[:, 0]
+    if detection_min_confidence:
+        keep = filter_low_confidence(class_scores, keep, detection_min_confidence)
+
+    nms_keep = apply_NMS(class_ids, class_scores, refined_rois, keep,
+                         detection_max_instances, detection_nms_threshold)
+    keep = get_top_detections(class_scores, keep, nms_keep, detection_max_instances)
+    return keep
+
+
+def refine_detections(rois, probs, deltas, bbox_std_dev, windows, detection_min_confidence,
+                      detection_max_instances, detection_nms_threshold):
+    """Used by Detection Layer
+
+    # Arguments:
+        rois
+        probs
+        deltas
+        bbox_std_dev
+        windows
+        detection_min_confidence
+        detection_max_instances
+        detection_nms_threshold
+    """
+    class_ids, class_scores, deltas_specific = compute_delta_specific(probs, deltas)
+    refined_rois = compute_refined_rois(rois, deltas_specific * bbox_std_dev, windows)
+    keep = compute_keep(class_ids, class_scores, refined_rois, detection_min_confidence,
+                        detection_max_instances, detection_nms_threshold)
+
+    gather_refined_rois = tf.gather(refined_rois, keep)
+    gather_class_ids = tf.cast(tf.gather(class_ids, keep), dtype=tf.float32)[..., tf.newaxis]
+    gather_class_scores = tf.gather(class_scores, keep)[..., tf.newaxis]
+
+    detections = tf.concat([gather_refined_rois, gather_class_ids, gather_class_scores],
+                           axis=1)
+    return zero_pad_detections(detections, detection_max_instances)
 
 
 def trim_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit):
@@ -274,7 +342,6 @@ def trim_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit):
         pre_nms_limit: type int, ROIs kept after tf.nn.top_k
                        and before non-maximum suppression
     """
-
     pre_nms_limit = tf.minimum(pre_nms_limit, tf.shape(anchors)[1])
     indices = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
                           name='top_anchors').indices
@@ -293,7 +360,6 @@ def apply_box_delta(pre_nms_anchors, deltas, images_per_gpu):
         deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
         images_per_gpu: Number of images to train with on each GPU
     """
-
     boxes = slice_batch([pre_nms_anchors, deltas], [], apply_box_deltas,
                         images_per_gpu, names=['refined_anchors'])
     return boxes
@@ -323,7 +389,27 @@ def clip_boxes_to_window_size(x):
     return clip_boxes(x,window1)
 
 
-def pad_ROI_priors(num_positives, num_negatives, roi_priors,
+def compute_NMS(boxes, scores, proposal_count, nms_threshold):
+    """Used by Proposal Layer
+
+        # Arguments:
+            boxes
+            scores
+            proposal_count
+            nms_threshold
+        """
+
+    indices = tf.image.non_max_suppression(
+        boxes, scores, proposal_count,
+        nms_threshold, name='rpn_non_max_suppression')
+    proposals = tf.gather(boxes, indices)
+    proposals_shape = tf.shape(proposals)[0]
+    padding = tf.maximum(proposal_count - proposals_shape, 0)
+    proposals = tf.pad(proposals, [(0, padding), (0, 0)])
+    return proposals
+
+
+def pad_ROI_priors(num_positives, num_negatives, roi_class_ids, roi_boxes, roi_masks,
                    deltas, masks):
     """Used by Detection target layer in detection_target_graph
 
@@ -334,8 +420,6 @@ def pad_ROI_priors(num_positives, num_negatives, roi_priors,
         deltas
         masks
     """
-
-    roi_class_ids, roi_boxes, _ = roi_priors
     num_samples = num_negatives + num_positives
     roi_boxes = tf.pad(roi_boxes, [(0, num_samples), (0, 0)])
     roi_class_ids = tf.pad(roi_class_ids, [(0, num_samples)])
@@ -352,7 +436,6 @@ def pad_ROI(positive_rois, negative_rois, train_rois_per_image):
         negative_rois
         train_rois_per_image
     """
-
     rois = tf.concat([positive_rois, negative_rois], axis=0)
     num_negatives = tf.shape(negative_rois)[0]
     train_roi = train_rois_per_image - tf.shape(rois)[0]
@@ -361,7 +444,7 @@ def pad_ROI(positive_rois, negative_rois, train_rois_per_image):
     return rois, num_positives, num_negatives
 
 
-def update_priors(overlaps, positive_indices, positive_rois, priors,
+def update_priors(overlaps, positive_indices, positive_rois, class_ids, boxes, masks,
                   bbox_standard_deviation):
     """Used by Detection target layer in detection_target_graph
 
@@ -372,8 +455,6 @@ def update_priors(overlaps, positive_indices, positive_rois, priors,
             priors
             bbox_std_dev
         """
-
-    class_ids, boxes, masks = priors
     global positive_overlaps
     positive_overlaps = tf.gather(overlaps, positive_indices)
 
@@ -388,7 +469,7 @@ def update_priors(overlaps, positive_indices, positive_rois, priors,
 
     transposed_masks = tf.expand_dims(tf.transpose(masks, [2, 0, 1]), -1)
     roi_masks = tf.gather(transposed_masks, roi_true_box_assignment)
-    return deltas, [roi_prior_class_ids, roi_prior_boxes, roi_masks]
+    return deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks
 
 
 def compute_largest_overlap():
@@ -399,7 +480,8 @@ def get_empty_list():
     return tf.cast(tf.constant([]), tf.int64)
 
 
-def compute_target_masks(positive_rois, roi_priors, mask_shape, mini_mask):
+def compute_target_masks(positive_rois, roi_class_ids, roi_boxes, roi_masks,
+                         mask_shape, mini_mask):
     """Used by Detection target layer in detection_target_graph
 
     # Arguments:
@@ -408,8 +490,6 @@ def compute_target_masks(positive_rois, roi_priors, mask_shape, mini_mask):
         mask_shape
         use_mini_mask
     """
-
-    roi_class_ids, roi_boxes, roi_masks = roi_priors
     boxes = positive_rois
     if mini_mask:
         boxes = transform_ROI_coordinates(positive_rois, roi_boxes)
@@ -427,7 +507,6 @@ def transform_ROI_coordinates(boxes, roi_boxes):
         boxes
         roi_boxes
     """
-
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
     roi_y_min, roi_x_min, roi_y_max, roi_x_max = tf.split(roi_boxes, 4,
                                                           axis=1)
@@ -464,7 +543,6 @@ def refine_instances(proposals, class_ids, boxes, masks):
         proposals
         ground_truth
     """
-
     proposals, class_ids, boxes, masks = remove_zero_padding(proposals, class_ids,
                                                              boxes, masks)
     crowd_ix = tf.where(class_ids < 0)[:, 0]
@@ -473,7 +551,7 @@ def refine_instances(proposals, class_ids, boxes, masks):
     class_ids = tf.gather(class_ids, non_crowd_ix)
     boxes = tf.gather(boxes, non_crowd_ix)
     masks = tf.gather(masks, non_crowd_ix, axis=2)
-    return [class_ids, boxes, masks], crowd_boxes
+    return class_ids, boxes, masks , crowd_boxes
 
 
 def compute_ROI_overlaps(proposals, boxes, crowd_boxes, overlaps,
@@ -488,7 +566,6 @@ def compute_ROI_overlaps(proposals, boxes, crowd_boxes, overlaps,
         train_rois_per_image
         roi_positive_ratio
     """
-
     crowd_overlaps = compute_IOU(proposals, crowd_boxes)
     crowd_iou_max = tf.reduce_max(crowd_overlaps, axis=1)
     no_crowd_bool = (crowd_iou_max < 0.001)
@@ -525,10 +602,10 @@ def gather_ROIs(proposals, positive_indices, negative_indices,
         train_rois_per_image
         roi_positive_ratio
     """
-
     positive_count = int(train_rois_per_image * roi_positive_ratio)
     positive_indices = tf.random.shuffle(positive_indices)[:positive_count]
-    negative_indices = get_negative_indices(positive_indices, roi_positive_ratio, negative_indices)
+    negative_indices = get_negative_indices(positive_indices, roi_positive_ratio,
+                                            negative_indices)
 
     positive_rois = tf.gather(proposals, positive_indices)
     negative_rois = tf.gather(proposals, negative_indices)
@@ -558,7 +635,6 @@ def compute_IOU(boxes_a, boxes_b):
         boxes_a
         boxes_b
     """
-
     box_a = tf.reshape(tf.tile(tf.expand_dims(boxes_a, 1),[1, 1, tf.shape(boxes_b)[0]]),
                        [-1, 4])
     box_b = tf.tile(boxes_b, [tf.shape(boxes_a)[0], 1])
@@ -589,6 +665,65 @@ def compute_overlap_union(box_a, box_b):
     return overlap, union
 
 
+def detection_targets(proposals, prior_class_ids, prior_boxes,
+                            prior_masks, train_rois_per_image, roi_positive_ratio,
+                            mask_shape, use_mini_mask, bbox_std_dev):
+    """Used by Detection Target Layer
+
+                # Arguments:
+                    proposals
+                    prior_class_ids
+                    prior_boxes,
+                    prior_masks
+                    train_rois_per_image
+                    roi_positive_ratio
+                    mask_shape
+                    use_mini_mask
+                    bbox_std_dev
+                """
+    refined_boxes, refined_class_ids, refined_masks, crowd_boxes = \
+                                                compute_refined_boxes(proposals, prior_class_ids,
+                                                                      prior_boxes, prior_masks)
+    overlaps = compute_IOU(proposals, refined_boxes)
+    positive_indices, positive_rois, negative_rois = compute_ROI_overlaps(proposals, refined_boxes,
+                                                                          crowd_boxes, overlaps,
+                                                                          train_rois_per_image,
+                                                                          roi_positive_ratio)
+    deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks = \
+                                                update_priors(overlaps, positive_indices,
+                                                              positive_rois, refined_class_ids,
+                                                              refined_boxes, refined_masks,
+                                                              bbox_std_dev)
+    masks = compute_target_masks(positive_rois, roi_prior_class_ids, roi_prior_boxes,
+                                 roi_masks, mask_shape, use_mini_mask)
+    rois, num_negatives, num_positives = pad_ROI(positive_rois, negative_rois,
+                                                 train_rois_per_image)
+    roi_class_ids, deltas, masks = pad_ROI_priors(num_positives, num_negatives, refined_class_ids,
+                                                  refined_boxes, refined_masks, deltas, masks)
+    return rois, roi_class_ids, deltas, masks
+
+
+def compute_refined_boxes(proposals, prior_class_ids, prior_boxes, prior_masks):
+    """Used by Detection Target Layer
+
+                    # Arguments:
+                        proposals
+                        prior_class_ids
+                        prior_boxes,
+                        prior_masks
+                    """
+    asserts = [
+        tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
+                  name='roi_assertion'),
+    ]
+    with tf.control_dependencies(asserts):
+        proposals = tf.identity(proposals)
+        class_ids, boxes, masks, crowd_boxes = refine_instances(proposals, prior_class_ids,
+                                                                prior_boxes, prior_masks)
+    refined_boxes = boxes
+    return refined_boxes, class_ids, masks, crowd_boxes
+
+
 def compute_ROI_level(boxes, image_shape):
     """Used by PyramidROIAlign
 
@@ -598,7 +733,6 @@ def compute_ROI_level(boxes, image_shape):
                 boxes to fill the array
         image_shape: shape of image
     """
-
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=2)
     H = y_max - y_min
     W = x_max - x_min
@@ -683,148 +817,3 @@ def rearrange_pooled_features(pooled, box_to_level, boxes):
     pooled = tf.gather(pooled, top_k_indices)
     shape = tf.concat([tf.shape(boxes)[:2], tf.shape(pooled)[1:]], axis=0)
     return tf.reshape(pooled, shape)
-
-
-def compute_NMS(boxes, scores, proposal_count, nms_threshold):
-    """Used by Proposal Layer
-
-        # Arguments:
-            boxes
-            scores
-            proposal_count
-            nms_threshold
-        """
-
-    indices = tf.image.non_max_suppression(
-        boxes, scores, proposal_count,
-        nms_threshold, name='rpn_non_max_suppression')
-    proposals = tf.gather(boxes, indices)
-    proposals_shape = tf.shape(proposals)[0]
-    padding = tf.maximum(proposal_count - proposals_shape, 0)
-    proposals = tf.pad(proposals, [(0, padding), (0, 0)])
-    return proposals
-
-
-def refine_detections(rois, probs, deltas, bbox_std_dev, windows, detection_min_confidence,
-                            detection_max_instances, detection_nms_threshold):
-    """Used by Detection Layer
-
-            # Arguments:
-                rois
-                probs
-                deltas
-                bbox_std_dev
-                windows
-                detection_min_confidence
-                detection_max_instances
-                detection_nms_threshold
-            """
-
-    class_ids, class_scores, deltas_specific = compute_delta_specific(probs,deltas)
-
-    refined_rois = compute_refined_rois(rois, deltas_specific * bbox_std_dev, windows)
-
-    keep = compute_keep(class_ids, class_scores,refined_rois,detection_min_confidence,
-                        detection_max_instances, detection_nms_threshold)
-    gather_refined_rois = tf.gather(refined_rois, keep)
-    gather_class_ids = tf.cast(tf.gather(class_ids, keep),dtype=tf.float32)[..., tf.newaxis]
-    gather_class_scores = tf.gather(class_scores, keep)[..., tf.newaxis]
-
-    detections = tf.concat([gather_refined_rois, gather_class_ids, gather_class_scores], axis=1)
-    return zero_pad_detections(detections, detection_max_instances)
-
-
-def compute_delta_specific(probs,deltas):
-    """Used by Detection Layer"""
-    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
-    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
-    class_scores = tf.gather_nd(probs, indices)
-    deltas_specific = tf.gather_nd(deltas, indices)
-    return class_ids, class_scores, deltas_specific
-
-
-def compute_refined_rois(rois, deltas, windows):
-    """Used by Detection Layer
-
-                    # Arguments:
-                        rois
-                        deltas
-                        windows
-                    """
-    refined_rois = apply_box_deltas(rois, deltas)
-    refined_rois = clip_boxes(refined_rois, windows)
-    return refined_rois
-
-
-def compute_keep(class_ids, class_scores,refined_rois, detection_min_confidence,
-                 detection_max_instances, detection_nms_threshold):
-    """Used by Detection Layer
-
-                # Arguments:
-                    class_ids
-                    class_scores
-                    refined_rois
-                    detection_min_confidence
-                    detection_max_instances
-                    detection_nms_threshold
-                """
-    keep = tf.where(class_ids > 0)[:, 0]
-    if detection_min_confidence:
-        keep = filter_low_confidence(class_scores, keep, detection_min_confidence)
-
-    nms_keep = apply_NMS(class_ids, class_scores, refined_rois, keep,
-                         detection_max_instances, detection_nms_threshold)
-    keep = get_top_detections(class_scores, keep, nms_keep, detection_max_instances)
-    return keep
-
-
-def detection_targets(proposals, prior_class_ids, prior_boxes,
-                            prior_masks, train_rois_per_image, roi_positive_ratio,
-                            mask_shape, use_mini_mask, bbox_std_dev):
-    """Used by Detection Target Layer
-
-                # Arguments:
-                    proposals
-                    prior_class_ids
-                    prior_boxes,
-                    prior_masks
-                    train_rois_per_image
-                    roi_positive_ratio
-                    mask_shape
-                    use_mini_mask
-                    bbox_std_dev
-                """
-    refined_boxes, refined_priors, crowd_boxes = compute_refined_boxes(proposals, prior_class_ids,
-                                                                       prior_boxes, prior_masks)
-    overlaps = compute_IOU(proposals, refined_boxes)
-    positive_indices, positive_rois, negative_rois = compute_ROI_overlaps(proposals, refined_boxes,
-                                                                          crowd_boxes, overlaps,
-                                                                          train_rois_per_image,
-                                                                          roi_positive_ratio)
-    deltas, roi_priors = update_priors(overlaps, positive_indices,positive_rois, refined_priors,
-                                       bbox_std_dev)
-    masks = compute_target_masks(positive_rois, roi_priors, mask_shape, use_mini_mask)
-    rois, num_negatives, num_positives = pad_ROI(positive_rois, negative_rois, train_rois_per_image)
-    roi_class_ids, deltas, masks = pad_ROI_priors(num_positives, num_negatives, roi_priors, deltas, masks)
-    return rois, roi_class_ids, deltas, masks
-
-
-def compute_refined_boxes(proposals, prior_class_ids, prior_boxes, prior_masks):
-    """Used by Detection Target Layer
-
-                    # Arguments:
-                        proposals
-                        prior_class_ids
-                        prior_boxes,
-                        prior_masks
-                    """
-    asserts = [
-        tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
-                  name='roi_assertion'),
-    ]
-    with tf.control_dependencies(asserts):
-        proposals = tf.identity(proposals)
-    refined_priors, crowd_boxes = refine_instances(proposals, prior_class_ids, prior_boxes,
-                                                   prior_masks)
-    _, refined_boxes, _ = refined_priors
-    return refined_boxes, refined_priors, crowd_boxes
