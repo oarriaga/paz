@@ -117,7 +117,8 @@ PAGES = [
                              camera.Camera.stop]),
             (camera.VideoPlayer, [camera.VideoPlayer.step,
                                   camera.VideoPlayer.run,
-                                  camera.VideoPlayer.record])
+                                  camera.VideoPlayer.record,
+                                  camera.VideoPlayer.record_from_file])
         ],
     },
 
