@@ -303,3 +303,25 @@ class DrawRGBMasks(Processor):
 
     def call(self, image, points2D, points3D):
         return draw_RGB_masks(image, points2D, points3D, self.object_sizes)
+
+
+class DrawText(Processor):
+    """Draws text to image.
+
+    # Arguments
+        color: List. Color of text to
+        thickness: Int. Thickness of text.
+        scale: Int. Size scale for text.
+        message: Str. Text to be added on the image.
+        location: List/tuple of int. Pixel corordinte in image to add text.
+    """
+    def __init__(self, color=GREEN, thickness=2, scale=1):
+        super(DrawText, self).__init__()
+        self.color = color
+        self.thickness = thickness
+        self.scale = scale
+
+    def call(self, image, message, location=(50, 50)):
+        image = put_text(image, message, location, self.scale,
+                         self.color, self.thickness)
+        return image

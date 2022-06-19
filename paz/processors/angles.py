@@ -8,7 +8,12 @@ from paz.backend.keypoints import rotate_keypoints3D
 from paz.backend.keypoints import compute_orientation_vector
 from paz.backend.angles import calculate_relative_angle
 from paz.backend.angles import reorder_relative_angles
+from paz.backend.angles import is_hand_open
 from paz.datasets import MPIIHandJoints
+from paz.datasets import MINIMAL_HAND_CONFIG
+from paz.datasets.CMU_poanoptic import hand_part_arg
+from paz.backend.image import put_text
+
 
 
 class ChangeLinkOrder(pr.Processor):
@@ -41,7 +46,7 @@ class CalculateRelativeAngles(pr.Processor):
                  output_config=MPIIHandJoints):
         super(CalculateRelativeAngles, self).__init__()
         output_labels = output_config.labels
-        origin_labels = input_config.labels
+        input_labels = input_config.labels
         links_origin = input_config.links_origin
         self.parents = input_config.parents
         self.children = output_config.children
@@ -50,11 +55,11 @@ class CalculateRelativeAngles(pr.Processor):
         self.links_orientation = compute_orientation_vector(
             links_origin, self.parents)
         self.quaternions_to_rotations = pr.SequentialProcessor([
-            pr.ChangeLinkOrder(output_labels, origin_labels),
+            pr.ChangeLinkOrder(output_labels, input_labels),
             quaternions_to_rotation_matrices])
         self.calculate_relative_angle = pr.SequentialProcessor([
             calculate_relative_angle,
-            pr.ChangeLinkOrder(origin_labels, output_labels)])
+            pr.ChangeLinkOrder(input_labels, output_labels)])
 
     def call(self, absolute_quaternions):
         absolute_rotation = self.quaternions_to_rotations(absolute_quaternions)
@@ -67,3 +72,25 @@ class CalculateRelativeAngles(pr.Processor):
         relative_angles = reorder_relative_angles(
             relative_angles, absolute_rotation[0], self.children)
         return relative_angles
+
+
+class IsHandOpen(pr.Processor):
+    """Check is the hand is open by by using the relative angles of the joint.
+    # Arguments
+        joint_order: Dictionary for the joint order
+        thresh: Float. Threshold value for theta
+        relative_angle: Array
+
+    # Returns
+        String: Hand is open or closed.
+    """
+    def __init__(self, joint_order=hand_part_arg, threshold=0.4):
+        super(IsHandOpen, self).__init__()
+        self.joint_order = joint_order
+        self.threshold = threshold
+
+    def call(self, relative_angles):
+        if is_hand_open(relative_angles, self.joint_order, self.threshold):
+            return 'OPEN'
+        else:
+            return 'CLOSE'
