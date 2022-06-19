@@ -229,21 +229,24 @@ class DrawHumanSkeleton(Processor):
     # Returns
         A numpy array containing pose skeleton.
     """
-    def __init__(self, dataset, check_scores):
+    def __init__(self, dataset, check_scores, link_width=2, keypoint_radius=4):
         super(DrawHumanSkeleton, self).__init__()
         self.link_orders = HUMAN_JOINT_CONFIG[dataset]['part_orders']
         self.link_colors = HUMAN_JOINT_CONFIG[dataset]['part_color']
         self.link_args = HUMAN_JOINT_CONFIG[dataset]['part_arg']
         self.keypoint_colors = HUMAN_JOINT_CONFIG[dataset]['joint_color']
         self.check_scores = check_scores
+        self.link_width = link_width
+        self.keypoint_radius = keypoint_radius
 
     def call(self, image, grouped_joints):
         for one_person_joints in grouped_joints:
             image = draw_keypoints_link(
                 image, one_person_joints, self.link_args, self.link_orders,
-                self.link_colors, self.check_scores)
+                self.link_colors, self.check_scores, self.link_width)
             image = draw_keypoints(image, one_person_joints,
-                                   self.keypoint_colors, self.check_scores)
+                                   self.keypoint_colors, self.check_scores,
+                                   self.keypoint_radius)
         return image
 
 
@@ -257,20 +260,22 @@ class DrawHandSkeleton(Processor):
     # Returns
         A numpy array containing pose skeleton.
     """
-    def __init__(self, check_scores=False):
+    def __init__(self, check_scores=False, link_width=2, keypoint_radius=4):
         super(DrawHandSkeleton, self).__init__()
         self.link_orders = MINIMAL_HAND_CONFIG['part_orders']
         self.link_colors = MINIMAL_HAND_CONFIG['part_color']
         self.link_args = MINIMAL_HAND_CONFIG['part_arg']
         self.keypoint_colors = MINIMAL_HAND_CONFIG['joint_color']
         self.check_scores = check_scores
+        self.link_width = link_width
+        self.keypoint_radius = keypoint_radius
 
-    def call(self, image, keypoints, link_width=2, keypoint_radius=4):
+    def call(self, image, keypoints):
         image = draw_keypoints_link(
             image, keypoints, self.link_args, self.link_orders,
-            self.link_colors, self.check_scores, link_width)
+            self.link_colors, self.check_scores, self.link_width)
         image = draw_keypoints(image, keypoints, self.keypoint_colors,
-                               self.check_scores, keypoint_radius)
+                               self.check_scores, self.keypoint_radius)
         return image
 
 
