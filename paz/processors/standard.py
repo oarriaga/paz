@@ -449,9 +449,24 @@ class AppendValues(Processor):
         return append_values(dictionary, lists, self.keys)
 
 
-class Cast(Processor):
-    def _init__(self, type):
-        self.type = type
+class BooleanToTextMessage(Processor):
+    """Convert a boolean to text message.
+    # Arguments
+        true_message: String. Message for true case.
+        false_message: String. Message for false case.
+        Flag: Boolean.
 
-    def call(self, value):
-        return self.type(value)
+    # Returns
+        message: String.
+    """
+    def __init__(self, true_message, false_message):
+        super(BooleanToTextMessage, self).__init__()
+        self.true_message = true_message
+        self.false_message = false_message
+
+    def call(self, flag):
+        if flag:
+            message = self.true_message
+        else:
+            message = self.false_message
+        return message

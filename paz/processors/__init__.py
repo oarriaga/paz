@@ -117,6 +117,7 @@ from .standard import Stochastic
 from .standard import UnwrapDictionary
 from .standard import Scale
 from .standard import AppendValues
+from .standard import BooleanToTextMessage
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
