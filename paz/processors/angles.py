@@ -84,10 +84,10 @@ class IsHandOpen(pr.Processor):
     # Returns
         String: Hand is open or closed.
     """
-    def __init__(self, joint_order=hand_part_arg, threshold=0.4):
+    def __init__(self, joint_order=hand_part_arg, thresh=0.4):
         super(IsHandOpen, self).__init__()
         self.joint_order = joint_order
-        self.threshold = threshold
+        self.thresh = thresh
 
     def call(self, relative_angles):
-        return is_hand_open(relative_angles, self.joint_order, self.threshold)
+        return is_hand_open(relative_angles, self.joint_order, self.thresh)

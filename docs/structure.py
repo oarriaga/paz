@@ -542,7 +542,8 @@ PAGES = [
             processors.Stochastic,
             processors.UnwrapDictionary,
             processors.Scale,
-            processors.AppendValues
+            processors.AppendValues,
+            processors.BooleanToTextMessage
         ]
     },
 

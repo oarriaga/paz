@@ -9,3 +9,8 @@ To test the hand pose detection on image, run:
 ```py
 python demo_image.py
 ```
+
+To test the live hand closure status with pose detection from camera, run:
+```py
+python is_open_demo.py
+```
