@@ -77,12 +77,11 @@ def change_link_order(joints, config1_labels, config2_labels):
     return mapped_joints
 
 
-def is_hand_open(relative_angles, joint_order, thresh):
+def is_hand_open(relative_angles, joint_name_to_arg, thresh):
     """Check is the hand is open by calculating relative pip joint angle norm.
 
        [(theta * ex), (theta * ey), (theta * ez)] = compact axis angle
        ex, ey, ez = normalized_axis
-       theta = angle
                   _______________________________________________
        norm =    / (theta**2) * [(ex**2) + (ey**2) + (ez**2)]
                \/
@@ -93,19 +92,26 @@ def is_hand_open(relative_angles, joint_order, thresh):
 
     # Arguments
         relative_angle: Array
-        joint_order: Dictionary for the joint order
+        joint_name_to_arg: Dictionary for the joints
         thresh: Float. Threshold value for theta
 
     # Returns
         Boolean: Hand is open or closed.
     """
-    relative_angles = np.asarray(relative_angles, dtype=np.float32)
-    theta_i = np.linalg.norm(relative_angles[joint_order['index_finger_pip']])
-    theta_m = np.linalg.norm(relative_angles[joint_order['middle_finger_pip']])
-    theta_r = np.linalg.norm(relative_angles[joint_order['ring_finger_pip']])
-    theta_p = np.linalg.norm(relative_angles[joint_order['pinky_pip']])
-    if theta_i > thresh and theta_m > thresh and \
-            theta_r > thresh and theta_p > thresh:
+    index_finger_pip_arg = joint_name_to_arg['index_finger_pip']
+    theta_index_pip = np.linalg.norm(relative_angles[index_finger_pip_arg])
+
+    middle_finger_pip_arg = joint_name_to_arg['middle_finger_pip']
+    theta_middle_pip = np.linalg.norm(relative_angles[middle_finger_pip_arg])
+
+    ring_finger_pip_arg = joint_name_to_arg['ring_finger_pip']
+    theta_ring_pip = np.linalg.norm(relative_angles[ring_finger_pip_arg])
+
+    pinky_finger_pip_arg = joint_name_to_arg['pinky_finger_pip']
+    theta_pinky_pip = np.linalg.norm(relative_angles[pinky_finger_pip_arg])
+
+    if theta_index_pip > thresh and theta_middle_pip > thresh and \
+            theta_ring_pip > thresh and theta_pinky_pip > thresh:
         return False
     else:
         return True

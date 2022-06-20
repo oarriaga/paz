@@ -77,17 +77,18 @@ class CalculateRelativeAngles(pr.Processor):
 class IsHandOpen(pr.Processor):
     """Check is the hand is open by by using the relative angles of the joint.
     # Arguments
-        joint_order: Dictionary for the joint order
+        joint_name_to_arg: Dictionary for the joints
         thresh: Float. Threshold value for theta
         relative_angle: Array
 
     # Returns
         String: Hand is open or closed.
     """
-    def __init__(self, joint_order=hand_part_arg, thresh=0.4):
+    def __init__(self, joint_name_to_arg=hand_part_arg, thresh=0.4):
         super(IsHandOpen, self).__init__()
-        self.joint_order = joint_order
+        self.joint_name_to_arg = joint_name_to_arg
         self.thresh = thresh
 
     def call(self, relative_angles):
-        return is_hand_open(relative_angles, self.joint_order, self.thresh)
+        return is_hand_open(relative_angles, self.joint_name_to_arg,
+                            self.thresh)
