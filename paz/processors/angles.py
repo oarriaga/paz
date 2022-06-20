@@ -90,7 +90,4 @@ class IsHandOpen(pr.Processor):
         self.threshold = threshold
 
     def call(self, relative_angles):
-        if is_hand_open(relative_angles, self.joint_order, self.threshold):
-            return 'OPEN'
-        else:
-            return 'CLOSE'
+        return is_hand_open(relative_angles, self.joint_order, self.threshold)
