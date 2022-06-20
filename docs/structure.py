@@ -30,7 +30,8 @@ PAGES = [
         'functions': [
             angles.calculate_relative_angle,
             angles.reorder_relative_angles,
-            angles.change_link_order
+            angles.change_link_order,
+            angles.is_hand_open
         ],
     },
 
@@ -342,6 +343,7 @@ PAGES = [
         'classes': [
             processors.ChangeLinkOrder,
             processors.CalculateRelativeAngles,
+            processors.IsHandOpen
         ]
     },
 
@@ -397,7 +399,8 @@ PAGES = [
             processors.DrawHumanSkeleton,
             processors.DrawHandSkeleton,
             processors.DrawRGBMask,
-            processors.DrawRGBMasks
+            processors.DrawRGBMasks,
+            processors.DrawText
         ]
     },
 
