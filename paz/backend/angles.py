@@ -51,8 +51,8 @@ def reorder_relative_angles(relative_angles, root_angle, children):
         root_angle = rotation_matrix_to_compact_axis_angle(root_angle)
     angles = np.zeros(shape=(len(relative_angles), 3))
     angles[0] = root_angle
-    angles[1:len(children), :] = relative_angles[children[1:], :]
-    # angles[children[1:], :] = relative_angles[children[1:], :]
+    # angles[1:len(children), :] = relative_angles[children[1:], :]
+    angles[children[1:], :] = relative_angles[children[1:], :]
     return angles
 
 
@@ -75,3 +75,37 @@ def change_link_order(joints, config1_labels, config2_labels):
         mapped_joints.append(joint_in_config1_labels)
     mapped_joints = np.stack(mapped_joints, 0)
     return mapped_joints
+
+
+def is_hand_open(relative_angles, joint_order, thresh):
+    """Check is the hand is open by calculating relative pip joint angle norm.
+
+       [(theta * ex), (theta * ey), (theta * ez)] = compact axis angle
+       ex, ey, ez = normalized_axis
+       theta = angle
+                  _______________________________________________
+       norm =    / (theta**2) * [(ex**2) + (ey**2) + (ez**2)]
+               \/
+
+       => norm is directly proportional to the theta if axis is notmalized.
+          If hand is open the relative angle of the pip joint will be less as
+          compared to for the closed hand.
+
+    # Arguments
+        relative_angle: Array
+        joint_order: Dictionary for the joint order
+        thresh: Float. Threshold value for theta
+
+    # Returns
+        Boolean: Hand is open or closed.
+    """
+    relative_angles = np.asarray(relative_angles, dtype=np.float32)
+    theta_i = np.linalg.norm(relative_angles[joint_order['index_finger_pip']])
+    theta_m = np.linalg.norm(relative_angles[joint_order['middle_finger_pip']])
+    theta_r = np.linalg.norm(relative_angles[joint_order['ring_finger_pip']])
+    theta_p = np.linalg.norm(relative_angles[joint_order['pinky_pip']])
+    if theta_i > thresh and theta_m > thresh and \
+            theta_r > thresh and theta_p > thresh:
+        return False
+    else:
+        return True
