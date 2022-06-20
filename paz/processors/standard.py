@@ -447,3 +447,11 @@ class AppendValues(Processor):
 
     def call(self, dictionary, lists):
         return append_values(dictionary, lists, self.keys)
+
+
+class Cast(Processor):
+    def _init__(self, type):
+        self.type = type
+
+    def call(self, value):
+        return self.type(value)
