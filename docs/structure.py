@@ -30,7 +30,8 @@ PAGES = [
         'functions': [
             angles.calculate_relative_angle,
             angles.reorder_relative_angles,
-            angles.change_link_order
+            angles.change_link_order,
+            angles.is_hand_open
         ],
     },
 
@@ -117,7 +118,8 @@ PAGES = [
                              camera.Camera.stop]),
             (camera.VideoPlayer, [camera.VideoPlayer.step,
                                   camera.VideoPlayer.run,
-                                  camera.VideoPlayer.record])
+                                  camera.VideoPlayer.record,
+                                  camera.VideoPlayer.record_from_file])
         ],
     },
 
@@ -341,6 +343,7 @@ PAGES = [
         'classes': [
             processors.ChangeLinkOrder,
             processors.CalculateRelativeAngles,
+            processors.IsHandOpen
         ]
     },
 
@@ -396,7 +399,8 @@ PAGES = [
             processors.DrawHumanSkeleton,
             processors.DrawHandSkeleton,
             processors.DrawRGBMask,
-            processors.DrawRGBMasks
+            processors.DrawRGBMasks,
+            processors.DrawText
         ]
     },
 
@@ -538,7 +542,8 @@ PAGES = [
             processors.Stochastic,
             processors.UnwrapDictionary,
             processors.Scale,
-            processors.AppendValues
+            processors.AppendValues,
+            processors.BooleanToTextMessage
         ]
     },
 

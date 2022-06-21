@@ -36,7 +36,8 @@ def calculate_relative_angle(absolute_rotation, links_origin_transform,
     return relative_angles
 
 
-def reorder_relative_angles(relative_angles, root_angle, children):
+def reorder_relative_angles(relative_angles, root_angle, children,
+                            root_joints=[1, 4, 7, 10, 13]):
     """Reorder the relative angles according to the kinematic chain
 
     # Arguments
@@ -49,10 +50,12 @@ def reorder_relative_angles(relative_angles, root_angle, children):
     """
     if root_angle.shape == (3, 3):
         root_angle = rotation_matrix_to_compact_axis_angle(root_angle)
-    angles = np.zeros(shape=(len(relative_angles), 3))
-    angles[0] = root_angle
-    angles[1:len(children), :] = relative_angles[children[1:], :]
-    # angles[children[1:], :] = relative_angles[children[1:], :]
+    children_angles = relative_angles[children[1:], :]
+    children_angles = np.concatenate(
+        [np.expand_dims(root_angle, 0), children_angles])
+
+    # insest zero relative angle to the root joints
+    angles = np.insert(children_angles, root_joints, np.array([0, 0, 0]), 0)
     return angles
 
 
@@ -61,8 +64,8 @@ def change_link_order(joints, config1_labels, config2_labels):
 
     # Arguments
         joints: Array
-        config1_labels: joint configuration of the joints
-        config2_labels: output joint configuration of the joints
+        config1_labels: input joint configuration
+        config2_labels: output joint configuration
 
     # Returns
         Array: joints maped to the config2_labels
@@ -75,3 +78,43 @@ def change_link_order(joints, config1_labels, config2_labels):
         mapped_joints.append(joint_in_config1_labels)
     mapped_joints = np.stack(mapped_joints, 0)
     return mapped_joints
+
+
+def is_hand_open(relative_angles, joint_name_to_arg, thresh):
+    """Check is the hand is open by calculating relative pip joint angle norm.
+
+       [(theta * ex), (theta * ey), (theta * ez)] = compact axis angle
+       ex, ey, ez = normalized_axis
+                  _______________________________________________
+       norm =    / (theta**2) * [(ex**2) + (ey**2) + (ez**2)]
+               \/
+
+       => norm is directly proportional to the theta if axis is normalized.
+          If hand is open the relative angle of the pip joint will be less as
+          compared to the closed hand.
+
+    # Arguments
+        relative_angle: Array
+        joint_name_to_arg: Dictionary for the joints
+        thresh: Float. Threshold value for theta
+
+    # Returns
+        Boolean: Hand is open or closed.
+    """
+    index_finger_pip_arg = joint_name_to_arg['index_finger_pip']
+    theta_index_pip = np.linalg.norm(relative_angles[index_finger_pip_arg])
+
+    middle_finger_pip_arg = joint_name_to_arg['middle_finger_pip']
+    theta_middle_pip = np.linalg.norm(relative_angles[middle_finger_pip_arg])
+
+    ring_finger_pip_arg = joint_name_to_arg['ring_finger_pip']
+    theta_ring_pip = np.linalg.norm(relative_angles[ring_finger_pip_arg])
+
+    pinky_finger_pip_arg = joint_name_to_arg['pinky_pip']
+    theta_pinky_pip = np.linalg.norm(relative_angles[pinky_finger_pip_arg])
+
+    if theta_index_pip > thresh and theta_middle_pip > thresh and \
+            theta_ring_pip > thresh and theta_pinky_pip > thresh:
+        return False
+    else:
+        return True

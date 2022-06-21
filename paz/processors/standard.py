@@ -447,3 +447,26 @@ class AppendValues(Processor):
 
     def call(self, dictionary, lists):
         return append_values(dictionary, lists, self.keys)
+
+
+class BooleanToTextMessage(Processor):
+    """Convert a boolean to text message.
+    # Arguments
+        true_message: String. Message for true case.
+        false_message: String. Message for false case.
+        Flag: Boolean.
+
+    # Returns
+        message: String.
+    """
+    def __init__(self, true_message, false_message):
+        super(BooleanToTextMessage, self).__init__()
+        self.true_message = true_message
+        self.false_message = false_message
+
+    def call(self, flag):
+        if flag:
+            message = self.true_message
+        else:
+            message = self.false_message
+        return message
