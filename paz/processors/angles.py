@@ -10,13 +10,20 @@ from paz.backend.angles import calculate_relative_angle
 from paz.backend.angles import reorder_relative_angles
 from paz.backend.angles import is_hand_open
 from paz.datasets import MPIIHandJoints
-from paz.datasets import MINIMAL_HAND_CONFIG
 from paz.datasets.CMU_poanoptic import hand_part_arg
-from paz.backend.image import put_text
-
 
 
 class ChangeLinkOrder(pr.Processor):
+    """Map data from one config to another.
+
+    # Arguments
+        joints: Array
+        config1_labels: input joint configuration
+        config2_labels: output joint configuration
+
+    # Returns
+        Array: joints maped to the config2_labels
+    """
     def __init__(self, config1_labels, config2_labels):
         super(ChangeLinkOrder, self).__init__()
         self.config1_labels = config1_labels
