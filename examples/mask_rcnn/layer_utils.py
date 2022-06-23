@@ -3,7 +3,7 @@ import numpy as np
 from tensorflow.keras.layers import Layer
 
 
-def box_refinement(box, prior_box):
+def refine_bbox(box, prior_box):
     """Compute refinement needed to transform box to prior_box
 
     # Arguments:
@@ -196,13 +196,20 @@ def apply_NMS(class_ids, scores, refined_rois, keep,
         detection_max_instances
         detection_nms_threshold
     """
-    global max_instances, nms_threshold, pre_nms_elements, keeps
-
     pre_nms_class_ids = tf.gather(class_ids, keep)
     pre_nms_scores = tf.gather(scores, keep)
     pre_nms_rois = tf.gather(refined_rois, keep)
     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
     pre_nms_elements = [pre_nms_class_ids, pre_nms_scores, pre_nms_rois]
+
+    def NMS_map_call(class_id):
+        """Used by top detection layer in apply_NMS for mapping function
+
+        # Arguments:
+            class_id : class_ids
+        """
+        return NMS_map(pre_nms_elements, keeps, class_id, max_instances,
+                       nms_threshold)
 
     max_instances = detection_max_instances
     nms_threshold = detection_nms_threshold
@@ -210,16 +217,6 @@ def apply_NMS(class_ids, scores, refined_rois, keep,
 
     nms_keep = tf.map_fn(NMS_map_call, unique_pre_nms_class_ids, dtype=tf.int64)
     return merge_results(nms_keep)
-
-
-def NMS_map_call(class_id):
-    """Used by top detection layer in apply_NMS for mapping function
-
-    # Arguments:
-        class_id : class_ids
-    """
-    return NMS_map(pre_nms_elements, keeps, class_id, max_instances,
-                   nms_threshold)
 
 
 def merge_results(nms_keep):
@@ -378,21 +375,10 @@ def clip_image_boundaries(boxes, images_per_gpu):
         boxes: [N, (dy, dx, log(dh), log(dw))] refinements to apply
         images_per_gpu: Number of images to train with on each GPU
     """
-    global window1
     window1 = np.array([0, 0, 1, 1], dtype=np.float32)
-    boxes = slice_batch(boxes,[], clip_boxes_to_window_size, images_per_gpu,
+    boxes = slice_batch(boxes,[window1], clip_boxes, images_per_gpu,
                         names=['refined_anchors_clipped'])
     return boxes
-
-
-def clip_boxes_to_window_size(x):
-    """Used tp clip boundaries of images after proposals
-
-    # Arguments:
-        x: [N, (dy, dx, log(dh), log(dw))] proposed image
-        window: Numpy array of size [1x4]
-    """
-    return clip_boxes(x,window1)
 
 
 def compute_NMS(boxes, scores, proposal_count, nms_threshold):
@@ -461,33 +447,30 @@ def update_priors(overlaps, positive_indices, positive_rois, class_ids, boxes, m
             priors
             bbox_std_dev: Bounding box refinement standard deviation for RPN and final detections
         """
-    global positive_overlaps
     positive_overlaps = tf.gather(overlaps, positive_indices)
 
+    def compute_largest_overlap():
+        """Used by Detection target layer in update prior for positive case
+        """
+        return tf.argmax(positive_overlaps, axis=1)
+
+    def get_empty_list():
+        """Used by Detection target layer in update prior for negative case
+        """
+        return tf.cast(tf.constant([]), tf.int64)
+
     roi_true_box_assignment = tf.cond(
-        tf.greater(tf.shape(positive_overlaps)[1], 0),
-        true_fn=compute_largest_overlap, false_fn=get_empty_list)
+         tf.greater(tf.shape(positive_overlaps)[1], 0),
+         true_fn=compute_largest_overlap, false_fn=get_empty_list)
 
     roi_prior_boxes = tf.gather(boxes, roi_true_box_assignment)
     roi_prior_class_ids = tf.gather(class_ids, roi_true_box_assignment)
-    deltas = box_refinement(positive_rois, roi_prior_boxes)
+    deltas = refine_bbox(positive_rois, roi_prior_boxes)
     deltas /= bbox_standard_deviation
 
     transposed_masks = tf.expand_dims(tf.transpose(masks, [2, 0, 1]), -1)
     roi_masks = tf.gather(transposed_masks, roi_true_box_assignment)
     return deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks
-
-
-def compute_largest_overlap():
-    """Used by Detection target layer in update prior for positive case
-    """
-    return tf.argmax(positive_overlaps, axis=1)
-
-
-def get_empty_list():
-    """Used by Detection target layer in update prior for negative case
-    """
-    return tf.cast(tf.constant([]), tf.int64)
 
 
 def compute_target_masks(positive_rois, roi_class_ids, roi_boxes, roi_masks,

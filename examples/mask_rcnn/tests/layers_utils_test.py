@@ -16,6 +16,8 @@ from ..layer_utils import detection_targets, compute_NMS, refine_detections
 from ..layer_utils import compute_refined_boxes, compute_keep, compute_refined_rois
 from ..layer_utils import filter_low_confidence, apply_NMS, get_top_detections, compute_IOU
 from ..layer_utils import compute_ROI_overlaps,update_priors, compute_target_masks
+from ..layer_utils import refine_bbox, trim_zeros, apply_box_deltas, clip_boxes, compute_scaled_area
+from ..layer_utils import transform_ROI_coordinates, compute_max_ROI_level
 
 
 class MaskRCNNConfig(Config):
@@ -343,8 +345,8 @@ def detection_target_pad_ROI_priors(detection_target_layer_update_priors,
 
 @pytest.fixture
 def pyramid_ROI_level(proposal_layer, feature_maps):
-    shape= (1024, 1024, 3)
-    roi_level= compute_ROI_level(proposal_layer, shape)
+    shape = (1024, 1024, 3)
+    roi_level = compute_ROI_level(proposal_layer, shape)
     return roi_level
 
 
@@ -450,3 +452,95 @@ def test_pyramid_ROI_align_functions(pyramid_ROI_level, pyramid_ROI_pooling,
     assert K.int_shape(roi_level) == (1, None)
     assert K.int_shape(box_to_level) == (None, 2)
     assert K.int_shape(pooled) == (1, None, 7, 7, 256)
+
+
+@pytest.fixture
+def test_results_refine_box():
+    box = tf.Variable([[ 337,  661,  585,  969]])
+    prior_box = tf.Variable([[350,  650,  590,  1000]])
+    return refine_bbox(box,prior_box)
+
+
+@pytest.mark.parametrize('delta_box', [[ 0.03629032, 0.03246753, -0.03278985, 0.12783337]])
+def test_refine_box(test_results_refine_box, delta_box):
+    prior_results = test_results_refine_box.numpy()
+    np.testing.assert_almost_equal(prior_results[0],delta_box, decimal=6)
+
+
+@pytest.fixture
+def test_results_trim_zeros():
+    box = tf.Variable([[0, 0, 0, 0], [0, 0, 0, 0],
+                       [337,  661,  585,  969],[337,  661,  585,  969],
+                       [337, 661, 585, 969],[337,  661,  585,  969],
+                       [337, 661, 585, 969], [337,  661,  585,  969],
+                       [0, 0, 0, 0], [0, 0, 0, 0]])
+    return trim_zeros(box)
+
+@pytest.mark.parametrize('boxes', [[[337,  661,  585,  969],[337,  661,  585,  969],
+                       [337, 661, 585, 969],[337,  661,  585,  969],
+                       [337, 661, 585, 969], [337,  661,  585,  969]]])
+def test_trim_zeros(test_results_trim_zeros, boxes):
+    box, non_zeros= test_results_trim_zeros
+    np.testing.assert_almost_equal(box.numpy(), boxes)
+    assert non_zeros.numpy().sum() == 6
+
+
+@pytest.fixture
+def test_results_apply_box_deltas():
+    box = tf.Variable([[337., 661., 500., 300.]])
+    deltas = tf.Variable([[ 0.03629032, 0.03246753, -0.03278985, 0.12783337]])
+    return apply_box_deltas(box, deltas)
+
+
+@pytest.mark.parametrize('result', [[345.54434, 673.8929,  503.28625, 263.66562]])
+def test_apply_box_deltas(test_results_apply_box_deltas,result):
+    values= test_results_apply_box_deltas.numpy()
+    np.testing.assert_almost_equal(values[0], result, decimal=4)
+
+
+@pytest.fixture
+def test_results_clip_boxes():
+    box = tf.Variable([[337., 661., 700., 300.]])
+    windows = np.array([400, 500, 800, 900], dtype=np.float32)
+    return clip_boxes(box, windows)
+
+
+@pytest.mark.parametrize('result', [[400., 661., 700., 500.]])
+def test_clip_boxes(test_results_clip_boxes,result):
+    values= test_results_clip_boxes.numpy()
+    np.testing.assert_almost_equal(values[0], result, decimal=4)
+
+
+@pytest.fixture
+def test_results_transform_ROI_coordinates():
+    box = tf.Variable([[337., 661., 700., 300.]])
+    roi = tf.Variable([[300., 600., 800., 400.]])
+    return transform_ROI_coordinates(box, roi)
+
+
+@pytest.mark.parametrize('result', [[ 0.074, -0.305,  0.8, 1.5]])
+def test_transform_ROI_coordinates(test_results_transform_ROI_coordinates, result):
+    values= test_results_transform_ROI_coordinates.numpy()
+    np.testing.assert_almost_equal(values[0], result, decimal=4)
+
+@pytest.fixture
+def test_results_compute_max_ROI_level():
+    area = 0.5
+    return compute_max_ROI_level(area)
+
+
+def test_compute_max_ROI_level(test_results_compute_max_ROI_level):
+    values= test_results_compute_max_ROI_level
+    assert values == 3
+
+
+@pytest.fixture
+def test_results_compute_scaled_area():
+    H, W = tf.Variable([100.]),tf.Variable([100.])
+    image_shape =tf.Variable([512,512])
+    return compute_scaled_area(H,W,image_shape)
+
+
+def test_compute_compute_scaled_area(test_results_compute_scaled_area):
+    values = test_results_compute_scaled_area.numpy()
+    assert values == 228.57143
