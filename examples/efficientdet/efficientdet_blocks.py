@@ -36,7 +36,7 @@ def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
         box_outputs: List, BoxNet output offsets for each level.
     """
 
-    class_outputs = build_predictor_block(
+    class_outputs = build_predictionnet(
         repeats, num_filters, with_separable_conv, name, min_level,
         max_level, num_classes, num_anchors, features, survival_rate,
         training, return_base, True)
@@ -71,7 +71,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
         box_outputs: List, BoxNet output offsets for each level.
     """
 
-    box_outputs = build_predictor_block(
+    box_outputs = build_predictionnet(
         repeats, num_filters, with_separable_conv, name, min_level,
         max_level, None, num_anchors, features, survival_rate,
         training, return_base, False)
@@ -94,17 +94,17 @@ def BiFPN(features, num_filters, id, fpn_weight_method):
     is_non_repeated_block = id == 0
 
     if is_non_repeated_block:
-        P6_in, P7_in = preprocess_features(
+        P6_in, P7_in = preprocess_features_BiFPN(
             0, features[-1], num_filters, features, id, True)
 
         previous_layer_feature, current_feature = P7_in, P6_in
-        feature_tds = propagate_downwards_all_blocks(
+        feature_tds = propagate_downwards_BiFPN(
             is_non_repeated_block, features, previous_layer_feature,
             current_feature, fpn_weight_method, num_filters, id)
 
         current_layer_feature, next_input = feature_tds[3], features[-2]
         next_td, output_features = feature_tds[2], [feature_tds[3]]
-        output_features = propagate_upwards_all_blocks(
+        output_features = propagate_upwards_BiFPN(
             is_non_repeated_block, features, current_layer_feature,
             next_input, next_td, id, feature_tds, fpn_weight_method,
             num_filters, output_features, P6_in, P7_in)
@@ -113,13 +113,13 @@ def BiFPN(features, num_filters, id, fpn_weight_method):
 
     else:
         previous_layer_feature, current_feature = features[-1], features[-2]
-        feature_tds = propagate_downwards_all_blocks(
+        feature_tds = propagate_downwards_BiFPN(
             is_non_repeated_block, features, previous_layer_feature,
             current_feature, fpn_weight_method, num_filters, id)
 
         current_layer_feature, next_input = feature_tds[-1], features[1]
         next_td, output_features = feature_tds[-2], [feature_tds[-1]]
-        output_features = propagate_upwards_all_blocks(
+        output_features = propagate_upwards_BiFPN(
             is_non_repeated_block, features, current_layer_feature,
             next_input, next_td, id, feature_tds, fpn_weight_method,
             num_filters, output_features, None, None)
@@ -198,14 +198,14 @@ def conv2D_layer(num_filters, kernel_size, padding, activation,
     return conv2D_layer
 
 
-def build_predictor_block(repeats, num_filters, with_separable_conv, name,
-                          min_level, max_level, num_classes, num_anchors,
-                          features, survival_rate, training,
-                          return_base, build_classnet):
-    conv_blocks = build_conv_blocks(
+def build_predictionnet(repeats, num_filters, with_separable_conv, name,
+                        min_level, max_level, num_classes, num_anchors,
+                        features, survival_rate, training,
+                        return_base, build_classnet):
+    conv_blocks = build_predictionnet_conv_blocks(
         repeats, num_filters, with_separable_conv, name, build_classnet)
 
-    batchnorms = build_batchnorm_blocks(
+    batchnorms = build_predictionnet_batchnorm_blocks(
         repeats, min_level, max_level, name, build_classnet)
 
     if build_classnet:
@@ -225,15 +225,15 @@ def build_predictor_block(repeats, num_filters, with_separable_conv, name,
 
     predictor_outputs = []
     for level_id in range(num_levels):
-        image = predictor_block_propagate_forward(
+        image = propagate_forward_predictionnet(
             features, level_id, repeats, conv_blocks, batchnorms,
             survival_rate, training, return_base, classes)
         predictor_outputs.append(image)
     return predictor_outputs
 
 
-def build_conv_blocks(repeats, num_filters, with_separable_conv,
-                      name, is_classnet):
+def build_predictionnet_conv_blocks(repeats, num_filters, with_separable_conv,
+                                    name, is_classnet):
 
     layer_name_prefix = name + 'class' if is_classnet else name + 'box'
     conv_blocks = []
@@ -244,7 +244,8 @@ def build_conv_blocks(repeats, num_filters, with_separable_conv,
     return conv_blocks
 
 
-def build_batchnorm_blocks(repeats, min_level, max_level, name, is_classnet):
+def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level,
+                                         name, is_classnet):
 
     layer_name_prefix = name + 'class' if is_classnet else name + 'box'
     batchnorms = []
@@ -257,9 +258,9 @@ def build_batchnorm_blocks(repeats, min_level, max_level, name, is_classnet):
     return batchnorms
 
 
-def predictor_block_propagate_forward(features, level_id, repeats, conv_blocks,
-                                      batchnorms, survival_rate, training,
-                                      return_base, output_candidates):
+def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
+                                    batchnorms, survival_rate, training,
+                                    return_base, output_candidates):
     image = features[level_id]
     for repeat_args in range(repeats):
         original_image = image
@@ -276,9 +277,9 @@ def predictor_block_propagate_forward(features, level_id, repeats, conv_blocks,
         return output_candidates(image)
 
 
-def propagate_downwards_all_blocks(is_non_repeated_block, features,
-                                   previous_layer_feature, current_feature,
-                                   fpn_weight_method, num_filters, id):
+def propagate_downwards_BiFPN(is_non_repeated_block, features,
+                              previous_layer_feature, current_feature,
+                              fpn_weight_method, num_filters, id):
 
     feature_tds = [] if is_non_repeated_block else [previous_layer_feature]
     for depth_idx in range(len(features)-1):
@@ -317,7 +318,7 @@ def propagate_downwards(previous_layer_feature, current_feature, id,
     is_non_repeated_block = id == 0
     layer_not_P7 = depth_idx > 0
     if is_non_repeated_block and layer_not_P7:
-        current_feature = preprocess_features(
+        current_feature = preprocess_features_BiFPN(
             depth_idx, current_feature, num_filters, features, id, True)
 
     previous_layer_feature_U = UpSampling2D()(previous_layer_feature)
@@ -339,10 +340,10 @@ def propagate_downwards(previous_layer_feature, current_feature, id,
     return current_feature_td
 
 
-def propagate_upwards_all_blocks(is_non_repeated_block, features,
-                                 current_layer_feature, next_input, next_td,
-                                 id, feature_tds, fpn_weight_method,
-                                 num_filters, output_features, P6_in, P7_in):
+def propagate_upwards_BiFPN(is_non_repeated_block, features,
+                            current_layer_feature, next_input, next_td,
+                            id, feature_tds, fpn_weight_method,
+                            num_filters, output_features, P6_in, P7_in):
 
     for depth_idx in range(len(features) - 1):
         current_layer_feature = propagate_upwards(
@@ -353,7 +354,7 @@ def propagate_upwards_all_blocks(is_non_repeated_block, features,
         depth_idx_arg, P6_in_arg, P7_in_arg, next_input_arg, next_td_arg =\
             (depth_idx + 1, P6_in, P7_in, None, None) if is_non_repeated_block\
             else (depth_idx, None, None, next_input, next_td)
-        next_input, next_td = compute_next_input(
+        next_input, next_td = compute_next_input_feature_BiFPN(
             id, features, feature_tds, depth_idx_arg, P6_in_arg,
             P7_in_arg, next_input_arg, next_td_arg)
     return output_features
@@ -395,7 +396,7 @@ def propagate_upwards(current_layer_feature, next_input, next_td, id,
 
     if is_non_repeated_block:
         if is_layer_P6_or_P7:
-            next_input = preprocess_features(
+            next_input = preprocess_features_BiFPN(
                 depth_idx, next_input, num_filters, features, id, False)
 
         layer_names = [(f'fpn_cells/cell_{id}/fnode'
@@ -436,8 +437,8 @@ def propagate_upwards(current_layer_feature, next_input, next_td, id,
     return next_out
 
 
-def preprocess_features(depth_idx, input_feature, num_filters,
-                        features, id, is_propagate_downwards):
+def preprocess_features_BiFPN(depth_idx, input_feature, num_filters,
+                              features, id, is_propagate_downwards):
     """Perform pre-processing on features before applying
     downward propagation or upward propagation.
 
@@ -461,7 +462,7 @@ def preprocess_features(depth_idx, input_feature, num_filters,
         if is_layer_P7:
             layer_names = [(f'resample_p{len(features) + 1}/conv2d'),
                            (f'resample_p{len(features) + 1}/bn')]
-            P6_in = preprocess_features_partly(
+            P6_in = preprocess_features_partly_BiFPN(
                 input_feature, num_filters, layer_names)
             P6_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
                                                      f'{len(features) + 1}'
@@ -476,7 +477,7 @@ def preprocess_features(depth_idx, input_feature, num_filters,
                             f'/conv2d'),
                            (f'fpn_cells/cell_{id}/fnode{depth_idx}/resample_0_'
                             f'{3 - depth_idx}_{len(features) + depth_idx}/bn')]
-            preprocessed_feature = preprocess_features_partly(
+            preprocessed_feature = preprocess_features_partly_BiFPN(
                 input_feature, num_filters, layer_names)
             return preprocessed_feature
     else:
@@ -486,12 +487,12 @@ def preprocess_features(depth_idx, input_feature, num_filters,
                        (f'fpn_cells/cell_{id}'
                         f'/fnode{len(features) - 1 + depth_idx}'
                         f'/resample_0_{1 + depth_idx}_{9 + depth_idx}/bn')]
-        preprocessed_feature = preprocess_features_partly(
+        preprocessed_feature = preprocess_features_partly_BiFPN(
             input_feature, num_filters, layer_names)
         return preprocessed_feature
 
 
-def preprocess_features_partly(input_feature, num_filters, layer_names):
+def preprocess_features_partly_BiFPN(input_feature, num_filters, layer_names):
     """Perform a part of feature preprocessing such as
     applying Conv2D and BatchNormalization.
 
@@ -511,8 +512,8 @@ def preprocess_features_partly(input_feature, num_filters, layer_names):
     return partly_processed_feature
 
 
-def compute_next_input(id, features, feature_tds, depth_idx,
-                       P6_in, P7_in, next_input, next_td):
+def compute_next_input_feature_BiFPN(id, features, feature_tds, depth_idx,
+                                     P6_in, P7_in, next_input, next_td):
     """Computes next input feature for upward propagation.
 
     # Arguments
