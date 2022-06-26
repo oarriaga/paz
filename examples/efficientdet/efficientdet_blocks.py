@@ -81,6 +81,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
 def BiFPN(features, num_filters, id, fpn_weight_method):
     """
     BiFPN layer.
+
     # Arguments
     features: List, feature to be processed by BiFPN.
     num_filters: Integer. Number of filters for intermediate layers.
@@ -202,6 +203,32 @@ def build_predictionnet(repeats, num_filters, with_separable_conv, name,
                         min_level, max_level, num_classes, num_anchors,
                         features, survival_rate, training,
                         return_base, build_classnet):
+    """Builds Prediction Net part of the Efficientdet
+
+    # Arguments
+        repeats: List, feature to be processed by PredictionNet head.
+        num_filters: Integer. Number of filters for intermediate
+                     layers.
+        with_separable_conv: Bool.
+        name: String indicating the name of this layer.
+        min_level: Integer. Minimum level for features.
+        max_level: Integer. Maximum level for features.
+        num_classes: Integer. Number of classes.
+        num_anchors: Integer. Number of anchors.
+        features: Tuple. Input features for PredictionNet
+        survival_rate: Float.
+        If a value is set then drop connect will be used.
+        training: Bool. mode of using the network.
+
+        True to use separable_conv instead of Conv2D.
+        return_base: Bool.
+        Build the base feature network only. Excluding final
+        class head.
+        build_classnet: Bool.
+
+    # Returns
+        predictor_outputs: List. Output of PredictionNet block.
+    """
     conv_blocks = build_predictionnet_conv_blocks(
         repeats, num_filters, with_separable_conv, name, build_classnet)
 
@@ -234,7 +261,19 @@ def build_predictionnet(repeats, num_filters, with_separable_conv, name,
 
 def build_predictionnet_conv_blocks(repeats, num_filters, with_separable_conv,
                                     name, is_classnet):
+    """Builds convolutional blocks for PredictionNet
 
+    # Arguments
+        repeats: List, feature to be processed by PredictionNet head.
+        num_filters: Integer. Number of filters for intermediate
+                     layers.
+        with_separable_conv: Bool.
+        name: String indicating the name of this layer.
+        is_classnet: Bool.
+
+    # Returns
+        conv_blocks: List. Convolutional blocks for PredictionNet.
+    """
     layer_name_prefix = name + 'class' if is_classnet else name + 'box'
     conv_blocks = []
     for repeat_args in range(repeats):
@@ -246,7 +285,18 @@ def build_predictionnet_conv_blocks(repeats, num_filters, with_separable_conv,
 
 def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level,
                                          name, is_classnet):
+    """Builds batch normalization blocks for PredictionNet
 
+    # Arguments
+        repeats: List, feature to be processed by PredictionNet head.
+        min_level: Integer. Minimum level for features.
+        max_level: Integer. Maximum level for features.
+        name: String indicating the name of this layer.
+        is_classnet: Bool.
+
+    # Returns
+        batchnorms: List. Batch normalization blocks for PredictionNet.
+    """
     layer_name_prefix = name + 'class' if is_classnet else name + 'box'
     batchnorms = []
     for repeat_args in range(repeats):
@@ -261,6 +311,25 @@ def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level,
 def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
                                     batchnorms, survival_rate, training,
                                     return_base, output_candidates):
+    """Propagates features through PredictionNet block.
+
+    # Arguments
+        features: Tuple. Input features for PredictionNet
+        level_id: Int. The index of feature level.
+        repeats: List, feature to be processed by PredictionNet head.
+        conv_blocks: List. Convolutional blocks for PredictionNet.
+        batchnorms: List. Batch normalization blocks for PredictionNet.
+        survival_rate: Float.
+        If a value is set then drop connect will be used.
+        training: Bool. mode of using the network.
+        return_base: Bool.
+        Build the base feature network only. Excluding final
+        class head.
+        output_candidates: Tensor. PredictionNet output for each level.
+
+    # Returns
+        image: List. Batch normalization blocks for PredictionNet.
+    """
     image = features[level_id]
     for repeat_args in range(repeats):
         original_image = image
@@ -280,7 +349,24 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
 def propagate_downwards_BiFPN(is_non_repeated_block, features,
                               previous_layer_feature, current_feature,
                               fpn_weight_method, num_filters, id):
+    """Propagates features in downward direction through BiFPN block.
 
+    # Arguments
+        is_non_repeated_block: Bool
+        features: Tuple. Input features for PredictionNet
+        previous_layer_feature: Tensor, feature input from previous
+                                level.
+        current_feature: Tensor, feature input from current level.
+        fpn_weight_method: String representing the feature fusion
+                           method.
+        num_filters: Integer. Number of filters for intermediate
+                     layers.
+        id: Int. Represents the BiFPN repetition count.
+
+    # Returns
+        feature_tds: List. Output features resulting from
+                     down propagation from BiFPN block.
+    """
     feature_tds = [] if is_non_repeated_block else [previous_layer_feature]
     for depth_idx in range(len(features)-1):
         previous_layer_feature = propagate_downwards(
@@ -344,7 +430,30 @@ def propagate_upwards_BiFPN(is_non_repeated_block, features,
                             current_layer_feature, next_input, next_td,
                             id, feature_tds, fpn_weight_method,
                             num_filters, output_features, P6_in, P7_in):
+    """Propagates features in upward direction through BiFPN block.
 
+    # Arguments
+        is_non_repeated_block: Bool
+        features: Tuple. Input features for PredictionNet
+        current_layer_feature: Tensor, feature input from current level.
+        next_input: Tensor, feature input from next level.
+        next_td: Tensor, feature input from next level.
+        id: Int. Represents the BiFPN repetition count.
+        feature_tds: List. Output features resulting from
+                     down propagation from BiFPN block.
+        fpn_weight_method: String representing the feature fusion
+                           method.
+        num_filters: Integer. Number of filters for intermediate
+                     layers.
+        output_features: List. Output features resulting from
+                         down propagation from BiFPN block.
+        P6_in: Tensor, feature input from 6th level.
+        P7_in: Tensor, feature input from 7th level.
+
+    # Returns
+        output_features: List. Output features resulting from
+                         upward propagation from BiFPN block.
+    """
     for depth_idx in range(len(features) - 1):
         current_layer_feature = propagate_upwards(
             current_layer_feature, next_input, next_td, id, feature_tds,
