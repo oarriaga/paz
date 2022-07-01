@@ -9,7 +9,63 @@ LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
 
 
-def draw_circle(image, point, color=GREEN, radius=5):
+def draw_square(image, center, color, size):
+    """Draw a square in an image
+
+    # Arguments
+        image: Array ``(H, W, 3)``
+        center: List ``(2)`` with ``(x, y)`` values in openCV coordinates.
+        size: Float. Length of square size.
+        color: List ``(3)`` indicating RGB colors.
+
+    # Returns
+        Array ``(H, W, 3)`` with square.
+    """
+    center_x, center_y = center
+    x_min, y_min = center_x - size, center_y - size
+    x_max, y_max = center_x + size, center_y + size
+    cv2.rectangle(image, (x_min, y_min), (x_max, y_max), tuple(color), FILLED)
+    return image
+
+
+def draw_circle(image, center, color=GREEN, radius=5):
+    """Draw a circle in an image
+
+    # Arguments
+        image: Array ``(H, W, 3)``
+        center: List ``(2)`` with ``(x, y)`` values in openCV coordinates.
+        radius: Float. Radius of circle.
+        color: Tuple ``(3)`` indicating the RGB colors.
+
+    # Returns
+        Array ``(H, W, 3)`` with circle.
+    """
+    cv2.circle(image, tuple(center), radius, tuple(color), FILLED)
+    return image
+
+
+def draw_triangle(image, center, color, size):
+    """Draw a triangle in an image
+
+    # Arguments
+        image: Array ``(H, W, 3)``
+        center: List ``(2)`` containing ``(x_center, y_center)``.
+        size: Float. Length of square size.
+        color: Tuple ``(3)`` indicating the RGB colors.
+
+    # Returns
+        Array ``(H, W, 3)`` with triangle.
+    """
+    center_x, center_y = center
+    vertex_A = (center_x, center_y - size)
+    vertex_B = (center_x - size, center_y + size)
+    vertex_C = (center_x + size, center_y + size)
+    points = np.array([[vertex_A, vertex_B, vertex_C]], dtype=np.int32)
+    cv2.fillPoly(image, points, tuple(color))
+    return image
+
+
+def draw_keypoint(image, point, color=GREEN, radius=5):
     """ Draws a circle in image.
 
     # Arguments
@@ -22,10 +78,9 @@ def draw_circle(image, point, color=GREEN, radius=5):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with circle.
     """
-    cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
+    cv2.circle(image, tuple(point), radius, (0, 0, 0), FILLED)
     inner_radius = int(0.8 * radius)
-    # color = color[::-1]  # transform to BGR for openCV
-    cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
+    cv2.circle(image, tuple(point), inner_radius, tuple(color), FILLED)
     return image
 
 
@@ -60,7 +115,6 @@ def draw_line(image, point_A, point_B, color=GREEN, thickness=5):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with line.
     """
-    # color = color[::-1]  # transform to BGR for openCV
     cv2.line(image, tuple(point_A), tuple(point_B), tuple(color), thickness)
     return image
 
@@ -79,7 +133,6 @@ def draw_rectangle(image, corner_A, corner_B, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    # color = color[::-1]  # transform to BGR for openCV
     return cv2.rectangle(
         image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
 
@@ -166,7 +219,6 @@ def draw_filled_polygon(image, vertices, color):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with polygon.
     """
-    # color = color[::-1]  # transform to BGR for openCV
     cv2.fillPoly(image, [vertices], color)
     return image
 
@@ -328,11 +380,12 @@ def draw_keypoints(image, keypoints, keypoint_colors, check_scores=False,
         color = keypoint_colors[keypoint_arg]
         if check_scores:
             if keypoint[2] > 0:
-                draw_circle(image, (int(keypoint[0]),
-                                    int(keypoint[1])), color, keypoint_radius)
+                draw_keypoint(
+                    image, (int(keypoint[0]),
+                            int(keypoint[1])), color, keypoint_radius)
         else:
-            draw_circle(image, (int(keypoint[0]), int(keypoint[1])), color,
-                        keypoint_radius)
+            draw_keypoint(image, (int(keypoint[0]), int(keypoint[1])), color,
+                          keypoint_radius)
     return image
 
 

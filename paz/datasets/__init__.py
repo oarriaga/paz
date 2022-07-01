@@ -12,3 +12,4 @@ from .CMU_poanoptic import MINIMAL_HAND_CONFIG
 from .CMU_poanoptic import IK_UNIT_LENGTH
 from .CMU_poanoptic import MANOHandJoints
 from .CMU_poanoptic import MPIIHandJoints
+from .shapes import Shapes

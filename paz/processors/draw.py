@@ -4,7 +4,7 @@ from ..abstract import Processor
 from ..backend.image import lincolor
 from ..backend.image import draw_rectangle
 from ..backend.image import put_text
-from ..backend.image import draw_circle
+from ..backend.image import draw_keypoint
 from ..backend.image import draw_cube
 from ..backend.image import GREEN
 from ..backend.image import draw_random_polygon
@@ -86,7 +86,7 @@ class DrawKeypoints2D(Processor):
     def call(self, image, keypoints):
         for keypoint_arg, keypoint in enumerate(keypoints):
             color = self.colors[keypoint_arg]
-            draw_circle(image, keypoint.astype('int'), color, self.radius)
+            draw_keypoint(image, keypoint.astype('int'), color, self.radius)
         return image
 
 

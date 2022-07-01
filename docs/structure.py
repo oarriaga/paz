@@ -128,6 +128,9 @@ PAGES = [
         'page': 'backend/draw.md',
         'functions': [
             draw.draw_circle,
+            draw.draw_square,
+            draw.draw_triangle,
+            draw.draw_keypoint,
             draw.draw_cube,
             draw.draw_dot,
             draw.draw_filled_polygon,
@@ -308,7 +311,8 @@ PAGES = [
             datasets.FER,
             datasets.FERPlus,
             datasets.OpenImages,
-            datasets.CityScapes
+            datasets.CityScapes,
+            datasets.Shapes
         ],
     },
 

@@ -1,13 +1,13 @@
 from paz.backend.keypoints import denormalize_keypoints
 from paz.abstract import SequentialProcessor
 from paz import processors as pr
-from paz.backend.image import draw_circle
+from paz.backend.image import draw_keypoint
 from paz.backend.image.draw import GREEN
 
 
 def draw_circles(image, points, color=GREEN, radius=3):
     for point in points:
-        draw_circle(image, point, color, radius)
+        draw_keypoint(image, point, color, radius)
     return image
 
 
