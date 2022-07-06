@@ -145,8 +145,7 @@ PAGES = [
             draw.draw_keypoints,
             draw.points3D_to_RGB,
             draw.draw_RGB_mask,
-            draw.draw_RGB_masks,
-            draw.plot_3D_keypoints_link
+            draw.draw_RGB_masks
         ],
     },
 

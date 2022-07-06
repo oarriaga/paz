@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from paz.backend.camera import Camera, VideoPlayer
 from paz.applications import MinimalHandPoseEstimation
-from paz.backend.image import resize_image, show_image, plot_3D_keypoints_link
+from paz.backend.image import resize_image, show_image
 from paz.datasets import MINIMAL_HAND_CONFIG
 
 
@@ -16,6 +16,26 @@ args = parser.parse_args()
 pipeline = MinimalHandPoseEstimation(right_hand=False)
 camera = Camera(args.camera_id)
 player = VideoPlayer((640, 480), pipeline, camera)
+
+
+def plot_3D_keypoints_link(ax, keypoints3D, link_args, link_orders,
+                           link_colors):
+    """Plot 3D keypoints links on a plt.axes 3D projection
+
+    # Arguments
+        ax: plt.axes object
+        keypoints3D: Array, 3D keypoints coordinates
+        link_args: Keypoint labels. Dictionary. {'k0':0, 'k1':1, ...}
+        link_orders: List of tuple. [('k0', 'k1'),('kl', 'k2'), ...]
+        link_colors: Color of each link. List of list
+    """
+    for pair_arg, pair in enumerate(link_orders):
+        color = link_colors[pair_arg]
+        point1 = keypoints3D[link_args[pair[0]]]
+        point2 = keypoints3D[link_args[pair[1]]]
+        points = np.stack([point1, point2], axis=0)
+        xs, ys, zs = np.split(points, 3, axis=1)
+        ax.plot3D(xs[:, 0], ys[:, 0], zs[:, 0], c=color)
 
 
 link_orders = MINIMAL_HAND_CONFIG['part_orders']
