@@ -5,15 +5,16 @@ from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from tensorflow.keras.callbacks import ModelCheckpoint
-from model import MaskRCNN
-from mask_rcnn.config import Config
-from pipeline import DetectionPipeline, DataSequencer
+
+from .config import Config
+from .pipeline import DetectionPipeline#, DataSequencer
 from paz.models.detection.utils import create_prior_boxes
 #from ycb import YCBVideo
-from loss import Loss
-from network import create_network_head
-from mask_rcnn.utils import data_generator
-from shapes_loader import ShapesDataset
+from .loss import Loss
+from .network import create_network_head
+from .utils import data_generator
+from .shapes_loader import Shapes
+from .model import MaskRCNN, get_imagenet_weights
 
 
 class ShapesConfig(Config):
@@ -66,14 +67,14 @@ optimizer = SGD(args.learning_rate, args.momentum)
 config = ShapesConfig()
 
 # Training data
-dataset_train = ShapesDataset()
-dataset_train.load_shapes(500, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
-dataset_train.prepare()
+dataset_train = Shapes(500, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
+dataset_train.load_data()
+#dataset_train.prepare() #prepare function added extra, need to check the impact
 
 # Validation data
-dataset_val = ShapesDataset()
-dataset_val.load_shapes(50, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
-dataset_val.prepare()
+dataset_val = Shapes(50, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
+dataset_val.load_data()
+#dataset_val.prepare()  #prepare function check added extra, need to check the  impact
 
 train_generator = data_generator(dataset_train, config, shuffle=True,
                                  augmentation=None,
@@ -83,9 +84,11 @@ val_generator = data_generator(dataset_val, config,
 
 # instantiating model
 num_classes = config.NUM_CLASSES
-model = MaskRCNN(config=config, model_dir=args.data_path)
+model = MaskRCNN(config=config, model_dir=args.data_path, train_bn=config.TRAIN_BN,
+                 image_shape=config.IMAGE_SHAPE, backbone=config.BACKBONE,
+                 top_down_pyramid_size=config.TOP_DOWN_PYRAMID_SIZE)
 model.keras_model = create_network_head(model, config)
-model.keras_model.load_weights(model.get_imagenet_weights(), by_name=True)
+model.keras_model.load_weights(get_imagenet_weights(), by_name=True)
 
 layer_regex = {
     # all layers but the backbone
@@ -97,6 +100,7 @@ layer_regex = {
     # All layers
     'all': '.*',
 }
+layers=[]
 if args.layers in layer_regex.keys():
     layers = layer_regex[args.layers]
 
@@ -121,7 +125,7 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 early_stop = EarlyStopping(monitor='loss', patience=3)
 
-model.set_trainable(layers)
+model.set_trainable(layer_regex=layers)
 
 # keras_model._losses = []
 # keras_model._per_input_losses = {}
@@ -140,6 +144,7 @@ model.set_trainable(layers)
 #     added_loss_name.append(layer.output.name)
 
 # l2 Regularization
+
 reg_losses = [
     l2(config.WEIGHT_DECAY)(w) / tf.cast(tf.size(input=w), tf.float32)
     for w in model.keras_model.trainable_weights

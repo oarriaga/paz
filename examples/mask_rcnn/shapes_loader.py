@@ -1,125 +1,202 @@
-import cv2
+from paz.abstract.loader import Loader
 import numpy as np
+from paz.backend.image.draw import draw_circle
 from paz.backend.boxes import apply_non_max_suppression
-from paz.abstract import Loader
-from tensorflow.keras.utils import Progbar
+import cv2
+
+GREEN = (0, 255, 0)
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+LINE = cv2.LINE_AA
+FILLED = cv2.FILLED
+
+
+def draw_square(image, center, color, size):
+    """Draw a square in an image
+
+    # Arguments
+        image: Array ``(H, W, 3)``
+        center: List ``(2)`` with ``(x, y)`` values in openCV coordinates.
+        size: Float. Length of square size.
+        color: List ``(3)`` indicating RGB colors.
+
+    # Returns
+        Array ``(H, W, 3)`` with square.
+    """
+    center_x, center_y = center
+    x_min, y_min = center_x - size, center_y - size
+    x_max, y_max = center_x + size, center_y + size
+    cv2.rectangle(image, (x_min, y_min), (x_max, y_max), tuple(color), FILLED)
+    return image
+
+
+def draw_triangle(image, center, color, size):
+    """Draw a triangle in an image
+
+    # Arguments
+        image: Array ``(H, W, 3)``
+        center: List ``(2)`` containing ``(x_center, y_center)``.
+        size: Float. Length of square size.
+        color: Tuple ``(3)`` indicating the RGB colors.
+
+    # Returns
+        Array ``(H, W, 3)`` with triangle.
+    """
+    center_x, center_y = center
+    vertex_A = (center_x, center_y - size)
+    vertex_B = (center_x - size, center_y + size)
+    vertex_C = (center_x + size, center_y + size)
+    points = np.array([[vertex_A, vertex_B, vertex_C]], dtype=np.int32)
+    cv2.fillPoly(image, points, tuple(color))
+    return image
 
 
 class Shapes(Loader):
     """ Loader for shapes synthetic dataset.
 
     # Arguments
-        num_samples: Int indicating number of samples to load
-        size: (Height, Width) of input image to load
+        num_samples: Int indicating number of samples to load.
+        image_size: (height, width) of input image to load.
         split: String determining the data split to load.
             e.g. `train`, `val` or `test`
-        class_names: `all` or list. If list it should contain as elements
-            strings indicating each class name
+        class_names: List of strings or `all`.
+        iou_thresh: Float intersection over union.
+        max_num_shapes: Int. maximum number of shapes in the image.
+
+    # Returns
+        List of dictionaries with keys `image`, `mask`, `box_data`
+            containing
     """
-    def __init__(self, num_samples, size, split='train', class_names='all'):
+    def __init__(self, num_samples, image_size, split='train',
+                 class_names='all', iou_thresh=0.3, max_num_shapes=3):
         if class_names == 'all':
             class_names = ['background', 'square', 'circle', 'triangle']
+        self.name_to_arg = dict(zip(class_names, range(len(class_names))))
+        self.arg_to_name = dict(zip(range(len(class_names)), class_names))
+        self.num_samples, self.image_size = num_samples, image_size
+        self.labels = ['image', 'masks', 'box_data']
+        self.iou_thresh = iou_thresh
+        self.max_num_shapes = max_num_shapes
         super(Shapes, self).__init__(None, split, class_names, 'Shapes')
-        self.num_samples = num_samples
-        self.size = size
-        self.name_to_arg, self.arg_to_name = self._get_maps(self.class_names)
-
-    def _get_maps(self, class_names):
-        name_to_arg = dict(zip(class_names, range(len(class_names))))
-        arg_to_name = dict(zip(range(len(class_names)), class_names))
-        return name_to_arg, arg_to_name
 
     def load_data(self):
-        progress_bar, data = Progbar(self.num_samples), []
-        for sample_arg in range(self.num_samples):
-            data.append(self.load_sample())
-            progress_bar.update(sample_arg + 1)
-        return data
+        return [self.load_sample() for arg in range(self.num_samples)]
 
     def load_sample(self):
-        shapes = self.random_image()
-        image = self.load_image(shapes)
-        masks = self.load_masks(shapes)
+        shapes = self._sample_shapes(self.max_num_shapes, *self.image_size)
+        boxes = self._compute_bounding_boxes(shapes)
+        shapes, boxes = self._filter_shapes(boxes, shapes, self.iou_thresh)
+        image = self._draw_shapes(shapes)
+        masks = self._draw_masks(shapes)
         class_args = [self.name_to_arg[name[0]] for name in shapes]
         class_args = np.asarray(class_args).reshape(-1, 1)
-        box_data = np.concatenate([self.get_boxes(masks), class_args], axis=1)
-        labels = ['image', 'mask', 'box_data']
-        sample = dict(zip(labels, [image, masks, box_data]))
+        box_data = np.concatenate([boxes, class_args], axis=1)
+        sample = dict(zip(self.labels, [image, masks, box_data]))
         return sample
 
-    def load_image(self, shapes):
-        H, W = self.size
-        background = np.array([np.random.randint(0, 255) for _ in range(3)])
+    def _sample_shape(self, H, W, offset=20):
+        shape = np.random.choice(self.class_names[1:])
+        color = tuple(np.random.randint(0, 255, size=3).tolist())
+        center_x = np.random.randint(offset, W - offset - 1)
+        center_y = np.random.randint(offset, H - offset - 1)
+        size = np.random.randint(offset, H // 4)
+        return shape, color, (center_x, center_y, size)
+
+    def _sample_shapes(self, num_shapes, H, W, offset=20):
+        shapes = []
+        for shape_arg in range(num_shapes):
+            shapes.append(self._sample_shape(H, W, offset=20))
+        return shapes
+
+    def _compute_bounding_box(self, center_x, center_y, size):
+        x_min, y_min = center_x - size, center_y - size
+        x_max, y_max = center_x + size, center_y + size
+        box = [x_min, y_min, x_max, y_max]
+        return box
+
+    def _compute_bounding_boxes(self, shapes):
+        boxes = []
+        for shape in shapes:
+            center_x, center_y, size = shape[2]
+            box = self._compute_bounding_box(center_x, center_y, size)
+            boxes.append(box)
+        return np.asarray(boxes)
+
+    def _filter_shapes(self, boxes, shapes, iou_thresh):
+        scores = np.ones(len(boxes))  # all shapes have the same score
+        args, num_boxes = apply_non_max_suppression(boxes, scores, iou_thresh)
+        box_args = args[:num_boxes]
+        selected_shapes = []
+        for box_arg in box_args:
+            selected_shapes.append(shapes[box_arg])
+        return selected_shapes, boxes[box_args]
+
+    def _draw_shapes(self, shapes):
+        H, W = self.image_size
+        background_color = np.random.randint(0, 255, size=3)
         image = np.ones([H, W, 3], dtype=np.uint8)
-        image = image * background.astype(np.uint8)
-        for shape, color, dims in shapes:
-            image = self.draw_shape(image, shape, dims, color)
+        image = image * background_color.astype(np.uint8)
+        for shape, color, dimensions in shapes:
+            image = self._draw_shape(image, shape, dimensions, color)
         return image
 
-    def load_masks(self, shapes):
-        H, W = self.size
-        masks = np.zeros([H, W, len(shapes)], dtype=np.uint8)
-        for idx, (shape, _, dims) in enumerate(shapes):
-            args = (masks[..., idx:idx + 1].copy(), shape, dims, 1)
-            masks[..., idx:idx + 1] = self.draw_shape(*args)
-        occlusion = np.logical_not(masks[..., -1]).astype(np.uint8)
-        for index in range(len(shapes) - 2, -1, -1):
-            masks[..., index] = masks[..., index] * occlusion
-            occlusion = np.logical_and(occlusion,
-                                       np.logical_not(masks[..., index]))
+    def _draw_shape(self, image, shape, dimensions, color):
+        center_x, center_y, size = dimensions
+        functions = [draw_square, draw_circle, draw_triangle]
+        draw = dict(zip(self.class_names[1:], functions))
+        image = draw[shape](image, (center_x, center_y), color, size)
+        return image
+
+    def _draw_masks(self, shapes):
+        H, W = self.image_size
+        class_masks = []
+        for class_mask in range(self.num_classes):
+            class_masks.append(np.zeros([H, W, 1]))
+        class_masks[0] = np.logical_not(class_masks[0])
+        for shape_arg, (shape, color, dimensions) in enumerate(shapes):
+            mask_arg = self.name_to_arg[shape]
+            class_mask = class_masks[mask_arg]
+            class_mask = self._draw_shape(
+                class_mask, shape, dimensions, (1, 1, 1))
+            class_masks[mask_arg] = class_mask
+            negative_mask = np.logical_not(class_mask)
+            background_mask = class_masks[0].copy()
+            class_masks[0] = np.logical_and(negative_mask, background_mask)
+        masks = np.concatenate(class_masks, axis=-1).astype(np.uint8)
         return masks
 
-    def get_boxes(self, masks):
-        H, W = masks.shape[:2]
-        boxes = np.zeros([masks.shape[-1], 4], dtype=np.float32)
-        for index in range(masks.shape[-1]):
-            mask = masks[:, :, index]
-            horizontal_indicies = np.where(np.any(mask, axis=0))[0]
-            vertical_indicies = np.where(np.any(mask, axis=1))[0]
-            X1, X2 = horizontal_indicies[[0, -1]]
-            Y1, Y2 = vertical_indicies[[0, -1]]
-            X2 += 1
-            Y2 += 1
-            boxes[index] = np.array([X1 / W, Y1 / H, X2 / W, Y2 / H])
-        return boxes
+    def prepare(self, class_map=None):
+        """Prepares the Dataset class for use.
+        TODO: class map is not supported yet. When done, it should handle mapping
+              classes from different datasets to the same class ID.
+        """
 
-    def draw_shape(self, image, shape, dims, color):
-        center_x, center_y, size = dims
-        if shape == 'square':
-            start_point = (center_x - size, center_y - size)
-            end_point = (center_x + size, center_y + size)
-            cv2.rectangle(image, start_point, end_point, color, -1)
-        elif shape == 'circle':
-            cv2.circle(image, (center_x, center_y), size, color, -1)
-        elif shape == 'triangle':
-            angle = np.sin(np.radians(60))
-            points = np.array([[(center_x, center_y - size),
-                                (center_x - size / angle, center_y + size),
-                                (center_x + size / angle, center_y + size),
-                                ]], dtype=np.int32)
-            cv2.fillPoly(image, points, color)
-        return image
+        def clean_name(name):
+            """Returns a shorter version of object names for cleaner display."""
+            return ",".join(name.split(",")[:1])
 
-    def random_shape(self, H, W, buffer=20):
-        shape = np.random.choice(self.class_names[1:])
-        color = tuple([np.random.randint(0, 255) for _ in range(3)])
-        Y = np.random.randint(buffer, H - buffer - 1)
-        X = np.random.randint(buffer, W - buffer - 1)
-        size = np.random.randint(buffer, H // 4)
-        check_dimension = (Y + size) > H or (X + size) > W
-        if check_dimension or size > Y or size > X:
-            return self.random_shape(H, W)
-        return shape, color, (X, Y, size)
+        # Build (or rebuild) everything else from the info dicts.
+        self.class_info = [{"source": "", "id": 0, "name": "BG"}]
+        self.image_info = []
+        self.image_ids = []
+        self.class_ids = np.arange(self.num_classes)
+        self.class_names = [clean_name(c["name"]) for c in self.class_info]
+        self.num_images = len(self.image_info)
+        self._image_ids = np.arange(self.num_images)
 
-    def random_image(self):
-        H, W = self.size
-        shapes, boxes = [], []
-        for _ in range(3):
-            shape, color, dims = self.random_shape(H, W)
-            shapes.append((shape, color, dims))
-            X, Y, size = dims
-            boxes.append([Y - size, X - size, Y + size, X + size])
-        boxes = np.asarray(boxes)
-        indices, _ = apply_non_max_suppression(boxes, np.arange(3), 0.3)
-        shapes = [shape for _, shape in enumerate(shapes) if _ in indices]
-        return shapes
+        # Mapping from source class and image IDs to internal IDs
+        self.class_from_source_map = {"{}.{}".format(info['source'], info['id']): id
+                                      for info, id in zip(self.class_info, self.class_ids)}
+        self.image_from_source_map = {"{}.{}".format(info['source'], info['id']): id
+                                      for info, id in zip(self.image_info, self.image_ids)}
+
+        # Map sources to class_ids they support
+        self.sources = list(set([i['source'] for i in self.class_info]))
+        self.source_class_ids = {}
+        # Loop over datasets
+        for source in self.sources:
+            self.source_class_ids[source] = []
+            # Find classes that belong to this dataset
+            for i, info in enumerate(self.class_info):
+                # Include BG class in all datasets
+                if i == 0 or source == info['source']:
+                    self.source_class_ids[source].append(i)
