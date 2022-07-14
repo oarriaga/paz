@@ -1,8 +1,8 @@
 from tensorflow.keras.layers import Input, Lambda
 from tensorflow.keras.models import Model
 
-from .utils import fpn_classifier_graph, build_fpn_mask_graph
-from .layers import ProposalLayer, DetectionLayer
+from mask_rcnn.utils import fpn_classifier_graph, build_fpn_mask_graph
+from mask_rcnn.layers import ProposalLayer, DetectionLayer
 
 
 class InferenceGraph():

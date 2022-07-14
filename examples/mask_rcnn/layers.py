@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
-from .layer_utils import slice_batch, trim_by_score, compute_NMS, apply_NMS,get_top_detections,refine_detections
-from .layer_utils import apply_box_delta, clip_image_boundaries, detection_targets,filter_low_confidence,filter_low_confidence
-from .layer_utils import compute_ROI_level, apply_ROI_pooling, rearrange_pooled_features,apply_box_deltas,clip_boxes,zero_pad_detections
+from mask_rcnn.layer_utils import slice_batch, trim_by_score, compute_NMS, apply_NMS,get_top_detections,refine_detections
+from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries, detection_targets,filter_low_confidence,filter_low_confidence
+from mask_rcnn.layer_utils import compute_ROI_level, apply_ROI_pooling, rearrange_pooled_features,apply_box_deltas,clip_boxes,zero_pad_detections
 
 
 class DetectionLayer(Layer):

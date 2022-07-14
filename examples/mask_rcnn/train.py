@@ -6,15 +6,15 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from tensorflow.keras.callbacks import ModelCheckpoint
 
-from .config import Config
-from .pipeline import DetectionPipeline#, DataSequencer
+from mask_rcnn.config import Config
+from mask_rcnn.pipeline import DetectionPipeline#, DataSequencer
 from paz.models.detection.utils import create_prior_boxes
 #from ycb import YCBVideo
-from .loss import Loss
-from .network import create_network_head
-from .utils import data_generator
-from .shapes_loader import Shapes
-from .model import MaskRCNN, get_imagenet_weights
+from mask_rcnn.loss import Loss
+from mask_rcnn.network import create_network_head
+from mask_rcnn.utils import data_generator
+from paz.datasets.shapes import Shapes
+from mask_rcnn.model import MaskRCNN, get_imagenet_weights
 
 
 class ShapesConfig(Config):
