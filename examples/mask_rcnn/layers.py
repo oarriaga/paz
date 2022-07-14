@@ -76,7 +76,7 @@ class ProposalLayer(Layer):
         scores, deltas, pre_nms_anchors = trim_by_score(scores, deltas,
                                                         anchors, self.images_per_gpu,
                                                         self.pre_nms_limit)
-        boxes = apply_box_delta(pre_nms_anchors, deltas, self.images_per_gpu)
+        boxes = apply_box_deltas(pre_nms_anchors, deltas, self.images_per_gpu)
         boxes = clip_image_boundaries(boxes, self.images_per_gpu)
 
         proposals = slice_batch([boxes, scores],[self.proposal_count, self.nms_threshold], compute_NMS,

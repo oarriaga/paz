@@ -2,6 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
+from ..backend.standard import append_values
 
 
 class ControlMap(Processor):
@@ -375,3 +376,97 @@ class StochasticProcessor(Processor):
         if self.probability >= np.random.rand():
             return self.call(X)
         return X
+
+
+class Stochastic(Processor):
+    def __init__(self, function, probability=0.5, name=None):
+        """Adds stochasticity to a given ``function``
+
+        # Arguments:
+            function: Callable object i.e. python function or
+                ``paz.abstract.Processor``.
+            probability: Probability of calling ``function``.
+
+        # Example:
+        ```python
+        stochastic_add_one = Stochastic(lambda x: x + 1, 0.5)
+        # value can be either 0.0 or 1.0
+        value = random_add(0.0)
+        ```
+        """
+        super(Stochastic, self).__init__(name=name)
+        self.function = function
+        self.probability = probability
+
+    @property
+    def probability(self):
+        return self._probability
+
+    @probability.setter
+    def probability(self, probability):
+        assert 0.0 <= probability <= 1.0, 'Probability must be between 0 and 1'
+        self._probability = probability
+
+    def call(self, X):
+        if self.probability >= np.random.rand():
+            return self.function(X)
+        return X
+
+
+class UnwrapDictionary(Processor):
+    """Unwraps a dictionry into a list given the key order.
+    """
+    def __init__(self, keys):
+        super(UnwrapDictionary, self).__init__()
+        self.keys = keys
+
+    def call(self, dictionary):
+        return [dictionary[key] for key in self.keys]
+
+
+class Scale(Processor):
+    """Scales an input.
+    """
+    def __init__(self, scales):
+        super(Scale, self).__init__()
+        self.scales = scales
+
+    def call(self, values):
+        return self.scales * values
+
+
+class AppendValues(Processor):
+    """Append dictionary values to lists
+
+    # Arguments
+        keys: Keys to dictionary values
+    """
+    def __init__(self, keys):
+        super(AppendValues, self).__init__()
+        self.keys = keys
+
+    def call(self, dictionary, lists):
+        return append_values(dictionary, lists, self.keys)
+
+
+class BooleanToTextMessage(Processor):
+    """Convert a boolean to text message.
+    # Arguments
+        true_message: String. Message for true case.
+        false_message: String. Message for false case.
+        Flag: Boolean.
+
+    # Returns
+        message: String.
+    """
+    def __init__(self, true_message, false_message):
+        super(BooleanToTextMessage, self).__init__()
+        self.true_message = true_message
+        self.false_message = false_message
+
+    def call(self, flag):
+        if flag:
+            message = self.true_message
+        else:
+            message = self.false_message
+        return message
