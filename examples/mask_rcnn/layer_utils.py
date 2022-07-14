@@ -161,8 +161,8 @@ def get_top_detections(scores, keep, nms_keep, detection_max_instances):
     return tf.gather(keep, top_ids)
 
 
-def NMS_map(box_data, keep, unique_class_id,
-            detection_max_instances, detection_nms_threshold):
+def NMS_map(class_ids, scores, rois , keep,detection_max_instances,
+            detection_nms_threshold, unique_class_id):
     """Mapping function used to greedily select a subset of
     bounding boxes in descending order of score. The output of
     is a set of integers indexing into the input collection of
@@ -175,7 +175,6 @@ def NMS_map(box_data, keep, unique_class_id,
         detection_max_instances: Max number of final detections
         detection_nms_threshold: Non-maximum suppression threshold for detection
     """
-    class_ids, scores, rois = box_data
     ids = tf.where(tf.equal(class_ids, unique_class_id))[:, 0]
 
     class_keep = tf.image.non_max_suppression(tf.gather(rois, ids), tf.gather(scores, ids),
@@ -188,39 +187,19 @@ def NMS_map(box_data, keep, unique_class_id,
     return class_keep
 
 
-# def apply_NMS(class_ids, scores, refined_rois, keeps,
-#               max_instances, nms_threshold):
-#     """Used select ROIs belonging to unique class_ids and appling suppresion.
-#
-#     # Arguments:
-#         class_ids  : [1x N] array values
-#         scores : probability scores for all classes
-#         refined_rois : rois after NMS
-#         keeps : rois after suppression
-#         max_instances : Max number of final detections
-#         nms_threshold : Non-maximum suppression threshold for detection
-#     """
-#     pre_nms_class_ids = tf.gather(class_ids, keeps)
-#     pre_nms_scores = tf.gather(scores, keeps)
-#     pre_nms_rois = tf.gather(refined_rois, keeps)
-#     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
-#     pre_nms_elements = [pre_nms_class_ids, pre_nms_scores, pre_nms_rois]
-#
-#     nms_keep = tf.map_fn(NMS_map_call, (pre_nms_elements, keeps, max_instances,
-#                          nms_threshold, unique_pre_nms_class_ids), dtype=tf.int64)
-#     return merge_results(nms_keep)
-#
-#
-# def NMS_map_call(pre_nms_elements, keeps, max_instances,
-#                        nms_threshold, class_id):
-#     """Used by top detection layer in apply_NMS and used to call
-#     NMS_map function.
-#
-#     # Arguments:
-#         class_id : [1x N] array values
-#     """
-#     return NMS_map(pre_nms_elements, keeps, class_id, max_instances,
-#                        nms_threshold)
+def NMS_map_call(pre_nms_class_ids, pre_nms_scores, pre_nms_rois, keeps, max_instances,
+                 nms_threshold, unique_pre_nms_class_ids):
+    """Used by top detection layer in apply_NMS and used to call
+    NMS_map function.
+
+    """
+    def _NMS_map_call(class_id):
+
+         return NMS_map(pre_nms_class_ids, pre_nms_scores, pre_nms_rois, keeps, max_instances,
+                        nms_threshold,class_id)
+
+    return tf.map_fn(_NMS_map_call, unique_pre_nms_class_ids, dtype=tf.int64)
+
 
 def apply_NMS(class_ids, scores, refined_rois, keep,
               detection_max_instances, detection_nms_threshold):
@@ -238,22 +217,10 @@ def apply_NMS(class_ids, scores, refined_rois, keep,
     pre_nms_scores = tf.gather(scores, keep)
     pre_nms_rois = tf.gather(refined_rois, keep)
     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
-    pre_nms_elements = [pre_nms_class_ids, pre_nms_scores, pre_nms_rois]
-
-    def NMS_map_call(class_id):
-        """Used by top detection layer in apply_NMS for mapping function
-
-        # Arguments:
-            class_id : class_ids
-        """
-        return NMS_map(pre_nms_elements, keeps, class_id, max_instances,
-                       nms_threshold)
-
-    max_instances = detection_max_instances
-    nms_threshold = detection_nms_threshold
     keeps = keep
 
-    nms_keep = tf.map_fn(NMS_map_call, unique_pre_nms_class_ids, dtype=tf.int64)
+    nms_keep = NMS_map_call(pre_nms_class_ids, pre_nms_scores, pre_nms_rois, keeps, detection_max_instances,
+                            detection_nms_threshold, unique_pre_nms_class_ids)
     return merge_results(nms_keep)
 
 
@@ -279,7 +246,7 @@ def filter_low_confidence(class_scores, keep, detection_min_confidence):
     """
     confidence = tf.where(class_scores >= detection_min_confidence)[:, 0]
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
-                                tf.expand_dims(confidence, 0))    #TODO: tf.logicaland to check
+                                tf.expand_dims(confidence, 0))
     return tf.sparse.to_dense(keep)[0]
 
 def zero_pad_detections(detections, detection_max_instances):
@@ -442,8 +409,6 @@ def compute_NMS(boxes, scores, proposal_count, nms_threshold):
     proposals = tf.pad(proposals, [(0, padding), (0, 0)])
     return proposals
 
-#TODO: continue from here
-
 
 def pad_ROI_priors(num_positives, num_negatives, roi_class_ids, deltas, masks):
     """Used by Detection target layer in detection_target_graph. Zero pad prior
@@ -480,50 +445,6 @@ def pad_ROI(positive_rois, negative_rois, train_rois_per_image):
     return rois, num_positives, num_negatives
 
 
-# def update_priors(overlaps, positive_indices, positive_rois, class_ids, boxes, masks,
-#                   bbox_standard_deviation):
-#     """Used by Detection target layer in detection_target_graph. To calculate prior boxes,
-#     masks and class_ids.
-#
-#         # Arguments:
-#             overlaps: Instances of overlaps
-#             positive_indices: Indices of proposals with IOU >=0.5
-#             positive_rois: Proposals/ROIs with IOU>= 0.5
-#             priors : ground truth values of class_ids, boxes and masks
-#             bbox_std_dev: Bounding box refinement standard deviation for RPN and final detections
-#         """
-#     positive_overlaps = tf.gather(overlaps, positive_indices)
-#
-#     true_fn = compute_largest_overlap(positive_overlaps)
-#     false_fn= get_empty_list
-#
-#     roi_true_box_assignment = tf.cond(
-#          tf.greater(tf.shape(positive_overlaps)[1], 0),
-#          true_fn=true_fn, false_fn=false_fn)
-#
-#     roi_prior_boxes = tf.gather(boxes, roi_true_box_assignment)
-#     roi_prior_class_ids = tf.gather(class_ids, roi_true_box_assignment)
-#     deltas = refine_bbox(positive_rois, roi_prior_boxes)
-#     deltas /= bbox_standard_deviation
-#
-#     transposed_masks = tf.expand_dims(tf.transpose(masks, [2, 0, 1]), -1)
-#     roi_masks = tf.gather(transposed_masks, roi_true_box_assignment)
-#     return deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks
-#
-#
-# def get_empty_list():
-#     """Used by Detection target layer in update prior for negative case.
-#     Returns an empty list when there are no overlaps.
-#     """
-#     return tf.cast(tf.constant([]), tf.int64)
-#
-#
-# def compute_largest_overlap(positive_overlaps):
-#     """Used by Detection target layer in update prior for positive case
-#     Returns max overlap score.
-#     """
-#     return tf.argmax(positive_overlaps, axis=1)
-
 def update_priors(overlaps, positive_indices, positive_rois, class_ids, boxes, masks,
                   bbox_standard_deviation):
     """Used by Detection target layer in detection_target_graph
@@ -536,20 +457,9 @@ def update_priors(overlaps, positive_indices, positive_rois, class_ids, boxes, m
             bbox_std_dev: Bounding box refinement standard deviation for RPN and final detections
         """
     positive_overlaps = tf.gather(overlaps, positive_indices)
-
-    def compute_largest_overlap():
-        """Used by Detection target layer in update prior for positive case
-        """
-        return tf.argmax(positive_overlaps, axis=1)
-
-    def get_empty_list():
-        """Used by Detection target layer in update prior for negative case
-        """
-        return tf.cast(tf.constant([]), tf.int64)
-
     roi_true_box_assignment = tf.cond(
          tf.greater(tf.shape(positive_overlaps)[1], 0),
-         true_fn=compute_largest_overlap, false_fn=get_empty_list)
+         true_fn=compute_largest_overlap(positive_overlaps), false_fn=get_empty_list)
 
     roi_prior_boxes = tf.gather(boxes, roi_true_box_assignment)
     roi_prior_class_ids = tf.gather(class_ids, roi_true_box_assignment)
@@ -561,6 +471,18 @@ def update_priors(overlaps, positive_indices, positive_rois, class_ids, boxes, m
     return deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks
 
 
+def compute_largest_overlap(positive_overlaps):
+    """Used by Detection target layer in update prior for positive case
+     """
+    def _compute_largest_overlap():
+        return tf.argmax(positive_overlaps, axis=1)
+    return _compute_largest_overlap
+
+
+def get_empty_list():
+    """Used by Detection target layer in update prior for negative case
+    """
+    return tf.cast(tf.constant([]), tf.int64)
 
 def compute_target_masks(positive_rois, roi_class_ids, roi_boxes, roi_masks,
                          mask_shape, mini_mask):
@@ -915,7 +837,7 @@ def rearrange_pooled_features(pooled, box_to_level, boxes):
                 coordinates. Possibly padded with zeros if not enough
                 boxes to fill the array
     """
-    sorting_tensor = (box_to_level[:, 0] * 100000) + box_to_level[:, 1]  #TODO: Big num? 10000, check ROI_level-->box_to_level
+    sorting_tensor = (box_to_level[:, 0] * 100000) + box_to_level[:, 1]  #TODO: Big num? not clear
     top_k_indices = tf.nn.top_k(sorting_tensor, k=tf.shape(
         box_to_level)[0]).indices[::-1]
     top_k_indices = tf.gather(box_to_level[:, 2], top_k_indices)
