@@ -14,8 +14,8 @@ from tensorflow.keras.layers import Input, Add, Conv2D, Concatenate
 from tensorflow.keras.layers import UpSampling2D, MaxPooling2D
 from tensorflow.keras.models import Model
 
-from .utils import log, get_resnet_features, build_rpn_model
-tf.compat.v1.disable_eager_execution()
+from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
+#tf.compat.v1.disable_eager_execution()
 
 
 class MaskRCNN:

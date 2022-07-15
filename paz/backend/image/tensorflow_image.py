@@ -129,3 +129,10 @@ def random_flip_left_right(image):
     if tf.random.uniform([1], 0, 2) == 1:
         image = flip_left_right(image)
     return image
+
+
+def imagenet_preprocess_input(image, data_format=None, mode='torch'):
+    image = tf.keras.applications.imagenet_utils.preprocess_input(image,
+                                                                  data_format,
+                                                                  mode)
+    return image

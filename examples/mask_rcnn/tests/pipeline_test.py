@@ -1,9 +1,9 @@
 import pytest
-from ..pipeline import DetectionPipeline
-from ..shapes_loader import Shapes
-from ..config import Config
-from ..utils import compute_backbone_shapes
-from ..utils import generate_pyramid_anchors
+from mask_rcnn.pipeline import DetectionPipeline
+from mask_rcnn.shapes_loader import Shapes
+from mask_rcnn.config import Config
+from mask_rcnn.utils import compute_backbone_shapes
+from mask_rcnn.utils import generate_pyramid_anchors
 from paz.abstract import ProcessingSequence
 
 

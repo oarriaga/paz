@@ -3,13 +3,13 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Input, Lambda
 
-from ..config import Config
+from mask_rcnn.config import Config
 import numpy as np
 
-from ..layers import ProposalLayer, DetectionTargetLayer
-from ..layers import DetectionLayer, PyramidROIAlign
-from ..utils import norm_boxes_graph, fpn_classifier_graph
-from ..model import MaskRCNN
+from mask_rcnn.layers import ProposalLayer, DetectionTargetLayer
+from mask_rcnn.layers import DetectionLayer, PyramidROIAlign
+from mask_rcnn.utils import norm_boxes_graph, fpn_classifier_graph
+from mask_rcnn.model import MaskRCNN
 
 
 class MaskRCNNConfig(Config):

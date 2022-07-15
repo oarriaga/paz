@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from ..config import Config
-from ..loss import Loss
+from mask_rcnn.config import Config
+from mask_rcnn.loss import Loss
 tf.compat.v1.disable_eager_execution()
 session = tf.compat.v1.Session()
 

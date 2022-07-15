@@ -60,7 +60,8 @@ class AugmentDetection(SequentialProcessor):
             for encoding bounding boxes.
     """
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
-                 mean=pr.BGR_IMAGENET_MEAN, IOU=.5, variances=[.1, .2]):
+                 mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
+                 variances=[0.1, 0.1, 0.2, 0.2]):
         super(AugmentDetection, self).__init__()
         # image processors
         self.augment_image = AugmentImage()
@@ -85,6 +86,21 @@ class AugmentDetection(SequentialProcessor):
             {1: {'boxes': [len(prior_boxes), 4 + num_classes]}}))
 
 
+class PostprocessBoxes2D(SequentialProcessor):
+    """Filters, squares and offsets 2D bounding boxes
+
+    # Arguments
+        valid_names: List of strings containing class names to keep.
+        offsets: List of length two containing floats e.g. (x_scale, y_scale)
+    """
+    def __init__(self, offsets, valid_names=None):
+        super(PostprocessBoxes2D, self).__init__()
+        if valid_names is not None:
+            self.add(pr.FilterClassBoxes2D(valid_names))
+        self.add(pr.SquareBoxes2D())
+        self.add(pr.OffsetBoxes2D(offsets))
+
+
 class DetectSingleShot(Processor):
     """Single-shot object detection prediction.
 
@@ -97,11 +113,13 @@ class DetectSingleShot(Processor):
         draw: Boolean. If ``True`` prediction are drawn in the returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 mean=pr.BGR_IMAGENET_MEAN, draw=True):
+                 mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
+                 draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
+        self.variances = variances
         self.draw = draw
 
         super(DetectSingleShot, self).__init__()
@@ -113,7 +131,7 @@ class DetectSingleShot(Processor):
              pr.ExpandDims(axis=0)])
         postprocessing = SequentialProcessor(
             [pr.Squeeze(axis=None),
-             pr.DecodeBoxes(self.model.prior_boxes, variances=[.1, .2]),
+             pr.DecodeBoxes(self.model.prior_boxes, self.variances),
              pr.NonMaximumSuppressionPerClass(self.nms_thresh),
              pr.FilterBoxes(self.class_names, self.score_thresh)])
         self.predict = pr.Predict(self.model, preprocessing, postprocessing)

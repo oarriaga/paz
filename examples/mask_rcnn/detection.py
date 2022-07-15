@@ -1,9 +1,9 @@
 import numpy as np
 from paz.abstract import Processor
-from .utils import resize_image, normalize_image
-from .utils import compute_backbone_shapes, norm_boxes
-from .utils import generate_pyramid_anchors, denorm_boxes
-from .utils import unmold_mask
+from mask_rcnn.utils import resize_image, normalize_image
+from mask_rcnn.utils import compute_backbone_shapes, norm_boxes
+from mask_rcnn.utils import generate_pyramid_anchors, denorm_boxes
+from mask_rcnn.utils import unmold_mask
 
 
 class NormalizeImages(Processor):
