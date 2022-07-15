@@ -1,24 +1,28 @@
 import pytest
 import tensorflow as tf
+#tf.enable_eager_execution()
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Input, Lambda
 
-from ..config import Config
+from mask_rcnn.config import Config
 import numpy as np
 
-from ..layers import ProposalLayer
-from ..utils import norm_boxes_graph, fpn_classifier_graph
-from ..model import MaskRCNN
-from ..layer_utils import slice_batch, compute_ROI_level, apply_ROI_pooling, pad_ROI,pad_ROI_priors
-from ..layer_utils import rearrange_pooled_features, trim_by_score
-from ..layer_utils import apply_box_delta, clip_image_boundaries,compute_delta_specific
-from ..layer_utils import detection_targets, compute_NMS, refine_detections
-from ..layer_utils import compute_refined_boxes, compute_keep, compute_refined_rois
-from ..layer_utils import filter_low_confidence, apply_NMS, get_top_detections, compute_IOU
-from ..layer_utils import compute_ROI_overlaps,update_priors, compute_target_masks
-from ..layer_utils import refine_bbox, trim_zeros, apply_box_deltas, clip_boxes, compute_scaled_area
-from ..layer_utils import transform_ROI_coordinates, compute_max_ROI_level
+from mask_rcnn.layers import ProposalLayer
+from mask_rcnn.utils import norm_boxes_graph, fpn_classifier_graph
+from mask_rcnn.model import MaskRCNN
+from mask_rcnn.layer_utils import slice_batch, compute_ROI_level, apply_ROI_pooling, pad_ROI,pad_ROI_priors
+from mask_rcnn.layer_utils import rearrange_pooled_features, trim_by_score
+from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries,compute_delta_specific
+from mask_rcnn.layer_utils import detection_targets, compute_NMS, refine_detections
+from mask_rcnn.layer_utils import compute_refined_boxes, compute_keep, compute_refined_rois
+from mask_rcnn.layer_utils import filter_low_confidence, apply_NMS, get_top_detections, compute_IOU
+from mask_rcnn.layer_utils import compute_ROI_overlaps,update_priors, compute_target_masks
+from mask_rcnn.layer_utils import refine_bbox, trim_zeros, apply_box_deltas, clip_boxes, compute_scaled_area
+from mask_rcnn.layer_utils import transform_ROI_coordinates, compute_max_ROI_level
 
+from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
+
+disable_eager_execution()
 
 class MaskRCNNConfig(Config):
     NAME = 'ycb'
@@ -112,7 +116,7 @@ def proposal_layer_trim_by_score(RPN_model, anchors, config):
 @pytest.fixture
 def proposal_layer_apply_box_delta(proposal_layer_trim_by_score,config):
     scores, deltas, pre_nms_anchors = proposal_layer_trim_by_score
-    boxes = apply_box_delta(pre_nms_anchors, deltas, config.IMAGES_PER_GPU)
+    boxes = apply_box_deltas(pre_nms_anchors, deltas, config.IMAGES_PER_GPU)
     boxes = clip_image_boundaries(boxes, config.IMAGES_PER_GPU)
     return boxes
 
@@ -337,8 +341,7 @@ def detection_target_pad_ROI_priors(detection_target_layer_update_priors,
     __,num_negatives, num_positives = detection_target_pad_ROI
 
     roi_class_ids, deltas, masks = slice_batch([num_positives, num_negatives,
-                                                refined_class_ids, refined_boxes,
-                                                refined_masks, deltas, masks],
+                                                refined_class_ids, deltas, masks],
                                                [],pad_ROI_priors, config.IMAGES_PER_GPU)
     return roi_class_ids, deltas, masks
 
@@ -486,15 +489,15 @@ def test_trim_zeros(test_results_trim_zeros, boxes):
 
 
 @pytest.fixture
-def test_results_apply_box_deltas():
+def test_results_apply_box_delta():
     box = tf.Variable([[337., 661., 500., 300.]])
     deltas = tf.Variable([[ 0.03629032, 0.03246753, -0.03278985, 0.12783337]])
-    return apply_box_deltas(box, deltas)
+    return apply_box_delta(box, deltas)
 
 
 @pytest.mark.parametrize('result', [[345.54434, 673.8929,  503.28625, 263.66562]])
-def test_apply_box_deltas(test_results_apply_box_deltas,result):
-    values= test_results_apply_box_deltas.numpy()
+def test_apply_box_delta(test_results_apply_box_delta,result):
+    values= test_results_apply_box_delta.numpy()
     np.testing.assert_almost_equal(values[0], result, decimal=4)
 
 

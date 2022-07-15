@@ -32,8 +32,8 @@ class DrawInferences(Callback):
         self.verbose = verbose
 
     def on_epoch_end(self, epoch, logs=None):
-        for image_arg, image in enumerate(self.images.copy()):
-            inferences = self.pipeline(image)
+        for image_arg, image in enumerate(self.images):
+            inferences = self.pipeline(image.copy())
             epoch_name = 'epoch_%03d' % epoch
             save_path = os.path.join(self.save_path, epoch_name)
             if not os.path.exists(save_path):

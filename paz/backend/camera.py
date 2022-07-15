@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 from ..backend.image import resize_image, convert_color_space, show_image
 from ..backend.image import BGR2RGB
@@ -9,20 +10,32 @@ class Camera(object):
     By default this camera uses the openCV functionality.
     It can be inherited to overwrite methods in case another camera API exists.
     """
-    def __init__(self, device_id=0, name='Camera'):
+    def __init__(self, device_id=0, name='Camera', intrinsics=None,
+                 distortion=None):
         # TODO load parameters from camera name. Use ``load`` method.
         self.device_id = device_id
-        self.camera = None
-        self.intrinsics = None
+        self.name = name
+        self.intrinsics = intrinsics
         self.distortion = None
+        self._camera = None
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
 
     @property
     def intrinsics(self):
         return self._intrinsics
 
     @intrinsics.setter
-    def intrinsics(self, intrinsics):
-        self._intrinsics = intrinsics
+    def intrinsics(self, value):
+        if value is None:
+            value = np.zeros((4))
+        self._intrinsics = value
 
     @property
     def distortion(self):
@@ -38,15 +51,15 @@ class Camera(object):
         # Returns
             Camera object.
         """
-        self.camera = cv2.VideoCapture(self.device_id)
-        if self.camera is None or not self.camera.isOpened():
+        self._camera = cv2.VideoCapture(self.device_id)
+        if self._camera is None or not self._camera.isOpened():
             raise ValueError('Unable to open device', self.device_id)
-        return self.camera
+        return self._camera
 
     def stop(self):
         """ Stops capturing device.
         """
-        return self.camera.release()
+        return self._camera.release()
 
     def read(self):
         """Reads camera input and returns a frame.
@@ -54,7 +67,7 @@ class Camera(object):
         # Returns
             Image array.
         """
-        frame = self.camera.read()[1]
+        frame = self._camera.read()[1]
         return frame
 
     def is_open(self):
@@ -63,7 +76,7 @@ class Camera(object):
         # Returns
             Boolean
         """
-        return self.camera.isOpened()
+        return self._camera.isOpened()
 
     def calibrate(self):
         raise NotImplementedError
@@ -73,6 +86,50 @@ class Camera(object):
 
     def load(self, filepath):
         raise NotImplementedError
+
+    def intrinsics_from_HFOV(self, HFOV=70, image_shape=None):
+        """Computes camera intrinsics using horizontal field of view (HFOV).
+
+        # Arguments
+            HFOV: Angle in degrees of horizontal field of view.
+            image_shape: List of two floats [height, width].
+
+        # Returns
+            camera intrinsics array (3, 3).
+
+        # Notes:
+
+                       \           /      ^
+                        \         /       |
+                         \ lens  /        | w/2
+        horizontal field  \     / alpha/2 |
+        of view (alpha)____\( )/_________ |      image
+                           /( )\          |      plane
+                          /     <-- f --> |
+                         /       \        |
+                        /         \       |
+                       /           \      v
+
+                    Pinhole camera model
+
+        From the image above we know that: tan(alpha/2) = w/2f
+        -> f = w/2 * (1/tan(alpha/2))
+
+        alpha in webcams and phones is often between 50 and 70 degrees.
+        -> 0.7 w <= f <= w
+        """
+        if image_shape is None:
+            self.start()
+            height, width = self.read().shape[0:2]
+            self.stop()
+        else:
+            height, width = image_shape[:2]
+
+        focal_length = (width / 2) * (1 / np.tan(np.deg2rad(HFOV / 2.0)))
+        intrinsics = np.array([[focal_length, 0, width / 2.0],
+                               [0, focal_length, height / 2.0],
+                               [0, 0, 1.0]])
+        self.intrinsics = intrinsics
 
 
 class VideoPlayer(object):
@@ -90,10 +147,11 @@ class VideoPlayer(object):
         record()
     """
 
-    def __init__(self, image_size, pipeline, camera):
+    def __init__(self, image_size, pipeline, camera, topic='image'):
         self.image_size = image_size
         self.pipeline = pipeline
         self.camera = camera
+        self.topic = topic
 
     def step(self):
         """ Runs the pipeline process once
@@ -121,7 +179,7 @@ class VideoPlayer(object):
             output = self.step()
             if output is None:
                 continue
-            image = resize_image(output['image'], tuple(self.image_size))
+            image = resize_image(output[self.topic], tuple(self.image_size))
             show_image(image, 'inference', wait=False)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -137,7 +195,7 @@ class VideoPlayer(object):
             fourCC: String. Indicates the four character code of the video.
             e.g. XVID, MJPG, X264.
         """
-        self.start()
+        self.camera.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
         while True:
@@ -150,6 +208,43 @@ class VideoPlayer(object):
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        self.stop()
+        self.camera.stop()
+        writer.release()
+        cv2.destroyAllWindows()
+
+    def record_from_file(self, video_file_path, name='video.avi',
+                         fps=20, fourCC='XVID'):
+        """Load video and records continuous inference using ``pipeline``.
+
+        # Arguments
+            video_file_path: String. Path to the video file.
+            name: String. Output video name. Must include the postfix .avi.
+            fps: Int. Frames per second.
+            fourCC: String. Indicates the four character code of the video.
+            e.g. XVID, MJPG, X264.
+        """
+
+        fourCC = cv2.VideoWriter_fourcc(*fourCC)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+
+        video = cv2.VideoCapture(video_file_path)
+        if (video.isOpened() is False):
+            print("Error opening video  file")
+
+        while(video.isOpened()):
+            is_frame_received, frame = video.read()
+            if not is_frame_received:
+                print("Frame not received. Exiting ...")
+                break
+            if is_frame_received is True:
+                output = self.pipeline(frame)
+                if output is None:
+                    continue
+                image = resize_image(output['image'], tuple(self.image_size))
+                show_image(image, 'inference', wait=False)
+                writer.write(image)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
         writer.release()
         cv2.destroyAllWindows()

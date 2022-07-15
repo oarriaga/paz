@@ -3,10 +3,10 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Layer, Input, Lambda
 from tensorflow.keras.models import Model
-from .utils import generate_pyramid_anchors, norm_boxes_graph
-from .utils import fpn_classifier_graph, compute_backbone_shapes
-from .utils import build_fpn_mask_graph
-from .layers import DetectionTargetLayer, ProposalLayer
+from mask_rcnn.utils import generate_pyramid_anchors, norm_boxes_graph
+from mask_rcnn.utils import fpn_classifier_graph, compute_backbone_shapes
+from mask_rcnn.utils import build_fpn_mask_graph
+from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
 
 
 def get_anchors(config):
@@ -31,9 +31,9 @@ def create_network_head(backbone_model, config):
     anchors = get_anchors(config)
     rpn_rois = ProposalLayer(
         proposal_count=config.POST_NMS_ROIS_INFERENCE,
-        nms_threshold=config.RPN_NMS_THRESHOLD,rpn_bbox_std_dev= config.rpn_bbox_std_dev,
-            pre_nms_limit= config.pre_nms_limit, images_per_gpu =config.images_per_gpu,
-        name='ROI')([rpn_class, rpn_bbox, anchors])
+        nms_threshold=config.RPN_NMS_THRESHOLD,rpn_bbox_std_dev= config.RPN_BBOX_STD_DEV,
+            pre_nms_limit= config.PRE_NMS_LIMIT, images_per_gpu =config.IMAGES_PER_GPU,
+        batch_size=config.BATCH_SIZE,name='ROI')([rpn_class, rpn_bbox, anchors])
 
     # Groundtruth for detections
     input_rpn_match = Input(shape=[None, 1], name='input_rpn_match',
@@ -56,7 +56,7 @@ def create_network_head(backbone_model, config):
         images_per_gpu=config.IMAGES_PER_GPU, mask_shape=config.MASK_SHAPE,
         train_rois_per_image=config.TRAIN_ROIS_PER_IMAGE,
         roi_positive_ratio=config.ROI_POSITIVE_RATIO,
-        bbox_std_dev=config.BBOX_STD_DEV, use_mini_mask=config.USE_MINI_MASK,
+        bbox_std_dev=config.BBOX_STD_DEV, use_mini_mask=config.USE_MINI_MASK, batch_size=config.BATCH_SIZE,
         name='proposal_targets')([rpn_rois, input_gt_class_ids,groundtruth_boxes,groundtruth_masks])
 
     # Network heads

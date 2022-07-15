@@ -1,4 +1,4 @@
-from ..backend.quaternion import rotation_vector_to_quaternion
+from ..backend.groups.quaternion import rotation_vector_to_quaternion
 
 
 class Box2D(object):
@@ -51,8 +51,8 @@ class Box2D(object):
 
     @property
     def center(self):
-        x_center = self._coordinates[0] + self._coordinates[2] / 2.0
-        y_center = self._coordinates[1] + self._coordinates[3] / 2.0
+        x_center = (self._coordinates[0] + self._coordinates[2]) / 2.0
+        y_center = (self._coordinates[1] + self._coordinates[3]) / 2.0
         return x_center, y_center
 
     @property

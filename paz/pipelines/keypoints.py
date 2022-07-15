@@ -1,9 +1,18 @@
-from ..abstract import SequentialProcessor, Processor
-from .. import processors as pr
+from tensorflow.keras.utils import get_file
 
 from .renderer import RenderTwoViews
-from ..models import KeypointNet2D
-from tensorflow.keras.utils import get_file
+from .image import PreprocessImageHigherHRNet
+from .heatmaps import GetHeatmapsAndTags
+
+from .. import processors as pr
+from ..abstract import SequentialProcessor, Processor
+from ..models import KeypointNet2D, HigherHRNet, DetNet
+from .angles import IKNetHandJointAngles
+
+
+from ..backend.image import get_affine_transform, flip_left_right
+from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
+from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -131,3 +140,191 @@ class FaceKeypointNet2D32(EstimateKeypoints2D):
         model_name = '%s_weights.hdf5' % model_name
         URL = self.weights_URL + model_name
         return get_file(model_name, URL, cache_subdir='paz/models')
+
+
+class GetKeypoints(Processor):
+    """Extract out the top k keypoints heatmaps and group the keypoints with
+       their respective tags value. Adjust and refine the keypoint locations
+       by removing the margins.
+    # Arguments
+        max_num_instance: Int. Maximum number of instances to be detected.
+        keypoint_order: List of length 17 (number of keypoints).
+        heatmaps: Numpy array of shape (1, num_keypoints, H, W)
+        Tags: Numpy array of shape (1, num_keypoints, H, W, 2)
+
+    # Returns
+        grouped_keypoints: numpy array. keypoints grouped by tag
+        scores: int: score for the keypoint
+    """
+    def __init__(self, max_num_instance, keypoint_order, detection_thresh=0.2,
+                 tag_thresh=1):
+        super(GetKeypoints, self).__init__()
+        self.group_keypoints = pr.SequentialProcessor(
+            [pr.TopKDetections(max_num_instance), pr.GroupKeypointsByTag(
+                keypoint_order, tag_thresh, detection_thresh)])
+        self.adjust_keypoints = pr.AdjustKeypointsLocations()
+        self.get_scores = pr.GetScores()
+        self.refine_keypoints = pr.RefineKeypointsLocations()
+
+    def call(self, heatmaps, tags, adjust=True, refine=True):
+        grouped_keypoints = self.group_keypoints(heatmaps, tags)
+        if adjust:
+            grouped_keypoints = self.adjust_keypoints(
+                heatmaps, grouped_keypoints)[0]
+        scores = self.get_scores(grouped_keypoints)
+        if refine:
+            grouped_keypoints = self.refine_keypoints(
+                heatmaps[0], tags[0], grouped_keypoints)
+        return grouped_keypoints, scores
+
+
+class TransformKeypoints(Processor):
+    """Transform the keypoint coordinates.
+    # Arguments
+        grouped_keypoints: Numpy array. keypoints grouped by tag
+        center: Tuple. center of the imput image
+        scale: Float. scaled imput image dimension
+        shape: Tuple/List
+
+    # Returns
+        transformed_keypoints: keypoint location with respect to the
+                               input image
+    """
+    def __init__(self, inverse=False):
+        super(TransformKeypoints, self).__init__()
+        self.inverse = inverse
+        self.get_source_destination_point = pr.GetSourceDestinationPoints(
+            scaling_factor=200)
+        self.transform_keypoints = pr.TransformKeypoints()
+
+    def call(self, grouped_keypoints, center, scale, shape):
+        source_point, destination_point = self.get_source_destination_point(
+            center, scale, shape)
+        if self.inverse:
+            source_point, destination_point = destination_point, source_point
+        transform = get_affine_transform(source_point, destination_point)
+        transformed_keypoints = self.transform_keypoints(grouped_keypoints,
+                                                         transform)
+        return transformed_keypoints
+
+
+class HigherHRNetHumanPose2D(Processor):
+    """Estimate human pose 2D keypoints and draw a skeleton.
+
+    # Arguments
+        model: Weights trained on HigherHRNet model.
+        keypoint_order: List of length 17 (number of keypoints).
+            where the keypoints are listed order wise.
+        flipped_keypoint_order: List of length 17 (number of keypoints).
+            Flipped list of keypoint order.
+        dataset: String. Name of the dataset used for training the model.
+        data_with_center: Boolean. True is the model is trained using the
+            center.
+
+    # Returns
+        dictonary with the following keys:
+            image: contains the image with skeleton drawn on it.
+            keypoints: location of keypoints
+            score: score of detection
+    """
+    def __init__(self, dataset='COCO', data_with_center=False,
+                 max_num_people=30, with_flip=True, draw=True):
+        super(HigherHRNetHumanPose2D, self).__init__()
+        keypoint_order = JOINT_CONFIG[dataset]
+        flipped_keypoint_order = FLIP_CONFIG[dataset]
+        self.with_flip = with_flip
+        self.draw = draw
+        self.model = HigherHRNet(weights=dataset)
+        self.transform_image = PreprocessImageHigherHRNet()
+        self.get_heatmaps_and_tags = pr.SequentialProcessor(
+            [GetHeatmapsAndTags(self.model, flipped_keypoint_order,
+             with_flip, data_with_center), pr.AggregateResults(with_flip)])
+        self.get_keypoints = GetKeypoints(max_num_people, keypoint_order)
+        self.transform_keypoints = TransformKeypoints(inverse=True)
+        self.draw_skeleton = pr.DrawHumanSkeleton(dataset, check_scores=True)
+        self.extract_keypoints_locations = pr.ExtractKeypointsLocations()
+        self.wrap = pr.WrapOutput(['image', 'keypoints', 'scores'])
+
+    def call(self, image):
+        resized_image, center, scale = self.transform_image(image)
+        heatmaps, tags = self.get_heatmaps_and_tags(resized_image)
+        keypoints, scores = self.get_keypoints(heatmaps, tags)
+        shape = [heatmaps.shape[3], heatmaps.shape[2]]
+        keypoints = self.transform_keypoints(keypoints, center, scale, shape)
+        if self.draw:
+            image = self.draw_skeleton(image, keypoints)
+        keypoints = self.extract_keypoints_locations(keypoints)
+        return self.wrap(image, keypoints, scores)
+
+
+class DetNetHandKeypoints(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
+
+    # Arguments
+        shape: List/tuple. Input image shape for DetNet model.
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+        input_image: Array
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+    """
+    def __init__(self, shape=(128, 128), draw=True, right_hand=False):
+        super(DetNetHandKeypoints).__init__()
+        self.draw = draw
+        self.right_hand = right_hand
+        self.preprocess = pr.SequentialProcessor(
+            [pr.ResizeImage(shape), pr.ExpandDims(axis=0)])
+        self.hand_estimator = DetNet()
+        self.scale_keypoints = pr.ScaleKeypoints(scale=4, shape=shape)
+        self.draw_skeleton = pr.DrawHandSkeleton()
+        self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D'])
+
+    def call(self, input_image):
+        image = self.preprocess(input_image)
+        if self.right_hand:
+            image = flip_left_right(image)
+        keypoints3D, keypoints2D = self.hand_estimator.predict(image)
+        if self.right_hand:
+            keypoints2D = flip_keypoints_left_right(keypoints2D)
+        keypoints2D = uv_to_vu(keypoints2D)
+        keypoints2D = self.scale_keypoints(keypoints2D, input_image)
+        if self.draw:
+            image = self.draw_skeleton(input_image, keypoints2D)
+        return self.wrap(image, keypoints3D, keypoints2D)
+
+
+class MinimalHandPoseEstimation(pr.Processor):
+    """Estimate 2D and 3D keypoints from minimal hand and draw a skeleton.
+       Estimate absolute and relative joint angle for the minimal hand joints
+       using the 3D keypoint locations.
+
+    # Arguments
+        draw: Boolean. Draw hand skeleton if true.
+        right_hand: Boolean. If 'True', detect keypoints for right hand, else
+                    detect keypoints for left hand.
+
+    # Returns
+        image: contains the image with skeleton drawn on it.
+        keypoints2D: Array [num_joints, 2]. 2D location of keypoints.
+        keypoints3D: Array [num_joints, 3]. 3D location of keypoints.
+        absolute_angles: Array [num_joints, 4]. quaternion repesentation
+        relative_angles: Array [num_joints, 3]. axis-angle repesentation
+    """
+    def __init__(self, draw=True, right_hand=False):
+        super(MinimalHandPoseEstimation, self).__init__()
+        self.keypoints_estimator = DetNetHandKeypoints(draw=draw,
+                                                       right_hand=right_hand)
+        self.angle_estimator = IKNetHandJointAngles(right_hand=right_hand)
+        self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D',
+                                   'absolute_angles', 'relative_angles'])
+
+    def call(self, image):
+        keypoints = self.keypoints_estimator(image)
+        angles = self.angle_estimator(keypoints['keypoints3D'])
+        return self.wrap(keypoints['image'], keypoints['keypoints3D'],
+                         keypoints['keypoints2D'], angles['absolute_angles'],
+                         angles['relative_angles'])

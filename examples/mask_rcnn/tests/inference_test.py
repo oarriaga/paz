@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import cv2
 
-from .. import inference
+from mask_rcnn import inference
 
 
 @pytest.fixture

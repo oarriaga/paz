@@ -2,7 +2,7 @@ import paz.processors as pr
 from paz.abstract import Processor, SequentialProcessor
 from paz.pipelines import AugmentImage, PreprocessImage
 from paz.pipelines import AugmentBoxes
-from .utils import build_rpn_targets
+from mask_rcnn.utils import build_rpn_targets
 
 
 class MatchRPNBoxes(Processor):
