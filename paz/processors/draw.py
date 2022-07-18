@@ -4,7 +4,7 @@ from ..abstract import Processor
 from ..backend.image import lincolor
 from ..backend.image import draw_rectangle
 from ..backend.image import put_text
-from ..backend.image import draw_circle
+from ..backend.image import draw_keypoint
 from ..backend.image import draw_cube
 from ..backend.image import GREEN
 from ..backend.image import draw_random_polygon
@@ -86,7 +86,7 @@ class DrawKeypoints2D(Processor):
     def call(self, image, keypoints):
         for keypoint_arg, keypoint in enumerate(keypoints):
             color = self.colors[keypoint_arg]
-            draw_circle(image, keypoint.astype('int'), color, self.radius)
+            draw_keypoint(image, keypoint.astype('int'), color, self.radius)
         return image
 
 
@@ -229,21 +229,24 @@ class DrawHumanSkeleton(Processor):
     # Returns
         A numpy array containing pose skeleton.
     """
-    def __init__(self, dataset, check_scores):
+    def __init__(self, dataset, check_scores, link_width=2, keypoint_radius=4):
         super(DrawHumanSkeleton, self).__init__()
         self.link_orders = HUMAN_JOINT_CONFIG[dataset]['part_orders']
         self.link_colors = HUMAN_JOINT_CONFIG[dataset]['part_color']
         self.link_args = HUMAN_JOINT_CONFIG[dataset]['part_arg']
         self.keypoint_colors = HUMAN_JOINT_CONFIG[dataset]['joint_color']
         self.check_scores = check_scores
+        self.link_width = link_width
+        self.keypoint_radius = keypoint_radius
 
     def call(self, image, grouped_joints):
         for one_person_joints in grouped_joints:
             image = draw_keypoints_link(
                 image, one_person_joints, self.link_args, self.link_orders,
-                self.link_colors, self.check_scores)
+                self.link_colors, self.check_scores, self.link_width)
             image = draw_keypoints(image, one_person_joints,
-                                   self.keypoint_colors, self.check_scores)
+                                   self.keypoint_colors, self.check_scores,
+                                   self.keypoint_radius)
         return image
 
 
@@ -257,20 +260,22 @@ class DrawHandSkeleton(Processor):
     # Returns
         A numpy array containing pose skeleton.
     """
-    def __init__(self, check_scores=False):
+    def __init__(self, check_scores=False, link_width=2, keypoint_radius=4):
         super(DrawHandSkeleton, self).__init__()
         self.link_orders = MINIMAL_HAND_CONFIG['part_orders']
         self.link_colors = MINIMAL_HAND_CONFIG['part_color']
         self.link_args = MINIMAL_HAND_CONFIG['part_arg']
         self.keypoint_colors = MINIMAL_HAND_CONFIG['joint_color']
         self.check_scores = check_scores
+        self.link_width = link_width
+        self.keypoint_radius = keypoint_radius
 
-    def call(self, image, keypoints, link_width=2, keypoint_radius=4):
+    def call(self, image, keypoints):
         image = draw_keypoints_link(
             image, keypoints, self.link_args, self.link_orders,
-            self.link_colors, self.check_scores, link_width)
+            self.link_colors, self.check_scores, self.link_width)
         image = draw_keypoints(image, keypoints, self.keypoint_colors,
-                               self.check_scores, keypoint_radius)
+                               self.check_scores, self.keypoint_radius)
         return image
 
 
@@ -303,3 +308,25 @@ class DrawRGBMasks(Processor):
 
     def call(self, image, points2D, points3D):
         return draw_RGB_masks(image, points2D, points3D, self.object_sizes)
+
+
+class DrawText(Processor):
+    """Draws text to image.
+
+    # Arguments
+        color: List. Color of text to
+        thickness: Int. Thickness of text.
+        scale: Int. Size scale for text.
+        message: Str. Text to be added on the image.
+        location: List/tuple of int. Pixel corordinte in image to add text.
+    """
+    def __init__(self, color=GREEN, thickness=2, scale=1):
+        super(DrawText, self).__init__()
+        self.color = color
+        self.thickness = thickness
+        self.scale = scale
+
+    def call(self, image, message, location=(50, 50)):
+        image = put_text(image, message, location, self.scale,
+                         self.color, self.thickness)
+        return image

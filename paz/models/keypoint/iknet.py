@@ -78,5 +78,4 @@ def IKNet(input_shape=(84, 3), num_keypoints=21, depth=6, width=1024):
     weights_path = get_file(filename, URL, cache_subdir='paz/models')
     print('==> Loading %s model weights' % weights_path)
     model.load_weights(weights_path)
-    print(model.layers[1].output)
     return model

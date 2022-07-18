@@ -25,6 +25,7 @@ from .draw import DrawHumanSkeleton
 from .draw import DrawHandSkeleton
 from .draw import DrawRGBMask
 from .draw import DrawRGBMasks
+from .draw import DrawText
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -116,6 +117,7 @@ from .standard import Stochastic
 from .standard import UnwrapDictionary
 from .standard import Scale
 from .standard import AppendValues
+from .standard import BooleanToTextMessage
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
@@ -159,6 +161,7 @@ from .munkres import Munkres
 
 from .angles import ChangeLinkOrder
 from .angles import CalculateRelativeAngles
+from .angles import IsHandOpen
 
 
 TRAIN = 0
