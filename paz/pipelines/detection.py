@@ -1,8 +1,10 @@
 import numpy as np
 
+from paz.models.detection.haar_cascade import WEIGHT_PATH
+
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
-from ..models import SSD512, SSD300, HaarCascadeDetector
+from ..models import SSD512, SSD300, HaarCascadeDetector, SSD512Custom
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
@@ -478,3 +480,41 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
         super(DetectFaceKeypointNet2D32, self).__init__(
             detect, estimate_keypoints, offsets, radius)
+
+
+class SSD512HandDetection(DetectSingleShot):
+    """Minimal hand detection with SSD512Custom trained on OPenImageV6.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD512HandDetection
+
+        detect = SSD512HandDetection()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+     # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    # Reference
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
+    def __init__(self, score_thresh=0.40, nms_thresh=0.45, draw=True):
+        weight_path = (
+            'https://github.com/oarriaga/altamira-data/releases/'
+            'download/v0.15/SSD512_OpenImageV6_trainable_weights.hdf5')
+        class_names = ['background', 'hand']
+        num_classes = len(class_names)
+        model = SSD512Custom(num_classes, weight_path)
+        super(SSD512HandDetection, self).__init__(
+            model, class_names, score_thresh, nms_thresh, draw=draw)
