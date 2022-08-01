@@ -255,7 +255,8 @@ PAGES = [
         'functions': [
             models.detection.SSD300,
             models.detection.SSD512,
-            models.detection.HaarCascadeDetector
+            models.detection.HaarCascadeDetector,
+            models.detection.SSD512Custom
         ],
     },
 
@@ -268,7 +269,7 @@ PAGES = [
             models.Projector,
             models.DetNet,
             models.IKNet,
-            
+
         ],
     },
 
@@ -580,7 +581,8 @@ PAGES = [
             pipelines.PreprocessBoxes,
             pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
-            pipelines.DetectHaarCascade
+            pipelines.DetectHaarCascade,
+            pipelines.SSD512HandDetection
         ]
     },
 
@@ -604,7 +606,8 @@ PAGES = [
             pipelines.TransformKeypoints,
             pipelines.HigherHRNetHumanPose2D,
             pipelines.DetNetHandKeypoints,
-            pipelines.MinimalHandPoseEstimation
+            pipelines.MinimalHandPoseEstimation,
+            pipelines.DetectMinimalHand
         ]
     },
 
@@ -659,7 +662,8 @@ PAGES = [
             pipelines.PIX2POSEPowerDrill,
             pipelines.PIX2YCBTools6D,
             pipelines.DetNetHandKeypoints,
-            pipelines.MinimalHandPoseEstimation
+            pipelines.MinimalHandPoseEstimation,
+            pipelines.DetectMinimalHand
         ]
     },
 

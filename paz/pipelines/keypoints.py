@@ -10,7 +10,7 @@ from ..models import KeypointNet2D, HigherHRNet, DetNet
 from .angles import IKNetHandJointAngles
 
 
-from ..backend.image import get_affine_transform, flip_left_right
+from ..backend.image import get_affine_transform, flip_left_right, lincolor
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
@@ -328,3 +328,57 @@ class MinimalHandPoseEstimation(pr.Processor):
         return self.wrap(keypoints['image'], keypoints['keypoints3D'],
                          keypoints['keypoints2D'], angles['absolute_angles'],
                          angles['relative_angles'])
+
+
+class DetectMinimalHand(pr.Processor):
+    def __init__(self, detect, estimate_keypoints, offsets=[0, 0], radius=3):
+        """Minimal hand detection and keypoint estimator pipeline.
+
+        # Arguments
+            detect: Function for detecting objects. The output should be a
+                dictionary with key ``Boxes2D`` containing a list
+                of ``Boxes2D`` messages.
+            estimate_keypoints: Function for estimating keypoints. The output
+                should be a dictionary with key ``keypoints`` containing
+                a numpy array of keypoints.
+            offsets: List of two elements. Each element must be between [0, 1].
+            radius: Int indicating the radius of the keypoints to be drawn.
+        """
+        super(DetectMinimalHand, self).__init__()
+        self.class_names = ['OPEN', 'CLOSE']
+        self.colors = lincolor(len(self.class_names))
+        self.detect = detect
+        self.estimate_keypoints = estimate_keypoints
+        self.classify_hand_closure = pr.SequentialProcessor(
+            [pr.IsHandOpen(), pr.BooleanToTextMessage('OPEN', 'CLOSE')])
+        self.square = pr.SequentialProcessor()
+        self.square.add(pr.SquareBoxes2D())
+        self.square.add(pr.OffsetBoxes2D(offsets))
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
+        self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
+        self.draw = pr.DrawHandSkeleton(keypoint_radius=radius)
+        self.draw_boxes = pr.DrawBoxes2D(self.class_names, self.colors,
+                                         with_score=False)
+        self.wrap = pr.WrapOutput(
+            ['image', 'boxes2D', 'keypoints2D', 'keypoints3D'])
+
+    def call(self, image):
+        boxes2D = self.detect(image.copy())['boxes2D']
+        boxes2D = self.square(boxes2D)
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        keypoints2D = []
+        keypoints3D = []
+        for cropped_image, box2D in zip(cropped_images, boxes2D):
+            inference = self.estimate_keypoints(cropped_image)
+            keypoints = self.change_coordinates(
+                inference['keypoints2D'], box2D)
+            hand_closure_status = self.classify_hand_closure(
+                inference['relative_angles'])
+            box2D.class_name = hand_closure_status
+            keypoints2D.append(keypoints)
+            keypoints3D.append(inference['keypoints3D'])
+            image = self.draw(image, keypoints)
+        image = self.draw_boxes(image, boxes2D)
+        return self.wrap(image, boxes2D, keypoints2D, keypoints3D)
