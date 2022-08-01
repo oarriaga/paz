@@ -30,6 +30,7 @@ from .keypoints import TransformKeypoints
 from .keypoints import HigherHRNetHumanPose2D
 from .keypoints import DetNetHandKeypoints
 from .keypoints import MinimalHandPoseEstimation
+from .keypoints import DetectMinimalHand
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage
