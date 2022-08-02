@@ -19,6 +19,7 @@ from .detection import HaarCascadeFrontalFace
 from .detection import DetectMiniXceptionFER
 from .detection import DetectKeypoints2D
 from .detection import DetectFaceKeypointNet2D32
+from .detection import SSD512HandDetection
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -29,6 +30,7 @@ from .keypoints import TransformKeypoints
 from .keypoints import HigherHRNetHumanPose2D
 from .keypoints import DetNetHandKeypoints
 from .keypoints import MinimalHandPoseEstimation
+from .keypoints import DetectMinimalHand
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage
