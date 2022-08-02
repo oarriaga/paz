@@ -64,8 +64,8 @@ def boxes_with_label():
 
 @pytest.fixture
 def target_unique_matches():
-    # return np.array([[238., 155., 306., 204.]])
-    return np.array([[47.0, 239.0, 194.0, 370.0]])
+    return np.array([[47.0, 239.0, 194.0, 370.0],
+                     [238., 155., 306., 204.]])
 
 
 @pytest.fixture
