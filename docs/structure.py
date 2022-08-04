@@ -255,8 +255,7 @@ PAGES = [
         'functions': [
             models.detection.SSD300,
             models.detection.SSD512,
-            models.detection.HaarCascadeDetector,
-            models.detection.SSD512Custom
+            models.detection.HaarCascadeDetector
         ],
     },
 
