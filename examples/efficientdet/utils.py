@@ -3,14 +3,14 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from paz.abstract import SequentialProcessor
 from paz.processors.image import RGB_IMAGENET_MEAN, LoadImage
+from tensorflow import keras
 from tensorflow.keras.layers import Activation, Concatenate, Flatten, Reshape
 
 import necessary_imports as ni
 from necessary_imports import RGB_IMAGENET_STDEV
 
 # Mock input image.
-file_name = ('/home/manummk95/Desktop/efficientdet_BKP/paz/'
-             'examples/efficientdet/img.jpg')
+file_name = ('/home/manummk95/Desktop/efficientdet_working/paz/examples/efficientdet/2007_001239.jpg')
 loader = LoadImage()
 raw_images = loader(file_name)
 
@@ -41,29 +41,47 @@ def get_class_name_efficientdet(dataset_name):
                 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 
 
-def get_drop_connect(features, is_training, survival_rate):
-    """Drop the entire conv with given survival probability.
-    Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
+# def get_drop_connect(features, is_training, survival_rate):
+#     """Drop the entire conv with given survival probability.
+#     Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
 
-    # Arguments
-        features: Tensor, input feature map to undergo
-        drop connection.
-        is_training: Bool specifying the training phase.
-        survival_rate: Float, survival probability to drop
-        input convolution features.
+#     # Arguments
+#         features: Tensor, input feature map to undergo
+#         drop connection.
+#         is_training: Bool specifying the training phase.
+#         survival_rate: Float, survival probability to drop
+#         input convolution features.
 
-    # Returns
-        output: Tensor, output feature map after drop connect.
-    """
-    if not is_training:
-        return features
-    batch_size = tf.shape(features)[0]
-    random_tensor = survival_rate
-    random_tensor = random_tensor + tf.random.uniform(
-        [batch_size, 1, 1, 1], dtype=features.dtype)
-    binary_tensor = tf.floor(random_tensor)
-    output = features / survival_rate * binary_tensor
-    return output
+#     # Returns
+#         output: Tensor, output feature map after drop connect.
+#     """
+#     if not is_training:
+#         return features
+#     batch_size = tf.shape(features)[0]
+#     random_tensor = survival_rate
+#     random_tensor = random_tensor + tf.random.uniform(
+#         [batch_size, 1, 1, 1], dtype=features.dtype)
+#     binary_tensor = tf.floor(random_tensor)
+#     output = (features / survival_rate) * binary_tensor
+#     return output
+
+
+class CustomDropout(keras.layers.Layer):
+    def __init__(self, survival_rate, **kwargs):
+        super(CustomDropout, self).__init__(**kwargs)
+        self.survival_rate = survival_rate
+
+    def call(self, features, training=None):
+        if training:
+            batch_size = tf.shape(features)[0]
+            random_tensor = self.survival_rate
+            random_tensor = random_tensor + tf.random.uniform(
+                [batch_size, 1, 1, 1], dtype=features.dtype)
+            binary_tensor = tf.floor(random_tensor)
+            output = (features / self.survival_rate) * binary_tensor
+            return output
+        else:
+            return features
 
 
 def efficientdet_preprocess(image, image_size):
