@@ -13,9 +13,8 @@ WEIGHT_PATH = (
 def EfficientDet(num_classes, base_weights, head_weights, input_shape,
                  fpn_num_filters, fpn_cell_repeats, box_class_repeats,
                  anchor_scale, min_level, max_level, fpn_weight_method,
-                 return_base, model_name, backbone, training=False,
-                 num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
-                 survival_rate=None):
+                 return_base, model_name, backbone, num_scales=3,
+                 aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None):
     """EfficientDet model in PAZ.
     # References
         -[Google AutoML repository implementation of EfficientDet](
@@ -69,10 +68,10 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
     num_anchors = len(aspect_ratios) * num_scales
     class_outputs = ClassNet(branch_tensors, num_classes, num_anchors,
                              fpn_num_filters, min_level, max_level,
-                             box_class_repeats, survival_rate, training)
+                             box_class_repeats, survival_rate)
     box_outputs = BoxNet(branch_tensors, num_anchors, fpn_num_filters,
                          min_level, max_level, box_class_repeats,
-                         survival_rate, training)
+                         survival_rate)
 
     branch_tensors = [class_outputs, box_outputs]
     if return_base:
