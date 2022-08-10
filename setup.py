@@ -3,7 +3,7 @@ from setuptools import find_packages
 import paz
 
 setup(name='pypaz',
-      version='0.1.6',
+      version=paz.__version__,
       description='Perception for Autonomous Systems',
       author='Octavio Arriaga',
       author_email='octavio.arriaga@dfki.de',

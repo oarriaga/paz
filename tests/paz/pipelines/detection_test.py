@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import cv2
 
 import os
 from tensorflow.keras.utils import get_file
@@ -84,27 +85,30 @@ def boxes_SSD512YCBVideo():
 @pytest.fixture
 def boxes_HaarCascadeFace():
     boxes2D = [
+        Box2D(np.array([855, 466, 974, 585]), 1.0, 'Face'),
         Box2D(np.array([701, 362, 827, 488]), 1.0, 'Face'),
         Box2D(np.array([488, 408, 612, 532]), 1.0, 'Face'),
-        Box2D(np.array([855, 466, 974, 585]), 1.0, 'Face')]
+    ]
     return boxes2D
 
 
 @pytest.fixture
 def boxes_MiniXceptionFER():
     boxes2D = [
+        Box2D(np.array([855, 466, 974, 585]), 0.98590159, 'happy'),
         Box2D(np.array([701, 362, 827, 488]), 0.49472683, 'neutral'),
         Box2D(np.array([488, 408, 612, 532]), 0.28161105, 'sad'),
-        Box2D(np.array([855, 466, 974, 585]), 0.98590159, 'happy')]
+    ]
     return boxes2D
 
 
 @pytest.fixture
 def boxes_FaceKeypointNet2D32():
     boxes2D = [
+        Box2D(np.array([855, 466, 974, 585]), 1.0, 'Face'),
         Box2D(np.array([701, 362, 827, 488]), 1.0, 'Face'),
         Box2D(np.array([488, 408, 612, 532]), 1.0, 'Face'),
-        Box2D(np.array([855, 466, 974, 585]), 1.0, 'Face')]
+    ]
     return boxes2D
 
 
@@ -138,17 +142,27 @@ def test_SSD512YCBVideo(image_with_tools, boxes_SSD512YCBVideo):
     assert_inferences(detector, image_with_tools, boxes_SSD512YCBVideo)
 
 
+# TODO: OpenCV is not deterministic with it's output
 def test_HaarCascadeFrontalFace(image_with_faces, boxes_HaarCascadeFace):
+    cv2.ocl.setUseOpenCL(False)
+    cv2.setNumThreads(1)
+    cv2.setRNGSeed(777)
     detector = HaarCascadeFrontalFace()
     assert_inferences(detector, image_with_faces, boxes_HaarCascadeFace)
 
 
 def test_DetectMiniXceptionFER(image_with_faces, boxes_MiniXceptionFER):
+    cv2.ocl.setUseOpenCL(False)
+    cv2.setNumThreads(1)
+    cv2.setRNGSeed(777)
     detector = DetectMiniXceptionFER()
     assert_inferences(detector, image_with_faces, boxes_MiniXceptionFER)
 
 
 def test_boxes_DetectFaceKeypointNet2D32(image_with_faces,
                                          boxes_FaceKeypointNet2D32):
+    cv2.ocl.setUseOpenCL(False)
+    cv2.setNumThreads(1)
+    cv2.setRNGSeed(777)
     detector = DetectFaceKeypointNet2D32()
     assert_inferences(detector, image_with_faces, boxes_FaceKeypointNet2D32)

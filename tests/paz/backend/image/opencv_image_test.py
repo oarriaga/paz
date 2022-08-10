@@ -3,17 +3,8 @@ import os
 from tensorflow.keras.utils import get_file
 import pytest
 
-from paz.backend.image import opencv_image
-from paz.backend.image.opencv_image import split_and_normalize_alpha_channel
-
-# TODO:
-# Add tests for the following random functions:
-# random_saturation
-# random_brightness
-# random_contrast
-# random_hue
-# random_plain_background
-# show_image
+from paz.backend import image as opencv_image
+from paz.backend.image import split_and_normalize_alpha_channel
 
 
 @pytest.fixture
@@ -139,3 +130,11 @@ def test_passes(image_with_face_fullpath):
     with pytest.raises(Exception):
         opencv_image.load_image(image_with_face_fullpath, 2)
         opencv_image.load_image(image_with_face_fullpath, 5)
+
+
+@pytest.mark.parametrize("image_center", [[64, 64]])
+def test_calculate_image_center(load_image, image_shape, rgb_channel,
+                                image_center):
+    test_image = load_image(image_shape, rgb_channel)
+    center_W, center_H = opencv_image.calculate_image_center(test_image)
+    assert image_center == [center_W, center_H]

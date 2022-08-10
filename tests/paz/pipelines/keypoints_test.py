@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import cv2
 
 import os
 from tensorflow.keras.utils import get_file
@@ -81,7 +82,7 @@ def keypoints_DetectFaceKeypointNet2D32():
          [895., 564.],
          [916., 562.],
          [914., 567.]])
-    keypoints2D = [keypoints_A, keypoints_B, keypoints_C]
+    keypoints2D = [keypoints_C, keypoints_A, keypoints_B]
     return keypoints2D
 
 
@@ -106,19 +107,21 @@ def keypoints_FaceKeypointNet2D32():
     return keypoints
 
 
-def assert_inferences(estimator, image, labelled_keypoints):
-    inferences = estimator(image)
-    predicted_keypoints = inferences['keypoints']
-    assert len(predicted_keypoints) == len(labelled_keypoints)
-    for label, preds in zip(labelled_keypoints, predicted_keypoints):
-        assert np.allclose(label, preds)
-
-
 def test_keypoints_DetectFaceKeypointNet2D32(
-        image_with_faces, keypoints_DetectFaceKeypointNet2D32):
+        image_with_faces,
+        keypoints_DetectFaceKeypointNet2D32):
+    cv2.ocl.setUseOpenCL(False)
+    cv2.setNumThreads(1)
+    cv2.setRNGSeed(777)
     estimator = DetectFaceKeypointNet2D32()
-    assert_inferences(estimator, image_with_faces,
-                      keypoints_DetectFaceKeypointNet2D32)
+    inferences = estimator(image_with_faces)
+    predicted_keypoints = inferences['keypoints']
+    assert len(predicted_keypoints) == len(keypoints_DetectFaceKeypointNet2D32)
+    # TODO openCV is not deterministic with it's predictions
+    print(predicted_keypoints)
+    for label, preds in zip(
+            keypoints_DetectFaceKeypointNet2D32, predicted_keypoints):
+        assert np.allclose(label, preds)
 
 
 def test_FaceKeypointNet2D32(image_with_face, keypoints_FaceKeypointNet2D32):

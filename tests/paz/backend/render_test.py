@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from paz.backend.render import calculate_norm
+from paz.backend.standard import calculate_norm
 from paz.backend.render import sample_point_in_full_sphere
 from paz.backend.render import sample_point_in_top_sphere
 from paz.backend.render import sample_point_in_sphere
@@ -50,13 +50,6 @@ def transform_B():
                      [0.19455847, 0.97565955, -0.10117041, -1.2649168],
                      [0.86562154, -0.21929079, -0.4501232, -5.17180017],
                      [0.0, 0.0, 0.0, 1.0]])
-
-
-def test_norm():
-    assert np.isclose(1.41421356, calculate_norm([1.0, 1.0]))
-    assert np.isclose(1.41421356, calculate_norm([-1.0, 1.0]))
-    assert np.isclose(1.41421356, calculate_norm([1.0, -1.0]))
-    assert np.isclose(1.41421356, calculate_norm([-1.0, -1.0]))
 
 
 def test_sample_point_in_full_sphere():
