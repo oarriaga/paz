@@ -14,8 +14,20 @@ from tensorflow.keras.layers import Input, Add, Conv2D, Concatenate
 from tensorflow.keras.layers import UpSampling2D, MaxPooling2D
 from tensorflow.keras.models import Model
 
-from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
-#tf.compat.v1.disable_eager_execution()
+from utils import log, get_resnet_features, build_rpn_model
+import numpy as np
+import tensorflow.keras.backend as K
+from tensorflow.keras.layers import Layer, Input, Lambda
+from tensorflow.keras.models import Model
+
+from utils import generate_pyramid_anchors, norm_boxes_graph
+from utils import fpn_classifier_graph, compute_backbone_shapes
+from utils import build_fpn_mask_graph
+from layers import DetectionTargetLayer, ProposalLayer
+from layer_utils import slice_batch
+from loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
+    BBoxLoss,ClassLoss,MaskLoss
+tf.compat.v1.disable_eager_execution()
 
 
 class MaskRCNN:
@@ -25,7 +37,6 @@ class MaskRCNN:
         config: Instance of basic model configurations
         model_dir: Directory to save training logs and weights
     """
-
     def __init__(self, config, model_dir, train_bn, image_shape, backbone, top_down_pyramid_size):
         self.config = config
         self.model_dir = model_dir
@@ -42,10 +53,54 @@ class MaskRCNN:
         get_trainable(self.keras_model, layer_regex, keras_model=None,
                       indent=0, verbose=1)
 
+    def build_complete_network(self):
+        image = self.keras_model.input
+        config = self.config
+        feature_maps = self.keras_model.output
+        rpn_class_logits, rpn_class, rpn_bbox = self.RPN(feature_maps)
+        rpn_rois = get_rpn_rois(config, rpn_class, rpn_bbox)
+
+        input_rpn_match, input_rpn_bbox, input_gt_class_ids, \
+        input_gt_boxes, groundtruth_boxes, groundtruth_masks = get_ground_truth_values(config, image)
+
+        rois, target_class_ids, target_boxes, target_masks = get_detections_target \
+            (config, rpn_rois, input_gt_class_ids, groundtruth_boxes, groundtruth_masks)
+        mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_rois = \
+            create_head(self.keras_model, config, rois)
+
+        RPN_output, target, predictions, active_class_ids, loss_inputs = get_loss(config, mrcnn_class_logits,
+                                                                                  mrcnn_bbox, mrcnn_mask,
+                                                                                  target_class_ids,
+                                                                                  target_boxes, target_masks,
+                                                                                  rpn_class_logits, rpn_bbox)
+        rpnclass_loss = ProposalClassLoss(config=config, name='rpn_class_loss') \
+            (input_rpn_match, rpn_class_logits)
+
+        rpnbbox_loss = ProposalBBoxLoss(config=config, rpn_match=input_rpn_match, name='rpn_bbox_loss')\
+            (input_rpn_bbox, rpn_bbox)
+
+        class_loss = ClassLoss(config=config, active_class_ids=active_class_ids, name='mrcnn_class_loss')\
+             (target_class_ids, mrcnn_class_logits)
+
+        bbox_loss = BBoxLoss(config=config, target_class_ids=target_class_ids, name='mrcnn_bbox_loss')\
+             (target_boxes, mrcnn_bbox)
+
+        mask_loss = MaskLoss(config, target_class_ids=target_class_ids, name='mrcnn_mask_loss')\
+             (target_masks, mrcnn_mask)
+
+        inputs = [image, input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, groundtruth_masks]
+        if not config.USE_RPN_ROIS:
+            inputs.append(input_rois)
+        outputs = [rpn_class_logits, rpn_class, rpn_bbox,
+                   mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
+                   rpn_rois, output_rois]
+        self.keras_model = Model(inputs, outputs, name='mask_rcnn')
+
+        return [rpnclass_loss, rpnbbox_loss, class_loss, bbox_loss, mask_loss]
+
 
 def convolution_block(inputs, filters, stride, name, padd='valid'):
     """Convolution block containing Conv2D
-
     # Arguments
         inputs: Keras/tensorflow tensor input.
         filters: Int. Number of filters.
@@ -91,11 +146,14 @@ def build_backbone(image_shape, backbone_features, fpn_size, train_bn):
     """
     height, width = image_shape[:2]
     raise_exception(height, width)
-    input_image = Input(shape=[None, None, image_shape[2]], name='input_image')
+    input_image = Input(shape=[None,None, image_shape[2]], name='input_image')
+
     C2, C3, C4, C5= get_backbone_features(input_image, backbone_features, train_bn)
     P2, P3, P4, P5, P6 = build_layers(C2, C3, C4, C5, fpn_size)
-    model = Model([input_image], [P2, P3, P4, P5, P6], name='mask_rcnn')
-    return model
+
+    model1 = Model([input_image], [P2, P3, P4, P5, P6], name='mask_rcnn_before')
+
+    return model1
 
 def build_layers(C2, C3, C4, C5, fpn_size):
     """Builds `layers for mask-RCNN backbone.
@@ -139,17 +197,16 @@ def get_backbone_features(image, backbone_features, train_BN):
     else:
         _, C2, C3, C4, C5 = get_resnet_features(image, backbone_features, stage5=True, train_bn=train_BN)
 
-    return( C2, C3, C4, C5)
+    return(C2, C3, C4, C5)
 
 
-def raise_exception( height, width):
+def raise_exception(height, width):
     """Raise exception when image is not a multiple of 2
 
     # Arguments
         height, width : size of image
 
     """
-
     if height / 2 ** 6 != int(height / 2 ** 6) or width / 2 ** 6 != int(width / 2 ** 6):
         raise Exception('Image size must be dividable by 2 atleast'
                         '6 times')
@@ -162,8 +219,8 @@ def get_imagenet_weights():
         weights_file.
     """
     weight_path = 'https://github.com/fchollet/deep-learning-models/'\
-                       'releases/download/v0.2/'\
-                       'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+                  'releases/download/v0.2/'\
+                  'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
     filepath = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
     weights_file = get_file(filepath, weight_path, cache_subdir='models',
                             md5_hash='a268eb855778b3df3c7506639542a6af')
@@ -182,8 +239,8 @@ def RPN_model(config, fpn_size, rpn_feature_maps):
         Model output.
     """
     rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
-                            len(config.RPN_ANCHOR_RATIOS),
-                            fpn_size)
+                        len(config.RPN_ANCHOR_RATIOS),
+                        fpn_size)
     layer_outputs = [rpn([feature]) for feature in rpn_feature_maps]
     names = ['rpn_class_logits', 'rpn_class', 'rpn_bbox']
     outputs = list(zip(*layer_outputs))
@@ -208,6 +265,7 @@ def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
     keras_model = keras_model or model
     if hasattr(keras_model, 'inner_model'):
         layers = keras_model.inner_model.layers
+
     layers = keras_model.layers
     for layer in layers:
         if layer.__class__.__name__ == 'Model':
@@ -223,3 +281,136 @@ def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
         if trainable and verbose > 0:
                 log("{}{:20}   ({})".format(" " * indent, layer.name,
                                             layer.__class__.__name__))
+
+
+def get_anchors(config):
+    """Returns anchor pyramid for the given image size
+    """
+    backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
+    anchors = generate_pyramid_anchors(
+        config.RPN_ANCHOR_SCALES,
+        config.RPN_ANCHOR_RATIOS,
+        backbone_shapes,
+        config.BACKBONE_STRIDES,
+        config.RPN_ANCHOR_STRIDE)
+    anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
+    anchors = Layer(name='anchors')(anchors)
+    return anchors
+
+
+def gnd_truth_call(image):
+    """Decorator function used to call the norm_boxes_graph function
+    """
+    shape = tf.shape(image)[1:3]
+
+    def _gnd_truth_call(boxes):
+        return norm_boxes_graph(boxes, shape)
+    return _gnd_truth_call
+
+
+def get_ground_truth_values(config, image):
+    """Returns the region specific values of groundtruth values needed for network head creation
+    """
+    rpn_match = Input(shape=[None, 1], name='input_rpn_match', dtype=tf.int32)
+    rpn_bbox = Input(shape=[None, 4], name='input_rpn_bbox', dtype=tf.float32)
+
+    class_ids = Input(shape=[None],name='input_gt_class_ids', dtype=tf.int32)
+    input_boxes = Input(shape=[None, 4], name='input_gt_boxes', dtype=tf.float32)
+
+    boxes = gnd_truth_call(image)(input_boxes)
+
+    if config.USE_MINI_MASK:
+        input_gt_masks = Input(
+            shape=[config.MINI_MASK_SHAPE[0],
+                   config.MINI_MASK_SHAPE[1], None],
+            name="input_gt_masks", dtype=bool)
+    else:
+        input_gt_masks = Input(
+            shape=[config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1], None],
+            name="input_gt_masks", dtype=bool)
+
+    return rpn_match, rpn_bbox, class_ids, \
+        input_boxes, boxes, input_gt_masks
+
+
+def get_rpn_rois(config, rpn_class, rpn_bbox):
+    """Returns the output of Proposal layer i.e the ROIs
+    """
+    anchors = get_anchors(config)
+    return ProposalLayer(
+        proposal_count=config.POST_NMS_ROIS_INFERENCE,
+        nms_threshold=config.RPN_NMS_THRESHOLD, rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
+        pre_nms_limit=config.PRE_NMS_LIMIT, images_per_gpu=config.IMAGES_PER_GPU,
+        batch_size=config.BATCH_SIZE, name='ROI')([rpn_class, rpn_bbox, anchors])
+
+
+def get_detections_target(config, rpn_rois, input_gt_class_ids, groundtruth_boxes, groundtruth_masks):
+    """Returns the output of Detection target layer i.e the detections
+    from the given proposals
+    """
+    return DetectionTargetLayer(
+        images_per_gpu=config.IMAGES_PER_GPU, mask_shape=config.MASK_SHAPE,
+        train_rois_per_image=config.TRAIN_ROIS_PER_IMAGE,
+        roi_positive_ratio=config.ROI_POSITIVE_RATIO,
+        bbox_std_dev=config.BBOX_STD_DEV, use_mini_mask=config.USE_MINI_MASK, batch_size=config.BATCH_SIZE,
+        name='proposal_targets')([rpn_rois, input_gt_class_ids, groundtruth_boxes, groundtruth_masks])
+
+
+def create_head(backbone_model, config, rois):
+    """ Creation of region specific network head
+    """
+    feature_maps = backbone_model.output
+    mrcnn_class_logits, mrcnn_class, mrcnn_bbox = fpn_classifier_graph(
+        rois, feature_maps[:-1], config, train_bn=config.TRAIN_BN,
+        fc_layers_size=1024)
+
+    mrcnn_mask = build_fpn_mask_graph(rois, feature_maps[:-1], config,
+                                      train_bn=config.TRAIN_BN)
+    output_rois =  call_rois()(rois)
+    return mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_rois
+
+
+def get_loss(config, mrcnn_class_logits, mrcnn_bbox, mrcnn_mask, target_class_ids,
+             target_boxes, target_masks, rpn_class_logits, rpn_bbox):
+    """Returns the total input loss of the network
+    """
+    active_class_ids = tf.zeros([config.NUM_CLASSES], dtype=tf.int32)
+    input_image_meta = Input(shape=[config.IMAGE_META_SIZE],
+                                name="input_image_meta")
+
+
+    RPN_output = [rpn_class_logits, rpn_bbox]
+    target = [target_class_ids, target_boxes, target_masks]
+    predictions = [mrcnn_class_logits, mrcnn_bbox, mrcnn_mask]
+    loss_inputs = [RPN_output, target, predictions, active_class_ids]
+
+    return RPN_output, target, predictions, active_class_ids, loss_inputs
+
+
+def call_rois():
+
+    def _call_rois(value):
+        return value * 1
+    return _call_rois
+
+
+def parse_image_meta_graph(meta):
+    """Parses a tensor that contains image attributes to its components.
+    See compose_image_meta() for more details.
+    meta: [batch, meta length] where meta length depends on NUM_CLASSES
+    Returns a dict of the parsed tensors.
+    """
+    image_id = meta[:, 0]
+    original_image_shape = meta[:, 1:4]
+    image_shape = meta[:, 4:7]
+    window = meta[:, 7:11]  # (y1, x1, y2, x2) window of image in in pixels
+    scale = meta[:, 11]
+    active_class_ids = meta[:, 12:]
+    return {
+        "image_id": image_id,
+        "original_image_shape": original_image_shape,
+        "image_shape": image_shape,
+        "window": window,
+        "scale": scale,
+        "active_class_ids": active_class_ids,
+    }
