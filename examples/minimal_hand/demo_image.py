@@ -10,7 +10,7 @@ filename = os.path.basename(URL)
 fullpath = get_file(filename, URL, cache_subdir='paz/tests')
 image = load_image(fullpath)
 
-detect = MinimalHandPoseEstimation()
+detect = MinimalHandPoseEstimation(right_hand=False)
 inferences = detect(image)
 
 image = inferences['image']

@@ -88,7 +88,6 @@ class OpenImages(Loader):
             # skip header
             annotations_file.readline()
 
-            # for line in tqdm(annotations_file, total=num_lines):
             for line in annotations_file:
                 row = line.split(",")
 

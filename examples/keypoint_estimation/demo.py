@@ -11,7 +11,7 @@ parser.add_argument('-c', '--camera_id', type=int, default=0,
 args = parser.parse_args()
 
 # instantiating model
-pipeline = DetectFaceKeypointNet2D32()
+pipeline = DetectFaceKeypointNet2D32(radius=5)
 camera = Camera(args.camera_id)
 player = VideoPlayer((640, 480), pipeline, camera)
 player.run()

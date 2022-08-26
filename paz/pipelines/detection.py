@@ -1,5 +1,7 @@
 import numpy as np
 
+from paz.models.detection.haar_cascade import WEIGHT_PATH
+
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
 from ..models import SSD512, SSD300, HaarCascadeDetector
@@ -8,8 +10,6 @@ from ..datasets import get_class_names
 from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32
-from .keypoints import TransformKeypoints
-from .heatmaps import GetHeatmapsAndTags
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -67,8 +67,9 @@ class AugmentDetection(SequentialProcessor):
         super(AugmentDetection, self).__init__()
         # image processors
         self.augment_image = AugmentImage()
-        self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
+        # self.augment_image.add(pr.ConvertColorSpace(pr.RGB2BGR))
         self.preprocess_image = PreprocessImage((size, size), mean)
+        self.preprocess_image.insert(0, pr.ConvertColorSpace(pr.RGB2BGR))
 
         # box processors
         self.augment_boxes = AugmentBoxes()
@@ -212,7 +213,7 @@ class SSD512YCBVideo(DetectSingleShot):
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('YCBVideo')
-        model = SSD512(weights='YCBVideo', num_classes=len(names))
+        model = SSD512(head_weights='YCBVideo', num_classes=len(names))
         super(SSD512YCBVideo, self).__init__(
             model, names, score_thresh, nms_thresh, draw=draw)
 
@@ -479,3 +480,39 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
         super(DetectFaceKeypointNet2D32, self).__init__(
             detect, estimate_keypoints, offsets, radius)
+
+
+class SSD512HandDetection(DetectSingleShot):
+    """Minimal hand detection with SSD512Custom trained on OPenImageV6.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD512HandDetection
+
+        detect = SSD512HandDetection()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+     # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    # Reference
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
+    def __init__(self, score_thresh=0.40, nms_thresh=0.45, draw=True):
+        class_names = ['background', 'hand']
+        num_classes = len(class_names)
+        model = SSD512(num_classes, base_weights='OIV6Hand',
+                       head_weights='OIV6Hand')
+        super(SSD512HandDetection, self).__init__(
+            model, class_names, score_thresh, nms_thresh, draw=draw)

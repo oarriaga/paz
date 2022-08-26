@@ -10,8 +10,7 @@ from paz.abstract import ProcessingSequence
 from paz.optimization import DiceLoss, JaccardLoss, FocalLoss
 from paz.models import UNET_VGG16
 # from paz import processors as pr
-
-from shapes import Shapes
+from paz.datasets import Shapes
 from pipelines import PreprocessSegmentation
 from pipelines import PostprocessSegmentation
 

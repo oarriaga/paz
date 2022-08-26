@@ -3,6 +3,7 @@ import os
 import numpy as np
 from tensorflow.keras.utils import get_file
 from paz.backend.image import load_image
+from paz.applications import DetNetHandKeypoints
 from paz.applications import MinimalHandPoseEstimation
 
 
@@ -66,8 +67,70 @@ def keypoints2D():
                       [168, 102]])]
 
 
-def test_MinimalHandPoseEstimation(image, keypoints3D, keypoints2D):
+@pytest.fixture
+def absolute_angles():
+    return np.array([[-0.55003023, 0.54174083, -0.4142253, 0.4820799],
+                     [-0.5624926, 0.56267995, -0.40999246, 0.4459814],
+                     [-0.37669882, 0.38495845, -0.66506314, 0.51729673],
+                     [-0.4377414, 0.47990933, -0.5837205, 0.48717532],
+                     [-0.39964816, 0.31424704, -0.71694404, 0.47699222],
+                     [-0.560527, 0.54840434, -0.41810822, 0.4585278],
+                     [-0.55105317, 0.5303487, -0.45095497, 0.4601198],
+                     [-0.575651, 0.5191569, -0.41850358, 0.47324073],
+                     [-0.5741391, 0.5290268, -0.3691986, 0.50417006],
+                     [-0.55413926, 0.5425503, -0.42098576, 0.47046748],
+                     [-0.56464446, 0.522922, -0.45514807, 0.44784996],
+                     [-0.5663422, 0.53870934, -0.4362606, 0.44578657],
+                     [-0.5538392, 0.5553579, -0.41902977, 0.45744264],
+                     [-0.5707189, 0.5323351, -0.40267533, 0.47828007],
+                     [-0.56731933, 0.5098313, -0.46286795, 0.45163482],
+                     [-0.5777617, 0.52286583, -0.44158795, 0.44475022],
+                     [-0.5972225, 0.5244431, -0.40871197, 0.44859675],
+                     [-0.56639063, 0.522546, -0.4045012, 0.49246943],
+                     [-0.5949595, 0.4835725, -0.42747536, 0.4790049],
+                     [-0.5709238, 0.5011917, -0.43002385, 0.48778316],
+                     [-0.55398124, 0.52803624, -0.38558212, 0.51537263]])
+
+
+@pytest.fixture
+def relative_angles():
+    return np.array([[-1.34068492, 1.32047989, -1.00966386],
+                     [0., 0., 0.],
+                     [0.69457068, 0.20520391, -0.16361796],
+                     [-0.27570329, -0.02112254, 0.06886208],
+                     [0.35222156, 0.00954176, -0.25213439],
+                     [0., 0., 0.],
+                     [0.06161169, 0.02644702, -0.03865006],
+                     [-0.03251298, -0.08219342, 0.00327256],
+                     [-0.02242868, -0.07831877, 0.08553838],
+                     [0., 0., 0.],
+                     [0.01865227, 0.03510356, -0.08437433],
+                     [-0.03798096, -0.00657708, 0.03109676],
+                     [-0.00874156, -0.00632347, 0.05786459],
+                     [0., 0., 0.],
+                     [0.05509129, 0.0783495, -0.10118576],
+                     [-0.05101549, -0.01502028, 0.01699224],
+                     [-0.04864834, -0.05780793, 0.01411513],
+                     [0., 0., 0.],
+                     [0.012155, -0.02141333, -0.10758127],
+                     [0.02087628, 0.03197619, 0.04928241],
+                     [-0.0196159, -0.03766432, 0.11479097]])
+
+
+def test_DetNetHandKeypoints(image, keypoints3D, keypoints2D):
+    detect = DetNetHandKeypoints()
+    inferences = detect(image)
+    assert np.allclose(inferences['keypoints3D'], keypoints3D, rtol=1e-03)
+    assert np.allclose(inferences['keypoints2D'], keypoints2D, rtol=1e-03)
+
+
+def test_MinimalHandPoseEstimation(image, keypoints3D, keypoints2D,
+                                   absolute_angles, relative_angles):
     detect = MinimalHandPoseEstimation()
     inferences = detect(image)
     assert np.allclose(inferences['keypoints3D'], keypoints3D, rtol=1e-03)
     assert np.allclose(inferences['keypoints2D'], keypoints2D, rtol=1e-03)
+    assert np.allclose(
+        inferences['absolute_angles'], absolute_angles, rtol=1e-03)
+    assert np.allclose(
+        inferences['relative_angles'], relative_angles, rtol=1e-03)

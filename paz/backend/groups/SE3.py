@@ -20,3 +20,21 @@ def to_affine_matrix(rotation_matrix, translation):
     affine_row = np.array([[0.0, 0.0, 0.0, 1.0]])
     affine_matrix = np.concatenate([affine_top, affine_row], axis=0)
     return affine_matrix
+
+
+def to_affine_matrices(rotations, translations):
+    """Construct affine matrices for rotation matrices vector and
+       translation vector.
+
+    # Arguments
+        ratations: Rotation matrix vector [N, 3, 3].
+        translations: Translation vector [N, 3].
+
+    # Returns
+        Transformation matrix [N, 4, 4]
+    """
+    affine_matrices = []
+    for rotation, translation in zip(rotations, translations):
+        transformation = to_affine_matrix(rotation, translation)
+        affine_matrices.append(transformation)
+    return np.array(affine_matrices)
