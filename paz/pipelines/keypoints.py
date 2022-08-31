@@ -287,7 +287,9 @@ class DetNetHandKeypoints(pr.Processor):
         image = self.preprocess(input_image)
         if self.right_hand:
             image = flip_left_right(image)
-        keypoints3D, keypoints2D = self.hand_estimator.predict(image)
+        keypoints3D, keypoints2D = self.hand_estimator(image)
+        keypoints3D = keypoints3D.numpy()
+        keypoints2D = keypoints2D.numpy()
         if self.right_hand:
             keypoints2D = flip_keypoints_left_right(keypoints2D)
         keypoints2D = uv_to_vu(keypoints2D)

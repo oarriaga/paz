@@ -2,7 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import append_values
+from ..backend.standard import append_values, predict
 
 
 class ControlMap(Processor):
@@ -244,12 +244,7 @@ class Predict(Processor):
         self.postprocess = postprocess
 
     def call(self, x):
-        if self.preprocess is not None:
-            x = self.preprocess(x)
-        y = self.model.predict(x)
-        if self.postprocess is not None:
-            y = self.postprocess(y)
-        return y
+        return predict(x, self.model, self.preprocess, self.postprocess)
 
 
 class ToClassName(Processor):

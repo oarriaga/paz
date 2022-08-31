@@ -32,7 +32,7 @@ class HaarCascadeDetector(object):
         self.scale = scale
         self.neighbors = neighbors
 
-    def predict(self, gray_image):
+    def __call__(self, gray_image):
         """ Detects faces from gray images.
 
         # Arguments

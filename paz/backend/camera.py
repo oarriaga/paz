@@ -131,6 +131,16 @@ class Camera(object):
                                [0, 0, 1.0]])
         self.intrinsics = intrinsics
 
+    def take_photo(self):
+        """Starts camera, reads buffer and returns an image.
+        """
+        self.start()
+        image = self.read()
+        # all pipelines start with RGB
+        image = convert_color_space(image, BGR2RGB)
+        self.stop()
+        return image
+
 
 class VideoPlayer(object):
     """Performs visualization inferences in a real-time video.
