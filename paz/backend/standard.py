@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 
 def append_values(dictionary, lists, keys):
@@ -249,3 +250,24 @@ def max_pooling_2d(image, pool_size=3, strides=1, padding='same'):
         for x in range(0, W - pool_size + 1, strides):
             max_image[y][x] = np.max(image[y:y + pool_size, x:x + pool_size])
     return max_image
+
+
+def predict(x, model, preprocess=None, postprocess=None):
+    """Preprocess, predict and postprocess input.
+    # Arguments
+        x: Input to model
+        model: Callable i.e. Keras model.
+        preprocess: Callable, used for preprocessing input x.
+        postprocess: Callable, used for postprocessing output of model.
+
+    # Note
+        If model outputs a tf.Tensor is converted automatically to numpy array.
+    """
+    if preprocess is not None:
+        x = preprocess(x)
+    y = model(x)
+    if isinstance(y, tf.Tensor):
+        y = y.numpy()
+    if postprocess is not None:
+        y = postprocess(y)
+    return y
