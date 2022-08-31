@@ -115,7 +115,9 @@ PAGES = [
         'classes': [
             (camera.Camera, [camera.Camera.is_open,
                              camera.Camera.start,
-                             camera.Camera.stop]),
+                             camera.Camera.stop,
+                             camera.Camera.intrinsics_from_HFOV,
+                             camera.Camera.take_photo]),
             (camera.VideoPlayer, [camera.VideoPlayer.step,
                                   camera.VideoPlayer.run,
                                   camera.VideoPlayer.record,
@@ -237,7 +239,8 @@ PAGES = [
             standard.calculate_norm,
             standard.tensor_to_numpy,
             standard.pad_matrix,
-            standard.max_pooling_2d
+            standard.max_pooling_2d,
+            standard.predict
         ],
     },
 
