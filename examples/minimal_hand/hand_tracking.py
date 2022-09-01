@@ -23,20 +23,20 @@ class EstimateHandPosition(pr.Processor):
     def __init__(self, camera, hand_width=10):
         super(EstimateHandPosition, self).__init__()
         self.camera = camera
-        self.focal_length = camera.intrinsics[0, 0]
+        self.focal_length = self.camera.intrinsics[0, 0]
         self.hand_width = hand_width
-        # TODO FIX THIS
-        self.u_camera_center = 1280 / 2.0
-        self.v_camera_center = 960 / 2.0
+        self.u_camera_center = self.camera.intrinsics[0, 2]
+        self.v_camera_center = self.camera.intrinsics[1, 2]
 
     def call(self, boxes2D):
         hands_center = []
         for box in boxes2D:
             u_box_center, v_box_center = box.center
-            # print('BOX CENTER', u_box_center, v_box_center)
-            x_center = (u_box_center - self.u_camera_center) / self.focal_length
-            y_center = (v_box_center - self.v_camera_center) / self.focal_length
-            z_center = (self.hand_width * focal_length) / box.height
+            z_center = (self.hand_width * focal_length) / box.width
+            u = u_box_center - self.u_camera_center
+            v = v_box_center - self.v_camera_center
+            x_center = (z_center * u) / self.focal_length
+            y_center = (z_center * v) / self.focal_length
             hands_center.append([x_center, y_center, z_center])
         print(hands_center)
         return hands_center
