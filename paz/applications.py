@@ -17,3 +17,5 @@ from .pipelines import HigherHRNetHumanPose2D
 from .pipelines import DetNetHandKeypoints
 from .pipelines import MinimalHandPoseEstimation
 from .pipelines import DetectMinimalHand
+from .pipelines import ClassifyHandClosure
+from .pipelines import SSD512MinimalHandPose
