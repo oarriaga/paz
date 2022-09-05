@@ -266,6 +266,10 @@ def predict(x, model, preprocess=None, postprocess=None):
     if preprocess is not None:
         x = preprocess(x)
     y = model(x)
+    if isinstance(y, list):
+        for arg in range(len(y)):
+            if isinstance(y[arg], tf.Tensor):
+                y[arg] = y[arg].numpy()
     if isinstance(y, tf.Tensor):
         y = y.numpy()
     if postprocess is not None:
