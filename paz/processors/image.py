@@ -22,6 +22,7 @@ from ..backend.image import gaussian_image_blur
 from ..backend.image import normalized_device_coordinates_to_image
 from ..backend.image import image_to_normalized_device_coordinates
 from ..backend.image import replace_lower_than_threshold
+from ..backend.image import flip_left_right
 from ..backend.image import BILINEAR, CUBIC
 from ..backend.image.tensorflow_image import imagenet_preprocess_input
 
@@ -497,3 +498,16 @@ class ImagenetPreprocessInput(Processor):
 
     def call(self, image):
         return imagenet_preprocess_input(image)
+
+
+class FlipLeftRightImage(Processor):
+    """Flips an image left and right.
+
+    # Arguments
+        image: Numpy array.
+    """
+    def __init__(self):
+        super(FlipLeftRightImage, self).__init__()
+
+    def call(self, image):
+        return flip_left_right(image)
