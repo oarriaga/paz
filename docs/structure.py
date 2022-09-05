@@ -343,9 +343,9 @@ PAGES = [
             losses.WeightedReconstructionWithError
         ],
     },
-    
-    
-    {   
+
+
+    {
         'page': 'processors/angles.md',
         'classes': [
             processors.ChangeLinkOrder,
@@ -389,7 +389,8 @@ PAGES = [
             processors.NormalizedDeviceCoordinatesToImage,
             processors.ReplaceLowerThanThreshold,
             processors.GetNonZeroValues,
-            processors.GetNonZeroArguments
+            processors.GetNonZeroArguments,
+            processors.FlipLeftRightImage
         ]
     },
 
@@ -564,13 +565,10 @@ PAGES = [
 
 
     {
-        'page': 'pipelines/image.md',
+        'page': 'pipelines/classification.md',
         'classes': [
-            pipelines.AugmentImage,
-            pipelines.PreprocessImage,
-            pipelines.DecoderPredictor,
-            pipelines.EncoderPredictor,
-            pipelines.PreprocessImageHigherHRNet
+            pipelines.MiniXceptionFER,
+            pipelines.ClassifyHandClosure
         ]
     },
 
@@ -584,7 +582,8 @@ PAGES = [
             pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
-            pipelines.SSD512HandDetection
+            pipelines.SSD512HandDetection,
+            pipelines.SSD512MinimalHandPose
         ]
     },
 
@@ -593,6 +592,18 @@ PAGES = [
         'page': 'pipelines/heatmaps.md',
         'classes': [
             pipelines.GetHeatmapsAndTags
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/image.md',
+        'classes': [
+            pipelines.AugmentImage,
+            pipelines.PreprocessImage,
+            pipelines.DecoderPredictor,
+            pipelines.EncoderPredictor,
+            pipelines.PreprocessImageHigherHRNet
         ]
     },
 
@@ -665,7 +676,9 @@ PAGES = [
             pipelines.PIX2YCBTools6D,
             pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation,
-            pipelines.DetectMinimalHand
+            pipelines.DetectMinimalHand,
+            pipelines.ClassifyHandClosure,
+            pipelines.SSD512MinimalHandPose
         ]
     },
 
