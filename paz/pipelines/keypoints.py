@@ -288,6 +288,8 @@ class DetNetHandKeypoints(pr.Processor):
 
     def call(self, image):
         keypoints3D, keypoints2D = self.predict(image)
+        keypoints3D = keypoints3D.numpy()
+        keypoints2D = keypoints2D.numpy()
         if self.right_hand:
             keypoints2D = flip_keypoints_left_right(keypoints2D)
         keypoints2D = uv_to_vu(keypoints2D)
