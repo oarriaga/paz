@@ -241,7 +241,7 @@ class VideoPlayer(object):
         if (video.isOpened() is False):
             print("Error opening video  file")
 
-        while(video.isOpened()):
+        while video.isOpened():
             is_frame_received, frame = video.read()
             if not is_frame_received:
                 print("Frame not received. Exiting ...")
