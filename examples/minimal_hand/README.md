@@ -19,3 +19,7 @@ To test the live hand pose estimation from camera and visualize keypoints in 3D,
 ```py
 python demo3D.py
 ```
+
+### Additional notes
+To test a more robust hand pose estimation and open / close classification try out the "paz/examples/hand_detection/pose_demo.py"
+
