@@ -9,7 +9,8 @@ from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
-from .keypoints import FaceKeypointNet2D32
+from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
+from .keypoints import MinimalHandPoseEstimation
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -208,8 +209,6 @@ class SSD512YCBVideo(DetectSingleShot):
         as a dictionary with ``keys``: ``image`` and ``boxes2D``.
         The corresponding values of these keys contain the image with the drawn
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
-
-
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('YCBVideo')
@@ -516,3 +515,34 @@ class SSD512HandDetection(DetectSingleShot):
                        head_weights='OIV6Hand')
         super(SSD512HandDetection, self).__init__(
             model, class_names, score_thresh, nms_thresh, draw=draw)
+
+
+class SSD512MinimalHandPose(DetectMinimalHand):
+    """Hand detection and minimal hand pose estimation pipeline.
+
+    # Arguments
+        right_hand: Boolean. True for right hand inference.
+        offsets: List of two elements. Each element must be between [0, 1].
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD512MinimalHandPose
+
+        detect = SSD512MinimalHandPose()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image``,  ``boxes2D``,
+        ``Keypoints2D``, ``Keypoints3D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences.
+    """
+    def __init__(self, right_hand=False, offsets=[0.25, 0.25]):
+        detector = SSD512HandDetection()
+        keypoint_estimator = MinimalHandPoseEstimation(right_hand)
+        super(SSD512MinimalHandPose, self).__init__(
+            detector, keypoint_estimator, offsets)

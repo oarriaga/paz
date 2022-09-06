@@ -57,6 +57,7 @@ from .image import NormalizedDeviceCoordinatesToImage
 from .image import ReplaceLowerThanThreshold
 from .image import GetNonZeroArguments
 from .image import GetNonZeroValues
+from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
 
 

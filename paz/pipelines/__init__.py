@@ -20,6 +20,7 @@ from .detection import DetectMiniXceptionFER
 from .detection import DetectKeypoints2D
 from .detection import DetectFaceKeypointNet2D32
 from .detection import SSD512HandDetection
+from .detection import SSD512MinimalHandPose
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -36,6 +37,7 @@ from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage
 
 from .classification import MiniXceptionFER
+from .classification import ClassifyHandClosure
 
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32
