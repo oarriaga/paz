@@ -119,6 +119,7 @@ from .standard import UnwrapDictionary
 from .standard import Scale
 from .standard import AppendValues
 from .standard import BooleanToTextMessage
+from .standard import PrintTopics
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC

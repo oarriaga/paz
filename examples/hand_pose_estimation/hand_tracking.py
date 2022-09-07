@@ -6,7 +6,7 @@ from paz import processors as pr
 
 
 parser = argparse.ArgumentParser(description='Minimal hand keypoint detection')
-parser.add_argument('-c', '--camera_id', type=int, default=4,
+parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 parser.add_argument('-HFOV', '--horizontal_field_of_view', type=float,
                     default=75, help='Horizontal field of view in degrees')
@@ -14,16 +14,6 @@ args = parser.parse_args()
 
 camera = Camera(args.camera_id)
 camera.intrinsics_from_HFOV(args.horizontal_field_of_view)
-
-
-class PrintTopics(pr.Processor):
-    def __init__(self, topics):
-        super(PrintTopics, self).__init__()
-        self.topics = topics
-
-    def call(self, dictionary):
-        [print(dictionary[topic]) for topic in self.topics]
-        return dictionary
 
 
 class HandStateEstimation(SequentialProcessor):
@@ -36,6 +26,7 @@ class HandStateEstimation(SequentialProcessor):
             pr.Translation3DFromBoxWidth(camera), [1], [4], {1: 1}))
         outro_topics = intro_topics + ['translation3D']
         self.add(pr.WrapOutput(outro_topics))
+        self.add(pr.PrintTopics(['translation3D']))
 
 
 pipeline = HandStateEstimation(camera)
