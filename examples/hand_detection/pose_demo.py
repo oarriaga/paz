@@ -9,7 +9,7 @@ parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 args = parser.parse_args()
 
-pipeline = SSD512MinimalHandPose(right_hand=False, offsets=[0.25, 0.25])
+pipeline = SSD512MinimalHandPose(right_hand=False, offsets=[0.5, 0.5])
 camera = Camera(args.camera_id)
 player = VideoPlayer((640, 480), pipeline, camera)
 player.run()
