@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from paz.backend.camera import Camera, VideoPlayer
-from paz.applications import MinimalHandPoseEstimation
 from paz.applications import SSD512MinimalHandPose
 from paz.backend.image import resize_image, show_image
 from paz.datasets import MINIMAL_HAND_CONFIG
@@ -14,8 +13,7 @@ parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 args = parser.parse_args()
 
-# pipeline = MinimalHandPoseEstimation(right_hand=False)
-pipeline = SSD512MinimalHandPose()
+pipeline = SSD512MinimalHandPose(right_hand=False, offsets=[0.5, 0.5])
 camera = Camera(args.camera_id)
 player = VideoPlayer((640, 480), pipeline, camera)
 
@@ -73,7 +71,7 @@ def animate(player):
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
-        ax.scatter3D(xs, ys, zs, c = joint_colors)
+        ax.scatter3D(xs, ys, zs, c=joint_colors)
         plot_3D_keypoints_link(ax, keypoints3D, link_args, link_orders,
                                link_colors)
     return wrapped_animate
