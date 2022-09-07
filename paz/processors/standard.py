@@ -465,3 +465,20 @@ class BooleanToTextMessage(Processor):
         else:
             message = self.false_message
         return message
+
+
+class PrintTopics(Processor):
+    """Prints topics
+    # Arguments
+        topics: List of keys to the inputted dictionary
+
+    # Returns
+        Returns same dictionary but outputs to terminal topic values.
+    """
+    def __init__(self, topics):
+        super(PrintTopics, self).__init__()
+        self.topics = topics
+
+    def call(self, dictionary):
+        [print(dictionary[topic]) for topic in self.topics]
+        return dictionary

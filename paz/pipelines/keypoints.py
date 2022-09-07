@@ -10,7 +10,7 @@ from ..models import KeypointNet2D, HigherHRNet, DetNet
 from .angles import IKNetHandJointAngles
 
 
-from ..backend.image import get_affine_transform, flip_left_right, lincolor
+from ..backend.image import get_affine_transform, lincolor
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 

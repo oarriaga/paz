@@ -91,3 +91,39 @@ class SolveChangingObjectPnPRANSAC(Processor):
             self.inlier_thresh, self.num_iterations)
         rotation_vector = np.squeeze(rotation_vector)
         return success, rotation_vector, translation
+
+
+class Translation3DFromBoxWidth(Processor):
+    """Computes 3D translation from box width and real width ratio.
+
+    # Arguments
+        camera: Instance of ''paz.backend.Camera'' containing as properties
+            the ``camera_intrinsics`` a Numpy array of shape ``[3, 3]``
+            usually calculated from the openCV ``calibrateCamera`` function,
+            and the ``distortion`` a Numpy array of shape ``[5]`` in which the
+            elements are usually obtained from the openCV
+            ``calibrateCamera`` function.
+        real_width: Real width of the predicted box2D.
+
+    # Returns
+        Array (num_boxes, 3) containing all 3D translations.
+    """
+    def __init__(self, camera, real_width=0.3):
+        super(Translation3DFromBoxWidth, self).__init__()
+        self.camera = camera
+        self.real_width = real_width
+        self.focal_length = self.camera.intrinsics[0, 0]
+        self.u_camera_center = self.camera.intrinsics[0, 2]
+        self.v_camera_center = self.camera.intrinsics[1, 2]
+
+    def call(self, boxes2D):
+        hands_center = []
+        for box in boxes2D:
+            u_box_center, v_box_center = box.center
+            z_center = (self.real_width * self.focal_length) / box.width
+            u = u_box_center - self.u_camera_center
+            v = v_box_center - self.v_camera_center
+            x_center = (z_center * u) / self.focal_length
+            y_center = (z_center * v) / self.focal_length
+            hands_center.append([x_center, y_center, z_center])
+        return np.array(hands_center)
