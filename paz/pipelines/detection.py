@@ -1,7 +1,5 @@
 import numpy as np
 
-from paz.models.detection.haar_cascade import WEIGHT_PATH
-
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
 from ..models import SSD512, SSD300, HaarCascadeDetector
