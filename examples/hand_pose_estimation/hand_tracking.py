@@ -21,8 +21,8 @@ class EstimateTranslation3D(pr.Processor):
     def __init__(self, camera, real_width=10):
         super(EstimateTranslation3D, self).__init__()
         self.camera = camera
-        self.focal_length = self.camera.intrinsics[0, 0]
         self.real_width = real_width
+        self.focal_length = self.camera.intrinsics[0, 0]
         self.u_camera_center = self.camera.intrinsics[0, 2]
         self.v_camera_center = self.camera.intrinsics[1, 2]
 
