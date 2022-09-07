@@ -26,7 +26,6 @@ class HandStateEstimation(SequentialProcessor):
             pr.Translation3DFromBoxWidth(camera), [1], [4], {1: 1}))
         outro_topics = intro_topics + ['translation3D']
         self.add(pr.WrapOutput(outro_topics))
-        self.add(pr.PrintTopics(['translation3D']))
 
 
 pipeline = HandStateEstimation(camera)
