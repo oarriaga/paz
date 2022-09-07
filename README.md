@@ -16,11 +16,11 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|--------------------------| -----------------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
 
-|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | [Hand pose estimation](https://github.com/oarriaga/paz/tree/master/examples/minimal_hand) |  [Human pose estimation](https://github.com/oarriaga/paz/tree/master/examples/human_pose_estimation_2D) |
+|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | [Hand pose estimation](https://github.com/oarriaga/paz/tree/master/examples/hand_pose_estimation) |  [Human pose estimation](https://github.com/oarriaga/paz/tree/master/examples/human_pose_estimation_2D) |
 |---------------------------|-----------------------|-----------------|
 | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/minimal_hand_example.jpg" width="330"> |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose.gif" width="250"> | 
 
-| [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Hand closure detection](https://github.com/oarriaga/paz/tree/master/examples/minimal_hand)  | [6D pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pix2pose) |
+| [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Hand closure detection](https://github.com/oarriaga/paz/tree/master/examples/hand_pose_estimation)  | [6D pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pix2pose) |
 |---------------------------|-----------------------| --------------------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="335"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/hand_closure_detection.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pix2pose_example.jpg" width="330"> |
 
