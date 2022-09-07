@@ -122,6 +122,7 @@ from .standard import BooleanToTextMessage
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
+from .pose import Translation3DFromBoxWidth
 
 from .groups import ToAffineMatrix
 from .groups import RotationVectorToQuaternion

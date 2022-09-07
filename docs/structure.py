@@ -504,7 +504,8 @@ PAGES = [
         'page': 'processors/pose.md',
         'classes': [
             processors.SolvePNP,
-            processors.SolveChangingObjectPnPRANSAC
+            processors.SolveChangingObjectPnPRANSAC,
+            processors.Translation3DFromBoxWidth
         ]
     },
 
