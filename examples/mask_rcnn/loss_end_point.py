@@ -4,8 +4,12 @@ from tensorflow.keras.layers import Layer
 
 
 class ProposalClassLoss(tf.keras.layers.Layer):
-    """Computes loss for Mask RCNN architecture
+    """Computes loss for Mask RCNN architecture, Region Proposal
+    Network Class loss. RPN anchor classifier loss.
 
+    rpn_match: [batch, anchors, 1]. Anchor match type. 1=positive,
+               -1=negative, 0=neutral anchor.
+    rpn_class_logits: [batch, anchors, 2]. RPN classifier logits for BG/FG.
     """
     def __init__(self, config, name= 'rpn_class_loss'):
         self.config = config
@@ -21,18 +25,26 @@ class ProposalClassLoss(tf.keras.layers.Layer):
                                                  output=y_pred,
                                                  from_logits=True)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-        self.add_loss(loss)
+        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('rpn_class_loss', 1.))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
-            'rpn_class_logits', 1.))
+             'rpn_class_logits', 1.))
         self.add_metric(metric, name= 'rpn_class_logits', aggregation='mean')
         return loss
 
 
 class ProposalBBoxLoss(tf.keras.layers.Layer):
-    """Computes loss for Mask RCNN architecture
+    """Computes loss for Mask RCNN architecture for Region Proposal
+     Network Bounding box loss.
+     Return the RPN bounding box loss graph.
 
+    config: the model config object.
+    target_bbox: [batch, max positive anchors, (dy, dx, log(dh), log(dw))].
+        Uses 0 padding to fill in unsed bbox deltas.
+    rpn_match: [batch, anchors, 1]. Anchor match type. 1=positive,
+               -1=negative, 0=neutral anchor.
+    rpn_bbox: [batch, anchors, (dy, dx, log(dh), log(dw))]
     """
-    def __init__(self, config, name= 'rpn_bbox_loss', rpn_match= None):
+    def __init__(self, config, name= 'rpn_bbox_loss', rpn_match= None): ##Evaluate RPN match ==  None
         self.config = config
         self.rpn_match = rpn_match
         super(ProposalBBoxLoss, self).__init__(name=name)
@@ -46,7 +58,7 @@ class ProposalBBoxLoss(tf.keras.layers.Layer):
                                              self.config.IMAGES_PER_GPU)
         loss = smooth_L1_loss(target_boxes, rpn_bbox)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-        self.add_loss(loss)
+        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('rpn_bbox_loss', 1.))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
         self.add_metric(metric, name='rpn_bbox', aggregation='mean')
@@ -54,8 +66,15 @@ class ProposalBBoxLoss(tf.keras.layers.Layer):
 
 
 class ClassLoss(tf.keras.layers.Layer):
-    """Computes loss for Mask RCNN architecture
+    """Computes loss for Mask RCNN architecture, for MRCNN class loss
+    Loss for the classifier head of Mask RCNN.
 
+    target_class_ids: [batch, num_rois]. Integer class IDs. Uses zero
+        padding to fill in the array.
+    pred_class_logits: [batch, num_rois, num_classes]
+    active_class_ids: [batch, num_classes]. Has a value of 1 for
+        classes that are in the dataset of the image, and 0
+        for classes that are not in the dataset.
     """
     def __init__(self, config, name='mrcnn_class_loss', active_class_ids =None):
         self.config = config
@@ -71,7 +90,7 @@ class ClassLoss(tf.keras.layers.Layer):
             labels=y_true, logits=y_pred)
         loss = tf.reshape(loss,[-1]) * tf.cast(pred_active, 'float32')
         loss = tf.reduce_sum(loss) / tf.reduce_sum(tf.cast(pred_active,'float32'))
-        self.add_loss(loss)
+        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('mrcnn_class_loss', 1.))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
         self.add_metric(metric, name='mrcnn_class', aggregation='mean')
@@ -79,8 +98,12 @@ class ClassLoss(tf.keras.layers.Layer):
 
 
 class BBoxLoss(tf.keras.layers.Layer):
-    """Computes loss for Mask RCNN architecture
+    """Computes loss for Mask RCNN architecture, MRCNN BBox loss
+    Loss for Mask R-CNN bounding box refinement.
 
+    target_bbox: [batch, num_rois, (dy, dx, log(dh), log(dw))]
+    target_class_ids: [batch, num_rois]. Integer class IDs.
+    pred_bbox: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
     """
     def __init__(self, config, name='mrcnn_bbox_loss', target_class_ids=None):
         self.config = config
@@ -104,16 +127,22 @@ class BBoxLoss(tf.keras.layers.Layer):
                         smooth_L1_loss(target_boxes, predicted_boxes),
                         tf.constant(0.0))
         loss = K.mean(loss)
-        self.add_loss(loss)
+        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('mrcnn_bbox_loss', 1.))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
         self.add_metric(metric, name='mrcnn_bbox', aggregation='mean')
         return loss
 
 
-class MaskLoss(tf.keras.layers.Layer):  #TODO: Rename MaskLoss. All class names as well
-    """Computes loss for Mask RCNN architecture
+class MaskLoss(tf.keras.layers.Layer):
+    """Computes loss for Mask RCNN architecture, for MRCNN mask loss.
+    Mask binary cross-entropy loss for the masks head.
 
+    target_masks: [batch, num_rois, height, width].
+        A float32 tensor of values 0 or 1. Uses zero padding to fill array.
+    target_class_ids: [batch, num_rois]. Integer class IDs. Zero padded.
+    pred_masks: [batch, proposals, height, width, num_classes] float32 tensor
+                with values from 0 to 1.
     """
     def __init__(self, config, name='mrcnn_mask_loss', target_class_ids=None):
         self.config = config
@@ -134,11 +163,11 @@ class MaskLoss(tf.keras.layers.Layer):  #TODO: Rename MaskLoss. All class names 
                         K.binary_crossentropy(target=y_true, output=y_pred),
                         tf.constant(0.0))
         loss = K.mean(loss)
-        self.add_loss(loss)
+        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('mrcnn_mask_loss', 1.))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
         self.add_metric(metric, name='mrcnn_mask', aggregation='mean')
-        return loss
+        return  loss
 
 
 def smooth_L1_loss(y_true, y_pred):
