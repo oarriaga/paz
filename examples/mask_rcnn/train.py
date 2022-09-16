@@ -10,8 +10,8 @@ from tensorflow.keras.models import Model
 from config import Config
 from pipeline import DetectionPipeline
 from paz.models.detection.utils import create_prior_boxes
-from utils import DataGenerator
-from utils import display_top_masks, build_fpn_mask_graph, fpn_classifier_graph
+from utils2 import DataGenerator
+
 from paz.datasets.shapes import Shapes
 from model import MaskRCNN, get_imagenet_weights
 import numpy as np
@@ -69,10 +69,9 @@ args = parser.parse_args()
 print('Path to save model: ', args.save_path)
 print('Data path: ', args.data_path)
 
-
 #Dataset initialisation
-optimizer = SGD(args.learning_rate, args.momentum)
 config = ShapesConfig()
+optimizer = SGD(args.learning_rate, args.momentum, clipnorm=config.GRADIRNT_CLIP_NORM)
 dataset_train = Shapes(50, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 dataset_val = Shapes(5, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 train_generator = DataGenerator(dataset_train, config, shuffle=True,
@@ -113,27 +112,11 @@ reg_losses = [
 
 model.keras_model.add_loss(tf.add_n(reg_losses))
 
-for loss in losses:
-    model.keras_model.add_loss(loss)
+model.keras_model.compile(
+            optimizer=optimizer,
+            loss=[None] * len(model.keras_model.outputs))
 
-loss_names = [
-            "rpn_class_loss",  "rpn_bbox_loss",
-            "mrcnn_class_loss", "mrcnn_bbox_loss", "mrcnn_mask_loss"]
-
-for name in loss_names:
-    if name in model.keras_model.metrics_names:
-        continue
-    layer = model.keras_model.get_layer(name)
-    model.keras_model.metrics_names.append(name)
-    loss = (
-        tf.reduce_mean(layer.output, keepdims=True)
-        * config.LOSS_WEIGHTS.get(name, 1.))
-    model.keras_model.add_metric(loss)
-
-
-model.keras_model.compile(optimizer)
-
-print("model.keras_model.input",model.keras_model.summary())
+#print("model.keras_model.input",model.keras_model.summary())
 
 #Checkpoints
 model_path = os.path.join(args.save_path, 'shapes')
