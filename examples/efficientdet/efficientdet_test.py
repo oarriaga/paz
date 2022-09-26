@@ -146,6 +146,7 @@ def test_efficientdet_architecture(models_base_path,
     del implemented_model, reference_model
 
 
+@pytest.mark.skip(reason="Training of model needs to carried out from D0-D7")
 @pytest.mark.parametrize('model, model_idx, preprocessed_inputs',
                          [
                              (EFFICIENTDETD0, 0, (1, 2, 3, 4, 5)),
