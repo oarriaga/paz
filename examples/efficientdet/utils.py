@@ -10,7 +10,8 @@ import necessary_imports as ni
 from necessary_imports import RGB_IMAGENET_STDEV
 
 # Mock input image.
-file_name = ('/home/manummk95/Desktop/efficientdet_working/paz/examples/efficientdet/images/2007_000033.jpg')
+file_name = ('/home/manummk95/Desktop/efficientdet_working/paz/'
+             'examples/efficientdet/images/2007_000033.jpg')
 loader = LoadImage()
 raw_images = loader(file_name)
 
