@@ -10,7 +10,7 @@ import necessary_imports as ni
 from necessary_imports import RGB_IMAGENET_STDEV
 
 # Mock input image.
-file_name = ('/home/manummk95/Desktop/efficientdet_working/paz/examples/efficientdet/000007.jpg')
+file_name = ('/home/manummk95/Desktop/efficientdet_working/paz/examples/efficientdet/images/2007_000033.jpg')
 loader = LoadImage()
 raw_images = loader(file_name)
 
@@ -128,7 +128,7 @@ def create_multibox_head(branch_tensors, num_levels, num_classes,
     regressions = Concatenate(axis=1)(regression_layers)
     num_boxes = K.int_shape(regressions)[-1] // num_regressions
     classifications = Reshape((num_boxes, num_classes))(classifications)
-    classifications = Activation('sigmoid')(classifications)
+    classifications = Activation('softmax')(classifications)
     regressions = Reshape((num_boxes, num_regressions))(regressions)
     outputs = Concatenate(axis=2, name='boxes')([regressions, classifications])
     return outputs
