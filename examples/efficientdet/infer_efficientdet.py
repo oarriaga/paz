@@ -1,17 +1,17 @@
-from paz.backend.image.opencv_image import write_image
-
+from paz.backend.image import show_image, write_image
+from paz.pipelines import DetectSingleShot
+from paz.models import SSD300
 from efficientdet import EFFICIENTDETD0
+from utils import get_class_name_efficientdet, raw_images
+from paz.models import SSD300
+from paz.datasets import get_class_names
+from utils import efficientdet_preprocess
 from efficientdet_postprocess import efficientdet_postprocess
-from utils import efficientdet_preprocess, raw_images
 
 if __name__ == "__main__":
-
-    model = EFFICIENTDETD0()
-    image_size = model.input_shape[1]
-    input_image, image_scales = efficientdet_preprocess(raw_images, image_size)
-    outputs = model(input_image)
-    image, detections = efficientdet_postprocess(
-        model, outputs, image_scales, raw_images)
-    print(detections)
-    write_image('paz_postprocess.jpg', image)
+    model = EFFICIENTDETD0(num_classes=21, base_weights='COCO', head_weights=None)
+    model.load_weights("/home/manummk95/Desktop/efficientdet_working/temp/weight/weights.140-3.55.hdf5")    
+    detections = DetectSingleShot(model, get_class_names('VOC'), 0.5, 0.45)(raw_images)
+    show_image(detections['image'])
+    write_image('latest_ops/new_op18.png', detections['image'])
     print('task completed')
