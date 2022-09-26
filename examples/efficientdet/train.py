@@ -6,11 +6,11 @@ from paz.abstract import ProcessingSequence
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import EvaluateMAP, LearningRateScheduler
+from paz.pipelines import AugmentDetection, DetectSingleShot
 from paz.processors import TRAIN, VAL
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import SGD
 
-from detection import AugmentDetection, DetectSingleShot_EfficientDet
 from efficientdet import EFFICIENTDETD0
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -23,17 +23,17 @@ gpus = tf.config.experimental.list_physical_devices('GPU')
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-bs', '--batch_size', default=1, type=int,
+parser.add_argument('-bs', '--batch_size', default=128, type=int,
                     help='Batch size for training')
-parser.add_argument('-et', '--evaluation_period', default=1, type=int,
+parser.add_argument('-et', '--evaluation_period', default=5, type=int,
                     help='evaluation frequency')
-parser.add_argument('-lr', '--learning_rate', default=0.001, type=float,
+parser.add_argument('-lr', '--learning_rate', default=0.08, type=float,
                     help='Initial learning rate for SGD')
 parser.add_argument('-m', '--momentum', default=0.9, type=float,
                     help='Momentum for SGD')
 parser.add_argument('-g', '--gamma_decay', default=0.1, type=float,
                     help='Gamma decay for learning rate scheduler')
-parser.add_argument('-e', '--num_epochs', default=240, type=int,
+parser.add_argument('-e', '--num_epochs', default=300, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
@@ -42,7 +42,7 @@ parser.add_argument('-sp', '--save_path', default='trained_models/',
 parser.add_argument('-dp', '--data_path', default='VOCdevkit/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
-                    default=[110, 152], help='Epoch learning rate reduction')
+                    default=[200, 250], help='Epoch learning rate reduction')
 parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
                     help='Select True for multiprocessing')
 parser.add_argument('-w', '--workers', default=1, type=int,
@@ -100,8 +100,8 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 evaluate = EvaluateMAP(
     evaluation_data_managers[0],
-    DetectSingleShot_EfficientDet(model, data_managers[0].class_names,
-                                  0.01, 0.45),
+    DetectSingleShot(model, data_managers[0].class_names,
+                     0.01, 0.45),
     args.evaluation_period,
     args.save_path,
     args.AP_IOU)
