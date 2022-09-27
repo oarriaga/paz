@@ -115,7 +115,9 @@ PAGES = [
         'classes': [
             (camera.Camera, [camera.Camera.is_open,
                              camera.Camera.start,
-                             camera.Camera.stop]),
+                             camera.Camera.stop,
+                             camera.Camera.intrinsics_from_HFOV,
+                             camera.Camera.take_photo]),
             (camera.VideoPlayer, [camera.VideoPlayer.step,
                                   camera.VideoPlayer.run,
                                   camera.VideoPlayer.record,
@@ -237,7 +239,8 @@ PAGES = [
             standard.calculate_norm,
             standard.tensor_to_numpy,
             standard.pad_matrix,
-            standard.max_pooling_2d
+            standard.max_pooling_2d,
+            standard.predict
         ],
     },
 
@@ -340,9 +343,9 @@ PAGES = [
             losses.WeightedReconstructionWithError
         ],
     },
-    
-    
-    {   
+
+
+    {
         'page': 'processors/angles.md',
         'classes': [
             processors.ChangeLinkOrder,
@@ -386,7 +389,8 @@ PAGES = [
             processors.NormalizedDeviceCoordinatesToImage,
             processors.ReplaceLowerThanThreshold,
             processors.GetNonZeroValues,
-            processors.GetNonZeroArguments
+            processors.GetNonZeroArguments,
+            processors.FlipLeftRightImage
         ]
     },
 
@@ -500,7 +504,8 @@ PAGES = [
         'page': 'processors/pose.md',
         'classes': [
             processors.SolvePNP,
-            processors.SolveChangingObjectPnPRANSAC
+            processors.SolveChangingObjectPnPRANSAC,
+            processors.Translation3DFromBoxWidth
         ]
     },
 
@@ -547,7 +552,8 @@ PAGES = [
             processors.UnwrapDictionary,
             processors.Scale,
             processors.AppendValues,
-            processors.BooleanToTextMessage
+            processors.BooleanToTextMessage,
+            processors.PrintTopics
         ]
     },
 
@@ -561,13 +567,10 @@ PAGES = [
 
 
     {
-        'page': 'pipelines/image.md',
+        'page': 'pipelines/classification.md',
         'classes': [
-            pipelines.AugmentImage,
-            pipelines.PreprocessImage,
-            pipelines.DecoderPredictor,
-            pipelines.EncoderPredictor,
-            pipelines.PreprocessImageHigherHRNet
+            pipelines.MiniXceptionFER,
+            pipelines.ClassifyHandClosure
         ]
     },
 
@@ -581,7 +584,8 @@ PAGES = [
             pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
-            pipelines.SSD512HandDetection
+            pipelines.SSD512HandDetection,
+            pipelines.SSD512MinimalHandPose
         ]
     },
 
@@ -590,6 +594,18 @@ PAGES = [
         'page': 'pipelines/heatmaps.md',
         'classes': [
             pipelines.GetHeatmapsAndTags
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/image.md',
+        'classes': [
+            pipelines.AugmentImage,
+            pipelines.PreprocessImage,
+            pipelines.DecoderPredictor,
+            pipelines.EncoderPredictor,
+            pipelines.PreprocessImageHigherHRNet
         ]
     },
 
@@ -662,7 +678,9 @@ PAGES = [
             pipelines.PIX2YCBTools6D,
             pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation,
-            pipelines.DetectMinimalHand
+            pipelines.DetectMinimalHand,
+            pipelines.ClassifyHandClosure,
+            pipelines.SSD512MinimalHandPose
         ]
     },
 

@@ -57,6 +57,7 @@ from .image import NormalizedDeviceCoordinatesToImage
 from .image import ReplaceLowerThanThreshold
 from .image import GetNonZeroArguments
 from .image import GetNonZeroValues
+from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
 
 
@@ -118,9 +119,11 @@ from .standard import UnwrapDictionary
 from .standard import Scale
 from .standard import AppendValues
 from .standard import BooleanToTextMessage
+from .standard import PrintTopics
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
+from .pose import Translation3DFromBoxWidth
 
 from .groups import ToAffineMatrix
 from .groups import RotationVectorToQuaternion

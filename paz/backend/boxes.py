@@ -38,8 +38,8 @@ def to_corner_form(boxes):
 
 
 def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2]):
-    """Encode the variances from the priorbox layers into the ground truth boxes
-    we have matched (based on jaccard overlap) with the prior boxes.
+    """Encode the variances from the priorbox layers into the ground truth
+    boxes we have matched (based on jaccard overlap) with the prior boxes.
 
     # Arguments
         matched: Numpy array of shape `(num_priors, 4)` with boxes in
@@ -367,7 +367,8 @@ def to_one_hot(class_indices, num_classes):
 
 
 def make_box_square(box):
-    """Makes box coordinates square with sides equal to the longest original side.
+    """Makes box coordinates square with sides equal to the longest
+        original side.
 
     # Arguments
         box: Numpy array with shape `(4)` with point corner coordinates.
@@ -442,7 +443,7 @@ def clip(coordinates, image_shape):
 
 
 def denormalize_box(box, image_shape):
-    """Scales corner box coordinates from normalized values to image dimensions.
+    """Scales corner box coordinates from normalized values to image dimensions
 
     # Arguments
         box: Numpy array containing corner box coordinates.

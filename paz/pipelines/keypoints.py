@@ -10,7 +10,7 @@ from ..models import KeypointNet2D, HigherHRNet, DetNet
 from .angles import IKNetHandJointAngles
 
 
-from ..backend.image import get_affine_transform, flip_left_right, lincolor
+from ..backend.image import get_affine_transform, lincolor
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
@@ -276,24 +276,26 @@ class DetNetHandKeypoints(pr.Processor):
         super(DetNetHandKeypoints).__init__()
         self.draw = draw
         self.right_hand = right_hand
-        self.preprocess = pr.SequentialProcessor(
-            [pr.ResizeImage(shape), pr.ExpandDims(axis=0)])
-        self.hand_estimator = DetNet()
+        self.preprocess = pr.SequentialProcessor()
+        self.preprocess.add(pr.ResizeImage(shape))
+        self.preprocess.add(pr.ExpandDims(axis=0))
+        if self.right_hand:
+            self.preprocess.add(pr.FlipLeftRightImage())
+        self.predict = pr.Predict(model=DetNet(), preprocess=self.preprocess)
         self.scale_keypoints = pr.ScaleKeypoints(scale=4, shape=shape)
         self.draw_skeleton = pr.DrawHandSkeleton()
         self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D'])
 
-    def call(self, input_image):
-        image = self.preprocess(input_image)
-        if self.right_hand:
-            image = flip_left_right(image)
-        keypoints3D, keypoints2D = self.hand_estimator.predict(image)
+    def call(self, image):
+        keypoints3D, keypoints2D = self.predict(image)
+        keypoints3D = keypoints3D.numpy()
+        keypoints2D = keypoints2D.numpy()
         if self.right_hand:
             keypoints2D = flip_keypoints_left_right(keypoints2D)
         keypoints2D = uv_to_vu(keypoints2D)
-        keypoints2D = self.scale_keypoints(keypoints2D, input_image)
+        keypoints2D = self.scale_keypoints(keypoints2D, image)
         if self.draw:
-            image = self.draw_skeleton(input_image, keypoints2D)
+            image = self.draw_skeleton(image, keypoints2D)
         return self.wrap(image, keypoints3D, keypoints2D)
 
 
