@@ -100,7 +100,7 @@ def compare_vertical_neighbours(x, y, image, offset=0.25):
     # Arguments
         x: Int. x coordinate of pixel to be compared.
         y: Int. y coordinate of pixel to be compared.
-        image: Numpy array.
+        image: Array.
         offset: Float.
     """
     int_x, int_y = int(x), int(y)
@@ -119,7 +119,7 @@ def compare_horizontal_neighbours(x, y, image, offset=0.25):
     # Arguments
         x: Int. x coordinate of pixel to be compared.
         y: Int. y coordinate of pixel to be compared.
-        image: Numpy array.
+        image: Array.
         offset: Float.
     """
     int_x, int_y = int(x), int(y)
@@ -136,10 +136,10 @@ def get_all_indices_of_array(array):
     """Get all the indices of an array.
 
     # Arguments
-        array: Numpy array
+        array: Array
 
     # Returns
-        Numpy array. Array with the indices of the input array
+        Array. Array with the indices of the input array
     """
     all_indices = np.ndarray(array.shape)
     all_indices.fill(True)
@@ -154,12 +154,12 @@ def gather_nd(array, indices, axis):
     given axis.
 
     # Arguments
-        array: Numpy array
-        indices: list/numpy array. values to be gathered from
+        array: Array
+        indices: list/Array. values to be gathered from
         axis: Int. Axis along which to gather values.
 
     # Returns
-        Numpy array. Gathered values from the input array
+        Array. Gathered values from the input array
     """
     gathered = np.take_along_axis(array, indices, axis=axis)
     return gathered
@@ -175,7 +175,7 @@ def calculate_norm(vector, order=None, axis=None):
 
 
 def tensor_to_numpy(tensor):
-    """Convert a tensor to a numpy array.
+    """Convert a tensor to a Array.
 
     # Arguments
         tensor: multidimensional array of type tensor
@@ -188,7 +188,7 @@ def pad_matrix(matrix, pool_size=(3, 3), strides=(1, 1),
     """Pad an array
 
     # Arguments
-        matrix: Numpy array.
+        matrix: Array.
         padding: String. Type of padding
         value: Int. Value to be added in the padded area.
         poolsize: Int. How many rows and colums to be padded for 'same' padding
@@ -228,7 +228,7 @@ def max_pooling_2d(image, pool_size=3, strides=1, padding='same'):
     """Returns the maximum pooled value of an image.
 
     # Arguments
-        image: Numpy array.
+        image: Array.
         poolsize: Int or list of len 2. Window size for each pool
         padding: String. Type of padding
     """

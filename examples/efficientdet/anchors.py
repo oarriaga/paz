@@ -83,13 +83,13 @@ class Anchors():
         base_anchor_x = anchor_scale * stride[1] * 2 ** octave_scale
         base_anchor_y = anchor_scale * stride[0] * 2 ** octave_scale
         aspect_x, aspect_y = self.get_aspect_ratio(aspect)
-        anchor_x = base_anchor_x * aspect_x / 2.0
-        anchor_y = base_anchor_y * aspect_y / 2.0
+        anchor_x = (base_anchor_x * aspect_x / 2.0) / self.image_size[1]
+        anchor_y = (base_anchor_y * aspect_y / 2.0) / self.image_size[0]
         x = np.arange(stride[1] / 2, self.image_size[1], stride[1])
         y = np.arange(stride[0] / 2, self.image_size[0], stride[0])
         center_x, center_y = np.meshgrid(x, y)
-        center_x = center_x.reshape(-1)
-        center_y = center_y.reshape(-1)
+        center_x = center_x.reshape(-1) / self.image_size[1]
+        center_y = center_y.reshape(-1) / self.image_size[0]
         return center_x, center_y, anchor_x, anchor_y
 
     def get_level_boxes(self, configs):

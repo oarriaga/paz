@@ -25,6 +25,7 @@ from .draw import DrawHumanSkeleton
 from .draw import DrawHandSkeleton
 from .draw import DrawRGBMask
 from .draw import DrawRGBMasks
+from .draw import DrawText
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -93,6 +94,7 @@ from .keypoints import DenormalizeKeypoints2D
 from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
+from .keypoints import ComputeOrientationVector
 
 from .standard import ControlMap
 from .standard import ExpandDomain
@@ -115,6 +117,7 @@ from .standard import Stochastic
 from .standard import UnwrapDictionary
 from .standard import Scale
 from .standard import AppendValues
+from .standard import BooleanToTextMessage
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
@@ -155,6 +158,10 @@ from .heatmaps import TransformKeypoints
 from .heatmaps import ExtractKeypointsLocations
 
 from .munkres import Munkres
+
+from .angles import ChangeLinkOrder
+from .angles import CalculateRelativeAngles
+from .angles import IsHandOpen
 
 
 TRAIN = 0

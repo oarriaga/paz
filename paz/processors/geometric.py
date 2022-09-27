@@ -13,7 +13,7 @@ from ..backend.image import get_rotation_matrix
 from ..backend.image import calculate_image_center
 from ..backend.image import get_affine_transform
 from ..backend.keypoints import translate_keypoints
-from ..backend.keypoints import rotate_keypoint
+from ..backend.keypoints import rotate_point2D
 from ..backend.standard import resize_with_same_aspect_ratio
 from ..backend.standard import get_transformation_scale
 
@@ -523,7 +523,7 @@ class GetSourceDestinationPoints(Processor):
     def _get_transformation_source_point(self, scale, center):
         scale = scale * self.scaling_factor
         center_W = scale[0] / 2
-        direction_vector = rotate_keypoint([0, -center_W], 0)
+        direction_vector = rotate_point2D([0, -center_W], 0)
         points = np.zeros((3, 2), dtype=np.float32)
         points[0, :] = center
         points[1, :] = center + direction_vector

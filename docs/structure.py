@@ -1,10 +1,13 @@
+from paz.backend import angles
 from paz.backend import boxes
 from paz.backend import camera
 from paz.backend import render
 from paz.backend import keypoints
-from paz.backend import quaternion
+from paz.backend import groups
+from paz.backend import image
+from paz.backend import heatmaps
+from paz.backend import standard
 from paz.backend.image import draw
-from paz.backend.image import opencv_image
 from paz.abstract import messages
 from paz.abstract import processor
 from paz.abstract import loader
@@ -22,6 +25,17 @@ EXCLUDE = {}
 # backend.pipelines *
 
 PAGES = [
+    {
+        'page': 'backend/angles.md',
+        'functions': [
+            angles.calculate_relative_angle,
+            angles.reorder_relative_angles,
+            angles.change_link_order,
+            angles.is_hand_open
+        ],
+    },
+
+
     {
         'page': 'backend/boxes.md',
         'functions': [
@@ -41,7 +55,8 @@ PAGES = [
             boxes.to_center_form,
             boxes.to_one_hot,
             boxes.to_normalized_coordinates,
-            boxes.to_corner_form
+            boxes.to_corner_form,
+            boxes.extract_bounding_box_corners
         ],
     },
 
@@ -49,20 +64,48 @@ PAGES = [
     {
         'page': 'backend/keypoints.md',
         'functions': [
+            keypoints.build_cube_points3D,
+            keypoints.normalize_keypoints2D,
+            keypoints.denormalize_keypoints2D,
+            keypoints.project_to_image,
+            keypoints.solve_PnP_RANSAC,
+            keypoints.arguments_to_image_points2D,
             keypoints.cascade_classifier,
-            keypoints.denormalize_keypoints,
-            keypoints.normalize_keypoints,
             keypoints.project_points3D,
             keypoints.solve_PNP,
-            keypoints.translate_keypoints
+            keypoints.translate_keypoints,
+            keypoints.rotate_point2D,
+            keypoints.transform_keypoint,
+            keypoints.add_offset_to_point,
+            keypoints.translate_points2D_origin,
+            keypoints.flip_keypoints_left_right,
+            keypoints.compute_orientation_vector,
+            keypoints.rotate_keypoints3D,
+            keypoints.flip_along_x_axis,
+            keypoints.uv_to_vu
         ],
     },
 
 
     {
-        'page': 'backend/quaternion.md',
+        'page': 'backend/groups.md',
         'functions': [
-            quaternion.rotation_vector_to_quaternion
+            groups.rotation_vector_to_quaternion,
+            groups.homogenous_quaternion_to_rotation_matrix,
+            groups.quaternion_to_rotation_matrix,
+            groups.rotation_matrix_to_quaternion,
+            groups.get_quaternion_conjugate,
+            groups.quaternions_to_rotation_matrices,
+            groups.to_affine_matrix,
+            groups.to_affine_matrices,
+            groups.rotation_vector_to_rotation_matrix,
+            groups.build_rotation_matrix_x,
+            groups.build_rotation_matrix_y,
+            groups.build_rotation_matrix_z,
+            groups.compute_norm_SO3,
+            groups.calculate_canonical_rotation,
+            groups.rotation_matrix_to_axis_angle,
+            groups.rotation_matrix_to_compact_axis_angle,
         ],
     },
 
@@ -75,7 +118,8 @@ PAGES = [
                              camera.Camera.stop]),
             (camera.VideoPlayer, [camera.VideoPlayer.step,
                                   camera.VideoPlayer.run,
-                                  camera.VideoPlayer.record])
+                                  camera.VideoPlayer.record,
+                                  camera.VideoPlayer.record_from_file])
         ],
     },
 
@@ -84,6 +128,9 @@ PAGES = [
         'page': 'backend/draw.md',
         'functions': [
             draw.draw_circle,
+            draw.draw_square,
+            draw.draw_triangle,
+            draw.draw_keypoint,
             draw.draw_cube,
             draw.draw_dot,
             draw.draw_filled_polygon,
@@ -92,7 +139,13 @@ PAGES = [
             draw.draw_rectangle,
             draw.lincolor,
             draw.put_text,
-            draw.make_mosaic
+            draw.make_mosaic,
+            draw.draw_points2D,
+            draw.draw_keypoints_link,
+            draw.draw_keypoints,
+            draw.points3D_to_RGB,
+            draw.draw_RGB_mask,
+            draw.draw_RGB_masks
         ],
     },
 
@@ -100,29 +153,40 @@ PAGES = [
     {
         'page': 'backend/image.md',
         'functions': [
-            opencv_image.cast_image,
-            opencv_image.resize_image,
-            opencv_image.convert_color_space,
-            opencv_image.load_image,
-            opencv_image.random_saturation,
-            opencv_image.random_brightness,
-            opencv_image.random_contrast,
-            opencv_image.random_hue,
-            opencv_image.random_flip_left_right,
-            opencv_image.show_image,
-            opencv_image.warp_affine,
-            opencv_image.write_image,
-            opencv_image.random_shape_crop,
-            opencv_image.make_random_plain_image,
-            opencv_image.blend_alpha_channel,
-            opencv_image.concatenate_alpha_mask,
-            opencv_image.split_and_normalize_alpha_channel,
-            opencv_image.gaussian_image_blur,
-            opencv_image.median_image_blur,
-            opencv_image.random_image_blur,
-            opencv_image.translate_image,
-            opencv_image.sample_scaled_translation,
-            opencv_image.get_rotation_matrix
+            image.resize_image,
+            image.convert_color_space,
+            image.load_image,
+            image.show_image,
+            image.warp_affine,
+            image.write_image,
+            image.gaussian_image_blur,
+            image.median_image_blur,
+            image.get_rotation_matrix,
+            image.cast_image,
+            image.random_saturation,
+            image.random_brightness,
+            image.random_contrast,
+            image.random_hue,
+            image.flip_left_right,
+            image.random_flip_left_right,
+            image.crop_image,
+            image.image_to_normalized_device_coordinates,
+            image.normalized_device_coordinates_to_image,
+            image.random_shape_crop,
+            image.make_random_plain_image,
+            image.blend_alpha_channel,
+            image.concatenate_alpha_mask,
+            image.split_and_normalize_alpha_channel,
+            image.random_image_blur,
+            image.translate_image,
+            image.sample_scaled_translation,
+            image.replace_lower_than_threshold,
+            image.normalize_min_max,
+            image.sample_scaled_translation,
+            image.get_rotation_matrix,
+            image.calculate_image_center,
+            image.get_affine_transform,
+            image.get_scaling_factor
         ],
     },
 
@@ -130,7 +194,6 @@ PAGES = [
     {
         'page': 'backend/render.md',
         'functions': [
-            render.calculate_norm,
             render.compute_modelview_matrices,
             render.get_look_at_transform,
             render.random_perturbation,
@@ -143,6 +206,38 @@ PAGES = [
             render.scale_translation,
             render.split_alpha_channel,
             render.translate_camera,
+        ],
+    },
+
+
+    {
+        'page': 'backend/heatmaps.md',
+        'functions': [
+            heatmaps.get_keypoints_heatmap,
+            heatmaps.get_tags_heatmap,
+            heatmaps.get_keypoints_locations,
+            heatmaps.get_top_k_keypoints_numpy,
+            heatmaps.get_valid_detections
+        ],
+    },
+
+
+    {
+        'page': 'backend/standard.md',
+        'functions': [
+            standard.append_lists,
+            standard.append_values,
+            standard.get_upper_multiple,
+            standard.resize_with_same_aspect_ratio,
+            standard.get_transformation_scale,
+            standard.compare_vertical_neighbours,
+            standard.compare_horizontal_neighbours,
+            standard.get_all_indices_of_array,
+            standard.gather_nd,
+            standard.calculate_norm,
+            standard.tensor_to_numpy,
+            standard.pad_matrix,
+            standard.max_pooling_2d
         ],
     },
 
@@ -170,7 +265,10 @@ PAGES = [
         'functions': [
             models.KeypointNet,
             models.KeypointNet2D,
-            models.Projector
+            models.Projector,
+            models.DetNet,
+            models.IKNet,
+
         ],
     },
 
@@ -181,6 +279,14 @@ PAGES = [
             models.UNET_VGG19,
             models.UNET_RESNET50,
             models.UNET
+        ],
+    },
+
+
+    {
+        'page': 'models/pose_estimation.md',
+        'functions': [
+            models.HigherHRNet
         ],
     },
 
@@ -205,7 +311,8 @@ PAGES = [
             datasets.FER,
             datasets.FERPlus,
             datasets.OpenImages,
-            datasets.CityScapes
+            datasets.CityScapes,
+            datasets.Shapes
         ],
     },
 
@@ -228,8 +335,20 @@ PAGES = [
             losses.KeypointNetLoss,
             losses.DiceLoss,
             losses.FocalLoss,
-            losses.JaccardLoss
+            losses.JaccardLoss,
+            losses.WeightedReconstruction,
+            losses.WeightedReconstructionWithError
         ],
+    },
+    
+    
+    {   
+        'page': 'processors/angles.md',
+        'classes': [
+            processors.ChangeLinkOrder,
+            processors.CalculateRelativeAngles,
+            processors.IsHandOpen
+        ]
     },
 
 
@@ -262,7 +381,12 @@ PAGES = [
             processors.ConcatenateAlphaMask,
             processors.BlendRandomCroppedBackground,
             processors.AddOcclusion,
-            processors.TranslateImage
+            processors.TranslateImage,
+            processors.ImageToNormalizedDeviceCoordinates,
+            processors.NormalizedDeviceCoordinatesToImage,
+            processors.ReplaceLowerThanThreshold,
+            processors.GetNonZeroValues,
+            processors.GetNonZeroArguments
         ]
     },
 
@@ -273,7 +397,14 @@ PAGES = [
             processors.DrawBoxes2D,
             processors.DrawKeypoints2D,
             processors.DrawBoxes3D,
-            processors.DrawRandomPolygon
+            processors.DrawRandomPolygon,
+            processors.DrawPose6D,
+            processors.DrawPoses6D,
+            processors.DrawHumanSkeleton,
+            processors.DrawHandSkeleton,
+            processors.DrawRGBMask,
+            processors.DrawRGBMasks,
+            processors.DrawText
         ]
     },
 
@@ -288,10 +419,14 @@ PAGES = [
             processors.RandomTranslation,
             processors.RandomRotation,
             processors.RandomKeypointTranslation,
-            processors.RandomKeypointRotation
+            processors.RandomKeypointRotation,
+            processors.GetTransformationSize,
+            processors.GetTransformationScale,
+            processors.GetSourceDestinationPoints,
+            processors.GetImageCenter,
+            processors.WarpAffine,
         ]
     },
-
 
 
     {
@@ -324,14 +459,48 @@ PAGES = [
             processors.PartitionKeypoints,
             processors.ProjectKeypoints,
             processors.RemoveKeypointsDepth,
-            processors.TranslateKeypoints
+            processors.TranslateKeypoints,
+            processors.DenormalizeKeypoints2D,
+            processors.NormalizeKeypoints2D,
+            processors.ArgumentsToImageKeypoints2D,
+            processors.ScaleKeypoints,
+            processors.ComputeOrientationVector,
+        ]
+    },
+
+
+    {
+        'page': 'processors/heatmaps.md',
+        'classes': [
+            processors.TransposeOutput,
+            processors.ScaleOutput,
+            processors.GetHeatmaps,
+            processors.GetTags,
+            processors.RemoveLastElement,
+            processors.AggregateResults,
+            processors.TopKDetections,
+            processors.GroupKeypointsByTag,
+            processors.AdjustKeypointsLocations,
+            processors.GetScores,
+            processors.RefineKeypointsLocations,
+            processors.TransformKeypoints,
+            processors.ExtractKeypointsLocations,
+        ]
+    },
+
+
+    {
+        'page': 'processors/munkres.md',
+        'classes': [
+            processors.Munkres
         ]
     },
 
     {
         'page': 'processors/pose.md',
         'classes': [
-            processors.SolvePNP
+            processors.SolvePNP,
+            processors.SolveChangingObjectPnPRANSAC
         ]
     },
 
@@ -342,6 +511,16 @@ PAGES = [
             processors.Render
         ]
     },
+
+    {
+        'page': 'processors/groups.md',
+        'classes': [
+            processors.ToAffineMatrix,
+            processors.RotationVectorToQuaternion,
+            processors.RotationVectorToRotationMatrix,
+        ]
+    },
+
 
 
     {
@@ -364,7 +543,19 @@ PAGES = [
             processors.Concatenate,
             processors.SelectElement,
             processors.StochasticProcessor,
-            processors.Stochastic
+            processors.Stochastic,
+            processors.UnwrapDictionary,
+            processors.Scale,
+            processors.AppendValues,
+            processors.BooleanToTextMessage
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/angles.md',
+        'classes': [
+            pipelines.IKNetHandJointAngles
         ]
     },
 
@@ -376,6 +567,7 @@ PAGES = [
             pipelines.PreprocessImage,
             pipelines.DecoderPredictor,
             pipelines.EncoderPredictor,
+            pipelines.PreprocessImageHigherHRNet
         ]
     },
 
@@ -386,8 +578,18 @@ PAGES = [
             pipelines.AugmentBoxes,
             pipelines.AugmentDetection,
             pipelines.PreprocessBoxes,
+            pipelines.PostprocessBoxes2D,
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
+            pipelines.SSD512HandDetection
+        ]
+    },
+
+
+    {
+        'page': 'pipelines/heatmaps.md',
+        'classes': [
+            pipelines.GetHeatmapsAndTags
         ]
     },
 
@@ -399,6 +601,12 @@ PAGES = [
             pipelines.KeypointNetSharedAugmentation,
             pipelines.EstimateKeypoints2D,
             pipelines.DetectKeypoints2D,
+            pipelines.GetKeypoints,
+            pipelines.TransformKeypoints,
+            pipelines.HigherHRNetHumanPose2D,
+            pipelines.DetNetHandKeypoints,
+            pipelines.MinimalHandPoseEstimation,
+            pipelines.DetectMinimalHand
         ]
     },
 
@@ -407,9 +615,23 @@ PAGES = [
         'page': 'pipelines/pose.md',
         'classes': [
             pipelines.EstimatePoseKeypoints,
-            pipelines.HeadPoseKeypointNet2D32
+            pipelines.HeadPoseKeypointNet2D32,
+            pipelines.SingleInstancePIX2POSE6D,
+            pipelines.MultiInstancePIX2POSE6D,
+            pipelines.MultiInstanceMultiClassPIX2POSE6D
         ]
     },
+
+    {
+        'page': 'pipelines/masks.md',
+        'classes': [
+            pipelines.RGBMaskToImagePoints2D,
+            pipelines.RGBMaskToObjectPoints3D,
+            pipelines.PredictRGBMask,
+            pipelines.Pix2Points
+        ]
+    },
+
 
 
     {
@@ -428,11 +650,19 @@ PAGES = [
             pipelines.SSD300VOC,
             pipelines.SSD512YCBVideo,
             pipelines.SSD300FAT,
+            pipelines.HigherHRNetHumanPose2D,
             pipelines.DetectMiniXceptionFER,
             pipelines.MiniXceptionFER,
             pipelines.FaceKeypointNet2D32,
             pipelines.HeadPoseKeypointNet2D32,
             pipelines.HaarCascadeFrontalFace,
+            pipelines.SinglePowerDrillPIX2POSE6D,
+            pipelines.MultiPowerDrillPIX2POSE6D,
+            pipelines.PIX2POSEPowerDrill,
+            pipelines.PIX2YCBTools6D,
+            pipelines.DetNetHandKeypoints,
+            pipelines.MinimalHandPoseEstimation,
+            pipelines.DetectMinimalHand
         ]
     },
 

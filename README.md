@@ -1,5 +1,7 @@
 # (PAZ) Perception for Autonomous Systems
-![Python package](https://github.com/oarriaga/paz/workflows/Python%20package/badge.svg) [![PyPI upload](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml)     [![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
+[![Unit testing](https://github.com/oarriaga/paz/actions/workflows/python-package.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-package.yml)
+[![PyPI upload](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml)
+[![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
 
 Hierarchical perception library in Python.
 
@@ -8,23 +10,28 @@ PAZ is used in the following examples (links to **real-time demos** and training
 
 | [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
 |---------------------------|--------------------------| ------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="440"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="440">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="425"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="440">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
 
 | [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |
 |---------------------------|--------------------------| -----------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
 
-| [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) | 6D pose estimation |
+|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | [Hand pose estimation](https://github.com/oarriaga/paz/tree/master/examples/minimal_hand) |  [Human pose estimation](https://github.com/oarriaga/paz/tree/master/examples/human_pose_estimation_2D) |
+|---------------------------|-----------------------|-----------------|
+| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/minimal_hand_example.jpg" width="330"> |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose.gif" width="250"> | 
+
+| [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Hand closure detection](https://github.com/oarriaga/paz/tree/master/examples/minimal_hand)  | [6D pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pix2pose) |
 |---------------------------|-----------------------| --------------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="410"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pose_estimation.png" width="400"> |
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="335"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/hand_closure_detection.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pix2pose_example.jpg" width="330"> |
 
-| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) |  [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces/eigenfaces.py) |
+| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) |
 |---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="360">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="360"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="350">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="335">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="340"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="330"> |
 
-|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) |                       |                 |
+| [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) | | |
 |---------------------------|-----------------------|-----------------|
-| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="330">|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330">|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330">
+
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
 
@@ -181,32 +188,28 @@ The following models are implemented in PAZ and they can be trained with your ow
 
 | Task (link to implementation)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|                
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|                
 |[Probabilistic keypoint est.](https://github.com/oarriaga/paz/blob/master/examples/probabilistic_keypoint_estimation/model.py) |[Gaussian Mixture CNN](https://www.robots.ox.ac.uk/~vgg/publications/2018/Neumann18a/)   |
 |[Detection and Segmentation](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/hrnet.py)|[HRNet](https://arxiv.org/abs/1908.07919)|
 |[Semantic segmentation](https://github.com/oarriaga/paz/blob/master/paz/models/segmentation/unet.py)|[U-NET](https://arxiv.org/abs/1505.04597)|      
-|[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[KeypointNet2D](https://arxiv.org/abs/1807.03146)          |
+|[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[Pix2Pose](https://arxiv.org/abs/1908.07433)          |
 |[Implicit orientation](https://github.com/oarriaga/paz/blob/master/examples/implicit_orientation_learning/model.py)        |[AutoEncoder](https://arxiv.org/abs/1902.01275)            |
 |[Emotion classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/xception.py)       |[MiniXception](https://arxiv.org/abs/1710.07557)           |
 |[Discovery of Keypoints](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)      |[KeypointNet](https://arxiv.org/abs/1807.03146)            |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)  |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)           |
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)  |
+|[Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/pose_estimation/higher_hrnet.py)            |[HigherHRNet](https://arxiv.org/abs/1908.10357)  |
+|[Hand pose estimation](https://github.com/oarriaga/paz/blob/refactor_readme/paz/models/keypoint/detnet.py)            |[DetNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
+
 
 ## Motivation
 Even though there are multiple high-level computer vision libraries in different deep learning frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
 
-### Why Keras over other frameworks/libraries?
-In simple terms, I have always felt the API of Keras to be more mature.
-It allowed me to express my ideas at the level of complexity that was required. 
-Keras was often misinterpreted as an inflexible or a beginners framework; however, once you learn to abstract `Layer`, `Callbacks`, `Loss`, `Metrics` or `Model`, the API remained intact and helpful for more complicated ideas. 
-It allowed me to automate and write down experiments with no extra boilerplate.
-Furthermore, one could always have created a custom training loop.
-
 As a final remark, I would like to mention, that I feel that we might tend to forget the great effort and emotional status behind every (open-source) project.
-I feel it's easy to blurry a company name with the individuals behind their project, and we forget that there is someone feeling our criticism and our praise.
+I feel it's easy to blurry a company name with the individuals behind their work, and we forget that there is someone feeling our criticism and our praise.
 Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
 You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration.
 

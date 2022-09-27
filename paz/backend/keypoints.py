@@ -383,7 +383,7 @@ def denormalize_keypoints(keypoints, height, width):
     return keypoints
 
 
-def rotate_keypoint(point2D, rotation_angle):
+def rotate_point2D(point2D, rotation_angle):
     """Rotate keypoint.
 
     # Arguments
@@ -405,7 +405,7 @@ def transform_keypoint(keypoint, transform):
 
     # Arguments
         keypoint2D: keypoint [x, y]
-        transform: Numpy array. Transformation matrix
+        transform: Array. Transformation matrix
     """
     keypoint = np.array([keypoint[0], keypoint[1], 1.]).T
     transformed_keypoint = np.dot(transform, keypoint)
@@ -423,3 +423,82 @@ def add_offset_to_point(keypoint_location, offset=0):
     y = y + offset
     x = x + offset
     return y, x
+
+
+def flip_keypoints_left_right(keypoints, image_size=(32, 32)):
+    """Flip the detected 2D keypoints left to right.
+
+    # Arguments
+        keypoints: Array
+        image_size: list/tuple
+        axis: int
+
+    # Returns
+        flipped_keypoints: Numpy array
+    """
+    x_coordinates, y_coordinates = np.split(keypoints, 2, axis=1)
+    flipped_x = image_size[0] - x_coordinates
+    keypoints = np.concatenate((flipped_x, y_coordinates), axis=1)
+    return keypoints
+
+
+def compute_orientation_vector(keypoints3D, parents):
+    """Compute bone orientations from joint coordinates
+       (child joint - parent joint). The returned vectors are normalized.
+       For the root joint, it will be a zero vector.
+
+    # Arguments
+        keypoints3D : Numpy array [num_keypoints, 3]. Joint coordinates.
+        parents: Parents of the keypoints from kinematic chain
+
+    # Returns
+        Array [num_keypoints, 3]. The unit vectors from each child joint to
+        its parent joint. For the root joint, it's are zero vector.
+    """
+    delta = []
+    for joint_arg in range(len(parents)):
+        parent = parents[joint_arg]
+        if parent is None:
+            delta.append(np.zeros(3))
+        else:
+            delta.append(keypoints3D[joint_arg] - keypoints3D[parent])
+    delta = np.stack(delta, 0)
+    return delta
+
+
+def rotate_keypoints3D(rotation_matrix, keypoints):
+    """Rotatate the keypoints by using rotation matrix
+
+    # Arguments
+        Rotation matrix [N, 3, 3].
+        keypoints [N, 3]
+
+    # Returns
+        Rotated keypoints [N, 3]
+    """
+    keypoint_xyz = np.einsum('ijk, ik -> ij', rotation_matrix, keypoints)
+    return keypoint_xyz
+
+
+def flip_along_x_axis(keypoints, axis=0):
+    """Flip the keypoints along the x axis.
+
+    # Arguments
+        keypoints: Array
+        axis: int/list
+
+    # Returns
+        Flipped keypoints: Array
+    # """
+    x, y, z = np.split(keypoints, 3, axis=1)
+    keypoints = np.concatenate((-x, y, z), axis=1)
+    return keypoints
+
+
+def uv_to_vu(keypoints):
+    """Flips the uv coordinates to vu.
+
+    # Arguments
+        keypoints: Array.
+    """
+    return keypoints[:, ::-1]

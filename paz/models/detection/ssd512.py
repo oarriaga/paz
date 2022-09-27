@@ -11,19 +11,20 @@ from ..layers import Conv2DNormalization
 from .utils import create_multibox_head
 from .utils import create_prior_boxes
 
+WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/'
+               'releases/download/v0.1/')
 
-BASE_WEIGHT_PATH = ('https://github.com/oarriaga/altamira-data/'
-                    'releases/download/v0.1/')
 
-
-def SSD512(num_classes=81, weights='COCO', input_shape=(512, 512, 3),
-           num_priors=[4, 6, 6, 6, 6, 4, 4], l2_loss=0.0005,
-           return_base=False, trainable_base=True):
+def SSD512(num_classes=81, base_weights='COCO', head_weights='COCO',
+           input_shape=(512, 512, 3), num_priors=[4, 6, 6, 6, 6, 4, 4],
+           l2_loss=0.0005, return_base=False, trainable_base=True):
     """Single-shot-multibox detector for 512x512x3 BGR input images.
     # Arguments
         num_classes: Integer. Specifies the number of class labels.
-        weights: String or None. If string should be a valid dataset name.
-            Current valid datasets include `COCO` and `YCBVideo`.
+        base_weights: String or None. If string should be a valid dataset name.
+            Current valid datasets include `COCO` and `OIV6Hand`.
+        head_weights: String or None. If string should be a valid dataset name.
+            Current valid datasets include `COCO`, `YCBVideo` and `OIV6Hand`.
         input_shape: List of integers. Input shape to the model including only
             spatial and channel resolution e.g. (512, 512, 3).
         num_priors: List of integers. Number of default box shapes
@@ -39,20 +40,23 @@ def SSD512(num_classes=81, weights='COCO', input_shape=(512, 512, 3),
             Detector](https://arxiv.org/abs/1512.02325)
     """
 
-    datasets = {'COCO', 'YCBVideo', None}
-    if not (weights in datasets or os.path.exists(weights)):
-        raise ValueError('The `weights` argument should be either '
-                         '`None` (random initialization), `COCO`, '
-                         'YCBVideo or the path to the weights '
-                         'file to be loaded.')
+    if base_weights not in ['COCO', 'OIV6Hand']:
+        raise ValueError('Invalid `base_weights`:', base_weights)
 
-    if weights == 'COCO' and num_classes != 81:
-        raise ValueError('If using `weights` as `"COCO"` '
-                         '`num_classes` should be 81')
+    if head_weights not in ['COCO', 'YCBVideo', 'OIV6Hand']:
+        raise ValueError('Invalid `head_weights`:', head_weights)
 
-    if weights == 'YCBVideo' and num_classes != 22:
-        raise ValueError('If using `weights` as `"YCBVideo"` '
-                         '`num_classes` should be 22')
+    if ((base_weights == 'OIV6Hand') and (head_weights != 'OIV6Hand')):
+        raise NotImplementedError('Invalid `base_weights` with head_weights')
+
+    if ((num_classes != 81) and (head_weights == 'COCO')):
+        raise ValueError('Invalid `head_weights` with given `num_classes`')
+
+    if ((num_classes != 22) and (head_weights == 'YCBVideo')):
+        raise ValueError('Invalid `head_weights` with given `num_classes`')
+
+    if ((num_classes != 2) and (head_weights == 'OIV6Hand')):
+        raise ValueError('Invalid `head_weights` with given `num_classes`')
 
     image = Input(shape=input_shape, name='image')
 
@@ -200,13 +204,14 @@ def SSD512(num_classes=81, weights='COCO', input_shape=(512, 512, 3),
 
     model = Model(inputs=image, outputs=output_tensor, name='SSD512')
 
-    if weights is not None:
-        model_name = '_'.join(['SSD512', weights])
-
-    if weights is not None:
-        weights_url = BASE_WEIGHT_PATH + model_name + '_weights.hdf5'
-        weights_path = get_file(os.path.basename(weights_url), weights_url,
+    if ((base_weights is not None) or (head_weights is not None)):
+        model_filename = [str(base_weights), str(head_weights)]
+        model_filename = '_'.join(['SSD512', '-'.join(model_filename),
+                                   'weights.hdf5'])
+        weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
                                 cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
+
         model.load_weights(weights_path)
 
     model.prior_boxes = create_prior_boxes('COCO')
