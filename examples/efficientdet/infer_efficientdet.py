@@ -9,7 +9,7 @@ if __name__ == "__main__":
     model = EFFICIENTDETD0(num_classes=21, base_weights='COCO',
                            head_weights=None)
     model.load_weights("/home/manummk95/Desktop/efficientdet_working/temp/"
-                       "weight/weights.140-3.55.hdf5")
+                       "weight/weights.65-3.44.hdf5")
     detections = DetectSingleShot(model, get_class_names('VOC'),
                                   0.5, 0.45)(raw_images)
     show_image(detections['image'])

@@ -1,7 +1,7 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 
-from anchors import get_prior_boxes
+from anchors import build_prior_boxes
 from efficientdet_blocks import BiFPN, BoxNet, ClassNet
 from efficientnet_model import EfficientNet
 from utils import create_multibox_head
@@ -87,7 +87,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
                         str(base_weights) + '_' + str(head_weights) + '.h5')
         model.load_weights(weights_path)
 
-    model.prior_boxes = get_prior_boxes(
+    model.prior_boxes = build_prior_boxes(
         min_level, max_level, num_scales, aspect_ratios, anchor_scale,
         input_shape[0])
     return model
