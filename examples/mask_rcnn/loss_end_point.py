@@ -25,10 +25,10 @@ class ProposalClassLoss(tf.keras.layers.Layer):
                                                  output=y_pred,
                                                  from_logits=True)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('rpn_class_loss', 1.))
+        self.add_loss(tf.reduce_mean(loss * self.config.LOSS_WEIGHTS.get('rpn_class_loss', 1.)))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
              'rpn_class_logits', 1.))
-        self.add_metric(metric, name= 'rpn_class_logits', aggregation='mean')
+        self.add_metric(metric, name= 'rpn_class_loss', aggregation='mean')
         return loss
 
 
@@ -44,7 +44,7 @@ class ProposalBBoxLoss(tf.keras.layers.Layer):
                -1=negative, 0=neutral anchor.
     rpn_bbox: [batch, anchors, (dy, dx, log(dh), log(dw))]
     """
-    def __init__(self, config, name= 'rpn_bbox_loss', rpn_match= None): ##Evaluate RPN match ==  None
+    def __init__(self, config, name= 'rpn_bbox_loss', rpn_match= None):
         self.config = config
         self.rpn_match = rpn_match
         super(ProposalBBoxLoss, self).__init__(name=name)
@@ -58,10 +58,10 @@ class ProposalBBoxLoss(tf.keras.layers.Layer):
                                              self.config.IMAGES_PER_GPU)
         loss = smooth_L1_loss(target_boxes, rpn_bbox)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('rpn_bbox_loss', 1.))
+        self.add_loss(tf.reduce_mean(loss * self.config.LOSS_WEIGHTS.get('rpn_bbox_loss', 1.)))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
-        self.add_metric(metric, name='rpn_bbox', aggregation='mean')
+        self.add_metric(metric, name='rpn_bbox_loss', aggregation='mean')
         return  loss
 
 
@@ -88,12 +88,13 @@ class ClassLoss(tf.keras.layers.Layer):
         pred_active = tf.gather(self.active_class_ids, pred_class_ids)
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=y_true, logits=y_pred)
-        loss = tf.reshape(loss,[-1]) * tf.cast(pred_active, 'float32')
+        #loss = tf.reshape(loss,[-1]) * tf.cast(pred_active, 'float32')
+        loss = loss * tf.cast(pred_active, 'float32')
         loss = tf.reduce_sum(loss) / tf.reduce_sum(tf.cast(pred_active,'float32'))
-        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('mrcnn_class_loss', 1.))
+        self.add_loss(tf.reduce_mean(loss * self.config.LOSS_WEIGHTS.get('mrcnn_class_loss', 1.)))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
-        self.add_metric(metric, name='mrcnn_class', aggregation='mean')
+        self.add_metric(metric, name='mrcnn_class_loss', aggregation='mean')
         return loss
 
 
@@ -127,10 +128,10 @@ class BBoxLoss(tf.keras.layers.Layer):
                         smooth_L1_loss(target_boxes, predicted_boxes),
                         tf.constant(0.0))
         loss = K.mean(loss)
-        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('mrcnn_bbox_loss', 1.))
+        self.add_loss(tf.reduce_mean(loss * self.config.LOSS_WEIGHTS.get('mrcnn_bbox_loss', 1.)))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
-        self.add_metric(metric, name='mrcnn_bbox', aggregation='mean')
+        self.add_metric(metric, name='mrcnn_bbox_loss', aggregation='mean')
         return loss
 
 
@@ -163,14 +164,17 @@ class MaskLoss(tf.keras.layers.Layer):
                         K.binary_crossentropy(target=y_true, output=y_pred),
                         tf.constant(0.0))
         loss = K.mean(loss)
-        self.add_loss(loss * self.config.LOSS_WEIGHTS.get('mrcnn_mask_loss', 1.))
+        self.add_loss(tf.reduce_mean(loss * self.config.LOSS_WEIGHTS.get('mrcnn_mask_loss', 1.)))
         metric = (tf.reduce_mean(loss) * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
-        self.add_metric(metric, name='mrcnn_mask', aggregation='mean')
-        return  loss
+        self.add_metric(metric, name='mrcnn_mask_loss', aggregation='mean')
+        return loss
 
 
 def smooth_L1_loss(y_true, y_pred):
+    """Implements Smooth-L1 loss.
+    y_true and y_pred are typically: [N, 4], but could be any shape.
+    """
     diff = K.abs(y_true - y_pred)
     less_than_one = K.cast(K.less(diff, 1.0), 'float32')
     loss = (less_than_one * 0.5 * diff**2) +\
@@ -179,6 +183,8 @@ def smooth_L1_loss(y_true, y_pred):
 
 
 def reshape_data(target_ids, target_masks, y_pred):
+    """Reshape the inputs to appropriate shapes for computation of loss
+    """
     target_ids = K.reshape(target_ids, (-1,))
     mask_shape = tf.shape(target_masks)
     target_masks = K.reshape(target_masks,
@@ -191,6 +197,9 @@ def reshape_data(target_ids, target_masks, y_pred):
 
 
 def batch_pack_graph(boxes, counts, num_rows):
+    """Picks different number of values from each row
+        in boxes depending on the values in counts.
+        """
     outputs = []
     for row in range(num_rows):
         outputs.append(boxes[row, :counts[row]])
