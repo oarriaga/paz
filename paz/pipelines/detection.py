@@ -9,6 +9,7 @@ from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
+from .detection import PaperDetection
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -544,3 +545,37 @@ class SSD512MinimalHandPose(DetectMinimalHand):
         keypoint_estimator = MinimalHandPoseEstimation(right_hand)
         super(SSD512MinimalHandPose, self).__init__(
             detector, keypoint_estimator, offsets)
+
+# ADR
+class DetectPaper(Processor):
+    """Paper detection pipeline.
+
+    # Returns
+        List with coordinates of edges? What types can I use here? Seems like it is common practice to also forward the annotated image in a dict.
+
+
+    # Example #TODO
+        ``` 
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``box2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and the box2D with the pixel values ``paz.abstract.messages.Box2D``.
+
+    # References
+       - [PaperDetector](https://gitlab.com/robo-eyes/paperdetector)
+    """
+    def __init__(self, name=None):
+        super().__init__(name)
+
+        # Detection
+        self.paper_detector = PaperDetection()
+
+        # Preprocessing
+        preprocessing = SequentialProcessor(
+            [pr.ResizeImage(self.paper_detector.input_shape[1:3])
+            ]
+        )
+
+        # Postprocessing

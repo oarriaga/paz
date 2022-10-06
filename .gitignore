@@ -39,3 +39,6 @@ docs/theme/fonts/*
 docs/theme/img/*
 
 install.sh
+
+## Conda env ##
+env/
