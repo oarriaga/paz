@@ -89,5 +89,5 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
 
     model.prior_boxes = build_prior_boxes(
         min_level, max_level, num_scales, aspect_ratios, anchor_scale,
-        input_shape[0])
+        input_shape[0:2])
     return model

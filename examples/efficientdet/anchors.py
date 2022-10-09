@@ -12,50 +12,53 @@ def compute_feature_sizes(image_size, max_level):
         feature_sizes: List, feature sizes with height and width values
         for a given image size and max level.
     """
-    feature_sizes = [{'height': image_size[0], 'width': image_size[1]}]
-    feature_size = image_size
+    feature_H, feature_W = image_size
+    feature_sizes = np.array([feature_H, feature_W], dtype=np.float64)
     for _ in range(1, max_level + 1):
-        feature_size_y = (feature_size[0] - 1) // 2 + 1
-        feature_size_x = (feature_size[1] - 1) // 2 + 1
-        feature_size = [feature_size_y, feature_size_x]
-        feature_sizes.append(
-            {'height': feature_size[0], 'width': feature_size[1]})
+        feature_H = (feature_H - 1) // 2 + 1
+        feature_W = (feature_W - 1) // 2 + 1
+        feature_size = np.array([feature_H, feature_W])
+        feature_sizes = np.vstack((feature_sizes, feature_size))
     return feature_sizes
 
 
 def generate_configurations(feature_sizes, min_level, max_level,
-                            num_scales, aspect_ratios, anchor_scales):
-    anchor_configurations = {}
-    feature_sizes = feature_sizes
-    for level in range(min_level, max_level + 1):
-        anchor_configurations[level] = []
-        for scale_octave in range(num_scales):
-            for aspect in aspect_ratios:
-                anchor_configurations[level].append(
-                    ((feature_sizes[0]['height'] /
-                        float(feature_sizes[level]['height']),
-                        feature_sizes[0]['width'] /
-                        float(feature_sizes[level]['width'])),
-                        scale_octave / float(num_scales),
-                        aspect, anchor_scales[level - min_level]))
-    return anchor_configurations
+                            num_scales, aspect_ratios, anchor_scale):
+    num_levels = max_level + 1 - min_level
+    base_feature_H, base_feature_W = feature_sizes[0]
+    scale_aspect_ratio_combinations = (len(range(num_scales))
+                                       * len(aspect_ratios))
+    feature_H = feature_sizes[min_level: max_level + 1][:, 0]
+    feature_W = feature_sizes[min_level: max_level + 1][:, 1]
+    features_H = np.repeat(feature_H, scale_aspect_ratio_combinations)
+    features_W = np.repeat(feature_W, scale_aspect_ratio_combinations)
+    scale_octaves = np.repeat(list(range(num_scales)), len(aspect_ratios))
+    aspect = np.tile(aspect_ratios, len(range(num_scales)))
+    strides_y = np.reshape(base_feature_H*np.reciprocal(features_H),
+                           (num_levels, -1))
+    strides_x = np.reshape(base_feature_W*np.reciprocal(features_W),
+                           (num_levels, -1))
+    octave_scales = (np.tile(scale_octaves, num_levels)
+                     / float(num_scales)).reshape(num_levels, -1)
+    aspects = np.tile(aspect, num_levels).reshape(num_levels, -1)
+    anchor_scales = np.reshape(np.repeat(anchor_scale,
+                               scale_aspect_ratio_combinations),
+                               (num_levels, -1))
+    return ((strides_y, strides_x, octave_scales, aspects, anchor_scales),
+            num_levels, scale_aspect_ratio_combinations)
 
 
 def compute_aspect_ratio(aspect):
-    if isinstance(aspect, list):
-        aspect_x, aspect_y = aspect
-    else:
-        aspect_x = np.sqrt(aspect)
-        aspect_y = 1 / aspect_x
+    aspect_x = np.sqrt(aspect)
+    aspect_y = 1 / aspect_x
     return aspect_x, aspect_y
 
 
-def compute_box_coordinates(configuration, image_size):
-    stride, octave_scale, aspect, anchor_scale = configuration
-    stride_y, stride_x = stride
+def compute_box_coordinates(stride_y, stride_x, octave_scale, aspect,
+                            anchor_scale, image_size):
     W, H = image_size
-    base_anchor_x = anchor_scale * stride_x * 2 ** octave_scale
-    base_anchor_y = anchor_scale * stride_y * 2 ** octave_scale
+    base_anchor_x = anchor_scale * stride_x * (2 ** octave_scale)
+    base_anchor_y = anchor_scale * stride_y * (2 ** octave_scale)
     aspect_x, aspect_y = compute_aspect_ratio(aspect)
     anchor_x = (base_anchor_x * aspect_x / 2.0) / H
     anchor_y = (base_anchor_y * aspect_y / 2.0) / W
@@ -67,36 +70,46 @@ def compute_box_coordinates(configuration, image_size):
     return center_x, center_y, anchor_x, anchor_y
 
 
-def generate_level_boxes(configurations, image_size):
+def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
+                         anchor_scales, image_size,
+                         scale_aspect_ratio_combinations):
     boxes_level = []
-    for configuration in configurations:
-        box_coordinates = compute_box_coordinates(configuration, image_size)
+    for combination in range(scale_aspect_ratio_combinations):
+        box_coordinates = compute_box_coordinates(strides_y[combination],
+                                                  strides_x[combination],
+                                                  octave_scales[combination],
+                                                  aspects[combination],
+                                                  anchor_scales[combination],
+                                                  image_size)
         center_x, center_y, anchor_x, anchor_y = box_coordinates
-        boxes = np.vstack((center_y - anchor_y, center_x - anchor_x,
-                           center_y + anchor_y, center_x + anchor_x))
+        boxes = np.vstack((center_x - anchor_x, center_y - anchor_y,
+                           center_x + anchor_x, center_y + anchor_y))
         boxes = np.swapaxes(boxes, 0, 1)
         boxes_level.append(np.expand_dims(boxes, axis=1))
     return boxes_level
 
 
-def generate_anchors(configuration, image_size):
+def generate_anchors(feature_sizes, min_level, max_level, num_scales,
+                     aspect_ratios, image_size, anchor_scales):
+    ((strides_y, strides_x, octave_scales, aspects, anchor_scales), num_levels,
+     scale_aspect_ratio_combinations) = generate_configurations(feature_sizes,
+                                                                min_level,
+                                                                max_level,
+                                                                num_scales,
+                                                                aspect_ratios,
+                                                                anchor_scales)
     boxes_all = []
-    for _, configurations in configuration.items():
-        boxes_level = generate_level_boxes(configurations, image_size)
+    for level in range(num_levels):
+        boxes_level = generate_level_boxes(strides_y[level], strides_x[level],
+                                           octave_scales[level],
+                                           aspects[level],
+                                           anchor_scales[level],
+                                           image_size,
+                                           scale_aspect_ratio_combinations)
         boxes_level = np.concatenate(boxes_level, axis=1)
         boxes_all.append(boxes_level.reshape([-1, 4]))
-    anchors = np.vstack(boxes_all)
+    anchors = np.vstack(boxes_all).astype('float32')
     return anchors
-
-
-def generate_boxes(configuration, image_size):
-    anchor_boxes = generate_anchors(configuration, image_size)
-    anchor_boxes = anchor_boxes.astype('float32')
-    return anchor_boxes
-
-
-def generate_anchors_per_location(num_scales, aspect_ratios):
-    return num_scales * len(aspect_ratios)
 
 
 def build_prior_boxes(min_level, max_level, num_scales,
@@ -117,18 +130,10 @@ def build_prior_boxes(min_level, max_level, num_scales,
     prior_boxes: Numpy, Prior anchor boxes corresponding to the
     feature map size of each feature level.
     """
-    if isinstance(image_size, int):
-        image_size = (image_size, image_size)
-    if isinstance(anchor_scale, (list, tuple)):
-        assert len(anchor_scale) == max_level - min_level + 1
-    else:
-        anchor_scales = [anchor_scale] * (max_level - min_level + 1)
+    anchor_scales = np.repeat(anchor_scale, max_level - min_level + 1)
     feature_sizes = compute_feature_sizes(image_size, max_level)
-    configuration = generate_configurations(feature_sizes, min_level,
-                                            max_level, num_scales,
-                                            aspect_ratios, anchor_scales)
-    prior_boxes = generate_boxes(configuration, image_size)
-    a1, a2, a3, a4 = np.hsplit(prior_boxes, 4)
-    prior_boxes = np.concatenate([a2, a1, a4, a3], axis=1)
+    prior_boxes = generate_anchors(feature_sizes, min_level, max_level,
+                                   num_scales, aspect_ratios, image_size,
+                                   anchor_scales)
     prior_boxes = to_center_form(prior_boxes)
     return prior_boxes
