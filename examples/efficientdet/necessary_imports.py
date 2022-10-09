@@ -82,7 +82,7 @@ class ScaleBox(Processor):
 
 # Taken from efficientdet -> /paz/paz/backend/boxes.py
 def scale_box(predictions, image_scales=None):
-    """
+    """Scales the boxes according to image_scales.
     # Arguments
         image: Numpy array.
         boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
