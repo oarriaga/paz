@@ -25,7 +25,7 @@ def compute_feature_sizes(image_size, max_level):
 def generate_configurations(feature_sizes, min_level, max_level,
                             num_scales, aspect_ratios, anchor_scale):
     """Generates configurations or in other words different combinations of
-        strides, octave scales, aspect ratios and anchor scales for each level 
+        strides, octave scales, aspect ratios and anchor scales for each level
         of the EfficientNet layers that feeds BiFPN layers.
 
     # Arguments:
