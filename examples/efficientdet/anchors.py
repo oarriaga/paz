@@ -3,14 +3,14 @@ from paz.backend.boxes import to_center_form
 
 
 def compute_feature_sizes(image_size, max_level):
-    """
+    """Computes the size of features that are given as input to each of
+        EfficientNet layers.
     # Arguments
         image_size: Tuple, (Height, Width) of the input image.
         max_level: Int, maximum level for features.
 
     # Returns
-        feature_sizes: List, feature sizes with height and width values
-        for a given image size and max level.
+        feature_sizes: Numpy array of shape ``(8, 2)``.
     """
     feature_H, feature_W = image_size
     feature_sizes = np.array([feature_H, feature_W], dtype=np.float64)
@@ -24,6 +24,26 @@ def compute_feature_sizes(image_size, max_level):
 
 def generate_configurations(feature_sizes, min_level, max_level,
                             num_scales, aspect_ratios, anchor_scale):
+    """Generates configurations or in other words different combinations of
+        strides, octave scales, aspect ratios and anchor scales for each level 
+        of the EfficientNet layers that feeds BiFPN layers.
+
+    # Arguments:
+        feature_sizes: Numpy array representing the feature sizes of inputs to
+            EfficientNet layers.
+        min_level: Int, Number representing the index of the earliest
+            EfficientNet layer that feeds the BiFPN layers.
+        max_level: Int, Number representing the index of the last EfficientNet
+            layer that feeds the BiFPN layers.
+        num_scales: Int, specifying the number of scales in the
+            anchor boxes.
+        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
+        anchor_scale: Numpy array representing the scales of the anchor box.
+
+    # Returns:
+        Tuple: Containing configuarations of strides, octave scales, aspect
+            ratios and anchor scales.
+    """
     num_levels = max_level + 1 - min_level
     base_feature_H, base_feature_W = feature_sizes[0]
     scale_aspect_ratio_combinations = (len(range(num_scales))
@@ -49,6 +69,14 @@ def generate_configurations(feature_sizes, min_level, max_level,
 
 
 def compute_aspect_ratio(aspect):
+    """Calculates the aspect ratio of the anchor box.
+
+    # Arguments:
+        aspect: Numpy array representing the aspect of the anchor box.
+
+    # Returns:
+        Tuple: Containing the aspect ratio values of the anchor box.
+    """
     aspect_x = np.sqrt(aspect)
     aspect_y = 1 / aspect_x
     return aspect_x, aspect_y
@@ -56,6 +84,21 @@ def compute_aspect_ratio(aspect):
 
 def compute_box_coordinates(stride_y, stride_x, octave_scale, aspect,
                             anchor_scale, image_size):
+    """Calculates the coordinates of the anchor box in centre form.
+
+    # Arguments:
+        stride_y: Numpy array representing the stride value in y direction.
+        stride_x: Numpy array representing the stride value in x direction.
+        octave_scale: Numpy array representing the octave scale of the
+            anchor box.
+        aspect: Numpy array representing the aspect value.
+        anchor_scale: Numpy array representing the scale of anchor box.
+        image_size: Tuple, representing the size of input image.
+
+    # Returns:
+        Tuple: Containing the centre as well as width and height of
+            anchor box in centre form.
+    """
     W, H = image_size
     base_anchor_x = anchor_scale * stride_x * (2 ** octave_scale)
     base_anchor_y = anchor_scale * stride_y * (2 ** octave_scale)
@@ -73,6 +116,23 @@ def compute_box_coordinates(stride_y, stride_x, octave_scale, aspect,
 def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
                          anchor_scales, image_size,
                          scale_aspect_ratio_combinations):
+    """Generates anchor box in centre form for every feature level.
+
+    # Arguments:
+        stride_y: Numpy array representing the stride value in y direction.
+        stride_x: Numpy array representing the stride value in x direction.
+        octave_scale: Numpy array representing the octave scale of the
+            anchor box.
+        aspect: Numpy array representing the aspect value.
+        anchor_scales: Numpy array representing the scale of anchor box.
+        image_size: Tuple, representing the size of input image.
+        scale_aspect_ratio_combinations: Int, representing the number of
+            combinations of scale and aspect ratio.
+
+    # Returns:
+        boxes_level: List containing ancho9r boxes in centre form for every
+            feature level.
+    """
     boxes_level = []
     for combination in range(scale_aspect_ratio_combinations):
         box_coordinates = compute_box_coordinates(strides_y[combination],
@@ -91,6 +151,23 @@ def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
 
 def generate_anchors(feature_sizes, min_level, max_level, num_scales,
                      aspect_ratios, image_size, anchor_scales):
+    """Generates anchor boxes in centre form for all feature levels.
+
+    # Arguments:
+        feature_sizes: Numpy array of shape ``(8, 2)``.
+        min_level: Int, Number representing the index of the earliest
+            EfficientNet layer that feeds the BiFPN layers.
+        max_level: Int, Number representing the index of the last EfficientNet
+            layer that feeds the BiFPN layers.
+        num_scales: Int, specifying the number of scales in the
+            anchor boxes.
+        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
+        image_size: Tuple, representing the size of input image.
+        anchor_scales: Numpy array representing the scale of anchor box.
+
+    # Returns:
+        anchors: Numpy array of shape ``(49104, 4)``.
+    """
     ((strides_y, strides_x, octave_scales, aspects, anchor_scales), num_levels,
      scale_aspect_ratio_combinations) = generate_configurations(feature_sizes,
                                                                 min_level,
@@ -117,18 +194,20 @@ def build_prior_boxes(min_level, max_level, num_scales,
     """Function to generate prior boxes.
 
     # Arguments
-    min_level: Int, minimum level for features.
-    max_level: Int, maximum level for features.
-    num_scales: Int, specifying the number of scales in the anchor boxes.
-    aspect_ratios: List, specifying the aspect ratio of the
-    default anchor boxes. Computed with k-mean on COCO dataset.
-    anchor_scale: float number representing the scale of size of the base
-    anchor to the feature stride 2^level. Or a list, one value per layer.
-    image_size: Int, size of the input image.
+        min_level: Int, Number representing the index of the earliest
+            EfficientNet layer that feeds the BiFPN layers.
+        max_level: Int, Number representing the index of the last EfficientNet
+            layer that feeds the BiFPN layers.
+        num_scales: Int, specifying the number of scales in the
+            anchor boxes.
+        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
+        anchor_scale: float number representing the scale of size of the base
+            anchor to the feature stride 2^level. Or a list, one value per
+            layer.
+        image_size: Tuple, representing the size of input image.
 
     # Returns
-    prior_boxes: Numpy, Prior anchor boxes corresponding to the
-    feature map size of each feature level.
+        prior_boxes: Numpy array of shape ``(49104, 4)``.
     """
     anchor_scales = np.repeat(anchor_scale, max_level - min_level + 1)
     feature_sizes = compute_feature_sizes(image_size, max_level)
