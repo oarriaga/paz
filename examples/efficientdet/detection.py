@@ -7,17 +7,6 @@ from paz.pipelines.image import AugmentImage
 from paz.processors.detection import MatchBoxes
 from utils import efficientdet_preprocess, get_class_name_efficientdet
 
-# class AugmentImage(SequentialProcessor):
-#     """Augments an RGB image by randomly changing contrast, brightness
-#         saturation and hue.
-#     """
-#     def __init__(self):
-#         super(AugmentImage, self).__init__()
-#         self.add(pr.RandomContrast())
-#         self.add(pr.RandomBrightness())
-#         self.add(pr.RandomSaturation(0.7))
-#         self.add(pr.RandomHue())
-
 
 class PreprocessImage(SequentialProcessor):
     """Preprocess RGB image by resizing it to the given ``shape``. If a
@@ -35,45 +24,6 @@ class PreprocessImage(SequentialProcessor):
         self.add(pr.CastImage(float))
         self.add(pr.SubtractMeanImage(pr.RGB_IMAGENET_MEAN))
         self.add(ni.DivideStandardDeviationImage(ni.RGB_IMAGENET_STDEV))
-        # if mean is None:
-        #     self.add(pr.NormalizeImage())
-        # else:
-        #     print('Normal')
-        #     self.add(pr.SubtractMeanImage(mean))
-
-
-# class AugmentBoxes(SequentialProcessor):
-#     """Perform data augmentation with bounding boxes.
-
-#     # Arguments
-#         mean: List of three elements used to fill empty image spaces.
-#     """
-#     def __init__(self, mean=pr.BGR_IMAGENET_MEAN):
-#         super(AugmentBoxes, self).__init__()
-#         self.add(pr.ToImageBoxCoordinates())
-#         self.add(pr.Expand(mean=mean))
-#         # RandomSampleCrop was commented out
-#         self.add(pr.RandomSampleCrop())
-#         self.add(pr.RandomFlipBoxesLeftRight())
-#         self.add(pr.ToNormalizedBoxCoordinates())
-
-
-# class PreprocessBoxes(SequentialProcessor):
-#     """Preprocess bounding boxes
-
-#     # Arguments
-#         num_classes: Int.
-#         prior_boxes: Numpy array of shape ``[num_boxes, 4]`` containing
-#             prior/default bounding boxes.
-#         IOU: Float. Intersection over union used to match boxes.
-#         variances: List of two floats indicating variances to be encoded
-#             for encoding bounding boxes.
-#     """
-#     def __init__(self, num_classes, prior_boxes, IOU, variances):
-#         super(PreprocessBoxes, self).__init__()
-#         self.add(MatchBoxes(prior_boxes, IOU),)
-#         self.add(pr.EncodeBoxes(prior_boxes, variances))
-#         self.add(pr.BoxClassToOneHotVector(num_classes))
 
 
 class AugmentDetection(SequentialProcessor):
