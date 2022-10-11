@@ -259,10 +259,11 @@ def generate_anchors(feature_sizes, min_level, max_level, num_scales,
     # Returns:
         anchors: Numpy array of shape ``(49104, 4)``.
     """
-    ((strides_y, strides_x, octave_scales, aspects, anchor_scales), num_levels,
-     scale_aspect_ratio_combinations) = generate_configurations(
+    configuration = generate_configurations(
         feature_sizes, min_level, max_level, num_scales,
         aspect_ratios, anchor_scales)
+    ((strides_y, strides_x, octave_scales, aspects, anchor_scales),
+        num_levels, scale_aspect_ratio_combinations) = configuration
     boxes_all = []
     for level in range(num_levels):
         boxes_level = generate_level_boxes(
