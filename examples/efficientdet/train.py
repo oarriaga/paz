@@ -98,20 +98,13 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
-evaluate = EvaluateMAP(
-    evaluation_data_managers[0],
-    DetectSingleShot(model, data_managers[0].class_names,
-                     0.01, 0.45),
-    args.evaluation_period,
-    args.save_path,
-    args.AP_IOU)
 
 # training
 model.fit(
     sequencers[0],
     epochs=args.num_epochs,
     verbose=1,
-    callbacks=[checkpoint, log, schedule, evaluate],
+    callbacks=[checkpoint, log, schedule],
     validation_data=sequencers[1],
     use_multiprocessing=args.multiprocessing,
     workers=args.workers)
