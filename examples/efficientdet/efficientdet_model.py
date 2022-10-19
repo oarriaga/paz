@@ -82,9 +82,10 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
     if (((base_weights == 'COCO') and (head_weights == 'COCO')) or
-            ((base_weights == 'COCO') and (head_weights == 'None'))):
-        weights_path = (WEIGHT_PATH + model_name + '_' +
-                        str(base_weights) + '_' + str(head_weights) + '.h5')
+            ((base_weights == 'COCO') and (head_weights is None))):
+        weights_path = (WEIGHT_PATH + model_name + '-' +
+                        str(base_weights) + '-' + str(head_weights) +
+                        '_weights.hdf5')
         model.load_weights(weights_path)
 
     model.prior_boxes = build_prior_boxes(
