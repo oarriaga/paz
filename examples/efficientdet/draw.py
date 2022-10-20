@@ -1,9 +1,7 @@
 import cv2
 
-GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
-FILLED = cv2.FILLED
 
 
 def put_text(image, text, point, scale, color, thickness):
@@ -20,7 +18,6 @@ def put_text(image, text, point, scale, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with text.
     """
-    # cv2.putText returns an image in contrast to other drawing cv2 functions.
     return cv2.putText(image, text, point, FONT, scale, color, thickness, LINE)
 
 

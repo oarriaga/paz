@@ -107,6 +107,17 @@ class DetectSingleShot_EfficientDet(Processor):
         return self.wrap(image, outputs)
 
 
+class DetectSingleShot(DetectSingleShot):
+    def __init__(
+            self, model, class_names, score_thresh, nms_thresh,
+            mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
+            draw=True):
+        super().__init__(
+            model, class_names, score_thresh, nms_thresh,
+            mean, variances, draw)
+        self.draw_boxes2D = DrawBoxes2D(class_names)
+
+
 class DrawBoxes2D(pr.DrawBoxes2D):
     def __init__(
             self, class_names=None, colors=None,
@@ -131,14 +142,12 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         for box2D in boxes2D:
             prediction_parameters = self.compute_prediction_parameters(box2D)
             x_min, y_min, x_max, y_max, color, text = prediction_parameters
-            draw_opaque_box(
-                image, (x_min, y_min), (x_max, y_max), color)
+            draw_opaque_box(image, (x_min, y_min), (x_max, y_max), color)
         image = make_box_transparent(raw_image, image)
         for box2D in boxes2D:
             prediction_parameters = self.compute_prediction_parameters(box2D)
             x_min, y_min, x_max, y_max, color, text = prediction_parameters
-            add_box_border(
-                image, (x_min, y_min), (x_max, y_max), color, 2)
+            add_box_border(image, (x_min, y_min), (x_max, y_max), color, 2)
             text_size = get_text_size(text, self.scale, 1)
             (text_W, text_H), _ = text_size
             draw_opaque_box(
@@ -147,14 +156,3 @@ class DrawBoxes2D(pr.DrawBoxes2D):
             put_text(
                 image, text, (x_min+2, y_min + 17), self.scale, (0, 0, 0), 1)
         return image
-
-
-class DetectSingleShot(DetectSingleShot):
-    def __init__(
-            self, model, class_names, score_thresh, nms_thresh,
-            mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
-            draw=True):
-        super().__init__(
-            model, class_names, score_thresh, nms_thresh,
-            mean, variances, draw)
-        self.draw_boxes2D = DrawBoxes2D(class_names)

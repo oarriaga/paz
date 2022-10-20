@@ -5,7 +5,6 @@ from detection import DetectSingleShot
 from efficientdet import EFFICIENTDETD0
 from utils import raw_images
 
-
 if __name__ == "__main__":
     model = EFFICIENTDETD0(num_classes=21, base_weights='COCO',
                            head_weights=None)
