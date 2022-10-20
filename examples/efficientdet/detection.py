@@ -108,6 +108,17 @@ class DetectSingleShot_EfficientDet(Processor):
 
 
 class DetectSingleShot(DetectSingleShot):
+    """Single-shot object detection prediction.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating the class names.
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        mean: List of three elements indicating the per channel mean.
+        variances: List containing the variances of the encoded boxes.
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+    """
     def __init__(
             self, model, class_names, score_thresh, nms_thresh,
             mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
@@ -119,6 +130,16 @@ class DetectSingleShot(DetectSingleShot):
 
 
 class DrawBoxes2D(pr.DrawBoxes2D):
+    """Draws bounding boxes from Boxes2D messages.
+
+    # Arguments
+        class_names: List of strings.
+        colors: List of lists containing the color values
+        weighted: Boolean. If ``True`` the colors are weighted with the
+            score of the bounding box.
+        scale: Float. Scale of drawn text.
+        with_score: Boolean. If ``True`` displays the confidence score.
+    """
     def __init__(
             self, class_names=None, colors=None,
             weighted=False, scale=0.7, with_score=True):

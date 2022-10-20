@@ -50,31 +50,6 @@ def get_class_name_efficientdet(dataset_name):
                 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 
 
-# def get_drop_connect(features, is_training, survival_rate):
-#     """Drop the entire conv with given survival probability.
-#     Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
-
-#     # Arguments
-#         features: Tensor, input feature map to undergo
-#         drop connection.
-#         is_training: Bool specifying the training phase.
-#         survival_rate: Float, survival probability to drop
-#         input convolution features.
-
-#     # Returns
-#         output: Tensor, output feature map after drop connect.
-#     """
-#     if not is_training:
-#         return features
-#     batch_size = tf.shape(features)[0]
-#     random_tensor = survival_rate
-#     random_tensor = random_tensor + tf.random.uniform(
-#         [batch_size, 1, 1, 1], dtype=features.dtype)
-#     binary_tensor = tf.floor(random_tensor)
-#     output = (features / survival_rate) * binary_tensor
-#     return output
-
-
 class CustomDropout(keras.layers.Layer):
     """Implements dropout for layers of the model.
 
