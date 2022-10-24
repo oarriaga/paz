@@ -1,5 +1,6 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
+from tensorflow.keras.utils import get_file
 
 from anchors import build_prior_boxes
 from efficientdet_blocks import BiFPN, BoxNet, ClassNet
@@ -7,7 +8,7 @@ from efficientnet_model import EfficientNet
 from utils import create_multibox_head
 
 WEIGHT_PATH = (
-    '/home/manummk95/Desktop/efficientdet_working/required/weights/')
+    'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
 
 
 def EfficientDet(num_classes, base_weights, head_weights, input_shape,
@@ -83,9 +84,11 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
 
     if (((base_weights == 'COCO') and (head_weights == 'COCO')) or
             ((base_weights == 'COCO') and (head_weights is None))):
-        weights_path = (WEIGHT_PATH + model_name + '-' +
-                        str(base_weights) + '-' + str(head_weights) +
-                        '_weights.hdf5')
+        model_filename = (model_name + '-' + str(base_weights) + '-' +
+                          str(head_weights) + '_weights.hdf5')
+        weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
         model.load_weights(weights_path)
 
     model.prior_boxes = build_prior_boxes(
