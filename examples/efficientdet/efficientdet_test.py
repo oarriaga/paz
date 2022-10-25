@@ -1,10 +1,8 @@
 import numpy as np
-# from examples.efficientdet.efficientdet_blocks import FeatureNode
 import pytest
 import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Input
-from tensorflow.keras.models import model_from_json
 
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
@@ -138,13 +136,10 @@ def test_efficientdet_architecture(models_base_path,
     custom_objects = {"conv_normal_initializer": conv_normal_initializer,
                       "FuseFeature": FuseFeature}
     K.clear_session()
-    reference_model_path = (models_base_path + 'EFFICIENTDETD' +
-                            str(model_id) + '.json')
-    reference_model_file = open(reference_model_path, 'r')
-    loaded_model_json = reference_model_file.read()
-    reference_model_file.close()
-    reference_model = model_from_json(loaded_model_json,
-                                      custom_objects=custom_objects)
+    reference_model_path = (models_base_path + 'EFFICIENTDET-D' +
+                            str(model_id) + '.hdf5')
+    reference_model = tf.keras.models.load_model(
+        reference_model_path, custom_objects=custom_objects)
     K.clear_session()
     assert (implemented_model().get_config() ==
             reference_model.get_config()), ('EFFICIENTDETD' + str(model_id)
