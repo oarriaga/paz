@@ -23,12 +23,6 @@ def model_input_output_base_path():
             "required/test_files/test_model_outputs/")
 
 
-@pytest.fixture
-def model_anchor_boxes_path():
-    return ("/home/manummk95/Desktop/efficientdet_working/"
-            "required/test_files/efficientdet_anchors/")
-
-
 def get_test_images(image_size, batch_size=1):
     """Generates a simple mock image.
 
@@ -147,24 +141,25 @@ def test_efficientdet_architecture(models_base_path,
     del implemented_model, reference_model
 
 
-@pytest.mark.parametrize('model, model_id',
+@pytest.mark.parametrize('model',
                          [
-                             (EFFICIENTDETD0, 0),
-                             (EFFICIENTDETD1, 1),
-                             (EFFICIENTDETD2, 2),
-                             (EFFICIENTDETD3, 3),
-                             (EFFICIENTDETD4, 4),
-                             (EFFICIENTDETD5, 5),
-                             (EFFICIENTDETD6, 6),
-                             (EFFICIENTDETD7, 7),
+                             (EFFICIENTDETD0),
+                             (EFFICIENTDETD1),
+                             (EFFICIENTDETD2),
+                             (EFFICIENTDETD3),
+                             (EFFICIENTDETD4),
+                             (EFFICIENTDETD5),
+                             (EFFICIENTDETD6),
+                             (EFFICIENTDETD7),
                          ])
-def test_efficientdet_anchor_boxes(model_anchor_boxes_path, model, model_id):
-    reference_anchor_file = (model_anchor_boxes_path + 'EFFICIENTDETD' +
-                             str(model_id) + '_anchors.npy')
-    with open(reference_anchor_file, 'rb') as f:
-        reference_anchor = np.load(f)
+def test_efficientdet_anchor_boxes(model):
     model_anchor = model().prior_boxes
-    assert np.array_equal(model_anchor, reference_anchor)
+    anchor_x, anchor_y = model_anchor[:, 0], model_anchor[:, 1]
+    anchor_W, anchor_H = model_anchor[:, 2], model_anchor[:, 3]
+    assert np.logical_and(anchor_x >= 0, anchor_x <= 1).all()
+    assert np.logical_and(anchor_y >= 0, anchor_y <= 1).all()
+    assert (anchor_W > 0).all()
+    assert (anchor_H > 0).all()
     del model
 
 
