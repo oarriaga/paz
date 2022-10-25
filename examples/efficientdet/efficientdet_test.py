@@ -25,6 +25,12 @@ def model_input_output_base_path():
             "required/test_files/test_model_outputs/")
 
 
+@pytest.fixture
+def model_anchor_boxes_path():
+    return ("/home/manummk95/Desktop/efficientdet_working/"
+            "required/test_files/efficientdet_anchors/")
+
+
 def get_test_images(image_size, batch_size=1):
     """Generates a simple mock image.
 
@@ -146,6 +152,27 @@ def test_efficientdet_architecture(models_base_path,
     del implemented_model, reference_model
 
 
+@pytest.mark.parametrize('model, model_id',
+                         [
+                             (EFFICIENTDETD0, 0),
+                             (EFFICIENTDETD1, 1),
+                             (EFFICIENTDETD2, 2),
+                             (EFFICIENTDETD3, 3),
+                             (EFFICIENTDETD4, 4),
+                             (EFFICIENTDETD5, 5),
+                             (EFFICIENTDETD6, 6),
+                             (EFFICIENTDETD7, 7),
+                         ])
+def test_efficientdet_anchor_boxes(model_anchor_boxes_path, model, model_id):
+    reference_anchor_file = (model_anchor_boxes_path + 'EFFICIENTDETD' +
+                             str(model_id) + '_anchors.npy')
+    with open(reference_anchor_file, 'rb') as f:
+        reference_anchor = np.load(f)
+    model_anchor = model().prior_boxes
+    assert np.array_equal(model_anchor, reference_anchor)
+    del model
+
+
 @pytest.mark.skip(reason="Training of model needs to carried out from D0-D7")
 @pytest.mark.parametrize('model, model_idx, preprocessed_inputs',
                          [
@@ -176,50 +203,3 @@ def test_efficientdet_result(model_input_output_base_path, model,
         assert np.all(model()(preprocessed_input).numpy() ==
                       target_model_output), 'Model result not as expected'
     del model
-
-# def test_feature_fusion_sum():
-#     nodes1 = tf.constant([1, 3])
-#     nodes2 = tf.constant([1, 3])
-#     feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False, 'sum',
-#                                None)
-#     output_node = feature_node.fuse_features([nodes1, nodes2])
-#     expected_node = tf.constant([2, 6], dtype=tf.int32)
-#     check_equality = tf.math.equal(output_node, expected_node)
-#     check_flag = tf.reduce_all(check_equality)
-#     assert check_flag, 'Feature fusion - \'sum\' mismatch'
-
-
-# def test_feature_fusion_attention():
-#     nodes1 = tf.constant([1, 3], dtype=tf.float32)
-#     nodes2 = tf.constant([1, 3], dtype=tf.float32)
-#     feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False,
-#                                'attention', None)
-#     feature_node.build((10, 128, 128, 3))
-#     output_node = feature_node.fuse_features([nodes1, nodes2])
-#     expected_node = tf.constant([1.0, 3.0], dtype=tf.float32)
-#     check_equality = tf.math.equal(output_node, expected_node)
-#     check_flag = tf.reduce_all(check_equality)
-#     assert check_flag, 'Feature fusion - attention method mismatch'
-
-
-# def test_feature_fusion_fastattention():
-#     nodes1 = tf.constant([1, 3], dtype=tf.float32)
-#     nodes2 = tf.constant([1, 3], dtype=tf.float32)
-#     feature_node = FeatureNode(6, [3, 4], 3, True, True, True, False,
-#                                'fastattention', None)
-#     feature_node.build((10, 128, 128, 3))
-#     output_node = feature_node.fuse_features([nodes1, nodes2])
-#     expected_node = tf.constant([0.99995005, 2.9998503], dtype=tf.float32)
-#     check_equality = tf.math.equal(output_node, expected_node)
-#     check_flag = tf.reduce_all(check_equality)
-#     assert check_flag, 'Feature fusion - fastattention method mismatch'
-
-
-# test_efficientdet_model()
-# test_efficientnet_model()
-# test_efficientnet_bottleneck_block()
-# test_efficientnet_se_block()
-# test_all_efficientdet_models(get_model_path)
-# test_feature_fusion_sum()
-# test_feature_fusion_attention()
-# test_feature_fusion_fastattention()

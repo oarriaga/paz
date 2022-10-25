@@ -11,12 +11,20 @@ from necessary_imports import RGB_IMAGENET_STDEV
 
 # Mock input image.
 file_name = ('/home/manummk95/Desktop/efficientdet_BKP/paz/'
-             'examples/efficientdet/img1.jpg')
+             'examples/efficientdet/000132.jpg')
 loader = LoadImage()
 raw_images = loader(file_name)
 
 
 def get_class_name_efficientdet(dataset_name):
+    """Function that returns the names of the class for COCO and VOC dataset.
+
+    # Arguments:
+        dataset_name: String, that specifies the name of the dataset.
+
+    # Returns:
+        List: _Containing the names of the class of the required dataset.
+    """
     if dataset_name == 'COCO':
         return ['person', 'bicycle', 'car', 'motorcycle',
                 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
@@ -42,32 +50,10 @@ def get_class_name_efficientdet(dataset_name):
                 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 
 
-# def get_drop_connect(features, is_training, survival_rate):
-#     """Drop the entire conv with given survival probability.
-#     Deep Networks with Stochastic Depth, https://arxiv.org/pdf/1603.09382.pdf
-
-#     # Arguments
-#         features: Tensor, input feature map to undergo
-#         drop connection.
-#         is_training: Bool specifying the training phase.
-#         survival_rate: Float, survival probability to drop
-#         input convolution features.
-
-#     # Returns
-#         output: Tensor, output feature map after drop connect.
-#     """
-#     if not is_training:
-#         return features
-#     batch_size = tf.shape(features)[0]
-#     random_tensor = survival_rate
-#     random_tensor = random_tensor + tf.random.uniform(
-#         [batch_size, 1, 1, 1], dtype=features.dtype)
-#     binary_tensor = tf.floor(random_tensor)
-#     output = (features / survival_rate) * binary_tensor
-#     return output
-
-
 class CustomDropout(keras.layers.Layer):
+    """Implements dropout for layers of the model.
+
+    """
     def __init__(self, survival_rate, **kwargs):
         super(CustomDropout, self).__init__(**kwargs)
         self.survival_rate = survival_rate
@@ -113,6 +99,19 @@ def efficientdet_preprocess(image, image_size):
 
 def create_multibox_head(branch_tensors, num_levels, num_classes,
                          num_regressions=4):
+    """Concatenates class and box outputs into a single tensor.
+
+    # Arguments:
+        branch_tensors: List, containing class outputs and box outputs from
+            efficientdet network.
+        num_levels: Int, specifying the number of feature levels.
+        num_classes: Int, specifying the number of output classes.
+        num_regressions: Int, specifying the bounding box coordinate values to
+            be regressed.
+
+    # Returns:
+        Tensor: Containing concatenated class and box outputs.
+    """
     class_outputs = branch_tensors[0]
     box_outputs = branch_tensors[1]
     classification_layers, regression_layers = [], []
