@@ -14,6 +14,50 @@ _CHANNELS_TO_FLAG = {1: cv2.IMREAD_GRAYSCALE,
 CUBIC = cv2.INTER_CUBIC
 BILINEAR = cv2.INTER_LINEAR
 
+def resize_with_padding(image, size, method=BILINEAR):
+    """
+    resizes image while keeping aspect ratio and adding padding if necessary.
+    Adjusted from : https://jdhao.github.io/2017/11/06/resize-image-to-square-with-padding/#using-opencv
+
+    # Arguments
+        image: Numpy array.
+        size: List of two ints. -> (height, width)
+        method: Flag indicating interpolation method i.e.
+            paz.backend.image.CUBIC
+
+    # Returns
+        Numpy array.
+    """
+
+    if (type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    else:
+        old_height, old_width = image.shape[:2] # old_size is in (height, width) format(numpy)
+
+        target_height, target_width = size
+
+        width_ratio = target_width / old_width
+        height_ratio = target_height / old_height
+
+        ratio = min([width_ratio, height_ratio])
+
+        new_size = tuple([int(x*ratio) for x in old_size])
+
+        # new_size should be in (width, height) format
+
+        im = cv2.resize(im, (new_size[1], new_size[0]))
+
+        delta_w = desired_size - new_size[1]
+        delta_h = desired_size - new_size[0]
+        top, bottom = delta_h//2, delta_h-(delta_h//2)
+        left, right = delta_w//2, delta_w-(delta_w//2)
+
+        color = [0, 0, 0]
+        new_image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT,
+            value=color)
+        return new_image
+
 
 def resize_image(image, size, method=BILINEAR):
     """Resize image.

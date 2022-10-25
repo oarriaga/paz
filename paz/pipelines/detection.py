@@ -10,6 +10,8 @@ from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
 from .detection import PaperDetection
+from .detection import PaperRefiner
+
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -571,6 +573,7 @@ class DetectPaper(Processor):
 
         # Detection
         self.paper_detector = PaperDetection()
+        self.paper_refiner = PaperRefiner()
 
         # Preprocessing
         preprocessing = SequentialProcessor(
