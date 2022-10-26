@@ -190,9 +190,9 @@ def test_build_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
     assert (anchor_W > 0).all(), "Invalid/negative anchor width"
     assert (anchor_H > 0).all(), "Invalid/negative anchor height"
     assert np.round(np.mean(anchor_x), 2) == 0.5, (
-        "Asymmetrical number of anchors along x-direction")
+        "Anchor boxes asymmetrically distributed along X-direction")
     assert np.round(np.mean(anchor_y), 2) == 0.5, (
-        "Asymmetrical number of anchors along y-direction")
+        "Anchor boxes asymmetrically distributed along Y-direction")
     assert measured_aspect_ratios == set(aspect_ratios), (
         "Anchor aspect ratios not as expected")
     assert prior_boxes.shape[0] == anchor_count, (
