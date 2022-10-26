@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 import tensorflow as tf
 from keras.utils.layer_utils import count_params
-from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Input
 
 from anchors import build_prior_boxes
@@ -10,12 +9,6 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
 from efficientnet_model import EfficientNet
-
-
-@pytest.fixture
-def model_input_output_base_path():
-    return ("/home/manummk95/Desktop/efficientdet_working/"
-            "required/test_files/test_model_outputs/")
 
 
 @pytest.fixture
@@ -123,21 +116,21 @@ def test_efficientnet_features(input_shape, backbone, feature_shape,
                           'output_shape'),
                          [
                             (EFFICIENTDETD0, 'efficientdet-d0', 3880067,
-                             47136, (512, 512, 3), (49104, 94)),
+                                47136, (512, 512, 3), (49104, 94)),
                             (EFFICIENTDETD1, 'efficientdet-d1', 6625898,
-                             71456, (640, 640, 3), (76725, 94)),
+                                71456, (640, 640, 3), (76725, 94)),
                             (EFFICIENTDETD2, 'efficientdet-d2', 8097039,
-                             81776, (768, 768, 3), (110484, 94)),
+                                81776, (768, 768, 3), (110484, 94)),
                             (EFFICIENTDETD3, 'efficientdet-d3', 12032296,
-                             114304, (896, 896, 3), (150381, 94)),
+                                114304, (896, 896, 3), (150381, 94)),
                             (EFFICIENTDETD4, 'efficientdet-d4', 20723675,
-                             167312, (1024, 1024, 3), (196416, 94)),
+                                167312, (1024, 1024, 3), (196416, 94)),
                             (EFFICIENTDETD5, 'efficientdet-d5', 33653315,
-                             227392, (1280, 1280, 3), (306900, 94)),
+                                227392, (1280, 1280, 3), (306900, 94)),
                             (EFFICIENTDETD6, 'efficientdet-d6', 51871934,
-                             311984, (1280, 1280, 3), (306900, 94)),
+                                311984, (1280, 1280, 3), (306900, 94)),
                             (EFFICIENTDETD7, 'efficientdet-d7', 51871934,
-                             311984, (1536, 1536, 3), (441936, 94)),
+                                311984, (1536, 1536, 3), (441936, 94)),
                          ])
 def test_efficientdet_architecture(model, model_name, model_input_name,
                                    model_output_name, trainable_parameters,
@@ -164,57 +157,43 @@ def test_efficientdet_architecture(model, model_name, model_input_name,
     del implemented_model
 
 
-@pytest.mark.parametrize('model',
+@pytest.mark.parametrize(('min_level, max_level, num_scales, aspect_ratios,'
+                          'anchor_scale, image_size, anchor_count'),
                          [
-                             (EFFICIENTDETD0),
-                             (EFFICIENTDETD1),
-                             (EFFICIENTDETD2),
-                             (EFFICIENTDETD3),
-                             (EFFICIENTDETD4),
-                             (EFFICIENTDETD5),
-                             (EFFICIENTDETD6),
-                             (EFFICIENTDETD7),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (512, 512),
+                                49104),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (640, 640),
+                                76725),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (768, 768),
+                                110484),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (896, 896),
+                                150381),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (1024, 1024),
+                                196416),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (1280, 1280),
+                                306900),
+                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (1536, 1536),
+                                441936),
                          ])
-def test_efficientdet_anchor_boxes(model):
-    model_anchor = model().prior_boxes
-    anchor_x, anchor_y = model_anchor[:, 0], model_anchor[:, 1]
-    anchor_W, anchor_H = model_anchor[:, 2], model_anchor[:, 3]
+def test_build_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
+                           anchor_scale, image_size, anchor_count):
+    prior_boxes = build_prior_boxes(
+        min_level, max_level, num_scales, aspect_ratios, anchor_scale,
+        image_size)
+    anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
+    anchor_W, anchor_H = prior_boxes[:, 2], prior_boxes[:, 3]
+    measured_aspect_ratios = set(np.unique(np.round((anchor_W/anchor_H), 2)))
     assert np.logical_and(anchor_x >= 0, anchor_x <= 1).all(), (
-        "X-coordinates of anchor centre invalid")
+        "Invalid x-coordinates of anchor centre")
     assert np.logical_and(anchor_y >= 0, anchor_y <= 1).all(), (
-        "Y-coordinates of anchor centre invalid")
-    assert (anchor_W > 0).all(), "Invalid or negative anchor width"
-    assert (anchor_H > 0).all(), "Invalid or negative anchor height"
-    del model
-
-
-@pytest.mark.skip(reason="Training of model needs to carried out from D0-D7")
-@pytest.mark.parametrize('model, model_idx, preprocessed_inputs',
-                         [
-                             (EFFICIENTDETD0, 0, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD1, 1, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD2, 2, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD3, 3, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD4, 4, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD5, 5, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD6, 6, (1, 2, 3, 4, 5)),
-                             (EFFICIENTDETD7, 7, (1, 2, 3, 4, 5))
-                         ])
-def test_efficientdet_result(model_input_output_base_path, model,
-                             model_idx, preprocessed_inputs):
-    for preprocessed_input_idx in preprocessed_inputs:
-        preprocessed_input_file = model_input_output_base_path + \
-            'EFFICIENTDETD' + str(model_idx) + '/inputs/test_image_' + \
-            str(preprocessed_input_idx) + '.npy'
-        with open(preprocessed_input_file, 'rb') as f:
-            preprocessed_input = np.load(f)
-
-        target_model_output_file = model_input_output_base_path + \
-            'EFFICIENTDETD' + str(model_idx) + '/outputs/model_output_' + \
-            str(preprocessed_input_idx) + '.npy'
-        with open(target_model_output_file, 'rb') as f:
-            target_model_output = np.load(target_model_output_file)
-
-        assert np.all(model()(preprocessed_input).numpy() ==
-                      target_model_output), 'Model result not as expected'
-    del model
+        "Invalid y-coordinates of anchor centre")
+    assert (anchor_W > 0).all(), "Invalid/negative anchor width"
+    assert (anchor_H > 0).all(), "Invalid/negative anchor height"
+    assert np.round(np.mean(anchor_x), 2) == 0.5, (
+        "Asymmetrical number of anchors along x-direction")
+    assert np.round(np.mean(anchor_y), 2) == 0.5, (
+        "Asymmetrical number of anchors along y-direction")
+    assert measured_aspect_ratios == set(aspect_ratios), (
+        "Anchor aspect ratios not as expected")
+    assert prior_boxes.shape[0] == anchor_count, (
+        "Incorrect number of anchor boxes")
