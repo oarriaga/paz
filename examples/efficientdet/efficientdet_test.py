@@ -1,26 +1,31 @@
 import numpy as np
 import pytest
 import tensorflow as tf
+from keras.utils.layer_utils import count_params
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Input
 
+from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientdet_blocks import FuseFeature
-from efficientnet_model import EfficientNet, conv_normal_initializer
-
-
-@pytest.fixture
-def models_base_path():
-    return ("/home/manummk95/Desktop/efficientdet_working/"
-            "required/test_files/efficientdet_architectures/")
+from efficientnet_model import EfficientNet
 
 
 @pytest.fixture
 def model_input_output_base_path():
     return ("/home/manummk95/Desktop/efficientdet_working/"
             "required/test_files/test_model_outputs/")
+
+
+@pytest.fixture
+def model_input_name():
+    return 'image'
+
+
+@pytest.fixture
+def model_output_name():
+    return 'boxes'
 
 
 def get_test_images(image_size, batch_size=1):
@@ -113,32 +118,50 @@ def test_efficientnet_features(input_shape, backbone, feature_shape,
     del branch_tensors
 
 
-@pytest.mark.parametrize('implemented_model, model_id',
+@pytest.mark.parametrize(('model, model_name, trainable_parameters,'
+                          'non_trainable_parameters, input_shape,'
+                          'output_shape'),
                          [
-                             (EFFICIENTDETD0, 0),
-                             (EFFICIENTDETD1, 1),
-                             (EFFICIENTDETD2, 2),
-                             (EFFICIENTDETD3, 3),
-                             (EFFICIENTDETD4, 4),
-                             (EFFICIENTDETD5, 5),
-                             (EFFICIENTDETD6, 6),
-                             (EFFICIENTDETD7, 7),
+                            (EFFICIENTDETD0, 'efficientdet-d0', 3880067,
+                             47136, (512, 512, 3), (49104, 94)),
+                            (EFFICIENTDETD1, 'efficientdet-d1', 6625898,
+                             71456, (640, 640, 3), (76725, 94)),
+                            (EFFICIENTDETD2, 'efficientdet-d2', 8097039,
+                             81776, (768, 768, 3), (110484, 94)),
+                            (EFFICIENTDETD3, 'efficientdet-d3', 12032296,
+                             114304, (896, 896, 3), (150381, 94)),
+                            (EFFICIENTDETD4, 'efficientdet-d4', 20723675,
+                             167312, (1024, 1024, 3), (196416, 94)),
+                            (EFFICIENTDETD5, 'efficientdet-d5', 33653315,
+                             227392, (1280, 1280, 3), (306900, 94)),
+                            (EFFICIENTDETD6, 'efficientdet-d6', 51871934,
+                             311984, (1280, 1280, 3), (306900, 94)),
+                            (EFFICIENTDETD7, 'efficientdet-d7', 51871934,
+                             311984, (1536, 1536, 3), (441936, 94)),
                          ])
-def test_efficientdet_architecture(models_base_path,
-                                   implemented_model,
-                                   model_id):
-    custom_objects = {"conv_normal_initializer": conv_normal_initializer,
-                      "FuseFeature": FuseFeature}
-    K.clear_session()
-    reference_model_path = (models_base_path + 'EFFICIENTDET-D' +
-                            str(model_id) + '.hdf5')
-    reference_model = tf.keras.models.load_model(
-        reference_model_path, custom_objects=custom_objects)
-    K.clear_session()
-    assert (implemented_model().get_config() ==
-            reference_model.get_config()), ('EFFICIENTDETD' + str(model_id)
-                                            + " architecture mismatch")
-    del implemented_model, reference_model
+def test_efficientdet_architecture(model, model_name, model_input_name,
+                                   model_output_name, trainable_parameters,
+                                   non_trainable_parameters, input_shape,
+                                   output_shape):
+    implemented_model = model()
+    trainable_count = count_params(
+        implemented_model.trainable_weights)
+    non_trainable_count = count_params(
+        implemented_model.non_trainable_weights)
+    assert implemented_model.name == model_name, "Model name incorrect"
+    assert implemented_model.input_names[0] == model_input_name, (
+        "Input name incorrect")
+    assert implemented_model.output_names[0] == model_output_name, (
+        "Output name incorrect")
+    assert trainable_count == trainable_parameters, (
+        "Incorrect trainable parameters count")
+    assert non_trainable_count == non_trainable_parameters, (
+        "Incorrect non-trainable parameters count")
+    assert implemented_model.input_shape[1:] == input_shape, (
+        "Incorrect input shape")
+    assert implemented_model.output_shape[1:] == output_shape, (
+        "Incorrect output shape")
+    del implemented_model
 
 
 @pytest.mark.parametrize('model',
@@ -156,10 +179,12 @@ def test_efficientdet_anchor_boxes(model):
     model_anchor = model().prior_boxes
     anchor_x, anchor_y = model_anchor[:, 0], model_anchor[:, 1]
     anchor_W, anchor_H = model_anchor[:, 2], model_anchor[:, 3]
-    assert np.logical_and(anchor_x >= 0, anchor_x <= 1).all()
-    assert np.logical_and(anchor_y >= 0, anchor_y <= 1).all()
-    assert (anchor_W > 0).all()
-    assert (anchor_H > 0).all()
+    assert np.logical_and(anchor_x >= 0, anchor_x <= 1).all(), (
+        "X-coordinates of anchor centre invalid")
+    assert np.logical_and(anchor_y >= 0, anchor_y <= 1).all(), (
+        "Y-coordinates of anchor centre invalid")
+    assert (anchor_W > 0).all(), "Invalid or negative anchor width"
+    assert (anchor_H > 0).all(), "Invalid or negative anchor height"
     del model
 
 
