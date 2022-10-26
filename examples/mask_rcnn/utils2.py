@@ -94,7 +94,7 @@ def DataGenerator(dataset, config, shuffle=True, augmentation=False):
                                        backbone_shapes,
                                        config.BACKBONE_STRIDES,
                                        config.RPN_ANCHOR_STRIDE)
-    #print("anchors",anchors)
+    
     while True:
         try:
 
@@ -300,9 +300,7 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
     if config.USE_MINI_MASK:
         mask_inst= minimize_mask(bbox.astype(np.int32), mask_inst, config.MINI_MASK_SHAPE)
 
-    class_ids.insert(0,0)
-
-    return image, np.array(class_ids).astype(np.int32), bbox[:,:4].astype(np.float32), mask_inst
+    return image, np.array(class_ids).astype(np.int32), bbox[:,:4].astype(np.float32), mask_inst.astype(np.bool)
 
 
 def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config):

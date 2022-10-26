@@ -293,7 +293,16 @@ def get_anchors(config):
         config.BACKBONE_STRIDES,
         config.RPN_ANCHOR_STRIDE)
     anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
-    anchors = Layer(name='anchors')(anchors)
+    #anchors = Layer(name='anchors')(anchors)
+    class ConstLayer(tf.keras.layers.Layer):
+        def __init__(self, x, name=None, dtype=np.float32):
+            super(ConstLayer, self).__init__(name=name, dtype=dtype)
+            self.x = tf.Variable(x)
+
+        def call(self, input):
+            return self.x
+
+    anchors = ConstLayer(anchors, name="anchors")(input_image)
     return anchors
 
 
