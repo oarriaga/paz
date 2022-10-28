@@ -450,6 +450,18 @@ def propagate_downwards(previous_layer_feature, current_feature, id,
 
 
 def refer_next_input(is_non_repeated_block, depth_idx, features):
+    """Computes and returns the index of the next input feature to be
+    fed into the BiFPN block.
+
+    # Arguments
+        is_non_repeated_block :Bool, indicating whether the BiFPN block
+            is a repeated one or a non-repeated one.
+        depth_idx :Int, depth of the BiFPN block.
+        features :Int, the ID or index of the BiFPN block.
+
+    # Returns
+        next_feature_idx :Int. indicating the index of the output feature.
+    """
     if is_non_repeated_block:
         next_feature_idx = -1 - depth_idx
     else:
