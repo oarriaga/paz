@@ -495,8 +495,8 @@ def refer_next_input(is_non_repeated_block, depth_idx, features):
     if is_non_repeated_block:
         next_feature_idx = -1 - depth_idx
     else:
-        num_upsamplers = 3
-        next_feature_idx = len(features) - num_upsamplers - depth_idx
+        num_BiFPN_upsamplers = 3
+        next_feature_idx = len(features) - num_BiFPN_upsamplers - depth_idx
     return next_feature_idx
 
 
