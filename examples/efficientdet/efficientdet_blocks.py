@@ -732,15 +732,16 @@ def compute_next_input_feature_BiFPN(id, features, feature_downpropagated,
                     upward propagation.
     """
     is_non_repeating_block = id == 0
-
+    num_BiFPN_upsamplers = 3
+    feature_offset_idx = 2
     if is_non_repeating_block:
         next_input = {1: features[-1], 2: P6_in, 3: P7_in, 4: None}
-        return next_input[depth_idx], feature_downpropagated[2 - depth_idx]
-
+        return next_input[depth_idx], feature_downpropagated[
+            feature_offset_idx - depth_idx]
     else:
-        is_layer_not_P4 = depth_idx < len(features) - 2
+        is_layer_not_P4 = depth_idx < len(features) - feature_offset_idx
         if is_layer_not_P4:
-            next_input = features[2 + depth_idx]
-            next_td = feature_downpropagated[-3 - depth_idx]
-
+            next_input = features[feature_offset_idx + depth_idx]
+            next_td = feature_downpropagated[
+                -num_BiFPN_upsamplers - depth_idx]
         return next_input, next_td
