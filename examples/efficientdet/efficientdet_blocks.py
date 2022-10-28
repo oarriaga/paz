@@ -79,8 +79,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
 
 
 def BiFPN(features, num_filters, id, fpn_weight_method):
-    """
-    BiFPN layer.
+    """BiFPN layer.
 
     # Arguments
     features: List, feature to be processed by BiFPN.
@@ -93,43 +92,74 @@ def BiFPN(features, num_filters, id, fpn_weight_method):
     features: List, features after BiFPN for the class and box heads.
     """
     is_non_repeated_block = id == 0
-
     if is_non_repeated_block:
-        P6_in, P7_in = preprocess_features_BiFPN(
-            0, features[-1], num_filters, features, id, True)
-
-        previous_layer_feature, current_feature = P7_in, P6_in
-        feature_downpropagated = propagate_downwards_BiFPN(
-            is_non_repeated_block, features, previous_layer_feature,
-            current_feature, fpn_weight_method, num_filters, id)
-
-        current_layer_feature = feature_downpropagated[3]
-        next_input, next_td = features[-2], feature_downpropagated[2]
-        output_features = [feature_downpropagated[3]]
-        output_features = propagate_upwards_BiFPN(
-            is_non_repeated_block, features, current_layer_feature,
-            next_input, next_td, id, feature_downpropagated, fpn_weight_method,
-            num_filters, output_features, P6_in, P7_in)
-
-        P3_out, P4_out, P5_out, P6_out, P7_out = output_features
-
+        output_features = propagate_features_efficientnet_to_BiFPN(
+            features, num_filters, id, fpn_weight_method)
     else:
-        previous_layer_feature, current_feature = features[-1], features[-2]
-        feature_downpropagated = propagate_downwards_BiFPN(
-            is_non_repeated_block, features, previous_layer_feature,
-            current_feature, fpn_weight_method, num_filters, id)
-
-        current_layer_feature = feature_downpropagated[-1]
-        next_input, next_td = features[1], feature_downpropagated[-2]
-        output_features = [feature_downpropagated[-1]]
-        output_features = propagate_upwards_BiFPN(
-            is_non_repeated_block, features, current_layer_feature,
-            next_input, next_td, id, feature_downpropagated, fpn_weight_method,
-            num_filters, output_features, None, None)
-
-        P3_out, P4_out, P5_out, P6_out, P7_out = output_features
-
+        output_features = propagate_features_BiFPN_to_BiFPN(
+            features, num_filters, id, fpn_weight_method)
+    P3_out, P4_out, P5_out, P6_out, P7_out = output_features
     return P3_out, P4_out, P5_out, P6_out, P7_out
+
+
+def propagate_features_efficientnet_to_BiFPN(features, num_filters, id,
+                                             fpn_weight_method):
+    """Propagates featutures from EfficientNet backbone to the
+    first BiFPN block.
+
+    # Arguments
+    features: List, feature to be processed by BiFPN.
+    num_filters: Integer. Number of filters for intermediate layers.
+    id: Integer. Represents the BiFPN repetition count.
+    fpn_weight_method: String representing the feature fusion method
+                       in BiFPN.
+
+    # Returns
+    output_features: List, features after BiFPN for the class and box heads.
+    """
+    P6_in, P7_in = preprocess_features_BiFPN(
+        0, features[-1], num_filters, features, id, True)
+    previous_layer_feature, current_feature = P7_in, P6_in
+    feature_downpropagated = propagate_downwards_BiFPN(
+        True, features, previous_layer_feature,
+        current_feature, fpn_weight_method, num_filters, id)
+    current_layer_feature = feature_downpropagated[3]
+    next_input, next_td = features[-2], feature_downpropagated[2]
+    output_features = [feature_downpropagated[3]]
+    output_features = propagate_upwards_BiFPN(
+        True, features, current_layer_feature,
+        next_input, next_td, id, feature_downpropagated, fpn_weight_method,
+        num_filters, output_features, P6_in, P7_in)
+    return output_features
+
+
+def propagate_features_BiFPN_to_BiFPN(features, num_filters, id,
+                                      fpn_weight_method):
+    """Propagates featutures from earlier BiFPN blocks to
+    succeeding BiFPN block.
+
+    # Arguments
+    features: List, feature to be processed by BiFPN.
+    num_filters: Integer. Number of filters for intermediate layers.
+    id: Integer. Represents the BiFPN repetition count.
+    fpn_weight_method: String representing the feature fusion method
+                       in BiFPN.
+
+    # Returns
+    output_features: List, features after BiFPN for the class and box heads.
+    """
+    previous_layer_feature, current_feature = features[-1], features[-2]
+    feature_downpropagated = propagate_downwards_BiFPN(
+        False, features, previous_layer_feature,
+        current_feature, fpn_weight_method, num_filters, id)
+    current_layer_feature = feature_downpropagated[-1]
+    next_input, next_td = features[1], feature_downpropagated[-2]
+    output_features = [feature_downpropagated[-1]]
+    output_features = propagate_upwards_BiFPN(
+        False, features, current_layer_feature, next_input, next_td,
+        id, feature_downpropagated, fpn_weight_method,
+        num_filters, output_features, None, None)
+    return output_features
 
 
 class FuseFeature(Layer):
