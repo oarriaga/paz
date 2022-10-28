@@ -119,6 +119,14 @@ def get_drop_connect(features, is_training, survival_rate):
 
 
 def name_conv_layer(conv_id):
+    """Names the convolutional layer given its ID.
+
+    # Arguments
+        conv_id: Generator, that generates the ID of the layer.
+
+    # Returns
+        output: Str, name of the convolutional layer to be assigned.
+    """
     if not next(conv_id):
         name_appender = ""
     else:
@@ -128,6 +136,14 @@ def name_conv_layer(conv_id):
 
 
 def name_batch_norm(batch_norm_id):
+    """Names the batch normalization layer given its ID.
+
+    # Arguments
+        batch_norm_id: Generator, that generates the ID of the layer.
+
+    # Returns
+        output: Str, name of the batch normalization layer to be assigned.
+    """
     if not next(batch_norm_id):
         name_appender = ""
     else:
