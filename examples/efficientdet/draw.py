@@ -18,7 +18,9 @@ def put_text(image, text, point, scale, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with text.
     """
-    return cv2.putText(image, text, point, FONT, scale, color, thickness, LINE)
+    image = cv2.putText(
+        image, text, point, FONT, scale, color, thickness, LINE)
+    return image
 
 
 def get_text_size(text, scale, FONT_THICKNESS, FONT=FONT):
@@ -30,9 +32,11 @@ def get_text_size(text, scale, FONT_THICKNESS, FONT=FONT):
         FONT_THICKNESS: Integer. Thickness of the lines used for drawing text.
         FONT: Integer. Style of the text font.
     # Returns
-        Numpy array with shape ``[H, W, 3]``. Image with text.
+        Tuple with shape ((text_W, text_H), baseline)``. The width and height
+            of the text
     """
-    return cv2.getTextSize(text, FONT, scale, FONT_THICKNESS)
+    text_size = cv2.getTextSize(text, FONT, scale, FONT_THICKNESS)
+    return text_size
 
 
 def add_box_border(image, corner_A, corner_B, color, thickness):
@@ -49,9 +53,9 @@ def add_box_border(image, corner_A, corner_B, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    return cv2.rectangle(
-        image, tuple(corner_A), tuple(corner_B), tuple(color),
-        thickness)
+    image = cv2.rectangle(
+        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    return image
 
 
 def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
@@ -68,9 +72,9 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    return cv2.rectangle(
-        image, tuple(corner_A), tuple(corner_B), tuple(color),
-        thickness)
+    image = cv2.rectangle(
+        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    return image
 
 
 def make_box_transparent(raw_image, image, alpha=0.30):
@@ -84,4 +88,5 @@ def make_box_transparent(raw_image, image, alpha=0.30):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    return cv2.addWeighted(raw_image, 1-alpha, image, alpha, 0.0)
+    image = cv2.addWeighted(raw_image, 1-alpha, image, alpha, 0.0)
+    return image
