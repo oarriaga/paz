@@ -14,18 +14,18 @@ from tensorflow.keras.layers import Input, Add, Conv2D, Concatenate
 from tensorflow.keras.layers import UpSampling2D, MaxPooling2D
 from tensorflow.keras.models import Model
 
-from utils import log, get_resnet_features, build_rpn_model
+from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
 import numpy as np
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Layer, Input, Lambda
 from tensorflow.keras.models import Model
 
-from utils import generate_pyramid_anchors, norm_boxes_graph
-from utils import fpn_classifier_graph, compute_backbone_shapes
-from utils import build_fpn_mask_graph
-from layers import DetectionTargetLayer, ProposalLayer
-from layer_utils import slice_batch
-from loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
+from mask_rcnn.utils import generate_pyramid_anchors, norm_boxes_graph
+from mask_rcnn.utils import fpn_classifier_graph, compute_backbone_shapes
+from mask_rcnn.utils import build_fpn_mask_graph
+from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
+from mask_rcnn.layer_utils import slice_batch
+from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
     BBoxLoss,ClassLoss,MaskLoss
 tf.compat.v1.disable_eager_execution()
 
@@ -73,30 +73,29 @@ class MaskRCNN:
                                                                                   target_class_ids,
                                                                                   target_boxes, target_masks,
                                                                                   rpn_class_logits, rpn_bbox)
-        rpnclass_loss = ProposalClassLoss(config=config, name='rpn_class_loss') \
+        rpn_class_loss = ProposalClassLoss(config=config, name='rpn_class_loss')\
             (input_rpn_match, rpn_class_logits)
 
-        rpnbbox_loss = ProposalBBoxLoss(config=config, rpn_match=input_rpn_match, name='rpn_bbox_loss')\
+        rpn_bbox_loss= ProposalBBoxLoss(config=config, rpn_match=input_rpn_match, name='rpn_bbox_loss')\
             (input_rpn_bbox, rpn_bbox)
-
-        class_loss = ClassLoss(config=config, active_class_ids=active_class_ids, name='mrcnn_class_loss')\
+        mrcnn_class_loss = ClassLoss(config=config, active_class_ids=active_class_ids, name='mrcnn_class_loss')\
              (target_class_ids, mrcnn_class_logits)
-
-        bbox_loss = BBoxLoss(config=config, target_class_ids=target_class_ids, name='mrcnn_bbox_loss')\
+        mrcnn_bbox_loss = BBoxLoss(config=config, target_class_ids=target_class_ids, name='mrcnn_bbox_loss')\
              (target_boxes, mrcnn_bbox)
-
-        mask_loss = MaskLoss(config, target_class_ids=target_class_ids, name='mrcnn_mask_loss')\
+        mrcnn_mask_loss = MaskLoss(config, target_class_ids=target_class_ids, name='mrcnn_mask_loss')\
              (target_masks, mrcnn_mask)
 
         inputs = [image, input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, groundtruth_masks]
+
         if not config.USE_RPN_ROIS:
             inputs.append(input_rois)
+
         outputs = [rpn_class_logits, rpn_class, rpn_bbox,
                    mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
-                   rpn_rois, output_rois]
-        self.keras_model = Model(inputs, outputs, name='mask_rcnn')
+                   rpn_rois, output_rois,rpn_class_loss, rpn_bbox_loss, mrcnn_class_loss,
+                   mrcnn_bbox_loss, mrcnn_mask_loss]
 
-        return [rpnclass_loss, rpnbbox_loss, class_loss, bbox_loss, mask_loss]
+        self.keras_model = Model(inputs, outputs, name='mask_rcnn')
 
 
 def convolution_block(inputs, filters, stride, name, padd='valid'):
@@ -294,7 +293,16 @@ def get_anchors(config):
         config.BACKBONE_STRIDES,
         config.RPN_ANCHOR_STRIDE)
     anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
-    anchors = Layer(name='anchors')(anchors)
+    #anchors = Layer(name='anchors')(anchors)
+    class ConstLayer(tf.keras.layers.Layer):
+        def __init__(self, x, name=None, dtype=np.float32):
+            super(ConstLayer, self).__init__(name=name, dtype=dtype)
+            self.x = tf.Variable(x)
+
+        def call(self, input):
+            return self.x
+
+    anchors = ConstLayer(anchors, name="anchors")(input_image)
     return anchors
 
 
@@ -338,7 +346,7 @@ def get_rpn_rois(config, rpn_class, rpn_bbox):
     """
     anchors = get_anchors(config)
     return ProposalLayer(
-        proposal_count=config.POST_NMS_ROIS_INFERENCE,
+        proposal_count=config.POST_NMS_ROIS_TRAINING,
         nms_threshold=config.RPN_NMS_THRESHOLD, rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
         pre_nms_limit=config.PRE_NMS_LIMIT, images_per_gpu=config.IMAGES_PER_GPU,
         batch_size=config.BATCH_SIZE, name='ROI')([rpn_class, rpn_bbox, anchors])
@@ -374,10 +382,7 @@ def get_loss(config, mrcnn_class_logits, mrcnn_bbox, mrcnn_mask, target_class_id
              target_boxes, target_masks, rpn_class_logits, rpn_bbox):
     """Returns the total input loss of the network
     """
-    active_class_ids = tf.zeros([config.NUM_CLASSES], dtype=tf.int32)
-    input_image_meta = Input(shape=[config.IMAGE_META_SIZE],
-                                name="input_image_meta")
-
+    active_class_ids = tf.ones([config.NUM_CLASSES], dtype=tf.int32)
 
     RPN_output = [rpn_class_logits, rpn_bbox]
     target = [target_class_ids, target_boxes, target_masks]
@@ -392,25 +397,3 @@ def call_rois():
     def _call_rois(value):
         return value * 1
     return _call_rois
-
-
-def parse_image_meta_graph(meta):
-    """Parses a tensor that contains image attributes to its components.
-    See compose_image_meta() for more details.
-    meta: [batch, meta length] where meta length depends on NUM_CLASSES
-    Returns a dict of the parsed tensors.
-    """
-    image_id = meta[:, 0]
-    original_image_shape = meta[:, 1:4]
-    image_shape = meta[:, 4:7]
-    window = meta[:, 7:11]  # (y1, x1, y2, x2) window of image in in pixels
-    scale = meta[:, 11]
-    active_class_ids = meta[:, 12:]
-    return {
-        "image_id": image_id,
-        "original_image_shape": original_image_shape,
-        "image_shape": image_shape,
-        "window": window,
-        "scale": scale,
-        "active_class_ids": active_class_ids,
-    }

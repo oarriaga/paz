@@ -7,18 +7,18 @@ from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.models import Model
 
-from config import Config
-from pipeline import DetectionPipeline
+from mask_rcnn.config import Config
+from mask_rcnn.pipeline import DetectionPipeline
 from paz.models.detection.utils import create_prior_boxes
-from utils2 import DataGenerator
+from mask_rcnn.utils2 import DataGenerator
 
 from paz.datasets.shapes import Shapes
-from model import MaskRCNN, get_imagenet_weights
+from mask_rcnn.model import MaskRCNN, get_imagenet_weights
 import numpy as np
 import cv2
 
 from tensorflow.keras.layers import Layer, Input, Lambda
-from layers import DetectionTargetLayer, ProposalLayer
+from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
 
 
 class ShapesConfig(Config):
@@ -116,7 +116,6 @@ model.keras_model.compile(
             optimizer=optimizer,
             loss=[None] * len(model.keras_model.outputs))
 
-#print("model.keras_model.input",model.keras_model.summary())
 
 #Checkpoints
 model_path = os.path.join(args.save_path, 'shapes')

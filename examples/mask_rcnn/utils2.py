@@ -23,6 +23,7 @@ from tensorflow.keras.layers import BatchNormalization, Add
 from tensorflow.keras.models import Model
 
 from pipeline import TrainingPipeline
+import cv2
 
 def compute_iou(box, boxes, box_area, boxes_area):
     """Calculates IoU of the given box with the array of the given boxes.
@@ -62,7 +63,7 @@ def compute_overlaps(boxes_A, boxes_B):
     return overlaps
 
 
-def DataGenerator(dataset, config, shuffle=False, augmentation=False):
+def DataGenerator(dataset, config, shuffle=True, augmentation=False):
     """An iterable that returns images and corresponding target class ids,
         bounding box deltas, and masks. It inherits from keras.utils.Sequence to avoid data redundancy
         when multiprocessing=True.
@@ -93,6 +94,7 @@ def DataGenerator(dataset, config, shuffle=False, augmentation=False):
                                        backbone_shapes,
                                        config.BACKBONE_STRIDES,
                                        config.RPN_ANCHOR_STRIDE)
+    
     while True:
         try:
 
@@ -107,12 +109,13 @@ def DataGenerator(dataset, config, shuffle=False, augmentation=False):
             image, gt_class_ids, gt_boxes, gt_masks = \
                          load_image_gt(dataset, config, image_id,
                           augmentation=augmentation)
-            gt_class_ids = np.array(gt_class_ids)
+
             # Skip images that have no instances.
-            if not np.any(gt_class_ids > 0):
+            if not np.any(np.array(gt_class_ids) > 0):
                 continue
 
             # RPN Targets
+
             rpn_match, rpn_bbox = build_rpn_targets(anchors, gt_class_ids, gt_boxes, config)
             batch_size = config.BATCH_SIZE
 
@@ -120,15 +123,15 @@ def DataGenerator(dataset, config, shuffle=False, augmentation=False):
             if b == 0:
 
                 batch_rpn_match = np.zeros(
-                    (batch_size, anchors.shape[0], 1), dtype=rpn_match.dtype)
+                    [batch_size, anchors.shape[0], 1], dtype=rpn_match.dtype)
                 batch_rpn_bbox = np.zeros(
-                    (batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4), dtype=rpn_bbox.dtype)
+                    [batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4], dtype=rpn_bbox.dtype)
                 batch_images = np.zeros(
-                    (batch_size, image.shape[0], image.shape[1], image.shape[2]), dtype=np.float32)
+                    [batch_size, image.shape[0], image.shape[1], image.shape[2]], dtype=np.float32)
                 batch_gt_class_ids = np.zeros(
                     (batch_size, config.MAX_GT_INSTANCES), dtype=np.int32)
                 batch_gt_boxes = np.zeros(
-                    (batch_size, config.MAX_GT_INSTANCES, 4), dtype=np.int32)
+                    (batch_size, config.MAX_GT_INSTANCES, 4), dtype=np.float32)
                 batch_gt_masks = np.zeros(
                     (batch_size, gt_masks.shape[0], gt_masks.shape[1],
                      config.MAX_GT_INSTANCES), dtype=gt_masks.dtype)
@@ -233,6 +236,9 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
+
+    boxes = np.where(boxes < 0, 0, boxes)
+    #boxes=np.rint(boxes)
     return boxes
 
 
@@ -262,8 +268,18 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
     class_ids = data[image_id]['box_data'][:,-1]
 
     bounding_box = data[image_id]['box_data']
+    bounding_box = np.where(bounding_box <= 0, 0, bounding_box)
     num_classes = config.NUM_CLASSES
     image_size = config.IMAGE_SHAPE[:2]
+
+
+    image, window, scale, padding, crop = resize_image(
+        image,
+        min_dim=config.IMAGE_MIN_DIM,
+        min_scale=config.IMAGE_MIN_SCALE,
+        max_dim=config.IMAGE_MAX_DIM,
+        mode=config.IMAGE_RESIZE_MODE)
+    mask = resize_mask(mask, scale, padding, crop)
 
     if augmentation:
         augmentator = TrainingPipeline(bounding_box, num_classes=num_classes, size=image_size)
@@ -272,7 +288,19 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
         image= data['inputs']['image']
         bounding_box = data['labels']['boxes']
         mask = data['labels']['masks']
-    return image, class_ids, bounding_box[:,:4], mask
+
+    mask_inst = generate_masks(mask=mask, bounding_box=bounding_box, config=config)
+
+    _idx = np.sum(mask_inst, axis=(0, 1)) > 0
+    mask_inst = mask_inst[:, :, _idx]
+    class_ids = class_ids[_idx[1:]]
+
+    bbox = extract_bboxes(mask_inst)
+
+    if config.USE_MINI_MASK:
+        mask_inst= minimize_mask(bbox.astype(np.int32), mask_inst, config.MINI_MASK_SHAPE)
+
+    return image, np.array(class_ids).astype(np.int32), bbox[:,:4].astype(np.float32), mask_inst.astype(np.bool)
 
 
 def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config):
@@ -287,14 +315,13 @@ def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config):
                1 = positive anchor, -1 = negative anchor, 0 = neutral
     rpn_bbox: [N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas.
     """
-
     overlaps, no_crowd_bool = compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes)
 
     rpn_match, anchor_iou_argmax = compute_rpn_match(anchors, overlaps, no_crowd_bool, config)
 
     rpn_bbox = compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax)
 
-    return rpn_match, rpn_bbox
+    return rpn_match, rpn_bbox.astype(np.float32)
 
 
 def compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes):
@@ -317,6 +344,8 @@ def compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes):
         crowd_boxes = gt_boxes[crowd_ix]
         gt_class_ids = gt_class_ids[non_crowd_ix]
         gt_boxes = gt_boxes[non_crowd_ix]
+
+
         crowd_overlaps = compute_overlaps(anchors, crowd_boxes)
         crowd_iou_max = np.amax(crowd_overlaps, axis=1)
         no_crowd_bool = (crowd_iou_max < 0.001)
@@ -386,11 +415,10 @@ def compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax):
     for i, a in zip(ids, anchors[ids]):
 
         gt = gt_boxes[anchor_iou_argmax[i]]
-
         gt = box_to_center_format(gt)
         a = box_to_center_format(a)
 
-        rpn_bbox[ix] = normalize_log_refinement(a, gt)
+        rpn_bbox[ix] = normalize_log_refinement(a,gt)
         rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
         ix += 1
     return rpn_bbox
@@ -408,7 +436,7 @@ def box_to_center_format(box):
     W = box[3] - box[1]
     center_y = box[0] + 0.5 * H
     center_x = box[1] + 0.5 * W
-    return [center_x, center_y, W, H]
+    return [center_y, center_x, H, W]
 
 
 def normalize_log_refinement(box, ground_truth_box):
@@ -417,14 +445,229 @@ def normalize_log_refinement(box, ground_truth_box):
     # Return:
      rpn_bbox = [dy, dx, log(dh), log(dw)]
     """
-    ground_truth_box = box_to_center_format(ground_truth_box)
-    box = box_to_center_format(box)
-
     # Compute the bbox refinement that the RPN should predict.
+
     rpn_bbox = [
-        (ground_truth_box[1] - box[1]) / box[3],
-        (ground_truth_box[0] - box[0]) / box[2],
-        np.log(ground_truth_box[3] / box[3]),
-        np.log(ground_truth_box[2] / box[2]),
+        (ground_truth_box[0] - box[0]) / (box[2]),
+        (ground_truth_box[1] - box[1]) / (box[3]),
+        np.log(ground_truth_box[2] / (box[2])),
+        np.log(ground_truth_box[3] / (box[3]))
     ]
     return rpn_bbox
+
+
+def minimize_mask(bbox, mask, mini_shape):
+    """Resize masks to a smaller version to reduce memory load.
+    Mini-masks can be resized back to image scale using expand_masks()
+    See inspect_data.ipynb notebook for more details.
+    """
+    mini_mask = np.zeros(mini_shape + (mask.shape[-1],), dtype=bool)
+    for i in range(mask.shape[-1]):
+        # Pick slice and cast to bool in case load_mask() returned wrong dtype
+        m = mask[:, :, i].astype(bool)
+        y1, x1, y2, x2 = bbox[i,:4]
+        m = m[y1:y2, x1:x2]
+        if m.size == 0:
+            raise Exception("Invalid bounding box with area of zero")
+        # Resize with bilinear interpolation
+        m = resize(m, mini_shape)
+        mini_mask[:, :, i] = np.around(m).astype(bool)
+    return mini_mask
+
+
+def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
+           preserve_range=False, anti_aliasing=False, anti_aliasing_sigma=None):
+    """A wrapper for Scikit-Image resize().
+    Scikit-Image generates warnings on every call to resize() if it doesn't
+    receive the right parameters. The right parameters depend on the version
+    of skimage. This solves the problem by using different parameters per
+    version. And it provides a central place to control resizing defaults.
+    """
+    if LooseVersion(skimage.__version__) >= LooseVersion("0.14"):
+        # New in 0.14: anti_aliasing. Default it to False for backward
+        # compatibility with skimage 0.13.
+        return skimage.transform.resize(
+            image, output_shape,
+            order=order, mode=mode, cval=cval, clip=clip,
+            preserve_range=preserve_range, anti_aliasing=anti_aliasing,
+            anti_aliasing_sigma=anti_aliasing_sigma)
+    else:
+        return skimage.transform.resize(
+            image, output_shape,
+            order=order, mode=mode, cval=cval, clip=clip,
+            preserve_range=preserve_range)
+
+
+def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square"):
+    """Resizes an image keeping the aspect ratio unchanged.
+    min_dim: if provided, resizes the image such that it's smaller
+        dimension == min_dim
+    max_dim: if provided, ensures that the image longest side doesn't
+        exceed this value.
+    min_scale: if provided, ensure that the image is scaled up by at least
+        this percent even if min_dim doesn't require it.
+    mode: Resizing mode.
+        none: No resizing. Return the image unchanged.
+        square: Resize and pad with zeros to get a square image
+            of size [max_dim, max_dim].
+        pad64: Pads width and height with zeros to make them multiples of 64.
+               If min_dim or min_scale are provided, it scales the image up
+               before padding. max_dim is ignored in this mode.
+               The multiple of 64 is needed to ensure smooth scaling of feature
+               maps up and down the 6 levels of the FPN pyramid (2**6=64).
+        crop: Picks random crops from the image. First, scales the image based
+              on min_dim and min_scale, then picks a random crop of
+              size min_dim x min_dim. Can be used in training only.
+              max_dim is not used in this mode.
+    Returns:
+    image: the resized image
+    window: (y1, x1, y2, x2). If max_dim is provided, padding might
+        be inserted in the returned image. If so, this window is the
+        coordinates of the image part of the full image (excluding
+        the padding). The x2, y2 pixels are not included.
+    scale: The scale factor used to resize the image
+    padding: Padding added to the image [(top, bottom), (left, right), (0, 0)]
+    """
+    # Keep track of image dtype and return results in the same dtype
+    image_dtype = image.dtype
+    # Default window (y1, x1, y2, x2) and default scale == 1.
+    h, w = image.shape[:2]
+    window = (0, 0, h, w)
+    scale = 1
+    padding = [(0, 0), (0, 0), (0, 0)]
+    crop = None
+
+    if mode == "none":
+        return image, window, scale, padding, crop
+
+    # Scale?
+    if min_dim:
+        # Scale up but not down
+        scale = max(1, min_dim / min(h, w))
+    if min_scale and scale < min_scale:
+        scale = min_scale
+
+    # Does it exceed max dim?
+    if max_dim and mode == "square":
+        image_max = max(h, w)
+        if round(image_max * scale) > max_dim:
+            scale = max_dim / image_max
+
+    # Resize image using bilinear interpolation
+    if scale != 1:
+        image = resize(image, (round(h * scale), round(w * scale)),
+                       preserve_range=True)
+
+    # Need padding or cropping?
+    if mode == "square":
+        # Get new height and width
+        h, w = image.shape[:2]
+        top_pad = (max_dim - h) // 2
+        bottom_pad = max_dim - h - top_pad
+        left_pad = (max_dim - w) // 2
+        right_pad = max_dim - w - left_pad
+        padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
+        image = np.pad(image, padding, mode='constant', constant_values=0)
+        window = (top_pad, left_pad, h + top_pad, w + left_pad)
+    elif mode == "pad64":
+        h, w = image.shape[:2]
+        # Both sides must be divisible by 64
+        assert min_dim % 64 == 0, "Minimum dimension must be a multiple of 64"
+        # Height
+        if h % 64 > 0:
+            max_h = h - (h % 64) + 64
+            top_pad = (max_h - h) // 2
+            bottom_pad = max_h - h - top_pad
+        else:
+            top_pad = bottom_pad = 0
+        # Width
+        if w % 64 > 0:
+            max_w = w - (w % 64) + 64
+            left_pad = (max_w - w) // 2
+            right_pad = max_w - w - left_pad
+        else:
+            left_pad = right_pad = 0
+        padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
+        image = np.pad(image, padding, mode='constant', constant_values=0)
+        window = (top_pad, left_pad, h + top_pad, w + left_pad)
+    elif mode == "crop":
+        # Pick a random crop
+        h, w = image.shape[:2]
+        y = random.randint(0, (h - min_dim))
+        x = random.randint(0, (w - min_dim))
+        crop = (y, x, min_dim, min_dim)
+        image = image[y:y + min_dim, x:x + min_dim]
+        window = (0, 0, min_dim, min_dim)
+    else:
+        raise Exception("Mode {} not supported".format(mode))
+    return image.astype(np.uint8), window, scale, padding, crop
+
+
+def resize_mask(mask, scale, padding, crop=None):
+    """Resizes a mask using the given scale and padding.
+    Typically, you get the scale and padding from resize_image() to
+    ensure both, the image and the mask, are resized consistently.
+    scale: mask scaling factor
+    padding: Padding to add to the mask in the form
+            [(top, bottom), (left, right), (0, 0)]
+    """
+    # Suppress warning from scipy 0.13.0, the output shape of zoom() is
+    # calculated with round() instead of int()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mask = scipy.ndimage.zoom(mask, zoom=[scale, scale, 1], order=0)
+    if crop is not None:
+        y, x, h, w = crop
+        mask = mask[y:y + h, x:x + w]
+    else:
+        mask = np.pad(mask, padding, mode='constant', constant_values=0)
+    return mask
+
+
+def extract_bboxes(mask):
+    """Compute bounding boxes from masks.
+    mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
+    Returns: bbox array [num_instances, (y1, x1, y2, x2)].
+    """
+    boxes = np.zeros([mask.shape[-1], 4], dtype=np.int32)
+    for i in range(mask.shape[-1]):
+        m = mask[:, :, i]
+        # Bounding box.
+        horizontal_indicies = np.where(np.any(m, axis=0))[0]
+        vertical_indicies = np.where(np.any(m, axis=1))[0]
+        if horizontal_indicies.shape[0]:
+            x1, x2 = horizontal_indicies[[0, -1]]
+            y1, y2 = vertical_indicies[[0, -1]]
+            # x2 and y2 should not be part of the box. Increment by 1.
+            x2 += 1
+            y2 += 1
+        else:
+            # No mask for this instance. Might happen due to
+            # resizing or cropping. Set bbox to zeros
+            x1, x2, y1, y2 = 0, 0, 0, 0
+        boxes[i] = np.array([y1, x1, y2, x2])
+    return boxes.astype(np.int32)
+
+
+def generate_masks(mask, bounding_box, config):
+    """Compute instance masks from masks and bounding box.
+        mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
+        Returns: modified instance masks .
+        """
+    mask_inst = np.zeros([mask.shape[0], mask.shape[1], len(class_ids)], dtype=np.uint8)
+    for count, i in enumerate(class_ids):
+        mask_box = bounding_box[count]
+        mask1 = mask[:, :, i]
+        mask_bg = np.zeros(mask1.shape)
+        x1, y1, x2, y2 = mask_box[:4]
+        mask_bg[y1:y2, x1:x2] = 1
+        mask_inst[:, :, count] = np.logical_and(mask_bg, mask1).astype(np.uint8)
+
+    for i in range(mask_inst.shape[-1]):
+        if i != 0:
+            occulusions = np.logical_and(mask_inst[:, :, i], mask_inst[:, :, i - 1])
+            mask_inst[:, :, i] = np.logical_xor(mask_inst[:, :, i], occulusions).astype(np.uint8)
+
+    mask_inst = np.dstack((mask[:, :, 0], mask_inst))
+
+    return mask_inst
