@@ -37,25 +37,63 @@ class ScaledResize(Processor):
         self.image_size = image_size
         super(ScaledResize, self).__init__()
 
-    def call(self, image):
-        """
+    def compute_image_scale(self, image):
+        """Computes the scale to resize the image.
         # Arguments
             image: Numpy array, raw input image.
+
+        # Returns
+            Tuple: Containing width, height and image_scale.
         """
-        crop_offset_y = np.array(0)
-        crop_offset_x = np.array(0)
         height = np.array(image.shape[0]).astype('float32')
         width = np.array(image.shape[1]).astype('float32')
         image_scale_y = np.array(self.image_size).astype('float32') / height
         image_scale_x = np.array(self.image_size).astype('float32') / width
         image_scale = np.minimum(image_scale_x, image_scale_y)
+        return width, height, image_scale
+
+    def scale_image(self, image, width, height, image_scale):
+        """Scales the image using the computed scale.
+        # Arguments
+            image: Numpy array, raw input image.
+            width: Numpy array, width of the raw image.
+            height: Numpy array, height of the raw image.
+            image_scale: Numpy array, scale to resize raw image.
+
+        # Returns
+            scaled_image: Numpy array, scaled input image.
+        """
         scaled_height = (height * image_scale).astype('int32')
         scaled_width = (width * image_scale).astype('int32')
         scaled_image = resize_image(image, (scaled_width, scaled_height))
-        scaled_image = scaled_image[
-                       crop_offset_y: crop_offset_y + self.image_size,
-                       crop_offset_x: crop_offset_x + self.image_size,
-                       :]
+        return scaled_image
+
+    def crop_image(self, scaled_image, crop_offset_x, crop_offset_y):
+        """Crops a given image.
+        # Arguments
+            scaled_image: Numpy array, input image.
+            crop_offset_x: Numpy array, specifying crop offset in x-direction.
+            crop_offset_y: Numpy array, specifying crop offset in y-direction.
+
+        # Returns
+            cropped_image: Numpy array, cropped input image.
+        """
+        cropped_image = scaled_image[
+                        crop_offset_y: crop_offset_y + self.image_size,
+                        crop_offset_x: crop_offset_x + self.image_size,
+                        :]
+        return cropped_image
+
+    def compose_output(self, image, scaled_image, image_scale):
+        """Composes the output image and image scale.
+        # Arguments
+            image: Numpy array, raw input image.
+            scaled_image: Numpy array, scaled input image.
+            image_scale: Numpy array, scale to resize raw image.
+
+        # Returns
+            Tuple: Containing output images and image scale.
+        """
         output_images = np.zeros((self.image_size,
                                   self.image_size,
                                   image.shape[2]))
@@ -64,6 +102,23 @@ class ScaledResize(Processor):
                       :scaled_image.shape[2]] = scaled_image
         image_scale = 1 / image_scale
         output_images = output_images[np.newaxis]
+        return output_images, image_scale
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Numpy array, raw input image.
+
+        # Returns:
+            Tuple: Containing the output image and image scale.
+        """
+        width, height, image_scale = self.compute_image_scale(image)
+        scaled_image = self.scale_image(image, width, height, image_scale)
+        crop_offset_x, crop_offset_y = np.array(0), np.array(0)
+        scaled_image = self.crop_image(
+            scaled_image, crop_offset_x, crop_offset_y)
+        output_images, image_scale = self.compose_output(
+            self, image, scaled_image, image_scale)
         return output_images, image_scale
 
 
