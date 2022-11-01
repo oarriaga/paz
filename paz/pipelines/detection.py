@@ -1,5 +1,7 @@
 import numpy as np
 
+from paz.processors.keypoints import RecursiveRefiner, relative_to_absolute
+
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
 from ..models import SSD512, SSD300, HaarCascadeDetector
@@ -9,9 +11,7 @@ from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
-from .detection import PaperDetection
-from .detection import PaperRefiner
-
+from ..models import PaperDetection, PaperRefiner
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -20,6 +20,7 @@ class AugmentBoxes(SequentialProcessor):
     # Arguments
         mean: List of three elements used to fill empty image spaces.
     """
+
     def __init__(self, mean=pr.BGR_IMAGENET_MEAN):
         super(AugmentBoxes, self).__init__()
         self.add(pr.ToImageBoxCoordinates())
@@ -40,6 +41,7 @@ class PreprocessBoxes(SequentialProcessor):
         variances: List of two floats indicating variances to be encoded
             for encoding bounding boxes.
     """
+
     def __init__(self, num_classes, prior_boxes, IOU, variances):
         super(PreprocessBoxes, self).__init__()
         self.add(pr.MatchBoxes(prior_boxes, IOU),)
@@ -63,6 +65,7 @@ class AugmentDetection(SequentialProcessor):
         variances: List of two floats indicating variances to be encoded
             for encoding bounding boxes.
     """
+
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
                  variances=[0.1, 0.1, 0.2, 0.2]):
@@ -98,6 +101,7 @@ class PostprocessBoxes2D(SequentialProcessor):
         valid_names: List of strings containing class names to keep.
         offsets: List of length two containing floats e.g. (x_scale, y_scale)
     """
+
     def __init__(self, offsets, valid_names=None):
         super(PostprocessBoxes2D, self).__init__()
         if valid_names is not None:
@@ -117,6 +121,7 @@ class DetectSingleShot(Processor):
         mean: List of three elements indicating the per channel mean.
         draw: Boolean. If ``True`` prediction are drawn in the returned image.
     """
+
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
                  draw=True):
@@ -180,6 +185,7 @@ class SSD512COCO(DetectSingleShot):
         - [SSD: Single Shot MultiBox
             Detector](https://arxiv.org/abs/1512.02325)
     """
+
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD512()
         names = get_class_names('COCO')
@@ -211,6 +217,7 @@ class SSD512YCBVideo(DetectSingleShot):
         The corresponding values of these keys contain the image with the drawn
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
     """
+
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('YCBVideo')
         model = SSD512(head_weights='YCBVideo', num_classes=len(names))
@@ -246,6 +253,7 @@ class SSD300VOC(DetectSingleShot):
         - [SSD: Single Shot MultiBox
             Detector](https://arxiv.org/abs/1512.02325)
     """
+
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD300()
         names = get_class_names('VOC')
@@ -277,6 +285,7 @@ class SSD300FAT(DetectSingleShot):
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
 
     """
+
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD300(22, 'FAT', 'FAT')
         names = get_class_names('FAT')
@@ -296,6 +305,7 @@ class DetectHaarCascade(Processor):
     # Returns
         A function for predicting bounding box detections.
     """
+
     def __init__(self, detector, class_names=None, colors=None, draw=True):
         super(DetectHaarCascade, self).__init__()
         self.detector = detector
@@ -340,6 +350,7 @@ class HaarCascadeFrontalFace(DetectHaarCascade):
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
 
     """
+
     def __init__(self, class_name='Face', color=[0, 255, 0], draw=True):
         self.model = HaarCascadeDetector('frontalface_default', class_arg=0)
         super(HaarCascadeFrontalFace, self).__init__(
@@ -375,6 +386,7 @@ class DetectMiniXceptionFER(Processor):
        - [Real-time Convolutional Neural Networks for Emotion and
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
+
     def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
         super(DetectMiniXceptionFER, self).__init__()
         self.offsets = offsets
@@ -475,6 +487,7 @@ class DetectFaceKeypointNet2D32(DetectKeypoints2D):
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
 
     """
+
     def __init__(self, offsets=[0, 0], radius=3):
         detect = HaarCascadeFrontalFace(draw=False)
         estimate_keypoints = FaceKeypointNet2D32(draw=False)
@@ -509,6 +522,7 @@ class SSD512HandDetection(DetectSingleShot):
         - [SSD: Single Shot MultiBox
             Detector](https://arxiv.org/abs/1512.02325)
     """
+
     def __init__(self, score_thresh=0.40, nms_thresh=0.45, draw=True):
         class_names = ['background', 'hand']
         num_classes = len(class_names)
@@ -542,6 +556,7 @@ class SSD512MinimalHandPose(DetectMinimalHand):
         The corresponding values of these keys contain the image with the drawn
         inferences.
     """
+
     def __init__(self, right_hand=False, offsets=[0.25, 0.25]):
         detector = SSD512HandDetection()
         keypoint_estimator = MinimalHandPoseEstimation(right_hand)
@@ -549,6 +564,8 @@ class SSD512MinimalHandPose(DetectMinimalHand):
             detector, keypoint_estimator, offsets)
 
 # ADR
+
+
 class DetectPaper(Processor):
     """Paper detection pipeline.
 
@@ -568,17 +585,34 @@ class DetectPaper(Processor):
     # References
        - [PaperDetector](https://gitlab.com/robo-eyes/paperdetector)
     """
+
     def __init__(self, name=None):
         super().__init__(name)
 
         # Detection
         self.paper_detector = PaperDetection()
         self.paper_refiner = PaperRefiner()
+        self.recursive_refiner = RecursiveRefiner(model=self.paper_refiner)
 
         # Preprocessing
-        preprocessing = SequentialProcessor(
-            [pr.ResizeImage(self.paper_detector.input_shape[1:3])
-            ]
-        )
+
+        self.resize = pr.ResizeImageWithPadding(
+            self.paper_detector.input_shape[1:3])
 
         # Postprocessing
+        # translate to pixelvalue
+        # apply recursiveRefiner
+        postprocessing = SequentialProcessor([])
+
+    def call(self, image):
+        resized_image = self.resize(image)
+        initial_guess = self.paper_detector.predict(
+            np.array([resized_image, ]))[0]
+        # TODO: this can be paralleized
+        keypoints = []
+        for keypoint in initial_guess.reshape(4, 2):
+            keypoint = relative_to_absolute(
+                keypoint, image.shape[0], image.shape[1])
+            keypoints.append(self.recursive_refiner(
+                keypoint_position=keypoint, image=image))
+        return np.array(keypoints)
