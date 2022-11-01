@@ -107,7 +107,7 @@ def crop_image(image, crop_box):
 
     # Arguments
         image: Numpy array.
-        crop_box: List of four ints.
+        crop_box: List of four ints. (x_min, y_min, x_max, y_max)
 
     # Returns
         Numpy array.

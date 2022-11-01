@@ -96,6 +96,7 @@ from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
 from .keypoints import ComputeOrientationVector
+from .keypoints import RecursiveRefiner
 
 from .standard import ControlMap
 from .standard import ExpandDomain
