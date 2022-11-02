@@ -3,9 +3,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
 
 from anchors import build_prior_boxes
-from efficientdet_blocks import (Efficientnet_to_BiFPN,
-                                 BiFPN_to_BiFPN, BoxNet,
-                                 ClassNet)
+from efficientdet_blocks import (BiFPN_to_BiFPN, BoxNet, ClassNet,
+                                 Efficientnet_to_BiFPN)
 from efficientnet_model import EfficientNet
 from utils import create_multibox_head
 
