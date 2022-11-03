@@ -23,26 +23,26 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         https://github.com/google/automl/tree/master/efficientdet)
 
     # Arguments
-        image_size: Int, size of the input image.
         num_classes: Int, specifying the number of class in the
-        output.
+            output.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, size of the input image.
         FPN_num_filters: Int, FPN filter output size.
         FPN_cell_repeats: Int, Number of consecutive FPN block.
         box_class_repeats: Int, Number of consective regression
-        and classification blocks.
+            and classification blocks.
         anchor_scale: Int, specifying the number of anchor
-        scales.
+            scales.
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
-        fusion: A string specifying the feature
-        fusion weighting method in FPN.
+        fusion: A string specifying the feature fusion weighting
+            method in FPN.
         return_base: Bool, indicating the usage of features only
         from EfficientDet
         model_name: A string of EfficientDet model name.
         backbone: A string of EfficientNet backbone name used
         in EfficientDet.
-        training: Bool, whether EfficientDet architecture is trained.
-        layer.
         num_scales: Int, specifying the number of scales in the
         anchor boxes.
         aspect_ratios: List, specifying the aspect ratio of the
@@ -50,10 +50,8 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
 
     # Returns
         model: EfficientDet model specified in model_name with the following:
-        class_outputs: Tensor, Logits for all classes corresponding to
-        the features associated with the box coordinates.
-        box_outputs: Tensor,  Box coordinate offsets for the
-        corresponding prior boxes.
+            class_outputs: Tensor, Logits for all classes corresponding to
+            the features associated with the box coordinates.
     """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
