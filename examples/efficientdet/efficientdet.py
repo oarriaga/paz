@@ -9,20 +9,24 @@ def EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
     values passed as argument.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet model
@@ -44,20 +48,24 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D0 model
@@ -79,20 +87,24 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D1 model
@@ -114,20 +126,24 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D2 model
@@ -149,20 +165,24 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D3 model
@@ -184,20 +204,24 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D4 model
@@ -219,20 +243,24 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D5 model
@@ -254,20 +282,24 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D6 model
@@ -289,19 +321,24 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
-        anchor_scale: Int, specifying the number of anchor scales
+        anchor_scale: Int, specifying the number of anchor
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D7 model
@@ -323,20 +360,24 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
     setting provided in the official implementation.
 
     # Arguments
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        image_size: Int, size of the input image
+        num_classes: Int, specifying the number of object classes.
+        base_weights: String, specifying the name of base weights.
+        head_weights: String, specifying the name of head weights.
+        input_shape: Tuple, specifying size of the input image.
         FPN_num_filters: Int, FPN filter output size
         FPN_cell_repeats: Int, Number of consecutive FPN block
         box_class_repeats: Int, Number of consective regression
         and classification blocks
         anchor_scale: Int, specifying the number of anchor
-        scales
+            scales
         min_level: Int, minimum level for features.
         max_level: Int, maximum level for features.
         fusion: A string specifying the feature
-        fusion weighting method in FPN.
+            fusion weighting method in FPN.
+        return_base: Boolean, specifying whether to return base or not.
+        model_name: A string of EfficientDet model name.
+        backbone: A string of EfficientNet backbone name used
+        in EfficientDet.
 
     # Returns
         model: EfficientDet-D7x model
