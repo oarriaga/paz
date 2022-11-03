@@ -49,9 +49,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         survival_rate: Float, specifying the survival probability
 
     # Returns
-        model: EfficientDet model specified in model_name with the following:
-            class_outputs: Tensor, Logits for all classes corresponding to
-            the features associated with the box coordinates.
+        model: EfficientDet model.
     """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
