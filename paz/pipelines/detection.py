@@ -11,7 +11,7 @@ from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
-from ..models import PaperDetection, PaperRefiner
+from ..models import PaperDetection, CornerRefiner
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -591,7 +591,7 @@ class DetectPaper(Processor):
 
         # Detection
         self.paper_detector = PaperDetection()
-        self.paper_refiner = PaperRefiner()
+        self.paper_refiner = CornerRefiner()
         self.recursive_refiner = RecursiveRefiner(model=self.paper_refiner)
 
         # Preprocessing
@@ -607,12 +607,11 @@ class DetectPaper(Processor):
     def call(self, image):
         resized_image = self.resize(image)
         initial_guess = self.paper_detector.predict(
-            np.array([resized_image, ]))[0]
+            np.array([resized_image, ]))[0].reshape(4, 2)
+        initial_guess = relative_to_absolute(initial_guess, image.shape[1], image.shape[0])
         # TODO: this can be paralleized
         keypoints = []
-        for keypoint in initial_guess.reshape(4, 2):
-            keypoint = relative_to_absolute(
-                keypoint, image.shape[0], image.shape[1])
+        for keypoint in initial_guess:
             keypoints.append(self.recursive_refiner(
                 keypoint_position=keypoint, image=image))
         return np.array(keypoints)

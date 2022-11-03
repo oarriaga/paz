@@ -3,8 +3,7 @@
 from warnings import warn
 
 import numpy as np
-from paz.backend.image.image import crop_image
-from paz.backend.image.opencv_image import resize_image, write_image
+from paz.backend.image import crop_image, resize_image, write_image
 
 from ..abstract import Processor
 from ..backend.keypoints import translate_keypoints
@@ -14,6 +13,7 @@ from ..backend.keypoints import denormalize_keypoints2D
 from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
+from ..backend.keypoints import relative_to_absolute
 from ..backend.image import get_scaling_factor
 
 
@@ -236,12 +236,12 @@ class ComputeOrientationVector(Processor):
         return orientation
 
 
-def relative_to_absolute(relative_position, width, height):
-    """
-    Calculates absolute pixel position in an image from the relative position.
-    """
-    # TODO: rounding can cause box to be not squared. make sure that this does not happen
-    return np.array([relative_position[0]*width, relative_position[1]*height]).astype(int)
+# def relative_to_absolute(relative_position, width, height):
+#     """
+#     Calculates absolute pixel position in an image from the relative position.
+#     """
+#     # TODO: rounding can cause box to be not squared. make sure that this does not happen
+#     return np.array([relative_position[0]*width, relative_position[1]*height]).astype(int)
 
 
 class RecursiveRefiner(Processor):
@@ -292,10 +292,9 @@ class RecursiveRefiner(Processor):
         # print(f'{crop_box=}')
         cropped_image = crop_image(image, crop_box)
         resized_image = resize_image(cropped_image, self.input_size)
-        keypoint_in_cropped = self.model.predict(np.array([resized_image, ]))[
-            0]  # just one prediction, no batch
+        keypoint_in_cropped = self.model.predict(np.array([resized_image, ]))
         keypoint_in_cropped = translation(
-            keypoint_in_cropped, cropped_image.shape[0], cropped_image.shape[1])
+            keypoint_in_cropped, cropped_image.shape[0], cropped_image.shape[1])[0]#just one keypoint
         # # TODO: remove
         # write_image(
         #     filepath=f'refined_{time.time()}.jpg', image=cropped_image)

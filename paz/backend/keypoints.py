@@ -104,6 +104,26 @@ def denormalize_keypoints2D(points2D, height, width):
     points2D = points2D * image_shape  # [1 , 0], [0 , 1] -> [W, 0], [0, H]
     return points2D
 
+def relative_to_absolute(relative_positions, width, height):
+    """
+    Calculates absolute pixel position *(U,V)* in an image from the relative position.
+
+    # Arguments
+        points2D: Numpy array of shape (num_keypoints, 2).
+        width: Int. Width of the image
+        height: Int. Height of the image
+        
+    # Returns
+        Numpy array of shape (num_keypoints, 2).
+    """
+    x = relative_positions[:, 0]
+    y = relative_positions[:, 1]
+    u = x * width
+    v = y * height
+    u_v = np.empty(shape=relative_positions.shape)
+    u_v[:, 0] = u
+    u_v[:, 1] = v
+    return u_v.astype(int)
 
 """
 def denormalize_keypoints(keypoints, height, width):
