@@ -212,12 +212,12 @@ def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
     """Generates anchor box in centre form for every feature level.
 
     # Arguments:
-        stride_y: Numpy array representing the stride value in y direction.
-        stride_x: Numpy array representing the stride value in x direction.
-        octave_scale: Numpy array representing the octave scale of the
+        strides_y: Numpy array representing the stride value in y direction.
+        strides_x: Numpy array representing the stride value in x direction.
+        octave_scales: Numpy array representing the octave scale of the
             anchor box.
-        aspect: Numpy array representing the aspect value.
-        anchor_scales: Numpy array representing the scale of anchor box.
+        aspects: Numpy array representing the aspect value.
+        anchor_scaless: Numpy array representing the scale of anchor box.
         image_size: Tuple, representing the size of input image.
         scale_aspect_ratio_combinations: Int, representing the number of
             combinations of scale and aspect ratio.

@@ -50,12 +50,12 @@ def get_class_name_efficientdet(dataset_name):
                 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 
 
-class CustomDropout(keras.layers.Layer):
+class GetDropConnect(keras.layers.Layer):
     """Implements dropout for layers of the model.
 
     """
     def __init__(self, survival_rate, **kwargs):
-        super(CustomDropout, self).__init__(**kwargs)
+        super(GetDropConnect, self).__init__(**kwargs)
         self.survival_rate = survival_rate
 
     def call(self, features, training=None):
@@ -76,15 +76,14 @@ def efficientdet_preprocess(image, image_size):
 
     # Arguments
         image: Tensor, raw input image to be preprocessed
-        of shape [bs, h, w, c]
+            of shape [bs, h, w, c]
         image_size: Tensor, size to resize the raw image
-        of shape [bs, new_h, new_w, c]
+            of shape [bs, new_h, new_w, c]
 
     # Returns
         image: Numpy array, resized and preprocessed image
         image_scale: Numpy array, scale to reconstruct each of
-        the raw images to original size from the resized
-        image.
+            the raw images to original size from the resized image.
     """
 
     preprocessing = SequentialProcessor([
