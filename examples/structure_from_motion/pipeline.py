@@ -1,5 +1,6 @@
 from paz import processors as pr
-from processors import DetecetSiftFeatures, FindHomographyRANSAC
+from processors import DetecetSiftFeatures, FindHomographyRANSAC, RecoverPose
+from processors import FindFundamentalMatrix, TriangulatePoints
 from processors import BruteForceMatcher
 import cv2
 import numpy as np
@@ -52,10 +53,45 @@ class ComputeHomography(pr.Processor):
 
     def call(self, images):
         image1, image2 = images
-        H, W = image2.shape[:2]
+        H_, W_ = image2.shape[:2]
         matches = self.feature_detector(images)
         points1, points2 = matches['match_points']
-        homography, mask = self.compute_homography(points1, points2)
-        image_ = cv2.warpPerspective(image2, homography, (W, H))
+        H, mask = self.compute_homography(points1, points2)
+        image_ = cv2.warpPerspective(image2, H, (W_, H_))
         image = np.concatenate((image1, image_), axis=1)
-        return self.warp(image, homography)
+        print(H)
+        return self.warp(image, H)
+
+
+class StructureFromMotion(pr.Processor):
+    def __init__(self, camera_intrinsics, draw=True):
+        super(StructureFromMotion, self).__init__()
+        self.K = camera_intrinsics
+        self.draw = draw
+        self.feature_detector = FeatureDetector()
+        self.compute_fundamental_matrix = FindFundamentalMatrix()
+        self.recover_pose = RecoverPose(self.K)
+        self.triangulate_points = TriangulatePoints()
+        self.warp = pr.WrapOutput(['points3D'])
+        self.projection_matrix = np.array([[1, 0, 0, 0],
+                                           [0, 1, 0, 0],
+                                           [0, 0, 1, 0]])
+
+    def call(self, images):
+        matches = self.feature_detector(images)
+        points1, points2 = matches['match_points']
+        F, mask = self.compute_fundamental_matrix(points1, points2)
+        E = self.K.T @ (F @ self.K)
+        points, R, t, mask = self.recover_pose(E, points1, points2)
+        # print(points, R, t)
+        # print(E)
+        P1 = self.K @ self.projection_matrix
+        P2 = R @ self.projection_matrix
+        P2[:3, 3] = t.ravel()
+        P2 = self.K @ P2
+        print(P2)
+
+        points3D = self.triangulate_points(P1, P2, points1.T, points2.T)
+        print(points3D)
+
+        return self.warp(points3D)
