@@ -1,7 +1,6 @@
 """Predicting 3d poses from 2d joints"""
 import os
 import pickle
-import time
 import numpy as np
 from scipy.optimize import *
 import matplotlib.pyplot as plt
@@ -13,6 +12,25 @@ from linear_model import mse_loss
 import data_utils
 import viz
 import helper_functions
+
+from tensorflow.keras.utils import get_file
+from paz.applications import HigherHRNetHumanPose2D
+from paz.backend.image import load_image, show_image
+from paz.backend.camera import Camera
+
+def joints_2d_from_image():
+    # URL = ('https://github.com/oarriaga/altamira-data/releases/download'
+    #        '/v0.10/single_person_test_pose.png')
+    # filename = os.path.basename(URL)
+    # fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+    path = '/home/dfki.uni-bremen.de/kshinde/Downloads/test_image.jpg'
+    image = load_image(path)
+    H, W = image.shape[:2]
+    detect = HigherHRNetHumanPose2D()
+    inferences = detect(image)
+    # image = inferences['image']
+    # show_image(image)
+    return inferences['keypoints'], H, W
 
 
 def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
@@ -30,6 +48,7 @@ def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
     # add root translation to poses3d
     initial_root_translation = np.reshape(initial_root_translation, (-1, 3))
     new_poses3d = poses3d + np.tile(initial_root_translation, (1, 16))
+
     # Project all poses translation 3D to 2D
     ppts = helper_functions.proj_3d_to_2d(new_poses3d.reshape((-1, 3)), f, img_center)
     ppts = ppts.reshape((Ki.shape[0],-1,2))
@@ -38,7 +57,6 @@ def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
 
     for i in range(Ki.shape[0]):
         person_sum += np.sum(np.linalg.norm(Ki[i] - ppts[i], axis=1))
-    # print(f"sum: {person_sum}")
 
     return person_sum
 
@@ -46,19 +64,14 @@ def optimize_trans(initial_root_translation, poses3d, Ki, f, img_center):
 def predict_3d_poses():
     """Predicts 3d human pose for each person from the multi-human 2d poses obtained from HigherHRNet"""
 
-    start_time = time.time()
+    poses_2d, img_h, img_w = joints_2d_from_image()
+
     # Load 2d and 3d normalization stats for H36M dataset
     data_mean_2d, data_std_2d, dim_to_use_2d, dim_to_ignore_2d, data_mean_3d, \
     data_std_3d, dim_to_use_3d, dim_to_ignore_3d = data_utils.load_params()
     print("\n==> done loading normalization stats.")
 
-    path_prefix = os.path.dirname(os.path.abspath(__file__))
-    path_2d = os.path.join(path_prefix, 'detections/2d/p0.txt')
-
-    # Load 2d poses from text file
-    with open(path_2d, 'rb') as fp:
-        poses_2d = pickle.load(fp)
-    poses_2d = data_utils.preprocess_2d_data(poses_2d)
+    poses_2d = data_utils.load_joints_2d(poses_2d)
     print(f"poses_2d : {poses_2d} {poses_2d.shape}")
 
     # Normalize 2d poses
@@ -67,7 +80,7 @@ def predict_3d_poses():
     enc_in = np.divide((poses_2d - mu), stddev)
 
     # load the model
-    model_path = '/home/kashmira/SCRATCH/3d-pose-baseline/saved_model/baseline_model'
+    model_path = '/home/dfki.uni-bremen.de/kshinde/Projects/models/baseline_model'
     # latter part added because custom loss is defined, is a TF bug
     model = tf.keras.models.load_model(model_path, custom_objects={'mse_loss': mse_loss})
     print("\n==> Model loaded!")
@@ -77,36 +90,36 @@ def predict_3d_poses():
 
     # denormalize
     poses3d = data_utils.unNormalizeData(poses3d, data_mean_3d, data_std_3d, dim_to_ignore_3d)
-    step_time = (time.time() - start_time)
-    print(f"\nPred done in {step_time}s")
     poses3d_copy = poses3d.copy()
 
-    return poses_2d, poses3d, poses3d_copy, start_time
+    return poses_2d, poses3d, poses3d_copy, img_h, img_w
 
 
 def translate_root():
     """Finds the optimal translation of root joint for each person to give a good enough estimate
     of the global human pose in camera coordinates"""
 
-    poses_2d, poses3d, poses3d_copy, start_time = predict_3d_poses()
-    start_time_1 = time.time()
+    poses_2d, poses3d, poses3d_copy, img_h, img_w = predict_3d_poses()
 
-    p3d_17 = data_utils.filter_moving_joints_3d(poses3d)
+    p3d_16 = data_utils.filter_moving_joints_3d(poses3d)
     Ki = poses_2d.astype(np.float32) # 2d poses
 
     # get human root joint in 2d
     root_2d = poses_2d[:, :2]
 
-    img_center = np.array([[636.695, 368.203]])  # change as per camera intrinsics
-    f = 699.195                                  # change as per camera intrinsics
+    # FIXME: Get the intrinsics (image center and focal length) information from the image
+    cam = Camera()
+    cam.intrinsics_from_HFOV(HFOV=70, image_shape=[img_h, img_w])
+    f = cam.intrinsics[0, 0]
+    img_center = np.array([[cam.intrinsics[0, 2], cam.intrinsics[1, 2]]])
 
     s2d = helper_functions.s2d(poses_2d)
-    s3d = helper_functions.s3d(p3d_17)
+    s3d = helper_functions.s3d(p3d_16)
 
     initial_root_translation = helper_functions.init_translation(f, root_2d, img_center, s2d, s3d)
     initial_root_translation = initial_root_translation.flatten()
 
-    root_translation = least_squares(optimize_trans, initial_root_translation, verbose=0, args=(p3d_17, Ki, f, img_center))
+    root_translation = least_squares(optimize_trans, initial_root_translation, verbose=0, args=(p3d_16, Ki, f, img_center))
 
     print(f"\nOPTIMIZATION result : {root_translation}\n{root_translation.x}\n{root_translation.x.shape}")
 
@@ -122,13 +135,7 @@ def translate_root():
     print(f"\nposes3d after optimization {poses3d} {poses3d.shape}")
     print(f"\nRoots after optimization {poses3d[:,:3]} {poses3d[:,:3].shape}")
 
-    step_time_1 = time.time() - start_time_1
-    total_step_time = time.time() - start_time
-
-    print(f"\noptimization done in {step_time_1}s")
-    print(f"Total done in {total_step_time}s")
-
-    visualize(poses2d_unnorm, poses3d_copy, poses3d, new_ppts)
+    visualize(poses_2d, p3d_16, poses3d, new_ppts)
 
 
 def visualize(poses_2d, poses3d, ps3d, ppts):

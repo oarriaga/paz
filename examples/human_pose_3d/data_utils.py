@@ -77,11 +77,11 @@ def filter_moving_joints_3d(poses3d):
 
 
 def preprocess_2d_data(poses_2d):
-    """Preprocesses 2d detections loaded from text file by creating some extra joints
+    """Preprocesses 2d detections by creating some extra joints
        and converting COCO joint order to H36M.
 
     Args
-        poses_2d: list of 2d detections obtained from HigherHRNet loaded from a text file
+        poses_2d: list of 2d detections obtained from HigherHRNet
     Returns
         poses: nx32 np array with 2d poses
     """
@@ -114,6 +114,34 @@ def preprocess_2d_data(poses_2d):
     return poses
 
 
+def load_joints_2d(joints):
+    # Permutation that goes from COCO detections to H36M ordering.
+    COCO_TO_GT_PERM = np.array([COCO_NAMES.index(h) for h in H36M_NAMES if h != '' and h in COCO_NAMES])
+    assert np.all(COCO_TO_GT_PERM == np.array([4, 12, 14, 16, 11, 13, 15, 2, 1, 0, 5, 7, 9, 6, 8, 10]))
+
+    poses_2d = np.array(joints)
+    poses_2d = np.reshape(poses_2d, (poses_2d.shape[0], -1))
+
+    # make Thorax, mid-point of shoulders
+    poses_2d[:, 2:4] = (poses_2d[:, 10:12] + poses_2d[:, 12:14]) / 2
+
+    # make Hip, mid-point of hips
+    poses_2d[:, 8:10] = (poses_2d[:, 22:24] + poses_2d[:, 24:26]) / 2
+
+    # make Spine, mid-point of thorax and hip
+    poses_2d[:, 4:6] = (poses_2d[:, 2:4] + poses_2d[:, 8:10]) / 2
+
+    # Reshape into (n, 17, 2) matrix
+    poses_2d = np.reshape(poses_2d, [poses_2d.shape[0], 17, 2])
+
+    # Permute the loaded data to make it compatible with H36M
+    poses = poses_2d[:, COCO_TO_GT_PERM, :]
+
+    # Reshape into nx32 matrix
+    poses = np.reshape(poses, [poses.shape[0], -1])
+    return poses
+
+
 def load_params():
     """Loads normalization statistics: mean and stdev, dimensions used and ignored from npy files
 
@@ -124,14 +152,14 @@ def load_params():
         dim_to_ignore: nxd np array of dimensions not used in the model
     """
     path_prefix = os.path.dirname(os.path.abspath(__file__))
-    data_mean_2d = np.load(os.path.join(path_prefix, '..', 'files/data_mean_2d.npy'))
-    data_std_2d = np.load(os.path.join(path_prefix, '..', 'files/data_std_2d.npy'))
-    dim_to_use_2d = np.load(os.path.join(path_prefix, '..', 'files/dim_to_use_2d.npy'))
-    dim_to_ignore_2d = np.load(os.path.join(path_prefix, '..', 'files/dim_to_ignore_2d.npy'))
-    data_mean_3d = np.load(os.path.join(path_prefix, '..', 'files/data_mean_3d.npy'))
-    data_std_3d = np.load(os.path.join(path_prefix, '..', 'files/data_std_3d.npy'))
-    dim_to_use_3d = np.load(os.path.join(path_prefix, '..', 'files/dim_to_use_3d.npy'))
-    dim_to_ignore_3d = np.load(os.path.join(path_prefix, '..', 'files/dim_to_ignore_3d.npy'))
+    data_mean_2d = np.load(os.path.join(path_prefix, 'files/data_mean_2d.npy'))
+    data_std_2d = np.load(os.path.join(path_prefix, 'files/data_std_2d.npy'))
+    dim_to_use_2d = np.load(os.path.join(path_prefix, 'files/dim_to_use_2d.npy'))
+    dim_to_ignore_2d = np.load(os.path.join(path_prefix, 'files/dim_to_ignore_2d.npy'))
+    data_mean_3d = np.load(os.path.join(path_prefix, 'files/data_mean_3d.npy'))
+    data_std_3d = np.load(os.path.join(path_prefix, 'files/data_std_3d.npy'))
+    dim_to_use_3d = np.load(os.path.join(path_prefix, 'files/dim_to_use_3d.npy'))
+    dim_to_ignore_3d = np.load(os.path.join(path_prefix, 'files/dim_to_ignore_3d.npy'))
 
     return data_mean_2d, data_std_2d, dim_to_use_2d, dim_to_ignore_2d, data_mean_3d, data_std_3d, dim_to_use_3d, dim_to_ignore_3d
 
