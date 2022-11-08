@@ -77,8 +77,8 @@ def efficientnet_to_BiFPN(features, num_filters, fusion):
     # Returns
     output_features: List, features after BiFPN for the class and box heads.
     """
-    P6_in, P7_in = preprocess_features_BiFPN(
-        0, features[-1], num_filters, features, 0, True)
+    P6_in, P7_in = preprocess_downward_features_BiFPN(
+        0, features[-1], num_filters, features, 0)
     past_feature_map, now_feature_map = P7_in, P6_in
     feature_down = propagate_downwards_BiFPN_non_repeated(
         features, past_feature_map, now_feature_map, fusion, num_filters, 0)
@@ -420,8 +420,8 @@ def propagate_downwards_one_step_BiFPN(past_feature_map, now_feature_map,
     is_non_repeated_block = id == 0
     layer_not_P7 = depth_arg > 0
     if is_non_repeated_block and layer_not_P7:
-        now_feature_map = preprocess_features_BiFPN(
-            depth_arg, now_feature_map, num_filters, features, id, True)
+        now_feature_map = preprocess_downward_features_BiFPN(
+            depth_arg, now_feature_map, num_filters, features, id)
 
     past_feature_map_U = UpSampling2D()(past_feature_map)
     now_feature_map_td = FuseFeature(
@@ -590,8 +590,8 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
     is_layer_P4 = depth_arg == 3
 
     if is_layer_P6_or_P7:
-        next_feature_map = preprocess_features_BiFPN(
-            depth_arg, next_feature_map, num_filters, features, 0, False)
+        next_feature_map = preprocess_upward_features_BiFPN(
+            depth_arg, next_feature_map, num_filters, features, 0)
 
     layer_names = [(f'FPN_cells/cell_0/fnode'
                     f'{len(features) - 2 + depth_arg + 1}'
@@ -679,10 +679,51 @@ def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
     return next_out
 
 
-def preprocess_features_BiFPN(depth_arg, input_feature, num_filters,
-                              features, id, is_propagate_downwards):
+def preprocess_downward_features_BiFPN(depth_arg, input_feature,
+                                       num_filters, features, id):
     """Perform pre-processing on features before applying
-    downward propagation or upward propagation.
+    downward propagation.
+
+    # Arguments
+        depth_arg :Int, the depth of the feature of BiFPN layer.
+        input_feature :Tensor, feature from the current layer.
+        num_filters :Int, Number of filters for intermediate layers.
+        features :List, the features returned from EfficientNet
+            backbone.
+        id :Int, the ID or index of the BiFPN block.
+
+    # Returns
+        preprocessed_feature: Tensor, the preprocessed feature.
+    """
+    is_layer_P7 = depth_arg == 0
+
+    if is_layer_P7:
+        layer_names = [(f'resample_p{len(features) + 1}/conv2d'),
+                       (f'resample_p{len(features) + 1}/bn')]
+        P6_in = preprocess_features_partly_BiFPN(
+            input_feature, num_filters, layer_names)
+        P6_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
+                                                 f'{len(features) + 1}'
+                                                 f'/maxpool'))(P6_in)
+        P7_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
+                                                 f'{len(features) + 2}'
+                                                 f'/maxpool'))(P6_in)
+        return P6_in, P7_in
+    else:
+        layer_names = [(f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
+                        f'{3 - depth_arg}_{len(features) + depth_arg}'
+                        f'/conv2d'),
+                       (f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
+                        f'{3 - depth_arg}_{len(features) + depth_arg}/bn')]
+        preprocessed_feature = preprocess_features_partly_BiFPN(
+            input_feature, num_filters, layer_names)
+        return preprocessed_feature
+
+
+def preprocess_upward_features_BiFPN(depth_arg, input_feature, 
+                                     num_filters, features, id):
+    """Perform pre-processing on features before applying
+    upward propagation.
 
     # Arguments
         depth_arg :Int, the depth of the feature of BiFPN layer.
@@ -697,40 +738,15 @@ def preprocess_features_BiFPN(depth_arg, input_feature, num_filters,
     # Returns
         preprocessed_feature: Tensor, the preprocessed feature.
     """
-    is_layer_P7 = depth_arg == 0
-
-    if is_propagate_downwards:
-        if is_layer_P7:
-            layer_names = [(f'resample_p{len(features) + 1}/conv2d'),
-                           (f'resample_p{len(features) + 1}/bn')]
-            P6_in = preprocess_features_partly_BiFPN(
-                input_feature, num_filters, layer_names)
-            P6_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
-                                                     f'{len(features) + 1}'
-                                                     f'/maxpool'))(P6_in)
-            P7_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
-                                                     f'{len(features) + 2}'
-                                                     f'/maxpool'))(P6_in)
-            return P6_in, P7_in
-        else:
-            layer_names = [(f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
-                            f'{3 - depth_arg}_{len(features) + depth_arg}'
-                            f'/conv2d'),
-                           (f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
-                            f'{3 - depth_arg}_{len(features) + depth_arg}/bn')]
-            preprocessed_feature = preprocess_features_partly_BiFPN(
-                input_feature, num_filters, layer_names)
-            return preprocessed_feature
-    else:
-        layer_names = [(f'FPN_cells/cell_{id}/fnode' +
-                        '%d' % (len(features) - 1 + depth_arg) +
-                        f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/conv2d'),
-                       (f'FPN_cells/cell_{id}'
-                        f'/fnode{len(features) - 1 + depth_arg}'
-                        f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/bn')]
-        preprocessed_feature = preprocess_features_partly_BiFPN(
-            input_feature, num_filters, layer_names)
-        return preprocessed_feature
+    layer_names = [(f'FPN_cells/cell_{id}/fnode' +
+                    '%d' % (len(features) - 1 + depth_arg) +
+                   f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/conv2d'),
+                   (f'FPN_cells/cell_{id}'
+                    f'/fnode{len(features) - 1 + depth_arg}'
+                    f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/bn')]
+    preprocessed_feature = preprocess_features_partly_BiFPN(
+        input_feature, num_filters, layer_names)
+    return preprocessed_feature
 
 
 def preprocess_features_partly_BiFPN(input_feature, num_filters, layer_names):
