@@ -5,7 +5,7 @@ from tensorflow.keras.utils import get_file
 from anchors import build_prior_boxes
 from efficientdet_blocks import (BiFPN_to_BiFPN, BoxNet, ClassNet,
                                  efficientnet_to_BiFPN)
-from efficientnet_model import EfficientNet
+from efficientnet_model import efficientnet
 from utils import create_multibox_head
 
 WEIGHT_PATH = (
@@ -59,7 +59,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
     image = Input(shape=input_shape, name='image')
-    branch_tensors = EfficientNet(image, backbone, input_shape)
+    branch_tensors = efficientnet(image, backbone, input_shape)
 
     branch_tensors = efficientnet_to_BiFPN(
         branch_tensors, FPN_num_filters, fusion)
