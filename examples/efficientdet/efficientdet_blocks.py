@@ -86,7 +86,7 @@ def efficientnet_to_BiFPN(features, num_filters, fusion):
     next_feature_map, next_td = features[-2], feature_down[2]
     output_features = [feature_down[3]]
     output_features = propagate_upwards_BiFPN_non_repeated(
-        features, now_feature_map, next_feature_map, next_td, 0,
+        features, now_feature_map, next_feature_map, next_td,
         feature_down, fusion, num_filters, output_features, P6_in, P7_in)
     return output_features
 
@@ -477,7 +477,7 @@ def refer_next_input_repeated(depth_arg, features):
 
 
 def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
-                                         next_feature_map, next_td, id,
+                                         next_feature_map, next_td,
                                          feature_down, fusion, num_filters,
                                          output_features, P6_in, P7_in):
     """Propagates features in upward direction through the non-repeated
@@ -505,8 +505,8 @@ def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
                          upward propagation from BiFPN block.
     """
     for depth_arg in range(len(features) - 1):
-        now_feature_map = propagate_upwards_one_step_BiFPN(
-            now_feature_map, next_feature_map, next_td, id, feature_down,
+        now_feature_map = propagate_upwards_one_step_BiFPN_non_repeated(
+            now_feature_map, next_feature_map, next_td, feature_down,
             depth_arg, fusion, num_filters, features)
         output_features.append(now_feature_map)
         depth_arg_next, P6_in_arg, P7_in_arg = depth_arg + 1, P6_in, P7_in
@@ -544,7 +544,7 @@ def propagate_upwards_BiFPN_repeated(features, now_feature_map,
             upward propagation from BiFPN block.
     """
     for depth_arg in range(len(features) - 1):
-        now_feature_map = propagate_upwards_one_step_BiFPN(
+        now_feature_map = propagate_upwards_one_step_BiFPN_repeated(
             now_feature_map, next_feature_map, next_td, id, feature_down,
             depth_arg, fusion, num_filters, features)
         output_features.append(now_feature_map)
@@ -556,11 +556,81 @@ def propagate_upwards_BiFPN_repeated(features, now_feature_map,
     return output_features
 
 
-def propagate_upwards_one_step_BiFPN(now_feature_map, next_feature_map,
-                                     next_td, id, feature_down, depth_arg,
-                                     fusion, num_filters, features):
-    """Propagates features in upward direction starting from the
-    features of bottom most layer of EfficientNet backbone.
+def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
+                                                  next_feature_map,
+                                                  next_td, feature_down,
+                                                  depth_arg, fusion,
+                                                  num_filters, features):
+    """Propagates features in upward direction in the BiFPN non
+    repeated block starting from the features of bottom most layer
+    of EfficientNet backbone.
+
+    # Arguments
+        now_feature_map :Tensor, Tensor, feature from the
+            current layer.
+        next_feature_map :Tensor, Tensor, feature from the relatively
+            top layer.
+        next_td : Tensor, The feature tensor from the relatively
+            top layer as result of upward or downward propagation.
+        id :Int, the ID or index of the BiFPN block.
+        feature_down: List, the list of features as a result of
+            upward or downward propagation.
+        depth_arg :Int, the depth of the feature of BiFPN layer.
+        fusion :string, String representing the feature
+            fusion method.
+        num_filters :Int, Number of filters for intermediate layers.
+        features :List, the features returned from EfficientNet
+            backbone.
+
+    # Returns
+        now_feature_td :Tensor, Tensor, tensor resulting from
+            upward propagation in BiFPN layer.
+    """
+    id = 0
+    now_feature_map_D = MaxPooling2D(3, 2, 'same')(now_feature_map)
+
+    is_layer_P6_or_P7 = depth_arg < 2
+    is_layer_P4 = depth_arg == 3
+
+    if is_layer_P6_or_P7:
+        next_feature_map = preprocess_features_BiFPN(
+            depth_arg, next_feature_map, num_filters, features, id, False)
+
+    layer_names = [(f'FPN_cells/cell_{id}/fnode'
+                    f'{len(features) - 2 + depth_arg + 1}'
+                    f'/add'),
+                   (f'FPN_cells/cell_{id}/fnode'
+                    f'{len(feature_down) + depth_arg}'
+                    f'/op_after_combine{9 + depth_arg}'
+                    f'/conv'),
+                   (f'FPN_cells/cell_{id}/fnode'
+                    f'{len(feature_down) + depth_arg}/'
+                    f'op_after_combine{9 + depth_arg}'
+                    f'/bn')]
+
+    if is_layer_P4:
+        to_fuse = [next_feature_map, now_feature_map_D]
+    else:
+        to_fuse = [next_feature_map, next_td, now_feature_map_D]
+
+    next_out = FuseFeature(
+        name=layer_names[0], fusion=fusion)(
+        to_fuse, fusion)
+    next_out = tf.nn.swish(next_out)
+    next_out = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True,
+                               name=layer_names[1])(next_out)
+    next_out = BatchNormalization(name=layer_names[2])(next_out)
+    return next_out
+
+
+def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
+                                              next_feature_map,
+                                              next_td, id, feature_down,
+                                              depth_arg, fusion,
+                                              num_filters, features):
+    """Propagates features in upward direction in the BiFPN repeated
+    blockstarting from the features of bottom most layer of
+    EfficientNet backbone.
 
     # Arguments
         now_feature_map :Tensor, Tensor, feature from the
@@ -585,40 +655,21 @@ def propagate_upwards_one_step_BiFPN(now_feature_map, next_feature_map,
     """
     now_feature_map_D = MaxPooling2D(3, 2, 'same')(now_feature_map)
 
-    is_non_repeated_block = id == 0
-    is_layer_P6_or_P7 = depth_arg < 2
     is_layer_P4 = depth_arg == 3
 
-    if is_non_repeated_block:
-        if is_layer_P6_or_P7:
-            next_feature_map = preprocess_features_BiFPN(
-                depth_arg, next_feature_map, num_filters, features, id, False)
-
-        layer_names = [(f'FPN_cells/cell_{id}/fnode'
-                        f'{len(features) - 2 + depth_arg + 1}'
-                        f'/add'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) + depth_arg}'
-                        f'/op_after_combine{9 + depth_arg}'
-                        f'/conv'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) + depth_arg}/'
-                        f'op_after_combine{9 + depth_arg}'
-                        f'/bn')]
-    else:
-        layer_names = [(f'FPN_cells/cell_{id}/'
-                        f'fnode{len(feature_down) - 1 + depth_arg}'
-                        f'/add'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) - 1 + depth_arg}'
-                        f'/op_after_combine'
-                        f'%d' % (len(feature_down) + depth_arg +
-                                 len(features) - 2 + 1) + '/conv'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) - 1 + depth_arg}/'
-                        f'op_after_combine'
-                        f'%d' % (len(feature_down) + depth_arg +
-                                 len(features) - 2 + 1) + '/bn')]
+    layer_names = [(f'FPN_cells/cell_{id}/'
+                    f'fnode{len(feature_down) - 1 + depth_arg}'
+                    f'/add'),
+                   (f'FPN_cells/cell_{id}/fnode'
+                    f'{len(feature_down) - 1 + depth_arg}'
+                    f'/op_after_combine'
+                    f'%d' % (len(feature_down) + depth_arg +
+                             len(features) - 2 + 1) + '/conv'),
+                   (f'FPN_cells/cell_{id}/fnode'
+                    f'{len(feature_down) - 1 + depth_arg}/'
+                    f'op_after_combine'
+                    f'%d' % (len(feature_down) + depth_arg +
+                             len(features) - 2 + 1) + '/bn')]
 
     if is_layer_P4:
         to_fuse = [next_feature_map, now_feature_map_D]
