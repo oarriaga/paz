@@ -700,7 +700,7 @@ def preprocess_downward_features_BiFPN(depth_arg, input_feature,
     if is_layer_P7:
         layer_names = [(f'resample_p{len(features) + 1}/conv2d'),
                        (f'resample_p{len(features) + 1}/bn')]
-        P6_in = preprocess_features_partly_BiFPN(
+        P6_in = conv_batchnorm_block(
             input_feature, num_filters, layer_names)
         P6_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
                                                  f'{len(features) + 1}'
@@ -715,7 +715,7 @@ def preprocess_downward_features_BiFPN(depth_arg, input_feature,
                         f'/conv2d'),
                        (f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
                         f'{3 - depth_arg}_{len(features) + depth_arg}/bn')]
-        preprocessed_feature = preprocess_features_partly_BiFPN(
+        preprocessed_feature = conv_batchnorm_block(
             input_feature, num_filters, layer_names)
         return preprocessed_feature
 
@@ -744,12 +744,12 @@ def preprocess_upward_features_BiFPN(depth_arg, input_feature,
                    (f'FPN_cells/cell_{id}'
                     f'/fnode{len(features) - 1 + depth_arg}'
                     f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/bn')]
-    preprocessed_feature = preprocess_features_partly_BiFPN(
+    preprocessed_feature = conv_batchnorm_block(
         input_feature, num_filters, layer_names)
     return preprocessed_feature
 
 
-def preprocess_features_partly_BiFPN(input_feature, num_filters, layer_names):
+def conv_batchnorm_block(input_feature, num_filters, layer_names):
     """Perform a part of feature preprocessing such as
     applying Conv2D and BatchNormalization.
 
@@ -762,11 +762,9 @@ def preprocess_features_partly_BiFPN(input_feature, num_filters, layer_names):
         partly_processed_feature: Tensor, the partly preprocessed
             feature.
     """
-    partly_processed_feature = Conv2D(
-        num_filters, 1, 1, 'same', name=layer_names[0])(input_feature)
-    partly_processed_feature = BatchNormalization(
-        name=layer_names[1])(partly_processed_feature)
-    return partly_processed_feature
+    x = Conv2D(num_filters, 1, 1, 'same', name=layer_names[0])(input_feature)
+    x = BatchNormalization(name=layer_names[1])(x)
+    return x
 
 
 def compute_next_input_BiFPN_non_repeated(features, feature_down, depth_arg,
