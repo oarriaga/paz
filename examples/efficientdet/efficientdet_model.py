@@ -4,7 +4,7 @@ from tensorflow.keras.utils import get_file
 
 from anchors import build_prior_boxes
 from efficientdet_blocks import (BiFPN_to_BiFPN, BoxNet, ClassNet,
-                                 Efficientnet_to_BiFPN)
+                                 efficientnet_to_BiFPN)
 from efficientnet_model import EfficientNet
 from utils import create_multibox_head
 
@@ -61,7 +61,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
     image = Input(shape=input_shape, name='image')
     branch_tensors = EfficientNet(image, backbone, input_shape)
 
-    branch_tensors = Efficientnet_to_BiFPN(
+    branch_tensors = efficientnet_to_BiFPN(
         branch_tensors, FPN_num_filters, fusion)
     for FPN_cell_id in range(1, FPN_cell_repeats):
         branch_tensors = BiFPN_to_BiFPN(

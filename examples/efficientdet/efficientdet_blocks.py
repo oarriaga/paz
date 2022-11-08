@@ -64,7 +64,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     return box_outputs
 
 
-def Efficientnet_to_BiFPN(features, num_filters, fusion):
+def efficientnet_to_BiFPN(features, num_filters, fusion):
     """Propagates featutures from EfficientNet backbone to the
     first BiFPN block.
 
