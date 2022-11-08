@@ -234,8 +234,7 @@ def build_predictionnet(repeats, num_filters, name, min_level, max_level,
         layer_name = name + 'box-predict'
 
     classes = conv2D_layer(
-        num_filters, 3, 'same', None, layer_name,
-        bias_initializer)
+        num_filters, 3, 'same', None, layer_name, bias_initializer)
 
     predictor_outputs = []
     for level_id in range(num_levels):
@@ -427,8 +426,7 @@ def propagate_downwards_one_step_BiFPN(past_feature_map, now_feature_map,
     past_feature_map_U = UpSampling2D()(past_feature_map)
     now_feature_map_td = FuseFeature(
         name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/add'),
-        fusion=fusion)(
-        [now_feature_map, past_feature_map_U], fusion)
+        fusion=fusion)([now_feature_map, past_feature_map_U], fusion)
 
     now_feature_map_td = tf.nn.swish(now_feature_map_td)
     now_feature_map_td = SeparableConv2D(
@@ -586,7 +584,6 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
         now_feature_td :Tensor, Tensor, tensor resulting from
             upward propagation in BiFPN layer.
     """
-    id = 0
     now_feature_map_D = MaxPooling2D(3, 2, 'same')(now_feature_map)
 
     is_layer_P6_or_P7 = depth_arg < 2
@@ -594,16 +591,16 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
 
     if is_layer_P6_or_P7:
         next_feature_map = preprocess_features_BiFPN(
-            depth_arg, next_feature_map, num_filters, features, id, False)
+            depth_arg, next_feature_map, num_filters, features, 0, False)
 
-    layer_names = [(f'FPN_cells/cell_{id}/fnode'
+    layer_names = [(f'FPN_cells/cell_0/fnode'
                     f'{len(features) - 2 + depth_arg + 1}'
                     f'/add'),
-                   (f'FPN_cells/cell_{id}/fnode'
+                   (f'FPN_cells/cell_0/fnode'
                     f'{len(feature_down) + depth_arg}'
                     f'/op_after_combine{9 + depth_arg}'
                     f'/conv'),
-                   (f'FPN_cells/cell_{id}/fnode'
+                   (f'FPN_cells/cell_0/fnode'
                     f'{len(feature_down) + depth_arg}/'
                     f'op_after_combine{9 + depth_arg}'
                     f'/bn')]
@@ -613,9 +610,7 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
     else:
         to_fuse = [next_feature_map, next_td, now_feature_map_D]
 
-    next_out = FuseFeature(
-        name=layer_names[0], fusion=fusion)(
-        to_fuse, fusion)
+    next_out = FuseFeature(name=layer_names[0], fusion=fusion)(to_fuse, fusion)
     next_out = tf.nn.swish(next_out)
     next_out = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True,
                                name=layer_names[1])(next_out)
@@ -676,9 +671,7 @@ def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
     else:
         to_fuse = [next_feature_map, next_td, now_feature_map_D]
 
-    next_out = FuseFeature(
-        name=layer_names[0], fusion=fusion)(
-        to_fuse, fusion)
+    next_out = FuseFeature(name=layer_names[0], fusion=fusion)(to_fuse, fusion)
     next_out = tf.nn.swish(next_out)
     next_out = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True,
                                name=layer_names[1])(next_out)
