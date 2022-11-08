@@ -355,7 +355,7 @@ def propagate_downwards_BiFPN_non_repeated(features, past_feature_map,
     """
     feature_down = []
     for depth_arg in range(len(features) - 1):
-        past_feature_map = propagate_downwards_BiFPN(
+        past_feature_map = propagate_downwards_one_step_BiFPN(
             past_feature_map, now_feature_map, id,
             fusion, depth_arg, features, num_filters)
         now_feature_map_arg = refer_next_input_non_repeated(depth_arg)
@@ -387,7 +387,7 @@ def propagate_downwards_BiFPN_repeated(features, past_feature_map,
     """
     feature_down = [past_feature_map]
     for depth_arg in range(len(features) - 1):
-        past_feature_map = propagate_downwards_BiFPN(
+        past_feature_map = propagate_downwards_one_step_BiFPN(
             past_feature_map, now_feature_map, id,
             fusion, depth_arg, features, num_filters)
         now_feature_map_arg = refer_next_input_repeated(depth_arg, features)
@@ -396,8 +396,9 @@ def propagate_downwards_BiFPN_repeated(features, past_feature_map,
     return feature_down
 
 
-def propagate_downwards_BiFPN(past_feature_map, now_feature_map, id,
-                              fusion, depth_arg, features, num_filters):
+def propagate_downwards_one_step_BiFPN(past_feature_map, now_feature_map,
+                                       id, fusion, depth_arg, features,
+                                       num_filters):
     """Propagates features in downward direction starting from the
     features of top most layer of EfficientNet backbone.
 
@@ -504,7 +505,7 @@ def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
                          upward propagation from BiFPN block.
     """
     for depth_arg in range(len(features) - 1):
-        now_feature_map = propagate_upwards_BiFPN(
+        now_feature_map = propagate_upwards_one_step_BiFPN(
             now_feature_map, next_feature_map, next_td, id, feature_down,
             depth_arg, fusion, num_filters, features)
         output_features.append(now_feature_map)
@@ -543,7 +544,7 @@ def propagate_upwards_BiFPN_repeated(features, now_feature_map,
             upward propagation from BiFPN block.
     """
     for depth_arg in range(len(features) - 1):
-        now_feature_map = propagate_upwards_BiFPN(
+        now_feature_map = propagate_upwards_one_step_BiFPN(
             now_feature_map, next_feature_map, next_td, id, feature_down,
             depth_arg, fusion, num_filters, features)
         output_features.append(now_feature_map)
@@ -555,9 +556,9 @@ def propagate_upwards_BiFPN_repeated(features, now_feature_map,
     return output_features
 
 
-def propagate_upwards_BiFPN(now_feature_map, next_feature_map, next_td, id,
-                            feature_down, depth_arg, fusion, num_filters,
-                            features):
+def propagate_upwards_one_step_BiFPN(now_feature_map, next_feature_map,
+                                     next_td, id, feature_down, depth_arg,
+                                     fusion, num_filters, features):
     """Propagates features in upward direction starting from the
     features of bottom most layer of EfficientNet backbone.
 
