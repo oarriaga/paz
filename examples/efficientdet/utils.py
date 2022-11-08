@@ -50,12 +50,12 @@ def get_class_name_efficientdet(dataset_name):
                 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 
 
-class GetDropConnect(keras.layers.Layer):
+class DropConnect(keras.layers.Layer):
     """Implements dropout for layers of the model.
 
     """
     def __init__(self, survival_rate, **kwargs):
-        super(GetDropConnect, self).__init__(**kwargs)
+        super(DropConnect, self).__init__(**kwargs)
         self.survival_rate = survival_rate
 
     def call(self, features, training=None):

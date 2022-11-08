@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D, Layer,
                                      MaxPooling2D, SeparableConv2D,
                                      UpSampling2D)
 
-from utils import GetDropConnect
+from utils import DropConnect
 
 
 def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
@@ -321,7 +321,7 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
             level_feature_map)
         level_feature_map = tf.nn.swish(level_feature_map)
         if repeat_args > 0 and survival_rate:
-            level_feature_map = GetDropConnect(
+            level_feature_map = DropConnect(
                 survival_rate=survival_rate)(level_feature_map)
             level_feature_map = level_feature_map + original_level_feature_map
 
