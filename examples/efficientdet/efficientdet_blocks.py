@@ -83,10 +83,10 @@ def efficientnet_to_BiFPN(features, num_filters, fusion):
     feature_down = propagate_downwards_BiFPN_non_repeated(
         features, past_feature_map, now_feature_map, fusion, num_filters, 0)
     now_feature_map = feature_down[3]
-    next_feature_map, next_td = features[-2], feature_down[2]
+    next_feature_map, next_TD = features[-2], feature_down[2]
     output_features = [feature_down[3]]
     output_features = propagate_upwards_BiFPN_non_repeated(
-        features, now_feature_map, next_feature_map, next_td,
+        features, now_feature_map, next_feature_map, next_TD,
         feature_down, fusion, num_filters, output_features, P6_in, P7_in)
     return output_features
 
@@ -109,10 +109,10 @@ def BiFPN_to_BiFPN(features, num_filters, fusion, id):
     feature_down = propagate_downwards_BiFPN_repeated(
         features, past_feature_map, now_feature_map, fusion, num_filters, id)
     now_feature_map = feature_down[-1]
-    next_feature_map, next_td = features[1], feature_down[-2]
+    next_feature_map, next_TD = features[1], feature_down[-2]
     output_features = [feature_down[-1]]
     output_features = propagate_upwards_BiFPN_repeated(
-        features, now_feature_map, next_feature_map, next_td,
+        features, now_feature_map, next_feature_map, next_TD,
         id, feature_down, fusion, num_filters, output_features)
     return output_features
 
@@ -414,7 +414,7 @@ def propagate_downwards_one_step_BiFPN(past_feature_map, now_feature_map,
         num_filters :Int, Number of filters for intermediate layers.
 
     # Returns
-        now_feature_map_td: Tensor, tensor resulting from
+        now_feature_map_TD: Tensor, tensor resulting from
             down propagation in BiFPN layer.
     """
     is_non_repeated_block = id == 0
@@ -424,22 +424,22 @@ def propagate_downwards_one_step_BiFPN(past_feature_map, now_feature_map,
             depth_arg, now_feature_map, num_filters, features, id)
 
     past_feature_map_U = UpSampling2D()(past_feature_map)
-    now_feature_map_td = FuseFeature(
+    now_feature_map_TD = FuseFeature(
         name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/add'),
         fusion=fusion)([now_feature_map, past_feature_map_U], fusion)
 
-    now_feature_map_td = tf.nn.swish(now_feature_map_td)
-    now_feature_map_td = SeparableConv2D(
+    now_feature_map_TD = tf.nn.swish(now_feature_map_TD)
+    now_feature_map_TD = SeparableConv2D(
         num_filters, 3, 1, 'same', use_bias=True,
         name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/'
               f'op_after_combine{len(features) + depth_arg}/conv'))(
-            now_feature_map_td)
+            now_feature_map_TD)
 
-    now_feature_map_td = BatchNormalization(
+    now_feature_map_TD = BatchNormalization(
         name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/'
               f'op_after_combine{len(features) + depth_arg}/bn'))(
-            now_feature_map_td)
-    return now_feature_map_td
+            now_feature_map_TD)
+    return now_feature_map_TD
 
 
 def refer_next_input_non_repeated(depth_arg):
@@ -475,7 +475,7 @@ def refer_next_input_repeated(depth_arg, features):
 
 
 def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
-                                         next_feature_map, next_td,
+                                         next_feature_map, next_TD,
                                          feature_down, fusion, num_filters,
                                          output_features, P6_in, P7_in):
     """Propagates features in upward direction through the non-repeated
@@ -485,7 +485,7 @@ def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
         features: Tuple. Input features for PredictionNet
         now_feature_map: Tensor, feature input from current level.
         next_feature_map: Tensor, feature input from next level.
-        next_td: Tensor, feature input from next level.
+        next_TD: Tensor, feature input from next level.
         id: Int. Represents the BiFPN repetition count.
         feature_down: List. Output features resulting from
             down propagation from BiFPN block.
@@ -504,19 +504,19 @@ def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
     """
     for depth_arg in range(len(features) - 1):
         now_feature_map = propagate_upwards_one_step_BiFPN_non_repeated(
-            now_feature_map, next_feature_map, next_td, feature_down,
+            now_feature_map, next_feature_map, next_TD, feature_down,
             depth_arg, fusion, num_filters, features)
         output_features.append(now_feature_map)
         depth_arg_next, P6_in_arg, P7_in_arg = depth_arg + 1, P6_in, P7_in
         next_feature_map_arg = None
-        next_feature_map, next_td = compute_next_input_BiFPN_non_repeated(
+        next_feature_map, next_TD = compute_next_input_BiFPN_non_repeated(
             features, feature_down, depth_arg_next,
             P6_in_arg, P7_in_arg, next_feature_map_arg)
     return output_features
 
 
 def propagate_upwards_BiFPN_repeated(features, now_feature_map,
-                                     next_feature_map, next_td, id,
+                                     next_feature_map, next_TD, id,
                                      feature_down, fusion, num_filters,
                                      output_features):
     """Propagates features in upward direction through the repeated
@@ -526,7 +526,7 @@ def propagate_upwards_BiFPN_repeated(features, now_feature_map,
         features: Tuple. Input features for PredictionNet
         now_feature_map: Tensor, feature input from current level.
         next_feature_map: Tensor, feature input from next level.
-        next_td: Tensor, feature input from next level.
+        next_TD: Tensor, feature input from next level.
         id: Int. Represents the BiFPN repetition count.
         feature_down: List. Output features resulting from
             down propagation from BiFPN block.
@@ -543,20 +543,20 @@ def propagate_upwards_BiFPN_repeated(features, now_feature_map,
     """
     for depth_arg in range(len(features) - 1):
         now_feature_map = propagate_upwards_one_step_BiFPN_repeated(
-            now_feature_map, next_feature_map, next_td, id, feature_down,
+            now_feature_map, next_feature_map, next_TD, id, feature_down,
             depth_arg, fusion, num_filters, features)
         output_features.append(now_feature_map)
         depth_arg_next = depth_arg
-        next_feature_map_arg, next_td_arg = next_feature_map, next_td
-        next_feature_map, next_td = compute_next_input_feature_BiFPN_repeated(
+        next_feature_map_arg, next_TD_arg = next_feature_map, next_TD
+        next_feature_map, next_TD = compute_next_input_feature_BiFPN_repeated(
             features, feature_down, depth_arg_next,
-            next_feature_map_arg, next_td_arg)
+            next_feature_map_arg, next_TD_arg)
     return output_features
 
 
 def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
                                                   next_feature_map,
-                                                  next_td, feature_down,
+                                                  next_TD, feature_down,
                                                   depth_arg, fusion,
                                                   num_filters, features):
     """Propagates features in upward direction in the BiFPN non
@@ -568,7 +568,7 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
             current layer.
         next_feature_map :Tensor, Tensor, feature from the relatively
             top layer.
-        next_td : Tensor, The feature tensor from the relatively
+        next_TD : Tensor, The feature tensor from the relatively
             top layer as result of upward or downward propagation.
         id :Int, the ID or index of the BiFPN block.
         feature_down: List, the list of features as a result of
@@ -581,7 +581,7 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
             backbone.
 
     # Returns
-        now_feature_td :Tensor, Tensor, tensor resulting from
+        now_feature_TD :Tensor, Tensor, tensor resulting from
             upward propagation in BiFPN layer.
     """
     now_feature_map_D = MaxPooling2D(3, 2, 'same')(now_feature_map)
@@ -608,7 +608,7 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
     if is_layer_P4:
         to_fuse = [next_feature_map, now_feature_map_D]
     else:
-        to_fuse = [next_feature_map, next_td, now_feature_map_D]
+        to_fuse = [next_feature_map, next_TD, now_feature_map_D]
 
     next_out = FuseFeature(name=layer_names[0], fusion=fusion)(to_fuse, fusion)
     next_out = tf.nn.swish(next_out)
@@ -620,7 +620,7 @@ def propagate_upwards_one_step_BiFPN_non_repeated(now_feature_map,
 
 def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
                                               next_feature_map,
-                                              next_td, id, feature_down,
+                                              next_TD, id, feature_down,
                                               depth_arg, fusion,
                                               num_filters, features):
     """Propagates features in upward direction in the BiFPN repeated
@@ -632,7 +632,7 @@ def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
             current layer.
         next_feature_map :Tensor, Tensor, feature from the relatively
             top layer.
-        next_td : Tensor, The feature tensor from the relatively
+        next_TD : Tensor, The feature tensor from the relatively
             top layer as result of upward or downward propagation.
         id :Int, the ID or index of the BiFPN block.
         feature_down: List, the list of features as a result of
@@ -645,7 +645,7 @@ def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
             backbone.
 
     # Returns
-        now_feature_td :Tensor, Tensor, tensor resulting from
+        now_feature_TD :Tensor, Tensor, tensor resulting from
             upward propagation in BiFPN layer.
     """
     now_feature_map_D = MaxPooling2D(3, 2, 'same')(now_feature_map)
@@ -669,7 +669,7 @@ def propagate_upwards_one_step_BiFPN_repeated(now_feature_map,
     if is_layer_P4:
         to_fuse = [next_feature_map, now_feature_map_D]
     else:
-        to_fuse = [next_feature_map, next_td, now_feature_map_D]
+        to_fuse = [next_feature_map, next_TD, now_feature_map_D]
 
     next_out = FuseFeature(name=layer_names[0], fusion=fusion)(to_fuse, fusion)
     next_out = tf.nn.swish(next_out)
@@ -787,7 +787,7 @@ def compute_next_input_BiFPN_non_repeated(features, feature_down, depth_arg,
     # Returns
         next_input :Tensor, the next input feature for upward
             propagation.
-        next_td :Tensor, the next input feature for upward
+        next_TD :Tensor, the next input feature for upward
             propagation generated from previous iteration of
             upward propagation.
     """
@@ -799,7 +799,7 @@ def compute_next_input_BiFPN_non_repeated(features, feature_down, depth_arg,
 
 def compute_next_input_feature_BiFPN_repeated(features, feature_down,
                                               depth_arg, next_feature_map,
-                                              next_td):
+                                              next_TD):
     """Computes next input feature for upward propagation.
 
     # Arguments
@@ -810,13 +810,13 @@ def compute_next_input_feature_BiFPN_repeated(features, feature_down,
         depth_arg :Int, the depth of the feature of BiFPN layer.
         next_feature_map :Tensor, the feature tensor from the relatively
             top layer.
-        next_td :Tensor, the feature tensor from the relatively
+        next_TD :Tensor, the feature tensor from the relatively
             top layer as result of upward or downward propagation.
 
     # Returns
         next_input :Tensor, the next input feature for upward
             propagation.
-        next_td :Tensor, the next input feature for upward
+        next_TD :Tensor, the next input feature for upward
             propagation generated from previous iteration of
             upward propagation.
     """
@@ -825,6 +825,6 @@ def compute_next_input_feature_BiFPN_repeated(features, feature_down,
     is_layer_not_P4 = depth_arg < len(features) - feature_offset_arg
     if is_layer_not_P4:
         next_feature_map = features[feature_offset_arg + depth_arg]
-        next_td = feature_down[
+        next_TD = feature_down[
             -num_BiFPN_upsamplers - depth_arg]
-    return next_feature_map, next_td
+    return next_feature_map, next_TD
