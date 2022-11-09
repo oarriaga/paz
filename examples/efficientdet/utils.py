@@ -76,14 +76,15 @@ def efficientdet_preprocess(image, image_size):
 
     # Arguments
         image: Tensor, raw input image to be preprocessed
-            of shape [bs, h, w, c]
+        of shape [bs, h, w, c]
         image_size: Tensor, size to resize the raw image
-            of shape [bs, new_h, new_w, c]
+        of shape [bs, new_h, new_w, c]
 
     # Returns
         image: Numpy array, resized and preprocessed image
         image_scale: Numpy array, scale to reconstruct each of
-            the raw images to original size from the resized image.
+        the raw images to original size from the resized
+        image.
     """
 
     preprocessing = SequentialProcessor([
