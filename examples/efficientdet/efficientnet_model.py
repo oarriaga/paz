@@ -507,7 +507,7 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters,
     return features
 
 
-def EfficientNet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
+def efficientnet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
                  squeeze_excite_ratio=0.25, kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  repeats=[1, 2, 2, 3, 3, 4, 1],
                  intro_filters=[32, 16, 24, 40, 80, 112, 192],
