@@ -77,7 +77,7 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     return image
 
 
-def make_box_transparent(raw_image, image, alpha=0.30):
+def make_box_transparent(raw_image, image, alpha=0.25):
     """ Blends the raw image with bounding box image to add transparency.
 
     # Arguments
