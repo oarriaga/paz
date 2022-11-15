@@ -314,17 +314,12 @@ def conv_batchnorm_block(x, num_filters):
     return x
 
 
-def node_layer_1(up, middle, num_filters, fusion):
-    to_fuse = [middle, up]
-    middle = FuseFeature(fusion=fusion)(to_fuse, fusion)
-    middle = tf.nn.swish(middle)
-    middle = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True)(middle)
-    middle = BatchNormalization()(middle)
-    return middle
-
-
-def node_layer_2(down, middle, skip, num_filters, fusion):
-    to_fuse = [middle, down] if skip is None else [skip, middle, down]
+def node_BiFPN(up, middle, down, skip, num_filters, fusion):
+    is_layer_1 = down is None
+    if is_layer_1:
+        to_fuse = [middle, up]
+    else:
+        to_fuse = [middle, down] if skip is None else [skip, middle, down]
     middle = FuseFeature(fusion=fusion)(to_fuse, fusion)
     middle = tf.nn.swish(middle)
     middle = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True)(middle)
@@ -349,23 +344,23 @@ def BiFPN(middles, skips, num_filters, fusion):
 
     # Downpropagation ---------------------------------------------------------
     P7_up = UpSampling2D()(P7_middle)
-    P6_TD = node_layer_1(P7_up, P6_middle, num_filters, fusion)
+    P6_TD = node_BiFPN(P7_up, P6_middle, None, None, num_filters, fusion)
     P6_up = UpSampling2D()(P6_TD)
-    P5_TD = node_layer_1(P6_up, P5_middle, num_filters, fusion)
+    P5_TD = node_BiFPN(P6_up, P5_middle, None, None, num_filters, fusion)
     P5_up = UpSampling2D()(P5_TD)
-    P4_TD = node_layer_1(P5_up, P4_middle, num_filters, fusion)
+    P4_TD = node_BiFPN(P5_up, P4_middle, None, None, num_filters, fusion)
     P4_up = UpSampling2D()(P4_TD)
-    P3_out = node_layer_1(P4_up, P3_middle, num_filters, fusion)
+    P3_out = node_BiFPN(P4_up, P3_middle, None, None, num_filters, fusion)
 
     # Upward propagation ------------------------------------------------------
     P3_down = MaxPooling2D(3, 2, 'same')(P3_out)
-    P4_out = node_layer_2(P3_down, P4_TD, P4_skip, num_filters, fusion)
+    P4_out = node_BiFPN(None, P4_TD, P3_down, P4_skip, num_filters, fusion)
     P4_down = MaxPooling2D(3, 2, 'same')(P4_out)
-    P5_out = node_layer_2(P4_down, P5_TD, P5_skip, num_filters, fusion)
+    P5_out = node_BiFPN(None, P5_TD, P4_down, P5_skip, num_filters, fusion)
     P5_down = MaxPooling2D(3, 2, 'same')(P5_out)
-    P6_out = node_layer_2(P5_down, P6_TD, P6_skip, num_filters, fusion)
+    P6_out = node_BiFPN(None, P6_TD, P5_down, P6_skip, num_filters, fusion)
     P6_down = MaxPooling2D(3, 2, 'same')(P6_out)
-    P7_out = node_layer_2(P6_down, P7_middle, None, num_filters, fusion)
+    P7_out = node_BiFPN(None, P7_middle, P6_down, None, num_filters, fusion)
 
     middles = [P3_out, P4_out, P5_out, P6_out, P7_out]
     return middles, middles
