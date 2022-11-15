@@ -72,8 +72,10 @@ class ScaledResize(Processor):
         """Crops a given image.
         # Arguments
             scaled_image: Numpy array, input image.
-            crop_offset_x: Numpy array, specifying crop offset in x-direction.
-            crop_offset_y: Numpy array, specifying crop offset in y-direction.
+            crop_offset_x: Numpy array, specifying crop offset in
+                x-direction.
+            crop_offset_y: Numpy array, specifying crop offset in
+                y-direction.
 
         # Returns
             cropped_image: Numpy array, cropped input image.

@@ -10,10 +10,12 @@ def put_text(image, text, point, scale, color, thickness):
     # Arguments
         image: Numpy array.
         text: String. Text to be drawn.
-        point: Tuple of coordinates indicating the top corner of the text.
+        point: Tuple of coordinates indicating the top corner of the
+            text.
         scale: Float. Scale of text.
         color: Tuple of integers. RGB color coordinates.
-        thickness: Integer. Thickness of the lines used for drawing text.
+        thickness: Integer. Thickness of the lines used for drawing
+            text.
 
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with text.
@@ -29,11 +31,13 @@ def get_text_size(text, scale, FONT_THICKNESS, FONT=FONT):
     # Arguments
         text: String. Text whose width and height is to be calculated.
         scale: Float. Scale of text.
-        FONT_THICKNESS: Integer. Thickness of the lines used for drawing text.
+        FONT_THICKNESS: Integer. Thickness of the lines used for drawing
+            text.
         FONT: Integer. Style of the text font.
+
     # Returns
-        Tuple with shape ((text_W, text_H), baseline)``. The width and height
-            of the text
+        Tuple with shape ((text_W, text_H), baseline)``. The width and
+            height of the text
     """
     text_size = cv2.getTextSize(text, FONT, scale, FONT_THICKNESS)
     return text_size
@@ -44,8 +48,10 @@ def add_box_border(image, corner_A, corner_B, color, thickness):
 
     # Arguments
         image: Numpy array of shape ``[H, W, 3]``.
-        corner_A: List of length two indicating ``(y, x)`` openCV coordinates.
-        corner_B: List of length two indicating ``(y, x)`` openCV coordinates.
+        corner_A: List of length two indicating ``(y, x)`` openCV
+            coordinates.
+        corner_B: List of length two indicating ``(y, x)`` openCV
+            coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer/openCV Flag. Thickness of rectangle line.
             or for filled use cv2.FILLED flag.
@@ -63,8 +69,10 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
 
     # Arguments
         image: Numpy array of shape ``[H, W, 3]``.
-        corner_A: List of length two indicating ``(y, x)`` openCV coordinates.
-        corner_B: List of length two indicating ``(y, x)`` openCV coordinates.
+        corner_A: List of length two indicating ``(y, x)`` openCV
+            coordinates.
+        corner_B: List of length two indicating ``(y, x)`` openCV
+            coordinates.
         color: List of length three indicating RGB color of point.
         thickness: Integer/openCV Flag. Thickness of rectangle line.
             or for filled use cv2.FILLED flag.
@@ -78,7 +86,8 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
 
 
 def make_box_transparent(raw_image, image, alpha=0.25):
-    """ Blends the raw image with bounding box image to add transparency.
+    """ Blends the raw image with bounding box image to add
+    transparency.
 
     # Arguments
         raw_image: Numpy array of shape ``[H, W, 3]``.

@@ -334,7 +334,8 @@ def BiFPN(middles, skips, num_filters, fusion):
     branches: List, feature to be processed by BiFPN.
     num_filters: Integer. Number of filters for intermediate layers.
     id: Integer. Represents the BiFPN repetition count.
-    FPN_weight_method: String representing the feature fusion method in BiFPN.
+    FPN_weight_method: String representing the feature fusion method in
+        BiFPN.
 
     # Returns
     branches: List, branches after BiFPN for the class and box heads.
