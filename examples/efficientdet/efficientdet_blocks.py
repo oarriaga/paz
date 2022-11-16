@@ -64,62 +64,9 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     return box_outputs
 
 
-def Efficientnet_to_BiFPN(features, num_filters, fusion):
-    """Propagates featutures from EfficientNet backbone to the
-    first BiFPN block.
-
-    # Arguments
-    features: List, feature to be processed by BiFPN.
-    num_filters: Integer. Number of filters for intermediate layers.
-    fusion: String representing the feature fusion method
-        in BiFPN.
-
-    # Returns
-    output_features: List, features after BiFPN for the class and box heads.
-    """
-    P6_in, P7_in = preprocess_features_BiFPN(
-        0, features[-1], num_filters, features, 0, True)
-    past_feature_map, now_feature_map = P7_in, P6_in
-    feature_down = propagate_downwards_BiFPN_non_repeated(
-        features, past_feature_map, now_feature_map, fusion, num_filters, 0)
-    now_feature_map = feature_down[3]
-    next_feature_map, next_td = features[-2], feature_down[2]
-    output_features = [feature_down[3]]
-    output_features = propagate_upwards_BiFPN_non_repeated(
-        features, now_feature_map, next_feature_map, next_td, 0,
-        feature_down, fusion, num_filters, output_features, P6_in, P7_in)
-    return output_features
-
-
-def BiFPN_to_BiFPN(features, num_filters, fusion, id):
-    """Propagates featutures from earlier BiFPN blocks to
-    succeeding BiFPN block.
-
-    # Arguments
-    features: List, feature to be processed by BiFPN.
-    num_filters: Integer. Number of filters for intermediate layers.
-    fusion: String representing the feature fusion method
-        in BiFPN.
-    id: Integer. Represents the BiFPN repetition count.
-
-    # Returns
-    output_features: List, features after BiFPN for the class and box heads.
-    """
-    past_feature_map, now_feature_map = features[-1], features[-2]
-    feature_down = propagate_downwards_BiFPN_repeated(
-        features, past_feature_map, now_feature_map, fusion, num_filters, id)
-    now_feature_map = feature_down[-1]
-    next_feature_map, next_td = features[1], feature_down[-2]
-    output_features = [feature_down[-1]]
-    output_features = propagate_upwards_BiFPN_repeated(
-        features, now_feature_map, next_feature_map, next_td,
-        id, feature_down, fusion, num_filters, output_features)
-    return output_features
-
-
 class FuseFeature(Layer):
-    def __init__(self, name, fusion, **kwargs):
-        super().__init__(name=name, **kwargs)
+    def __init__(self, fusion, **kwargs):
+        super().__init__(**kwargs)
         self.fusion = fusion
         if fusion == 'fast':
             self.fuse_method = self._fuse_fast
@@ -138,13 +85,13 @@ class FuseFeature(Layer):
         """
         # Arguments
         inputs: Tensor. Features to be fused.
-        fusion: String representing the feature fusion
-            method.
+        fusion: String representing the feature fusion method.
 
         # Returns
         x: feature after combining by the feature fusion method in
            BiFPN.
         """
+        inputs = [input for input in inputs if input is not None]
         return self.fuse_method(inputs)
 
     def _fuse_fast(self, inputs):
@@ -178,8 +125,7 @@ def conv2D_layer(num_filters, kernel_size, padding, activation,
         padding: String. Padding for conv layer.
         activation: String. Activation function.
         name: String. Name of conv layer.
-        bias_initializer: String or TF Function. Bias
-            initialization.
+        bias_initializer: String or TF Function. Bias initialization.
 
     # Returns
         conv2D_layer: TF conv layer.
@@ -199,7 +145,7 @@ def build_predictionnet(repeats, num_filters, name, min_level, max_level,
     # Arguments
         repeats: List, feature to be processed by PredictionNet head.
         num_filters: Integer. Number of filters for intermediate
-                     layers.
+            layers.
         with_separable_conv: Bool.
         name: String indicating the name of this layer.
         min_level: Integer. Minimum level for features.
@@ -332,440 +278,158 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
         return output_candidates(level_feature_map)
 
 
-def propagate_downwards_BiFPN_non_repeated(features, past_feature_map,
-                                           now_feature_map, fusion,
-                                           num_filters, id):
-    """Propagates features in downward direction through the first
-    or non-repeated BiFPN block.
+def efficientnet_to_BiFPN(branches, num_filters):
+    """Modifies the branches produced by EfficientNet backbone such that
+    it can be fed into the BiFPN blocks. This modification includes
+    generating feature maps P6 and P7 and preprocessing by applying
+    2D convolution and batch normalization.
 
     # Arguments
-        features: Tuple. Input features for PredictionNet
-        past_feature_map: Tensor, feature input from previous
-            level.
-        now_feature_map: Tensor, feature input from current level.
-        fusion: String representing the feature fusion
-            method.
+        branches: List. It is a list of tensors containing the feature
+            maps from the output layers of EfficientNet backbone.
         num_filters: Integer. Number of filters for intermediate
             layers.
-        id: Int. Represents the BiFPN repetition count.
 
     # Returns
-        feature_down: List. Output features resulting from
-                     down propagation from BiFPN block.
+        middles skips: List, of tensors or feature maps obtained as a
+            result of preprocessing EfficientNet feature maps.
     """
-    feature_down = []
-    for depth_arg in range(len(features) - 1):
-        past_feature_map = propagate_downwards_BiFPN(
-            past_feature_map, now_feature_map, id,
-            fusion, depth_arg, features, num_filters)
-        now_feature_map_arg = refer_next_input_non_repeated(depth_arg)
-        now_feature_map = features[now_feature_map_arg]
-        feature_down.append(past_feature_map)
-    return feature_down
+    _, _, P3, P4, P5 = branches
+    P6, P7 = build_branch(P5, num_filters)
+    branches_extended = [P3, P4, P5, P6, P7]
+    middles, skips = preprocess_node(branches_extended, num_filters)
+    return [middles, skips]
 
 
-def propagate_downwards_BiFPN_repeated(features, past_feature_map,
-                                       now_feature_map, fusion,
-                                       num_filters, id):
-    """Propagates features in downward direction through the
-    repeated BiFPN block.
+def build_branch(P5, num_filters):
+    """Computes feature maps P6 and P7 from P5.
 
     # Arguments
-        features: Tuple. Input features for PredictionNet
-        past_feature_map: Tensor, feature input from previous
-            level.
-        now_feature_map: Tensor, feature input from current level.
-        fusion: String representing the feature fusion
-            method.
+        P5: Tensor. Output feature map obtained from fifth layer of
+            EfficientNet backbone.
         num_filters: Integer. Number of filters for intermediate
             layers.
-        id: Int. Represents the BiFPN repetition count.
 
     # Returns
-        feature_down: List. Output features resulting from
-                     down propagation from BiFPN block.
+        P6, P7: List, of tensors or feature maps obtained from sixth
+            and seventh layer of EfficientNet backbone.
     """
-    feature_down = [past_feature_map]
-    for depth_arg in range(len(features) - 1):
-        past_feature_map = propagate_downwards_BiFPN(
-            past_feature_map, now_feature_map, id,
-            fusion, depth_arg, features, num_filters)
-        now_feature_map_arg = refer_next_input_repeated(depth_arg, features)
-        now_feature_map = features[now_feature_map_arg]
-        feature_down.append(past_feature_map)
-    return feature_down
+    P6 = conv_batchnorm_block(P5, num_filters)
+    P6 = MaxPooling2D(3, 2, 'same')(P6)
+    P7 = MaxPooling2D(3, 2, 'same')(P6)
+    return [P6, P7]
 
 
-def propagate_downwards_BiFPN(past_feature_map, now_feature_map, id,
-                              fusion, depth_arg, features, num_filters):
-    """Propagates features in downward direction starting from the
-    features of top most layer of EfficientNet backbone.
+def preprocess_node(branches, num_filters):
+    """Preprocesses the feature maps obtained from EfficientNet backbone
+    by applying 2D convolution and bath normalization such that it can
+    be fed into the BiFPN block.
 
     # Arguments
-        past_feature_map :Tensor, feature from the relatively
-            top layer.
-        now_feature_map :Tensor, feature from the current layer.
-        id :Int, the ID or index of the BiFPN block.
-        fusion :string, String representing the feature
-            fusion method.
-        depth_arg :Int, the depth of the feature of BiFPN layer.
-        features :List, the features returned from EfficientNet
-            backbone.
-        num_filters :Int, Number of filters for intermediate layers.
-
-    # Returns
-        now_feature_map_td: Tensor, tensor resulting from
-            down propagation in BiFPN layer.
-    """
-    is_non_repeated_block = id == 0
-    layer_not_P7 = depth_arg > 0
-    if is_non_repeated_block and layer_not_P7:
-        now_feature_map = preprocess_features_BiFPN(
-            depth_arg, now_feature_map, num_filters, features, id, True)
-
-    past_feature_map_U = UpSampling2D()(past_feature_map)
-    now_feature_map_td = FuseFeature(
-        name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/add'),
-        fusion=fusion)(
-        [now_feature_map, past_feature_map_U], fusion)
-
-    now_feature_map_td = tf.nn.swish(now_feature_map_td)
-    now_feature_map_td = SeparableConv2D(
-        num_filters, 3, 1, 'same', use_bias=True,
-        name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/'
-              f'op_after_combine{len(features) + depth_arg}/conv'))(
-            now_feature_map_td)
-
-    now_feature_map_td = BatchNormalization(
-        name=(f'FPN_cells/cell_{id}/fnode{depth_arg}/'
-              f'op_after_combine{len(features) + depth_arg}/bn'))(
-            now_feature_map_td)
-    return now_feature_map_td
-
-
-def refer_next_input_non_repeated(depth_arg):
-    """Computes and returns the index of the next input feature to be
-    fed into the BiFPN block.
-
-    # Arguments
-        depth_arg :Int, depth of the BiFPN block.
-
-    # Returns
-        next_feature_map_arg :Int. indicating the index of the output
-        feature.
-    """
-    next_feature_map_arg = -1 - depth_arg
-    return next_feature_map_arg
-
-
-def refer_next_input_repeated(depth_arg, features):
-    """Computes and returns the index of the next input feature to be
-    fed into the BiFPN block.
-
-    # Arguments
-        depth_arg :Int, depth of the BiFPN block.
-        features :Int, the ID or index of the BiFPN block.
-
-    # Returns
-        next_feature_map_arg :Int. indicating the index of the output
-        feature.
-    """
-    num_BiFPN_upsamplers = 3
-    next_feature_map_arg = len(features) - num_BiFPN_upsamplers - depth_arg
-    return next_feature_map_arg
-
-
-def propagate_upwards_BiFPN_non_repeated(features, now_feature_map,
-                                         next_feature_map, next_td, id,
-                                         feature_down, fusion, num_filters,
-                                         output_features, P6_in, P7_in):
-    """Propagates features in upward direction through the non-repeated
-    BiFPN block.
-
-    # Arguments
-        features: Tuple. Input features for PredictionNet
-        now_feature_map: Tensor, feature input from current level.
-        next_feature_map: Tensor, feature input from next level.
-        next_td: Tensor, feature input from next level.
-        id: Int. Represents the BiFPN repetition count.
-        feature_down: List. Output features resulting from
-            down propagation from BiFPN block.
-        fusion: String representing the feature fusion
-            method.
+        branches: List. It is a list of tensors containing the feature
+            maps from the output layers of EfficientNet backbone.
         num_filters: Integer. Number of filters for intermediate
             layers.
-        output_features: List. Output features resulting from
-            down propagation from BiFPN block.
-        P6_in: Tensor, feature input from 6th level.
-        P7_in: Tensor, feature input from 7th level.
 
     # Returns
-        output_features: List. Output features resulting from
-                         upward propagation from BiFPN block.
+        middles, skips: List, of tensors or feature maps obtained after
+            preprocessing.
     """
-    for depth_arg in range(len(features) - 1):
-        now_feature_map = propagate_upwards_BiFPN(
-            now_feature_map, next_feature_map, next_td, id, feature_down,
-            depth_arg, fusion, num_filters, features)
-        output_features.append(now_feature_map)
-        depth_arg_next, P6_in_arg, P7_in_arg = depth_arg + 1, P6_in, P7_in
-        next_feature_map_arg = None
-        next_feature_map, next_td = compute_next_input_BiFPN_non_repeated(
-            features, feature_down, depth_arg_next,
-            P6_in_arg, P7_in_arg, next_feature_map_arg)
-    return output_features
+    P3, P4, P5, P6, P7 = branches
+    P3_middle = conv_batchnorm_block(P3, num_filters)
+    P4_middle = conv_batchnorm_block(P4, num_filters)
+    P5_middle = conv_batchnorm_block(P5, num_filters)
+    middles = [P3_middle, P4_middle, P5_middle, P6, P7]
+
+    P4_skip = conv_batchnorm_block(P4, num_filters)
+    P5_skip = conv_batchnorm_block(P5, num_filters)
+    skips = [None, P4_skip, P5_skip, P6, None]
+    return [middles, skips]
 
 
-def propagate_upwards_BiFPN_repeated(features, now_feature_map,
-                                     next_feature_map, next_td, id,
-                                     feature_down, fusion, num_filters,
-                                     output_features):
-    """Propagates features in upward direction through the repeated
-    BiFPN block.
+def conv_batchnorm_block(x, num_filters):
+    """Builds 2D convolution and batch normalization layers.
 
     # Arguments
-        features: Tuple. Input features for PredictionNet
-        now_feature_map: Tensor, feature input from current level.
-        next_feature_map: Tensor, feature input from next level.
-        next_td: Tensor, feature input from next level.
-        id: Int. Represents the BiFPN repetition count.
-        feature_down: List. Output features resulting from
-            down propagation from BiFPN block.
-        fusion: String representing the feature fusion
-            method.
+        x: Tensor. Input feature map.
         num_filters: Integer. Number of filters for intermediate
             layers.
-        output_features: List. Output features resulting from
-            down propagation from BiFPN block.
 
     # Returns
-        output_features: List. Output features resulting from
-            upward propagation from BiFPN block.
+        x: Tensor. Feature map obtained as output after applying 2D
+            convolution and batch normalization.
     """
-    for depth_arg in range(len(features) - 1):
-        now_feature_map = propagate_upwards_BiFPN(
-            now_feature_map, next_feature_map, next_td, id, feature_down,
-            depth_arg, fusion, num_filters, features)
-        output_features.append(now_feature_map)
-        depth_arg_next = depth_arg
-        next_feature_map_arg, next_td_arg = next_feature_map, next_td
-        next_feature_map, next_td = compute_next_input_feature_BiFPN_repeated(
-            features, feature_down, depth_arg_next,
-            next_feature_map_arg, next_td_arg)
-    return output_features
+    x = Conv2D(num_filters, 1, 1, 'same')(x)
+    x = BatchNormalization()(x)
+    return x
 
 
-def propagate_upwards_BiFPN(now_feature_map, next_feature_map, next_td, id,
-                            feature_down, depth_arg, fusion, num_filters,
-                            features):
-    """Propagates features in upward direction starting from the
-    features of bottom most layer of EfficientNet backbone.
+def node_BiFPN(up, middle, down, skip, num_filters, fusion):
+    """Implements the functionality of nodes in the BiFPN block.
 
     # Arguments
-        now_feature_map :Tensor, Tensor, feature from the
-            current layer.
-        next_feature_map :Tensor, Tensor, feature from the relatively
-            top layer.
-        next_td : Tensor, The feature tensor from the relatively
-            top layer as result of upward or downward propagation.
-        id :Int, the ID or index of the BiFPN block.
-        feature_down: List, the list of features as a result of
-            upward or downward propagation.
-        depth_arg :Int, the depth of the feature of BiFPN layer.
-        fusion :string, String representing the feature
-            fusion method.
-        num_filters :Int, Number of filters for intermediate layers.
-        features :List, the features returned from EfficientNet
-            backbone.
+        up: Tensor, upsampled feature map.
+        middle: Tensor, Output feature map from preprocess/BiFPN node.
+        down: Tensor, Downsampled feature map.
+        skip: Tensor, Skip feature map.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+        fusion: String representing the feature fusion method.
 
     # Returns
-        now_feature_td :Tensor, Tensor, tensor resulting from
-            upward propagation in BiFPN layer.
+        middle: Tensor. Feature map obtained as output from the BiFPN
+            node.
     """
-    now_feature_map_D = MaxPooling2D(3, 2, 'same')(now_feature_map)
-
-    is_non_repeated_block = id == 0
-    is_layer_P6_or_P7 = depth_arg < 2
-    is_layer_P4 = depth_arg == 3
-
-    if is_non_repeated_block:
-        if is_layer_P6_or_P7:
-            next_feature_map = preprocess_features_BiFPN(
-                depth_arg, next_feature_map, num_filters, features, id, False)
-
-        layer_names = [(f'FPN_cells/cell_{id}/fnode'
-                        f'{len(features) - 2 + depth_arg + 1}'
-                        f'/add'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) + depth_arg}'
-                        f'/op_after_combine{9 + depth_arg}'
-                        f'/conv'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) + depth_arg}/'
-                        f'op_after_combine{9 + depth_arg}'
-                        f'/bn')]
+    is_layer_1 = down is None
+    if is_layer_1:
+        to_fuse = [middle, up]
     else:
-        layer_names = [(f'FPN_cells/cell_{id}/'
-                        f'fnode{len(feature_down) - 1 + depth_arg}'
-                        f'/add'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) - 1 + depth_arg}'
-                        f'/op_after_combine'
-                        f'%d' % (len(feature_down) + depth_arg +
-                                 len(features) - 2 + 1) + '/conv'),
-                       (f'FPN_cells/cell_{id}/fnode'
-                        f'{len(feature_down) - 1 + depth_arg}/'
-                        f'op_after_combine'
-                        f'%d' % (len(feature_down) + depth_arg +
-                                 len(features) - 2 + 1) + '/bn')]
-
-    if is_layer_P4:
-        to_fuse = [next_feature_map, now_feature_map_D]
-    else:
-        to_fuse = [next_feature_map, next_td, now_feature_map_D]
-
-    next_out = FuseFeature(
-        name=layer_names[0], fusion=fusion)(
-        to_fuse, fusion)
-    next_out = tf.nn.swish(next_out)
-    next_out = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True,
-                               name=layer_names[1])(next_out)
-    next_out = BatchNormalization(name=layer_names[2])(next_out)
-    return next_out
+        to_fuse = [middle, down] if skip is None else [skip, middle, down]
+    middle = FuseFeature(fusion=fusion)(to_fuse, fusion)
+    middle = tf.nn.swish(middle)
+    middle = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True)(middle)
+    middle = BatchNormalization()(middle)
+    return middle
 
 
-def preprocess_features_BiFPN(depth_arg, input_feature, num_filters,
-                              features, id, is_propagate_downwards):
-    """Perform pre-processing on features before applying
-    downward propagation or upward propagation.
+def BiFPN(middles, skips, num_filters, fusion):
+    """BiFPN block.
 
     # Arguments
-        depth_arg :Int, the depth of the feature of BiFPN layer.
-        input_feature :Tensor, feature from the current layer.
-        num_filters :Int, Number of filters for intermediate layers.
-        features :List, the features returned from EfficientNet
-            backbone.
-        id :Int, the ID or index of the BiFPN block.
-        is_propagate_downwards :Bool, Boolean flag indicating if
-            propagation is in upward or downward direction.
+        middles: Tensor. Feature map obtained as output from the
+            preprocess/BiFPN node.
+        skips: Tensor. Skip feature map obtained as output from the
+            preprocess/BiFPN node.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+        fusion: String representing the feature fusion method.
 
     # Returns
-        preprocessed_feature: Tensor, the preprocessed feature.
+        middles, middles: List, feature maps obtained as output from
+            BiFPN block.
     """
-    is_layer_P7 = depth_arg == 0
+    P3_middle, P4_middle, P5_middle, P6_middle, P7_middle = middles
+    _, P4_skip, P5_skip, P6_skip, _ = skips
 
-    if is_propagate_downwards:
-        if is_layer_P7:
-            layer_names = [(f'resample_p{len(features) + 1}/conv2d'),
-                           (f'resample_p{len(features) + 1}/bn')]
-            P6_in = preprocess_features_partly_BiFPN(
-                input_feature, num_filters, layer_names)
-            P6_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
-                                                     f'{len(features) + 1}'
-                                                     f'/maxpool'))(P6_in)
-            P7_in = MaxPooling2D(3, 2, 'same', name=(f'resample_p'
-                                                     f'{len(features) + 2}'
-                                                     f'/maxpool'))(P6_in)
-            return P6_in, P7_in
-        else:
-            layer_names = [(f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
-                            f'{3 - depth_arg}_{len(features) + depth_arg}'
-                            f'/conv2d'),
-                           (f'FPN_cells/cell_{id}/fnode{depth_arg}/resample_0_'
-                            f'{3 - depth_arg}_{len(features) + depth_arg}/bn')]
-            preprocessed_feature = preprocess_features_partly_BiFPN(
-                input_feature, num_filters, layer_names)
-            return preprocessed_feature
-    else:
-        layer_names = [(f'FPN_cells/cell_{id}/fnode' +
-                        '%d' % (len(features) - 1 + depth_arg) +
-                        f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/conv2d'),
-                       (f'FPN_cells/cell_{id}'
-                        f'/fnode{len(features) - 1 + depth_arg}'
-                        f'/resample_0_{1 + depth_arg}_{9 + depth_arg}/bn')]
-        preprocessed_feature = preprocess_features_partly_BiFPN(
-            input_feature, num_filters, layer_names)
-        return preprocessed_feature
+    # Downpropagation ---------------------------------------------------------
+    P7_up = UpSampling2D()(P7_middle)
+    P6_TD = node_BiFPN(P7_up, P6_middle, None, None, num_filters, fusion)
+    P6_up = UpSampling2D()(P6_TD)
+    P5_TD = node_BiFPN(P6_up, P5_middle, None, None, num_filters, fusion)
+    P5_up = UpSampling2D()(P5_TD)
+    P4_TD = node_BiFPN(P5_up, P4_middle, None, None, num_filters, fusion)
+    P4_up = UpSampling2D()(P4_TD)
+    P3_out = node_BiFPN(P4_up, P3_middle, None, None, num_filters, fusion)
 
+    # Upward propagation ------------------------------------------------------
+    P3_down = MaxPooling2D(3, 2, 'same')(P3_out)
+    P4_out = node_BiFPN(None, P4_TD, P3_down, P4_skip, num_filters, fusion)
+    P4_down = MaxPooling2D(3, 2, 'same')(P4_out)
+    P5_out = node_BiFPN(None, P5_TD, P4_down, P5_skip, num_filters, fusion)
+    P5_down = MaxPooling2D(3, 2, 'same')(P5_out)
+    P6_out = node_BiFPN(None, P6_TD, P5_down, P6_skip, num_filters, fusion)
+    P6_down = MaxPooling2D(3, 2, 'same')(P6_out)
+    P7_out = node_BiFPN(None, P7_middle, P6_down, None, num_filters, fusion)
 
-def preprocess_features_partly_BiFPN(input_feature, num_filters, layer_names):
-    """Perform a part of feature preprocessing such as
-    applying Conv2D and BatchNormalization.
-
-    # Arguments
-        input_feature :Tensor, feature from the current layer.
-        num_filters :Int, Number of filters for intermediate layers.
-        layer_names :List, name of the layers.
-
-    # Returns
-        partly_processed_feature: Tensor, the partly preprocessed
-            feature.
-    """
-    partly_processed_feature = Conv2D(
-        num_filters, 1, 1, 'same', name=layer_names[0])(input_feature)
-    partly_processed_feature = BatchNormalization(
-        name=layer_names[1])(partly_processed_feature)
-    return partly_processed_feature
-
-
-def compute_next_input_BiFPN_non_repeated(features, feature_down, depth_arg,
-                                          P6_in, P7_in, next_feature_map):
-    """Computes next input feature for upward propagation.
-
-    # Arguments
-        features :List, the features returned from EfficientNet
-            backbone.
-        feature_down :Tensor, the feature resulting for upward
-            or downward propagation.
-        depth_arg :Int, the depth of the feature of BiFPN layer.
-        P6_in :Tensor, the output tensor from the P6 layer
-            of EfficientNet.
-        P7_in :Tensor, the output tensor from the P7 layer
-            of EfficientNet.
-        next_feature_map :Tensor, the feature tensor from the relatively
-            top layer.
-
-    # Returns
-        next_input :Tensor, the next input feature for upward
-            propagation.
-        next_td :Tensor, the next input feature for upward
-            propagation generated from previous iteration of
-            upward propagation.
-    """
-    feature_offset_arg = 2
-    next_feature_map = {1: features[-1], 2: P6_in, 3: P7_in, 4: None}
-    return next_feature_map[depth_arg], feature_down[
-        feature_offset_arg - depth_arg]
-
-
-def compute_next_input_feature_BiFPN_repeated(features, feature_down,
-                                              depth_arg, next_feature_map,
-                                              next_td):
-    """Computes next input feature for upward propagation.
-
-    # Arguments
-        features :List, the features returned from EfficientNet
-            backbone.
-        feature_down :Tensor, the feature resulting for upward
-            or downward propagation.
-        depth_arg :Int, the depth of the feature of BiFPN layer.
-        next_feature_map :Tensor, the feature tensor from the relatively
-            top layer.
-        next_td :Tensor, the feature tensor from the relatively
-            top layer as result of upward or downward propagation.
-
-    # Returns
-        next_input :Tensor, the next input feature for upward
-            propagation.
-        next_td :Tensor, the next input feature for upward
-            propagation generated from previous iteration of
-            upward propagation.
-    """
-    num_BiFPN_upsamplers = 3
-    feature_offset_arg = 2
-    is_layer_not_P4 = depth_arg < len(features) - feature_offset_arg
-    if is_layer_not_P4:
-        next_feature_map = features[feature_offset_arg + depth_arg]
-        next_td = feature_down[
-            -num_BiFPN_upsamplers - depth_arg]
-    return next_feature_map, next_td
+    middles = [P3_out, P4_out, P5_out, P6_out, P7_out]
+    return [middles, middles]

@@ -8,7 +8,7 @@ from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientnet_model import EfficientNet
+from efficientnet_model import efficientnet
 
 
 @pytest.fixture
@@ -50,14 +50,14 @@ def test_efficientdet_model():
 def test_efficientnet_model():
     image_size = 512
     images = get_test_images(image_size)
-    features = EfficientNet(images, 'efficientnet-b0', (512, 512, 3))
+    features = efficientnet(images, 'efficientnet-b0', (512, 512, 3))
     assert len(features) == 5, 'EfficientNet model features length mismatch'
     del features
 
 
 def test_efficientnet_bottleneck_block():
     images = get_test_images(128, 10)
-    output_shape = EfficientNet(
+    output_shape = efficientnet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6])[0].shape
@@ -67,7 +67,7 @@ def test_efficientnet_bottleneck_block():
 
 def test_efficientnet_se_block():
     images = get_test_images(128, 10)
-    output_shape = EfficientNet(
+    output_shape = efficientnet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6],
@@ -100,7 +100,7 @@ def test_efficientnet_features(input_shape, backbone, feature_shape,
                                feature_channels):
     shape = (input_shape, input_shape, 3)
     image = Input(shape=shape, name='image')
-    branch_tensors = EfficientNet(image, backbone, shape)
+    branch_tensors = efficientnet(image, backbone, shape)
     assert len(branch_tensors) == 5, "Number of features mismatch"
     for branch_tensor, feature_shape_per_tensor, feature_channel  \
             in zip(branch_tensors, feature_shape, feature_channels):

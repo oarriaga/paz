@@ -17,13 +17,15 @@ raw_images = loader(file_name)
 
 
 def get_class_name_efficientdet(dataset_name):
-    """Function that returns the names of the class for COCO and VOC dataset.
+    """Function that returns the names of the class for COCO and VOC
+    dataset.
 
     # Arguments:
         dataset_name: String, that specifies the name of the dataset.
 
     # Returns:
-        List: _Containing the names of the class of the required dataset.
+        List: _Containing the names of the class of the required
+            dataset.
     """
     if dataset_name == 'COCO':
         return ['person', 'bicycle', 'car', 'motorcycle',
@@ -76,14 +78,15 @@ def efficientdet_preprocess(image, image_size):
 
     # Arguments
         image: Tensor, raw input image to be preprocessed
-            of shape [bs, h, w, c]
+        of shape [bs, h, w, c]
         image_size: Tensor, size to resize the raw image
-            of shape [bs, new_h, new_w, c]
+        of shape [bs, new_h, new_w, c]
 
     # Returns
         image: Numpy array, resized and preprocessed image
         image_scale: Numpy array, scale to reconstruct each of
-            the raw images to original size from the resized image.
+        the raw images to original size from the resized
+        image.
     """
 
     preprocessing = SequentialProcessor([
@@ -101,12 +104,12 @@ def create_multibox_head(branch_tensors, num_levels, num_classes,
     """Concatenates class and box outputs into a single tensor.
 
     # Arguments:
-        branch_tensors: List, containing class outputs and box outputs from
-            efficientdet network.
+        branch_tensors: List, containing class outputs and box outputs
+            from efficientdet network.
         num_levels: Int, specifying the number of feature levels.
         num_classes: Int, specifying the number of output classes.
-        num_regressions: Int, specifying the bounding box coordinate values to
-            be regressed.
+        num_regressions: Int, specifying the bounding box coordinate
+            values to be regressed.
 
     # Returns:
         Tensor: Containing concatenated class and box outputs.

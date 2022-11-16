@@ -13,8 +13,8 @@ from utils import efficientdet_preprocess, get_class_name_efficientdet
 
 class PreprocessImage(SequentialProcessor):
     """Preprocess RGB image by resizing it to the given ``shape``. If a
-    ``mean`` is given it is substracted from image and it not the image gets
-    normalized.
+    ``mean`` is given it is substracted from image and it not the image
+    gets normalized.
 
     # Argumeqnts
         shape: List of two Ints.
@@ -36,8 +36,8 @@ class AugmentDetection(SequentialProcessor):
         prior_boxes: Numpy array of shape ``[num_boxes, 4]`` containing
             prior/default bounding boxes.
         split: Flag from `paz.processors.TRAIN`, ``paz.processors.VAL``
-            or ``paz.processors.TEST``. Certain transformations would take
-            place depending on the flag.
+            or ``paz.processors.TEST``. Certain transformations would
+            take place depending on the flag.
         num_classes: Int.
         size: Int. Image size.
         mean: List of three elements indicating the per channel mean.
@@ -81,7 +81,8 @@ class DetectSingleShot_EfficientDet(Processor):
         score_thresh: Float between [0, 1]
         nms_thresh: Float between [0, 1].
         mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        draw: Boolean. If ``True`` prediction are drawn in the returned
+            image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh):
         self.model = model
@@ -117,7 +118,8 @@ class DetectSingleShot(DetectSingleShot):
         nms_thresh: Float between [0, 1].
         mean: List of three elements indicating the per channel mean.
         variances: List containing the variances of the encoded boxes.
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        draw: Boolean. If ``True`` prediction are drawn in the returned
+            image.
     """
     def __init__(
             self, model, class_names, score_thresh, nms_thresh,

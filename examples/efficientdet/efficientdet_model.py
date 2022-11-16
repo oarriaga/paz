@@ -3,9 +3,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
 
 from anchors import build_prior_boxes
-from efficientdet_blocks import (BiFPN_to_BiFPN, BoxNet, ClassNet,
-                                 Efficientnet_to_BiFPN)
-from efficientnet_model import EfficientNet
+from efficientdet_blocks import BiFPN, BoxNet, ClassNet, efficientnet_to_BiFPN
+from efficientnet_model import efficientnet
 from utils import create_multibox_head
 
 WEIGHT_PATH = (
@@ -59,28 +58,27 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
     image = Input(shape=input_shape, name='image')
-    branch_tensors = EfficientNet(image, backbone, input_shape)
+    branches = efficientnet(image, backbone, input_shape)
 
-    branch_tensors = Efficientnet_to_BiFPN(
-        branch_tensors, FPN_num_filters, fusion)
-    for FPN_cell_id in range(1, FPN_cell_repeats):
-        branch_tensors = BiFPN_to_BiFPN(
-            branch_tensors, FPN_num_filters, fusion, FPN_cell_id)
+    middles, skips = efficientnet_to_BiFPN(branches, FPN_num_filters)
+    for _ in range(FPN_cell_repeats):
+        middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
+
     num_anchors = len(aspect_ratios) * num_scales
-
     class_outputs = ClassNet(
-        branch_tensors, num_classes, num_anchors, FPN_num_filters,
+        middles, num_classes, num_anchors, FPN_num_filters,
         min_level, max_level, box_class_repeats, survival_rate)
     box_outputs = BoxNet(
-        branch_tensors, num_anchors, FPN_num_filters, min_level,
+        middles, num_anchors, FPN_num_filters, min_level,
         max_level, box_class_repeats, survival_rate)
 
-    branch_tensors = [class_outputs, box_outputs]
+    branches = [class_outputs, box_outputs]
     if return_base:
-        outputs = branch_tensors
+        outputs = branches
     else:
         num_levels = max_level - min_level + 1
-        outputs = create_multibox_head(branch_tensors, num_levels, num_classes)
+        outputs = create_multibox_head(branches, num_levels, num_classes)
+
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
     if (((base_weights == 'COCO') and (head_weights == 'COCO')) or
