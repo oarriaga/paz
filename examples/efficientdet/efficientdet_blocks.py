@@ -85,8 +85,7 @@ class FuseFeature(Layer):
         """
         # Arguments
         inputs: Tensor. Features to be fused.
-        fusion: String representing the feature fusion
-            method.
+        fusion: String representing the feature fusion method.
 
         # Returns
         x: feature after combining by the feature fusion method in
@@ -126,8 +125,7 @@ def conv2D_layer(num_filters, kernel_size, padding, activation,
         padding: String. Padding for conv layer.
         activation: String. Activation function.
         name: String. Name of conv layer.
-        bias_initializer: String or TF Function. Bias
-            initialization.
+        bias_initializer: String or TF Function. Bias initialization.
 
     # Returns
         conv2D_layer: TF conv layer.
@@ -147,7 +145,7 @@ def build_predictionnet(repeats, num_filters, name, min_level, max_level,
     # Arguments
         repeats: List, feature to be processed by PredictionNet head.
         num_filters: Integer. Number of filters for intermediate
-                     layers.
+            layers.
         with_separable_conv: Bool.
         name: String indicating the name of this layer.
         min_level: Integer. Minimum level for features.
@@ -281,6 +279,21 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
 
 
 def efficientnet_to_BiFPN(branches, num_filters):
+    """Modifies the branches produced by EfficientNet backbone such that
+    it can be fed into the BiFPN blocks. This modification includes
+    generating feature maps P6 and P7 and preprocessing by applying
+    2D convolution and batch normalization.
+
+    # Arguments
+        branches: List. It is a list of tensors containing the feature
+            maps from the output layers of EfficientNet backbone.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+
+    # Returns
+        middles skips: List, of tensors or feature maps obtained as a
+            result of preprocessing EfficientNet feature maps.
+    """
     _, _, P3, P4, P5 = branches
     P6, P7 = build_branch(P5, num_filters)
     branches_extended = [P3, P4, P5, P6, P7]
@@ -289,6 +302,18 @@ def efficientnet_to_BiFPN(branches, num_filters):
 
 
 def build_branch(P5, num_filters):
+    """Computes feature maps P6 and P7 from P5.
+
+    # Arguments
+        P5: Tensor. Output feature map obtained from fifth layer of
+            EfficientNet backbone.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+
+    # Returns
+        P6, P7: List, of tensors or feature maps obtained from sixth
+            and seventh layer of EfficientNet backbone.
+    """
     P6 = conv_batchnorm_block(P5, num_filters)
     P6 = MaxPooling2D(3, 2, 'same')(P6)
     P7 = MaxPooling2D(3, 2, 'same')(P6)
@@ -296,6 +321,20 @@ def build_branch(P5, num_filters):
 
 
 def preprocess_node(branches, num_filters):
+    """Preprocesses the feature maps obtained from EfficientNet backbone
+    by applying 2D convolution and bath normalization such that it can
+    be fed into the BiFPN block.
+
+    # Arguments
+        branches: List. It is a list of tensors containing the feature
+            maps from the output layers of EfficientNet backbone.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+
+    # Returns
+        middles, skips: List, of tensors or feature maps obtained after
+            preprocessing.
+    """
     P3, P4, P5, P6, P7 = branches
     P3_middle = conv_batchnorm_block(P3, num_filters)
     P4_middle = conv_batchnorm_block(P4, num_filters)
@@ -309,12 +348,38 @@ def preprocess_node(branches, num_filters):
 
 
 def conv_batchnorm_block(x, num_filters):
+    """Builds 2D convolution and batch normalization layers.
+
+    # Arguments
+        x: Tensor. Input feature map.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+
+    # Returns
+        x: Tensor. Feature map obtained as output after applying 2D
+            convolution and batch normalization.
+    """
     x = Conv2D(num_filters, 1, 1, 'same')(x)
     x = BatchNormalization()(x)
     return x
 
 
 def node_BiFPN(up, middle, down, skip, num_filters, fusion):
+    """Implements the functionality of nodes in the BiFPN block.
+
+    # Arguments
+        up: Tensor, upsampled feature map.
+        middle: Tensor, Output feature map from preprocess/BiFPN node.
+        down: Tensor, Downsampled feature map.
+        skip: Tensor, Skip feature map.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+        fusion: String representing the feature fusion method.
+
+    # Returns
+        middle: Tensor. Feature map obtained as output from the BiFPN
+            node.
+    """
     is_layer_1 = down is None
     if is_layer_1:
         to_fuse = [middle, up]
@@ -328,17 +393,20 @@ def node_BiFPN(up, middle, down, skip, num_filters, fusion):
 
 
 def BiFPN(middles, skips, num_filters, fusion):
-    """
-    BiFPN layer.
+    """BiFPN block.
+
     # Arguments
-    branches: List, feature to be processed by BiFPN.
-    num_filters: Integer. Number of filters for intermediate layers.
-    id: Integer. Represents the BiFPN repetition count.
-    FPN_weight_method: String representing the feature fusion method in
-        BiFPN.
+        middles: Tensor. Feature map obtained as output from the
+            preprocess/BiFPN node.
+        skips: Tensor. Skip feature map obtained as output from the
+            preprocess/BiFPN node.
+        num_filters: Integer. Number of filters for intermediate
+            layers.
+        fusion: String representing the feature fusion method.
 
     # Returns
-    branches: List, branches after BiFPN for the class and box heads.
+        middles, middles: List, feature maps obtained as output from
+            BiFPN block.
     """
     P3_middle, P4_middle, P5_middle, P6_middle, P7_middle = middles
     _, P4_skip, P5_skip, P6_skip, _ = skips
@@ -364,4 +432,4 @@ def BiFPN(middles, skips, num_filters, fusion):
     P7_out = node_BiFPN(None, P7_middle, P6_down, None, num_filters, fusion)
 
     middles = [P3_out, P4_out, P5_out, P6_out, P7_out]
-    return middles, middles
+    return [middles, middles]
