@@ -5,8 +5,6 @@ import tensorflow as tf
 from tensorflow.keras.layers import (BatchNormalization, Conv2D,
                                      DepthwiseConv2D, Input)
 
-from necessary_imports import incrementer
-
 
 def get_scaling_coefficients(model_name):
     """Default efficientnet scaling coefficients and
@@ -51,11 +49,10 @@ def round_filters(filters, W_coefficient, D_divisor):
     filters = filters * W_coefficient
     min_D = D_divisor
     half_D = D_divisor / 2
-    threshold = int(filters + half_D) // D_divisor * D_divisor
-    new_filters = max(min_D, threshold)
+    threshold = (int(filters + half_D) // D_divisor) * D_divisor
+    new_filters = int(max(min_D, threshold))
     if new_filters < 0.9 * filters:
-        new_filters = new_filters + D_divisor
-    new_filters = int(new_filters)
+        new_filters = int(new_filters + D_divisor)
     return new_filters
 
 
@@ -93,13 +90,13 @@ def conv_normal_initializer(shape, dtype=None):
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
-def get_drop_connect(features, is_training, survival_rate):
+def get_drop_connect(x, is_training, survival_rate):
     """Drop the entire conv with given survival probability.
     Deep Networks with Stochastic Depth,
     https://arxiv.org/pdf/1603.09382.pdf
 
     # Arguments
-        features: Tensor, input feature map to undergo drop connection.
+        x: Tensor, input feature map to undergo drop connection.
         is_training: Bool specifying the training phase.
         survival_rate: Float, survival probability to drop.
 
@@ -107,54 +104,19 @@ def get_drop_connect(features, is_training, survival_rate):
         output: Tensor, output feature map after drop connect.
     """
     if not is_training:
-        return features
-    batch_size = tf.shape(features)[0]
+        return x
+    batch_size = tf.shape(x)[0]
     random_tensor = survival_rate
     random_tensor = random_tensor + tf.random.uniform(
-        [batch_size, 1, 1, 1], dtype=features.dtype)
+        [batch_size, 1, 1, 1], dtype=x.dtype)
     binary_tensor = tf.floor(random_tensor)
-    output = features / survival_rate * binary_tensor
+    output = x / survival_rate * binary_tensor
     return output
-
-
-def name_conv_layer(conv_id):
-    """Names the convolutional layer given its ID.
-
-    # Arguments
-        conv_id: Generator, that generates the ID of the layer.
-
-    # Returns
-        output: Str, name of the convolutional layer to be assigned.
-    """
-    if not next(conv_id):
-        name_appender = ""
-    else:
-        name_appender = '_' + str(next(conv_id) // 2)
-    name = 'conv2d' + name_appender
-    return name
-
-
-def name_batch_norm(batch_norm_id):
-    """Names the batch normalization layer given its ID.
-
-    # Arguments
-        batch_norm_id: Generator, that generates the ID of the layer.
-
-    # Returns
-        output: Str, name of the batch normalization layer to be
-            assigned.
-    """
-    if not next(batch_norm_id):
-        name_appender = ""
-    else:
-        name_appender = '_' + str(next(batch_norm_id) // 2)
-    name = 'batch_normalization' + name_appender
-    return name
 
 
 def mobile_inverted_residual_bottleneck_block(
         inputs, survival_rate, kernel_size, intro_filters, outro_filters,
-        expand_ratio, strides, squeeze_excite_ratio, name=''):
+        expand_ratio, strides, squeeze_excite_ratio):
     """A class of MBConv: Mobile Inverted Residual Bottleneck. As
     provided in the paper: https://arxiv.org/pdf/1801.04381.pdf and
     https://arxiv.org/pdf/1905.11946.pdf
@@ -169,33 +131,27 @@ def mobile_inverted_residual_bottleneck_block(
         strides: List, strides in height and weight of conv filter.
         squeeze_excite_ratio: Float, squeeze excite block ratio.
         num_blocks: Int, number of Mobile bottleneck conv blocks.
-        name: Str, layer name.
 
     # Returns
         x: Tensor, output features.
     """
-    conv_id = incrementer(0)
-    batch_norm_id = incrementer(0)
     filters = intro_filters * expand_ratio
     x = build_MBblock_input_layer(
-        expand_ratio, filters, conv_normal_initializer,
-        name, conv_id, batch_norm_id, inputs)
+        expand_ratio, filters, conv_normal_initializer, inputs)
 
     x = build_MBblock_depth_wise_conv_layer(
-        kernel_size, strides, conv_normal_initializer,
-        name, batch_norm_id, x)
+        kernel_size, strides, conv_normal_initializer, x)
 
     x = build_MBblock_se_layer(
-        intro_filters, squeeze_excite_ratio, x, filters, name)
+        intro_filters, squeeze_excite_ratio, x, filters)
 
     x = build_MBblock_output_layer(
-        inputs, intro_filters, outro_filters, name, conv_id,
-        batch_norm_id, x, strides, survival_rate)
+        x, inputs, intro_filters, outro_filters, strides, survival_rate)
     return x
 
 
-def build_MBblock_input_layer(expand_ratio, filters, conv_normal_initializer,
-                              name, conv_id, batch_norm_id, inputs):
+def build_MBblock_input_layer(expand_ratio, filters,
+                              conv_normal_initializer, inputs):
     """Builds input layer of the Mobile Inverted Residual Bottleneck
     block.
 
@@ -205,7 +161,6 @@ def build_MBblock_input_layer(expand_ratio, filters, conv_normal_initializer,
             construct.
         conv_normal_initializer: Function, that initializes
             convolutional kernels.
-        name: Str, layer name.
         conv_id: Generator, that generates the ID of the convolutional
             layer.
         batch_norm_id: Generator, that generates the ID of the batch
@@ -219,10 +174,8 @@ def build_MBblock_input_layer(expand_ratio, filters, conv_normal_initializer,
     """
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
-                   kernel_initializer=conv_normal_initializer,
-                   name=name + '/' + name_conv_layer(conv_id))(inputs)
-        x = BatchNormalization(
-            name=name+'/' + name_batch_norm(batch_norm_id))(x)
+                   kernel_initializer=conv_normal_initializer)(inputs)
+        x = BatchNormalization()(x)
         x = tf.nn.swish(x)
     else:
         x = inputs
@@ -230,8 +183,7 @@ def build_MBblock_input_layer(expand_ratio, filters, conv_normal_initializer,
 
 
 def build_MBblock_depth_wise_conv_layer(kernel_size, strides,
-                                        conv_normal_initializer, name,
-                                        batch_norm_id, x):
+                                        conv_normal_initializer, x):
     """Builds input layer of the Mobile Inverted Residual Bottleneck
     block.
 
@@ -240,7 +192,6 @@ def build_MBblock_depth_wise_conv_layer(kernel_size, strides,
         strides: List, stride of the filter.
         conv_normal_initializer: Function, that initializes
             convolutional kernels.
-        name: Str, layer name.
         batch_norm_id: Generator, that generates the ID of the batch
             normalization layer.
         x: Tensor, input features for the Mobile Inverted Residual
@@ -251,16 +202,13 @@ def build_MBblock_depth_wise_conv_layer(kernel_size, strides,
             layer of the Mobile Inverted Residual Bottleneck block.
     """
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
-                        depthwise_initializer=conv_normal_initializer,
-                        name=name + '/depthwise_conv2d')(x)
-    x = BatchNormalization(
-        name=name + '/' + name_batch_norm(batch_norm_id))(x)
+                        depthwise_initializer=conv_normal_initializer)(x)
+    x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
 
 
-def build_MBblock_se_layer(intro_filters, squeeze_excite_ratio, x,
-                           filters, name):
+def build_MBblock_se_layer(intro_filters, squeeze_excite_ratio, x, filters):
     """Builds squeeze excitation layer of the Mobile Inverted Residual
     Bottleneck block.
 
@@ -270,7 +218,6 @@ def build_MBblock_se_layer(intro_filters, squeeze_excite_ratio, x,
         x: Tensor, input fro depth wise convolutional layer.
         filters: Int, expanded input filters for the blocks to
             construct.
-        name: Str, layer name.
 
     # Returns
         x: Tensor, output features from the squeeze excitation layer of
@@ -279,20 +226,17 @@ def build_MBblock_se_layer(intro_filters, squeeze_excite_ratio, x,
     num_reduced_filters = max(1, int(intro_filters * squeeze_excite_ratio))
     se = tf.reduce_mean(x, [1, 2], keepdims=True)
     se = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
-                kernel_initializer=conv_normal_initializer,
-                name=name + '/se/conv2d')(se)
+                kernel_initializer=conv_normal_initializer)(se)
     se = tf.nn.swish(se)
     se = Conv2D(filters, 1, padding='same', use_bias=True,
-                kernel_initializer=conv_normal_initializer,
-                name=name + '/se/conv2d_1')(se)
+                kernel_initializer=conv_normal_initializer)(se)
     se = tf.sigmoid(se)
     x = se * x
     return x
 
 
-def build_MBblock_output_layer(inputs, intro_filters, outro_filters,
-                               name, conv_id, batch_norm_id, x, strides,
-                               survival_rate):
+def build_MBblock_output_layer(x, inputs, intro_filters, outro_filters,
+                               strides, survival_rate):
     """Builds output layer of the Mobile Inverted Residual
     Bottleneck block.
 
@@ -301,7 +245,6 @@ def build_MBblock_output_layer(inputs, intro_filters, outro_filters,
             Bottleneck block..
         intro_filters: Int, input filters for the blocks to construct.
         outro_filters: Int, output filters for the blocks to construct.
-        name: Str, layer name.
         conv_id: Generator, that generates the ID of the convolutional
             layer.
         batch_norm_id: Generator, that generates the ID of the batch
@@ -316,10 +259,8 @@ def build_MBblock_output_layer(inputs, intro_filters, outro_filters,
             Bottleneck block.
     """
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
-               kernel_initializer=conv_normal_initializer,
-               name=name + '/' + name_conv_layer(conv_id))(x)
-    x = BatchNormalization(
-        name=name + '/' + name_batch_norm(batch_norm_id))(x)
+               kernel_initializer=conv_normal_initializer)(x)
+    x = BatchNormalization()(x)
     if all(s == 1 for s in strides) and intro_filters == outro_filters:
         if survival_rate:
             x = get_drop_connect(x, False, survival_rate)
@@ -328,8 +269,7 @@ def build_MBblock_output_layer(inputs, intro_filters, outro_filters,
 
 
 def MBconv_block_parameters(block_arg, intro_filters, outro_filters,
-                            W_coefficient, D_coefficient,
-                            D_divisor, repeats):
+                            W_coefficient, D_coefficient, D_divisor, repeats):
     """Compute parameters of the MBConv block.
 
     # Arguments
@@ -351,16 +291,13 @@ def MBconv_block_parameters(block_arg, intro_filters, outro_filters,
     num_outro_filters = outro_filters[block_arg]
     intro_filter = round_filters(num_intro_filters, W_coefficient, D_divisor)
     outro_filter = round_filters(num_outro_filters, W_coefficient, D_divisor)
-
     repeats = round_repeats(repeats[block_arg], D_coefficient)
-
     return intro_filter, outro_filter, repeats
 
 
-def MBconv_block_features(x, block_id, block_arg, survival_rate,
-                          kernel_sizes, intro_filter, outro_filter,
-                          expand_ratios, strides, repeats,
-                          squeeze_excite_ratio, model_name):
+def MBconv_block_features(x, block_id, block_arg, survival_rate, kernel_sizes,
+                          intro_filter, outro_filter, expand_ratios, strides,
+                          repeats, squeeze_excite_ratio):
     """Computes features from a given MBConv block.
 
     # Arguments
@@ -384,28 +321,21 @@ def MBconv_block_features(x, block_id, block_arg, survival_rate,
             layer.
         block_id: Int, the block identifier.
     """
-    x = mobile_inverted_residual_bottleneck_block(
-        x, survival_rate, kernel_sizes[block_arg], intro_filter,
-        outro_filter, expand_ratios[block_arg], strides[block_arg],
-        squeeze_excite_ratio, model_name + '/blocks_%d' % block_id)
-
-    block_id = block_id + 1
-    if repeats > 1:
-        for _ in range(repeats - 1):
-            x = mobile_inverted_residual_bottleneck_block(
-                x, survival_rate, kernel_sizes[block_arg], outro_filter,
-                outro_filter, expand_ratios[block_arg], [1, 1],
-                squeeze_excite_ratio, model_name + '/blocks_%d' % block_id)
-            block_id = block_id + 1
-
+    stride_value = strides[block_arg]
+    for _ in range(repeats):
+        x = mobile_inverted_residual_bottleneck_block(
+            x, survival_rate, kernel_sizes[block_arg], intro_filter,
+            outro_filter, expand_ratios[block_arg], stride_value,
+            squeeze_excite_ratio)
+        intro_filter, stride_value = outro_filter, [1, 1]
+        block_id = block_id + 1
     return x, block_id
 
 
-def process_features(x, block_arg, intro_filters, outro_filters,
-                     W_coefficient, D_coefficient, D_divisor,
-                     repeats, squeeze_excite_ratio, block_id,
-                     survival_rate, kernel_sizes, strides, model_name,
-                     expand_ratios):
+def process_feature_maps(
+        x, block_arg, intro_filters, outro_filters, W_coefficient,
+        D_coefficient, D_divisor, repeats, squeeze_excite_ratio, block_id,
+        survival_rate, kernel_sizes, strides, expand_ratios):
     """Computes features from a given MBConv block.
 
     # Arguments
@@ -432,20 +362,19 @@ def process_features(x, block_arg, intro_filters, outro_filters,
             layer.
         block_id: Int, the block identifier.
     """
-    (intro_filter, outro_filter, repeats) = MBconv_block_parameters(
+    parameters = MBconv_block_parameters(
         block_arg, intro_filters, outro_filters, W_coefficient,
         D_coefficient, D_divisor, repeats)
+    intro_filter, outro_filter, repeats = parameters
 
     x, block_id = MBconv_block_features(
         x, block_id, block_arg, survival_rate, kernel_sizes, intro_filter,
-        outro_filter, expand_ratios, strides, repeats, squeeze_excite_ratio,
-        model_name)
+        outro_filter, expand_ratios, strides, repeats, squeeze_excite_ratio)
 
     return x, block_id
 
 
-def conv_block_1(image, intro_filters, W_coefficient,
-                 D_divisor, model_name):
+def conv_block(image, intro_filters, W_coefficient, D_divisor):
     """Construct the first convolutional layer of EfficientNet.
 
     # Arguments
@@ -460,19 +389,16 @@ def conv_block_1(image, intro_filters, W_coefficient,
             layer.
     """
     filters = round_filters(intro_filters[0], W_coefficient, D_divisor)
-
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
-               None, False, conv_normal_initializer,
-               name=model_name + '/stem/conv2d')(image)
-    x = BatchNormalization(name=model_name + '/stem/batch_normalization')(x)
+               None, False, conv_normal_initializer)(image)
+    x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
 
 
-def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters,
-                  W_coefficient, D_coefficient, D_divisor,
-                  repeats, squeeze_excite_ratio, survival_rate, strides,
-                  model_name, expand_ratios):
+def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
+                  D_coefficient, D_divisor, repeats, squeeze_excite_ratio,
+                  survival_rate, strides, expand_ratios):
     """Construct the blocks of MBConv: Mobile Inverted Residual
     Bottleneck.
 
@@ -498,22 +424,21 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters,
         features: A list of Tensor which is the features from this
             layer(s).
     """
-    block_id, features = 0, []
+    block_id, feature_maps = 0, []
     for block_arg in range(len(kernel_sizes)):
-        x, block_id = process_features(
+        x, block_id = process_feature_maps(
             x, block_arg, intro_filters, outro_filters, W_coefficient,
-            D_coefficient, D_divisor, repeats,
-            squeeze_excite_ratio, block_id, survival_rate, kernel_sizes,
-            strides, model_name, expand_ratios)
+            D_coefficient, D_divisor, repeats, squeeze_excite_ratio, block_id,
+            survival_rate, kernel_sizes, strides, expand_ratios)
 
         is_last_block = block_arg == len(kernel_sizes) - 1
         if not is_last_block:
             next_block_stride = strides[block_arg + 1][0]
             if next_block_stride == 2:
-                features.append(x)
+                feature_maps.append(x)
         elif is_last_block:
-            features.append(x)
-    return features
+            feature_maps.append(x)
+    return feature_maps
 
 
 def efficientnet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
@@ -545,7 +470,7 @@ def efficientnet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
             block.
 
     # Raises
-        ValueError: when blocks_args is not specified as list.
+        ValueError: when repeats is not greater than zero.
     """
 
     assert (repeats > np.zeros_like(repeats)).sum() == len(repeats)
@@ -554,10 +479,9 @@ def efficientnet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
 
     image = Input(tensor=image, shape=input_shape, name='image')
-    x = conv_block_1(image, intro_filters, W_coefficient,
-                     D_divisor, model_name)
-    features = MBconv_blocks(
+    x = conv_block(image, intro_filters, W_coefficient, D_divisor)
+    x = MBconv_blocks(
         x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
         D_coefficient, D_divisor, repeats, squeeze_excite_ratio,
-        survival_rate, strides, model_name, expand_ratios)
-    return features
+        survival_rate, strides, expand_ratios)
+    return x

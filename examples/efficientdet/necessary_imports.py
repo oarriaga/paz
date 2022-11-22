@@ -153,14 +153,3 @@ def scale_box(predictions, image_scales=None):
         boxes = boxes * scales
         predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
     return predictions
-
-
-def incrementer(initial_value):
-    """ Generates a counter variable
-    # Yields:
-        counter_var: Int a counter vaiable
-    """
-    counter_var = initial_value
-    while True:
-        yield counter_var
-        counter_var += 1
