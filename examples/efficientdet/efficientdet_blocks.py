@@ -7,9 +7,8 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D, Layer,
 from utils import GetDropConnect
 
 
-def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
-             min_level=3, max_level=7, repeats=4, survival_rate=None,
-             return_base=False, name='class_net/'):
+def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
+             repeats=4, survival_rate=None, num_classes=90, return_base=False):
     """Object class prediction network. Initialize the ClassNet.
 
     # Arguments
@@ -30,15 +29,14 @@ def ClassNet(features, num_classes=90, num_anchors=9, num_filters=32,
     # Returns
         box_outputs: List, BoxNet output offsets for each level.
     """
-    class_outputs = build_predictionnet(
-        repeats, num_filters, name, min_level, max_level, num_classes,
-        num_anchors, features, survival_rate, return_base, build_classnet=True)
+    args = (repeats, num_filters, min_level, max_level, num_classes,
+            num_anchors, features, survival_rate, return_base)
+    class_outputs = build_predictionnet(*args, build_classnet=True)
     return class_outputs
 
 
 def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
-           max_level=7, repeats=4, survival_rate=None,
-           return_base=False, name='box_net/'):
+           max_level=7, repeats=4, survival_rate=None, return_base=False):
     """Initialize the BoxNet.
 
     # Arguments
@@ -58,9 +56,9 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     # Returns
         box_outputs: List, BoxNet output offsets for each level.
     """
-    box_outputs = build_predictionnet(
-        repeats, num_filters, name, min_level, max_level, None, num_anchors,
-        features, survival_rate, return_base, build_classnet=False)
+    args = (repeats, num_filters, min_level, max_level, None,
+            num_anchors, features, survival_rate, return_base)
+    box_outputs = build_predictionnet(*args, build_classnet=False)
     return box_outputs
 
 
@@ -77,9 +75,9 @@ class FuseFeature(Layer):
 
     def build(self, input_shape):
         num_in = len(input_shape)
-        self.w = self.add_weight(
-            self.name, (num_in,), tf.float32,
-            tf.keras.initializers.constant(1 / num_in), trainable=True)
+        args = (self.name, (num_in,), tf.float32,
+                tf.keras.initializers.constant(1 / num_in))
+        self.w = self.add_weight(*args, trainable=True)
 
     def call(self, inputs, fusion):
         """
@@ -117,7 +115,7 @@ class FuseFeature(Layer):
 
 
 def conv2D_layer(num_filters, kernel_size, padding, activation,
-                 name, bias_initializer):
+                 bias_initializer):
     """Gets the conv2D layer in ClassNet class.
     # Arguments
         num_filters: Integer. Number of intermediate layers.
@@ -130,14 +128,14 @@ def conv2D_layer(num_filters, kernel_size, padding, activation,
     # Returns
         conv2D_layer: TF conv layer.
     """
-    conv2D_layer = SeparableConv2D(
-        num_filters, kernel_size, (1, 1), padding, 'channels_last',
-        (1, 1), 1, activation, True, tf.initializers.variance_scaling(),
-        tf.initializers.variance_scaling(), bias_initializer, name=name)
+    args = (num_filters, kernel_size, (1, 1), padding, 'channels_last',
+            (1, 1), 1, activation, True, tf.initializers.variance_scaling(),
+            tf.initializers.variance_scaling(), bias_initializer)
+    conv2D_layer = SeparableConv2D(*args)
     return conv2D_layer
 
 
-def build_predictionnet(repeats, num_filters, name, min_level, max_level,
+def build_predictionnet(repeats, num_filters, min_level, max_level,
                         num_classes, num_anchors, features, survival_rate,
                         return_base, build_classnet):
     """Builds Prediction Net part of the Efficientdet
@@ -162,37 +160,32 @@ def build_predictionnet(repeats, num_filters, name, min_level, max_level,
     # Returns
         predictor_outputs: List. Output of PredictionNet block.
     """
-    conv_blocks = build_predictionnet_conv_blocks(
-        repeats, num_filters, name, build_classnet)
+    conv_blocks = build_predictionnet_conv_blocks(repeats, num_filters)
 
-    batchnorms = build_predictionnet_batchnorm_blocks(
-        repeats, min_level, max_level, name, build_classnet)
+    args = (repeats, min_level, max_level)
+    batchnorms = build_predictionnet_batchnorm_blocks(*args)
 
     if build_classnet:
         bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
         num_filters = num_classes * num_anchors
         num_levels = max_level - min_level + 1
-        layer_name = name + 'class-predict'
     else:
         bias_initializer = tf.zeros_initializer()
         num_filters = 4 * num_anchors
         num_levels = len(features)
-        layer_name = name + 'box-predict'
 
-    classes = conv2D_layer(
-        num_filters, 3, 'same', None, layer_name,
-        bias_initializer)
+    classes = conv2D_layer(num_filters, 3, 'same', None, bias_initializer)
 
     predictor_outputs = []
     for level_id in range(num_levels):
-        level_feature_map = propagate_forward_predictionnet(
-            features, level_id, repeats, conv_blocks, batchnorms,
-            survival_rate, return_base, classes)
+        args = (features, level_id, repeats, conv_blocks, batchnorms,
+                survival_rate, return_base, classes)
+        level_feature_map = propagate_forward_predictionnet(*args)
         predictor_outputs.append(level_feature_map)
     return predictor_outputs
 
 
-def build_predictionnet_conv_blocks(repeats, num_filters, name, is_classnet):
+def build_predictionnet_conv_blocks(repeats, num_filters):
     """Builds convolutional blocks for PredictionNet
 
     # Arguments
@@ -205,17 +198,14 @@ def build_predictionnet_conv_blocks(repeats, num_filters, name, is_classnet):
     # Returns
         conv_blocks: List. Convolutional blocks for PredictionNet.
     """
-    layer_name_prefix = name + 'class' if is_classnet else name + 'box'
     conv_blocks = []
-    for repeat_args in range(repeats):
-        conv_blocks.append(conv2D_layer(
-            num_filters, 3, 'same', None,
-            layer_name_prefix + '-%d' % repeat_args, tf.zeros_initializer()))
+    for _ in range(repeats):
+        args = (num_filters, 3, 'same', None, tf.zeros_initializer())
+        conv_blocks.append(conv2D_layer(*args))
     return conv_blocks
 
 
-def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level,
-                                         name, is_classnet):
+def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level):
     """Builds batch normalization blocks for PredictionNet
 
     # Arguments
@@ -228,13 +218,11 @@ def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level,
     # Returns
         batchnorms: List. Batch normalization blocks for PredictionNet.
     """
-    layer_name_prefix = name + 'class' if is_classnet else name + 'box'
     batchnorms = []
-    for repeat_args in range(repeats):
+    for _ in range(repeats):
         batchnorm_per_level = []
-        for level in range(min_level, max_level + 1):
-            batchnorm_per_level.append(BatchNormalization(
-                name=layer_name_prefix + '-%d-bn-%d' % (repeat_args, level)))
+        for _ in range(min_level, max_level + 1):
+            batchnorm_per_level.append(BatchNormalization())
         batchnorms.append(batchnorm_per_level)
     return batchnorms
 

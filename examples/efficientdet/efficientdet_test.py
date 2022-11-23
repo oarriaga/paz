@@ -70,8 +70,7 @@ def test_efficientnet_se_block():
     output_shape = efficientnet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
-        outro_filters=[6], expand_ratios=[6],
-        squeeze_excite_ratio=0.8)[0].shape
+        outro_filters=[6], expand_ratios=[6], SE_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 

@@ -64,8 +64,8 @@ class GetDropConnect(keras.layers.Layer):
         if training:
             batch_size = tf.shape(features)[0]
             random_tensor = self.survival_rate
-            random_tensor = random_tensor + tf.random.uniform(
-                [batch_size, 1, 1, 1], dtype=features.dtype)
+            kwargs = {"shape": [batch_size, 1, 1, 1], "dtype": features.dtype}
+            random_tensor = random_tensor + tf.random.uniform(**kwargs)
             binary_tensor = tf.floor(random_tensor)
             output = (features / self.survival_rate) * binary_tensor
             return output

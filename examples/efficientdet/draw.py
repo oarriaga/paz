@@ -20,8 +20,8 @@ def put_text(image, text, point, scale, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with text.
     """
-    image = cv2.putText(
-        image, text, point, FONT, scale, color, thickness, LINE)
+    args = (image, text, point, FONT, scale, color, thickness, LINE)
+    image = cv2.putText(*args)
     return image
 
 
@@ -59,8 +59,8 @@ def add_box_border(image, corner_A, corner_B, color, thickness):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    image = cv2.rectangle(
-        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    image = cv2.rectangle(*args)
     return image
 
 
@@ -80,8 +80,8 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     # Returns
         Numpy array with shape ``[H, W, 3]``. Image with rectangle.
     """
-    image = cv2.rectangle(
-        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    image = cv2.rectangle(*args)
     return image
 
 

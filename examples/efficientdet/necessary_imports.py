@@ -96,9 +96,8 @@ class ScaledResize(Processor):
         # Returns
             Tuple: Containing output images and image scale.
         """
-        output_images = np.zeros((self.image_size,
-                                  self.image_size,
-                                  image.shape[2]))
+        args = ((self.image_size, self.image_size, image.shape[2]))
+        output_images = np.zeros(*args)
         output_images[:scaled_image.shape[0],
                       :scaled_image.shape[1],
                       :scaled_image.shape[2]] = scaled_image
@@ -117,10 +116,10 @@ class ScaledResize(Processor):
         width, height, image_scale = self.compute_image_scale(image)
         scaled_image = self.scale_image(image, width, height, image_scale)
         crop_offset_x, crop_offset_y = np.array(0), np.array(0)
-        scaled_image = self.crop_image(
-            scaled_image, crop_offset_x, crop_offset_y)
-        output_images, image_scale = self.compose_output(
-            self, image, scaled_image, image_scale)
+        args = (scaled_image, crop_offset_x, crop_offset_y)
+        scaled_image = self.crop_image(*args)
+        args = (self, image, scaled_image, image_scale)
+        output_images, image_scale = self.compose_output(*args)
         return output_images, image_scale
 
 

@@ -65,12 +65,10 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 
     num_anchors = len(aspect_ratios) * num_scales
-    class_outputs = ClassNet(
-        middles, num_classes, num_anchors, FPN_num_filters,
-        min_level, max_level, box_class_repeats, survival_rate)
-    box_outputs = BoxNet(
-        middles, num_anchors, FPN_num_filters, min_level,
-        max_level, box_class_repeats, survival_rate)
+    args = (middles, num_anchors, FPN_num_filters, min_level,
+            max_level, box_class_repeats, survival_rate)
+    class_outputs = ClassNet(*args, num_classes)
+    box_outputs = BoxNet(*args)
 
     branches = [class_outputs, box_outputs]
     if return_base:
@@ -90,7 +88,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         print('Loading %s model weights' % weights_path)
         model.load_weights(weights_path)
 
-    model.prior_boxes = build_prior_boxes(
-        min_level, max_level, num_scales, aspect_ratios,
-        anchor_scale, input_shape[0:2])
+    args = (min_level, max_level, num_scales, aspect_ratios,
+            anchor_scale, input_shape[0:2])
+    model.prior_boxes = build_prior_boxes(*args)
     return model
