@@ -8,7 +8,7 @@ from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientnet_model import efficientnet
+from efficientnet_model import efficientnet, get_drop_connect
 
 
 @pytest.fixture
@@ -32,6 +32,25 @@ def get_test_images(image_size, batch_size=1):
         image: Zeros of shape (batch_size, H, W, C)
     """
     return tf.zeros((batch_size, image_size, image_size, 3), dtype=tf.float32)
+
+
+@pytest.mark.parametrize(('input_shape, dtype, target_shape, is_training'),
+                         [
+                            ((1, 1), tf.dtypes.float64, ([1, 1, 1, 1]), True),
+                            ((5, 5), tf.dtypes.float64, ([5, 1, 5, 5]), True),
+                            ((3, 5), tf.dtypes.float64, ([3, 1, 3, 5]), True),
+                            ((5, 3), tf.dtypes.float64, ([5, 1, 5, 3]), True),
+                            ((1, 1), tf.dtypes.float64, (1, 1), False),
+                            ((5, 5), tf.dtypes.float64, (5, 5), False),
+                            ((3, 5), tf.dtypes.float64, (3, 5), False),
+                            ((5, 3), tf.dtypes.float64, (5, 3), False)
+                         ])
+def test_drop_connect(input_shape, dtype, target_shape, is_training):
+    x = tf.random.uniform(input_shape, minval=0, maxval=5, dtype=dtype)
+    survival_rate = np.random.uniform(0.0, 1.0)
+    y = get_drop_connect(x, is_training, survival_rate)
+    assert y.shape == target_shape, 'Incorrect target shape'
+    assert y.dtype == dtype, 'Incorrect target datatype'
 
 
 def test_efficientdet_model():
@@ -78,22 +97,22 @@ def test_efficientnet_se_block():
 @pytest.mark.parametrize(('input_shape, backbone, feature_shape,'
                           'feature_channels'),
                          [
-                             (512,  'efficientnet-b0', (256, 128, 64, 32, 16),
-                              (16, 24, 40, 112, 320)),
-                             (640,  'efficientnet-b1', (320, 160, 80, 40, 20),
-                              (16, 24, 40, 112, 320)),
-                             (768,  'efficientnet-b2', (384, 192, 96, 48, 24),
-                              (16, 24, 48, 120, 352)),
-                             (896,  'efficientnet-b3', (448, 224, 112, 56, 28),
-                              (24, 32, 48, 136, 384)),
-                             (1024, 'efficientnet-b4', (512, 256, 128, 64, 32),
-                              (24, 32, 56, 160, 448)),
-                             (1280, 'efficientnet-b5', (640, 320, 160, 80, 40),
-                              (24, 40, 64, 176, 512)),
-                             (1280, 'efficientnet-b6', (640, 320, 160, 80, 40),
-                              (32, 40, 72, 200, 576)),
-                             (1536, 'efficientnet-b6', (768, 384, 192, 96, 48),
-                              (32, 40, 72, 200, 576))
+                            (512,  'efficientnet-b0', (256, 128, 64, 32, 16),
+                             (16, 24, 40, 112, 320)),
+                            (640,  'efficientnet-b1', (320, 160, 80, 40, 20),
+                             (16, 24, 40, 112, 320)),
+                            (768,  'efficientnet-b2', (384, 192, 96, 48, 24),
+                             (16, 24, 48, 120, 352)),
+                            (896,  'efficientnet-b3', (448, 224, 112, 56, 28),
+                             (24, 32, 48, 136, 384)),
+                            (1024, 'efficientnet-b4', (512, 256, 128, 64, 32),
+                             (24, 32, 56, 160, 448)),
+                            (1280, 'efficientnet-b5', (640, 320, 160, 80, 40),
+                             (24, 40, 64, 176, 512)),
+                            (1280, 'efficientnet-b6', (640, 320, 160, 80, 40),
+                             (32, 40, 72, 200, 576)),
+                            (1536, 'efficientnet-b6', (768, 384, 192, 96, 48),
+                             (32, 40, 72, 200, 576))
                          ])
 def test_efficientnet_features(input_shape, backbone, feature_shape,
                                feature_channels):
