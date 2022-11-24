@@ -16,39 +16,34 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
                  anchor_scale, min_level, max_level, fusion,
                  return_base, model_name, backbone, num_scales=3,
                  aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None):
-    """EfficientDet model in PAZ.
-    # References
-        -[Google AutoML repository implementation of EfficientDet](
-        https://github.com/google/automl/tree/master/efficientdet)
+    """EfficientDet model.
 
     # Arguments
-        num_classes: Int, specifying the number of class in the
-            output.
-        base_weights: String, specifying the name of base weights.
-        head_weights: String, specifying the name of head weights.
-        input_shape: Tuple, size of the input image.
-        FPN_num_filters: Int, FPN filter output size.
-        FPN_cell_repeats: Int, Number of consecutive FPN block.
-        box_class_repeats: Int, Number of consective regression
+        num_classes: Int, number of object classes.
+        base_weights: Str, base weights name.
+        head_weights: Str, head weights name.
+        input_shape: Tuple, input image shape.
+        FPN_num_filters: Int, number of FPN filters.
+        FPN_cell_repeats: Int, number of FPN blocks.
+        box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, specifying the number of anchor
-            scales.
-        min_level: Int, minimum level for features.
-        max_level: Int, maximum level for features.
-        fusion: A string specifying the feature fusion weighting
-            method in FPN.
-        return_base: Bool, indicating the usage of features only
-        from EfficientDet
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        num_scales: Int, specifying the number of scales in the
-        anchor boxes.
-        aspect_ratios: List, specifying the aspect ratio of the
-        survival_rate: Float, specifying the survival probability
+        anchor_scale: Int, anchor scale.
+        min_level: Int, minimum features level.
+        max_level: Int, maximum features level.
+        fusion: Str, feature fusion method.
+        return_base: Bool, use only EfficientDet features.
+        model_name: Str, EfficientDet model name.
+        backbone: Str, EfficientNet backbone name.
+        num_scales: Int, number of anchor box scales.
+        aspect_ratios: List, anchor boxes aspect ratios.
+        survival_rate: Float, specifying survival probability.
 
     # Returns
         model: EfficientDet model.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
     """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)

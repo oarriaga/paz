@@ -7,20 +7,13 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D,
 
 
 def get_scaling_coefficients(model_name):
-    """Default efficientnet scaling coefficients and
-    image name based on model name.
-    The value of each model name in the key represents:
-    (W_coefficient, D_coefficient, survival_rate).
-    with_coefficient: scaling coefficient for network width.
-    D_coefficient: scaling coefficient for network depth.
-    survival_rate: survival rate for final fully connected layers.
+    """Model name to scaling coefficients.
 
     # Arguments
-        model_name: String, name of the EfficientNet backbone
+        model_name: Str, EfficientNet backbone name.
 
     # Returns
-        efficientnetparams: Dictionary, parameters corresponding to
-            width coefficient, depth coefficient, survival rate
+        List: with width coefficient, depth coefficient, survival rate
     """
     scaling_coefficients = {'efficientnet-b0': (1.0, 1.0, 0.8),
                             'efficientnet-b1': (1.0, 1.1, 0.8),
@@ -36,15 +29,15 @@ def get_scaling_coefficients(model_name):
 
 
 def round_filters(filters, W_coefficient, D_divisor):
-    """Round number of filters based on depth multiplier.
+    """Round number of filters using depth multiplier.
 
     # Arguments
-        filters: Int, filters to be rounded based on depth multiplier.
-        W_coefficient: Float, scaling coefficient for network width.
-        D_divisor: Int, multiplier for the depth of the network.
+        filters: Int, filters to be rounded.
+        W_coefficient: Float, width coefficient.
+        D_divisor: Int, network depth multiplier.
 
     # Returns
-        new_filters: Int, rounded filters based on depth multiplier.
+        new_filters: Int, rounded filters.
     """
     filters = filters * W_coefficient
     min_D = D_divisor
@@ -57,33 +50,28 @@ def round_filters(filters, W_coefficient, D_divisor):
 
 
 def round_repeats(repeats, D_coefficient):
-    """Round number of repeat blocks based on depth multiplier.
+    """Round number of block repeats using depth multiplier.
 
     # Arguments
-        repeats: Int, number of repeats of multiplier blocks.
-        D_coefficient: Float, scaling coefficient for network depth.
+        repeats: Int, number of multiplier blocks.
+        D_coefficient: Float, network depth scaling coefficient.
 
     # Returns
-        new_repeats: Int, repeats of blocks based on multiplier.
+        new_repeats: Int, rounded block repeats.
     """
     new_repeats = int(math.ceil(D_coefficient * repeats))
     return new_repeats
 
 
 def kernel_initializer(shape, dtype=None):
-    """Initialization for convolutional kernels.
-    The main difference with tf.variance_scaling_kernel_initializer is that
-    tf.variance_scaling_kernel_initializer uses a truncated normal with an
-    uncorrected standard deviation, whereas here we use a normal
-    distribution. Similarly, tf.kernel_initializers.variance_scaling uses a
-    truncated normal with a corrected standard deviation.
+    """Initialize convolutional kernels.
 
     # Arguments
-        shape: shape of variable
-        dtype: dtype of variable
+        shape: variable shape.
+        dtype: variable dtype.
 
     # Returns
-        an initialization for the variable
+        variable initialization.
     """
     kernel_H, kernel_W, _, outro_filters = shape
     fan_output = int(kernel_H * kernel_W * outro_filters)
@@ -91,17 +79,19 @@ def kernel_initializer(shape, dtype=None):
 
 
 def get_drop_connect(x, is_training, survival_rate):
-    """Drop the entire conv with given survival probability.
-    Deep Networks with Stochastic Depth,
-    https://arxiv.org/pdf/1603.09382.pdf
+    """Drops conv with given survival probability.
 
     # Arguments
         x: Tensor, input feature map to undergo drop connection.
-        is_training: Bool specifying the training phase.
-        survival_rate: Float, survival probability to drop.
+        is_training: Bool specifying training phase.
+        survival_rate: Float, survival probability to drop features.
 
     # Returns
         output: Tensor, output feature map after drop connect.
+
+    # References
+        [Deep Networks with Stochastic Depth]
+        (https://arxiv.org/pdf/1603.09382.pdf)
     """
     if not is_training:
         return x
@@ -115,23 +105,27 @@ def get_drop_connect(x, is_training, survival_rate):
 
 def MB_block(inputs, survival_rate, kernel_size, intro_filters,
              outro_filters, expand_ratio, strides, SE_ratio):
-    """A class of MBConv: Mobile Inverted Residual Bottleneck. As
-    provided in the paper: https://arxiv.org/pdf/1801.04381.pdf and
-    https://arxiv.org/pdf/1905.11946.pdf
-    Initializes a MBConv block.
+    """Initialize Mobile Inverted Residual Bottleneck block.
 
     # Arguments
-        kernel_size: Int, kernel size of the conv block filters.
+        kernel_size: Int, conv block kernel size.
         repeats: Int, number of block repeats.
-        intro_filters: Int, input filters for the blocks to construct.
-        outro_filters: Int, output filters for the blocks to construct.
-        expand_ratio: Int, ratio to expand the conv block in repeats.
-        strides: List, strides in height and weight of conv filter.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        expand_ratio: Int, conv block expansion ratio.
+        strides: List, conv block filter strides.
         SE_ratio: Float, squeeze excite block ratio.
         num_blocks: Int, number of Mobile bottleneck conv blocks.
 
     # Returns
         x: Tensor, output features.
+
+    # References
+        [MobileNetV2: Inverted Residuals and Linear Bottlenecks]
+        (https://arxiv.org/pdf/1801.04381.pdf)
+        [EfficientNet: Rethinking Model Scaling for
+         Convolutional Neural Networks]
+        (https://arxiv.org/pdf/1905.11946.pdf)
     """
     filters = intro_filters * expand_ratio
     x = input_MB_block(inputs, expand_ratio, filters)
@@ -143,25 +137,15 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
 
 
 def input_MB_block(inputs, expand_ratio, filters):
-    """Builds input layer of the Mobile Inverted Residual Bottleneck
-    block.
+    """Builds Mobile Inverted Residual Bottleneck block's input layer.
 
     # Arguments
-        expand_ratio: Int, ratio to expand the conv block in repeats.
-        filters: Int, expanded input filters for the blocks to
-            construct.
-        kernel_initializer: Function, that initializes
-            convolutional kernels.
-        conv_id: Generator, that generates the ID of the convolutional
-            layer.
-        batch_norm_id: Generator, that generates the ID of the batch
-            normalization layer.
-        inputs: Tensor, input features for the Mobile Inverted Residual
-            Bottleneck block.
+        inputs: Tensor, input features.
+        expand_ratio: Int, conv block expansion ratio.
+        filters: Int, block's expanded input filters.
 
     # Returns
-        x: Tensor, processed input features for the Mobile Inverted
-            Residual Bottleneck block.
+        x: Tensor, output features.
     """
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
@@ -174,22 +158,15 @@ def input_MB_block(inputs, expand_ratio, filters):
 
 
 def conv_MB_block(x, kernel_size, strides):
-    """Builds input layer of the Mobile Inverted Residual Bottleneck
-    block.
+    """Builds Mobile Inverted Residual Bottleneck block's conv layer.
 
     # Arguments
-        kernel_size: Int, size of the kernel filter.
-        strides: List, stride of the filter.
-        kernel_initializer: Function, that initializes
-            convolutional kernels.
-        batch_norm_id: Generator, that generates the ID of the batch
-            normalization layer.
-        x: Tensor, input features for the Mobile Inverted Residual
-            Bottleneck block.
+        x: Tensor, input features.
+        kernel_size: Int, kernel size.
+        strides: List, filter strides.
 
     # Returns
-        x: Tensor, output features from the depthwise convolutional
-            layer of the Mobile Inverted Residual Bottleneck block.
+        x: Tensor, output features.
     """
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
                         depthwise_initializer=kernel_initializer)(x)
@@ -199,19 +176,17 @@ def conv_MB_block(x, kernel_size, strides):
 
 
 def MB_SE_block(x, intro_filters, SE_ratio, filters):
-    """Builds squeeze excitation layer of the Mobile Inverted Residual
-    Bottleneck block.
+    """Builds Mobile Inverted Residual Bottleneck block's
+    Squeeze Excitation layer.
 
     # Arguments
-        intro_filters: Int, input filters for the blocks to construct.
-        SE_ratio: Float, squeeze excite block ratio.
-        x: Tensor, input fro depth wise convolutional layer.
-        filters: Int, expanded input filters for the blocks to
-            construct.
+        x: Tensor, input features.
+        intro_filters: Int, block's input filters.
+        SE_ratio: Float, block's squeeze excite ratio.
+        filters: Int, block's expanded input filters.
 
     # Returns
-        x: Tensor, output features from the squeeze excitation layer of
-            the Mobile Inverted Residual Bottleneck block.
+        x: Tensor, output features.
     """
     num_reduced_filters = max(1, int(intro_filters * SE_ratio))
     SE = tf.reduce_mean(x, [1, 2], keepdims=True)
@@ -227,26 +202,19 @@ def MB_SE_block(x, intro_filters, SE_ratio, filters):
 
 def output_MB_block(x, inputs, intro_filters, outro_filters,
                     strides, survival_rate):
-    """Builds output layer of the Mobile Inverted Residual
-    Bottleneck block.
+    """Builds Mobile Inverted Residual Bottleneck block's output layer.
 
     # Arguments
-        inputs: Tensor, input features for the Mobile Inverted Residual
-            Bottleneck block..
-        intro_filters: Int, input filters for the blocks to construct.
-        outro_filters: Int, output filters for the blocks to construct.
-        conv_id: Generator, that generates the ID of the convolutional
-            layer.
-        batch_norm_id: Generator, that generates the ID of the batch
-            normalization layer.
-        x: Tensor, output features from the squeeze excitation layer of
-            the Mobile Inverted Residual Bottleneck block.
-        strides: List, stride of the filter.
-        survival_rate: Float, survival probability to drop
+        x: Tensor, input features from squeeze excitation layer.
+        inputs: Tensor, input features from Mobile Inverted Residual
+            Bottleneck block.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        strides: List, filter strides.
+        survival_rate: Float, survival probability to drop features.
 
     # Returns
-        x: Tensor, output features from the Mobile Inverted Residual
-            Bottleneck block.
+        x: Tensor, output features.
     """
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
                kernel_initializer=kernel_initializer)(x)
@@ -261,21 +229,21 @@ def output_MB_block(x, inputs, intro_filters, outro_filters,
 def compute_MBconv_block_parameters(block_arg, intro_filters, outro_filters,
                                     W_coefficient, D_coefficient, D_divisor,
                                     repeats):
-    """Compute parameters of the MBConv block.
+    """Compute MBConv block parameters.
 
     # Arguments
-        block_arg: Int, specifying the index of the block.
-        intro_filters: List, input filters of the blocks.
-        outro_filters: List, output filters of the blocks.
-        W_coefficient: Float, scaling coefficient for network width.
-        D_coefficient: Float, multiplier for the depth of the network.
-        D_divisor: Int, multiplier for the depth of the network.
+        block_arg: Int, block index.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        W_coefficient: Float, width coefficient.
+        D_coefficient: Float, network depth scaling coefficient.
+        D_divisor: Int, network depth multiplier.
         repeats: Int, number of block repeats.
 
     # Returns
-        intro_filter: Int rounded block input filter.
-        outro_filter: Int rounded block output filter.
-        repeats: Int rounded repeat of each MBConv block.
+        intro_filter: Int, rounded block's input filter.
+        outro_filter: Int, rounded block's output filter.
+        repeats: Int, rounded repeats of each MBConv block.
 
     """
     num_intro_filters = intro_filters[block_arg]
@@ -289,28 +257,24 @@ def compute_MBconv_block_parameters(block_arg, intro_filters, outro_filters,
 def MBconv_block_features(x, block_id, block_arg, survival_rate, kernel_sizes,
                           intro_filter, outro_filter, expand_ratios, strides,
                           repeats, SE_ratio):
-    """Computes features from a given MBConv block.
+    """Computes given MBConv block's features.
 
     # Arguments
-        x: Tensor, output features from the Mobile Inverted Residual
-            Bottleneck block.
-        block_id: Int, specifying the index of the block.
-        survival_rate: Float, survival probability to drop input
-            convolution features.
-        kernel_sizes: List, kernel size of various
-            EfficientNet blocks.
-        intro_filters: List, input filters of the blocks.
-        outro_filters: List, output filters of the blocks.
-        expand_ratio: Int, ratio to expand the conv block in repeats.
-        strides: List, strides in height and weight of conv filter.
+        x: Tensor, input features.
+        block_id: Int, MBConv block index.
+        block_arg: Int, block index.
+        survival_rate: Float, survival probability to drop features.
+        kernel_sizes: List, kernel sizes.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        expand_ratios: Int, MBConv block expansion ratio.
+        strides: List, filter strides.
         repeats: Int, number of block repeats.
-        SE_ratio: Float, squeeze excite block ratio.
-        model_name: String, name of the EfficientNet backbone
+        SE_ratio: Float, block's squeeze excite ratio.
 
     # Returns
-        A `Tensor` of type `float32` which is the features from this
-            layer.
-        block_id: Int, the block identifier.
+        Tensor: Output features.
+        block_id: Int, block identifier.
     """
     kernel_size = kernel_sizes[block_arg]
     expand_ratio = expand_ratios[block_arg]
@@ -328,31 +292,24 @@ def MBconv_block_features(x, block_id, block_arg, survival_rate, kernel_sizes,
 def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
                          SE_ratio, block_id, survival_rate, kernel_sizes,
                          strides, expand_ratios):
-    """Computes features from a given MBConv block.
+    """Process given MBConv block's features.
 
     # Arguments
-        x: Tensor, output features from the Mobile Inverted Residual
-            Bottleneck block.
-        block_arg: Int, specifying the index of the block.
-        intro_filters: List, input filters of the blocks.
-        outro_filters: List, output filters of the blocks.
-        W_coefficient: Float, scaling coefficient for network width.
-        D_coefficient: Float, multiplier for the depth of the network.
-        D_divisor: Int, multiplier for the depth of the network.
-        repeats: Int, number of block repeats.
-        SE_ratio: Float, squeeze excite block ratio.
-        survival_rate: Float, survival probability to drop input
-            convolution features.
-        kernel_sizes: List, kernel size of various
-            EfficientNet blocks.
-        strides: List, strides in height and weight of conv filter.
-        model_name: String, name of the EfficientNet backbone.
-        expand_ratio: Int, ratio to expand the conv block in repeats.
+        x: Tensor, input features.
+        block_arg: Int, block index.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        repeat: Int, number of block repeats.
+        SE_ratio: Float, block's squeeze excite ratio.
+        block_id: Int, MBConv block index.
+        survival_rate: Float, survival probability to drop features.
+        kernel_sizes: List, kernel sizes.
+        strides: List, filter strides.
+        expand_ratios: Int, MBConv block expansion ratio.
 
     # Returns
-        x: A `Tensor` of type `float32` which is the features from this
-            layer.
-        block_id: Int, the block identifier.
+        x: Tensor, output features.
+        block_id: Int, MBConv block identifier.
     """
     args = (x, block_id, block_arg, survival_rate, kernel_sizes, intro_filter,
             outro_filter, expand_ratios, strides, repeat, SE_ratio)
@@ -362,18 +319,16 @@ def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
 
 
 def conv_block(image, intro_filters, W_coefficient, D_divisor):
-    """Construct the first convolutional layer of EfficientNet.
+    """Builds EfficientNet's first convolutional layer.
 
     # Arguments
-        image: Tensor, specifying the input image.
-        intro_filters: List, input filters for the blocks to construct.
-        W_coefficient: Float, scaling coefficient for network width.
-        D_divisor: Int, multiplier for the depth of the network.
-        model_name: String, name of the EfficientNet backbone
+        image: Tensor, the input image.
+        intro_filters: Int, block's input filters.
+        W_coefficient: Float, width coefficient.
+        D_divisor: Int, network depth multiplier.
 
     # Returns
-        x: A `Tensor` of type `float32` which is the features from this
-            layer.
+        x: Tensor, output features.
     """
     filters = round_filters(intro_filters[0], W_coefficient, D_divisor)
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
@@ -386,30 +341,24 @@ def conv_block(image, intro_filters, W_coefficient, D_divisor):
 def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
                   D_coefficient, D_divisor, repeats, SE_ratio,
                   survival_rate, strides, expand_ratios):
-    """Construct the blocks of MBConv: Mobile Inverted Residual
-    Bottleneck.
+    """Builds MBConv blocks.
 
     # Arguments
-        x: A `Tensor` of type `float32` which is the features from this
-            layer.
-        kernel_sizes: List, kernel size of various
-            EfficientNet blocks.
-        intro_filters: List, input filters of the blocks.
-        outro_filters: List, output filters of the blocks.
-        W_coefficient: Float, scaling coefficient for network width.
-        D_coefficient: Float, multiplier for the depth of the network.
-        D_divisor: Int, multiplier for the depth of the network.
+        x: Tensor, input features.
+        kernel_sizes: List, kernel sizes.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        W_coefficient: Float, width coefficient.
+        D_coefficient: Float, network depth scaling coefficient.
+        D_divisor: Int, network depth multiplier.
         repeats: Int, number of block repeats.
-        SE_ratio: Float, squeeze excite block ratio.
-        survival_rate: Float, survival probability to drop input
-            convolution features.
-        strides: List, strides in height and weight of conv filter.
-        model_name: String, name of the EfficientNet backbone.
-        expand_ratio: Int, ratio to expand the conv block in repeats.
+        SE_ratio: Float, block's squeeze excite ratio.
+        survival_rate: Float, survival probability to drop features.
+        strides: List, filter strides.
+        expand_ratios: Int, MBConv block expansion ratio.
 
     # Returns
-        features: A list of Tensor which is the features from this
-            layer(s).
+        feature_maps: List, of output features.
     """
     block_id, feature_maps = 0, []
     for block_arg in range(len(kernel_sizes)):
@@ -440,30 +389,32 @@ def efficientnet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]]):
-    """A class implementing tf.keras.Model for EfficientNet. Base paper:
-    https://arxiv.org/pdf/1905.11946.pdf
-    Initializes an 'Model' instance.
+    """A class implementing EfficientNet.
+
     # Arguments
-        image: Tensor, specifying the input image.
-        model_name: String, name of the EfficientNet backbone.
-        input_shape: Tuple, specifying the shape of the input image.
-        D_divisor: Int, multiplier for the depth of the network.
-        SE_ratio: Float, squeeze excite block ratio.
-        kernel_sizes: List, kernel size of the conv block filters.
-        repeats: List, number of block repeats.
-        intro_filters: List, input filters for the blocks to construct.
-        outro_filters: List, output filters for the blocks to construct.
-        expand_ratios: List, ratio to expand the conv block in repeats.
-        strides: List, strides in height and weight of conv filter.
+        image: Tensor, the input image.
+        model_name: Str, EfficientNet backbone name.
+        input_shape: Tuple, input image shape.
+        D_divisor: Int, network depth multiplier.
+        SE_ratio: Float, block's squeeze excite ratio.
+        kernel_sizes: List, kernel sizes.
+        repeats: Int, number of block repeats.
+        intro_filters: Int, block's input filters.
+        outro_filters: Int, block's output filters.
+        expand_ratios: Int, MBConv block expansion ratio.
+        strides: List, filter strides.
 
     # Returns
-        features: A list of Tensor which is the features from this
-            block.
+        x: List, output features.
 
     # Raises
         ValueError: when repeats is not greater than zero.
-    """
 
+    # References
+        [EfficientNet: Rethinking Model Scaling for
+         Convolutional Neural Networks]
+        (https://arxiv.org/pdf/1905.11946.pdf)
+    """
     assert (repeats > np.zeros_like(repeats)).sum() == len(repeats)
 
     scaling_coefficients = get_scaling_coefficients(model_name)

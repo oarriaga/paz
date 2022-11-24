@@ -9,25 +9,21 @@ from utils import GetDropConnect
 
 def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
              repeats=4, survival_rate=None, num_classes=90, return_base=False):
-    """Object class prediction network. Initialize the ClassNet.
+    """Initializes ClassNet.
 
     # Arguments
-        features: List, feature to be processed by ClassNet head.
-        num_classes: Integer. Number of classes.
-        num_anchors: Integer. Number of anchors.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
-        min_level: Integer. Minimum level for features.
-        max_level: Integer. Maximum level for features.
-        repeats: Integer. Number of intermediate layers.
-        survival_rate: Float. If a value is set then drop connect will
-            be used.
-        return_base: Bool. Build the base feature network only.
-            Excluding final class head.
-        name: String indicating the name of this layer.
+        features: List, input features.
+        num_anchors: Int, number of anchors.
+        num_filters: Int, number of intermediate layer filters.
+        min_level: Int, minimum feature level.
+        max_level: Int, maximum feature level.
+        repeats: Int, Number of intermediate layers.
+        survival_rate: Float, used in drop connect.
+        num_classes: Int, number of object classes.
+        return_base: Bool, to build only base feature network.
 
     # Returns
-        box_outputs: List, BoxNet output offsets for each level.
+        class_outputs: List, ClassNet outputs per level.
     """
     args = (repeats, num_filters, min_level, max_level, num_classes,
             num_anchors, features, survival_rate, return_base)
@@ -37,24 +33,20 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
 
 def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
            max_level=7, repeats=4, survival_rate=None, return_base=False):
-    """Initialize the BoxNet.
+    """Initializes BoxNet.
 
     # Arguments
-        features: List, feature to be processed by BoxNet head.
-        num_anchors: Integer. Number of anchors.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
-        min_level: Integer. Minimum level for features.
-        max_level: Integer. Maximum level for features.
-        repeats: Integer. Number of intermediate layers.
-        survival_rate: Float. If a value is set then drop connect
-            will be used.
-        return_base: Bool. Build the base feature network only.
-            Excluding final class head.
-        name: String indicating the name of this layer.
+        features: List, input features.
+        num_anchors: Int, number of anchors.
+        num_filters: Int, number of intermediate layer filters.
+        min_level: Int, minimum feature level.
+        max_level: Int, maximum feature level.
+        repeats: Int, Number of intermediate layers.
+        survival_rate: Float, used by drop connect.
+        return_base: Bool, to build only base feature network.
 
     # Returns
-        box_outputs: List, BoxNet output offsets for each level.
+        box_outputs: List, BoxNet outputs per level.
     """
     args = (repeats, num_filters, min_level, max_level, None,
             num_anchors, features, survival_rate, return_base)
@@ -82,12 +74,11 @@ class FuseFeature(Layer):
     def call(self, inputs, fusion):
         """
         # Arguments
-        inputs: Tensor. Features to be fused.
-        fusion: String representing the feature fusion method.
+        inputs: Tensor, features to fuse.
+        fusion: Str, feature fusion method.
 
         # Returns
-        x: feature after combining by the feature fusion method in
-           BiFPN.
+        x: fused feature.
         """
         inputs = [input for input in inputs if input is not None]
         return self.fuse_method(inputs)
@@ -114,16 +105,17 @@ class FuseFeature(Layer):
         return config
 
 
-def conv2D_layer(num_filters, kernel_size, padding, activation,
-                 bias_initializer):
-    """Gets the conv2D layer in ClassNet class.
+def conv2D_layer(num_filters, kernel_size, padding,
+                 activation, bias_initializer):
+    """Builds conv2D layer.
+
     # Arguments
-        num_filters: Integer. Number of intermediate layers.
-        kernel_size: Integer. Kernel size of conv layer.
-        padding: String. Padding for conv layer.
-        activation: String. Activation function.
-        name: String. Name of conv layer.
-        bias_initializer: String or TF Function. Bias initialization.
+        num_filters: Int, number of intermediate layer filters.
+        kernel_size: Int, kernel size.
+        padding: String. padding for conv layer.
+        activation: Str, activation function.
+        name: Str, conv layer name.
+        bias_initializer: Callable, bias initializer.
 
     # Returns
         conv2D_layer: TF conv layer.
@@ -138,27 +130,22 @@ def conv2D_layer(num_filters, kernel_size, padding, activation,
 def build_predictionnet(repeats, num_filters, min_level, max_level,
                         num_classes, num_anchors, features, survival_rate,
                         return_base, build_classnet):
-    """Builds Prediction Net part of the Efficientdet
+    """Builds PredictionNet.
 
     # Arguments
-        repeats: List, feature to be processed by PredictionNet head.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
-        with_separable_conv: Bool.
-        name: String indicating the name of this layer.
-        min_level: Integer. Minimum level for features.
-        max_level: Integer. Maximum level for features.
-        num_classes: Integer. Number of classes.
-        num_anchors: Integer. Number of anchors.
-        features: Tuple. Input features for PredictionNet
-        survival_rate: Float. If a value is set then drop connect
-            will be used.
-        return_base: Bool. Build the base feature network only.
-            Excluding final class head.
-        build_classnet: Bool.
+        repeats: Int, number of intermediate layers.
+        num_filters: Int, number of intermediate layer filters.
+        min_level: Int, minimum feature level.
+        max_level: Int, maximum feature level.
+        num_classes: Int, number of object classes.
+        num_anchors: Int, number of anchors.
+        features: Tuple. input features.
+        survival_rate: Float, used by drop connect.
+        return_base: Bool, to build only base feature network.
+        build_classnet: Bool, to build ClassNet or BoxNet.
 
     # Returns
-        predictor_outputs: List. Output of PredictionNet block.
+        predictor_outputs: List, with PredictionNet outputs.
     """
     conv_blocks = build_predictionnet_conv_blocks(repeats, num_filters)
 
@@ -186,17 +173,14 @@ def build_predictionnet(repeats, num_filters, min_level, max_level,
 
 
 def build_predictionnet_conv_blocks(repeats, num_filters):
-    """Builds convolutional blocks for PredictionNet
+    """Builds PredictionNet convolutional blocks.
 
     # Arguments
-        repeats: List, feature to be processed by PredictionNet head.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
-        name: String indicating the name of this layer.
-        is_classnet: Bool.
+        repeats: Int, number of intermediate layers.
+        num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        conv_blocks: List. Convolutional blocks for PredictionNet.
+        conv_blocks: List, PredictionNet convolutional blocks.
     """
     conv_blocks = []
     for _ in range(repeats):
@@ -206,17 +190,15 @@ def build_predictionnet_conv_blocks(repeats, num_filters):
 
 
 def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level):
-    """Builds batch normalization blocks for PredictionNet
+    """Builds PredictionNet batch normalization blocks.
 
     # Arguments
-        repeats: List, feature to be processed by PredictionNet head.
-        min_level: Integer. Minimum level for features.
-        max_level: Integer. Maximum level for features.
-        name: String indicating the name of this layer.
-        is_classnet: Bool.
+        repeats: Int, number of intermediate layers.
+        min_level: Int, minimum feature level.
+        max_level: Int, maximum feature level.
 
     # Returns
-        batchnorms: List. Batch normalization blocks for PredictionNet.
+        batchnorms: List, PredictionNet batch normalization blocks.
     """
     batchnorms = []
     for _ in range(repeats):
@@ -233,20 +215,17 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
     """Propagates features through PredictionNet block.
 
     # Arguments
-        features: Tuple. Input features for PredictionNet
-        level_id: Int. The index of feature level.
-        repeats: List, feature to be processed by PredictionNet head.
-        conv_blocks: List. Convolutional blocks for PredictionNet.
-        batchnorms: List. Batch normalization blocks for PredictionNet.
-        survival_rate: Float. If a value is set then drop connect will
-            be used.
-        return_base: Bool. Build the base feature network only.
-            Excluding final class head.
-        output_candidates: Tensor. PredictionNet output for each level.
+        features: Tuple, PredictionNet input features.
+        level_id: Int, feature level index.
+        repeats: Int, number of intermediate layers.
+        conv_blocks: List, PredictionNet convolutional blocks.
+        batchnorms: List, PredictionNet batch normalization blocks.
+        survival_rate: Float, used by drop connect.
+        return_base: Bool, to build only base feature network.
+        output_candidates: Tensor, PredictionNet outputs per level.
 
     # Returns
-        level_feature: List. Batch normalization blocks for
-                       PredictionNet.
+        output_candidates: List. PredictionNet outputs.
     """
     level_feature_map = features[level_id]
     for repeat_args in range(repeats):
@@ -267,20 +246,14 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
 
 
 def efficientnet_to_BiFPN(branches, num_filters):
-    """Modifies the branches produced by EfficientNet backbone such that
-    it can be fed into the BiFPN blocks. This modification includes
-    generating feature maps P6 and P7 and preprocessing by applying
-    2D convolution and batch normalization.
+    """Modifies the branches to comply with BiFPN.
 
     # Arguments
-        branches: List. It is a list of tensors containing the feature
-            maps from the output layers of EfficientNet backbone.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
+        branches: List, EfficientNet feature maps.
+        num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        middles skips: List, of tensors or feature maps obtained as a
-            result of preprocessing EfficientNet feature maps.
+        middles, skips: List, modified branch.
     """
     _, _, P3, P4, P5 = branches
     P6, P7 = build_branch(P5, num_filters)
@@ -290,17 +263,14 @@ def efficientnet_to_BiFPN(branches, num_filters):
 
 
 def build_branch(P5, num_filters):
-    """Computes feature maps P6 and P7 from P5.
+    """Builds feature maps P6 and P7.
 
     # Arguments
-        P5: Tensor. Output feature map obtained from fifth layer of
-            EfficientNet backbone.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
+        P5: Tensor. EfficientNet's 5th layer output.
+        num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        P6, P7: List, of tensors or feature maps obtained from sixth
-            and seventh layer of EfficientNet backbone.
+        P6, P7: List, EfficientNet's 6th and 7th layer output.
     """
     P6 = conv_batchnorm_block(P5, num_filters)
     P6 = MaxPooling2D(3, 2, 'same')(P6)
@@ -309,19 +279,14 @@ def build_branch(P5, num_filters):
 
 
 def preprocess_node(branches, num_filters):
-    """Preprocesses the feature maps obtained from EfficientNet backbone
-    by applying 2D convolution and bath normalization such that it can
-    be fed into the BiFPN block.
+    """Preprocess EfficientNet features.
 
     # Arguments
-        branches: List. It is a list of tensors containing the feature
-            maps from the output layers of EfficientNet backbone.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
+        branches: List, EfficientNet feature maps.
+        num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        middles, skips: List, of tensors or feature maps obtained after
-            preprocessing.
+        middles, skips: List, preprocessed feature maps.
     """
     P3, P4, P5, P6, P7 = branches
     P3_middle = conv_batchnorm_block(P3, num_filters)
@@ -339,13 +304,11 @@ def conv_batchnorm_block(x, num_filters):
     """Builds 2D convolution and batch normalization layers.
 
     # Arguments
-        x: Tensor. Input feature map.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
+        x: Tensor, input feature map.
+        num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        x: Tensor. Feature map obtained as output after applying 2D
-            convolution and batch normalization.
+        x: Tensor. Feature after convolution and batch normalization.
     """
     x = Conv2D(num_filters, 1, 1, 'same')(x)
     x = BatchNormalization()(x)
@@ -353,20 +316,18 @@ def conv_batchnorm_block(x, num_filters):
 
 
 def node_BiFPN(up, middle, down, skip, num_filters, fusion):
-    """Implements the functionality of nodes in the BiFPN block.
+    """Simulates BiFPN block's node.
 
     # Arguments
         up: Tensor, upsampled feature map.
-        middle: Tensor, Output feature map from preprocess/BiFPN node.
-        down: Tensor, Downsampled feature map.
-        skip: Tensor, Skip feature map.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
-        fusion: String representing the feature fusion method.
+        middle: Tensor, preprocessed feature map.
+        down: Tensor, downsampled feature map.
+        skip: Tensor, skip feature map.
+        num_filters: Int, number of intermediate layer filters.
+        fusion: Str, feature fusion method.
 
     # Returns
-        middle: Tensor. Feature map obtained as output from the BiFPN
-            node.
+        middle: Tensor, BiFPN node output.
     """
     is_layer_1 = down is None
     if is_layer_1:
@@ -384,17 +345,13 @@ def BiFPN(middles, skips, num_filters, fusion):
     """BiFPN block.
 
     # Arguments
-        middles: Tensor. Feature map obtained as output from the
-            preprocess/BiFPN node.
-        skips: Tensor. Skip feature map obtained as output from the
-            preprocess/BiFPN node.
-        num_filters: Integer. Number of filters for intermediate
-            layers.
-        fusion: String representing the feature fusion method.
+        middles: Tensor, BiFPN node output.
+        skips: Tensor. skip feature map from BiFPN node.
+        num_filters: Int, number of intermediate layer filters.
+        fusion: Str, feature fusion method.
 
     # Returns
-        middles, middles: List, feature maps obtained as output from
-            BiFPN block.
+        middles, middles: List, BiFPN block output.
     """
     P3_middle, P4_middle, P5_middle, P6_middle, P7_middle = middles
     _, P4_skip, P5_skip, P6_skip, _ = skips

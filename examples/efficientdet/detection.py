@@ -12,14 +12,11 @@ from utils import efficientdet_preprocess, get_class_name_efficientdet
 
 
 class PreprocessImage(SequentialProcessor):
-    """Preprocess RGB image by resizing it to the given ``shape``. If a
-    ``mean`` is given it is substracted from image and it not the image
-    gets normalized.
+    """Preprocess RGB image.
 
-    # Argumeqnts
-        shape: List of two Ints.
-        mean: List of three Ints indicating the per-channel mean to be
-            subtracted.
+    # Arguments
+        shape: List, being desired image width and height.
+        mean: List, being per-channel mean.
     """
     def __init__(self, shape, mean=pr.BGR_IMAGENET_MEAN):
         super(PreprocessImage, self).__init__()
@@ -30,20 +27,16 @@ class PreprocessImage(SequentialProcessor):
 
 
 class AugmentDetection(SequentialProcessor):
-    """Augment boxes and images for object detection.
+    """Augment boxes and images.
 
     # Arguments
-        prior_boxes: Numpy array of shape ``[num_boxes, 4]`` containing
-            prior/default bounding boxes.
-        split: Flag from `paz.processors.TRAIN`, ``paz.processors.VAL``
-            or ``paz.processors.TEST``. Certain transformations would
-            take place depending on the flag.
-        num_classes: Int.
-        size: Int. Image size.
-        mean: List of three elements indicating the per channel mean.
-        IOU: Float. Intersection over union used to match boxes.
-        variances: List of two floats indicating variances to be encoded
-            for encoding bounding boxes.
+        prior_boxes: Numpy array, holding prior boxes.
+        split: Flag denoting additional transformation.
+        num_classes: Int, being number of classes.
+        size: Int. being image size.
+        mean: List, being per-channel mean.
+        IOU: Float. Intersection over union.
+        variances: List, bounding boxes encoding variances.
     """
     def __init__(self, prior_boxes, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
@@ -77,12 +70,11 @@ class DetectSingleShot_EfficientDet(Processor):
 
     # Arguments
         model: Keras model.
-        class_names: List of strings indicating the class names.
-        score_thresh: Float between [0, 1]
+        class_names: List, indicating class names.
+        score_thresh: Float between [0, 1].
         nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the returned
-            image.
+        mean: List, being per-channel mean.
+        draw: Bool, denoting if detections be drawn on image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh):
         self.model = model
@@ -113,13 +105,12 @@ class DetectSingleShot(DetectSingleShot):
 
     # Arguments
         model: Keras model.
-        class_names: List of strings indicating the class names.
-        score_thresh: Float between [0, 1]
+        class_names: List, indicating class names.
+        score_thresh: Float between [0, 1].
         nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating the per channel mean.
-        variances: List containing the variances of the encoded boxes.
-        draw: Boolean. If ``True`` prediction are drawn in the returned
-            image.
+        mean: List, being per-channel mean.
+        variances: List, bounding boxes encoding variances.
+        draw: Bool, denoting if detections be shown on image.
     """
     def __init__(
             self, model, class_names, score_thresh, nms_thresh,
@@ -135,12 +126,11 @@ class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
 
     # Arguments
-        class_names: List of strings.
-        colors: List of lists containing the color values
-        weighted: Boolean. If ``True`` the colors are weighted with the
-            score of the bounding box.
-        scale: Float. Scale of drawn text.
-        with_score: Boolean. If ``True`` displays the confidence score.
+        class_names: List, indicating class names.
+        colors: List holding color values.
+        weighted: Bool, denoting bounding box color to be weighted.
+        scale: Float. Scale of text drawn.
+        with_score: Bool, denoting if confidence be shown.
     """
     def __init__(
             self, class_names=None, colors=None,
