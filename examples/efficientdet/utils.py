@@ -17,15 +17,13 @@ raw_images = loader(file_name)
 
 
 def get_class_name_efficientdet(dataset_name):
-    """Function that returns the names of the class for COCO and VOC
-    dataset.
+    """Returns COCO and VOC dataset class names.
 
     # Arguments:
-        dataset_name: String, that specifies the name of the dataset.
+        dataset_name: Str, dataset name.
 
     # Returns:
-        List: _Containing the names of the class of the required
-            dataset.
+        List: class names.
     """
     if dataset_name == 'COCO':
         return ['person', 'bicycle', 'car', 'motorcycle',
@@ -53,7 +51,7 @@ def get_class_name_efficientdet(dataset_name):
 
 
 class GetDropConnect(keras.layers.Layer):
-    """Implements dropout for layers of the model.
+    """Dropout for model layers.
 
     """
     def __init__(self, survival_rate, **kwargs):
@@ -64,8 +62,8 @@ class GetDropConnect(keras.layers.Layer):
         if training:
             batch_size = tf.shape(features)[0]
             random_tensor = self.survival_rate
-            random_tensor = random_tensor + tf.random.uniform(
-                [batch_size, 1, 1, 1], dtype=features.dtype)
+            kwargs = {"shape": [batch_size, 1, 1, 1], "dtype": features.dtype}
+            random_tensor = random_tensor + tf.random.uniform(**kwargs)
             binary_tensor = tf.floor(random_tensor)
             output = (features / self.survival_rate) * binary_tensor
             return output
@@ -77,16 +75,12 @@ def efficientdet_preprocess(image, image_size):
     """Preprocess image for EfficientDet model.
 
     # Arguments
-        image: Tensor, raw input image to be preprocessed
-        of shape [bs, h, w, c]
-        image_size: Tensor, size to resize the raw image
-        of shape [bs, new_h, new_w, c]
+        image: Tensor, raw input image.
+        image_size: Tensor, size to resize raw image.
 
     # Returns
         image: Numpy array, resized and preprocessed image
-        image_scale: Numpy array, scale to reconstruct each of
-        the raw images to original size from the resized
-        image.
+        image_scale: Numpy array, scale to reconstruct raw image.
     """
 
     preprocessing = SequentialProcessor([
@@ -101,18 +95,16 @@ def efficientdet_preprocess(image, image_size):
 
 def create_multibox_head(branch_tensors, num_levels, num_classes,
                          num_regressions=4):
-    """Concatenates class and box outputs into a single tensor.
+    """Concatenates class and box outputs into single tensor.
 
     # Arguments:
-        branch_tensors: List, containing class outputs and box outputs
-            from efficientdet network.
-        num_levels: Int, specifying the number of feature levels.
-        num_classes: Int, specifying the number of output classes.
-        num_regressions: Int, specifying the bounding box coordinate
-            values to be regressed.
+        branch_tensors: List, containing efficientdet outputs.
+        num_levels: Int, number of feature levels.
+        num_classes: Int, number of output classes.
+        num_regressions: Int, number of bounding box coordinate.
 
     # Returns:
-        Tensor: Containing concatenated class and box outputs.
+        Tensor: concatenated class and box outputs.
     """
     class_outputs = branch_tensors[0]
     box_outputs = branch_tensors[1]

@@ -7,17 +7,13 @@ from utils import get_class_name_efficientdet
 
 
 def process_outputs(outputs):
-    """Merges all feature levels into single tensor and combines box
-    offsets and class scores.
+    """Merges feature levels, boxes and classes into single tensor.
 
     # Arguments
-        outputs: Tensor, box coordinate offsets for the corresponding
-        prior boxes at each feature levels.
+        outputs: Tensor, prrior box coordinate offsets.
 
     # Returns
-        outputs: Numpy array, Processed outputs by merging the features
-        at all levels. Each row corresponds to box coordinate offsets
-        and sigmoid of the class logits.
+        outputs: Numpy array, processed outputs.
     """
     outputs = outputs[0]
     boxes, classes = outputs[:, :4], outputs[:, 4:]
@@ -30,21 +26,17 @@ def process_outputs(outputs):
 
 
 def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
-    """EfficientDet output postprocessing function.
+    """Postprocess EfficientDet output.
 
     # Arguments
         model: EfficientDet model
-        outputs: Tensor, box coordinate offsets for the corresponding
-            prior boxes at each feature levels.
-        image_scales: Numpy array, scale to reconstruct each of the raw
-            images to original size from the resized image.
-        raw_images: Numpy array, RGB image to draw the detections on
-            the image.
+        outputs: Tensor, prior box coordinate offsets.
+        image_scales: Numpy array, raw images resize scale.
+        raw_images: Numpy array, RGB image to draw detections.
 
     # Returns
-        image: Numpy array, RGB input image with detections overlaid.
-        outputs: List of Box2D, containing the detections with bounding
-            box and class details.
+        image: Numpy array, input image with detections overlaid.
+        outputs: List, holding bounding box and class details.
     """
     outputs = process_outputs(outputs)
     postprocessing = SequentialProcessor(
