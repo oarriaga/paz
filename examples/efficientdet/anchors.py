@@ -13,12 +13,12 @@ def compute_feature_sizes(image_size, max_level):
         feature_sizes: Numpy array of shape ``(8, 2)``.
     """
     feature_H, feature_W = image_size
-    feature_sizes = np.array([feature_H, feature_W], dtype=np.float64)
+    feature_sizes = np.array([[feature_H, feature_W]], dtype=np.float64)
     for _ in range(1, max_level + 1):
         feature_H = (feature_H - 1) // 2 + 1
         feature_W = (feature_W - 1) // 2 + 1
-        feature_size = np.array([feature_H, feature_W])
-        feature_sizes = np.vstack((feature_sizes, feature_size))
+        feature_size = np.array([[feature_H, feature_W]])
+        feature_sizes = np.concatenate((feature_sizes, feature_size), axis=0)
     return feature_sizes
 
 
@@ -213,8 +213,9 @@ def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
             octave_scales[combination], aspects[combination],
             anchor_scales[combination], image_size)
         center_x, center_y, anchor_x, anchor_y = box_coordinates
-        boxes = np.vstack((center_x - anchor_x, center_y - anchor_y,
-                           center_x + anchor_x, center_y + anchor_y))
+        boxes = np.concatenate(([center_x - anchor_x], [center_y - anchor_y],
+                                [center_x + anchor_x], [center_y + anchor_y]),
+                               axis=0)
         boxes = np.swapaxes(boxes, 0, 1)
         boxes_level.append(np.expand_dims(boxes, axis=1))
     return boxes_level
@@ -249,7 +250,7 @@ def generate_anchors(feature_sizes, min_level, max_level, num_scales,
             scale_aspect_ratio_combinations)
         boxes_level = np.concatenate(boxes_level, axis=1)
         boxes_all.append(boxes_level.reshape([-1, 4]))
-    anchors = np.vstack(boxes_all).astype('float32')
+    anchors = np.concatenate(boxes_all, axis=0).astype('float32')
     return anchors
 
 
