@@ -25,9 +25,13 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     # Returns
         class_outputs: List, ClassNet outputs per level.
     """
+    bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
+    num_filters = [num_filters, num_classes * num_anchors]
+    num_levels = max_level - min_level + 1
+
     class_outputs = build_head(
-        repeats, num_filters, min_level, max_level, num_classes, num_anchors,
-        features, survival_rate, return_base, build_classnet=True)
+        repeats, num_filters, min_level, max_level, features,
+        survival_rate, return_base, bias_initializer, num_levels)
     return class_outputs
 
 
@@ -48,9 +52,13 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     # Returns
         box_outputs: List, BoxNet outputs per level.
     """
+    bias_initializer = tf.zeros_initializer()
+    num_filters = [num_filters, 4 * num_anchors]
+    num_levels = len(features)
+
     box_outputs = build_head(
-        repeats, num_filters, min_level, max_level, None, num_anchors,
-        features, survival_rate, return_base, build_classnet=False)
+        repeats, num_filters, min_level, max_level, features,
+        survival_rate, return_base, bias_initializer, num_levels)
     return box_outputs
 
 
@@ -127,9 +135,8 @@ def conv2D_layer(num_filters, kernel_size, padding,
     return conv2D_layer
 
 
-def build_head(repeats, num_filters, min_level, max_level, num_classes,
-               num_anchors, features, survival_rate,
-               return_base, build_classnet):
+def build_head(repeats, num_filters, min_level, max_level, features,
+               survival_rate, return_base, bias_initializer, num_levels):
     """Builds head.
 
     # Arguments
@@ -145,30 +152,19 @@ def build_head(repeats, num_filters, min_level, max_level, num_classes,
         build_classnet: Bool, to build ClassNet or BoxNet.
 
     # Returns
-        predictor_outputs: List, with head outputs.
+        head_outputs: List, with head outputs.
     """
-    conv_blocks = build_head_conv_blocks(repeats, num_filters)
-
+    conv_blocks = build_head_conv_blocks(repeats, num_filters[0])
     batchnorms = build_head_batchnorm_blocks(repeats, min_level, max_level)
+    classes = conv2D_layer(num_filters[1], 3, 'same', None, bias_initializer)
 
-    if build_classnet:
-        bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
-        num_filters = num_classes * num_anchors
-        num_levels = max_level - min_level + 1
-    else:
-        bias_initializer = tf.zeros_initializer()
-        num_filters = 4 * num_anchors
-        num_levels = len(features)
-
-    classes = conv2D_layer(num_filters, 3, 'same', None, bias_initializer)
-
-    predictor_outputs = []
+    head_outputs = []
     for level_id in range(num_levels):
         level_feature_map = propagate_forward_head(
             features, level_id, repeats, conv_blocks, batchnorms,
             survival_rate, return_base, classes)
-        predictor_outputs.append(level_feature_map)
-    return predictor_outputs
+        head_outputs.append(level_feature_map)
+    return head_outputs
 
 
 def build_head_conv_blocks(repeats, num_filters):
