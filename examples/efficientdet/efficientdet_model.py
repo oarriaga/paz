@@ -75,11 +75,11 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
     if ((base_weights == 'COCO') and (head_weights == 'COCO')):
-        model_filename = (model_name + '-' + str(base_weights) + '-' +
-                          str(head_weights) + '_weights.hdf5')
+        model_filename = '-'.join([model_name, str(base_weights),
+                                   str(head_weights) + '_weights.hdf5'])
     elif ((base_weights == 'COCO') and (head_weights is None)):
-        model_filename = (model_name + '-' + str(base_weights) + '-' +
-                          str(head_weights) + '_weights.hdf5')
+        model_filename = '-'.join([model_name, str(base_weights),
+                                   str(head_weights) + '_weights.hdf5'])
 
     weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
                             cache_subdir='paz/models')
