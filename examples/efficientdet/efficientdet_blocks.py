@@ -353,24 +353,25 @@ def BiFPN(middles, skips, num_filters, fusion):
     _, P4_skip, P5_skip, P6_skip, _ = skips
 
     # Downpropagation ---------------------------------------------------------
+    args = (num_filters, fusion)
     P7_up = UpSampling2D()(P7_middle)
-    P6_TD = node_BiFPN(P7_up, P6_middle, None, None, num_filters, fusion)
-    P6_up = UpSampling2D()(P6_TD)
-    P5_TD = node_BiFPN(P6_up, P5_middle, None, None, num_filters, fusion)
-    P5_up = UpSampling2D()(P5_TD)
-    P4_TD = node_BiFPN(P5_up, P4_middle, None, None, num_filters, fusion)
-    P4_up = UpSampling2D()(P4_TD)
-    P3_out = node_BiFPN(P4_up, P3_middle, None, None, num_filters, fusion)
+    P6_top_down = node_BiFPN(P7_up, P6_middle, None, None, *args)
+    P6_up = UpSampling2D()(P6_top_down)
+    P5_top_down = node_BiFPN(P6_up, P5_middle, None, None, *args)
+    P5_up = UpSampling2D()(P5_top_down)
+    P4_top_down = node_BiFPN(P5_up, P4_middle, None, None, *args)
+    P4_up = UpSampling2D()(P4_top_down)
+    P3_out = node_BiFPN(P4_up, P3_middle, None, None, *args)
 
     # Upward propagation ------------------------------------------------------
     P3_down = MaxPooling2D(3, 2, 'same')(P3_out)
-    P4_out = node_BiFPN(None, P4_TD, P3_down, P4_skip, num_filters, fusion)
+    P4_out = node_BiFPN(None, P4_top_down, P3_down, P4_skip, *args)
     P4_down = MaxPooling2D(3, 2, 'same')(P4_out)
-    P5_out = node_BiFPN(None, P5_TD, P4_down, P5_skip, num_filters, fusion)
+    P5_out = node_BiFPN(None, P5_top_down, P4_down, P5_skip, *args)
     P5_down = MaxPooling2D(3, 2, 'same')(P5_out)
-    P6_out = node_BiFPN(None, P6_TD, P5_down, P6_skip, num_filters, fusion)
+    P6_out = node_BiFPN(None, P6_top_down, P5_down, P6_skip, *args)
     P6_down = MaxPooling2D(3, 2, 'same')(P6_out)
-    P7_out = node_BiFPN(None, P7_middle, P6_down, None, num_filters, fusion)
+    P7_out = node_BiFPN(None, P7_middle, P6_down, None, *args)
 
     middles = [P3_out, P4_out, P5_out, P6_out, P7_out]
     return [middles, middles]
