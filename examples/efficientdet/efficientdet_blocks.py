@@ -235,9 +235,10 @@ def propagate_forward_head(features, level_id, repeats, conv_blocks,
             level_feature_map = level_feature_map + original_level_feature_map
 
     if return_base:
-        return level_feature_map
+        output_candidates = level_feature_map
     else:
-        return output_candidates(level_feature_map)
+        output_candidates = output_candidates(level_feature_map)
+    return output_candidates
 
 
 def EfficientNet_to_BiFPN(branches, num_filters):

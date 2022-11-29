@@ -94,12 +94,13 @@ def get_drop_connect(x, is_training, survival_rate):
         (https://arxiv.org/pdf/1603.09382.pdf)
     """
     if not is_training:
-        return x
-    batch_size = tf.shape(x)[0]
-    kwargs = {"shape": [batch_size, 1, 1, 1], "dtype": x.dtype}
-    random_tensor = survival_rate + tf.random.uniform(**kwargs)
-    binary_tensor = tf.floor(random_tensor)
-    output = (x / survival_rate) * binary_tensor
+        output = x
+    else:
+        batch_size = tf.shape(x)[0]
+        kwargs = {"shape": [batch_size, 1, 1, 1], "dtype": x.dtype}
+        random_tensor = survival_rate + tf.random.uniform(**kwargs)
+        binary_tensor = tf.floor(random_tensor)
+        output = (x / survival_rate) * binary_tensor
     return output
 
 
