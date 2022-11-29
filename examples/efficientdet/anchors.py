@@ -38,18 +38,16 @@ def generate_configurations(feature_sizes, min_level, max_level,
         Tuple: being generated configuarations.
     """
     num_levels = max_level + 1 - min_level
-    scale_aspect_ratio_combinations = (
-        len(range(num_scales)) * len(aspect_ratios))
-    features_H, features_W = build_features(
-        feature_sizes, min_level, max_level, scale_aspect_ratio_combinations)
+    num_scale_aspects = len(range(num_scales)) * len(aspect_ratios)
+    args = (feature_sizes, min_level, max_level, num_scale_aspects)
+    features_H, features_W = build_features(*args)
     octave_scales = build_octaves(num_scales, aspect_ratios, num_levels)
     aspects = build_aspects(aspect_ratios, num_scales, num_levels)
-    strides_y, strides_x = build_strides(
-        feature_sizes, features_H, features_W, num_levels)
-    anchor_scales = build_scales(
-        anchor_scale, scale_aspect_ratio_combinations, num_levels)
+    args = (feature_sizes, features_H, features_W, num_levels)
+    strides_y, strides_x = build_strides(*args)
+    anchor_scales = build_scales(anchor_scale, num_scale_aspects, num_levels)
     return ((strides_y, strides_x, octave_scales, aspects, anchor_scales),
-            num_levels, scale_aspect_ratio_combinations)
+            num_levels, num_scale_aspects)
 
 
 def build_strides(feature_sizes, features_H, features_W, num_levels):
@@ -72,24 +70,23 @@ def build_strides(feature_sizes, features_H, features_W, num_levels):
     return strides_y, strides_x
 
 
-def build_features(feature_sizes, min_level, max_level,
-                   scale_aspect_ratio_combinations):
+def build_features(feature_sizes, min_level, max_level, num_scale_aspects):
     """Calculates layer-wise EfficientNet feature height and width.
 
     # Arguments:
         feature_sizes: Numpy array being input feature sizes.
         min_level: Int, being first EfficientNet layer index.
         max_level: Int, being last EfficientNet layer index.
-        scale_aspect_ratio_combinations: Int, number of
-            scales aspect ratios combinations.
+        num_scale_aspects: Int, number of scales aspect ratios
+            combinations.
 
     # Returns:
         Tuple: Containing feature height and width.
     """
     feature_H = feature_sizes[min_level: max_level + 1][:, 0]
     feature_W = feature_sizes[min_level: max_level + 1][:, 1]
-    features_H = np.repeat(feature_H, scale_aspect_ratio_combinations)
-    features_W = np.repeat(feature_W, scale_aspect_ratio_combinations)
+    features_H = np.repeat(feature_H, num_scale_aspects)
+    features_W = np.repeat(feature_W, num_scale_aspects)
     return features_H, features_W
 
 
@@ -128,19 +125,19 @@ def build_aspects(aspect_ratios, num_scales, num_levels):
     return aspects
 
 
-def build_scales(anchor_scale, scale_aspect_ratio_combinations, num_levels):
+def build_scales(anchor_scale, num_scale_aspects, num_levels):
     """Generates layer-wise EfficientNet anchor box scales.
 
     # Arguments:
         anchor_scale: Numpy array, being anchor box scales.
-        scale_aspect_ratio_combinations:  Int, number of
-            scale aspect ratio combinations.
+        num_scale_aspects:  Int, number of scale aspect ratio
+            combinations.
         num_levels: Int, being number of feature levels.
 
     # Returns:
         anchor_scales: Numpy array of shape ``(5, 9)``.
     """
-    anchors_repeated = np.repeat(anchor_scale, scale_aspect_ratio_combinations)
+    anchors_repeated = np.repeat(anchor_scale, num_scale_aspects)
     anchor_scales = np.reshape(anchors_repeated, (num_levels, -1))
     return anchor_scales
 
@@ -189,8 +186,7 @@ def compute_box_coordinates(stride_y, stride_x, octave_scale, aspect,
 
 
 def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
-                         anchor_scales, image_size,
-                         scale_aspect_ratio_combinations):
+                         anchor_scales, image_size, num_scale_aspects):
     """Generates anchor box in centre form per feature level.
 
     # Arguments:
@@ -200,22 +196,22 @@ def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
         aspects: Numpy array being anchor box aspects.
         anchor_scales: Numpy array being anchor box scales.
         image_size: Tuple, being input image size.
-        scale_aspect_ratio_combinations: Int, number of
-            scale aspect ratio combinations.
+        num_scale_aspects: Int, number of scale aspect ratio
+            combinations.
 
     # Returns:
         boxes_level: List being anchor boxes in centre form.
     """
     boxes_level = []
-    for combination in range(scale_aspect_ratio_combinations):
-        box_coordinates = compute_box_coordinates(
-            strides_y[combination], strides_x[combination],
-            octave_scales[combination], aspects[combination],
-            anchor_scales[combination], image_size)
+    for combination in range(num_scale_aspects):
+        args = (strides_y[combination], strides_x[combination],
+                octave_scales[combination], aspects[combination],
+                anchor_scales[combination], image_size)
+        box_coordinates = compute_box_coordinates(*args)
         center_x, center_y, anchor_x, anchor_y = box_coordinates
-        boxes = np.concatenate(([center_x - anchor_x], [center_y - anchor_y],
-                                [center_x + anchor_x], [center_y + anchor_y]),
-                               axis=0)
+        args = ([center_x - anchor_x], [center_y - anchor_y],
+                [center_x + anchor_x], [center_y + anchor_y])
+        boxes = np.concatenate(args, axis=0)
         boxes = np.swapaxes(boxes, 0, 1)
         boxes_level.append(np.expand_dims(boxes, axis=1))
     return boxes_level
@@ -237,17 +233,17 @@ def generate_anchors(feature_sizes, min_level, max_level, num_scales,
     # Returns:
         anchors: Numpy array of shape ``(49104, 4)``.
     """
-    configuration = generate_configurations(
-        feature_sizes, min_level, max_level, num_scales,
-        aspect_ratios, anchor_scales)
+    args = (feature_sizes, min_level, max_level, num_scales,
+            aspect_ratios, anchor_scales)
+    configuration = generate_configurations(*args)
     ((strides_y, strides_x, octave_scales, aspects, anchor_scales),
-        num_levels, scale_aspect_ratio_combinations) = configuration
+        num_levels, num_scale_aspects) = configuration
     boxes_all = []
     for level in range(num_levels):
-        boxes_level = generate_level_boxes(
-            strides_y[level], strides_x[level], octave_scales[level],
-            aspects[level], anchor_scales[level], image_size,
-            scale_aspect_ratio_combinations)
+        args = (strides_y[level], strides_x[level], octave_scales[level],
+                aspects[level], anchor_scales[level], image_size,
+                num_scale_aspects)
+        boxes_level = generate_level_boxes(*args)
         boxes_level = np.concatenate(boxes_level, axis=1)
         boxes_all.append(boxes_level.reshape([-1, 4]))
     anchors = np.concatenate(boxes_all, axis=0).astype('float32')
