@@ -39,12 +39,12 @@ def generate_configurations(feature_sizes, min_level, max_level,
     """
     num_levels = max_level + 1 - min_level
     num_scale_aspects = len(range(num_scales)) * len(aspect_ratios)
-    args = (feature_sizes, min_level, max_level, num_scale_aspects)
-    features_H, features_W = build_features(*args)
+    features_H, features_W = build_features(
+        feature_sizes, min_level, max_level, num_scale_aspects)
     octave_scales = build_octaves(num_scales, aspect_ratios, num_levels)
     aspects = build_aspects(aspect_ratios, num_scales, num_levels)
-    args = (feature_sizes, features_H, features_W, num_levels)
-    strides_y, strides_x = build_strides(*args)
+    strides_y, strides_x = build_strides(
+        feature_sizes, features_H, features_W, num_levels)
     anchor_scales = build_scales(anchor_scale, num_scale_aspects, num_levels)
     return ((strides_y, strides_x, octave_scales, aspects, anchor_scales),
             num_levels, num_scale_aspects)
@@ -204,14 +204,14 @@ def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
     """
     boxes_level = []
     for combination in range(num_scale_aspects):
-        args = (strides_y[combination], strides_x[combination],
+        box_coordinates = compute_box_coordinates(
+                strides_y[combination], strides_x[combination],
                 octave_scales[combination], aspects[combination],
                 anchor_scales[combination], image_size)
-        box_coordinates = compute_box_coordinates(*args)
         center_x, center_y, anchor_x, anchor_y = box_coordinates
-        args = ([center_x - anchor_x], [center_y - anchor_y],
-                [center_x + anchor_x], [center_y + anchor_y])
-        boxes = np.concatenate(args, axis=0)
+        boxes = np.concatenate(([center_x - anchor_x], [center_y - anchor_y],
+                                [center_x + anchor_x], [center_y + anchor_y]),
+                               axis=0)
         boxes = np.swapaxes(boxes, 0, 1)
         boxes_level.append(np.expand_dims(boxes, axis=1))
     return boxes_level
@@ -233,17 +233,17 @@ def generate_anchors(feature_sizes, min_level, max_level, num_scales,
     # Returns:
         anchors: Array of shape ``(49104, 4)``.
     """
-    args = (feature_sizes, min_level, max_level, num_scales,
-            aspect_ratios, anchor_scales)
-    configuration = generate_configurations(*args)
+    configuration = generate_configurations(
+        feature_sizes, min_level, max_level, num_scales,
+        aspect_ratios, anchor_scales)
     ((strides_y, strides_x, octave_scales, aspects, anchor_scales),
         num_levels, num_scale_aspects) = configuration
     boxes_all = []
     for level in range(num_levels):
-        args = (strides_y[level], strides_x[level], octave_scales[level],
-                aspects[level], anchor_scales[level], image_size,
-                num_scale_aspects)
-        boxes_level = generate_level_boxes(*args)
+        boxes_level = generate_level_boxes(
+            strides_y[level], strides_x[level], octave_scales[level],
+            aspects[level], anchor_scales[level], image_size,
+            num_scale_aspects)
         boxes_level = np.concatenate(boxes_level, axis=1)
         boxes_all.append(boxes_level.reshape([-1, 4]))
     anchors = np.concatenate(boxes_all, axis=0).astype('float32')

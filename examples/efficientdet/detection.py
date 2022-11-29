@@ -49,8 +49,8 @@ class AugmentDetection(SequentialProcessor):
 
         # box processors
         self.augment_boxes = AugmentBoxes()
-        args = (num_classes, prior_boxes, IOU, variances)
-        self.preprocess_boxes = PreprocessBoxes(*args)
+        self.preprocess_boxes = PreprocessBoxes(
+            num_classes, prior_boxes, IOU, variances)
 
         # pipeline
         self.add(pr.UnpackDictionary(['image', 'boxes']))

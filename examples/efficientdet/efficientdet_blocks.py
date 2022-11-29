@@ -25,9 +25,9 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     # Returns
         class_outputs: List, ClassNet outputs per level.
     """
-    args = (repeats, num_filters, min_level, max_level, num_classes,
-            num_anchors, features, survival_rate, return_base)
-    class_outputs = build_predictionnet(*args, build_classnet=True)
+    class_outputs = build_predictionnet(
+        repeats, num_filters, min_level, max_level, num_classes, num_anchors,
+        features, survival_rate, return_base, build_classnet=True)
     return class_outputs
 
 
@@ -48,9 +48,9 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     # Returns
         box_outputs: List, BoxNet outputs per level.
     """
-    args = (repeats, num_filters, min_level, max_level, None,
-            num_anchors, features, survival_rate, return_base)
-    box_outputs = build_predictionnet(*args, build_classnet=False)
+    box_outputs = build_predictionnet(
+        repeats, num_filters, min_level, max_level, None, num_anchors,
+        features, survival_rate, return_base, build_classnet=False)
     return box_outputs
 
 
@@ -120,10 +120,10 @@ def conv2D_layer(num_filters, kernel_size, padding,
     # Returns
         conv2D_layer: TF conv layer.
     """
-    args = (num_filters, kernel_size, (1, 1), padding, 'channels_last',
-            (1, 1), 1, activation, True, tf.initializers.variance_scaling(),
-            tf.initializers.variance_scaling(), bias_initializer)
-    conv2D_layer = SeparableConv2D(*args)
+    conv2D_layer = SeparableConv2D(
+        num_filters, kernel_size, (1, 1), padding, 'channels_last',
+        (1, 1), 1, activation, True, tf.initializers.variance_scaling(),
+        tf.initializers.variance_scaling(), bias_initializer)
     return conv2D_layer
 
 
@@ -149,8 +149,8 @@ def build_predictionnet(repeats, num_filters, min_level, max_level,
     """
     conv_blocks = build_predictionnet_conv_blocks(repeats, num_filters)
 
-    args = (repeats, min_level, max_level)
-    batchnorms = build_predictionnet_batchnorm_blocks(*args)
+    batchnorms = build_predictionnet_batchnorm_blocks(
+        repeats, min_level, max_level)
 
     if build_classnet:
         bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
@@ -165,9 +165,9 @@ def build_predictionnet(repeats, num_filters, min_level, max_level,
 
     predictor_outputs = []
     for level_id in range(num_levels):
-        args = (features, level_id, repeats, conv_blocks, batchnorms,
-                survival_rate, return_base, classes)
-        level_feature_map = propagate_forward_predictionnet(*args)
+        level_feature_map = propagate_forward_predictionnet(
+            features, level_id, repeats, conv_blocks, batchnorms,
+            survival_rate, return_base, classes)
         predictor_outputs.append(level_feature_map)
     return predictor_outputs
 

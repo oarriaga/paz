@@ -18,8 +18,8 @@ def put_text(image, text, point, scale, color, thickness):
     # Returns
         Array: image with text.
     """
-    args = (image, text, point, FONT, scale, color, thickness, LINE)
-    image = cv2.putText(*args)
+    image = cv2.putText(
+        image, text, point, FONT, scale, color, thickness, LINE)
     return image
 
 
@@ -52,8 +52,8 @@ def add_box_border(image, corner_A, corner_B, color, thickness):
     # Returns
         Array: image with open rectangle.
     """
-    args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
-    image = cv2.rectangle(*args)
+    image = cv2.rectangle(
+        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
     return image
 
 
@@ -70,8 +70,8 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     # Returns
         Array: image with filled rectangle.
     """
-    args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
-    image = cv2.rectangle(*args)
+    image = cv2.rectangle(
+        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
     return image
 
 

@@ -131,8 +131,8 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
     x = input_MB_block(inputs, expand_ratio, filters)
     x = conv_MB_block(x, kernel_size, strides)
     x = MB_SE_block(x, intro_filters, SE_ratio, filters)
-    args = (x, inputs, intro_filters, outro_filters, strides, survival_rate)
-    x = output_MB_block(*args)
+    x = output_MB_block(
+        x, inputs, intro_filters, outro_filters, strides, survival_rate)
     return x
 
 
@@ -311,9 +311,9 @@ def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
         x: Tensor, output features.
         block_id: Int, MBConv block identifier.
     """
-    args = (x, block_id, block_arg, survival_rate, kernel_sizes, intro_filter,
-            outro_filter, expand_ratios, strides, repeat, SE_ratio)
-    x, block_id = MBconv_block_features(*args)
+    x, block_id = MBconv_block_features(
+        x, block_id, block_arg, survival_rate, kernel_sizes, intro_filter,
+        outro_filter, expand_ratios, strides, repeat, SE_ratio)
 
     return x, block_id
 
@@ -362,14 +362,14 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     """
     block_id, feature_maps = 0, []
     for block_arg in range(len(kernel_sizes)):
-        args = (block_arg, intro_filters, outro_filters, W_coefficient,
-                D_coefficient, D_divisor, repeats)
-        parameters = compute_MBconv_block_parameters(*args)
+        parameters = compute_MBconv_block_parameters(
+            block_arg, intro_filters, outro_filters, W_coefficient,
+            D_coefficient, D_divisor, repeats)
         intro_filter, outro_filter, repeat = parameters
 
-        args = (x, block_arg, intro_filter, outro_filter, repeat, SE_ratio,
-                block_id, survival_rate, kernel_sizes, strides, expand_ratios)
-        x, block_id = process_feature_maps(*args)
+        x, block_id = process_feature_maps(
+            x, block_arg, intro_filter, outro_filter, repeat, SE_ratio,
+            block_id, survival_rate, kernel_sizes, strides, expand_ratios)
 
         is_last_block = block_arg == len(kernel_sizes) - 1
         if not is_last_block:
@@ -422,8 +422,8 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
 
     image = Input(tensor=image, shape=input_shape, name='image')
     x = conv_block(image, intro_filters, W_coefficient, D_divisor)
-    args = (x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
-            D_coefficient, D_divisor, repeats, SE_ratio,
-            survival_rate, strides, expand_ratios)
-    x = MBconv_blocks(*args)
+    x = MBconv_blocks(
+        x, kernel_sizes, intro_filters, outro_filters,
+        W_coefficient, D_coefficient, D_divisor, repeats,
+        SE_ratio, survival_rate, strides, expand_ratios)
     return x
