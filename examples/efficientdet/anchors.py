@@ -66,9 +66,9 @@ def build_strides(feature_sizes, features_H, features_W, num_levels):
     """
     base_feature_H, base_feature_W = feature_sizes[0]
     strides_y = np.reshape(
-        base_feature_H*np.reciprocal(features_H), (num_levels, -1))
+        base_feature_H * np.reciprocal(features_H), (num_levels, -1))
     strides_x = np.reshape(
-        base_feature_W*np.reciprocal(features_W), (num_levels, -1))
+        base_feature_W * np.reciprocal(features_W), (num_levels, -1))
     return strides_y, strides_x
 
 

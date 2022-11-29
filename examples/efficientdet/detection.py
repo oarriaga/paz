@@ -163,10 +163,10 @@ class DrawBoxes2D(pr.DrawBoxes2D):
             add_box_border(image, (x_min, y_min), (x_max, y_max), color, 2)
             text_size = get_text_size(text, self.scale, 1)
             (text_W, text_H), _ = text_size
-            args = (image, (x_min+2, y_min+2),
-                    (x_min+text_W+5, y_min+text_H+5), (255, 174, 66))
+            args = (image, (x_min + 2, y_min + 2),
+                    (x_min + text_W + 5, y_min + text_H + 5), (255, 174, 66))
             draw_opaque_box(*args)
-            args = (image, text, (x_min+2, y_min + 17), self.scale,
+            args = (image, text, (x_min + 2, y_min + 17), self.scale,
                     (0, 0, 0), 1)
             put_text(*args)
         return image
