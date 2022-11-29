@@ -65,10 +65,10 @@ def build_strides(feature_sizes, features_H, features_W, num_levels):
         Tuple: Containing strides in y and x direction.
     """
     base_feature_H, base_feature_W = feature_sizes[0]
-    strides_y = np.reshape(
-        base_feature_H * np.reciprocal(features_H), (num_levels, -1))
-    strides_x = np.reshape(
-        base_feature_W * np.reciprocal(features_W), (num_levels, -1))
+    H_inverse = np.reciprocal(features_H)
+    strides_y = np.reshape(base_feature_H * H_inverse, (num_levels, -1))
+    W_inverse = np.reciprocal(features_W)
+    strides_x = np.reshape(base_feature_W * W_inverse, (num_levels, -1))
     return strides_y, strides_x
 
 
@@ -105,8 +105,9 @@ def build_octaves(num_scales, aspect_ratios, num_levels):
         octave_scales: Numpy array of shape ``(5, 9)``.
     """
     scale_octaves = np.repeat(list(range(num_scales)), len(aspect_ratios))
-    octave_scales = (np.tile(scale_octaves, num_levels)
-                     / float(num_scales)).reshape(num_levels, -1)
+    octaves_tiled = np.tile(scale_octaves, num_levels)
+    octaves_standardized = octaves_tiled / float(num_scales)
+    octave_scales = octaves_standardized.reshape(num_levels, -1)
     return octave_scales
 
 
@@ -122,7 +123,8 @@ def build_aspects(aspect_ratios, num_scales, num_levels):
         aspects: Numpy array of shape ``(5, 9)``.
     """
     aspect = np.tile(aspect_ratios, len(range(num_scales)))
-    aspects = np.tile(aspect, num_levels).reshape(num_levels, -1)
+    aspects_tiled = np.tile(aspect, num_levels)
+    aspects = aspects_tiled.reshape(num_levels, -1)
     return aspects
 
 
@@ -138,9 +140,8 @@ def build_scales(anchor_scale, scale_aspect_ratio_combinations, num_levels):
     # Returns:
         anchor_scales: Numpy array of shape ``(5, 9)``.
     """
-    anchor_scales = np.reshape(
-        np.repeat(anchor_scale, scale_aspect_ratio_combinations),
-        (num_levels, -1))
+    anchors_repeated = np.repeat(anchor_scale, scale_aspect_ratio_combinations)
+    anchor_scales = np.reshape(anchors_repeated, (num_levels, -1))
     return anchor_scales
 
 
