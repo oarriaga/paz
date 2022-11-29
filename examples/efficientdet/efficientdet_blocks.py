@@ -25,7 +25,7 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     # Returns
         class_outputs: List, ClassNet outputs per level.
     """
-    class_outputs = build_predictionnet(
+    class_outputs = build_head(
         repeats, num_filters, min_level, max_level, num_classes, num_anchors,
         features, survival_rate, return_base, build_classnet=True)
     return class_outputs
@@ -48,7 +48,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
     # Returns
         box_outputs: List, BoxNet outputs per level.
     """
-    box_outputs = build_predictionnet(
+    box_outputs = build_head(
         repeats, num_filters, min_level, max_level, None, num_anchors,
         features, survival_rate, return_base, build_classnet=False)
     return box_outputs
@@ -127,10 +127,10 @@ def conv2D_layer(num_filters, kernel_size, padding,
     return conv2D_layer
 
 
-def build_predictionnet(repeats, num_filters, min_level, max_level,
-                        num_classes, num_anchors, features, survival_rate,
-                        return_base, build_classnet):
-    """Builds PredictionNet.
+def build_head(repeats, num_filters, min_level, max_level, num_classes,
+               num_anchors, features, survival_rate,
+               return_base, build_classnet):
+    """Builds head.
 
     # Arguments
         repeats: Int, number of intermediate layers.
@@ -145,12 +145,11 @@ def build_predictionnet(repeats, num_filters, min_level, max_level,
         build_classnet: Bool, to build ClassNet or BoxNet.
 
     # Returns
-        predictor_outputs: List, with PredictionNet outputs.
+        predictor_outputs: List, with head outputs.
     """
-    conv_blocks = build_predictionnet_conv_blocks(repeats, num_filters)
+    conv_blocks = build_head_conv_blocks(repeats, num_filters)
 
-    batchnorms = build_predictionnet_batchnorm_blocks(
-        repeats, min_level, max_level)
+    batchnorms = build_head_batchnorm_blocks(repeats, min_level, max_level)
 
     if build_classnet:
         bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
@@ -165,22 +164,22 @@ def build_predictionnet(repeats, num_filters, min_level, max_level,
 
     predictor_outputs = []
     for level_id in range(num_levels):
-        level_feature_map = propagate_forward_predictionnet(
+        level_feature_map = propagate_forward_head(
             features, level_id, repeats, conv_blocks, batchnorms,
             survival_rate, return_base, classes)
         predictor_outputs.append(level_feature_map)
     return predictor_outputs
 
 
-def build_predictionnet_conv_blocks(repeats, num_filters):
-    """Builds PredictionNet convolutional blocks.
+def build_head_conv_blocks(repeats, num_filters):
+    """Builds head convolutional blocks.
 
     # Arguments
         repeats: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        conv_blocks: List, PredictionNet convolutional blocks.
+        conv_blocks: List, head convolutional blocks.
     """
     conv_blocks = []
     for _ in range(repeats):
@@ -189,8 +188,8 @@ def build_predictionnet_conv_blocks(repeats, num_filters):
     return conv_blocks
 
 
-def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level):
-    """Builds PredictionNet batch normalization blocks.
+def build_head_batchnorm_blocks(repeats, min_level, max_level):
+    """Builds head batch normalization blocks.
 
     # Arguments
         repeats: Int, number of intermediate layers.
@@ -198,7 +197,7 @@ def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level):
         max_level: Int, maximum feature level.
 
     # Returns
-        batchnorms: List, PredictionNet batch normalization blocks.
+        batchnorms: List, head batch normalization blocks.
     """
     batchnorms = []
     for _ in range(repeats):
@@ -209,23 +208,23 @@ def build_predictionnet_batchnorm_blocks(repeats, min_level, max_level):
     return batchnorms
 
 
-def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
-                                    batchnorms, survival_rate,
-                                    return_base, output_candidates):
-    """Propagates features through PredictionNet block.
+def propagate_forward_head(features, level_id, repeats, conv_blocks,
+                           batchnorms, survival_rate,
+                           return_base, output_candidates):
+    """Propagates features through head block.
 
     # Arguments
-        features: Tuple, PredictionNet input features.
+        features: Tuple, head input features.
         level_id: Int, feature level index.
         repeats: Int, number of intermediate layers.
-        conv_blocks: List, PredictionNet convolutional blocks.
-        batchnorms: List, PredictionNet batch normalization blocks.
+        conv_blocks: List, head convolutional blocks.
+        batchnorms: List, head batch normalization blocks.
         survival_rate: Float, used by drop connect.
         return_base: Bool, to build only base feature network.
-        output_candidates: Tensor, PredictionNet outputs per level.
+        output_candidates: Tensor, head outputs per level.
 
     # Returns
-        output_candidates: List. PredictionNet outputs.
+        output_candidates: List. head outputs.
     """
     level_feature_map = features[level_id]
     for repeat_args in range(repeats):
