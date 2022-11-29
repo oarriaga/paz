@@ -86,5 +86,5 @@ def make_box_transparent(raw_image, image, alpha=0.25):
     # Returns
         Numpy array: Blended image.
     """
-    image = cv2.addWeighted(raw_image, 1-alpha, image, alpha, 0.0)
+    image = cv2.addWeighted(raw_image, 1 - alpha, image, alpha, 0.0)
     return image
