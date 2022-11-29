@@ -154,8 +154,8 @@ def build_head(repeats, num_filters, min_level, max_level, features,
     # Returns
         head_outputs: List, with head outputs.
     """
-    conv_blocks = build_head_conv_blocks(repeats, num_filters[0])
-    batchnorms = build_head_batchnorm_blocks(repeats, min_level, max_level)
+    conv_blocks = build_head_conv2D(repeats, num_filters[0])
+    batchnorms = build_head_batchnorm(repeats, min_level, max_level)
     classes = conv2D_layer(num_filters[1], 3, 'same', None, bias_initializer)
 
     head_outputs = []
@@ -167,7 +167,7 @@ def build_head(repeats, num_filters, min_level, max_level, features,
     return head_outputs
 
 
-def build_head_conv_blocks(repeats, num_filters):
+def build_head_conv2D(repeats, num_filters):
     """Builds head convolutional blocks.
 
     # Arguments
@@ -184,7 +184,7 @@ def build_head_conv_blocks(repeats, num_filters):
     return conv_blocks
 
 
-def build_head_batchnorm_blocks(repeats, min_level, max_level):
+def build_head_batchnorm(repeats, min_level, max_level):
     """Builds head batch normalization blocks.
 
     # Arguments
