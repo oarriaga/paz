@@ -30,7 +30,7 @@ class AugmentDetection(SequentialProcessor):
     """Augment boxes and images.
 
     # Arguments
-        prior_boxes: Numpy array, holding prior boxes.
+        prior_boxes: Array, holding prior boxes.
         split: Flag denoting additional transformation.
         num_classes: Int, being number of classes.
         size: Int. being image size.

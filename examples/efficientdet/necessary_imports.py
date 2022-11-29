@@ -28,8 +28,8 @@ class ScaledResize(Processor):
         image_size: Int, desired model's input size.
 
     # Returns
-        output_images: Numpy array, resized image.
-        image_scales: Numpy array, scales to reconstruct raw image.
+        output_images: Array, resized image.
+        image_scales: Array, scales to reconstruct raw image.
     """
     def __init__(self, image_size):
         self.image_size = image_size
@@ -39,7 +39,7 @@ class ScaledResize(Processor):
         """Computes image resizing scale.
 
         # Arguments
-            image: Numpy array, raw input image.
+            image: Array, raw input image.
 
         # Returns
             Tuple: holding width, height and image_scale.
@@ -55,13 +55,13 @@ class ScaledResize(Processor):
         """Scales image using computed scale.
 
         # Arguments
-            image: Numpy array, raw input image.
-            width: Numpy array, raw image width.
-            height: Numpy array, raw image height.
-            image_scale: Numpy array, scale to resize raw image.
+            image: Array, raw input image.
+            width: Array, raw image width.
+            height: Array, raw image height.
+            image_scale: Array, scale to resize raw image.
 
         # Returns
-            scaled_image: Numpy array, scaled input image.
+            scaled_image: Array, scaled input image.
         """
         scaled_height = (height * image_scale).astype('int32')
         scaled_width = (width * image_scale).astype('int32')
@@ -72,12 +72,12 @@ class ScaledResize(Processor):
         """Crops given image.
 
         # Arguments
-            scaled_image: Numpy array, input image.
-            crop_offset_x: Numpy array, x crop offset.
-            crop_offset_y: Numpy array, y crop offset.
+            scaled_image: Array, input image.
+            crop_offset_x: Array, x crop offset.
+            crop_offset_y: Array, y crop offset.
 
         # Returns
-            cropped_image: Numpy array, cropped input image.
+            cropped_image: Array, cropped input image.
         """
         cropped_image = scaled_image[
                         crop_offset_y: crop_offset_y + self.image_size,
@@ -89,9 +89,9 @@ class ScaledResize(Processor):
         """Composes output image and image scale.
 
         # Arguments
-            image: Numpy array, raw input image.
-            scaled_image: Numpy array, scaled input image.
-            image_scale: Numpy array, scale to resize raw image.
+            image: Array, raw input image.
+            scaled_image: Array, scaled input image.
+            image_scale: Array, scale to resize raw image.
 
         # Returns
             Tuple: holding output images and image scale.
@@ -108,7 +108,7 @@ class ScaledResize(Processor):
     def call(self, image):
         """
         # Arguments
-            image: Numpy array, raw input image.
+            image: Array, raw input image.
 
         # Returns:
             Tuple: holding the output image and image scale.
@@ -139,11 +139,11 @@ def scale_box(predictions, image_scales=None):
     """Scales boxes according to image_scales.
 
     # Arguments
-        predictions: Numpy array, prediction boxes.
-        image_scales: Numpy array, scales to reconstruct raw image.
+        predictions: Array, prediction boxes.
+        image_scales: Array, scales to reconstruct raw image.
 
     # Returns
-        Numpy array of shape `[num_boxes, N]`.
+        Array of shape `[num_boxes, N]`.
     """
 
     if image_scales is not None:

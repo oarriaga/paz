@@ -8,7 +8,7 @@ def put_text(image, text, point, scale, color, thickness):
     """Puts text on image.
 
     # Arguments
-        image: Numpy array, input image.
+        image: Array, input image.
         text: String, text to show.
         point: Tuple, coordinate of top corner of text.
         scale: Float, scale of text.
@@ -16,7 +16,7 @@ def put_text(image, text, point, scale, color, thickness):
         thickness: Int, text thickness.
 
     # Returns
-        Numpy array: image with text.
+        Array: image with text.
     """
     args = (image, text, point, FONT, scale, color, thickness, LINE)
     image = cv2.putText(*args)
@@ -43,14 +43,14 @@ def add_box_border(image, corner_A, corner_B, color, thickness):
     """ Draws open rectangle.
 
     # Arguments
-        image: Numpy array, input image.
+        image: Array, input image.
         corner_A: List, top left rectangle coordinate.
         corner_B: List, bottom right rectangle coordinate.
         color: List, holding rectangle RGB color.
         thickness: Int, rectangle line thickness.
 
     # Returns
-        Numpy array: image with open rectangle.
+        Array: image with open rectangle.
     """
     args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
     image = cv2.rectangle(*args)
@@ -61,14 +61,14 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     """ Draws filled rectangle.
 
     # Arguments
-        image: Numpy array, input image.
+        image: Array, input image.
         corner_A: List, top left rectangle coordinate.
         corner_B: List, bottom right rectangle coordinate.
         color: List, holding rectangle RGB color.
         thickness: Int, rectangle line thickness.
 
     # Returns
-        Numpy array: image with filled rectangle.
+        Array: image with filled rectangle.
     """
     args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
     image = cv2.rectangle(*args)
@@ -79,12 +79,12 @@ def make_box_transparent(raw_image, image, alpha=0.25):
     """ Blends two images for transparency.
 
     # Arguments
-        raw_image: Numpy array, first input image.
-        image: Numpy array, second input image.
+        raw_image: Array, first input image.
+        image: Array, second input image.
         alpha: Float, sum weight.
 
     # Returns
-        Numpy array: Blended image.
+        Array: Blended image.
     """
     image = cv2.addWeighted(raw_image, 1 - alpha, image, alpha, 0.0)
     return image

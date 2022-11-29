@@ -13,7 +13,7 @@ def process_outputs(outputs):
         outputs: Tensor, prrior box coordinate offsets.
 
     # Returns
-        outputs: Numpy array, processed outputs.
+        outputs: Array, processed outputs.
     """
     outputs = outputs[0]
     boxes, classes = outputs[:, :4], outputs[:, 4:]
@@ -31,11 +31,11 @@ def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
     # Arguments
         model: EfficientDet model
         outputs: Tensor, prior box coordinate offsets.
-        image_scales: Numpy array, raw images resize scale.
-        raw_images: Numpy array, RGB image to draw detections.
+        image_scales: Array, raw images resize scale.
+        raw_images: Array, RGB image to draw detections.
 
     # Returns
-        image: Numpy array, input image with detections overlaid.
+        image: Array, input image with detections overlaid.
         outputs: List, holding bounding box and class details.
     """
     outputs = process_outputs(outputs)

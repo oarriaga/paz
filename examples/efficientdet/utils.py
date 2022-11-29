@@ -79,8 +79,8 @@ def efficientdet_preprocess(image, image_size):
         image_size: Tensor, size to resize raw image.
 
     # Returns
-        image: Numpy array, resized and preprocessed image
-        image_scale: Numpy array, scale to reconstruct raw image.
+        image: Array, resized and preprocessed image
+        image_scale: Array, scale to reconstruct raw image.
     """
 
     preprocessing = SequentialProcessor([
