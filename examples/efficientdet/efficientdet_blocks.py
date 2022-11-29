@@ -245,7 +245,7 @@ def propagate_forward_predictionnet(features, level_id, repeats, conv_blocks,
         return output_candidates(level_feature_map)
 
 
-def efficientnet_to_BiFPN(branches, num_filters):
+def EfficientNet_to_BiFPN(branches, num_filters):
     """Modifies the branches to comply with BiFPN.
 
     # Arguments

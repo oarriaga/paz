@@ -8,7 +8,7 @@ from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientnet_model import efficientnet, get_drop_connect
+from efficientnet import EfficientNet, get_drop_connect
 
 
 @pytest.fixture
@@ -66,17 +66,17 @@ def test_efficientdet_model():
     del detector
 
 
-def test_efficientnet_model():
+def test_EfficientNet_model():
     image_size = 512
     images = get_test_images(image_size)
-    features = efficientnet(images, 'efficientnet-b0', (512, 512, 3))
+    features = EfficientNet(images, 'efficientnet-b0', (512, 512, 3))
     assert len(features) == 5, 'EfficientNet model features length mismatch'
     del features
 
 
-def test_efficientnet_bottleneck_block():
+def test_EfficientNet_bottleneck_block():
     images = get_test_images(128, 10)
-    output_shape = efficientnet(
+    output_shape = EfficientNet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6])[0].shape
@@ -84,9 +84,9 @@ def test_efficientnet_bottleneck_block():
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
-def test_efficientnet_se_block():
+def test_EfficientNet_se_block():
     images = get_test_images(128, 10)
-    output_shape = efficientnet(
+    output_shape = EfficientNet(
         images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6], SE_ratio=0.8)[0].shape
@@ -114,11 +114,11 @@ def test_efficientnet_se_block():
                             (1536, 'efficientnet-b6', (768, 384, 192, 96, 48),
                              (32, 40, 72, 200, 576))
                          ])
-def test_efficientnet_features(input_shape, backbone, feature_shape,
+def test_EfficientNet_features(input_shape, backbone, feature_shape,
                                feature_channels):
     shape = (input_shape, input_shape, 3)
     image = Input(shape=shape, name='image')
-    branch_tensors = efficientnet(image, backbone, shape)
+    branch_tensors = EfficientNet(image, backbone, shape)
     assert len(branch_tensors) == 5, "Number of features mismatch"
     for branch_tensor, feature_shape_per_tensor, feature_channel  \
             in zip(branch_tensors, feature_shape, feature_channels):
