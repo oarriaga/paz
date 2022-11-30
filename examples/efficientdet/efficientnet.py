@@ -41,8 +41,9 @@ def round_repeats(repeats, depth_coefficient):
     return new_repeats
 
 
-def kernel_initializer(shape, dtype=None):
-    """Initialize convolutional kernels.
+def normal_kernel_initializer(shape, dtype=None):
+    """Initialize convolutional kernel using zero
+    centred Gaussian distribution.
 
     # Arguments
         shape: variable shape.
@@ -128,7 +129,7 @@ def input_MB_block(inputs, expand_ratio, filters):
     """
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
-                   kernel_initializer=kernel_initializer)(inputs)
+                   kernel_initializer=normal_kernel_initializer)(inputs)
         x = BatchNormalization()(x)
         x = tf.nn.swish(x)
     else:
@@ -148,7 +149,7 @@ def conv_MB_block(x, kernel_size, strides):
         x: Tensor, output features.
     """
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
-                        depthwise_initializer=kernel_initializer)(x)
+                        depthwise_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
@@ -170,10 +171,10 @@ def MB_SE_block(x, intro_filters, SE_ratio, filters):
     num_reduced_filters = max(1, int(intro_filters * SE_ratio))
     SE = tf.reduce_mean(x, [1, 2], keepdims=True)
     SE = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
-                kernel_initializer=kernel_initializer)(SE)
+                kernel_initializer=normal_kernel_initializer)(SE)
     SE = tf.nn.swish(SE)
     SE = Conv2D(filters, 1, padding='same', use_bias=True,
-                kernel_initializer=kernel_initializer)(SE)
+                kernel_initializer=normal_kernel_initializer)(SE)
     SE = tf.sigmoid(SE)
     x = SE * x
     return x
@@ -196,7 +197,7 @@ def output_MB_block(x, inputs, intro_filters, outro_filters,
         x: Tensor, output features.
     """
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
-               kernel_initializer=kernel_initializer)(x)
+               kernel_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
     if all(s == 1 for s in strides) and intro_filters == outro_filters:
         if survival_rate:
@@ -311,7 +312,7 @@ def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     """
     filters = round_filters(intro_filters[0], width_coefficient, depth_divisor)
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
-               None, False, kernel_initializer)(image)
+               None, False, normal_kernel_initializer)(image)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
