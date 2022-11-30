@@ -1,20 +1,18 @@
-from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
 
 from anchors import build_prior_boxes
 from efficientdet_blocks import BiFPN, BoxNet, ClassNet, EfficientNet_to_BiFPN
-from efficientnet import EfficientNet
 from utils import create_multibox_head
 
 WEIGHT_PATH = (
     'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
 
 
-def EfficientDet(num_classes, base_weights, head_weights, input_shape,
+def EfficientDet(image, num_classes, base_weights, head_weights, input_shape,
                  FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                  anchor_scale, min_level, max_level, fusion,
-                 return_base, model_name, backbone, num_scales=3,
+                 return_base, model_name, EfficientNet, num_scales=3,
                  aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None):
     """EfficientDet model.
 
@@ -52,10 +50,7 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
     if (base_weights is None) and (head_weights == 'COCO'):
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
-    image = Input(shape=input_shape, name='image')
-    branches = EfficientNet(image, backbone, input_shape)
-
-    middles, skips = EfficientNet_to_BiFPN(branches, FPN_num_filters)
+    middles, skips = EfficientNet_to_BiFPN(EfficientNet, FPN_num_filters)
     for _ in range(FPN_cell_repeats):
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 

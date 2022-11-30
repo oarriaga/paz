@@ -6,28 +6,6 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D,
                                      DepthwiseConv2D, Input)
 
 
-def get_scaling_coefficients(model_name):
-    """Model name to scaling coefficients.
-
-    # Arguments
-        model_name: Str, EfficientNet backbone name.
-
-    # Returns
-        List: with width coefficient, depth coefficient, survival rate
-    """
-    scaling_coefficients = {'efficientnet-b0': (1.0, 1.0, 0.8),
-                            'efficientnet-b1': (1.0, 1.1, 0.8),
-                            'efficientnet-b2': (1.1, 1.2, 0.7),
-                            'efficientnet-b3': (1.2, 1.4, 0.7),
-                            'efficientnet-b4': (1.4, 1.8, 0.6),
-                            'efficientnet-b5': (1.6, 2.2, 0.6),
-                            'efficientnet-b6': (1.8, 2.6, 0.5),
-                            'efficientnet-b7': (2.0, 3.1, 0.5),
-                            'efficientnet-b8': (2.2, 3.6, 0.5),
-                            'efficientnet-l2': (4.3, 5.3, 0.5)}
-    return scaling_coefficients[model_name]
-
-
 def round_filters(filters, W_coefficient, D_divisor):
     """Round number of filters using depth multiplier.
 
@@ -382,8 +360,9 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     return feature_maps
 
 
-def EfficientNet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
-                 SE_ratio=0.25, kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
+def EFFICIENTNET(image, scaling_coefficients, input_shape=(512, 512, 3),
+                 D_divisor=8, SE_ratio=0.25,
+                 kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  repeats=[1, 2, 2, 3, 3, 4, 1],
                  intro_filters=[32, 16, 24, 40, 80, 112, 192],
                  outro_filters=[16, 24, 40, 80, 112, 192, 320],
@@ -418,7 +397,6 @@ def EfficientNet(image, model_name, input_shape=(512, 512, 3), D_divisor=8,
     """
     assert (repeats > np.zeros_like(repeats)).sum() == len(repeats)
 
-    scaling_coefficients = get_scaling_coefficients(model_name)
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
 
     image = Input(tensor=image, shape=input_shape, name='image')

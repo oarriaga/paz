@@ -1,10 +1,13 @@
+from tensorflow.keras.layers import Input
+
 from efficientdet_model import EfficientDet
+from efficientnet import EFFICIENTNET
 
 
-def EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
+def EFFICIENTDET(image, num_classes, base_weights, head_weights, input_shape,
                  FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                  anchor_scale, min_level, max_level, fusion,
-                 return_base, model_name, backbone):
+                 return_base, model_name, EfficientNet):
     """ Creates EfficientDet model.
 
     # Arguments
@@ -27,10 +30,10 @@ def EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
     # Returns
         model: EfficientDet model.
     """
-    model = EfficientDet(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    model = EfficientDet(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNet)
     return model
 
 
@@ -39,7 +42,7 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=3, box_class_repeats=3, anchor_scale=4.0,
                    min_level=3, max_level=7, fusion='fast',
                    return_base=False, model_name='efficientdet-d0',
-                   backbone='efficientnet-b0'):
+                   scaling_coefficients=(1.0, 1.0, 0.8)):
     """ Instantiates EfficientDet-D0 model.
 
     # Arguments
@@ -62,10 +65,12 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D0 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb0)
     return model
 
 
@@ -74,7 +79,7 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=4, box_class_repeats=3, anchor_scale=4.0,
                    min_level=3, max_level=7, fusion='fast',
                    return_base=False, model_name='efficientdet-d1',
-                   backbone='efficientnet-b1'):
+                   scaling_coefficients=(1.0, 1.1, 0.8)):
     """ Instantiates EfficientDet-D1 model.
 
     # Arguments
@@ -97,10 +102,12 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D1 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb1 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb1)
     return model
 
 
@@ -109,7 +116,7 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=5, box_class_repeats=3, anchor_scale=4.0,
                    min_level=3, max_level=7, fusion='fast',
                    return_base=False, model_name='efficientdet-d2',
-                   backbone='efficientnet-b2'):
+                   scaling_coefficients=(1.1, 1.2, 0.7)):
     """ Instantiate EfficientDet-D2 model.
 
     # Arguments
@@ -132,10 +139,12 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D2 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb2 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb2)
     return model
 
 
@@ -144,7 +153,7 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=6, box_class_repeats=4, anchor_scale=4.0,
                    min_level=3, max_level=7, fusion='fast',
                    return_base=False, model_name='efficientdet-d3',
-                   backbone='efficientnet-b3'):
+                   scaling_coefficients=(1.2, 1.4, 0.7)):
     """ Instantiates EfficientDet-D3 model.
 
     # Arguments
@@ -167,10 +176,12 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D3 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb3 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb3)
     return model
 
 
@@ -179,7 +190,7 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=7, box_class_repeats=4, anchor_scale=4.0,
                    min_level=3, max_level=7, fusion='fast',
                    return_base=False, model_name='efficientdet-d4',
-                   backbone='efficientnet-b4'):
+                   scaling_coefficients=(1.4, 1.8, 0.6)):
     """ Instantiates EfficientDet-D4 model.
 
     # Arguments
@@ -202,10 +213,12 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D4 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb4 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb4)
     return model
 
 
@@ -214,7 +227,7 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=7, box_class_repeats=4, anchor_scale=4.0,
                    min_level=3, max_level=7, fusion='fast',
                    return_base=False, model_name='efficientdet-d5',
-                   backbone='efficientnet-b5'):
+                   scaling_coefficients=(1.6, 2.2, 0.6)):
     """ Instantiates EfficientDet-D5 model.
 
     # Arguments
@@ -237,10 +250,12 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D5 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb5 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb5)
     return model
 
 
@@ -249,7 +264,7 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=8, box_class_repeats=5, anchor_scale=5.0,
                    min_level=3, max_level=7, fusion='sum',
                    return_base=False, model_name='efficientdet-d6',
-                   backbone='efficientnet-b6'):
+                   scaling_coefficients=(1.8, 2.6, 0.5)):
     """ Instantiates EfficientDet-D6 model.
 
     # Arguments
@@ -272,10 +287,12 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D6 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb6)
     return model
 
 
@@ -284,7 +301,7 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
                    FPN_cell_repeats=8, box_class_repeats=5, anchor_scale=5.0,
                    min_level=3, max_level=7, fusion='sum',
                    return_base=False, model_name='efficientdet-d7',
-                   backbone='efficientnet-b6'):
+                   scaling_coefficients=(1.8, 2.6, 0.5)):
     """ Instantiates EfficientDet-D7 model.
 
     # Arguments
@@ -307,10 +324,12 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D7 model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb6)
     return model
 
 
@@ -319,7 +338,7 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
                     FPN_cell_repeats=8, box_class_repeats=5, anchor_scale=4.0,
                     min_level=3, max_level=8, fusion='sum',
                     return_base=False, model_name='efficientdet-d7x',
-                    backbone='efficientnet-b7'):
+                    scaling_coefficients=(2.0, 3.1, 0.5)):
     """ Instantiates EfficientDet-D7x model.
 
     # Arguments
@@ -342,8 +361,10 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D7x model.
     """
-    model = EFFICIENTDET(num_classes, base_weights, head_weights, input_shape,
-                         FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, min_level, max_level, fusion,
-                         return_base, model_name, backbone)
+    image = Input(shape=input_shape, name='image')
+    EfficientNetb7 = EFFICIENTNET(image, scaling_coefficients, input_shape)
+    model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
+                         input_shape, FPN_num_filters, FPN_cell_repeats,
+                         box_class_repeats, anchor_scale, min_level, max_level,
+                         fusion, return_base, model_name, EfficientNetb7)
     return model
