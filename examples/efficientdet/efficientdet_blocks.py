@@ -222,16 +222,18 @@ def propagate_forward_head(features, level_id, repeats, conv_blocks,
     # Returns
         output_candidates: List. head outputs.
     """
+    drop_connect = GetDropConnect(survival_rate=survival_rate)
     level_feature_map = features[level_id]
-    for repeat_args in range(repeats):
-        original_level_feature_map = level_feature_map
-        level_feature_map = conv_blocks[repeat_args](level_feature_map)
-        level_feature_map = batchnorms[repeat_args][level_id](
-            level_feature_map)
+    for repeat_arg in range(repeats):
+        level_conv_block = conv_blocks[repeat_arg]
+        level_batchnorm_block = batchnorms[repeat_arg][level_id]
+        level_feature_map = level_conv_block(level_feature_map)
+        level_feature_map = level_batchnorm_block(level_feature_map)
         level_feature_map = tf.nn.swish(level_feature_map)
-        if repeat_args > 0 and survival_rate:
-            level_feature_map = GetDropConnect(
-                survival_rate=survival_rate)(level_feature_map)
+
+        original_level_feature_map = level_feature_map
+        if repeat_arg > 0 and survival_rate:
+            level_feature_map = drop_connect(level_feature_map)
             level_feature_map = level_feature_map + original_level_feature_map
 
     if return_base:
