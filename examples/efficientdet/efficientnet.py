@@ -6,38 +6,38 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D,
                                      DepthwiseConv2D, Input)
 
 
-def round_filters(filters, W_coefficient, D_divisor):
-    """Round number of filters using depth multiplier.
+def round_filters(filters, width_coefficient, depth_divisor):
+    """Round number of filters using depth divisor.
 
     # Arguments
         filters: Int, filters to be rounded.
-        W_coefficient: Float, width coefficient.
-        D_divisor: Int, network depth multiplier.
+        width_coefficient: Float, width coefficient.
+        depth_divisor: Int, network depth divisor.
 
     # Returns
         new_filters: Int, rounded filters.
     """
-    filters = filters * W_coefficient
-    min_D = D_divisor
-    half_D = D_divisor / 2
-    threshold = (int(filters + half_D) // D_divisor) * D_divisor
+    filters = filters * width_coefficient
+    min_D = depth_divisor
+    half_D = depth_divisor / 2
+    threshold = (int(filters + half_D) // depth_divisor) * depth_divisor
     new_filters = int(max(min_D, threshold))
     if new_filters < 0.9 * filters:
-        new_filters = int(new_filters + D_divisor)
+        new_filters = int(new_filters + depth_divisor)
     return new_filters
 
 
-def round_repeats(repeats, D_coefficient):
-    """Round number of block repeats using depth multiplier.
+def round_repeats(repeats, depth_coefficient):
+    """Round number of block repeats using depth divisor.
 
     # Arguments
         repeats: Int, number of multiplier blocks.
-        D_coefficient: Float, network depth scaling coefficient.
+        depth_coefficient: Float, network depth scaling coefficient.
 
     # Returns
         new_repeats: Int, rounded block repeats.
     """
-    new_repeats = int(math.ceil(D_coefficient * repeats))
+    new_repeats = int(math.ceil(depth_coefficient * repeats))
     return new_repeats
 
 
@@ -216,7 +216,7 @@ def compute_MBconv_block_parameters(block_arg, intro_filters, outro_filters,
         outro_filters: Int, block's output filters.
         W_coefficient: Float, width coefficient.
         D_coefficient: Float, network depth scaling coefficient.
-        D_divisor: Int, network depth multiplier.
+        D_divisor: Int, network depth divisor.
         repeats: Int, number of block repeats.
 
     # Returns
@@ -297,19 +297,19 @@ def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
     return x, block_id
 
 
-def conv_block(image, intro_filters, W_coefficient, D_divisor):
+def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     """Builds EfficientNet's first convolutional layer.
 
     # Arguments
         image: Tensor, the input image.
         intro_filters: Int, block's input filters.
-        W_coefficient: Float, width coefficient.
-        D_divisor: Int, network depth multiplier.
+        width_coefficient: Float, width coefficient.
+        depth_divisor: Int, network depth divisor.
 
     # Returns
         x: Tensor, output features.
     """
-    filters = round_filters(intro_filters[0], W_coefficient, D_divisor)
+    filters = round_filters(intro_filters[0], width_coefficient, depth_divisor)
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
                None, False, kernel_initializer)(image)
     x = BatchNormalization()(x)
@@ -329,7 +329,7 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
         outro_filters: Int, block's output filters.
         W_coefficient: Float, width coefficient.
         D_coefficient: Float, network depth scaling coefficient.
-        D_divisor: Int, network depth multiplier.
+        D_divisor: Int, network depth divisor.
         repeats: Int, number of block repeats.
         SE_ratio: Float, block's squeeze excite ratio.
         survival_rate: Float, survival probability to drop features.
@@ -375,7 +375,7 @@ def EFFICIENTNET(image, scaling_coefficients, input_shape=(512, 512, 3),
         image: Tensor, the input image.
         model_name: Str, EfficientNet backbone name.
         input_shape: Tuple, input image shape.
-        D_divisor: Int, network depth multiplier.
+        D_divisor: Int, network depth divisor.
         SE_ratio: Float, block's squeeze excite ratio.
         kernel_sizes: List, kernel sizes.
         repeats: Int, number of block repeats.
