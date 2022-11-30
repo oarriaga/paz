@@ -79,7 +79,7 @@ def get_drop_connect(x, is_training, survival_rate):
         kwargs = {"shape": [batch_size, 1, 1, 1], "dtype": x.dtype}
         random_tensor = survival_rate + tf.random.uniform(**kwargs)
         binary_tensor = tf.floor(random_tensor)
-        output = (x / survival_rate) * binary_tensor
+        output = (x * binary_tensor) / survival_rate
     return output
 
 
@@ -108,25 +108,8 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
         (https://arxiv.org/pdf/1905.11946.pdf)
     """
     filters = intro_filters * expand_ratio
-    x = input_MB_block(inputs, expand_ratio, filters)
-    x = conv_MB_block(x, kernel_size, strides)
-    x = MB_SE_block(x, intro_filters, SE_ratio, filters)
-    x = output_MB_block(
-        x, inputs, intro_filters, outro_filters, strides, survival_rate)
-    return x
 
-
-def input_MB_block(inputs, expand_ratio, filters):
-    """Builds Mobile Inverted Residual Bottleneck block's input layer.
-
-    # Arguments
-        inputs: Tensor, input features.
-        expand_ratio: Int, conv block expansion ratio.
-        filters: Int, block's expanded input filters.
-
-    # Returns
-        x: Tensor, output features.
-    """
+    # MB Block Input ----------------------------------------------------------
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
                    kernel_initializer=normal_kernel_initializer)(inputs)
@@ -134,40 +117,14 @@ def input_MB_block(inputs, expand_ratio, filters):
         x = tf.nn.swish(x)
     else:
         x = inputs
-    return x
 
-
-def conv_MB_block(x, kernel_size, strides):
-    """Builds Mobile Inverted Residual Bottleneck block's conv layer.
-
-    # Arguments
-        x: Tensor, input features.
-        kernel_size: Int, kernel size.
-        strides: List, filter strides.
-
-    # Returns
-        x: Tensor, output features.
-    """
+    # MB Block Convolution  ---------------------------------------------------
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
                         depthwise_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
-    return x
 
-
-def MB_SE_block(x, intro_filters, SE_ratio, filters):
-    """Builds Mobile Inverted Residual Bottleneck block's
-    Squeeze Excitation layer.
-
-    # Arguments
-        x: Tensor, input features.
-        intro_filters: Int, block's input filters.
-        SE_ratio: Float, block's squeeze excite ratio.
-        filters: Int, block's expanded input filters.
-
-    # Returns
-        x: Tensor, output features.
-    """
+    # MB Block Squeeze Excitation ---------------------------------------------
     num_reduced_filters = max(1, int(intro_filters * SE_ratio))
     SE = tf.reduce_mean(x, [1, 2], keepdims=True)
     SE = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
@@ -177,25 +134,8 @@ def MB_SE_block(x, intro_filters, SE_ratio, filters):
                 kernel_initializer=normal_kernel_initializer)(SE)
     SE = tf.sigmoid(SE)
     x = SE * x
-    return x
 
-
-def output_MB_block(x, inputs, intro_filters, outro_filters,
-                    strides, survival_rate):
-    """Builds Mobile Inverted Residual Bottleneck block's output layer.
-
-    # Arguments
-        x: Tensor, input features from squeeze excitation layer.
-        inputs: Tensor, input features from Mobile Inverted Residual
-            Bottleneck block.
-        intro_filters: Int, block's input filters.
-        outro_filters: Int, block's output filters.
-        strides: List, filter strides.
-        survival_rate: Float, survival probability to drop features.
-
-    # Returns
-        x: Tensor, output features.
-    """
+    # MB Block Output ---------------------------------------------------------
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
                kernel_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
