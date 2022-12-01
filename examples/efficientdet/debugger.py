@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 from paz import processors as pr
 from paz.abstract import Processor, SequentialProcessor
 from paz.datasets import VOC
