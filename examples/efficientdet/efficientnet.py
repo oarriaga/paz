@@ -139,7 +139,8 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
                kernel_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
-    if all(s == 1 for s in strides) and intro_filters == outro_filters:
+    if (all(stride == 1 for stride in strides) and
+            intro_filters == outro_filters):
         if survival_rate:
             x = get_drop_connect(x, False, survival_rate)
         x = tf.add(x, inputs)
