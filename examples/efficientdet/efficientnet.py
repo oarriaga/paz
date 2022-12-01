@@ -88,14 +88,14 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
     """Initialize Mobile Inverted Residual Bottleneck block.
 
     # Arguments
+        inputs: Tensor, input features to MB block.
+        survival_rate: Float, survival probability to drop features.
         kernel_size: Int, conv block kernel size.
-        repeats: Int, number of block repeats.
         intro_filters: Int, block's input filters.
         outro_filters: Int, block's output filters.
         expand_ratio: Int, conv block expansion ratio.
         strides: List, conv block filter strides.
         SE_ratio: Float, squeeze excite block ratio.
-        num_blocks: Int, number of Mobile bottleneck conv blocks.
 
     # Returns
         x: Tensor, output features.
@@ -185,8 +185,8 @@ def MBconv_block_features(x, block_id, block_arg, survival_rate, kernel_sizes,
         block_arg: Int, block index.
         survival_rate: Float, survival probability to drop features.
         kernel_sizes: List, kernel sizes.
-        intro_filters: Int, block's input filters.
-        outro_filters: Int, block's output filters.
+        intro_filter: Int, block's input filter.
+        outro_filter: Int, block's output filter.
         expand_ratios: Int, MBConv block expansion ratio.
         strides: List, filter strides.
         repeats: Int, number of block repeats.
@@ -217,8 +217,8 @@ def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
     # Arguments
         x: Tensor, input features.
         block_arg: Int, block index.
-        intro_filters: Int, block's input filters.
-        outro_filters: Int, block's output filters.
+        intro_filter: Int, block's input filter.
+        outro_filter: Int, block's output filter.
         repeat: Int, number of block repeats.
         SE_ratio: Float, block's squeeze excite ratio.
         block_id: Int, MBConv block index.
@@ -242,7 +242,7 @@ def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     """Builds EfficientNet's first convolutional layer.
 
     # Arguments
-        image: Tensor, the input image.
+        image: Tensor of shape `(batch_size, input_shape)`, input image.
         intro_filters: Int, block's input filters.
         width_coefficient: Float, width coefficient.
         depth_divisor: Int, network depth divisor.
@@ -313,8 +313,8 @@ def EFFICIENTNET(image, scaling_coefficients, input_shape=(512, 512, 3),
     """A class implementing EfficientNet.
 
     # Arguments
-        image: Tensor, the input image.
-        model_name: Str, EfficientNet backbone name.
+        image: Tensor of shape `(batch_size, input_shape)`, input image.
+        scaling_coefficients: List, EfficientNet scaling coefficients.
         input_shape: Tuple, input image shape.
         D_divisor: Int, network depth divisor.
         SE_ratio: Float, block's squeeze excite ratio.

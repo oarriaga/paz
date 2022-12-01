@@ -43,7 +43,8 @@ def create_multibox_head(branch_tensors, num_levels, num_classes,
         num_regressions: Int, number of bounding box coordinate.
 
     # Returns:
-        Tensor: concatenated class and box outputs.
+        Tensor: With shape `(num_boxes, num_regressions)`,
+            concatenated class and box outputs.
     """
     class_outputs = branch_tensors[0]
     box_outputs = branch_tensors[1]

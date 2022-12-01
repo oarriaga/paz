@@ -8,9 +8,9 @@ class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
 
     # Arguments
-        class_names: List, indicating class names.
-        colors: List holding color values.
-        weighted: Bool, denoting bounding box color to be weighted.
+        class_names: List, class names.
+        colors: List, color values.
+        weighted: Bool, whether to weight bounding box color.
         scale: Float. Scale of text drawn.
         with_score: Bool, denoting if confidence be shown.
     """

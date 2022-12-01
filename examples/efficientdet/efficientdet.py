@@ -11,6 +11,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights, input_shape,
     """ Creates EfficientDet model.
 
     # Arguments
+        image: Tensor of shape `(batch_size, input_shape)`.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -25,7 +26,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights, input_shape,
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        EfficientNet: List, containing branch tensors.
 
     # Returns
         model: EfficientDet model.
@@ -60,7 +61,7 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D0 model.
@@ -97,7 +98,7 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D1 model.
@@ -134,7 +135,7 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D2 model.
@@ -171,7 +172,7 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D3 model.
@@ -208,7 +209,7 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D4 model.
@@ -245,7 +246,7 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D5 model.
@@ -282,7 +283,7 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D6 model.
@@ -319,7 +320,7 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D7 model.
@@ -356,7 +357,7 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
         model: EfficientDet-D7x model.

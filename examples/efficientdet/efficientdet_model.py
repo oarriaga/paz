@@ -17,6 +17,7 @@ def EfficientDet(image, num_classes, base_weights, head_weights, input_shape,
     """EfficientDet model.
 
     # Arguments
+        image: Tensor of shape `(batch_size, input_shape)`
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -31,7 +32,7 @@ def EfficientDet(image, num_classes, base_weights, head_weights, input_shape,
         fusion: Str, feature fusion method.
         return_base: Bool, use only EfficientDet features.
         model_name: Str, EfficientDet model name.
-        backbone: Str, EfficientNet backbone name.
+        EfficientNet: List, containing branch tensors.
         num_scales: Int, number of anchor box scales.
         aspect_ratios: List, anchor boxes aspect ratios.
         survival_rate: Float, specifying survival probability.

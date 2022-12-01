@@ -3,7 +3,6 @@ import tensorflow as tf
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Layer,
                                      MaxPooling2D, SeparableConv2D,
                                      UpSampling2D)
-
 from utils import GetDropConnect
 
 
@@ -122,7 +121,6 @@ def conv2D_layer(num_filters, kernel_size, padding,
         kernel_size: Int, kernel size.
         padding: String. padding for conv layer.
         activation: Str, activation function.
-        name: Str, conv layer name.
         bias_initializer: Callable, bias initializer.
 
     # Returns
@@ -144,12 +142,11 @@ def build_head(repeats, num_filters, min_level, max_level, features,
         num_filters: Int, number of intermediate layer filters.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
-        num_classes: Int, number of object classes.
-        num_anchors: Int, number of anchors.
         features: Tuple. input features.
         survival_rate: Float, used by drop connect.
         return_base: Bool, to build only base feature network.
-        build_classnet: Bool, to build ClassNet or BoxNet.
+        bias_initializer: Callable, bias initializer.
+        num_levels: Int, number of EfficientNet feature levels.
 
     # Returns
         head_outputs: List, with head outputs.
@@ -217,7 +214,7 @@ def propagate_forward_head(features, level_id, repeats, conv_blocks,
         batchnorms: List, head batch normalization blocks.
         survival_rate: Float, used by drop connect.
         return_base: Bool, to build only base feature network.
-        output_candidates: Tensor, head outputs per level.
+        output_candidates: Layer, head outputs per level.
 
     # Returns
         output_candidates: List. head outputs.
@@ -264,7 +261,8 @@ def build_branch(P5, num_filters):
     """Builds feature maps P6 and P7.
 
     # Arguments
-        P5: Tensor. EfficientNet's 5th layer output.
+        P5: Tensor of shape `(batch_size, 16, 16, 320)`,
+            EfficientNet's 5th layer output.
         num_filters: Int, number of intermediate layer filters.
 
     # Returns
@@ -343,8 +341,8 @@ def BiFPN(middles, skips, num_filters, fusion):
     """BiFPN block.
 
     # Arguments
-        middles: Tensor, BiFPN node output.
-        skips: Tensor. skip feature map from BiFPN node.
+        middles: List, BiFPN node output.
+        skips: List, skip feature map from BiFPN node.
         num_filters: Int, number of intermediate layer filters.
         fusion: Str, feature fusion method.
 
