@@ -27,7 +27,7 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         if self.weighted:
             color = [int(channel * box2D.score) for channel in color]
         if self.with_score:
-            text = '{} :{}%'.format(class_name, round(box2D.score*100))
+            text = '{} :{}%'.format(class_name, round(box2D.score * 100))
         if not self.with_score:
             text = '{}'.format(class_name)
         return x_min, y_min, x_max, y_max, color, text

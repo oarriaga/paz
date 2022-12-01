@@ -200,7 +200,7 @@ def test_build_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
         image_size)
     anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
     anchor_W, anchor_H = prior_boxes[:, 2], prior_boxes[:, 3]
-    measured_aspect_ratios = set(np.unique(np.round((anchor_W/anchor_H), 2)))
+    measured_aspect_ratios = set(np.unique(np.round((anchor_W / anchor_H), 2)))
     assert np.logical_and(anchor_x >= 0, anchor_x <= 1).all(), (
         "Invalid x-coordinates of anchor centre")
     assert np.logical_and(anchor_y >= 0, anchor_y <= 1).all(), (
