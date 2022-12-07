@@ -8,7 +8,7 @@ from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientnet import EFFICIENTNET, get_drop_connect
+from efficientnet import EFFICIENTNET, apply_drop_connect
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def get_test_images(image_size, batch_size=1):
 def test_drop_connect(input_shape, dtype, target_shape, is_training):
     x = tf.random.uniform(input_shape, minval=0, maxval=5, dtype=dtype)
     survival_rate = np.random.uniform(0.0, 1.0)
-    y = get_drop_connect(x, is_training, survival_rate)
+    y = apply_drop_connect(x, is_training, survival_rate)
     assert y.shape == target_shape, 'Incorrect target shape'
     assert y.dtype == dtype, 'Incorrect target datatype'
 

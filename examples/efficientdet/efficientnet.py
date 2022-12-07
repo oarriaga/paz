@@ -35,10 +35,9 @@ def round_repeats(repeats, depth_coefficient):
         depth_coefficient: Float, network depth scaling coefficient.
 
     # Returns
-        new_repeats: Int, rounded block repeats.
+        Int: Rounded block repeats.
     """
-    new_repeats = int(math.ceil(depth_coefficient * repeats))
-    return new_repeats
+    return int(math.ceil(depth_coefficient * repeats))
 
 
 def normal_kernel_initializer(shape, dtype=None):
@@ -57,7 +56,7 @@ def normal_kernel_initializer(shape, dtype=None):
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
-def get_drop_connect(x, is_training, survival_rate):
+def apply_drop_connect(x, is_training, survival_rate):
     """Drops conv with given survival probability.
 
     # Arguments
@@ -142,7 +141,7 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
     if (all(stride == 1 for stride in strides) and
             intro_filters == outro_filters):
         if survival_rate:
-            x = get_drop_connect(x, False, survival_rate)
+            x = apply_drop_connect(x, False, survival_rate)
         x = tf.add(x, inputs)
     return x
 
