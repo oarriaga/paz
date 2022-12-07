@@ -174,21 +174,20 @@ def compute_MBconv_block_parameters(block_arg, intro_filters, outro_filters,
     return intro_filter, outro_filter, repeat
 
 
-def MBconv_block_features(x, block_id, block_arg, survival_rate, kernel_sizes,
-                          intro_filter, outro_filter, expand_ratios, strides,
+def MBconv_block_features(x, block_id, survival_rate, kernel_size,
+                          intro_filter, outro_filter, expand_ratio, stride,
                           repeats, SE_ratio):
     """Computes given MBConv block's features.
 
     # Arguments
         x: Tensor, input features.
         block_id: Int, MBConv block index.
-        block_arg: Int, block index.
         survival_rate: Float, survival probability to drop features.
-        kernel_sizes: List, kernel sizes.
+        kernel_size: Int, kernel size.
         intro_filter: Int, block's input filter.
         outro_filter: Int, block's output filter.
-        expand_ratios: Int, MBConv block expansion ratio.
-        strides: List, filter strides.
+        expand_ratio: Int, MBConv block expansion ratio.
+        stride: Int, filter strides.
         repeats: Int, number of block repeats.
         SE_ratio: Float, block's squeeze excite ratio.
 
@@ -196,16 +195,13 @@ def MBconv_block_features(x, block_id, block_arg, survival_rate, kernel_sizes,
         Tensor: Output features.
         block_id: Int, block identifier.
     """
-    kernel_size = kernel_sizes[block_arg]
-    expand_ratio = expand_ratios[block_arg]
-    stride = strides[block_arg]
+    x = MB_block(x, survival_rate, kernel_size, intro_filter,
+                 outro_filter, expand_ratio, stride, SE_ratio)
+    for _ in range(1, repeats):
+        x = MB_block(x, survival_rate, kernel_size, outro_filter,
+                     outro_filter, expand_ratio, [1, 1], SE_ratio)
 
-    for _ in range(repeats):
-        x = MB_block(x, survival_rate, kernel_size, intro_filter,
-                     outro_filter, expand_ratio, stride, SE_ratio)
-        intro_filter, stride = outro_filter, [1, 1]
-
-    block_id += repeats
+    block_id = block_id + repeats
     return x, block_id
 
 
@@ -231,9 +227,13 @@ def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
         x: Tensor, output features.
         block_id: Int, MBConv block identifier.
     """
+    kernel_size = kernel_sizes[block_arg]
+    expand_ratio = expand_ratios[block_arg]
+    stride = strides[block_arg]
+
     x, block_id = MBconv_block_features(
-        x, block_id, block_arg, survival_rate, kernel_sizes, intro_filter,
-        outro_filter, expand_ratios, strides, repeat, SE_ratio)
+        x, block_id, survival_rate, kernel_size, intro_filter,
+        outro_filter, expand_ratio, stride, repeat, SE_ratio)
 
     return x, block_id
 
