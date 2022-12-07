@@ -205,39 +205,6 @@ def MBconv_block_features(x, block_id, survival_rate, kernel_size,
     return x, block_id
 
 
-def process_feature_maps(x, block_arg, intro_filter, outro_filter, repeat,
-                         SE_ratio, block_id, survival_rate, kernel_sizes,
-                         strides, expand_ratios):
-    """Process given MBConv block's features.
-
-    # Arguments
-        x: Tensor, input features.
-        block_arg: Int, block index.
-        intro_filter: Int, block's input filter.
-        outro_filter: Int, block's output filter.
-        repeat: Int, number of block repeats.
-        SE_ratio: Float, block's squeeze excite ratio.
-        block_id: Int, MBConv block index.
-        survival_rate: Float, survival probability to drop features.
-        kernel_sizes: List, kernel sizes.
-        strides: List, filter strides.
-        expand_ratios: Int, MBConv block expansion ratio.
-
-    # Returns
-        x: Tensor, output features.
-        block_id: Int, MBConv block identifier.
-    """
-    kernel_size = kernel_sizes[block_arg]
-    expand_ratio = expand_ratios[block_arg]
-    stride = strides[block_arg]
-
-    x, block_id = MBconv_block_features(
-        x, block_id, survival_rate, kernel_size, intro_filter,
-        outro_filter, expand_ratio, stride, repeat, SE_ratio)
-
-    return x, block_id
-
-
 def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     """Builds EfficientNet's first convolutional layer.
 
@@ -287,9 +254,10 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
             D_coefficient, D_divisor, repeats)
         intro_filter, outro_filter, repeat = parameters
 
-        x, block_id = process_feature_maps(
-            x, block_arg, intro_filter, outro_filter, repeat, SE_ratio,
-            block_id, survival_rate, kernel_sizes, strides, expand_ratios)
+        x, block_id = MBconv_block_features(
+            x, block_id, survival_rate, kernel_sizes[block_arg], intro_filter,
+            outro_filter, expand_ratios[block_arg], strides[block_arg],
+            repeat, SE_ratio)
 
         is_last_block = block_arg == len(kernel_sizes) - 1
         if not is_last_block:
