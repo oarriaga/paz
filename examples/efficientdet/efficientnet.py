@@ -18,10 +18,10 @@ def round_filters(filters, width_coefficient, depth_divisor):
         new_filters: Int, rounded filters.
     """
     filters = filters * width_coefficient
-    min_D = depth_divisor
-    half_D = depth_divisor / 2
-    threshold = (int(filters + half_D) // depth_divisor) * depth_divisor
-    new_filters = int(max(min_D, threshold))
+    min_depth = depth_divisor
+    half_depth = depth_divisor / 2
+    threshold = (int(filters + half_depth) // depth_divisor) * depth_divisor
+    new_filters = int(max(min_depth, threshold))
     if new_filters < 0.9 * filters:
         new_filters = int(new_filters + depth_divisor)
     return new_filters
@@ -52,8 +52,8 @@ def normal_kernel_initializer(shape, dtype=None):
     # Returns
         variable initialization.
     """
-    kernel_H, kernel_W, _, outro_filters = shape
-    fan_output = int(kernel_H * kernel_W * outro_filters)
+    kernel_height, kernel_width, _, outro_filters = shape
+    fan_output = int(kernel_height * kernel_width * outro_filters)
     return tf.random.normal(shape, 0.0, np.sqrt(2.0 / fan_output), dtype)
 
 
