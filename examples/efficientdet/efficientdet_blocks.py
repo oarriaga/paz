@@ -34,8 +34,8 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     return class_outputs
 
 
-def BoxNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-           repeats=4, survival_rate=None, num_dims=4, return_base=False):
+def BoxesNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
+             repeats=4, survival_rate=None, num_dims=4, return_base=False):
     """Initializes BoxNet.
 
     # Arguments
@@ -46,6 +46,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
         max_level: Int, maximum feature level.
         repeats: Int, Number of intermediate layers.
         survival_rate: Float, used by drop connect.
+        num_dims: Int, number of output dimensions to regress.
         return_base: Bool, to build only base feature network.
 
     # Returns

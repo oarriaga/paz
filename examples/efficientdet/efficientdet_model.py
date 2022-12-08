@@ -1,8 +1,8 @@
+from anchors import build_prior_boxes
+from efficientdet_blocks import (BiFPN, BoxesNet, ClassNet,
+                                 EfficientNet_to_BiFPN)
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
-
-from anchors import build_prior_boxes
-from efficientdet_blocks import BiFPN, BoxNet, ClassNet, EfficientNet_to_BiFPN
 from utils import create_multibox_head
 
 WEIGHT_PATH = (
@@ -59,9 +59,9 @@ def EfficientDet(image, num_classes, base_weights, head_weights, input_shape,
     args = (middles, num_anchors, FPN_num_filters, min_level,
             max_level, box_class_repeats, survival_rate)
     class_outputs = ClassNet(*args, num_classes)
-    box_outputs = BoxNet(*args, num_dims)
+    boxes_outputs = BoxesNet(*args, num_dims)
 
-    branches = [class_outputs, box_outputs]
+    branches = [class_outputs, boxes_outputs]
     if return_base:
         outputs = branches
     else:
