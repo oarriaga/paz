@@ -79,20 +79,16 @@ def build_head(middle_features, num_blocks, num_filters,
     """
     conv_blocks = build_head_conv2D(num_blocks, num_filters[0])
     classes = conv2D_layer(num_filters[1], 3, 'same', None, bias_initializer)
-
     head_outputs = []
     for x in middle_features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
             x = BatchNormalization()(x)
             x = tf.nn.swish(x)
-
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
-
         if not return_base:
             x = classes(x)
-
         head_outputs.append(x)
     return head_outputs
 
