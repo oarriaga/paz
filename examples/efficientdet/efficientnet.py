@@ -246,12 +246,14 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
         feature_maps: List, of output features.
     """
     block_id, feature_maps = 0, []
-    block_args = list(range(len(kernel_sizes)))
+    feature_append_mask = [stride[0] == 2 for stride in strides[1:]]
+    feature_append_mask.append(True)
 
-    for iterator in zip(block_args, kernel_sizes, expand_ratios, strides,
-                        intro_filters, outro_filters, repeats):
-        (block_arg, kernel_size, expand_ratio, stride, intro_filter,
-            outro_filter, repeat) = iterator
+    for iterator in zip(kernel_sizes, expand_ratios, strides,
+                        intro_filters, outro_filters, repeats,
+                        feature_append_mask):
+        (kernel_size, expand_ratio, stride, intro_filter,
+            outro_filter, repeat, should_append_feature) = iterator
 
         parameters = compute_MBconv_block_parameters(
             intro_filter, outro_filter, W_coefficient,
@@ -262,13 +264,9 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
             x, block_id, survival_rate, kernel_size, intro_filter,
             outro_filter, expand_ratio, stride, repeat, SE_ratio)
 
-        is_last_block = block_arg == len(kernel_sizes) - 1
-        if not is_last_block:
-            next_block_stride = strides[block_arg + 1][0]
-            if next_block_stride == 2:
-                feature_maps.append(x)
-        elif is_last_block:
+        if should_append_feature:
             feature_maps.append(x)
+
     return feature_maps
 
 
