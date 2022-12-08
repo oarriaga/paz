@@ -13,8 +13,6 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
         features: List, input features.
         num_anchors: Int, number of anchors.
         num_filters: Int, number of intermediate layer filters.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used in drop connect.
         num_classes: Int, number of object classes.
@@ -40,8 +38,6 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
         features: List, input features.
         num_anchors: Int, number of anchors.
         num_filters: Int, number of intermediate layer filters.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used by drop connect.
         num_dims: Int, number of output dimensions to regress.
@@ -64,21 +60,19 @@ def build_head(middle_features, num_blocks, num_filters,
     """Builds head.
 
     # Arguments
+        middle_features: Tuple. input features.
         num_blocks: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
-        middle_features: Tuple. input features.
         survival_rate: Float, used by drop connect.
         return_base: Bool, to build only base feature network.
         bias_initializer: Callable, bias initializer.
-        num_levels: Int, number of EfficientNet feature levels.
 
     # Returns
         head_outputs: List, with head outputs.
     """
-    conv_blocks = build_head_conv2D(num_blocks, num_filters[0])
-    classes = conv2D_layer(num_filters[1], 3, 'same', None, bias_initializer)
+    conv_blocks = build_head_conv2D(
+        num_blocks, num_filters[0], tf.zeros_initializer())
+    classes = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_outputs = []
     for x in middle_features:
         for block_arg in range(num_blocks):
@@ -93,41 +87,23 @@ def build_head(middle_features, num_blocks, num_filters,
     return head_outputs
 
 
-def conv2D_layer(num_filters, kernel_size, padding,
-                 activation, bias_initializer):
-    """Builds conv2D layer.
-
-    # Arguments
-        num_filters: Int, number of intermediate layer filters.
-        kernel_size: Int, kernel size.
-        padding: String. padding for conv layer.
-        activation: Str, activation function.
-        bias_initializer: Callable, bias initializer.
-
-    # Returns
-        conv2D_layer: TF conv layer.
-    """
-    conv2D_layer = SeparableConv2D(
-        num_filters, kernel_size, (1, 1), padding, 'channels_last',
-        (1, 1), 1, activation, True, tf.initializers.variance_scaling(),
-        tf.initializers.variance_scaling(), bias_initializer)
-    return conv2D_layer
-
-
-def build_head_conv2D(num_blocks, num_filters):
+def build_head_conv2D(num_blocks, num_filters, bias_initializer):
     """Builds head convolutional blocks.
 
     # Arguments
         num_blocks: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
+        bias_initializer: Callable, bias initializer.
 
     # Returns
         conv_blocks: List, head convolutional blocks.
     """
     conv_blocks = []
     for _ in range(num_blocks):
-        args = (num_filters, 3, 'same', None, tf.zeros_initializer())
-        conv_blocks.append(conv2D_layer(*args))
+        args = (num_filters, 3, (1, 1), 'same', 'channels_last', (1, 1),
+                1, None, True, tf.initializers.variance_scaling(),
+                tf.initializers.variance_scaling(), bias_initializer)
+        conv_blocks.append(SeparableConv2D(*args))
     return conv_blocks
 
 
