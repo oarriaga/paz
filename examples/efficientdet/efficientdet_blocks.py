@@ -34,8 +34,8 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     return class_outputs
 
 
-def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
-           max_level=7, repeats=4, survival_rate=None, return_base=False):
+def BoxNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
+           repeats=4, survival_rate=None, num_dims=4, return_base=False):
     """Initializes BoxNet.
 
     # Arguments
@@ -52,7 +52,7 @@ def BoxNet(features, num_anchors=9, num_filters=32, min_level=3,
         box_outputs: List, BoxNet outputs per level.
     """
     bias_initializer = tf.zeros_initializer()
-    num_filters = [num_filters, 4 * num_anchors]
+    num_filters = [num_filters, num_dims * num_anchors]
     num_levels = len(features)
 
     box_outputs = build_head(

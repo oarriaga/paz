@@ -13,7 +13,7 @@ def EfficientDet(image, num_classes, base_weights, head_weights, input_shape,
                  FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                  anchor_scale, min_level, max_level, fusion,
                  return_base, model_name, EfficientNet, num_scales=3,
-                 aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None):
+                 aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None, num_dims=4):
     """EfficientDet model.
 
     # Arguments
@@ -59,7 +59,7 @@ def EfficientDet(image, num_classes, base_weights, head_weights, input_shape,
     args = (middles, num_anchors, FPN_num_filters, min_level,
             max_level, box_class_repeats, survival_rate)
     class_outputs = ClassNet(*args, num_classes)
-    box_outputs = BoxNet(*args)
+    box_outputs = BoxNet(*args, num_dims)
 
     branches = [class_outputs, box_outputs]
     if return_base:
