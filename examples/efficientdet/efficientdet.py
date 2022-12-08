@@ -60,8 +60,8 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights, input_shape,
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 
     num_anchors = len(aspect_ratios) * num_scales
-    args = (middles, num_anchors, FPN_num_filters, min_level,
-            max_level, box_class_repeats, survival_rate)
+    args = (middles, num_anchors, FPN_num_filters,
+            box_class_repeats, survival_rate)
     class_outputs = ClassNet(*args, num_classes)
     boxes_outputs = BoxesNet(*args, num_dims)
 

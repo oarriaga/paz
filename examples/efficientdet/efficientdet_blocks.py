@@ -1,13 +1,12 @@
 import numpy as np
 import tensorflow as tf
+from layers import FuseFeature, GetDropConnect
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, MaxPooling2D,
                                      SeparableConv2D, UpSampling2D)
 
-from layers import FuseFeature, GetDropConnect
 
-
-def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-             repeats=4, survival_rate=None, num_classes=90, return_base=False):
+def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
+             survival_rate=None, num_classes=90, return_base=False):
     """Initializes ClassNet.
 
     # Arguments
@@ -16,7 +15,7 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
         num_filters: Int, number of intermediate layer filters.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
-        repeats: Int, Number of intermediate layers.
+        num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used in drop connect.
         num_classes: Int, number of object classes.
         return_base: Bool, to build only base feature network.
@@ -26,16 +25,15 @@ def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     """
     bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
     num_filters = [num_filters, num_classes * num_anchors]
-    num_levels = max_level - min_level + 1
 
     class_outputs = build_head(
-        repeats, num_filters, min_level, max_level, features,
-        survival_rate, return_base, bias_initializer, num_levels)
+        features, num_blocks, num_filters, survival_rate,
+        return_base, bias_initializer)
     return class_outputs
 
 
-def BoxesNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
-             repeats=4, survival_rate=None, num_dims=4, return_base=False):
+def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
+             survival_rate=None, num_dims=4, return_base=False):
     """Initializes BoxNet.
 
     # Arguments
@@ -44,7 +42,7 @@ def BoxesNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
         num_filters: Int, number of intermediate layer filters.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
-        repeats: Int, Number of intermediate layers.
+        num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used by drop connect.
         num_dims: Int, number of output dimensions to regress.
         return_base: Bool, to build only base feature network.
@@ -54,12 +52,49 @@ def BoxesNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
     """
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
-    num_levels = len(features)
 
     boxes_outputs = build_head(
-        repeats, num_filters, min_level, max_level, features,
-        survival_rate, return_base, bias_initializer, num_levels)
+        features, num_blocks, num_filters, survival_rate,
+        return_base, bias_initializer)
     return boxes_outputs
+
+
+def build_head(middle_features, num_blocks, num_filters,
+               survival_rate, return_base, bias_initializer):
+    """Builds head.
+
+    # Arguments
+        num_blocks: Int, number of intermediate layers.
+        num_filters: Int, number of intermediate layer filters.
+        min_level: Int, minimum feature level.
+        max_level: Int, maximum feature level.
+        middle_features: Tuple. input features.
+        survival_rate: Float, used by drop connect.
+        return_base: Bool, to build only base feature network.
+        bias_initializer: Callable, bias initializer.
+        num_levels: Int, number of EfficientNet feature levels.
+
+    # Returns
+        head_outputs: List, with head outputs.
+    """
+    conv_blocks = build_head_conv2D(num_blocks, num_filters[0])
+    classes = conv2D_layer(num_filters[1], 3, 'same', None, bias_initializer)
+
+    head_outputs = []
+    for x in middle_features:
+        for block_arg in range(num_blocks):
+            x = conv_blocks[block_arg](x)
+            x = BatchNormalization()(x)
+            x = tf.nn.swish(x)
+
+            if block_arg > 0 and survival_rate:
+                x = x + GetDropConnect(survival_rate=survival_rate)(x)
+
+        if not return_base:
+            x = classes(x)
+
+        head_outputs.append(x)
+    return head_outputs
 
 
 def conv2D_layer(num_filters, kernel_size, padding,
@@ -83,111 +118,21 @@ def conv2D_layer(num_filters, kernel_size, padding,
     return conv2D_layer
 
 
-def build_head(repeats, num_filters, min_level, max_level, features,
-               survival_rate, return_base, bias_initializer, num_levels):
-    """Builds head.
-
-    # Arguments
-        repeats: Int, number of intermediate layers.
-        num_filters: Int, number of intermediate layer filters.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
-        features: Tuple. input features.
-        survival_rate: Float, used by drop connect.
-        return_base: Bool, to build only base feature network.
-        bias_initializer: Callable, bias initializer.
-        num_levels: Int, number of EfficientNet feature levels.
-
-    # Returns
-        head_outputs: List, with head outputs.
-    """
-    conv_blocks = build_head_conv2D(repeats, num_filters[0])
-    batchnorms = build_head_batchnorm(repeats, min_level, max_level)
-    classes = conv2D_layer(num_filters[1], 3, 'same', None, bias_initializer)
-
-    head_outputs = []
-    for level_id in range(num_levels):
-        level_feature_map = propagate_forward_head(
-            features, level_id, repeats, conv_blocks, batchnorms,
-            survival_rate, return_base, classes)
-        head_outputs.append(level_feature_map)
-    return head_outputs
-
-
-def build_head_conv2D(repeats, num_filters):
+def build_head_conv2D(num_blocks, num_filters):
     """Builds head convolutional blocks.
 
     # Arguments
-        repeats: Int, number of intermediate layers.
+        num_blocks: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
 
     # Returns
         conv_blocks: List, head convolutional blocks.
     """
     conv_blocks = []
-    for _ in range(repeats):
+    for _ in range(num_blocks):
         args = (num_filters, 3, 'same', None, tf.zeros_initializer())
         conv_blocks.append(conv2D_layer(*args))
     return conv_blocks
-
-
-def build_head_batchnorm(repeats, min_level, max_level):
-    """Builds head batch normalization blocks.
-
-    # Arguments
-        repeats: Int, number of intermediate layers.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
-
-    # Returns
-        batchnorms: List, head batch normalization blocks.
-    """
-    batchnorms = []
-    for _ in range(repeats):
-        batchnorm_per_level = []
-        for _ in range(min_level, max_level + 1):
-            batchnorm_per_level.append(BatchNormalization())
-        batchnorms.append(batchnorm_per_level)
-    return batchnorms
-
-
-def propagate_forward_head(features, level_id, repeats, conv_blocks,
-                           batchnorms, survival_rate,
-                           return_base, output_candidates):
-    """Propagates features through head block.
-
-    # Arguments
-        features: Tuple, head input features.
-        level_id: Int, feature level index.
-        repeats: Int, number of intermediate layers.
-        conv_blocks: List, head convolutional blocks.
-        batchnorms: List, head batch normalization blocks.
-        survival_rate: Float, used by drop connect.
-        return_base: Bool, to build only base feature network.
-        output_candidates: Layer, head outputs per level.
-
-    # Returns
-        output_candidates: List. head outputs.
-    """
-    drop_connect = GetDropConnect(survival_rate=survival_rate)
-    level_feature_map = features[level_id]
-    for repeat_arg in range(repeats):
-        level_conv_block = conv_blocks[repeat_arg]
-        level_batchnorm_block = batchnorms[repeat_arg][level_id]
-        level_feature_map = level_conv_block(level_feature_map)
-        level_feature_map = level_batchnorm_block(level_feature_map)
-        level_feature_map = tf.nn.swish(level_feature_map)
-
-        original_level_feature_map = level_feature_map
-        if repeat_arg > 0 and survival_rate:
-            level_feature_map = drop_connect(level_feature_map)
-            level_feature_map = level_feature_map + original_level_feature_map
-
-    if return_base:
-        output_candidates = level_feature_map
-    else:
-        output_candidates = output_candidates(level_feature_map)
-    return output_candidates
 
 
 def EfficientNet_to_BiFPN(branches, num_filters):
