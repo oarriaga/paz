@@ -47,14 +47,14 @@ def create_multibox_head(branch_tensors, num_levels, num_classes,
             concatenated class and box outputs.
     """
     class_outputs = branch_tensors[0]
-    box_outputs = branch_tensors[1]
+    boxes_outputs = branch_tensors[1]
     classification_layers, regression_layers = [], []
     for level in range(0, num_levels):
         class_leaf = class_outputs[level]
         class_leaf = Flatten()(class_leaf)
         classification_layers.append(class_leaf)
 
-        regress_leaf = box_outputs[level]
+        regress_leaf = boxes_outputs[level]
         regress_leaf = Flatten()(regress_leaf)
         regression_layers.append(regress_leaf)
 

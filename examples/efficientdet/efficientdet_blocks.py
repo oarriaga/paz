@@ -50,16 +50,16 @@ def BoxesNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
         return_base: Bool, to build only base feature network.
 
     # Returns
-        box_outputs: List, BoxNet outputs per level.
+        boxes_outputs: List, BoxNet outputs per level.
     """
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
     num_levels = len(features)
 
-    box_outputs = build_head(
+    boxes_outputs = build_head(
         repeats, num_filters, min_level, max_level, features,
         survival_rate, return_base, bias_initializer, num_levels)
-    return box_outputs
+    return boxes_outputs
 
 
 class FuseFeature(Layer):
