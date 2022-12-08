@@ -1,9 +1,9 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import (BatchNormalization, Conv2D, Layer,
-                                     MaxPooling2D, SeparableConv2D,
-                                     UpSampling2D)
-from utils import GetDropConnect
+from tensorflow.keras.layers import (BatchNormalization, Conv2D, MaxPooling2D,
+                                     SeparableConv2D, UpSampling2D)
+
+from layers import FuseFeature, GetDropConnect
 
 
 def ClassNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
@@ -60,57 +60,6 @@ def BoxesNet(features, num_anchors=9, num_filters=32, min_level=3, max_level=7,
         repeats, num_filters, min_level, max_level, features,
         survival_rate, return_base, bias_initializer, num_levels)
     return boxes_outputs
-
-
-class FuseFeature(Layer):
-    def __init__(self, fusion, **kwargs):
-        super().__init__(**kwargs)
-        self.fusion = fusion
-        if fusion == 'fast':
-            self.fuse_method = self._fuse_fast
-        elif fusion == 'sum':
-            self.fuse_method = self._fuse_sum
-        else:
-            raise ValueError('FPN weight fusion is not defined')
-
-    def build(self, input_shape):
-        num_in = len(input_shape)
-        args = (self.name, (num_in,), tf.float32,
-                tf.keras.initializers.constant(1 / num_in))
-        self.w = self.add_weight(*args, trainable=True)
-
-    def call(self, inputs, fusion):
-        """
-        # Arguments
-        inputs: Tensor, features to fuse.
-        fusion: Str, feature fusion method.
-
-        # Returns
-        x: fused feature.
-        """
-        inputs = [input for input in inputs if input is not None]
-        return self.fuse_method(inputs)
-
-    def _fuse_fast(self, inputs):
-        w = tf.keras.activations.relu(self.w)
-
-        pre_activations = []
-        for input_arg in range(len(inputs)):
-            pre_activations.append(w[input_arg] * inputs[input_arg])
-        x = tf.reduce_sum(pre_activations, 0)
-        x = x / (tf.reduce_sum(w) + 0.0001)
-        return x
-
-    def _fuse_sum(self, inputs):
-        x = inputs[0]
-        for node in inputs[1:]:
-            x = x + node
-        return x
-
-    def get_config(self):
-        config = super().get_config().copy()
-        config.update({'fusion': self.fusion})
-        return config
 
 
 def conv2D_layer(num_filters, kernel_size, padding,

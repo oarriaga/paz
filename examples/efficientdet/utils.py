@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from paz.processors.image import LoadImage
-from tensorflow import keras
 from tensorflow.keras.layers import Activation, Concatenate, Flatten, Reshape
 
 # Mock input image.
@@ -9,27 +8,6 @@ file_name = ('/home/manummk95/Desktop/efficientdet_BKP/paz/'
              'examples/efficientdet/000132.jpg')
 loader = LoadImage()
 raw_images = loader(file_name)
-
-
-class GetDropConnect(keras.layers.Layer):
-    """Dropout for model layers.
-
-    """
-    def __init__(self, survival_rate, **kwargs):
-        super(GetDropConnect, self).__init__(**kwargs)
-        self.survival_rate = survival_rate
-
-    def call(self, features, training=None):
-        if training:
-            batch_size = tf.shape(features)[0]
-            random_tensor = self.survival_rate
-            kwargs = {"shape": [batch_size, 1, 1, 1], "dtype": features.dtype}
-            random_tensor = random_tensor + tf.random.uniform(**kwargs)
-            binary_tensor = tf.floor(random_tensor)
-            output = (features / self.survival_rate) * binary_tensor
-            return output
-        else:
-            return features
 
 
 def create_multibox_head(branch_tensors, num_levels, num_classes,
