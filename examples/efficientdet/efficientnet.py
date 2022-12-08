@@ -146,19 +146,19 @@ def MB_block(inputs, survival_rate, kernel_size, intro_filters,
     return x
 
 
-def compute_MBconv_block_parameters(block_arg, intro_filters, outro_filters,
+def compute_MBconv_block_parameters(intro_filter, outro_filter,
                                     W_coefficient, D_coefficient, D_divisor,
-                                    repeats):
+                                    repeat):
     """Compute MBConv block parameters.
 
     # Arguments
         block_arg: Int, block index.
-        intro_filters: Int, block's input filters.
-        outro_filters: Int, block's output filters.
+        intro_filter Int, block's input filter.
+        outro_filter: Int, block's output filter.
         W_coefficient: Float, width coefficient.
         D_coefficient: Float, network depth scaling coefficient.
         D_divisor: Int, network depth divisor.
-        repeats: Int, number of block repeats.
+        repeat: Int, number of block repeats.
 
     # Returns
         intro_filter: Int, rounded block's input filter.
@@ -166,11 +166,9 @@ def compute_MBconv_block_parameters(block_arg, intro_filters, outro_filters,
         repeats: Int, rounded repeats of each MBConv block.
 
     """
-    num_intro_filters = intro_filters[block_arg]
-    num_outro_filters = outro_filters[block_arg]
-    intro_filter = round_filters(num_intro_filters, W_coefficient, D_divisor)
-    outro_filter = round_filters(num_outro_filters, W_coefficient, D_divisor)
-    repeat = round_repeats(repeats[block_arg], D_coefficient)
+    intro_filter = round_filters(intro_filter, W_coefficient, D_divisor)
+    outro_filter = round_filters(outro_filter, W_coefficient, D_divisor)
+    repeat = round_repeats(repeat, D_coefficient)
     return intro_filter, outro_filter, repeat
 
 
@@ -248,16 +246,21 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
         feature_maps: List, of output features.
     """
     block_id, feature_maps = 0, []
-    for block_arg in range(len(kernel_sizes)):
+    block_args = list(range(len(kernel_sizes)))
+
+    for iterator in zip(block_args, kernel_sizes, expand_ratios, strides,
+                        intro_filters, outro_filters, repeats):
+        (block_arg, kernel_size, expand_ratio, stride, intro_filter,
+            outro_filter, repeat) = iterator
+
         parameters = compute_MBconv_block_parameters(
-            block_arg, intro_filters, outro_filters, W_coefficient,
-            D_coefficient, D_divisor, repeats)
+            intro_filter, outro_filter, W_coefficient,
+            D_coefficient, D_divisor, repeat)
         intro_filter, outro_filter, repeat = parameters
 
         x, block_id = MBconv_block_features(
-            x, block_id, survival_rate, kernel_sizes[block_arg], intro_filter,
-            outro_filter, expand_ratios[block_arg], strides[block_arg],
-            repeat, SE_ratio)
+            x, block_id, survival_rate, kernel_size, intro_filter,
+            outro_filter, expand_ratio, stride, repeat, SE_ratio)
 
         is_last_block = block_arg == len(kernel_sizes) - 1
         if not is_last_block:
