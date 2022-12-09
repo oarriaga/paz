@@ -3,8 +3,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
 
 from anchors import build_prior_boxes
-from efficientdet_blocks import BiFPN, BoxNet, ClassNet
-from efficientnet_model import EfficientNet
+from efficientdet_blocks import BiFPN, BoxNet, ClassNet, efficientnet_to_BiFPN
+from efficientnet_model import efficientnet
 from utils import create_multibox_head
 
 WEIGHT_PATH = (
@@ -12,47 +12,38 @@ WEIGHT_PATH = (
 
 
 def EfficientDet(num_classes, base_weights, head_weights, input_shape,
-                 fpn_num_filters, fpn_cell_repeats, box_class_repeats,
-                 anchor_scale, min_level, max_level, fpn_weight_method,
+                 FPN_num_filters, FPN_cell_repeats, box_class_repeats,
+                 anchor_scale, min_level, max_level, fusion,
                  return_base, model_name, backbone, num_scales=3,
                  aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None):
-    """EfficientDet model in PAZ.
-    # References
-        -[Google AutoML repository implementation of EfficientDet](
-        https://github.com/google/automl/tree/master/efficientdet)
+    """EfficientDet model.
 
     # Arguments
-        image_size: Int, size of the input image.
-        num_classes: Int, specifying the number of class in the
-        output.
-        fpn_num_filters: Int, FPN filter output size.
-        fpn_cell_repeats: Int, Number of consecutive FPN block.
-        box_class_repeats: Int, Number of consective regression
-        and classification blocks.
-        anchor_scale: Int, specifying the number of anchor
-        scales.
-        min_level: Int, minimum level for features.
-        max_level: Int, maximum level for features.
-        fpn_weight_method: A string specifying the feature
-        fusion weighting method in fpn.
-        return_base: Bool, indicating the usage of features only
-        from EfficientDet
-        model_name: A string of EfficientDet model name.
-        backbone: A string of EfficientNet backbone name used
-        in EfficientDet.
-        training: Bool, whether EfficientDet architecture is trained.
-        layer.
-        num_scales: Int, specifying the number of scales in the
-        anchor boxes.
-        aspect_ratios: List, specifying the aspect ratio of the
-        survival_rate: Float, specifying the survival probability
+        num_classes: Int, number of object classes.
+        base_weights: Str, base weights name.
+        head_weights: Str, head weights name.
+        input_shape: Tuple, input image shape.
+        FPN_num_filters: Int, number of FPN filters.
+        FPN_cell_repeats: Int, number of FPN blocks.
+        box_class_repeats: Int, Number of regression
+            and classification blocks.
+        anchor_scale: Int, anchor scale.
+        min_level: Int, minimum features level.
+        max_level: Int, maximum features level.
+        fusion: Str, feature fusion method.
+        return_base: Bool, use only EfficientDet features.
+        model_name: Str, EfficientDet model name.
+        backbone: Str, EfficientNet backbone name.
+        num_scales: Int, number of anchor box scales.
+        aspect_ratios: List, anchor boxes aspect ratios.
+        survival_rate: Float, specifying survival probability.
 
     # Returns
-        model: EfficientDet model specified in model_name with the following:
-        class_outputs: Tensor, Logits for all classes corresponding to
-        the features associated with the box coordinates.
-        box_outputs: Tensor,  Box coordinate offsets for the
-        corresponding prior boxes.
+        model: EfficientDet model.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
     """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
@@ -62,36 +53,40 @@ def EfficientDet(num_classes, base_weights, head_weights, input_shape,
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
     image = Input(shape=input_shape, name='image')
-    branch_tensors = EfficientNet(image, backbone, input_shape)
-    for fpn_cell_id in range(fpn_cell_repeats):
-        branch_tensors = BiFPN(branch_tensors, fpn_num_filters,
-                               fpn_cell_id, fpn_weight_method)
-    num_anchors = len(aspect_ratios) * num_scales
-    class_outputs = ClassNet(branch_tensors, num_classes, num_anchors,
-                             fpn_num_filters, min_level, max_level,
-                             box_class_repeats, survival_rate)
-    box_outputs = BoxNet(branch_tensors, num_anchors, fpn_num_filters,
-                         min_level, max_level, box_class_repeats,
-                         survival_rate)
+    branches = efficientnet(image, backbone, input_shape)
 
-    branch_tensors = [class_outputs, box_outputs]
+    middles, skips = efficientnet_to_BiFPN(branches, FPN_num_filters)
+    for _ in range(FPN_cell_repeats):
+        middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
+
+    num_anchors = len(aspect_ratios) * num_scales
+    args = (middles, num_anchors, FPN_num_filters, min_level,
+            max_level, box_class_repeats, survival_rate)
+    class_outputs = ClassNet(*args, num_classes)
+    box_outputs = BoxNet(*args)
+
+    branches = [class_outputs, box_outputs]
     if return_base:
-        outputs = branch_tensors
+        outputs = branches
     else:
         num_levels = max_level - min_level + 1
-        outputs = create_multibox_head(branch_tensors, num_levels, num_classes)
+        outputs = create_multibox_head(branches, num_levels, num_classes)
+
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
-    if (((base_weights == 'COCO') and (head_weights == 'COCO')) or
-            ((base_weights == 'COCO') and (head_weights is None))):
+    if ((base_weights == 'COCO') and (head_weights == 'COCO')):
         model_filename = (model_name + '-' + str(base_weights) + '-' +
                           str(head_weights) + '_weights.hdf5')
-        weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
-                                cache_subdir='paz/models')
-        print('Loading %s model weights' % weights_path)
-        model.load_weights(weights_path)
+    elif ((base_weights == 'COCO') and (head_weights is None)):
+        model_filename = (model_name + '-' + str(base_weights) + '-' +
+                          str(head_weights) + '_weights.hdf5')
 
-    model.prior_boxes = build_prior_boxes(
-        min_level, max_level, num_scales, aspect_ratios, anchor_scale,
-        input_shape[0:2])
+    weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
+                            cache_subdir='paz/models')
+    print('Loading %s model weights' % weights_path)
+    model.load_weights(weights_path)
+
+    args = (min_level, max_level, num_scales, aspect_ratios,
+            anchor_scale, input_shape[0:2])
+    model.prior_boxes = build_prior_boxes(*args)
     return model

@@ -3,12 +3,11 @@ from paz.backend.boxes import to_center_form
 
 
 def compute_feature_sizes(image_size, max_level):
-    """Computes the size of features that are given as input to each of
-        EfficientNet layers.
+    """Computes EfficientNet input feature size.
 
     # Arguments
-        image_size: Tuple, (Height, Width) of the input image.
-        max_level: Int, maximum level for features.
+        image_size: Tuple, (Height, Width) of input image.
+        max_level: Int, maximum features levels.
 
     # Returns
         feature_sizes: Numpy array of shape ``(8, 2)``.
@@ -25,25 +24,18 @@ def compute_feature_sizes(image_size, max_level):
 
 def generate_configurations(feature_sizes, min_level, max_level,
                             num_scales, aspect_ratios, anchor_scale):
-    """Generates configurations or in other words different combinations of
-        strides, octave scales, aspect ratios and anchor scales for each level
-        of the EfficientNet layers that feeds BiFPN network.
+    """Generates anchor box parameter combinations.
 
     # Arguments:
-        feature_sizes: Numpy array representing the feature sizes of inputs to
-            EfficientNet layers.
-        min_level: Int, Number representing the index of the earliest
-            EfficientNet layer that feeds the BiFPN layers.
-        max_level: Int, Number representing the index of the last EfficientNet
-            layer that feeds the BiFPN layers.
-        num_scales: Int, specifying the number of scales in the
-            anchor boxes.
-        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
-        anchor_scale: Numpy array representing the scales of the anchor box.
+        feature_sizes: Numpy array, being input feature sizes.
+        min_level: Int, being first EfficientNet layer index.
+        max_level: Int, being last EfficientNet layer index.
+        num_scales: Int, being number of anchor box scales.
+        aspect_ratios: List, being anchor boxes aspect ratios.
+        anchor_scale: Numpy array, being anchor box scales.
 
     # Returns:
-        Tuple: Containing configuarations of strides, octave scales, aspect
-            ratios and anchor scales.
+        Tuple: being generated configuarations.
     """
     num_levels = max_level + 1 - min_level
     scale_aspect_ratio_combinations = (
@@ -61,14 +53,13 @@ def generate_configurations(feature_sizes, min_level, max_level,
 
 
 def build_strides(feature_sizes, features_H, features_W, num_levels):
-    """Generates strides for each EfficientNet layer that feeds BiFPN network.
+    """Generates layer-wise EfficientNet anchor box strides.
 
     # Arguments:
-        feature_sizes: Numpy array representing the feature sizes of inputs to
-            EfficientNet layers.
-        features_H: Numpy array representing the height of the input features.
-        features_W: Numpy array representing the width of the input features.
-        num_levels: Int, representing the number of feature levels.
+        feature_sizes: Numpy array being input feature sizes.
+        features_H: Numpy array being input feature height.
+        features_W: Numpy array being input feature width.
+        num_levels: Int, representing number of feature levels.
 
     # Returns:
         Tuple: Containing strides in y and x direction.
@@ -83,18 +74,14 @@ def build_strides(feature_sizes, features_H, features_W, num_levels):
 
 def build_features(feature_sizes, min_level, max_level,
                    scale_aspect_ratio_combinations):
-    """Calculates feature height and width for each EfficientNet layer that
-    feeds BiFPN network.
+    """Calculates layer-wise EfficientNet feature height and width.
 
     # Arguments:
-        feature_sizes: Numpy array representing the feature sizes of inputs to
-            EfficientNet layers.
-        min_level: Int, Number representing the index of the earliest
-            EfficientNet layer that feeds the BiFPN layers.
-        max_level: Int, Number representing the index of the last EfficientNet
-            layer that feeds the BiFPN layers.
-        scale_aspect_ratio_combinations: Int, representing the number of
-        possible combinations of scales and aspect ratios.
+        feature_sizes: Numpy array being input feature sizes.
+        min_level: Int, being first EfficientNet layer index.
+        max_level: Int, being last EfficientNet layer index.
+        scale_aspect_ratio_combinations: Int, number of
+            scales aspect ratios combinations.
 
     # Returns:
         Tuple: Containing feature height and width.
@@ -107,14 +94,12 @@ def build_features(feature_sizes, min_level, max_level,
 
 
 def build_octaves(num_scales, aspect_ratios, num_levels):
-    """Calculates octave scales for each EfficientNet layer that feeds
-    BiFPN network.
+    """Generates layer-wise EfficientNet anchor box octaves.
 
     # Arguments:
-        num_scales: Int, specifying the number of scales in the
-            anchor boxes.
-        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
-        num_levels: Int, representing the number of feature levels.
+        num_scales: Int, being number of anchor box scales.
+        aspect_ratios: List, being anchor boxes aspect ratios.
+        num_levels: Int, being number of feature levels.
 
     # Returns:
         octave_scales: Numpy array of shape ``(5, 9)``.
@@ -126,13 +111,12 @@ def build_octaves(num_scales, aspect_ratios, num_levels):
 
 
 def build_aspects(aspect_ratios, num_scales, num_levels):
-    """Calculates aspect ratios for each EfficientNet layer that feeds
-    BiFPN network.
+    """Generates layer-wise EfficientNet anchor box aspect ratios.
 
     # Arguments:
-        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
-        num_scales: Int, specifying the number of scales in the anchor boxes.
-        num_levels: Int, representing the number of feature levels.
+        aspect_ratios: List, being anchor boxes aspect ratios.
+        num_scales: Int, being number of anchor box scales.
+        num_levels: Int, being number of feature levels.
 
     # Returns:
         aspects: Numpy array of shape ``(5, 9)``.
@@ -143,14 +127,13 @@ def build_aspects(aspect_ratios, num_scales, num_levels):
 
 
 def build_scales(anchor_scale, scale_aspect_ratio_combinations, num_levels):
-    """Calculates anchor scales for each EfficientNet layer that feeds
-    BiFPN network.
+    """Generates layer-wise EfficientNet anchor box scales.
 
     # Arguments:
-        anchor_scale: Numpy array representing the scales of the anchor box.
-        scale_aspect_ratio_combinations: Int, representing the number of
-            possible combinations of scales and aspect ratios.
-        num_levels: Int, representing the number of feature levels.
+        anchor_scale: Numpy array, being anchor box scales.
+        scale_aspect_ratio_combinations:  Int, number of
+            scale aspect ratio combinations.
+        num_levels: Int, being number of feature levels.
 
     # Returns:
         anchor_scales: Numpy array of shape ``(5, 9)``.
@@ -162,13 +145,13 @@ def build_scales(anchor_scale, scale_aspect_ratio_combinations, num_levels):
 
 
 def compute_aspect_ratio(aspect):
-    """Calculates the aspect ratio of the anchor box.
+    """Calculates anchor box aspect ratio.
 
     # Arguments:
-        aspect: Numpy array representing the aspect of the anchor box.
+        aspect: Numpy array being anchor box aspects.
 
     # Returns:
-        Tuple: Containing the aspect ratio values of the anchor box.
+        Tuple: being anchor box aspect ratios.
     """
     aspect_x = np.sqrt(aspect)
     aspect_y = 1 / aspect_x
@@ -177,20 +160,18 @@ def compute_aspect_ratio(aspect):
 
 def compute_box_coordinates(stride_y, stride_x, octave_scale, aspect,
                             anchor_scale, image_size):
-    """Calculates the coordinates of the anchor box in centre form.
+    """Calculates anchor box coordinates in centre form.
 
     # Arguments:
-        stride_y: Numpy array representing the stride value in y direction.
-        stride_x: Numpy array representing the stride value in x direction.
-        octave_scale: Numpy array representing the octave scale of the
-            anchor box.
-        aspect: Numpy array representing the aspect value.
-        anchor_scale: Numpy array representing the scale of anchor box.
-        image_size: Tuple, representing the size of input image.
+        stride_y: Numpy array, being y-direction stride.
+        stride_x: Numpy array, being x-direction stride.
+        octave_scale: Numpy array, being anchor box octave scale.
+        aspect: Numpy array being anchor box aspects.
+        anchor_scale: Numpy array, being anchor box scales.
+        image_size: Tuple, being input image size.
 
     # Returns:
-        Tuple: Containing the centre as well as width and height of
-            anchor box in centre form.
+        Tuple: holding anchor box centre, width and height.
     """
     W, H = image_size
     base_anchor_x = anchor_scale * stride_x * (2 ** octave_scale)
@@ -209,22 +190,20 @@ def compute_box_coordinates(stride_y, stride_x, octave_scale, aspect,
 def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
                          anchor_scales, image_size,
                          scale_aspect_ratio_combinations):
-    """Generates anchor box in centre form for every feature level.
+    """Generates anchor box in centre form per feature level.
 
     # Arguments:
-        stride_y: Numpy array representing the stride value in y direction.
-        stride_x: Numpy array representing the stride value in x direction.
-        octave_scale: Numpy array representing the octave scale of the
-            anchor box.
-        aspect: Numpy array representing the aspect value.
-        anchor_scales: Numpy array representing the scale of anchor box.
-        image_size: Tuple, representing the size of input image.
-        scale_aspect_ratio_combinations: Int, representing the number of
-            combinations of scale and aspect ratio.
+        strides_y: Numpy array, being y-direction strides.
+        strides_x: Numpy array, being x-direction strides.
+        octave_scales: Numpy array, being anchor box octave scales.
+        aspects: Numpy array being anchor box aspects.
+        anchor_scales: Numpy array being anchor box scales.
+        image_size: Tuple, being input image size.
+        scale_aspect_ratio_combinations: Int, number of
+            scale aspect ratio combinations.
 
     # Returns:
-        boxes_level: List containing ancho9r boxes in centre form for every
-            feature level.
+        boxes_level: List being anchor boxes in centre form.
     """
     boxes_level = []
     for combination in range(scale_aspect_ratio_combinations):
@@ -245,16 +224,13 @@ def generate_anchors(feature_sizes, min_level, max_level, num_scales,
     """Generates anchor boxes in centre form for all feature levels.
 
     # Arguments:
-        feature_sizes: Numpy array of shape ``(8, 2)``.
-        min_level: Int, Number representing the index of the earliest
-            EfficientNet layer that feeds the BiFPN layers.
-        max_level: Int, Number representing the index of the last EfficientNet
-            layer that feeds the BiFPN layers.
-        num_scales: Int, specifying the number of scales in the
-            anchor boxes.
-        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
-        image_size: Tuple, representing the size of input image.
-        anchor_scales: Numpy array representing the scale of anchor box.
+        feature_sizes: Numpy array being input feature sizes.
+        min_level: Int, being first EfficientNet layer index.
+        max_level: Int, being last EfficientNet layer index.
+        num_scales: Int, being number of anchor box scales.
+        aspect_ratios: List, specifying anchor boxes aspect ratios.
+        image_size: Tuple, representing input image size.
+        anchor_scales: Numpy array being anchor box scales.
 
     # Returns:
         anchors: Numpy array of shape ``(49104, 4)``.
@@ -278,20 +254,15 @@ def generate_anchors(feature_sizes, min_level, max_level, num_scales,
 
 def build_prior_boxes(min_level, max_level, num_scales,
                       aspect_ratios, anchor_scale, image_size):
-    """Function to generate prior boxes.
+    """Generates prior boxes.
 
     # Arguments
-        min_level: Int, Number representing the index of the earliest
-            EfficientNet layer that feeds the BiFPN layers.
-        max_level: Int, Number representing the index of the last EfficientNet
-            layer that feeds the BiFPN layers.
-        num_scales: Int, specifying the number of scales in the
-            anchor boxes.
-        aspect_ratios: List, specifying the aspect rations of the anchor boxes.
-        anchor_scale: float number representing the scale of size of the base
-            anchor to the feature stride 2^level. Or a list, one value per
-            layer.
-        image_size: Tuple, representing the size of input image.
+        min_level: Int, being first EfficientNet layer index.
+        max_level: Int, being last EfficientNet layer index.
+        num_scales: Int, being number of anchor box scales.
+        aspect_ratios: List, specifying anchor boxes aspect ratios.
+        anchor_scale: Float, being anchor box scale.
+        image_size: Tuple, representing input image size.
 
     # Returns
         prior_boxes: Numpy array of shape ``(49104, 4)``.
