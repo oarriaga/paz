@@ -192,8 +192,8 @@ def node_BiFPN(up, middle, down, skip, num_filters, fusion):
     # Returns
         middle: Tensor, BiFPN node output.
     """
-    is_layer_1 = down is None
-    if is_layer_1:
+    is_layer_one = down is None
+    if is_layer_one:
         to_fuse = [middle, up]
     else:
         to_fuse = [middle, down] if skip is None else [skip, middle, down]
