@@ -82,18 +82,18 @@ def apply_drop_connect(x, is_training, survival_rate):
     return output
 
 
-def MB_block(inputs, survival_rate, kernel_size, intro_filters,
-             outro_filters, expand_ratio, strides, SE_ratio):
+def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
+             survival_rate, expand_ratio, SE_ratio):
     """Initialize Mobile Inverted Residual Bottleneck block.
 
     # Arguments
         inputs: Tensor, input features to MB block.
-        survival_rate: Float, survival probability to drop features.
-        kernel_size: Int, conv block kernel size.
         intro_filters: Int, block's input filters.
         outro_filters: Int, block's output filters.
-        expand_ratio: Int, conv block expansion ratio.
         strides: List, conv block filter strides.
+        kernel_size: Int, conv block kernel size.
+        survival_rate: Float, survival probability to drop features.
+        expand_ratio: Int, conv block expansion ratio.
         SE_ratio: Float, squeeze excite block ratio.
 
     # Returns
@@ -172,14 +172,13 @@ def compute_MBconv_block_parameters(intro_filter, outro_filter,
     return intro_filter, outro_filter, repeat
 
 
-def MBconv_block_features(x, block_id, survival_rate, kernel_size,
-                          intro_filter, outro_filter, expand_ratio, stride,
-                          repeats, SE_ratio):
+def MBconv_block_features(x, survival_rate, kernel_size, intro_filter,
+                          outro_filter, expand_ratio, stride, repeats,
+                          SE_ratio):
     """Computes given MBConv block's features.
 
     # Arguments
         x: Tensor, input features.
-        block_id: Int, MBConv block index.
         survival_rate: Float, survival probability to drop features.
         kernel_size: Int, kernel size.
         intro_filter: Int, block's input filter.
@@ -193,14 +192,11 @@ def MBconv_block_features(x, block_id, survival_rate, kernel_size,
         Tensor: Output features.
         block_id: Int, block identifier.
     """
-    x = MB_block(x, survival_rate, kernel_size, intro_filter,
-                 outro_filter, expand_ratio, stride, SE_ratio)
+    args = (kernel_size, survival_rate, expand_ratio, SE_ratio)
+    x = MB_block(x, intro_filter, outro_filter, stride, *args)
     for _ in range(1, repeats):
-        x = MB_block(x, survival_rate, kernel_size, outro_filter,
-                     outro_filter, expand_ratio, [1, 1], SE_ratio)
-
-    block_id = block_id + repeats
-    return x, block_id
+        x = MB_block(x, outro_filter, outro_filter, [1, 1], *args)
+    return x
 
 
 def conv_block(image, intro_filters, width_coefficient, depth_divisor):
@@ -245,7 +241,7 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     # Returns
         feature_maps: List, of output features.
     """
-    block_id, feature_maps = 0, []
+    feature_maps = []
     feature_append_mask = [stride[0] == 2 for stride in strides[1:]]
     feature_append_mask.append(True)
 
@@ -260,9 +256,9 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
             D_coefficient, D_divisor, repeat)
         intro_filter, outro_filter, repeat = parameters
 
-        x, block_id = MBconv_block_features(
-            x, block_id, survival_rate, kernel_size, intro_filter,
-            outro_filter, expand_ratio, stride, repeat, SE_ratio)
+        x = MBconv_block_features(
+            x, survival_rate, kernel_size, intro_filter, outro_filter,
+            expand_ratio, stride, repeat, SE_ratio)
 
         if should_append_feature:
             feature_maps.append(x)
