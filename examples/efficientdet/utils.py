@@ -1,4 +1,3 @@
-import tensorflow as tf
 import tensorflow.keras.backend as K
 from paz.processors.image import LoadImage
 from tensorflow.keras.layers import Activation, Concatenate, Flatten, Reshape
