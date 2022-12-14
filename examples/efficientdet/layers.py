@@ -5,6 +5,10 @@ from tensorflow.keras.layers import Layer
 class GetDropConnect(Layer):
     """Dropout for model layers.
 
+    # References
+        [Deep Networks with Stochastic Depth]
+        (https://arxiv.org/pdf/1603.09382.pdf)
+
     """
     def __init__(self, survival_rate, **kwargs):
         super(GetDropConnect, self).__init__(**kwargs)
@@ -24,6 +28,14 @@ class GetDropConnect(Layer):
 
 
 class FuseFeature(Layer):
+    """Fuse features from different resolutions
+    and return a weighted sum.
+
+    # References
+        [EfficientDet: Scalable and Efficient Object Detection]
+        (https://arxiv.org/pdf/1911.09070.pdf)
+
+    """
     def __init__(self, fusion, **kwargs):
         super().__init__(**kwargs)
         self.fusion = fusion
