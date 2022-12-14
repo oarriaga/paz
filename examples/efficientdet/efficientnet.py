@@ -215,20 +215,20 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     # Returns
         feature_maps: List, of output features.
     """
-    iterator1 = zip(intro_filters, outro_filters, repeats)
-    iterator2 = zip(kernel_sizes, expand_ratios, strides)
+    iterator_1 = zip(intro_filters, outro_filters, repeats)
+    iterator_2 = zip(kernel_sizes, expand_ratios, strides)
     feature_append_mask = [stride[0] == 2 for stride in strides[1:]]
     feature_append_mask.append(True)
     feature_maps = []
 
-    for args1, args2, should_append_feature in zip(iterator1, iterator2,
-                                                   feature_append_mask):
-        intro_filter, outro_filter, repeat = args1
+    for args_1, args_2, should_append_feature in zip(iterator_1, iterator_2,
+                                                     feature_append_mask):
+        intro_filter, outro_filter, repeat = args_1
         intro_filter = round_filters(intro_filter, W_coefficient, D_divisor)
         outro_filter = round_filters(outro_filter, W_coefficient, D_divisor)
         repeat = round_repeats(repeat, D_coefficient)
-        args1 = intro_filter, outro_filter, repeat
-        x = MBconv_block_features(x, survival_rate, SE_ratio, *args1, *args2)
+        args_1 = intro_filter, outro_filter, repeat
+        x = MBconv_block_features(x, survival_rate, SE_ratio, *args_1, *args_2)
         if should_append_feature:
             feature_maps.append(x)
 
