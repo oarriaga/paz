@@ -146,47 +146,21 @@ def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
     return x
 
 
-def compute_MBconv_block_parameters(intro_filter, outro_filter,
-                                    W_coefficient, D_coefficient, D_divisor,
-                                    repeat):
-    """Compute MBConv block parameters.
-
-    # Arguments
-        block_arg: Int, block index.
-        intro_filter Int, block's input filter.
-        outro_filter: Int, block's output filter.
-        W_coefficient: Float, width coefficient.
-        D_coefficient: Float, network depth scaling coefficient.
-        D_divisor: Int, network depth divisor.
-        repeat: Int, number of block repeats.
-
-    # Returns
-        intro_filter: Int, rounded block's input filter.
-        outro_filter: Int, rounded block's output filter.
-        repeats: Int, rounded repeats of each MBConv block.
-
-    """
-    intro_filter = round_filters(intro_filter, W_coefficient, D_divisor)
-    outro_filter = round_filters(outro_filter, W_coefficient, D_divisor)
-    repeat = round_repeats(repeat, D_coefficient)
-    return intro_filter, outro_filter, repeat
-
-
-def MBconv_block_features(x, survival_rate, kernel_size, intro_filter,
-                          outro_filter, expand_ratio, stride, repeats,
-                          SE_ratio):
+def MBconv_block_features(x, survival_rate, SE_ratio, intro_filter,
+                          outro_filter, repeats, kernel_size, expand_ratio,
+                          stride):
     """Computes given MBConv block's features.
 
     # Arguments
         x: Tensor, input features.
         survival_rate: Float, survival probability to drop features.
-        kernel_size: Int, kernel size.
+        SE_ratio: Float, block's squeeze excite ratio.
         intro_filter: Int, block's input filter.
         outro_filter: Int, block's output filter.
+        repeats: Int, number of block repeats.
+        kernel_size: Int, kernel size.
         expand_ratio: Int, MBConv block expansion ratio.
         stride: Int, filter strides.
-        repeats: Int, number of block repeats.
-        SE_ratio: Float, block's squeeze excite ratio.
 
     # Returns
         Tensor: Output features.
@@ -241,25 +215,20 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     # Returns
         feature_maps: List, of output features.
     """
-    feature_maps = []
+    iterator1 = zip(intro_filters, outro_filters, repeats)
+    iterator2 = zip(kernel_sizes, expand_ratios, strides)
     feature_append_mask = [stride[0] == 2 for stride in strides[1:]]
     feature_append_mask.append(True)
+    feature_maps = []
 
-    for iterator in zip(kernel_sizes, expand_ratios, strides,
-                        intro_filters, outro_filters, repeats,
-                        feature_append_mask):
-        (kernel_size, expand_ratio, stride, intro_filter,
-            outro_filter, repeat, should_append_feature) = iterator
-
-        parameters = compute_MBconv_block_parameters(
-            intro_filter, outro_filter, W_coefficient,
-            D_coefficient, D_divisor, repeat)
-        intro_filter, outro_filter, repeat = parameters
-
-        x = MBconv_block_features(
-            x, survival_rate, kernel_size, intro_filter, outro_filter,
-            expand_ratio, stride, repeat, SE_ratio)
-
+    for args1, args2, should_append_feature in zip(iterator1, iterator2,
+                                                   feature_append_mask):
+        intro_filter, outro_filter, repeat = args1
+        intro_filter = round_filters(intro_filter, W_coefficient, D_divisor)
+        outro_filter = round_filters(outro_filter, W_coefficient, D_divisor)
+        repeat = round_repeats(repeat, D_coefficient)
+        args1 = intro_filter, outro_filter, repeat
+        x = MBconv_block_features(x, survival_rate, SE_ratio, *args1, *args2)
         if should_append_feature:
             feature_maps.append(x)
 
