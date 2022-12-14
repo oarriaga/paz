@@ -6,7 +6,7 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D, MaxPooling2D,
 
 
 def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
-             survival_rate=None, num_classes=90, return_base=False):
+             survival_rate=None, return_base=False, num_classes=90):
     """Initializes ClassNet.
 
     # Arguments
@@ -23,15 +23,12 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     """
     bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
     num_filters = [num_filters, num_classes * num_anchors]
-
-    class_outputs = build_head(
-        features, num_blocks, num_filters, survival_rate,
-        return_base, bias_initializer)
-    return class_outputs
+    return build_head(features, num_blocks, num_filters, survival_rate,
+                      return_base, bias_initializer)
 
 
 def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
-             survival_rate=None, num_dims=4, return_base=False):
+             survival_rate=None, return_base=False, num_dims=4):
     """Initializes BoxNet.
 
     # Arguments
@@ -48,11 +45,8 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     """
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
-
-    boxes_outputs = build_head(
-        features, num_blocks, num_filters, survival_rate,
-        return_base, bias_initializer)
-    return boxes_outputs
+    return build_head(features, num_blocks, num_filters, survival_rate,
+                      return_base, bias_initializer)
 
 
 def build_head(middle_features, num_blocks, num_filters,
@@ -72,7 +66,7 @@ def build_head(middle_features, num_blocks, num_filters,
     """
     conv_blocks = build_head_conv2D(
         num_blocks, num_filters[0], tf.zeros_initializer())
-    classes = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_outputs = []
     for x in middle_features:
         for block_arg in range(num_blocks):
@@ -82,7 +76,7 @@ def build_head(middle_features, num_blocks, num_filters,
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
         if not return_base:
-            x = classes(x)
+            x = final_head_conv(x)
         head_outputs.append(x)
     return head_outputs
 
