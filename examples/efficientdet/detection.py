@@ -1,7 +1,8 @@
 from paz import processors as pr
+from paz.backend.image.draw import draw_rectangle
 
-from draw import (add_box_border, draw_opaque_box, get_text_size,
-                  make_box_transparent, put_text)
+from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
+                  put_text)
 
 
 class DrawBoxes2D(pr.DrawBoxes2D):
@@ -20,35 +21,54 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         super().__init__(
             class_names, colors, weighted, scale, with_score)
 
-    def compute_prediction_parameters(self, box2D):
-        x_min, y_min, x_max, y_max = box2D.coordinates
+    def compute_box_color(self, box2D):
         class_name = box2D.class_name
         color = self.class_to_color[class_name]
         if self.weighted:
             color = [int(channel * box2D.score) for channel in color]
+        return color
+
+    def compute_text(self, box2D):
+        class_name = box2D.class_name
+        text = '{}'.format(class_name)
         if self.with_score:
             text = '{} :{}%'.format(class_name, round(box2D.score * 100))
-        if not self.with_score:
-            text = '{}'.format(class_name)
-        return x_min, y_min, x_max, y_max, color, text
+        return text
+
+    def get_text_box_parameters(self):
+        thickness = 1
+        offset_x = 2
+        offset_y = 17
+        color = (0, 0, 0)
+        text_parameters = [thickness, offset_x, offset_y, color]
+        box_start_offset = 2
+        box_end_offset = 5
+        box_color = (255, 174, 66)
+        text_box_parameters = [box_start_offset, box_end_offset, box_color]
+        return [text_box_parameters, text_parameters]
 
     def call(self, image, boxes2D):
         raw_image = image.copy()
         for box2D in boxes2D:
-            prediction_parameters = self.compute_prediction_parameters(box2D)
-            x_min, y_min, x_max, y_max, color, text = prediction_parameters
+            x_min, y_min, x_max, y_max = box2D.coordinates
+            color = self.compute_box_color(box2D)
             draw_opaque_box(image, (x_min, y_min), (x_max, y_max), color)
         image = make_box_transparent(raw_image, image)
+        text_box_parameters, text_parameters = self.get_text_box_parameters()
+        offset_start, offset_end, text_box_color = text_box_parameters
+        text_thickness, offset_x, offset_y, text_color = text_parameters
         for box2D in boxes2D:
-            prediction_parameters = self.compute_prediction_parameters(box2D)
-            x_min, y_min, x_max, y_max, color, text = prediction_parameters
-            add_box_border(image, (x_min, y_min), (x_max, y_max), color, 2)
-            text_size = get_text_size(text, self.scale, 1)
+            x_min, y_min, x_max, y_max = box2D.coordinates
+            color = self.compute_box_color(box2D)
+            draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
+            text = self.compute_text(box2D)
+            text_size = compute_text_bounds(text, self.scale, text_thickness)
             (text_W, text_H), _ = text_size
-            args = (image, (x_min + 2, y_min + 2),
-                    (x_min + text_W + 5, y_min + text_H + 5), (255, 174, 66))
+            args = (image, (x_min + offset_start, y_min + offset_start),
+                    (x_min + text_W + offset_end, y_min + text_H + offset_end),
+                    text_box_color)
             draw_opaque_box(*args)
-            args = (image, text, (x_min + 2, y_min + 17), self.scale,
-                    (0, 0, 0), 1)
+            args = (image, text, (x_min + offset_x, y_min + offset_y),
+                    self.scale, text_color, text_thickness)
             put_text(*args)
         return image

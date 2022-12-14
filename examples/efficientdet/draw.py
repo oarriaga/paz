@@ -23,38 +23,20 @@ def put_text(image, text, point, scale, color, thickness):
     return image
 
 
-def get_text_size(text, scale, FONT_THICKNESS, FONT=FONT):
+def compute_text_bounds(text, scale, thickness, FONT=FONT):
     """Computes given text size.
 
     # Arguments
         text: Str, given text.
         scale: Float, text scale.
-        FONT_THICKNESS: Int, text line thickness.
+        thickness: Int, text line thickness.
         FONT: Int, text font.
 
     # Returns
         Tuple: holding width and height of given text.
     """
-    text_size = cv2.getTextSize(text, FONT, scale, FONT_THICKNESS)
+    text_size = cv2.getTextSize(text, FONT, scale, thickness)
     return text_size
-
-
-def add_box_border(image, corner_A, corner_B, color, thickness):
-    """ Draws open rectangle.
-
-    # Arguments
-        image: Array of shape `(H, W, 3)`, input image.
-        corner_A: List, top left rectangle coordinate.
-        corner_B: List, bottom right rectangle coordinate.
-        color: List, rectangle's RGB color.
-        thickness: Int, rectangle's line thickness.
-
-    # Returns
-        Array: image of shape `(H, W, 3)` with open rectangle.
-    """
-    image = cv2.rectangle(
-        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
-    return image
 
 
 def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
@@ -70,8 +52,7 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     # Returns
         Array: image of shape `(H, W, 3)` with filled rectangle.
     """
-    image = cv2.rectangle(
-        image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
+    image = cv2.rectangle(image, corner_A, corner_B, color, thickness)
     return image
 
 
