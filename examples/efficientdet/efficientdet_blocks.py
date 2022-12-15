@@ -1,8 +1,10 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
+                                     MaxPooling2D, SeparableConv2D,
+                                     UpSampling2D)
+
 from layers import FuseFeature, GetDropConnect
-from tensorflow.keras.layers import (BatchNormalization, Conv2D, MaxPooling2D,
-                                     SeparableConv2D, UpSampling2D)
 
 
 def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
@@ -77,6 +79,7 @@ def build_head(middle_features, num_blocks, num_filters,
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
         if not return_base:
             x = final_head_conv(x)
+            x = Flatten()(x)
         head_outputs.append(x)
     return head_outputs
 

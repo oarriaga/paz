@@ -1,11 +1,12 @@
+import tensorflow.keras.backend as K
+from tensorflow.keras.layers import Activation, Concatenate, Input, Reshape
+from tensorflow.keras.models import Model
+from tensorflow.keras.utils import get_file
+
 from anchors import build_prior_boxes
 from efficientdet_blocks import (BiFPN, BoxesNet, ClassNet,
                                  EfficientNet_to_BiFPN)
 from efficientnet import EFFICIENTNET
-from tensorflow.keras.layers import Input
-from tensorflow.keras.models import Model
-from tensorflow.keras.utils import get_file
-from utils import create_multibox_head
 
 WEIGHT_PATH = (
     'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
@@ -65,12 +66,15 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights, input_shape,
     class_outputs = ClassNet(*args, num_classes)
     boxes_outputs = BoxesNet(*args, num_dims)
 
-    branches = [class_outputs, boxes_outputs]
-    if return_base:
-        outputs = branches
-    else:
-        num_levels = max_level - min_level + 1
-        outputs = create_multibox_head(branches, num_levels, num_classes)
+    outputs = [class_outputs, boxes_outputs]
+    if not return_base:
+        classifications = Concatenate(axis=1)(class_outputs)
+        regressions = Concatenate(axis=1)(boxes_outputs)
+        num_boxes = K.int_shape(regressions)[-1] // num_dims
+        classifications = Reshape((num_boxes, num_classes))(classifications)
+        classifications = Activation('softmax')(classifications)
+        regressions = Reshape((num_boxes, num_dims))(regressions)
+        outputs = Concatenate(axis=2)([regressions, classifications])
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
