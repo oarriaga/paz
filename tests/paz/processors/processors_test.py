@@ -66,7 +66,7 @@ def test_NormalizeKeypoints2D():
     points2D = np.array([[0, 0], [320, 240], [640, 480]])
     # normalize_points2D = pr.NormalizeKeypoints2D((height, width))
     normalize = pr.NormalizeKeypoints2D()
-    normalized_points = normalize(points2D, image)
+    image, normalized_points = normalize(image, points2D)
     assert np.allclose(normalized_points, np.array([[-1, -1], [0, 0], [1, 1]]))
 
 def test_DenormalizeKeypoints2D():
@@ -75,7 +75,7 @@ def test_DenormalizeKeypoints2D():
     points2D = np.array([[-1, -1], [0, 0], [1, 1]])
     # normalize_points2D = pr.NormalizeKeypoints2D((height, width))
     denormalize = pr.DenormalizeKeypoints2D()
-    denormalized_points = denormalize(points2D, image)
+    image, denormalized_points = denormalize(image, points2D)
     assert np.allclose(denormalized_points, np.array([[0, 0], [320, 240], [640, 480]]))
 
 
