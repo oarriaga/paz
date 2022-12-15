@@ -17,8 +17,8 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
         num_filters: Int, number of intermediate layer filters.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used in drop connect.
-        num_classes: Int, number of object classes.
         return_base: Bool, to build only base feature network.
+        num_classes: Int, number of object classes.
 
     # Returns
         class_outputs: List, ClassNet outputs per level.
@@ -39,8 +39,8 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
         num_filters: Int, number of intermediate layer filters.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used by drop connect.
-        num_dims: Int, number of output dimensions to regress.
         return_base: Bool, to build only base feature network.
+        num_dims: Int, number of output dimensions to regress.
 
     # Returns
         boxes_outputs: List, BoxNet outputs per level.
