@@ -1,5 +1,4 @@
 import math
-
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import BatchNormalization, Conv2D, DepthwiseConv2D

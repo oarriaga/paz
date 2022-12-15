@@ -2,7 +2,6 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Activation, Concatenate, Input, Reshape
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
-
 from anchors import build_prior_boxes
 from efficientdet_blocks import (BiFPN, BoxesNet, ClassNet,
                                  EfficientNet_to_BiFPN)

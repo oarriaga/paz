@@ -1,10 +1,8 @@
 import os
-
 import tensorflow as tf
 from paz.datasets import VOC
 from paz.optimization.callbacks import EvaluateMAP
 from paz.pipelines import DetectSingleShot
-
 from efficientdet import EFFICIENTDETD0
 
 if __name__ == "__main__":

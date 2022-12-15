@@ -1,6 +1,5 @@
 from paz import processors as pr
 from paz.backend.image.draw import draw_rectangle
-
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
 

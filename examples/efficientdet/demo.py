@@ -1,9 +1,8 @@
+from tensorflow.keras.utils import get_file
 from paz.backend.image import show_image, write_image
 from paz.datasets import get_class_names
 from paz.pipelines.detection import DetectSingleShot
 from paz.processors.image import LoadImage
-from tensorflow.keras.utils import get_file
-
 from detection import DrawBoxes2D
 from efficientdet import EFFICIENTDETD0
 

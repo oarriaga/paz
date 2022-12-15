@@ -6,9 +6,6 @@ from paz.pipelines.detection import AugmentDetection
 
 from efficientdet import EFFICIENTDETD0
 
-# gpus = tf.config.experimental.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(gpus[0], True)
-
 
 class ShowBoxes(Processor):
     def __init__(self, class_names, prior_boxes,

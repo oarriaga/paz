@@ -3,7 +3,6 @@ import tensorflow as tf
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
                                      MaxPooling2D, SeparableConv2D,
                                      UpSampling2D)
-
 from layers import FuseFeature, GetDropConnect
 
 
