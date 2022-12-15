@@ -3,7 +3,6 @@
 from warnings import warn
 
 import numpy as np
-from paz.backend.image import crop_image, resize_image, write_image
 
 from ..abstract import Processor
 from ..backend.keypoints import translate_keypoints
@@ -14,6 +13,8 @@ from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
+from ..backend.image import crop_image, resize_image, write_image
+
 
 
 class ProjectKeypoints(Processor):
