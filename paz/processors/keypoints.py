@@ -13,7 +13,6 @@ from ..backend.keypoints import denormalize_keypoints2D
 from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
-from ..backend.keypoints import relative_to_absolute
 from ..backend.image import get_scaling_factor
 
 
@@ -256,7 +255,7 @@ class RecursiveRefiner(Processor):
         self.stopping_criterion = stopping_criterion
         self.input_size = model.input_shape[1:3]
 
-    def call(self, image, keypoint_position, translation=relative_to_absolute):
+    def call(self, image, keypoint_position, translation=denormalize_keypoints2D, translation_kwargs={"norm_range":(0,1)}):
         """
         calculates the refinement and returns a keypoint position
         """
@@ -286,7 +285,7 @@ class RecursiveRefiner(Processor):
         resized_image = resize_image(cropped_image, self.input_size)
         keypoint_in_cropped = self.model.predict(np.array([resized_image, ]))
         keypoint_in_cropped = translation(
-            keypoint_in_cropped, cropped_image.shape[0], cropped_image.shape[1])[0]#just one keypoint
+            keypoint_in_cropped, cropped_image.shape[0], cropped_image.shape[1], **translation_kwargs)[0]#just one keypoint
         # # TODO: remove
         # write_image(
         #     filepath=f'refined_{time.time()}.jpg', image=cropped_image)

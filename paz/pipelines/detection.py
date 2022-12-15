@@ -1,6 +1,7 @@
 import numpy as np
 
-from paz.processors.keypoints import RecursiveRefiner, relative_to_absolute
+from ..processors.keypoints import RecursiveRefiner
+from ..backend.keypoints import denormalize_keypoints2D
 
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
@@ -608,7 +609,7 @@ class DetectPaper(Processor):
         resized_image = self.resize(image)
         initial_guess = self.paper_detector.predict(
             np.array([resized_image, ]))[0].reshape(4, 2)
-        initial_guess = relative_to_absolute(initial_guess, image.shape[1], image.shape[0])
+        initial_guess = denormalize_keypoints2D(initial_guess, image.shape[1], image.shape[0], norm_range=(0,1))
         # TODO: this can be paralleized
         keypoints = []
         for keypoint in initial_guess:
