@@ -236,14 +236,6 @@ class ComputeOrientationVector(Processor):
         return orientation
 
 
-# def relative_to_absolute(relative_position, width, height):
-#     """
-#     Calculates absolute pixel position in an image from the relative position.
-#     """
-#     # TODO: rounding can cause box to be not squared. make sure that this does not happen
-#     return np.array([relative_position[0]*width, relative_position[1]*height]).astype(int)
-
-
 class RecursiveRefiner(Processor):
     """
     Recursively refines a keypoint wih a given model until a stopping criterion is reached.
