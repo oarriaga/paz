@@ -11,11 +11,6 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
 from efficientnet import EFFICIENTNET, apply_drop_connect
 
 
-@pytest.fixture
-def model_input_name():
-    return 'image'
-
-
 def get_test_images(image_size, batch_size=1):
     """Generates a simple mock image.
 
@@ -112,7 +107,7 @@ def test_EfficientNet_se_block():
 def test_EfficientNet_features(input_shape, scaling_coefficients,
                                feature_shape, feature_channels):
     shape = (input_shape, input_shape, 3)
-    image = Input(shape=shape, name='image')
+    image = Input(shape=shape)
     branch_tensors = EFFICIENTNET(image, scaling_coefficients, shape)
     assert len(branch_tensors) == 5, "Number of features mismatch"
     for branch_tensor, feature_shape_per_tensor, feature_channel  \
@@ -145,8 +140,7 @@ def test_EfficientNet_features(input_shape, scaling_coefficients,
                             (EFFICIENTDETD7, 'efficientdet-d7', 51871934,
                                 311984, (1536, 1536, 3), (441936, 94)),
                          ])
-def test_efficientdet_architecture(model, model_name, model_input_name,
-                                   trainable_parameters,
+def test_efficientdet_architecture(model, model_name, trainable_parameters,
                                    non_trainable_parameters, input_shape,
                                    output_shape):
     implemented_model = model()
@@ -155,8 +149,6 @@ def test_efficientdet_architecture(model, model_name, model_input_name,
     non_trainable_count = count_params(
         implemented_model.non_trainable_weights)
     assert implemented_model.name == model_name, "Model name incorrect"
-    assert implemented_model.input_names[0] == model_input_name, (
-        "Input name incorrect")
     assert trainable_count == trainable_parameters, (
         "Incorrect trainable parameters count")
     assert non_trainable_count == non_trainable_parameters, (

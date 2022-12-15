@@ -124,7 +124,7 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D0 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -161,7 +161,7 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D1 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb1 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -198,7 +198,7 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D2 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb2 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -235,7 +235,7 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D3 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb3 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -272,7 +272,7 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D4 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb4 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -309,7 +309,7 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D5 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb5 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -346,7 +346,7 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D6 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -383,7 +383,7 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D7 model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
@@ -420,7 +420,7 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
     # Returns
         model: EfficientDet-D7x model.
     """
-    image = Input(shape=input_shape, name='image')
+    image = Input(shape=input_shape)
     EfficientNetb7 = EFFICIENTNET(image, scaling_coefficients, input_shape)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          input_shape, FPN_num_filters, FPN_cell_repeats,
