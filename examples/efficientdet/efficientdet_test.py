@@ -16,11 +16,6 @@ def model_input_name():
     return 'image'
 
 
-@pytest.fixture
-def model_output_name():
-    return 'boxes'
-
-
 def get_test_images(image_size, batch_size=1):
     """Generates a simple mock image.
 
@@ -151,7 +146,7 @@ def test_EfficientNet_features(input_shape, scaling_coefficients,
                                 311984, (1536, 1536, 3), (441936, 94)),
                          ])
 def test_efficientdet_architecture(model, model_name, model_input_name,
-                                   model_output_name, trainable_parameters,
+                                   trainable_parameters,
                                    non_trainable_parameters, input_shape,
                                    output_shape):
     implemented_model = model()
@@ -162,8 +157,6 @@ def test_efficientdet_architecture(model, model_name, model_input_name,
     assert implemented_model.name == model_name, "Model name incorrect"
     assert implemented_model.input_names[0] == model_input_name, (
         "Input name incorrect")
-    assert implemented_model.output_names[0] == model_output_name, (
-        "Output name incorrect")
     assert trainable_count == trainable_parameters, (
         "Incorrect trainable parameters count")
     assert non_trainable_count == non_trainable_parameters, (
