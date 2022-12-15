@@ -69,7 +69,7 @@ def test_efficientdet_model():
 def test_EfficientNet_model():
     image_size = 512
     images = get_test_images(image_size)
-    features = EFFICIENTNET(images, (1.0, 1.0, 0.8), (512, 512, 3))
+    features = EFFICIENTNET(images, (1.0, 1.0, 0.8))
     assert len(features) == 5, 'EfficientNet model features length mismatch'
     del features
 
@@ -77,7 +77,7 @@ def test_EfficientNet_model():
 def test_EfficientNet_bottleneck_block():
     images = get_test_images(128, 10)
     output_shape = EFFICIENTNET(
-        images, (1.0, 1.0, 0.8), (128, 10), strides=[[2, 2]],
+        images, (1.0, 1.0, 0.8), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6])[0].shape
     expected_shape = (10, 32, 32, 8)
@@ -87,7 +87,7 @@ def test_EfficientNet_bottleneck_block():
 def test_EfficientNet_se_block():
     images = get_test_images(128, 10)
     output_shape = EFFICIENTNET(
-        images, (1.0, 1.0, 0.8), (128, 10), strides=[[2, 2]],
+        images, (1.0, 1.0, 0.8), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6], SE_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
@@ -118,7 +118,7 @@ def test_EfficientNet_features(input_shape, scaling_coefficients,
                                feature_shape, feature_channels):
     shape = (input_shape, input_shape, 3)
     image = Input(shape=shape, name='image')
-    branch_tensors = EFFICIENTNET(image, scaling_coefficients, shape)
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
     assert len(branch_tensors) == 5, "Number of features mismatch"
     for branch_tensor, feature_shape_per_tensor, feature_channel  \
             in zip(branch_tensors, feature_shape, feature_channels):
