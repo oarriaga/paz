@@ -50,10 +50,10 @@ class NormalizeKeypoints2D(Processor):
         super(NormalizeKeypoints2D, self).__init__()
         self.norm_range = norm_range
 
-    def call(self, keypoints, image):
+    def call(self, image, keypoints):
         height, width = image.shape[0:2]
         keypoints = normalize_keypoints2D(keypoints, height, width, norm_range=self.norm_range)
-        return keypoints
+        return image, keypoints
 
 
 class DenormalizeKeypoints2D(Processor):
@@ -67,10 +67,10 @@ class DenormalizeKeypoints2D(Processor):
         super(DenormalizeKeypoints2D, self).__init__()
         self.norm_range = norm_range
 
-    def call(self, keypoints, image):
+    def call(self, image, keypoints):
         height, width = image.shape[0:2]
         keypoints = denormalize_keypoints2D(keypoints, height, width, norm_range=self.norm_range)
-        return keypoints
+        return image, keypoints
 
 
 class NormalizeKeypoints(Processor):
