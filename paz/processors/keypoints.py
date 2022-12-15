@@ -42,16 +42,17 @@ class NormalizeKeypoints2D(Processor):
     """Transform keypoints in image-size coordinates to normalized coordinates.
 
     # Arguments
-        image_size: List of two ints indicating ''(height, width)''
+        norm_range: Tuple of Floats. (-1, 1) means keypoints will be normalized to the range [-1, 1]
+
     """
 
-    def __init__(self, image_size):
-        self.image_size = image_size
+    def __init__(self, norm_range=(-1,1)):
         super(NormalizeKeypoints2D, self).__init__()
+        self.norm_range = norm_range
 
-    def call(self, keypoints):
-        height, width = self.image_size[0:2]
-        keypoints = normalize_keypoints2D(keypoints, height, width)
+    def call(self, keypoints, image):
+        height, width = image.shape[0:2]
+        keypoints = normalize_keypoints2D(keypoints, height, width, norm_range=self.norm_range)
         return keypoints
 
 
@@ -59,15 +60,16 @@ class DenormalizeKeypoints2D(Processor):
     """Transform normalized keypoints coordinates into image-size coordinates.
 
     # Arguments
-        image_size: List of two floats having height and width of image.
+        norm_range: Tuple of Floats. (-1, 1) means keypoints are assumed to be in the range [-1, 1]
     """
 
-    def __init__(self):
+    def __init__(self, norm_range=(-1,1)):
         super(DenormalizeKeypoints2D, self).__init__()
+        self.norm_range = norm_range
 
     def call(self, keypoints, image):
         height, width = image.shape[0:2]
-        keypoints = denormalize_keypoints2D(keypoints, height, width)
+        keypoints = denormalize_keypoints2D(keypoints, height, width, norm_range=self.norm_range)
         return keypoints
 
 

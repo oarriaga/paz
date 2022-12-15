@@ -62,11 +62,21 @@ def test_ReplaceLowerThanThreshold():
 
 def test_NormalizeKeypoints2D():
     height, width = 480, 640
+    image = np.empty(shape=(height,width, 3))
     points2D = np.array([[0, 0], [320, 240], [640, 480]])
     # normalize_points2D = pr.NormalizeKeypoints2D((height, width))
-    normalize = pr.NormalizeKeypoints2D((height, width))
-    normalized_points = normalize(points2D)
+    normalize = pr.NormalizeKeypoints2D()
+    normalized_points = normalize(points2D, image)
     assert np.allclose(normalized_points, np.array([[-1, -1], [0, 0], [1, 1]]))
+
+def test_DenormalizeKeypoints2D():
+    height, width = 480, 640
+    image = np.empty(shape=(height,width, 3))
+    points2D = np.array([[-1, -1], [0, 0], [1, 1]])
+    # normalize_points2D = pr.NormalizeKeypoints2D((height, width))
+    denormalize = pr.DenormalizeKeypoints2D()
+    denormalized_points = denormalize(points2D, image)
+    assert np.allclose(denormalized_points, np.array([[0, 0], [320, 240], [640, 480]]))
 
 
 def test_ToAffineMarixIdentity():
