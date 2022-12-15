@@ -273,8 +273,6 @@ def EFFICIENTNET(image, scaling_coefficients, input_shape=(512, 512, 3),
     assert (repeats > np.zeros_like(repeats)).sum() == len(repeats)
 
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
-
-    image = Input(tensor=image, shape=input_shape, name='image')
     x = conv_block(image, intro_filters, W_coefficient, D_divisor)
     x = MBconv_blocks(
         x, kernel_sizes, intro_filters, outro_filters,
