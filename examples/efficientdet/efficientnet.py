@@ -16,10 +16,9 @@ def round_filters(filters, width_coefficient, depth_divisor):
         new_filters: Int, rounded filters.
     """
     filters = filters * width_coefficient
-    min_depth = depth_divisor
     half_depth = depth_divisor / 2
     threshold = (int(filters + half_depth) // depth_divisor) * depth_divisor
-    new_filters = int(max(min_depth, threshold))
+    new_filters = int(max(depth_divisor, threshold))
     if new_filters < 0.9 * filters:
         new_filters = int(new_filters + depth_divisor)
     return new_filters
