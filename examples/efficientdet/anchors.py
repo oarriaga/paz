@@ -205,9 +205,9 @@ def generate_level_boxes(strides_y, strides_x, octave_scales, aspects,
     boxes_level = []
     for combination in range(num_scale_aspects):
         box_coordinates = compute_box_coordinates(
-                strides_y[combination], strides_x[combination],
-                octave_scales[combination], aspects[combination],
-                anchor_scales[combination], image_size)
+            strides_y[combination], strides_x[combination],
+            octave_scales[combination], aspects[combination],
+            anchor_scales[combination], image_size)
         center_x, center_y, anchor_x, anchor_y = box_coordinates
         boxes = np.concatenate(([center_x - anchor_x], [center_y - anchor_y],
                                 [center_x + anchor_x], [center_y + anchor_y]),
