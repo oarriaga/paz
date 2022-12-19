@@ -55,11 +55,11 @@ class FuseFeature(Layer):
     def call(self, inputs, fusion):
         """
         # Arguments
-        inputs: Tensor, features to fuse.
-        fusion: Str, feature fusion method.
+            inputs: Tensor, features to fuse.
+            fusion: Str, feature fusion method.
 
         # Returns
-        x: fused feature.
+            x: Tensor, fused feature.
         """
         inputs = [input for input in inputs if input is not None]
         return self.fuse_method(inputs)
