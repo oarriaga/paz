@@ -4,8 +4,8 @@ import tensorflow as tf
 from tensorflow.keras.layers import BatchNormalization, Conv2D, DepthwiseConv2D
 
 
-def round_filters(filters, width_coefficient, depth_divisor):
-    """Round number of filters using depth divisor.
+def scale_filters(filters, width_coefficient, depth_divisor):
+    """Scales filters using depth divisor.
 
     # Arguments
         filters: Int, filters to be rounded.
@@ -13,15 +13,17 @@ def round_filters(filters, width_coefficient, depth_divisor):
         depth_divisor: Int, network depth divisor.
 
     # Returns
-        new_filters: Int, rounded filters.
+        scaled_filters: Int, scaled filters.
     """
-    filters = filters * width_coefficient
+    filters_scaled_by_width = filters * width_coefficient
     half_depth = depth_divisor / 2
-    threshold = (int(filters + half_depth) // depth_divisor) * depth_divisor
-    new_filters = int(max(depth_divisor, threshold))
-    if new_filters < 0.9 * filters:
-        new_filters = int(new_filters + depth_divisor)
-    return new_filters
+    filters_rounded = int(filters_scaled_by_width + half_depth)
+    filters_standardized = filters_rounded // depth_divisor
+    threshold = filters_standardized * depth_divisor
+    scaled_filters = int(max(depth_divisor, threshold))
+    if scaled_filters < 0.9 * filters_scaled_by_width:
+        scaled_filters = int(scaled_filters + depth_divisor)
+    return scaled_filters
 
 
 def round_repeats(repeats, depth_coefficient):
@@ -182,7 +184,7 @@ def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     # Returns
         x: Tensor, output features.
     """
-    filters = round_filters(intro_filters[0], width_coefficient, depth_divisor)
+    filters = scale_filters(intro_filters[0], width_coefficient, depth_divisor)
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
                None, False, normal_kernel_initializer)(image)
     x = BatchNormalization()(x)
@@ -221,8 +223,8 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     for args_1, args_2, should_append_feature in zip(iterator_1, iterator_2,
                                                      feature_append_mask):
         intro_filter, outro_filter, repeat = args_1
-        intro_filter = round_filters(intro_filter, W_coefficient, D_divisor)
-        outro_filter = round_filters(outro_filter, W_coefficient, D_divisor)
+        intro_filter = scale_filters(intro_filter, W_coefficient, D_divisor)
+        outro_filter = scale_filters(outro_filter, W_coefficient, D_divisor)
         repeat = round_repeats(repeat, D_coefficient)
         args_1 = intro_filter, outro_filter, repeat
         x = MBconv_block_features(x, survival_rate, SE_ratio, *args_1, *args_2)

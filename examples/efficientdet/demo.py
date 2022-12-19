@@ -25,5 +25,5 @@ if __name__ == "__main__":
     detections = detect(raw_image)
 
     show_image(detections['image'])
-    write_image('predictions.png', detections['image'])
+    write_image('detections.png', detections['image'])
     print('task completed')
