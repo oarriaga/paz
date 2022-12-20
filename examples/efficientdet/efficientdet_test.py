@@ -174,29 +174,23 @@ def test_efficientdet_architecture(model, model_name, model_input_name,
     del implemented_model
 
 
-@pytest.mark.parametrize(('min_level, max_level, num_scales, aspect_ratios,'
-                          'anchor_scale, image_size, anchor_count'),
+@pytest.mark.parametrize(('model, num_scales, aspect_ratios, anchor_scale,'
+                          ' num_boxes'),
                          [
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (512, 512),
-                                49104),
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (640, 640),
-                                76725),
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (768, 768),
-                                110484),
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (896, 896),
-                                150381),
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (1024, 1024),
-                                196416),
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (1280, 1280),
-                                306900),
-                            (3, 7, 3, [1.0, 2.0, 0.5], 4.0, (1536, 1536),
-                                441936),
+                            (EFFICIENTDETD0, 3, [1.0, 2.0, 0.5], 4.0, 49104),
+                            (EFFICIENTDETD1, 3, [1.0, 2.0, 0.5], 4.0, 76725),
+                            (EFFICIENTDETD2, 3, [1.0, 2.0, 0.5], 4.0, 110484),
+                            (EFFICIENTDETD3, 3, [1.0, 2.0, 0.5], 4.0, 150381),
+                            (EFFICIENTDETD4, 3, [1.0, 2.0, 0.5], 4.0, 196416),
+                            (EFFICIENTDETD5, 3, [1.0, 2.0, 0.5], 4.0, 306900),
+                            (EFFICIENTDETD6, 3, [1.0, 2.0, 0.5], 4.0, 306900),
+                            (EFFICIENTDETD7, 3, [1.0, 2.0, 0.5], 4.0, 441936),
                          ])
-def test_build_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
-                           anchor_scale, image_size, anchor_count):
+def test_build_prior_boxes(model, num_scales, aspect_ratios, anchor_scale,
+                           num_boxes):
+    model = model()
     prior_boxes = build_prior_boxes(
-        min_level, max_level, num_scales, aspect_ratios, anchor_scale,
-        image_size)
+        model, num_scales, aspect_ratios, anchor_scale)
     anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
     anchor_W, anchor_H = prior_boxes[:, 2], prior_boxes[:, 3]
     measured_aspect_ratios = set(np.unique(np.round((anchor_W / anchor_H), 2)))
@@ -212,5 +206,6 @@ def test_build_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
         "Anchor boxes asymmetrically distributed along Y-direction")
     assert measured_aspect_ratios == set(aspect_ratios), (
         "Anchor aspect ratios not as expected")
-    assert prior_boxes.shape[0] == anchor_count, (
+    assert prior_boxes.shape[0] == num_boxes, (
         "Incorrect number of anchor boxes")
+    del model
