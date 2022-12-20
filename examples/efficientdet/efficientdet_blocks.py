@@ -117,6 +117,7 @@ def EfficientNet_to_BiFPN(branches, num_filters):
     P6, P7 = build_branch(P5, num_filters)
     branches_extended = [P3, P4, P5, P6, P7]
     middles, skips = preprocess_node(branches_extended, num_filters)
+    EfficientNet_to_BiFPN.branches = branches_extended
     return [middles, skips]
 
 
