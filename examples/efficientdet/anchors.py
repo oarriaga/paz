@@ -3,14 +3,14 @@ from paz.backend.boxes import to_center_form
 
 
 def build_prior_boxes(model, *args):
-    """Generates anchor boxes in centre form for all feature levels.
+    """Builds anchor boxes in centre form for given model.
 
     # Arguments:
-        model:
-        args"
+        model: Keras/tensorflow model.
+        args: List, containing num_scales, aspect_ratios, anchor_scale
 
     # Returns:
-        anchors: Array of shape `(49104, 4)`.
+        anchors: Array of shape `(num_boxes, 4)`.
     """
     boxes_all = []
     for level_arg in range(len(model.branches)):
@@ -27,13 +27,14 @@ def build_prior_boxes(model, *args):
 
 def build_level_configurations(model, num_scales, aspect_ratios,
                                anchor_scale, level_arg):
-    """Generates anchor box parameter combinations.
+    """Builds anchor box parameter combinations.
 
     # Arguments:
-        model
+        model: Keras/tensorflow model.
         num_scales: Int, number of anchor box scales.
         aspect_ratios: List, anchor boxes aspect ratios.
         anchor_scale: Array of shape `(5,)`, anchor box scales.
+        level_arg: Int, level index.
 
     # Returns:
         Tuple: being generated configuarations.
@@ -49,13 +50,12 @@ def build_level_configurations(model, num_scales, aspect_ratios,
 
 
 def build_strides(model, num_scale_aspect, level_arg):
-    """Generates layer-wise EfficientNet anchor box strides.
+    """Builds level-wise strides.
 
     # Arguments:
-        model:
-        features_H: Array of shape `(45,)`, input feature height.
-        features_W: Array of shape `(45,)`, input feature width.
-        num_levels: Int, number of feature levels.
+        model: Keras/tensorflow model.
+        num_scale_aspect: Int, count of scale aspect ratio combinations.
+        level_arg: Int, level index.
 
     # Returns:
         Tuple: Containing strides in y and x direction.
@@ -76,7 +76,7 @@ def compute_box_coordinates(model, stride_y, stride_x, octave_scale,
     """Calculates anchor box coordinates in centre form.
 
     # Arguments:
-        model:
+        model: Keras/tensorflow model.
         stride_y: Array of shape `()`, y-direction stride.
         stride_x: Array of shape `()`, x-direction stride.
         octave_scale: Array of shape `()`, anchor box octave scale.
