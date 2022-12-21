@@ -27,7 +27,7 @@ def build_prior_boxes(model, *args):
 
 def build_level_configurations(model, num_scales, aspect_ratios,
                                anchor_scale, level_arg):
-    """Builds anchor box parameter combinations.
+    """Builds anchor box parameter combinations per level.
 
     # Arguments:
         model: Keras/tensorflow model.
@@ -62,8 +62,8 @@ def build_strides(model, num_scale_aspect, level_arg):
     """
     base_feature_H, base_feature_W = model.input.shape[1:3]
     feature_H, feature_W = model.branches[level_arg].shape[1:3]
-    features_H = np.repeat(feature_H, num_scale_aspect).astype(np.float32)
-    features_W = np.repeat(feature_W, num_scale_aspect).astype(np.float32)
+    features_H = np.repeat(feature_H, num_scale_aspect).astype('float32')
+    features_W = np.repeat(feature_W, num_scale_aspect).astype('float32')
     H_inverse = np.reciprocal(features_H)
     W_inverse = np.reciprocal(features_W)
     strides_y = base_feature_H * H_inverse
