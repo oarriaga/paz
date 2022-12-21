@@ -18,57 +18,98 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     num_scale_aspect = num_scales * len(aspect_ratios)
     args = (image_shape, branches, num_scale_aspect)
     anchor_boxes = []
-    for level_arg in range(len(branches)):
-        stride = build_strides(level_arg, *args)
+    for branch_arg in range(len(branches)):
+        stride = build_strides(branch_arg, *args)
         octave = build_octaves(num_scales, aspect_ratios)
         aspect = build_aspect(aspect_ratios, num_scales)
         scales = build_scales(scale, num_scale_aspect)
         stride_y, stride_x = stride
-        boxes_level = build_level_boxes(
+        branch_boxes = build_branch_boxes(
             stride_y, stride_x, octave, aspect, scales, image_shape)
-        anchor_boxes.append(boxes_level.reshape([-1, 4]))
+        anchor_boxes.append(branch_boxes.reshape([-1, 4]))
     anchor_boxes = np.concatenate(anchor_boxes, axis=0).astype('float32')
     return to_center_form(anchor_boxes)
 
 
-def build_level_boxes(stride_y, stride_x, octave, aspect, scales, image_shape):
-    boxes_level = []
-    for level_config in zip(stride_y, stride_x, octave, aspect, scales):
-        boxes = compute_box_coordinates(image_shape, *level_config)
-        boxes_level.append(np.expand_dims(boxes.T, axis=1))
-    boxes_level = np.concatenate(boxes_level, axis=1)
-    return boxes_level
+def build_branch_boxes(stride_y, stride_x, octave, aspect, scales,
+                       image_shape):
+    """_summary_
+
+    Args:
+        stride_y (_type_): _description_
+        stride_x (_type_): _description_
+        octave (_type_): _description_
+        aspect (_type_): _description_
+        scales (_type_): _description_
+        image_shape (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    branch_boxes = []
+    for branch_config in zip(stride_y, stride_x, octave, aspect, scales):
+        boxes = compute_box_coordinates(image_shape, *branch_config)
+        branch_boxes.append(np.expand_dims(boxes.T, axis=1))
+    branch_boxes = np.concatenate(branch_boxes, axis=1)
+    return branch_boxes
 
 
 def build_octaves(num_scales, aspect_ratios):
+    """_summary_
+
+    Args:
+        num_scales (_type_): _description_
+        aspect_ratios (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     octave = np.repeat(list(range(num_scales)), len(aspect_ratios))
     octave = octave / float(num_scales)
     return octave
 
 
 def build_aspect(aspect_ratios, num_scales):
+    """_summary_
+
+    Args:
+        aspect_ratios (_type_): _description_
+        num_scales (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     aspect = np.tile(aspect_ratios, num_scales)
     return aspect
 
 
 def build_scales(scale, num_scale_aspect):
+    """_summary_
+
+    Args:
+        scale (_type_): _description_
+        num_scale_aspect (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     scales = np.repeat(scale, num_scale_aspect)
     return scales
 
 
-def build_strides(level_arg, image_shape, branches, num_scale_aspect):
-    """Builds level-wise strides.
+def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
+    """Builds branch-wise strides.
 
     # Arguments:
         model: Keras/tensorflow model.
         num_scale_aspect: Int, count of scale aspect ratio combinations.
-        level_arg: Int, level index.
+        branch_arg: Int, branch index.
 
     # Returns:
         Tuple: Containing strides in y and x direction.
     """
     base_feature_H, base_feature_W = image_shape
-    feature_H, feature_W = branches[level_arg].shape[1:3]
+    feature_H, feature_W = branches[branch_arg].shape[1:3]
     features_H = np.repeat(feature_H, num_scale_aspect).astype('float32')
     features_W = np.repeat(feature_W, num_scale_aspect).astype('float32')
     H_inverse = np.reciprocal(features_H)
