@@ -6,13 +6,13 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
 from layers import FuseFeature, GetDropConnect
 
 
-def ClassNet(features, num_priors=9, num_filters=32, num_blocks=4,
+def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
              survival_rate=None, return_base=False, num_classes=90):
     """Initializes ClassNet.
 
     # Arguments
         features: List, input features.
-        num_priors: Int, number of priors.
+        num_anchors: Int, number of anchors.
         num_filters: Int, number of intermediate layer filters.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used in drop connect.
@@ -23,18 +23,18 @@ def ClassNet(features, num_priors=9, num_filters=32, num_blocks=4,
         class_outputs: List, ClassNet outputs per level.
     """
     bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
-    num_filters = [num_filters, num_classes * num_priors]
+    num_filters = [num_filters, num_classes * num_anchors]
     return build_head(features, num_blocks, num_filters, survival_rate,
                       return_base, bias_initializer)
 
 
-def BoxesNet(features, num_priors=9, num_filters=32, num_blocks=4,
+def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
              survival_rate=None, return_base=False, num_dims=4):
     """Initializes BoxNet.
 
     # Arguments
         features: List, input features.
-        num_priors: Int, number of priors.
+        num_anchors: Int, number of anchors.
         num_filters: Int, number of intermediate layer filters.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used by drop connect.
@@ -45,7 +45,7 @@ def BoxesNet(features, num_priors=9, num_filters=32, num_blocks=4,
         boxes_outputs: List, BoxNet outputs per level.
     """
     bias_initializer = tf.zeros_initializer()
-    num_filters = [num_filters, num_dims * num_priors]
+    num_filters = [num_filters, num_dims * num_anchors]
     return build_head(features, num_blocks, num_filters, survival_rate,
                       return_base, bias_initializer)
 
