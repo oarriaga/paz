@@ -14,10 +14,10 @@ def build_prior_boxes(model, *args):
     """
     boxes_all = []
     for level_arg in range(len(model.branches)):
-        level_config = build_level_configuration(model, *args, level_arg)
+        level_configs = build_level_configurations(model, *args, level_arg)
         boxes_level = []
-        for arg in zip(*level_config):
-            boxes = compute_box_coordinates(model, *arg)
+        for level_config in zip(*level_configs):
+            boxes = compute_box_coordinates(model, *level_config)
             boxes_level.append(np.expand_dims(boxes.T, axis=1))
         boxes_level = np.concatenate(boxes_level, axis=1)
         boxes_all.append(boxes_level.reshape([-1, 4]))
@@ -25,8 +25,8 @@ def build_prior_boxes(model, *args):
     return to_center_form(prior_boxes)
 
 
-def build_level_configuration(model, num_scales, aspect_ratios,
-                              anchor_scale, level_arg):
+def build_level_configurations(model, num_scales, aspect_ratios,
+                               anchor_scale, level_arg):
     """Generates anchor box parameter combinations.
 
     # Arguments:
