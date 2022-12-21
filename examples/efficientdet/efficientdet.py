@@ -2,7 +2,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Activation, Concatenate, Input, Reshape
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
-from anchors import build_prior_boxes
+from priors import build_prior_boxes
 from efficientdet_blocks import (BiFPN, BoxesNet, ClassNet,
                                  EfficientNet_to_BiFPN)
 from efficientnet import EFFICIENTNET
@@ -13,7 +13,7 @@ WEIGHT_PATH = (
 
 def EFFICIENTDET(image, num_classes, base_weights, head_weights,
                  FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                 anchor_scale, fusion, return_base, model_name, EfficientNet,
+                 prior_scale, fusion, return_base, model_name, EfficientNet,
                  num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
                  survival_rate=None, num_dims=4):
     """ Creates EfficientDet model.
@@ -27,13 +27,13 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
         EfficientNet: List, containing branch tensors.
-        num_scales: Int, number of anchor box scales.
-        aspect_ratios: List, anchor boxes aspect ratios.
+        num_scales: Int, number of prior box scales.
+        aspect_ratios: List, prior boxes aspect ratios.
         survival_rate: Float, specifying survival probability.
         num_dims: Int, number of output dimensions to regress.
 
@@ -55,8 +55,8 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     for _ in range(FPN_cell_repeats):
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 
-    num_anchors = len(aspect_ratios) * num_scales
-    args = (middles, num_anchors, FPN_num_filters,
+    num_priors = len(aspect_ratios) * num_scales
+    args = (middles, num_priors, FPN_num_filters,
             box_class_repeats, survival_rate, return_base)
     class_outputs = ClassNet(*args, num_classes)
     boxes_outputs = BoxesNet(*args, num_dims)
@@ -86,15 +86,15 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     print('Loading %s model weights' % weights_path)
     model.load_weights(weights_path)
 
-    model.branches = EfficientNet_to_BiFPN.branches
+    image_shape = image.shape[1:3].as_list()
+    branches = EfficientNet_to_BiFPN.branches
     model.prior_boxes = build_prior_boxes(
-        model, num_scales, aspect_ratios, anchor_scale)
-    return model
+        image_shape, branches, num_scales, aspect_ratios, prior_scale)
 
 
 def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(512, 512, 3), FPN_num_filters=64,
-                   FPN_cell_repeats=3, box_class_repeats=3, anchor_scale=4.0,
+                   FPN_cell_repeats=3, box_class_repeats=3, prior_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d0',
                    scaling_coefficients=(1.0, 1.0, 0.8)):
@@ -109,7 +109,7 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -124,14 +124,14 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb0)
     return model
 
 
 def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(640, 640, 3), FPN_num_filters=88,
-                   FPN_cell_repeats=4, box_class_repeats=3, anchor_scale=4.0,
+                   FPN_cell_repeats=4, box_class_repeats=3, prior_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d1',
                    scaling_coefficients=(1.0, 1.1, 0.8)):
@@ -146,7 +146,7 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -161,14 +161,14 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb1 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb1)
     return model
 
 
 def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(768, 768, 3), FPN_num_filters=112,
-                   FPN_cell_repeats=5, box_class_repeats=3, anchor_scale=4.0,
+                   FPN_cell_repeats=5, box_class_repeats=3, prior_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d2',
                    scaling_coefficients=(1.1, 1.2, 0.7)):
@@ -183,7 +183,7 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -198,14 +198,14 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb2 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb2)
     return model
 
 
 def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(896, 896, 3), FPN_num_filters=160,
-                   FPN_cell_repeats=6, box_class_repeats=4, anchor_scale=4.0,
+                   FPN_cell_repeats=6, box_class_repeats=4, prior_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d3',
                    scaling_coefficients=(1.2, 1.4, 0.7)):
@@ -220,7 +220,7 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -235,14 +235,14 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb3 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb3)
     return model
 
 
 def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(1024, 1024, 3), FPN_num_filters=224,
-                   FPN_cell_repeats=7, box_class_repeats=4, anchor_scale=4.0,
+                   FPN_cell_repeats=7, box_class_repeats=4, prior_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d4',
                    scaling_coefficients=(1.4, 1.8, 0.6)):
@@ -257,7 +257,7 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -272,14 +272,14 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb4 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb4)
     return model
 
 
 def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(1280, 1280, 3), FPN_num_filters=288,
-                   FPN_cell_repeats=7, box_class_repeats=4, anchor_scale=4.0,
+                   FPN_cell_repeats=7, box_class_repeats=4, prior_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d5',
                    scaling_coefficients=(1.6, 2.2, 0.6)):
@@ -294,7 +294,7 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -309,14 +309,14 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb5 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb5)
     return model
 
 
 def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(1280, 1280, 3), FPN_num_filters=384,
-                   FPN_cell_repeats=8, box_class_repeats=5, anchor_scale=5.0,
+                   FPN_cell_repeats=8, box_class_repeats=5, prior_scale=5.0,
                    fusion='sum', return_base=False,
                    model_name='efficientdet-d6',
                    scaling_coefficients=(1.8, 2.6, 0.5)):
@@ -331,7 +331,7 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -346,14 +346,14 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb6)
     return model
 
 
 def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
                    input_shape=(1536, 1536, 3), FPN_num_filters=384,
-                   FPN_cell_repeats=8, box_class_repeats=5, anchor_scale=5.0,
+                   FPN_cell_repeats=8, box_class_repeats=5, prior_scale=5.0,
                    fusion='sum', return_base=False,
                    model_name='efficientdet-d7',
                    scaling_coefficients=(1.8, 2.6, 0.5)):
@@ -368,7 +368,7 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -383,14 +383,14 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb6)
     return model
 
 
 def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
                     input_shape=(1536, 1536, 3), FPN_num_filters=384,
-                    FPN_cell_repeats=8, box_class_repeats=5, anchor_scale=4.0,
+                    FPN_cell_repeats=8, box_class_repeats=5, prior_scale=4.0,
                     fusion='sum', return_base=False,
                     model_name='efficientdet-d7x',
                     scaling_coefficients=(2.0, 3.1, 0.5)):
@@ -405,7 +405,7 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
         FPN_cell_repeats: Int, number of FPN blocks.
         box_class_repeats: Int, Number of regression
             and classification blocks.
-        anchor_scale: Int, number of anchor scales.
+        prior_scale: Int, number of prior scales.
         min_level: Int, minimum feature level.
         max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
@@ -420,6 +420,6 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
     EfficientNetb7 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTDET(image, num_classes, base_weights, head_weights,
                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                         anchor_scale, fusion, return_base, model_name,
+                         prior_scale, fusion, return_base, model_name,
                          EfficientNetb7)
     return model
