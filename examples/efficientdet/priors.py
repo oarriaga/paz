@@ -45,12 +45,27 @@ def build_level_configurations(level_arg, image_shape, branches, num_scales,
     """
     num_scale_aspect = num_scales * len(aspect_ratios)
     stride = build_strides(image_shape, branches, num_scale_aspect, level_arg)
-    octave = np.repeat(list(range(num_scales)), len(aspect_ratios))
-    octave = octave / float(num_scales)
-    aspect = np.tile(aspect_ratios, num_scales)
-    scales = np.repeat(scale, num_scale_aspect)
+    octave = build_octaves(num_scales, aspect_ratios)
+    aspect = build_aspect(aspect_ratios, num_scales)
+    scales = build_scales(scale, num_scale_aspect)
     stride_y, stride_x = stride
     return stride_y, stride_x, octave, aspect, scales
+
+
+def build_octaves(num_scales, aspect_ratios):
+    octave = np.repeat(list(range(num_scales)), len(aspect_ratios))
+    octave = octave / float(num_scales)
+    return octave
+
+
+def build_aspect(aspect_ratios, num_scales):
+    aspect = np.tile(aspect_ratios, num_scales)
+    return aspect
+
+
+def build_scales(scale, num_scale_aspect):
+    scales = np.repeat(scale, num_scale_aspect)
+    return scales
 
 
 def build_strides(image_shape, branches, num_scale_aspect, level_arg):

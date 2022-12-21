@@ -90,6 +90,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     branches = EfficientNet_to_BiFPN.branches
     model.prior_boxes = build_prior_boxes(
         image_shape, branches, num_scales, aspect_ratios, prior_scale)
+    return model
 
 
 def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
