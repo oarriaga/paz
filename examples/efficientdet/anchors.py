@@ -17,12 +17,12 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     """
     num_scale_aspect = num_scales * len(aspect_ratios)
     args = (image_shape, branches, num_scale_aspect)
+    octave = build_octaves(num_scales, aspect_ratios)
+    aspect = build_aspect(num_scales, aspect_ratios)
+    scales = build_scales(scale, num_scale_aspect)
     anchor_boxes = []
     for branch_arg in range(len(branches)):
         stride = build_strides(branch_arg, *args)
-        octave = build_octaves(num_scales, aspect_ratios)
-        aspect = build_aspect(num_scales, aspect_ratios)
-        scales = build_scales(scale, num_scale_aspect)
         boxes = make_branch_boxes(*stride, octave, aspect, scales, image_shape)
         anchor_boxes.append(boxes.reshape([-1, 4]))
     anchor_boxes = np.concatenate(anchor_boxes, axis=0).astype('float32')
