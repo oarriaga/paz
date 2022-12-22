@@ -38,7 +38,7 @@ def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
         branch_arg: Int, branch index.
         image_shape: List, input image shape.
         branches: List, EfficientNet branch tensors.
-        num_scale_aspect: Int, count of scale aspect ratio combinations.        
+        num_scale_aspect: Int, count of scale aspect ratio combinations.
 
     # Returns:
         Tuple: Containing strides in y and x direction.
@@ -151,7 +151,7 @@ def build_base_anchor(scale, stride_x, stride_y, octave_scale):
     # Arguments:
         scale: Float, anchor box scale.
         stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
-        stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.        
+        stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
         octave_scale: Array of shape `()`, anchor box octave scale.
 
     # Returns:
