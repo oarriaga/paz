@@ -3,7 +3,6 @@ import numpy as np
 import tensorflow as tf
 from keras.utils.layer_utils import count_params
 from tensorflow.keras.layers import Input
-from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
@@ -174,23 +173,20 @@ def test_efficientdet_architecture(model, model_name, model_input_name,
     del implemented_model
 
 
-@pytest.mark.parametrize(('model, num_scales, aspect_ratios, anchor_scale,'
-                          ' num_boxes'),
+@pytest.mark.parametrize(('model, aspect_ratios, num_boxes'),
                          [
-                            (EFFICIENTDETD0, 3, [1.0, 2.0, 0.5], 4.0, 49104),
-                            (EFFICIENTDETD1, 3, [1.0, 2.0, 0.5], 4.0, 76725),
-                            (EFFICIENTDETD2, 3, [1.0, 2.0, 0.5], 4.0, 110484),
-                            (EFFICIENTDETD3, 3, [1.0, 2.0, 0.5], 4.0, 150381),
-                            (EFFICIENTDETD4, 3, [1.0, 2.0, 0.5], 4.0, 196416),
-                            (EFFICIENTDETD5, 3, [1.0, 2.0, 0.5], 4.0, 306900),
-                            (EFFICIENTDETD6, 3, [1.0, 2.0, 0.5], 4.0, 306900),
-                            (EFFICIENTDETD7, 3, [1.0, 2.0, 0.5], 4.0, 441936),
+                            (EFFICIENTDETD0, [1.0, 2.0, 0.5], 49104),
+                            (EFFICIENTDETD1, [1.0, 2.0, 0.5], 76725),
+                            (EFFICIENTDETD2, [1.0, 2.0, 0.5], 110484),
+                            (EFFICIENTDETD3, [1.0, 2.0, 0.5], 150381),
+                            (EFFICIENTDETD4, [1.0, 2.0, 0.5], 196416),
+                            (EFFICIENTDETD5, [1.0, 2.0, 0.5], 306900),
+                            (EFFICIENTDETD6, [1.0, 2.0, 0.5], 306900),
+                            (EFFICIENTDETD7, [1.0, 2.0, 0.5], 441936),
                          ])
-def test_build_prior_boxes(model, num_scales, aspect_ratios, anchor_scale,
-                           num_boxes):
+def test_build_prior_boxes(model, aspect_ratios, num_boxes):
     model = model()
-    prior_boxes = build_prior_boxes(
-        model, num_scales, aspect_ratios, anchor_scale)
+    prior_boxes = model.prior_boxes
     anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
     anchor_W, anchor_H = prior_boxes[:, 2], prior_boxes[:, 3]
     measured_aspect_ratios = set(np.unique(np.round((anchor_W / anchor_H), 2)))

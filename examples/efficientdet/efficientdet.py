@@ -74,7 +74,6 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
             [regressions, classifications])
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
-    model.branches = branches
 
     if ((base_weights == 'COCO') and (head_weights == 'COCO')):
         model_filename = '-'.join([model_name, str(base_weights),

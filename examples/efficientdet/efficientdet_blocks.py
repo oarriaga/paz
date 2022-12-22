@@ -111,7 +111,8 @@ def EfficientNet_to_BiFPN(branches, num_filters):
         num_filters: Int, number of intermediate layer filters.
 
     # Returns
-        middles, skips: List, preprocessed feature maps.
+        branches, middles, skips: List, extended branch
+            and preprocessed feature maps.
     """
     branches = extend_branch(branches, num_filters)
     P3, P4, P5, P6, P7 = branches
