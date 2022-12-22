@@ -51,7 +51,8 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     if (base_weights is None) and (head_weights == 'COCO'):
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
-    middles, skips = EfficientNet_to_BiFPN(EfficientNet, FPN_num_filters)
+    branches, middles, skips = EfficientNet_to_BiFPN(
+        EfficientNet, FPN_num_filters)
     for _ in range(FPN_cell_repeats):
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 
@@ -61,7 +62,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     class_outputs = ClassNet(*args, num_classes)
     boxes_outputs = BoxesNet(*args, num_dims)
 
-    outputs = [class_outputs, boxes_outputs]
+    outputs = middles
     if not return_base:
         classifications = Concatenate(axis=1)(class_outputs)
         regressions = Concatenate(axis=1)(boxes_outputs)
@@ -73,6 +74,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
             [regressions, classifications])
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
+    model.branches = branches
 
     if ((base_weights == 'COCO') and (head_weights == 'COCO')):
         model_filename = '-'.join([model_name, str(base_weights),
@@ -87,7 +89,6 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     model.load_weights(weights_path)
 
     image_shape = image.shape[1:3].as_list()
-    branches = EfficientNet_to_BiFPN.branches
     model.prior_boxes = build_anchors(
         image_shape, branches, num_scales, aspect_ratios, anchor_scale)
     return model

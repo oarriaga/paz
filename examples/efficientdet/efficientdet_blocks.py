@@ -104,7 +104,30 @@ def build_head_conv2D(num_blocks, num_filters, bias_initializer):
 
 
 def EfficientNet_to_BiFPN(branches, num_filters):
-    """Modifies the branches to comply with BiFPN.
+    """Preprocess EfficientNet features.
+
+    # Arguments
+        branches: List, EfficientNet feature maps.
+        num_filters: Int, number of intermediate layer filters.
+
+    # Returns
+        middles, skips: List, preprocessed feature maps.
+    """
+    branches = extend_branch(branches, num_filters)
+    P3, P4, P5, P6, P7 = branches
+    P3_middle = conv_batchnorm_block(P3, num_filters)
+    P4_middle = conv_batchnorm_block(P4, num_filters)
+    P5_middle = conv_batchnorm_block(P5, num_filters)
+    middles = [P3_middle, P4_middle, P5_middle, P6, P7]
+
+    P4_skip = conv_batchnorm_block(P4, num_filters)
+    P5_skip = conv_batchnorm_block(P5, num_filters)
+    skips = [None, P4_skip, P5_skip, P6, None]
+    return [branches, middles, skips]
+
+
+def extend_branch(branches, num_filters):
+    """Extends branches to comply with BiFPN.
 
     # Arguments
         branches: List, EfficientNet feature maps.
@@ -116,9 +139,7 @@ def EfficientNet_to_BiFPN(branches, num_filters):
     _, _, P3, P4, P5 = branches
     P6, P7 = build_branch(P5, num_filters)
     branches_extended = [P3, P4, P5, P6, P7]
-    middles, skips = preprocess_node(branches_extended, num_filters)
-    EfficientNet_to_BiFPN.branches = branches_extended
-    return [middles, skips]
+    return branches_extended
 
 
 def build_branch(P5, num_filters):
@@ -138,28 +159,6 @@ def build_branch(P5, num_filters):
     return [P6, P7]
 
 
-def preprocess_node(branches, num_filters):
-    """Preprocess EfficientNet features.
-
-    # Arguments
-        branches: List, EfficientNet feature maps.
-        num_filters: Int, number of intermediate layer filters.
-
-    # Returns
-        middles, skips: List, preprocessed feature maps.
-    """
-    P3, P4, P5, P6, P7 = branches
-    P3_middle = conv_batchnorm_block(P3, num_filters)
-    P4_middle = conv_batchnorm_block(P4, num_filters)
-    P5_middle = conv_batchnorm_block(P5, num_filters)
-    middles = [P3_middle, P4_middle, P5_middle, P6, P7]
-
-    P4_skip = conv_batchnorm_block(P4, num_filters)
-    P5_skip = conv_batchnorm_block(P5, num_filters)
-    skips = [None, P4_skip, P5_skip, P6, None]
-    return [middles, skips]
-
-
 def conv_batchnorm_block(x, num_filters):
     """Builds 2D convolution and batch normalization layers.
 
@@ -173,32 +172,6 @@ def conv_batchnorm_block(x, num_filters):
     x = Conv2D(num_filters, 1, 1, 'same')(x)
     x = BatchNormalization()(x)
     return x
-
-
-def node_BiFPN(up, middle, down, skip, num_filters, fusion):
-    """Simulates BiFPN block's node.
-
-    # Arguments
-        up: Tensor, upsampled feature map.
-        middle: Tensor, preprocessed feature map.
-        down: Tensor, downsampled feature map.
-        skip: Tensor, skip feature map.
-        num_filters: Int, number of intermediate layer filters.
-        fusion: Str, feature fusion method.
-
-    # Returns
-        middle: Tensor, BiFPN node output.
-    """
-    is_layer_one = down is None
-    if is_layer_one:
-        to_fuse = [middle, up]
-    else:
-        to_fuse = [middle, down] if skip is None else [skip, middle, down]
-    middle = FuseFeature(fusion=fusion)(to_fuse, fusion)
-    middle = tf.nn.swish(middle)
-    middle = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True)(middle)
-    middle = BatchNormalization()(middle)
-    return middle
 
 
 def BiFPN(middles, skips, num_filters, fusion):
@@ -239,3 +212,29 @@ def BiFPN(middles, skips, num_filters, fusion):
 
     middles = [P3_out, P4_out, P5_out, P6_out, P7_out]
     return [middles, middles]
+
+
+def node_BiFPN(up, middle, down, skip, num_filters, fusion):
+    """Simulates BiFPN block's node.
+
+    # Arguments
+        up: Tensor, upsampled feature map.
+        middle: Tensor, preprocessed feature map.
+        down: Tensor, downsampled feature map.
+        skip: Tensor, skip feature map.
+        num_filters: Int, number of intermediate layer filters.
+        fusion: Str, feature fusion method.
+
+    # Returns
+        middle: Tensor, BiFPN node output.
+    """
+    is_layer_one = down is None
+    if is_layer_one:
+        to_fuse = [middle, up]
+    else:
+        to_fuse = [middle, down] if skip is None else [skip, middle, down]
+    middle = FuseFeature(fusion=fusion)(to_fuse, fusion)
+    middle = tf.nn.swish(middle)
+    middle = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True)(middle)
+    middle = BatchNormalization()(middle)
+    return middle

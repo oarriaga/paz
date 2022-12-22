@@ -23,10 +23,8 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
         octave = build_octaves(num_scales, aspect_ratios)
         aspect = build_aspect(num_scales, aspect_ratios)
         scales = build_scales(scale, num_scale_aspect)
-        stride_y, stride_x = stride
-        branch_boxes = build_branch_boxes(
-            stride_y, stride_x, octave, aspect, scales, image_shape)
-        anchor_boxes.append(branch_boxes.reshape([-1, 4]))
+        boxes = make_branch_boxes(*stride, octave, aspect, scales, image_shape)
+        anchor_boxes.append(boxes.reshape([-1, 4]))
     anchor_boxes = np.concatenate(anchor_boxes, axis=0).astype('float32')
     return to_center_form(anchor_boxes)
 
@@ -93,8 +91,8 @@ def build_scales(scale, num_scale_aspect):
     return np.repeat(scale, num_scale_aspect)
 
 
-def build_branch_boxes(stride_y, stride_x, octave,
-                       aspect, scales, image_shape):
+def make_branch_boxes(stride_y, stride_x, octave,
+                      aspect, scales, image_shape):
     """Builds anchor boxes per EfficientNet branch.
 
     # Arguments:
@@ -133,10 +131,9 @@ def compute_box_coordinates(image_shape, stride_y, stride_x,
     """
     W, H = image_shape
     base_anchor = build_base_anchor(scale, stride_x, stride_y, octave_scale)
-    base_anchor_W, base_anchor_H = base_anchor
-    aspect_W, aspect_H = compute_aspect_dims(aspect)
+    aspect_size = compute_aspect_size(aspect)
     anchor_half_W, anchor_half_H = compute_anchor_dims(
-        base_anchor_W, base_anchor_H, aspect_W, aspect_H, image_shape)
+        *base_anchor, *aspect_size, image_shape)
     center_x, center_y = compute_anchor_centres(
         stride_x, stride_y, image_shape)
     x_min, y_min = [center_x - anchor_half_W], [center_y - anchor_half_H]
@@ -162,7 +159,7 @@ def build_base_anchor(scale, stride_x, stride_y, octave_scale):
     return base_anchor_W, base_anchor_H
 
 
-def compute_aspect_dims(aspect):
+def compute_aspect_size(aspect):
     """Computes aspect width and height.
 
     # Arguments:
@@ -189,9 +186,11 @@ def compute_anchor_dims(base_anchor_W, base_anchor_H,
         Tuple: Anchor's half width and height.
     """
     W, H = image_shape
-    anchor_half_W = (base_anchor_W * aspect_W / 2.0) / H
-    anchor_half_H = (base_anchor_H * aspect_H / 2.0) / W
-    return anchor_half_W, anchor_half_H
+    anchor_half_W = (base_anchor_W * aspect_W / 2.0)
+    anchor_half_H = (base_anchor_H * aspect_H / 2.0)
+    anchor_half_W_normalized = anchor_half_W / W
+    anchor_half_H_normalized = anchor_half_H / H
+    return anchor_half_W_normalized, anchor_half_H_normalized
 
 
 def compute_anchor_centres(stride_x, stride_y, image_shape):
@@ -206,9 +205,9 @@ def compute_anchor_centres(stride_x, stride_y, image_shape):
         Tuple: Normalized anchor centres.
     """
     W, H = image_shape
-    x = np.arange(stride_x / 2, H, stride_x)
-    y = np.arange(stride_y / 2, W, stride_y)
+    x = np.arange(stride_x / 2, W, stride_x)
+    y = np.arange(stride_y / 2, H, stride_y)
     center_x, center_y = np.meshgrid(x, y)
-    normalized_center_x = center_x.flatten() / H
-    normalized_center_y = center_y.flatten() / W
+    normalized_center_x = center_x.flatten() / W
+    normalized_center_y = center_y.flatten() / H
     return normalized_center_x, normalized_center_y
