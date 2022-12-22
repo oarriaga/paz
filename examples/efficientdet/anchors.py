@@ -6,14 +6,14 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     """Builds anchor boxes in centre form for given model.
 
     # Arguments:
-        image_shape
-        branches:
-        num_scales:
-        aspect_ratios:
-        scale:
+        image_shape: List, input image shape.
+        branches: List, EfficientNet branch tensors.
+        num_scales: Int, number of anchor scales.
+        aspect_ratios: List, anchor box aspect ratios.
+        scale: Float, anchor box scale.
 
     # Returns:
-        anchors: Array of shape `(num_boxes, 4)`.
+        anchor_boxes: Array of shape `(num_boxes, 4)`.
     """
     num_scale_aspect = num_scales * len(aspect_ratios)
     args = (image_shape, branches, num_scale_aspect)
@@ -21,7 +21,7 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     for branch_arg in range(len(branches)):
         stride = build_strides(branch_arg, *args)
         octave = build_octaves(num_scales, aspect_ratios)
-        aspect = build_aspect(aspect_ratios, num_scales)
+        aspect = build_aspect(num_scales, aspect_ratios)
         scales = build_scales(scale, num_scale_aspect)
         stride_y, stride_x = stride
         branch_boxes = build_branch_boxes(
@@ -31,20 +31,20 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     return to_center_form(anchor_boxes)
 
 
-def build_branch_boxes(stride_y, stride_x, octave, aspect, scales,
-                       image_shape):
-    """_summary_
+def build_branch_boxes(stride_y, stride_x, octave,
+                       aspect, scales, image_shape):
+    """Builds anchor boxes per EfficientNet branch.
 
-    Args:
-        stride_y (_type_): _description_
-        stride_x (_type_): _description_
-        octave (_type_): _description_
-        aspect (_type_): _description_
-        scales (_type_): _description_
-        image_shape (_type_): _description_
+    # Arguments:
+        stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
+        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
+        octave: Array of shape `(num_scale_aspect,)` octave scale.
+        aspect: Array of shape `(num_scale_aspect,)` aspect ratio.
+        scales: Array of shape `(num_scale_aspect,)` anchor box scales.
+        image_shape: List, input image shape.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        branch_boxes: Array of shape `(num_boxes,num_scale_aspect,4)`.
     """
     branch_boxes = []
     for branch_config in zip(stride_y, stride_x, octave, aspect, scales):
@@ -55,55 +55,54 @@ def build_branch_boxes(stride_y, stride_x, octave, aspect, scales,
 
 
 def build_octaves(num_scales, aspect_ratios):
-    """_summary_
+    """Builds branch-wise EfficientNet anchor box octaves.
 
-    Args:
-        num_scales (_type_): _description_
-        aspect_ratios (_type_): _description_
+    # Arguments:
+        num_scales: Int, number of anchor scales.
+        aspect_ratios: List, anchor box aspect ratios.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        octave_normalized: Array of shape `(num_scale_aspect,)`.
     """
     octave = np.repeat(list(range(num_scales)), len(aspect_ratios))
-    octave = octave / float(num_scales)
-    return octave
+    octave_normalized = octave / float(num_scales)
+    return octave_normalized
 
 
-def build_aspect(aspect_ratios, num_scales):
-    """_summary_
+def build_aspect(num_scales, aspect_ratios):
+    """Builds branch-wise EfficientNet anchor box aspect ratios.
 
-    Args:
-        aspect_ratios (_type_): _description_
-        num_scales (_type_): _description_
+    # Arguments:
+        aspect_ratios: List, anchor box aspect ratios.
+        num_scales: Int, number of anchor scales.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        Array of shape `(num_scale_aspect,)`.
     """
-    aspect = np.tile(aspect_ratios, num_scales)
-    return aspect
+    return np.tile(aspect_ratios, num_scales)
 
 
 def build_scales(scale, num_scale_aspect):
-    """_summary_
+    """Builds branch-wise EfficientNet anchor box scales.
 
-    Args:
-        scale (_type_): _description_
-        num_scale_aspect (_type_): _description_
+    # Arguments:
+        scale: Float, anchor box scale.
+        num_scale_aspect: Int, number of scale and aspect combinations.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        Array of shape `(num_scale_aspect,)`.
     """
-    scales = np.repeat(scale, num_scale_aspect)
-    return scales
+    return np.repeat(scale, num_scale_aspect)
 
 
 def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
     """Builds branch-wise strides.
 
     # Arguments:
-        model: Keras/tensorflow model.
-        num_scale_aspect: Int, count of scale aspect ratio combinations.
         branch_arg: Int, branch index.
+        image_shape: List, input image shape.
+        branches: List, EfficientNet branch tensors.
+        num_scale_aspect: Int, count of scale aspect ratio combinations.        
 
     # Returns:
         Tuple: Containing strides in y and x direction.
@@ -117,25 +116,25 @@ def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
     return strides_y, strides_x
 
 
-def compute_box_coordinates(image_shape, stride_y, stride_x, octave_scale,
-                            aspect, scale):
-    """Calculates anchor box coordinates in centre form.
+def compute_box_coordinates(image_shape, stride_y, stride_x,
+                            octave_scale, aspect, scale):
+    """Computes anchor box coordinates in centre form.
 
     # Arguments:
-        model: Keras/tensorflow model.
-        stride_y: Array of shape `()`, y-direction stride.
-        stride_x: Array of shape `()`, x-direction stride.
+        image_shape: List, input image shape.
+        stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
+        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
         octave_scale: Array of shape `()`, anchor box octave scale.
         aspect: Array of shape `()`, anchor box aspect ratio.
         scale: Array of shape `()`, anchor box scales.
 
     # Returns:
-        Tuple: holding anchor box centre, width and height.
+        Tuple: Box coordinates in corner form.
     """
     W, H = image_shape
     base_anchor = build_base_anchor(scale, stride_x, stride_y, octave_scale)
     base_anchor_W, base_anchor_H = base_anchor
-    aspect_W, aspect_H = compute_aspect_ratio(aspect)
+    aspect_W, aspect_H = compute_aspect_dims(aspect)
     anchor_half_W, anchor_half_H = compute_anchor_dims(
         base_anchor_W, base_anchor_H, aspect_W, aspect_H, image_shape)
     center_x, center_y = compute_anchor_centres(
@@ -147,46 +146,47 @@ def compute_box_coordinates(image_shape, stride_y, stride_x, octave_scale,
 
 
 def build_base_anchor(scale, stride_x, stride_y, octave_scale):
-    """_summary_
+    """Builds base anchor.
 
-    Args:
-        scale (_type_): _description_
-        stride_x (_type_): _description_
-        stride_y (_type_): _description_
-        octave_scale (_type_): _description_
+    # Arguments:
+        scale: Float, anchor box scale.
+        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
+        stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.        
+        octave_scale: Array of shape `()`, anchor box octave scale.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        Tuple: Base anchor width and height.
     """
     base_anchor_W = scale * stride_x * (2 ** octave_scale)
     base_anchor_H = scale * stride_y * (2 ** octave_scale)
     return base_anchor_W, base_anchor_H
 
 
-def compute_aspect_ratio(aspect):
-    """_summary_
+def compute_aspect_dims(aspect):
+    """Computes aspect width and height.
 
-    Args:
-        aspect (_type_): _description_
+    # Arguments:
+        aspect: Array of shape `()`, anchor box aspect ratio.
+
+    # Returns:
+        Tuple: Aspect width and height.
     """
-    aspect_W, aspect_H = np.sqrt(aspect), 1/np.sqrt(aspect)
-    return aspect_W, aspect_H
+    return np.sqrt(aspect), 1/np.sqrt(aspect)
 
 
-def compute_anchor_dims(base_anchor_W, base_anchor_H, aspect_W, aspect_H,
-                        image_shape):
-    """_summary_
+def compute_anchor_dims(base_anchor_W, base_anchor_H,
+                        aspect_W, aspect_H, image_shape):
+    """Compute anchor's half width and height.
 
-    Args:
-        base_anchor_W (_type_): _description_
-        base_anchor_H (_type_): _description_
-        aspect_W (_type_): _description_
-        aspect_H (_type_): _description_
-        W (_type_): _description_
-        H (_type_): _description_
+    # Arguments:
+        base_anchor_W: Array of shape (), base anchor width.
+        base_anchor_H: Array of shape (), base anchor height.
+        aspect_W: Array of shape (), aspect width.
+        aspect_H: Array of shape (), aspect height.
+        image_shape: List, input image shape.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        Tuple: Anchor's half width and height.
     """
     W, H = image_shape
     anchor_half_W = (base_anchor_W * aspect_W / 2.0) / H
@@ -195,15 +195,15 @@ def compute_anchor_dims(base_anchor_W, base_anchor_H, aspect_W, aspect_H,
 
 
 def compute_anchor_centres(stride_x, stride_y, image_shape):
-    """_summary_
+    """Compute anchor centres.
 
-    Args:
-        stride_x (_type_): _description_
-        stride_y (_type_): _description_
-        image_shape (_type_): _description_
+    # Arguments:
+        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
+        stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
+        image_shape: List, input image shape.
 
-    Returns:
-        _type_: _description_
+    # Returns:
+        Tuple: Normalized anchor centres.
     """
     W, H = image_shape
     x = np.arange(stride_x / 2, H, stride_x)
