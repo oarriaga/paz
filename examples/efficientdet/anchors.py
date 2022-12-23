@@ -184,7 +184,7 @@ def compute_anchor_dims(base_anchor_W, base_anchor_H,
     # Returns:
         Tuple: Anchor's half width and height.
     """
-    W, H = image_shape
+    H, W = image_shape
     anchor_half_W = (base_anchor_W * aspect_W / 2.0)
     anchor_half_H = (base_anchor_H * aspect_H / 2.0)
     anchor_half_W_normalized = anchor_half_W / W
@@ -203,7 +203,7 @@ def compute_anchor_centres(stride_x, stride_y, image_shape):
     # Returns:
         Tuple: Normalized anchor centres.
     """
-    W, H = image_shape
+    H, W = image_shape
     x = np.arange(stride_x / 2, W, stride_x)
     y = np.arange(stride_y / 2, H, stride_y)
     center_x, center_y = np.meshgrid(x, y)
