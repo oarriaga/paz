@@ -58,7 +58,7 @@ class MaskRCNN:
         config = self.config
         feature_maps = self.keras_model.output
         rpn_class_logits, rpn_class, rpn_bbox = self.RPN(feature_maps)
-        rpn_rois = get_rpn_rois(config, rpn_class, rpn_bbox)
+        rpn_rois = get_rpn_rois(config, rpn_class, rpn_bbox, image)
 
         input_rpn_match, input_rpn_bbox, input_gt_class_ids, \
         input_gt_boxes, groundtruth_boxes, groundtruth_masks = get_ground_truth_values(config, image)
@@ -282,7 +282,7 @@ def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
                                             layer.__class__.__name__))
 
 
-def get_anchors(config):
+def get_anchors(config, input_image):
     """Returns anchor pyramid for the given image size
     """
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
@@ -292,17 +292,10 @@ def get_anchors(config):
         backbone_shapes,
         config.BACKBONE_STRIDES,
         config.RPN_ANCHOR_STRIDE)
+
+    anchors = norm_boxes(anchors, input_image[:2])
     anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
-    #anchors = Layer(name='anchors')(anchors)
-    class ConstLayer(tf.keras.layers.Layer):
-        def __init__(self, x, name=None, dtype=np.float32):
-            super(ConstLayer, self).__init__(name=name, dtype=dtype)
-            self.x = tf.Variable(x)
-
-        def call(self, input):
-            return self.x
-
-    anchors = ConstLayer(anchors, name="anchors")(input_image)
+    anchors = AnchorsLayer(anchors, name="anchors")(input_image)
     return anchors
 
 
@@ -341,10 +334,10 @@ def get_ground_truth_values(config, image):
         input_boxes, boxes, input_gt_masks
 
 
-def get_rpn_rois(config, rpn_class, rpn_bbox):
+def get_rpn_rois(config, rpn_class, rpn_bbox, input_image):
     """Returns the output of Proposal layer i.e the ROIs
     """
-    anchors = get_anchors(config)
+    anchors = get_anchors(config, input_image)
     return ProposalLayer(
         proposal_count=config.POST_NMS_ROIS_TRAINING,
         nms_threshold=config.RPN_NMS_THRESHOLD, rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
@@ -397,3 +390,12 @@ def call_rois():
     def _call_rois(value):
         return value * 1
     return _call_rois
+
+
+class AnchorsLayer(Layer):
+    def __init__(self, anchors, name="anchors", **kwargs):
+        super(AnchorsLayer, self).__init__(name=name, **kwargs)
+        self.anchors = tf.Variable(anchors, trainable=False)
+
+    def call(self, input_image):
+        return self.anchors
