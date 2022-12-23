@@ -107,7 +107,7 @@ def make_branch_boxes(stride_y, stride_x, octave,
         branch_boxes: Array of shape `(num_boxes,num_scale_aspect,4)`.
     """
     branch_boxes = []
-    for branch_config in zip(stride_y, stride_x, octave, aspect, scales):
+    for branch_config in zip(stride_y, stride_x, scales, octave, aspect):
         boxes = compute_box_coordinates(image_shape, *branch_config)
         branch_boxes.append(np.expand_dims(boxes.T, axis=1))
     branch_boxes = np.concatenate(branch_boxes, axis=1)
@@ -115,21 +115,21 @@ def make_branch_boxes(stride_y, stride_x, octave,
 
 
 def compute_box_coordinates(image_shape, stride_y, stride_x,
-                            octave_scale, aspect, scale):
+                            scale, octave_scale, aspect):
     """Computes anchor box coordinates in centre form.
 
     # Arguments:
         image_shape: List, input image shape.
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
         stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
+        scale: Array of shape `()`, anchor box scales.
         octave_scale: Array of shape `()`, anchor box octave scale.
         aspect: Array of shape `()`, anchor box aspect ratio.
-        scale: Array of shape `()`, anchor box scales.
 
     # Returns:
         Tuple: Box coordinates in corner form.
     """
-    base_anchor = build_base_anchor(scale, stride_y, stride_x, octave_scale)
+    base_anchor = build_base_anchor(stride_y, stride_x, scale, octave_scale)
     aspect_size = compute_aspect_size(aspect)
     anchor_half_W, anchor_half_H = compute_anchor_dims(
         *base_anchor, *aspect_size, image_shape)
@@ -141,13 +141,13 @@ def compute_box_coordinates(image_shape, stride_y, stride_x,
     return box_coordinates
 
 
-def build_base_anchor(scale, stride_y, stride_x, octave_scale):
+def build_base_anchor(stride_y, stride_x, scale, octave_scale):
     """Builds base anchor.
 
     # Arguments:
-        scale: Float, anchor box scale.
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
         stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
+        scale: Float, anchor box scale.
         octave_scale: Array of shape `()`, anchor box octave scale.
 
     # Returns:
