@@ -129,25 +129,25 @@ def compute_box_coordinates(image_shape, stride_y, stride_x,
     # Returns:
         Tuple: Box coordinates in corner form.
     """
-    base_anchor = build_base_anchor(scale, stride_x, stride_y, octave_scale)
+    base_anchor = build_base_anchor(scale, stride_y, stride_x, octave_scale)
     aspect_size = compute_aspect_size(aspect)
     anchor_half_W, anchor_half_H = compute_anchor_dims(
         *base_anchor, *aspect_size, image_shape)
     center_x, center_y = compute_anchor_centres(
-        stride_x, stride_y, image_shape)
+        stride_y, stride_x, image_shape)
     x_min, y_min = [center_x - anchor_half_W], [center_y - anchor_half_H]
     x_max, y_max = [center_x + anchor_half_W], [center_y + anchor_half_H]
     box_coordinates = np.concatenate((x_min, y_min, x_max, y_max), axis=0)
     return box_coordinates
 
 
-def build_base_anchor(scale, stride_x, stride_y, octave_scale):
+def build_base_anchor(scale, stride_y, stride_x, octave_scale):
     """Builds base anchor.
 
     # Arguments:
         scale: Float, anchor box scale.
-        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
+        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
         octave_scale: Array of shape `()`, anchor box octave scale.
 
     # Returns:
@@ -192,12 +192,12 @@ def compute_anchor_dims(base_anchor_W, base_anchor_H,
     return anchor_half_W_normalized, anchor_half_H_normalized
 
 
-def compute_anchor_centres(stride_x, stride_y, image_shape):
+def compute_anchor_centres(stride_y, stride_x, image_shape):
     """Compute anchor centres.
 
     # Arguments:
-        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
+        stride_x: Array of shape `(num_scale_aspect,)` x-axis stride.
         image_shape: List, input image shape.
 
     # Returns:
