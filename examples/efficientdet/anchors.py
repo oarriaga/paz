@@ -129,7 +129,6 @@ def compute_box_coordinates(image_shape, stride_y, stride_x,
     # Returns:
         Tuple: Box coordinates in corner form.
     """
-    W, H = image_shape
     base_anchor = build_base_anchor(scale, stride_x, stride_y, octave_scale)
     aspect_size = compute_aspect_size(aspect)
     anchor_half_W, anchor_half_H = compute_anchor_dims(
