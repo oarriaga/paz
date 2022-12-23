@@ -29,27 +29,6 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     return to_center_form(anchor_boxes)
 
 
-def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
-    """Builds branch-wise strides.
-
-    # Arguments:
-        branch_arg: Int, branch index.
-        image_shape: List, input image shape.
-        branches: List, EfficientNet branch tensors.
-        num_scale_aspect: Int, count of scale aspect ratio combinations.
-
-    # Returns:
-        Tuple: Containing strides in y and x direction.
-    """
-    H_image, W_image = image_shape
-    feature_H, feature_W = branches[branch_arg].shape[1:3]
-    features_H = np.repeat(feature_H, num_scale_aspect).astype('float32')
-    features_W = np.repeat(feature_W, num_scale_aspect).astype('float32')
-    strides_y = H_image / features_H
-    strides_x = W_image / features_W
-    return strides_y, strides_x
-
-
 def build_octaves(num_scales, aspect_ratios):
     """Builds branch-wise EfficientNet anchor box octaves.
 
@@ -89,6 +68,27 @@ def build_scales(scale, num_scale_aspect):
         Array of shape `(num_scale_aspect,)`.
     """
     return np.repeat(scale, num_scale_aspect)
+
+
+def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
+    """Builds branch-wise strides.
+
+    # Arguments:
+        branch_arg: Int, branch index.
+        image_shape: List, input image shape.
+        branches: List, EfficientNet branch tensors.
+        num_scale_aspect: Int, count of scale aspect ratio combinations.
+
+    # Returns:
+        Tuple: Containing strides in y and x direction.
+    """
+    H_image, W_image = image_shape
+    feature_H, feature_W = branches[branch_arg].shape[1:3]
+    features_H = np.repeat(feature_H, num_scale_aspect).astype('float32')
+    features_W = np.repeat(feature_W, num_scale_aspect).astype('float32')
+    strides_y = H_image / features_H
+    strides_x = W_image / features_W
+    return strides_y, strides_x
 
 
 def make_branch_boxes(stride_y, stride_x, octave,
