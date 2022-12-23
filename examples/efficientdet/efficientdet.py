@@ -1,9 +1,8 @@
-import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Activation, Concatenate, Input, Reshape
+from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
 from anchors import build_anchors
-from efficientdet_blocks import (BiFPN, BoxesNet, ClassNet,
+from efficientdet_blocks import (BiFPN, build_detector_head,
                                  EfficientNet_to_BiFPN)
 from efficientnet import EFFICIENTNET
 
@@ -59,19 +58,9 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     if return_base:
         outputs = middles
     else:
-        num_anchors = len(aspect_ratios) * num_scales
-        args = (middles, num_anchors, FPN_num_filters,
-                box_class_repeats, survival_rate)
-        class_outputs = ClassNet(*args, num_classes)
-        boxes_outputs = BoxesNet(*args, num_dims)
-        classifications = Concatenate(axis=1)(class_outputs)
-        regressions = Concatenate(axis=1)(boxes_outputs)
-        num_boxes = K.int_shape(regressions)[-1] // num_dims
-        classifications = Reshape((num_boxes, num_classes))(classifications)
-        classifications = Activation('softmax')(classifications)
-        regressions = Reshape((num_boxes, num_dims))(regressions)
-        outputs = Concatenate(axis=2, name='boxes')(
-            [regressions, classifications])
+        outputs = build_detector_head(
+            middles, num_classes, num_dims, aspect_ratios, num_scales,
+            FPN_num_filters, box_class_repeats, survival_rate)
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
 

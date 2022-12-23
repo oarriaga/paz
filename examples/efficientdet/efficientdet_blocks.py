@@ -1,9 +1,30 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K
+from tensorflow.keras.layers import Activation, Concatenate, Reshape
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
                                      MaxPooling2D, SeparableConv2D,
                                      UpSampling2D)
 from layers import FuseFeature, GetDropConnect
+
+
+def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
+                        num_scales, FPN_num_filters, box_class_repeats,
+                        survival_rate):
+    num_anchors = len(aspect_ratios) * num_scales
+    args = (middles, num_anchors, FPN_num_filters,
+            box_class_repeats, survival_rate)
+    class_outputs = ClassNet(*args, num_classes)
+    boxes_outputs = BoxesNet(*args, num_dims)
+    classifications = Concatenate(axis=1)(class_outputs)
+    regressions = Concatenate(axis=1)(boxes_outputs)
+    num_boxes = K.int_shape(regressions)[-1] // num_dims
+    classifications = Reshape((num_boxes, num_classes))(classifications)
+    classifications = Activation('softmax')(classifications)
+    regressions = Reshape((num_boxes, num_dims))(regressions)
+    outputs = Concatenate(axis=2, name='boxes')(
+        [regressions, classifications])
+    return outputs
 
 
 def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
