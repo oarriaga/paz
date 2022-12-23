@@ -7,7 +7,7 @@ from layers import FuseFeature, GetDropConnect
 
 
 def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
-             survival_rate=None, return_base=False, num_classes=90):
+             survival_rate=None, num_classes=90):
     """Initializes ClassNet.
 
     # Arguments
@@ -16,7 +16,6 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
         num_filters: Int, number of intermediate layer filters.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used in drop connect.
-        return_base: Bool, to build only base feature network.
         num_classes: Int, number of object classes.
 
     # Returns
@@ -25,11 +24,11 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
     num_filters = [num_filters, num_classes * num_anchors]
     return build_head(features, num_blocks, num_filters, survival_rate,
-                      return_base, bias_initializer)
+                      bias_initializer)
 
 
 def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
-             survival_rate=None, return_base=False, num_dims=4):
+             survival_rate=None, num_dims=4):
     """Initializes BoxNet.
 
     # Arguments
@@ -38,7 +37,6 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
         num_filters: Int, number of intermediate layer filters.
         num_blocks: Int, Number of intermediate layers.
         survival_rate: Float, used by drop connect.
-        return_base: Bool, to build only base feature network.
         num_dims: Int, number of output dimensions to regress.
 
     # Returns
@@ -47,11 +45,11 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
     return build_head(features, num_blocks, num_filters, survival_rate,
-                      return_base, bias_initializer)
+                      bias_initializer)
 
 
 def build_head(middle_features, num_blocks, num_filters,
-               survival_rate, return_base, bias_initializer):
+               survival_rate, bias_initializer):
     """Builds head.
 
     # Arguments
@@ -59,7 +57,6 @@ def build_head(middle_features, num_blocks, num_filters,
         num_blocks: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
         survival_rate: Float, used by drop connect.
-        return_base: Bool, to build only base feature network.
         bias_initializer: Callable, bias initializer.
 
     # Returns
@@ -76,9 +73,8 @@ def build_head(middle_features, num_blocks, num_filters,
             x = tf.nn.swish(x)
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
-        if not return_base:
-            x = final_head_conv(x)
-            x = Flatten()(x)
+        x = final_head_conv(x)
+        x = Flatten()(x)
         head_outputs.append(x)
     return head_outputs
 

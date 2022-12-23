@@ -56,14 +56,14 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     for _ in range(FPN_cell_repeats):
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 
-    num_anchors = len(aspect_ratios) * num_scales
-    args = (middles, num_anchors, FPN_num_filters,
-            box_class_repeats, survival_rate, return_base)
-    class_outputs = ClassNet(*args, num_classes)
-    boxes_outputs = BoxesNet(*args, num_dims)
-
-    outputs = middles
-    if not return_base:
+    if return_base:
+        outputs = middles
+    else:
+        num_anchors = len(aspect_ratios) * num_scales
+        args = (middles, num_anchors, FPN_num_filters,
+                box_class_repeats, survival_rate)
+        class_outputs = ClassNet(*args, num_classes)
+        boxes_outputs = BoxesNet(*args, num_dims)
         classifications = Concatenate(axis=1)(class_outputs)
         regressions = Concatenate(axis=1)(boxes_outputs)
         num_boxes = K.int_shape(regressions)[-1] // num_dims
