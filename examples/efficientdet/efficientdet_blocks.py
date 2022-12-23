@@ -16,14 +16,13 @@ def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
             box_class_repeats, survival_rate)
     class_outputs = ClassNet(*args, num_classes)
     boxes_outputs = BoxesNet(*args, num_dims)
-    classifications = Concatenate(axis=1)(class_outputs)
+    classes = Concatenate(axis=1)(class_outputs)
     regressions = Concatenate(axis=1)(boxes_outputs)
     num_boxes = K.int_shape(regressions)[-1] // num_dims
-    classifications = Reshape((num_boxes, num_classes))(classifications)
-    classifications = Activation('softmax')(classifications)
+    classes = Reshape((num_boxes, num_classes))(classes)
+    classes = Activation('softmax')(classes)
     regressions = Reshape((num_boxes, num_dims))(regressions)
-    outputs = Concatenate(axis=2, name='boxes')(
-        [regressions, classifications])
+    outputs = Concatenate(axis=2, name='boxes')([regressions, classes])
     return outputs
 
 
