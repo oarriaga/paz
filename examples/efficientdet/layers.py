@@ -28,8 +28,8 @@ class GetDropConnect(Layer):
 
 
 class FuseFeature(Layer):
-    """Fuse features from different resolutions
-    and return a weighted sum.
+    """Fuse features from different resolutions and return a
+    weighted sum. The resulting weighted sum is the fused feature.
 
     # References
         [EfficientDet: Scalable and Efficient Object Detection]

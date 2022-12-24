@@ -4,6 +4,12 @@ from paz.backend.boxes import to_center_form
 
 def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
     """Builds anchor boxes in centre form for given model.
+    Anchor boxes a.k.a prior boxes are reference boxes built with
+    various scales and aspect ratio centered over every pixel in the
+    input image and branch tensors. They can be strided. Anchor boxes
+    define regions of image where objects are likely to be found. They
+    help object detector to accurately localize and classify objects at
+    the same time handling variations in object size and shape.
 
     # Arguments:
         image_shape: List, input image shape.
@@ -31,6 +37,12 @@ def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):
 
 def build_octaves(num_scales, aspect_ratios):
     """Builds branch-wise EfficientNet anchor box octaves.
+    Octaves are values that differ from each other by a multiplicative
+    factor of 2. In case of EfficienDet the scales of anchor box,
+    which are integers raised to the power of 2 are normalized.
+    This makes the values differ from each other by a multiplicative
+    factor of approximately 1.2599. Therefore in this case it is not a
+    perfect octave however is an approximation of octave.
 
     # Arguments:
         num_scales: Int, number of anchor scales.
@@ -49,7 +61,7 @@ def build_aspect(num_scales, aspect_ratios):
 
     # Arguments:
         num_scales: Int, number of anchor scales.
-        aspect_ratios: List, anchor box aspect ratios.        
+        aspect_ratios: List, anchor box aspect ratios.
 
     # Returns:
         Array of shape `(num_scale_aspect,)`.
@@ -71,7 +83,7 @@ def build_scales(scale, num_scale_aspect):
 
 
 def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
-    """Builds branch-wise EfficientNet strides.
+    """Builds branch-wise EfficientNet anchor box strides.
 
     # Arguments:
         branch_arg: Int, branch index.
@@ -142,7 +154,7 @@ def compute_box_coordinates(image_shape, stride_y, stride_x,
 
 
 def build_base_anchor(stride_y, stride_x, scale, octave_scale):
-    """Builds base anchor.
+    """Builds base anchor's width and height.
 
     # Arguments:
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.
@@ -172,7 +184,7 @@ def compute_aspect_size(aspect):
 
 def compute_anchor_dims(base_anchor_W, base_anchor_H,
                         aspect_W, aspect_H, image_shape):
-    """Compute anchor's half width and height.
+    """Compute anchor's half width and half height.
 
     # Arguments:
         base_anchor_W: Array of shape (), base anchor width.
@@ -193,7 +205,7 @@ def compute_anchor_dims(base_anchor_W, base_anchor_H,
 
 
 def compute_anchor_centres(stride_y, stride_x, image_shape):
-    """Compute anchor centres.
+    """Compute anchor centres normalized to image size.
 
     # Arguments:
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.

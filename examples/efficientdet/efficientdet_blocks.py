@@ -11,7 +11,9 @@ from layers import FuseFeature, GetDropConnect
 def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
                         num_scales, FPN_num_filters, box_class_repeats,
                         survival_rate):
-    """Builds object detector's head.
+    """Builds EfficientDet object detector's head.
+    The built head includes ClassNet and BoxNet for classification and
+    regression respectively.
 
     Args:
         middles: List, BiFPN layer output.
@@ -136,7 +138,7 @@ def build_head_conv2D(num_blocks, num_filters, bias_initializer):
 
 
 def EfficientNet_to_BiFPN(branches, num_filters):
-    """Preprocess EfficientNet features.
+    """Preprocess EfficientNet branches prior to feeding BiFPN block.
 
     # Arguments
         branches: List, EfficientNet feature maps.
@@ -161,6 +163,8 @@ def EfficientNet_to_BiFPN(branches, num_filters):
 
 def extend_branch(branches, num_filters):
     """Extends branches to comply with BiFPN.
+    The input branchs includes features P1-P5. The extended branch
+    contains features P3-P7.
 
     # Arguments
         branches: List, EfficientNet feature maps.
@@ -176,7 +180,7 @@ def extend_branch(branches, num_filters):
 
 
 def build_branch(P5, num_filters):
-    """Builds feature maps P6 and P7.
+    """Builds feature maps P6 and P7 from P5.
 
     # Arguments
         P5: Tensor of shape `(batch_size, 16, 16, 320)`,
@@ -209,6 +213,7 @@ def conv_batchnorm_block(x, num_filters):
 
 def BiFPN(middles, skips, num_filters, fusion):
     """BiFPN block.
+    BiFPN stands for Bidirectional Feature Pyramid Network.
 
     # Arguments
         middles: List, BiFPN layer output.
@@ -248,7 +253,7 @@ def BiFPN(middles, skips, num_filters, fusion):
 
 
 def node_BiFPN(up, middle, down, skip, num_filters, fusion):
-    """Simulates BiFPN block's node.
+    """Simulates a single node of BiFPN block.
 
     # Arguments
         up: Tensor, upsampled feature map.

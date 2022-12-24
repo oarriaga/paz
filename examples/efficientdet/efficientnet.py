@@ -12,7 +12,7 @@ def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, SE_ratio=0.25,
                  expand_ratios=[1, 6, 6, 6, 6, 6, 6],
                  strides=[[1, 1], [2, 2], [2, 2], [2, 2],
                           [1, 1], [2, 2], [1, 1]]):
-    """A class implementing EfficientNet.
+    """A function implementing EfficientNet.
 
     # Arguments
         image: Tensor of shape `(batch_size, input_shape)`, input image.
@@ -110,6 +110,7 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
                   D_coefficient, D_divisor, repeats, SE_ratio,
                   survival_rate, strides, expand_ratios):
     """Builds MBConv blocks.
+    MBConv stands for Mobile Inverted Bottleneck Convolution.
 
     # Arguments
         x: Tensor, input features.

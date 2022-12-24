@@ -5,7 +5,7 @@ LINE = cv2.LINE_AA
 
 
 def put_text(image, text, point, scale, color, thickness):
-    """Puts text on image.
+    """Puts text on given image.
 
     # Arguments
         image: Array of shape `(H, W, 3)`, input image.
