@@ -16,7 +16,7 @@ def put_text(image, text, point, scale, color, thickness):
         thickness: Int, text thickness.
 
     # Returns
-        Array: image with text.
+        Array: Image of shape `(H, W, 3)` with text.
     """
     image = cv2.putText(
         image, text, point, FONT, scale, color, thickness, LINE)

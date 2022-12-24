@@ -48,8 +48,8 @@ def build_aspect(num_scales, aspect_ratios):
     """Builds branch-wise EfficientNet anchor box aspect ratios.
 
     # Arguments:
-        aspect_ratios: List, anchor box aspect ratios.
         num_scales: Int, number of anchor scales.
+        aspect_ratios: List, anchor box aspect ratios.        
 
     # Returns:
         Array of shape `(num_scale_aspect,)`.
@@ -71,7 +71,7 @@ def build_scales(scale, num_scale_aspect):
 
 
 def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
-    """Builds branch-wise strides.
+    """Builds branch-wise EfficientNet strides.
 
     # Arguments:
         branch_arg: Int, branch index.
@@ -93,7 +93,7 @@ def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
 
 def make_branch_boxes(stride_y, stride_x, octave,
                       aspect, scales, image_shape):
-    """Builds anchor boxes per EfficientNet branch.
+    """Builds branch-wise EfficientNet anchor boxes.
 
     # Arguments:
         stride_y: Array of shape `(num_scale_aspect,)` y-axis stride.

@@ -100,8 +100,6 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -137,8 +135,6 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -174,8 +170,6 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -211,8 +205,6 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -248,8 +240,6 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -285,8 +275,6 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -322,8 +310,6 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -359,8 +345,6 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
@@ -396,8 +380,6 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
-        min_level: Int, minimum feature level.
-        max_level: Int, maximum feature level.
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.

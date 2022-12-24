@@ -11,6 +11,22 @@ from layers import FuseFeature, GetDropConnect
 def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
                         num_scales, FPN_num_filters, box_class_repeats,
                         survival_rate):
+    """Builds object detector's head.
+
+    Args:
+        middles: List, BiFPN layer output.
+        num_classes: Int, number of object classes.
+        num_dims: Int, number of output dimensions to regress.
+        aspect_ratios: List, anchor boxes aspect ratios.
+        num_scales: Int, number of anchor box scales.
+        FPN_num_filters: Int, number of FPN filters.
+        box_class_repeats: Int, Number of regression
+            and classification blocks.
+        survival_rate: Float, used in drop connect.
+
+    Returns:
+        outputs: Tensor of shape `[num_boxes, num_classes+num_dims]`
+    """
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
@@ -70,7 +86,7 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
 
 def build_head(middle_features, num_blocks, num_filters,
                survival_rate, bias_initializer):
-    """Builds head.
+    """Builds ClassNet/BoxNet head.
 
     # Arguments
         middle_features: Tuple. input features.
@@ -195,7 +211,7 @@ def BiFPN(middles, skips, num_filters, fusion):
     """BiFPN block.
 
     # Arguments
-        middles: List, BiFPN node output.
+        middles: List, BiFPN layer output.
         skips: List, skip feature map from BiFPN node.
         num_filters: Int, number of intermediate layer filters.
         fusion: Str, feature fusion method.

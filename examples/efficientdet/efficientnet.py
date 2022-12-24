@@ -17,7 +17,6 @@ def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, SE_ratio=0.25,
     # Arguments
         image: Tensor of shape `(batch_size, input_shape)`, input image.
         scaling_coefficients: List, EfficientNet scaling coefficients.
-        input_shape: Tuple, input image shape.
         D_divisor: Int, network depth divisor.
         SE_ratio: Float, block's squeeze excite ratio.
         kernel_sizes: List, kernel sizes.
@@ -180,7 +179,6 @@ def MBconv_block_features(x, survival_rate, SE_ratio, intro_filter,
 
     # Returns
         Tensor: Output features.
-        block_id: Int, block identifier.
     """
     args = (kernel_size, survival_rate, expand_ratio, SE_ratio)
     x = MB_block(x, intro_filter, outro_filter, stride, *args)
