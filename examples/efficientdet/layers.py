@@ -4,6 +4,11 @@ from tensorflow.keras.layers import Layer
 
 class GetDropConnect(Layer):
     """Dropout for model layers.
+    DropConnect is similar to dropout, but instead of setting
+    activations to zero, it sets a fraction of the weights in a layer to
+    zero. This helps to prevent overfitting by reducing the complexity
+    of the model and encouraging the model to rely on a more diverse set
+    of weights.
 
     # References
         [Deep Networks with Stochastic Depth]
@@ -30,6 +35,13 @@ class GetDropConnect(Layer):
 class FuseFeature(Layer):
     """Fuse features from different resolutions and return a
     weighted sum. The resulting weighted sum is the fused feature.
+    Lower layers of the network tend to extract more basic features,
+    such as edges and shapes, while higher layers extract more complex
+    features that are useful for making predictions.
+    This class implements function that combines features from various
+    levels/layers of the model. This helps to combine the strengths of
+    different features and create a more robust and accurate
+    representation of the input image.
 
     # References
         [EfficientDet: Scalable and Efficient Object Detection]
