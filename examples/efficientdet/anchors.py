@@ -58,6 +58,11 @@ def build_octaves(num_scales, aspect_ratios):
 
 def build_aspect(num_scales, aspect_ratios):
     """Builds branch-wise EfficientNet anchor box aspect ratios.
+    The aspect ratio of an anchor box refers to the ratio of its width
+    to its height. They define the shape of the object that the object
+    detector is trying to detect. If aspect ratio is 1, the anchor box
+    is a square. If it is greater than 1, the box is wider than it is
+    tall. If it is less than 1, the box is taller than its is wide.
 
     # Arguments:
         num_scales: Int, number of anchor scales.
@@ -71,6 +76,12 @@ def build_aspect(num_scales, aspect_ratios):
 
 def build_scales(scale, num_scale_aspect):
     """Builds branch-wise EfficientNet anchor box scales.
+    Anchor box scale refers to the size of the anchor box. The scale of
+    the anchor box determines how large the box is in relation of the
+    object it is trying to detect. If the object detector is trying to
+    detect smaller objects, anchor box with smaller scales may be more
+    effective. If the object detector is trying to detect larger
+    objects, anchor box with larger scales my be more effective.
 
     # Arguments:
         scale: Float, anchor box scale.
@@ -84,6 +95,16 @@ def build_scales(scale, num_scale_aspect):
 
 def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
     """Builds branch-wise EfficientNet anchor box strides.
+    The stride of an anchor box determines how densely the anchor boxes
+    are placed in the image. A smaller stride means that the anchor
+    boxes are more densely packed and cover a larger area of the image,
+    while a larger stride means that the anchor boxes are less densely
+    packed and cover a smaller area of the image.
+    In general, a smaller stride is more effective at detecting smaller
+    objects, while a larger stride is more effective at detecting larger
+    objects. The optimal stride for a particular object detection system
+    will depend on the sizes of the objects that it is trying to detect
+    and the resolution of the input images.
 
     # Arguments:
         branch_arg: Int, branch index.
