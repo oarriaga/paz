@@ -109,7 +109,7 @@ def normal_kernel_initializer(shape, dtype=None):
 def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
                   D_coefficient, D_divisor, repeats, SE_ratio,
                   survival_rate, strides, expand_ratios):
-    """Builds MBConv blocks.
+    """Builds EfficientNet's MBConv blocks.
     MBConv stands for Mobile Inverted Bottleneck Convolution.
 
     # Arguments
