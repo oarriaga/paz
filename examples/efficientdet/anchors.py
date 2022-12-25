@@ -149,7 +149,7 @@ def make_branch_boxes(stride_y, stride_x, octave,
 
 def compute_box_coordinates(image_shape, stride_y, stride_x,
                             scale, octave_scale, aspect):
-    """Computes anchor box coordinates in centre form.
+    """Computes anchor box coordinates in corner form.
 
     # Arguments:
         image_shape: List, input image shape.
