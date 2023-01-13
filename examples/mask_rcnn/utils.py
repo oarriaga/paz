@@ -25,7 +25,7 @@ from matplotlib.patches import Polygon
 from distutils.version import LooseVersion
 
 import tensorflow.keras.backend as K
-from tensorflow.keras.utils import  Sequence
+from tensorflow.keras.utils import Sequence
 from tensorflow.keras.layers import ZeroPadding2D, MaxPooling2D
 from tensorflow.keras.layers import Conv2D, Dense, Activation
 from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
@@ -310,8 +310,7 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     box_widths, box_center_X = np.meshgrid(widths, shifts_X)
     box_heights, box_center_Y = np.meshgrid(heights, shifts_Y)
 
-    box_centers = np.stack(
-        [box_center_Y, box_center_X], axis=2).reshape([-1, 2])
+    box_centers = np.stack([box_center_Y, box_center_X], axis=2).reshape([-1, 2])
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
@@ -418,7 +417,7 @@ def fpn_classifier_graph(rois, feature_maps,
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM)
 
     image_shape = tf.convert_to_tensor(np.array(image_shape))
-    #image_shape = Input(shape=[1, config.IMAGE_META_SIZE], name ="input_image_meta")
+    # image_shape = Input(shape=[1, config.IMAGE_META_SIZE], name ="input_image_meta")
     x = PyramidROIAlign([pool_size, pool_size], name='roi_align_classifier')(
         [rois, image_shape] + feature_maps)
 
@@ -448,7 +447,7 @@ def fpn_classifier_graph(rois, feature_maps,
                         name='mrcnn_bbox_fc')(shared)
     s = K.int_shape(x)
 
-    if s[1] == None:
+    if s[1] is None:
         mrcnn_bbox = Reshape((-1, num_classes, 4), name='mrcnn_bbox')(x)
     else:
         mrcnn_bbox = Reshape((s[1], num_classes, 4), name='mrcnn_bbox')(x)
@@ -476,7 +475,7 @@ def build_fpn_mask_graph(rois, feature_maps, config, train_bn=True):
     num_classes = config.NUM_CLASSES
     image_shape = (config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3)
     image_shape = tf.convert_to_tensor(np.array(image_shape))
-    #image_shape= Input(shape=[config.IMAGE_META_SIZE],name="input_image_meta")
+    # image_shape= Input(shape=[config.IMAGE_META_SIZE],name="input_image_meta")
 
     x = PyramidROIAlign([pool_size, pool_size], name='roi_align_mask')(
         [rois, image_shape] + feature_maps)
@@ -779,7 +778,7 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
             preserve_range=preserve_range)
 
 
-#Utility functions
+# Utility functions
 class BatchNorm(BatchNormalization):
     """Extends the Keras BatchNormalization class to allow a central place
     to make changes if needed.
@@ -796,6 +795,7 @@ class BatchNorm(BatchNormalization):
         """
         return super(self.__class__, self).call(inputs, training=training)
 
+
 def compute_backbone_shapes(config, image_shape):
     """Computes the width and height of each stage of the backbone network.
     Returns:
@@ -811,6 +811,7 @@ def compute_backbone_shapes(config, image_shape):
             int(math.ceil(image_shape[1] / stride))]
             for stride in config.BACKBONE_STRIDES])
 
+
 def log(text, array=None):
     """Prints a text message. And, optionally, if a Numpy array is provided it
     prints it's shape, min, and max values.
@@ -819,14 +820,14 @@ def log(text, array=None):
         text = text.ljust(25)
         text += ("shape: {:20}  ".format(str(array.shape)))
         if array.size:
-            text += ("min: {:10.5f}  max: {:10.5f}".format(array.min(),array.max()))
+            text += ("min: {:10.5f}  max: {:10.5f}".format(array.min(), array.max()))
         else:
-            text += ("min: {:10}  max: {:10}".format("",""))
+            text += ("min: {:10}  max: {:10}".format("", ""))
         text += "  {}".format(array.dtype)
     print(text)
 
 
-#Data formatting
+# Data formatting
 def compose_image_meta(image_id, original_image_shape, image_shape,
                        window, scale, active_class_ids):
     """Takes attributes of an image and puts them in one 1D array.
@@ -923,7 +924,7 @@ def norm_boxes_graph(boxes, shape):
     return tf.divide(boxes - shift, scale)
 
 
-#Data generator
+# Data generator
 def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
                   use_mini_mask=False):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
@@ -947,13 +948,13 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         defined in MINI_MASK_SHAPE.
     """
     # Load image and mask
-    #image = dataset.load_image(image_id)
-    #mask,class_ids = dataset.load_mask(image_id)
+    # image = dataset.load_image(image_id)
+    # mask,class_ids = dataset.load_mask(image_id)
 
     data = dataset.load_data()
     image = data[image_id]['image']
     mask = data[image_id]['masks']
-    class_ids = data[image_id]['box_data'][:,-1]
+    class_ids = data[image_id]['box_data'][:, -1]
 
     original_shape = image.shape
     image, window, scale, padding, crop = resize_image(
@@ -1009,7 +1010,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     # mask = mask[:, :, _idx]
     # class_ids = class_ids[_idx]
 
-    #true_class_ids = []
+    # true_class_ids = []
     # for id_ in _idx:
     #     if(id_):
     #         true_class_ids.append(class_ids[id_])
@@ -1019,8 +1020,8 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     # if the corresponding mask got cropped out.
     # bbox: [num_instances, (y1, x1, y2, x2)]
 
-    #bbox = extract_bboxes(mask)
-    bbox= data[image_id]['box_data'][:,:4]
+    # bbox = extract_bboxes(mask)
+    bbox = data[image_id]['box_data'][:, :4]
 
     # Active classes
     # Different datasets have different classes, so track the
@@ -1265,6 +1266,7 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
 
     return rois, roi_gt_class_ids, bboxes, masks
 
+
 def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
     """Given the anchors and GT boxes, compute overlaps and identify positive
     anchors and deltas to refine them to match their corresponding GT boxes.
@@ -1317,7 +1319,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
     rpn_match[(anchor_iou_max < 0.3) & (no_crowd_bool)] = -1
     # 2. Set an anchor for each GT box (regardless of IoU value).
     # If multiple anchors have the same IoU match all of them
-    gt_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:,0]
+    gt_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:, 0]
     rpn_match[gt_iou_argmax] = 1
     # 3. Set anchors with high overlap as positive.
     rpn_match[anchor_iou_max >= 0.7] = 1
@@ -1411,7 +1413,7 @@ class DataGenerator(Sequence):
     def __init__(self, dataset, config, shuffle=True, augmentation=None,
                  random_rois=0, detection_targets=False):
 
-        #self.image_ids = np.copy(dataset.image_ids)
+        # self.image_ids = np.copy(dataset.image_ids)
         self.image_ids = np.array([i for i in range(len(dataset.load_data()))])
 
         self.dataset = dataset
@@ -1421,10 +1423,10 @@ class DataGenerator(Sequence):
         # [anchor_count, (y1, x1, y2, x2)]
         self.backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
         self.anchors = generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
-                                                      config.RPN_ANCHOR_RATIOS,
-                                                      self.backbone_shapes,
-                                                      config.BACKBONE_STRIDES,
-                                                      config.RPN_ANCHOR_STRIDE)
+                                                config.RPN_ANCHOR_RATIOS,
+                                                self.backbone_shapes,
+                                                config.BACKBONE_STRIDES,
+                                                config.RPN_ANCHOR_STRIDE)
 
         self.shuffle = shuffle
         self.augmentation = augmentation
@@ -1479,7 +1481,7 @@ class DataGenerator(Sequence):
                 batch_rpn_bbox = np.zeros(
                     (self.batch_size, self.config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4), dtype=rpn_bbox.dtype)
                 batch_images = np.zeros(
-                    (self.batch_size, image.shape[0],image.shape[1],image.shape[2]), dtype=np.float32)
+                    (self.batch_size, image.shape[0], image.shape[1], image.shape[2]), dtype=np.float32)
                 batch_gt_class_ids = np.zeros(
                     (self.batch_size, self.config.MAX_GT_INSTANCES), dtype=np.int32)
                 batch_gt_boxes = np.zeros(
@@ -1541,7 +1543,8 @@ class DataGenerator(Sequence):
 
         return inputs, outputs
 
-#Resnet graph
+
+# Resnet graph
 def identity_block(input_tensor, kernel_size, filters, stage, block,
                    use_bias=True, train_bn=True):
     """The identity_block is the block that has no conv layer at shortcut
@@ -1721,8 +1724,8 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         y1, x1, y2, x2 = boxes[i]
         if show_bbox:
             p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
-                                alpha=0.7, linestyle="dashed",
-                                edgecolor=color, facecolor='none')
+                                  alpha=0.7, linestyle="dashed",
+                                  edgecolor=color, facecolor='none')
             ax.add_patch(p)
 
         # Label

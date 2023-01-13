@@ -1,4 +1,5 @@
 from mask_rcnn.model import MaskRCNN
+import tensorflow.compat.v1 as tf
 from config import Config
 from mask_rcnn.utils import norm_boxes_graph
 from mask_rcnn.inference_graph import InferenceGraph
@@ -10,9 +11,6 @@ import cv2
 import utils
 import numpy as np
 
-from keras.backend import manual_variable_initialization
-manual_variable_initialization(True)
-import tensorflow.compat.v1 as tf
 
 class TestConfig(Config):
     NAME = "test"
@@ -30,10 +28,10 @@ def test(images, weights_path):
     image_shape = molded_images[0].shape
     window = norm_boxes_graph(windows[0], image_shape[:2])
     config.WINDOW = window
-    train_bn= config.TRAIN_BN
-    image_shape= config.IMAGE_SHAPE
-    backbone= config.BACKBONE
-    top_down_pyramid_size= config.TOP_DOWN_PYRAMID_SIZE
+    train_bn = config.TRAIN_BN
+    image_shape = config.IMAGE_SHAPE
+    backbone = config.BACKBONE
+    top_down_pyramid_size = config.TOP_DOWN_PYRAMID_SIZE
 
     base_model = MaskRCNN(config=config, model_dir='../../mask_rcnn', train_bn=train_bn, image_shape=image_shape,
                           backbone=backbone, top_down_pyramid_size=top_down_pyramid_size)
@@ -52,7 +50,7 @@ def test(images, weights_path):
     return results
 
 
-path = '' #Weights path to declare
+path = ''  # Weights path to declare
 
 config = TestConfig()
 dataset_train = Shapes(1, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))

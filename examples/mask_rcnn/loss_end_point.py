@@ -11,7 +11,7 @@ class ProposalClassLoss(tf.keras.layers.Layer):
                -1=negative, 0=neutral anchor.
     rpn_class_logits: [batch, anchors, 2]. RPN classifier logits for BG/FG.
     """
-    def __init__(self, config, name= 'rpn_class_loss'):
+    def __init__(self, config, name='rpn_class_loss'):
         self.config = config
         super(ProposalClassLoss, self).__init__(name=name)
 
@@ -28,7 +28,7 @@ class ProposalClassLoss(tf.keras.layers.Layer):
         self.add_loss(loss * self.config.LOSS_WEIGHTS.get('rpn_class_loss', 1.))
         metric = (loss * self.config.LOSS_WEIGHTS.get(
              'rpn_class_logits', 1.))
-        self.add_metric(metric, name= 'rpn_class_loss', aggregation='mean')
+        self.add_metric(metric, name='rpn_class_loss', aggregation='mean')
         return loss
 
 
@@ -44,7 +44,7 @@ class ProposalBBoxLoss(tf.keras.layers.Layer):
                -1=negative, 0=neutral anchor.
     rpn_bbox: [batch, anchors, (dy, dx, log(dh), log(dw))]
     """
-    def __init__(self, config, name= 'rpn_bbox_loss', rpn_match= None):
+    def __init__(self, config, name='rpn_bbox_loss', rpn_match=None):
         self.config = config
         self.rpn_match = rpn_match
         super(ProposalBBoxLoss, self).__init__(name=name)
@@ -54,8 +54,7 @@ class ProposalBBoxLoss(tf.keras.layers.Layer):
         indices = tf.compat.v1.where(K.equal(rpn_match, 1))
         rpn_bbox = tf.gather_nd(y_pred, indices)
         batch_counts = K.sum(K.cast(K.equal(rpn_match, 1), tf.int32), axis=1)
-        target_boxes = batch_pack_graph(y_true, batch_counts,
-                                             self.config.IMAGES_PER_GPU)
+        target_boxes = batch_pack_graph(y_true, batch_counts, self.config.IMAGES_PER_GPU)
         loss = smooth_L1_loss(target_boxes, rpn_bbox)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
         self.add_loss(loss * self.config.LOSS_WEIGHTS.get('rpn_bbox_loss', 1.))
@@ -76,11 +75,10 @@ class ClassLoss(tf.keras.layers.Layer):
         classes that are in the dataset of the image, and 0
         for classes that are not in the dataset.
     """
-    def __init__(self, config, name='mrcnn_class_loss', active_class_ids =None):
+    def __init__(self, config, name='mrcnn_class_loss', active_class_ids=None):
         self.config = config
         self.active_class_ids = active_class_ids
         super(ClassLoss, self).__init__(name=name)
-
 
     def call(self, y_true, y_pred):
         y_true = tf.cast(y_true, 'int64')
@@ -88,9 +86,9 @@ class ClassLoss(tf.keras.layers.Layer):
         pred_active = tf.gather(self.active_class_ids, pred_class_ids)
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=y_true, logits=y_pred)
-        #loss = tf.reshape(loss,[-1]) * tf.cast(pred_active, 'float32')
+        # loss = tf.reshape(loss,[-1]) * tf.cast(pred_active, 'float32')
         loss = loss * tf.cast(pred_active, 'float32')
-        loss = loss / tf.reduce_sum(tf.cast(pred_active,'float32'))
+        loss = loss / tf.reduce_sum(tf.cast(pred_active, 'float32'))
         self.add_loss(tf.reduce_mean(loss * self.config.LOSS_WEIGHTS.get('mrcnn_class_loss', 1.)))
         metric = (loss * self.config.LOSS_WEIGHTS.get(
             'rpn_class_logits', 1.))
@@ -151,8 +149,7 @@ class MaskLoss(tf.keras.layers.Layer):
         super(MaskLoss, self).__init__(name=name)
 
     def call(self, y_true, y_pred):
-        target_ids, true_masks, pred_masks = reshape_data(self.target_class_ids,
-                                                               y_true, y_pred)
+        target_ids, true_masks, pred_masks = reshape_data(self.target_class_ids, y_true, y_pred)
         positive_indices = tf.compat.v1.where(target_ids > 0)[:, 0]
         positive_class_ids = tf.cast(
             tf.gather(target_ids, positive_indices), tf.int64)
@@ -187,11 +184,9 @@ def reshape_data(target_ids, target_masks, y_pred):
     """
     target_ids = K.reshape(target_ids, (-1,))
     mask_shape = tf.shape(target_masks)
-    target_masks = K.reshape(target_masks,
-                            (-1, mask_shape[2], mask_shape[3]))
+    target_masks = K.reshape(target_masks, (-1, mask_shape[2], mask_shape[3]))
     pred_shape = tf.shape(y_pred)
-    y_pred = K.reshape(y_pred,
-                    (-1, pred_shape[2], pred_shape[3], pred_shape[4]))
+    y_pred = K.reshape(y_pred, (-1, pred_shape[2], pred_shape[3], pred_shape[4]))
     y_pred = tf.transpose(y_pred, [0, 3, 1, 2])
     return target_ids, target_masks, y_pred
 

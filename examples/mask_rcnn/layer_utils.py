@@ -64,7 +64,7 @@ def slice_batch(inputs, constants, function, batch_size, names=None):
 
         input_slices = []
         for x in inputs:
-            input_slice=x[sample_arg]
+            input_slice = x[sample_arg]
             input_slices.append(input_slice)
         for y in constants:
             input_slices.append(y)
@@ -79,7 +79,7 @@ def slice_batch(inputs, constants, function, batch_size, names=None):
         names = [None] * len(outputs)
 
     results = []
-    for output, name in zip(outputs,names):
+    for output, name in zip(outputs, names):
         result = tf.stack(output, axis=0, name=name)
         results.append(result)
 
@@ -136,7 +136,7 @@ def clip_boxes(boxes, window):
 
     clipped = tf.concat([y_min, x_min, y_max, x_max], axis=1,
                         name='clipped_boxes')
-    #clipped.set_shape((clipped.shape[0], 4))     #TODO: Check impact during trianing
+    clipped.set_shape((clipped.shape[0], 4))     # TODO: Check impact during trianing
     return clipped
 
 
@@ -161,7 +161,7 @@ def get_top_detections(scores, keep, nms_keep, detection_max_instances):
     return tf.gather(keep, top_ids)
 
 
-def NMS_map(class_ids, scores, rois , keep,detection_max_instances,
+def NMS_map(class_ids, scores, rois, keep, detection_max_instances,
             detection_nms_threshold, unique_class_id):
     """Mapping function used to greedily select a subset of
     bounding boxes in descending order of score. The output of
@@ -183,7 +183,7 @@ def NMS_map(class_ids, scores, rois , keep,detection_max_instances,
     class_keep = tf.gather(keep, tf.gather(ids, class_keep))
     gap = detection_max_instances - tf.shape(class_keep)[0]
     class_keep = tf.pad(class_keep, [(0, gap)], mode='CONSTANT', constant_values=-1)
-    #class_keep.set_shape([detection_max_instances])    #TODO: Check impact during training
+    class_keep.set_shape([detection_max_instances])    # TODO: Check impact during training
     return class_keep
 
 
@@ -194,9 +194,8 @@ def NMS_map_call(pre_nms_class_ids, pre_nms_scores, pre_nms_rois, keeps, max_ins
 
     """
     def _NMS_map_call(class_id):
-
-         return NMS_map(pre_nms_class_ids, pre_nms_scores, pre_nms_rois, keeps, max_instances,
-                        nms_threshold,class_id)
+        return NMS_map(pre_nms_class_ids, pre_nms_scores, pre_nms_rois, keeps, max_instances,
+                       nms_threshold, class_id)
 
     return tf.map_fn(_NMS_map_call, unique_pre_nms_class_ids, dtype=tf.int64)
 
@@ -249,6 +248,7 @@ def filter_low_confidence(class_scores, keep, detection_min_confidence):
                                 tf.expand_dims(confidence, 0))
     return tf.sparse.to_dense(keep)[0]
 
+
 def zero_pad_detections(detections, detection_max_instances):
     """Used by top detection layer in refine detection graph
     to match keep the detection shape same as the max instance.
@@ -290,7 +290,7 @@ def compute_refined_rois(rois, deltas, windows):
     return refined_rois
 
 
-def compute_keep(class_ids, class_scores,refined_rois, detection_min_confidence,
+def compute_keep(class_ids, class_scores, refined_rois, detection_min_confidence,
                  detection_max_instances, detection_nms_threshold):
     """Used by Detection Layer to keep proposed regions after non-maximum suppresion.
 
@@ -385,7 +385,7 @@ def clip_image_boundaries(boxes, images_per_gpu):
         images_per_gpu: Number of images to train with on each GPU
     """
     window_size = np.array([0, 0, 1, 1], dtype=np.float32)
-    boxes = slice_batch(boxes,[window_size], clip_boxes, images_per_gpu,
+    boxes = slice_batch(boxes, [window_size], clip_boxes, images_per_gpu,
                         names=['refined_anchors_clipped'])
     return boxes
 
@@ -484,6 +484,7 @@ def get_empty_list():
     """
     return tf.cast(tf.constant([]), tf.int64)
 
+
 def compute_target_masks(positive_rois, roi_class_ids, roi_boxes, roi_masks,
                          mask_shape, mini_mask):
     """Used by Detection target layer in detection_target_graph. Final computation
@@ -565,7 +566,7 @@ def refine_instances(proposals, class_ids, boxes, masks):
     class_ids = tf.gather(class_ids, non_crowd_ix)
     boxes = tf.gather(boxes, non_crowd_ix)
     masks = tf.gather(masks, non_crowd_ix, axis=2)
-    return class_ids, boxes, masks , crowd_boxes
+    return class_ids, boxes, masks, crowd_boxes
 
 
 def compute_ROI_overlaps(proposals, boxes, crowd_boxes, overlaps,
@@ -659,7 +660,7 @@ def compute_IOU(boxes_a, boxes_b):
     box_b = tf.tile(boxes_b, [tf.shape(boxes_a)[0], 1])
     overlap, union = compute_overlap_union(box_a,  box_b)
     iou = overlap / union
-    overlaps = tf.reshape(iou,[tf.shape(boxes_a)[0], tf.shape(boxes_b)[0]])
+    overlaps = tf.reshape(iou, [tf.shape(boxes_a)[0], tf.shape(boxes_b)[0]])
     return overlaps
 
 
@@ -686,8 +687,8 @@ def compute_overlap_union(box_a, box_b):
 
 
 def detection_targets(proposals, prior_class_ids, prior_boxes,
-                            prior_masks, train_rois_per_image, roi_positive_ratio,
-                            mask_shape, use_mini_mask, bbox_std_dev):
+                      prior_masks, train_rois_per_image, roi_positive_ratio,
+                      mask_shape, use_mini_mask, bbox_std_dev):
     """Used by Detection Target Layer and apply it in batches. Generates
     target box refinement, class_ids, and masks for proposals.
 
@@ -705,19 +706,17 @@ def detection_targets(proposals, prior_class_ids, prior_boxes,
                         memory load.
         bbox_std_dev : Bounding box refinement standard deviation for final detections.
     """
-    refined_boxes, refined_class_ids, refined_masks, crowd_boxes = \
-                                                compute_refined_boxes(proposals, prior_class_ids,
-                                                                      prior_boxes, prior_masks)
+    refined_boxes, refined_class_ids, refined_masks, crowd_boxes = compute_refined_boxes(proposals, prior_class_ids,
+                                                                                         prior_boxes, prior_masks)
     overlaps = compute_IOU(proposals, refined_boxes)
     positive_indices, positive_rois, negative_rois = compute_ROI_overlaps(proposals, refined_boxes,
                                                                           crowd_boxes, overlaps,
                                                                           train_rois_per_image,
                                                                           roi_positive_ratio)
-    deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks = \
-                                                update_priors(overlaps, positive_indices,
-                                                              positive_rois, refined_class_ids,
-                                                              refined_boxes, refined_masks,
-                                                              bbox_std_dev)
+    deltas, roi_prior_class_ids, roi_prior_boxes, roi_masks = update_priors(overlaps, positive_indices,
+                                                                            positive_rois, refined_class_ids,
+                                                                            refined_boxes, refined_masks,
+                                                                            bbox_std_dev)
     masks = compute_target_masks(positive_rois, roi_prior_class_ids, roi_prior_boxes,
                                  roi_masks, mask_shape, use_mini_mask)
     rois, num_negatives, num_positives = pad_ROI(positive_rois, negative_rois,
@@ -837,7 +836,7 @@ def rearrange_pooled_features(pooled, box_to_level, boxes):
                 coordinates. Possibly padded with zeros if not enough
                 boxes to fill the array
     """
-    sorting_tensor = (box_to_level[:, 0] * 100000) + box_to_level[:, 1]  #TODO: Big num? not clear
+    sorting_tensor = (box_to_level[:, 0] * 100000) + box_to_level[:, 1]  # TODO: Big num? not clear
     top_k_indices = tf.nn.top_k(sorting_tensor, k=tf.shape(
         box_to_level)[0]).indices[::-1]
     top_k_indices = tf.gather(box_to_level[:, 2], top_k_indices)

@@ -35,7 +35,7 @@ class ShapesConfig(Config):
     STEPS_PER_EPOCH = 100
     VALIDATION_STEPS = 5
 
-#Extra arguments to be passed to model from default values
+# Extra arguments to be passed to model from default values
 
 
 description = 'Training script for Mask RCNN model'
@@ -43,9 +43,9 @@ parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('-dp', '--data_path', default='/Users/poornimakaushik/Desktop/output/',
-                    required=False,type=str, help='Directory for loading data')
+                    required=False, type=str, help='Directory for loading data')
 parser.add_argument('-sp', '--save_path', default='/Users/poornimakaushik/Desktop/output/',
-                    required=False,metavar='/path/to/save',
+                    required=False, metavar='/path/to/save',
                     help="Path to save model weights and logs")
 parser.add_argument('-lr', '--learning_rate', default=0.002, type=float,
                     help='Initial learning rate for SGD')
@@ -69,26 +69,26 @@ args = parser.parse_args()
 print('Path to save model: ', args.save_path)
 print('Data path: ', args.data_path)
 
-#Dataset initialisation
+# Dataset initialisation
 config = ShapesConfig()
 optimizer = SGD(args.learning_rate, args.momentum, clipnorm=config.GRADIRNT_CLIP_NORM)
 dataset_train = Shapes(50, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 dataset_val = Shapes(5, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 train_generator = DataGenerator(dataset_train, config, shuffle=True,
-                                 augmentation=None, detection_targets=True)
-val_generator = DataGenerator(dataset_val, config, shuffle=True, detection_targets=True)
+                                augmentation=None)
+val_generator = DataGenerator(dataset_val, config, shuffle=True)
 
-#Initial model description
+# Initial model description
 model = MaskRCNN(config=config, model_dir=args.data_path, train_bn=config.TRAIN_BN,
                  image_shape=config.IMAGE_SHAPE, backbone=config.BACKBONE,
                  top_down_pyramid_size=config.TOP_DOWN_PYRAMID_SIZE)
 
-#Network head creation
+# Network head creation
 losses = model.build_complete_network()
 
-model.keras_model.load_weights('weights/mask_rcnn_coco (1).h5',by_name=True, skip_mismatch=True)
+model.keras_model.load_weights('weights/mask_rcnn_coco (1).h5', by_name=True, skip_mismatch=True)
 
-#Set which layers to train in the backbone Default: Heads
+# Set which layers to train in the backbone Default: Heads
 layer_regex = {
     # all layers but the backbone
     'heads': r'(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)',
@@ -100,7 +100,7 @@ layer_regex = {
     'all': '.*',
 }
 
-layers=[]
+layers = []
 if args.layers in layer_regex.keys():
     layers = layer_regex[args.layers]
 model.set_trainable(layer_regex=layers)
@@ -117,7 +117,7 @@ model.keras_model.compile(
             loss=[None] * len(model.keras_model.outputs))
 
 
-#Checkpoints
+# Checkpoints
 model_path = os.path.join(args.save_path, 'shapes')
 if not os.path.exists(model_path):
     os.makedirs(model_path)

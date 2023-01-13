@@ -21,10 +21,10 @@ def test(images, weights_path):
     image_shape = molded_images[0].shape
     window = norm_boxes_graph(windows[0], image_shape[:2])
     config.WINDOW = window
-    train_bn= config.TRAIN_BN
-    image_shape= config.IMAGE_SHAPE
-    backbone= config.BACKBONE
-    top_down_pyramid_size= config.TOP_DOWN_PYRAMID_SIZE
+    train_bn = config.TRAIN_BN
+    image_shape = config.IMAGE_SHAPE
+    backbone = config.BACKBONE
+    top_down_pyramid_size = config.TOP_DOWN_PYRAMID_SIZE
 
     base_model = MaskRCNN(config=config, model_dir='../../mask_rcnn', train_bn=train_bn, image_shape=image_shape,
                           backbone=backbone, top_down_pyramid_size=top_down_pyramid_size)
