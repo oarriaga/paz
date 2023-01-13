@@ -30,8 +30,9 @@ class ResizeImages(Processor):
         resized_images, windows = [], []
         for image in images:
             resized_image, window, _, _, _ = resize_image(image, min_dim=self.IMAGE_MIN_DIM,
-                min_scale=self.IMAGE_MIN_SCALE, max_dim=self.IMAGE_MAX_DIM,
-                mode=self.IMAGE_RESIZE_MODE)
+                                                          min_scale=self.IMAGE_MIN_SCALE,
+                                                          max_dim=self.IMAGE_MAX_DIM,
+                                                          mode=self.IMAGE_RESIZE_MODE)
             resized_images.append(resized_image)
             windows.append(window)
         return resized_images, windows

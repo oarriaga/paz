@@ -26,7 +26,7 @@ from mask_rcnn.utils import build_fpn_mask_graph
 from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
 from mask_rcnn.layer_utils import slice_batch
 from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
-    BBoxLoss,ClassLoss,MaskLoss
+    BBoxLoss, ClassLoss, MaskLoss
 tf.compat.v1.disable_eager_execution()
 
 
@@ -58,13 +58,14 @@ class MaskRCNN:
         config = self.config
         feature_maps = self.keras_model.output
         rpn_class_logits, rpn_class, rpn_bbox = self.RPN(feature_maps)
-        rpn_rois = get_rpn_rois(config, rpn_class, rpn_bbox)
+        rpn_rois = get_rpn_rois(config, rpn_class, rpn_bbox, image)
 
-        input_rpn_match, input_rpn_bbox, input_gt_class_ids, \
-        input_gt_boxes, groundtruth_boxes, groundtruth_masks = get_ground_truth_values(config, image)
+        input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, groundtruth_boxes, groundtruth_masks = \
+            get_ground_truth_values(config, image)
 
-        rois, target_class_ids, target_boxes, target_masks = get_detections_target \
-            (config, rpn_rois, input_gt_class_ids, groundtruth_boxes, groundtruth_masks)
+        rois, target_class_ids, target_boxes, target_masks = get_detections_target(config, rpn_rois,
+                                                                                   input_gt_class_ids,
+                                                                                   groundtruth_boxes, groundtruth_masks)
         mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_rois = \
             create_head(self.keras_model, config, rois)
 
@@ -73,17 +74,17 @@ class MaskRCNN:
                                                                                   target_class_ids,
                                                                                   target_boxes, target_masks,
                                                                                   rpn_class_logits, rpn_bbox)
-        rpn_class_loss = ProposalClassLoss(config=config, name='rpn_class_loss')\
-            (input_rpn_match, rpn_class_logits)
 
-        rpn_bbox_loss= ProposalBBoxLoss(config=config, rpn_match=input_rpn_match, name='rpn_bbox_loss')\
+        rpn_class_loss = ProposalClassLoss(config=config, name='rpn_class_loss')(input_rpn_match,
+                                                                                 rpn_class_logits)
+        rpn_bbox_loss = ProposalBBoxLoss(config=config, rpn_match=input_rpn_match, name='rpn_bbox_loss')\
             (input_rpn_bbox, rpn_bbox)
         mrcnn_class_loss = ClassLoss(config=config, active_class_ids=active_class_ids, name='mrcnn_class_loss')\
-             (target_class_ids, mrcnn_class_logits)
+            (target_class_ids, mrcnn_class_logits)
         mrcnn_bbox_loss = BBoxLoss(config=config, target_class_ids=target_class_ids, name='mrcnn_bbox_loss')\
-             (target_boxes, mrcnn_bbox)
+            (target_boxes, mrcnn_bbox)
         mrcnn_mask_loss = MaskLoss(config, target_class_ids=target_class_ids, name='mrcnn_mask_loss')\
-             (target_masks, mrcnn_mask)
+            (target_masks, mrcnn_mask)
 
         inputs = [image, input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, groundtruth_masks]
 
@@ -92,7 +93,7 @@ class MaskRCNN:
 
         outputs = [rpn_class_logits, rpn_class, rpn_bbox,
                    mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
-                   rpn_rois, output_rois,rpn_class_loss, rpn_bbox_loss, mrcnn_class_loss,
+                   rpn_rois, output_rois, rpn_class_loss, rpn_bbox_loss, mrcnn_class_loss,
                    mrcnn_bbox_loss, mrcnn_mask_loss]
 
         self.keras_model = Model(inputs, outputs, name='mask_rcnn')
@@ -145,14 +146,15 @@ def build_backbone(image_shape, backbone_features, fpn_size, train_bn):
     """
     height, width = image_shape[:2]
     raise_exception(height, width)
-    input_image = Input(shape=[None,None, image_shape[2]], name='input_image')
+    input_image = Input(shape=[None, None, image_shape[2]], name='input_image')
 
-    C2, C3, C4, C5= get_backbone_features(input_image, backbone_features, train_bn)
+    C2, C3, C4, C5 = get_backbone_features(input_image, backbone_features, train_bn)
     P2, P3, P4, P5, P6 = build_layers(C2, C3, C4, C5, fpn_size)
 
     model1 = Model([input_image], [P2, P3, P4, P5, P6], name='mask_rcnn_before')
 
     return model1
+
 
 def build_layers(C2, C3, C4, C5, fpn_size):
     """Builds `layers for mask-RCNN backbone.
@@ -237,9 +239,7 @@ def RPN_model(config, fpn_size, rpn_feature_maps):
     # Returns
         Model output.
     """
-    rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
-                        len(config.RPN_ANCHOR_RATIOS),
-                        fpn_size)
+    rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE, len(config.RPN_ANCHOR_RATIOS), fpn_size)
     layer_outputs = [rpn([feature]) for feature in rpn_feature_maps]
     names = ['rpn_class_logits', 'rpn_class', 'rpn_bbox']
     outputs = list(zip(*layer_outputs))
@@ -268,7 +268,7 @@ def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
     layers = keras_model.layers
     for layer in layers:
         if layer.__class__.__name__ == 'Model':
-            get_trainable(layer_regex, keras_model=layer, indent=indent + 4 )
+            get_trainable(model, layer_regex=layer_regex, keras_model=layer, indent=indent + 4)
             continue
         if not layer.weights:
             continue
@@ -282,7 +282,7 @@ def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
                                             layer.__class__.__name__))
 
 
-def get_anchors(config):
+def get_anchors(config, input_image):
     """Returns anchor pyramid for the given image size
     """
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
@@ -292,17 +292,10 @@ def get_anchors(config):
         backbone_shapes,
         config.BACKBONE_STRIDES,
         config.RPN_ANCHOR_STRIDE)
+
+    anchors = norm_boxes(anchors, input_image[:2])
     anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
-    #anchors = Layer(name='anchors')(anchors)
-    class ConstLayer(tf.keras.layers.Layer):
-        def __init__(self, x, name=None, dtype=np.float32):
-            super(ConstLayer, self).__init__(name=name, dtype=dtype)
-            self.x = tf.Variable(x)
-
-        def call(self, input):
-            return self.x
-
-    anchors = ConstLayer(anchors, name="anchors")(input_image)
+    anchors = AnchorsLayer(anchors, name="anchors")(input_image)
     return anchors
 
 
@@ -322,7 +315,7 @@ def get_ground_truth_values(config, image):
     rpn_match = Input(shape=[None, 1], name='input_rpn_match', dtype=tf.int32)
     rpn_bbox = Input(shape=[None, 4], name='input_rpn_bbox', dtype=tf.float32)
 
-    class_ids = Input(shape=[None],name='input_gt_class_ids', dtype=tf.int32)
+    class_ids = Input(shape=[None], name='input_gt_class_ids', dtype=tf.int32)
     input_boxes = Input(shape=[None, 4], name='input_gt_boxes', dtype=tf.float32)
 
     boxes = gnd_truth_call(image)(input_boxes)
@@ -341,10 +334,10 @@ def get_ground_truth_values(config, image):
         input_boxes, boxes, input_gt_masks
 
 
-def get_rpn_rois(config, rpn_class, rpn_bbox):
+def get_rpn_rois(config, rpn_class, rpn_bbox, input_image):
     """Returns the output of Proposal layer i.e the ROIs
     """
-    anchors = get_anchors(config)
+    anchors = get_anchors(config, input_image)
     return ProposalLayer(
         proposal_count=config.POST_NMS_ROIS_TRAINING,
         nms_threshold=config.RPN_NMS_THRESHOLD, rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
@@ -374,7 +367,7 @@ def create_head(backbone_model, config, rois):
 
     mrcnn_mask = build_fpn_mask_graph(rois, feature_maps[:-1], config,
                                       train_bn=config.TRAIN_BN)
-    output_rois =  call_rois()(rois)
+    output_rois = call_rois()(rois)
     return mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_rois
 
 
@@ -397,3 +390,12 @@ def call_rois():
     def _call_rois(value):
         return value * 1
     return _call_rois
+
+
+class AnchorsLayer(Layer):
+    def __init__(self, anchors, name="anchors", **kwargs):
+        super(AnchorsLayer, self).__init__(name=name, **kwargs)
+        self.anchors = tf.Variable(anchors, trainable=False)
+
+    def call(self, input_image):
+        return self.anchors

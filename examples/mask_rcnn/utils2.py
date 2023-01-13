@@ -14,7 +14,7 @@ from matplotlib.patches import Polygon
 from distutils.version import LooseVersion
 
 import tensorflow.keras.backend as K
-from tensorflow.keras.utils import  Sequence
+from tensorflow.keras.utils import Sequence
 from tensorflow.keras.layers import ZeroPadding2D, MaxPooling2D
 from tensorflow.keras.layers import Conv2D, Dense, Activation
 from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
@@ -24,6 +24,7 @@ from tensorflow.keras.models import Model
 
 from pipeline import TrainingPipeline
 import cv2
+
 
 def compute_iou(box, boxes, box_area, boxes_area):
     """Calculates IoU of the given box with the array of the given boxes.
@@ -86,7 +87,6 @@ def DataGenerator(dataset, config, shuffle=True, augmentation=False):
         """
     b = 0
     image_index = -1
-    error_count=0
     image_ids = np.array([i for i in range(len(dataset.load_data()))])
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
     anchors = generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
@@ -106,9 +106,8 @@ def DataGenerator(dataset, config, shuffle=True, augmentation=False):
 
             # Get GT bounding boxes and masks for image.
             image_id = image_ids[image_index]
-            image, gt_class_ids, gt_boxes, gt_masks = \
-                         load_image_gt(dataset, config, image_id,
-                          augmentation=augmentation)
+            image, gt_class_ids, gt_boxes, gt_masks = load_image_gt(dataset, config, image_id,
+                                                                    augmentation=augmentation)
 
             # Skip images that have no instances.
             if not np.any(np.array(gt_class_ids) > 0):
@@ -154,7 +153,7 @@ def DataGenerator(dataset, config, shuffle=True, augmentation=False):
 
             b += 1
 
-            if b>=batch_size:
+            if b >= batch_size:
 
                 inputs = [batch_images, batch_rpn_match, batch_rpn_bbox,
                           batch_gt_class_ids, batch_gt_boxes, batch_gt_masks]
@@ -162,15 +161,9 @@ def DataGenerator(dataset, config, shuffle=True, augmentation=False):
 
                 yield inputs, outputs
 
-                b=0
+                b = 0
         except (GeneratorExit, KeyboardInterrupt):
             raise
-        except:
-            logging.exception("Error processing image")
-            error_count +=1
-            if error_count > 5:
-                raise
-
 
 
 def compute_backbone_shapes(config, image_shape):
@@ -237,8 +230,8 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
 
-    boxes = np.where(boxes < 0, 0, boxes)
-    #boxes=np.rint(boxes)
+    # boxes = np.where(boxes < 0, 0, boxes)
+    # boxes=np.rint(boxes)
     return boxes
 
 
@@ -265,14 +258,12 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
     data = dataset.load_data()
     image = data[image_id]['image']
     mask = data[image_id]['masks']
-    class_ids = data[image_id]['box_data'][:,-1]
+    class_ids = data[image_id]['box_data'][:, -1]
 
     bounding_box = data[image_id]['box_data']
     bounding_box = np.where(bounding_box <= 0, 0, bounding_box)
     num_classes = config.NUM_CLASSES
     image_size = config.IMAGE_SHAPE[:2]
-
-
     image, window, scale, padding, crop = resize_image(
         image,
         min_dim=config.IMAGE_MIN_DIM,
@@ -285,7 +276,7 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
         augmentator = TrainingPipeline(bounding_box, num_classes=num_classes, size=image_size)
         sample = {'image': image, 'boxes': bounding_box, 'masks': mask}
         data = augmentator(sample)
-        image= data['inputs']['image']
+        image = data['inputs']['image']
         bounding_box = data['labels']['boxes']
         mask = data['labels']['masks']
 
@@ -298,9 +289,9 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
     bbox = extract_bboxes(mask_inst)
 
     if config.USE_MINI_MASK:
-        mask_inst= minimize_mask(bbox.astype(np.int32), mask_inst, config.MINI_MASK_SHAPE)
+        mask_inst = minimize_mask(bbox.astype(np.int32), mask_inst, config.MINI_MASK_SHAPE)
 
-    return image, np.array(class_ids).astype(np.int32), bbox[:,:4].astype(np.float32), mask_inst.astype(np.bool)
+    return image, np.array(class_ids).astype(np.int32), bbox[:, :4].astype(np.float32), mask_inst.astype(np.bool)
 
 
 def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config):
@@ -344,8 +335,6 @@ def compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes):
         crowd_boxes = gt_boxes[crowd_ix]
         gt_class_ids = gt_class_ids[non_crowd_ix]
         gt_boxes = gt_boxes[non_crowd_ix]
-
-
         crowd_overlaps = compute_overlaps(anchors, crowd_boxes)
         crowd_iou_max = np.amax(crowd_overlaps, axis=1)
         no_crowd_bool = (crowd_iou_max < 0.001)
@@ -418,7 +407,7 @@ def compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax):
         gt = box_to_center_format(gt)
         a = box_to_center_format(a)
 
-        rpn_bbox[ix] = normalize_log_refinement(a,gt)
+        rpn_bbox[ix] = normalize_log_refinement(a, gt)
         rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
         ix += 1
     return rpn_bbox
@@ -465,7 +454,7 @@ def minimize_mask(bbox, mask, mini_shape):
     for i in range(mask.shape[-1]):
         # Pick slice and cast to bool in case load_mask() returned wrong dtype
         m = mask[:, :, i].astype(bool)
-        y1, x1, y2, x2 = bbox[i,:4]
+        y1, x1, y2, x2 = bbox[i, :4]
         m = m[y1:y2, x1:x2]
         if m.size == 0:
             raise Exception("Invalid bounding box with area of zero")
@@ -669,5 +658,4 @@ def generate_masks(mask, bounding_box, config):
             mask_inst[:, :, i] = np.logical_xor(mask_inst[:, :, i], occulusions).astype(np.uint8)
 
     mask_inst = np.dstack((mask[:, :, 0], mask_inst))
-
     return mask_inst

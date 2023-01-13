@@ -2,9 +2,12 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
-from mask_rcnn.layer_utils import slice_batch, trim_by_score, compute_NMS, apply_NMS,get_top_detections,refine_detections
-from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries, detection_targets,filter_low_confidence,filter_low_confidence
-from mask_rcnn.layer_utils import compute_ROI_level, apply_ROI_pooling, rearrange_pooled_features,apply_box_deltas,clip_boxes,zero_pad_detections
+from mask_rcnn.layer_utils import slice_batch, trim_by_score, compute_NMS, apply_NMS, get_top_detections, \
+    refine_detections
+from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries, detection_targets, filter_low_confidence, \
+    filter_low_confidence
+from mask_rcnn.layer_utils import compute_ROI_level, apply_ROI_pooling, rearrange_pooled_features, apply_box_deltas,\
+    clip_boxes, zero_pad_detections
 
 
 class DetectionLayer(Layer):
@@ -33,10 +36,10 @@ class DetectionLayer(Layer):
         rois, mrcnn_class, mrcnn_bbox = inputs
         detections_batch = slice_batch([rois, mrcnn_class, mrcnn_bbox],
                                        [tf.cast(self.bbox_std_dev, dtype=tf.float32),
-                                        self.window,self.detection_min_confidence,
+                                        self.window, self.detection_min_confidence,
                                         self.detection_max_instances,
                                         tf.cast(self.detection_nms_threshold, dtype=tf.float32)],
-                                        refine_detections,self.images_per_gpu)
+                                       refine_detections, self.images_per_gpu)
 
         return tf.reshape(detections_batch,
                           [self.batch_size, self.detection_max_instances, 6])
@@ -79,7 +82,7 @@ class ProposalLayer(Layer):
         boxes = apply_box_deltas(pre_nms_anchors, deltas, self.images_per_gpu)
         boxes = clip_image_boundaries(boxes, self.images_per_gpu)
 
-        proposals = slice_batch([boxes, scores],[self.proposal_count, self.nms_threshold], compute_NMS,
+        proposals = slice_batch([boxes, scores], [self.proposal_count, self.nms_threshold], compute_NMS,
                                 self.images_per_gpu)
         return proposals
 
@@ -120,7 +123,7 @@ class DetectionTargetLayer(Layer):
         proposals, prior_class_ids, prior_boxes, prior_masks = inputs
         names = ['rois', 'target_class_ids', 'target_bbox', 'target_mask']
         outputs = slice_batch([proposals, prior_class_ids, prior_boxes, prior_masks],
-                              [self.train_rois_per_image,self.roi_positive_ratio,
+                              [self.train_rois_per_image, self.roi_positive_ratio,
                                self.mask_shape, self.use_mini_mask,
                                tf.cast(self.bbox_std_dev, dtype=tf.float32)],
                               detection_targets, self.images_per_gpu, names=names)
@@ -153,7 +156,7 @@ class PyramidROIAlign(Layer):
         boxes, image_shape = inputs[0], inputs[1]
         feature_maps = inputs[2:]
 
-        roi_level =  compute_ROI_level(boxes, image_shape)
+        roi_level = compute_ROI_level(boxes, image_shape)
         pooled, box_to_level = apply_ROI_pooling(roi_level, boxes,
                                                  feature_maps, self.pool_shape)
         box_range = tf.expand_dims(tf.range(tf.shape(box_to_level)[0]), 1)
