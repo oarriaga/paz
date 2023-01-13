@@ -281,9 +281,7 @@ class RecursiveRefiner(Processor):
         assert x_min >= 0 and x_min < x_max and x_max <= image.shape[0]
         assert y_min >= 0 and y_min < y_max and y_max <= image.shape[1]
 
-        crop_box = (x_min, y_min, x_max, y_max)
-        # # TODO: remove
-        # print(f'{crop_box=}')
+        crop_box = (int(x_min), int(y_min), int(x_max), int(y_max))
         cropped_image = crop_image(image, crop_box)
         resized_image = resize_image(cropped_image, self.input_size)
         keypoint_in_cropped = self.model.predict(np.array([resized_image, ]))

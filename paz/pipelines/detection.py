@@ -586,7 +586,7 @@ class DetectPaper(Processor):
     # References
        - [PaperDetector](https://gitlab.com/robo-eyes/paperdetector)
     """
-
+    # TODO: allow custom models to be used
     def __init__(self, name=None):
         super().__init__(name)
 
