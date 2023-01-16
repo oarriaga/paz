@@ -23,6 +23,7 @@ from ..backend.image import normalized_device_coordinates_to_image
 from ..backend.image import image_to_normalized_device_coordinates
 from ..backend.image import replace_lower_than_threshold
 from ..backend.image import flip_left_right
+from ..backend.image import resize_with_padding
 from ..backend.image import BILINEAR, CUBIC
 from ..backend.image.tensorflow_image import imagenet_preprocess_input
 
@@ -38,6 +39,7 @@ class CastImage(Processor):
     # Arguments
         dtype: Str or np.dtype
     """
+
     def __init__(self, dtype):
         self.dtype = dtype
         super(CastImage, self).__init__()
@@ -52,6 +54,7 @@ class SubtractMeanImage(Processor):
     # Arguments
         mean: List of length 3, containing the channel-wise mean.
     """
+
     def __init__(self, mean):
         self.mean = mean
         super(SubtractMeanImage, self).__init__()
@@ -66,6 +69,7 @@ class AddMeanImage(Processor):
     # Arguments
         mean: List of length 3, containing the channel-wise mean.
     """
+
     def __init__(self, mean):
         self.mean = mean
         super(AddMeanImage, self).__init__()
@@ -77,6 +81,7 @@ class AddMeanImage(Processor):
 class NormalizeImage(Processor):
     """Normalize image by diving all values by 255.0.
     """
+
     def __init__(self):
         super(NormalizeImage, self).__init__()
 
@@ -87,6 +92,7 @@ class NormalizeImage(Processor):
 class DenormalizeImage(Processor):
     """Denormalize image by multiplying all values by 255.0.
     """
+
     def __init__(self):
         super(DenormalizeImage, self).__init__()
 
@@ -100,6 +106,7 @@ class LoadImage(Processor):
     # Arguments
         num_channels: Integer, valid integers are: 1, 3 and 4.
     """
+
     def __init__(self, num_channels=3):
         self.num_channels = num_channels
         super(LoadImage, self).__init__()
@@ -115,6 +122,7 @@ class RandomSaturation(Processor):
         lower: Float, lower bound for saturation factor.
         upper: Float, upper bound for saturation factor.
     """
+
     def __init__(self, lower=0.3, upper=1.5):
         self.lower = lower
         self.upper = upper
@@ -130,6 +138,7 @@ class RandomBrightness(Processor):
     # Arguments
         max_delta: Float.
     """
+
     def __init__(self, delta=32):
         self.delta = delta
         super(RandomBrightness, self).__init__()
@@ -147,6 +156,7 @@ class RandomContrast(Processor):
         upper: Float, indicating the upper bound of the random number
         to be multiplied with the BGR/RGB image.
     """
+
     def __init__(self, lower=0.5, upper=1.5):
         self.lower = lower
         self.upper = upper
@@ -163,6 +173,7 @@ class RandomHue(Processor):
         delta: Int, indicating the range (-delta, delta ) of possible
             hue values.
     """
+
     def __init__(self, delta=18):
         self.delta = delta
         super(RandomHue, self).__init__()
@@ -177,6 +188,7 @@ class ResizeImage(Processor):
     # Arguments
         size: List of two ints.
     """
+
     def __init__(self, shape, method=BILINEAR):
         self.shape = shape
         self.method = method
@@ -186,12 +198,29 @@ class ResizeImage(Processor):
         return resize_image(image, self.shape, self.method)
 
 
+class ResizeImageWithPadding(Processor):
+    """Resize image.
+
+    # Arguments
+        size: List of two ints.
+    """
+
+    def __init__(self, shape, method=BILINEAR, name=None):
+        self.shape = shape
+        self.method = method
+        super().__init__(name)
+
+    def call(self, image):
+        return resize_with_padding(image, self.shape, self.method)
+
+
 class ResizeImages(Processor):
     """Resize list of images.
 
     # Arguments
         size: List of two ints.
     """
+
     def __init__(self, shape):
         self.shape = shape
         super(ResizeImages, self).__init__()
@@ -207,6 +236,7 @@ class RandomImageBlur(Processor):
         probability: Float between [0, 1]. Assigns probability of how
             often a random image blur is applied.
     """
+
     def __init__(self, probability=0.5):
         super(RandomImageBlur, self).__init__()
         self.probability = probability
@@ -224,6 +254,7 @@ class RandomGaussianBlur(Processor):
         probability: Float between [0, 1]. Assigns probability of how
             often a random image blur is applied.
     """
+
     def __init__(self, kernel_size=(5, 5), probability=0.5):
         super(RandomGaussianBlur, self).__init__()
         self.kernel_size = kernel_size
@@ -238,6 +269,7 @@ class RandomGaussianBlur(Processor):
 class RandomFlipImageLeftRight(Processor):
     """Randomly flip the image left or right
     """
+
     def __init__(self):
         super(RandomFlipImageLeftRight, self).__init__()
 
@@ -252,6 +284,7 @@ class ConvertColorSpace(Processor):
         flag: Flag found in ``processors``indicating transform e.g.
             ``pr.BGR2RGB``
     """
+
     def __init__(self, flag):
         self.flag = flag
         super(ConvertColorSpace, self).__init__()
@@ -267,6 +300,7 @@ class ShowImage(Processor):
         window_name: String. Window name.
         wait: Boolean
     """
+
     def __init__(self, window_name='image', wait=True):
         super(ShowImage, self).__init__()
         self.window_name = window_name
@@ -282,6 +316,7 @@ class ImageDataProcessor(Processor):
     # Arguments
         generator: An instantiated Keras ImageDataGenerator
     """
+
     def __init__(self, generator):
         super(ImageDataProcessor, self).__init__()
         self.generator = generator
@@ -296,6 +331,7 @@ class ImageDataProcessor(Processor):
 class AlphaBlending(Processor):
     """Blends image to background using the image's alpha channel.
     """
+
     def __init__(self):
         super(AlphaBlending, self).__init__()
 
@@ -310,6 +346,7 @@ class RandomShapeCrop(Processor):
         shape: List of two ints [height, width].
             Dimensions of image to be cropped.
     """
+
     def __init__(self, shape):
         super(RandomShapeCrop, self).__init__()
         self.shape = shape
@@ -325,6 +362,7 @@ class MakeRandomPlainImage(Processor):
         shape: List of two ints [height, width].
             Dimensions of plain image to be generated.
     """
+
     def __init__(self, shape):
         super(MakeRandomPlainImage, self).__init__()
         self.shape = shape
@@ -336,6 +374,7 @@ class MakeRandomPlainImage(Processor):
 class ConcatenateAlphaMask(Processor):
     """Concatenates alpha mask to original image.
     """
+
     def __init__(self, **kwargs):
         super(ConcatenateAlphaMask, self).__init__(**kwargs)
 
@@ -350,6 +389,7 @@ class BlendRandomCroppedBackground(Processor):
         background_paths: List of strings. Each element of the list is a
             full-path to an image used for cropping a background.
     """
+
     def __init__(self, background_paths):
         super(BlendRandomCroppedBackground, self).__init__()
         if not isinstance(background_paths, list):
@@ -382,6 +422,7 @@ class AddOcclusion(Processor):
         probability: Float between [0, 1]. Assigns probability of how
             often an occlusion to an image is generated.
     """
+
     def __init__(self, max_radius_scale=0.5, probability=0.5):
         super(AddOcclusion, self).__init__()
         self.max_radius_scale = max_radius_scale
@@ -422,6 +463,7 @@ class RandomImageCrop(Processor):
         crop_factor: Float between ``[0, 1]``.
         probability: Float between ``[0, 1]``.
     """
+
     def __init__(self, crop_factor=0.3, probability=0.5):
         self.crop_factor = crop_factor
         self.probability = probability
@@ -444,6 +486,7 @@ class RandomImageCrop(Processor):
 class ImageToNormalizedDeviceCoordinates(Processor):
     """Map image value from [0, 255] -> [-1, 1].
     """
+
     def __init__(self):
         super(ImageToNormalizedDeviceCoordinates, self).__init__()
 
@@ -454,6 +497,7 @@ class ImageToNormalizedDeviceCoordinates(Processor):
 class NormalizedDeviceCoordinatesToImage(Processor):
     """Map normalized value from [-1, 1] -> [0, 255].
     """
+
     def __init__(self):
         super(NormalizedDeviceCoordinatesToImage, self).__init__()
 
@@ -506,6 +550,7 @@ class FlipLeftRightImage(Processor):
     # Arguments
         image: Numpy array.
     """
+
     def __init__(self):
         super(FlipLeftRightImage, self).__init__()
 

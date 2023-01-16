@@ -16,3 +16,4 @@ from .segmentation import UNET_VGG16
 from .segmentation import UNET_VGG19
 from .segmentation import UNET_RESNET50
 from .pose_estimation import HigherHRNet
+from .detection.paper_detection import PaperDetection, CornerRefiner

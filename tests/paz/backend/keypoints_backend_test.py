@@ -86,6 +86,11 @@ def test_normalize_points2D():
     normalized_points = normalize_keypoints2D(points2D, height, width)
     assert np.allclose(normalized_points, np.array([[-1, -1], [0, 0], [1, 1]]))
 
+def test_normalize_points2D_range():
+    height, width = 480, 640
+    points2D = np.array([[0, 0], [320, 240], [640, 480]])
+    normalized_points = normalize_keypoints2D(points2D, height, width, norm_range=(0,1))
+    assert np.allclose(normalized_points, np.array([[0, 0], [0.5, 0.5], [1, 1]]))
 
 def test_denormalize_points2D():
     height, width = 480, 640
@@ -93,6 +98,11 @@ def test_denormalize_points2D():
     points2D = denormalize_keypoints2D(normalized_points, height, width)
     assert np.allclose(points2D, np.array([[0, 0], [320, 240], [640, 480]]))
 
+def test_denormalize_points2D_range():
+    height, width = 480, 640
+    normalized_points = np.array([[0, 0], [0.5, 0.5], [1, 1]])
+    points2D = denormalize_keypoints2D(normalized_points, height, width, norm_range=(0,1))
+    assert np.allclose(points2D, np.array([[0, 0], [320, 240], [640, 480]]))
 
 def test_project_to_image():
     points3D = np.array([[1.0, 1.0, 1.0]])

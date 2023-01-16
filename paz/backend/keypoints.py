@@ -46,7 +46,7 @@ def build_cube_points3D(width, height, depth):
                      point_5, point_6, point_7, point_8])
 
 
-def normalize_keypoints2D(points2D, height, width):
+def normalize_keypoints2D(points2D, height, width, norm_range=(-1, 1)):
     """Transform points2D in image coordinates to normalized coordinates i.e.
         [U, V] -> [-1, 1]. UV have maximum values of [W, H] respectively.
 
@@ -65,18 +65,24 @@ def normalize_keypoints2D(points2D, height, width):
         points2D: Numpy array of shape (num_keypoints, 2).
         height: Int. Height of the image
         width: Int. Width of the image
+        norm_range: Tuple of Floats. (-1, 1) means keypoints will be normalized to the range [-1, 1]
 
     # Returns
         Numpy array of shape (num_keypoints, 2).
     """
-    image_shape = np.array([width, height])
-    points2D = points2D / image_shape  # [W, 0], [0, H] -> [1,  0], [0,  1]
-    points2D = 2.0 * points2D          # [1, 0], [0, 1] -> [2,  0], [0,  2]
-    points2D = points2D - 1.0          # [2, 0], [0, 2] -> [-1, 1], [-1, 1]
-    return points2D
+    length = norm_range[1] - norm_range[0]
+    x = points2D[:, 0]
+    y = points2D[:, 1]
+    u = (x / width) * length + norm_range[0]
+    v = (y / height) * length + norm_range[0]
+    u_v = np.empty(shape=points2D.shape)
+    u_v[:, 0] = u
+    u_v[:, 1] = v
+
+    return u_v
 
 
-def denormalize_keypoints2D(points2D, height, width):
+def denormalize_keypoints2D(points2D, height, width, norm_range=(-1,1)):
     """Transform nomralized points2D to image UV coordinates i.e.
         [-1, 1] -> [U, V]. UV have maximum values of [W, H] respectively.
 
@@ -94,29 +100,20 @@ def denormalize_keypoints2D(points2D, height, width):
         points2D: Numpy array of shape (num_keypoints, 2).
         height: Int. Height of the image
         width: Int. Width of the image
+        norm_range: Tuple of Floats. (-1, 1) means keypoints are assumed to be in the range [-1, 1]
 
     # Returns
         Numpy array of shape (num_keypoints, 2).
     """
-    image_shape = np.array([width, height])
-    points2D = points2D + 1.0          # [-1, 1], [-1, 1] -> [2, 0], [0, 2]
-    points2D = points2D / 2.0          # [2 , 0], [0 , 2] -> [1, 0], [0, 1]
-    points2D = points2D * image_shape  # [1 , 0], [0 , 1] -> [W, 0], [0, H]
-    return points2D
-
-
-"""
-def denormalize_keypoints(keypoints, height, width):
-    for keypoint_arg, keypoint in enumerate(keypoints):
-        x, y = keypoint[:2]
-        # transform key-point coordinates to image coordinates
-        x = (min(max(x, -1), 1) * width / 2 + width / 2) - 0.5
-        # flip since the image coordinates for y are flipped
-        y = height - 0.5 - (min(max(y, -1), 1) * height / 2 + height / 2)
-        x, y = int(round(x)), int(round(y))
-        keypoints[keypoint_arg][:2] = [x, y]
-    return keypoints
-"""
+    length = norm_range[1] - norm_range[0]
+    u = points2D[:, 0]
+    v = points2D[:, 1]
+    x = ((u - norm_range[0]) * width) / length
+    y = ((v - norm_range[0]) * height) / length
+    x_y = np.empty(shape=points2D.shape)
+    x_y[:, 0] = x
+    x_y[:, 1] = y
+    return x_y
 
 
 def cascade_classifier(path):

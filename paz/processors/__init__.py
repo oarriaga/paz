@@ -39,6 +39,7 @@ from .image import RandomContrast
 from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
+from .image import ResizeImageWithPadding
 from .image import RandomImageBlur
 from .image import RandomGaussianBlur
 from .image import RandomFlipImageLeftRight
@@ -96,6 +97,7 @@ from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
 from .keypoints import ComputeOrientationVector
+from .keypoints import RecursiveRefiner
 
 from .standard import ControlMap
 from .standard import ExpandDomain

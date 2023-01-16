@@ -15,6 +15,65 @@ CUBIC = cv2.INTER_CUBIC
 BILINEAR = cv2.INTER_LINEAR
 
 
+def pad_image(image, size, color=[0,0,0]):
+    """
+    Pads the image with a specific color. 
+    *Normally only black (zero-padding) is needed.*
+    # Arguments
+        image: Numpy array.
+        size: List of two ints. -> (width, height) **This must be bigger than the original size of the image**
+        color: List of three ints for RGB color
+    # Returns
+        Numpy array.    
+    """
+    if (type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    if size[0] < image.shape[1] or size[1] < image.shape[0]:
+        raise ValueError('size for padding needs to be bigger than original image size')
+
+    delta_w = size[0] - image.shape[1]
+    delta_h = size[1] - image.shape[0]
+    top = delta_h//2
+    bottom = delta_h-top
+    left = delta_w//2
+    right = delta_w-left
+    return cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT,
+                                       value=color)    
+
+def resize_with_padding(image, size, color=[0,0,0], method=BILINEAR):
+    """
+    resizes image while keeping aspect ratio and adds zero-padding if necessary.
+    Adjusted from : https://jdhao.github.io/2017/11/06/resize-image-to-square-with-padding/#using-opencv
+
+    # Arguments
+        image: Numpy array.
+        size: List of two ints. -> (width, height)
+        method: Flag indicating interpolation method i.e.
+            paz.backend.image.CUBIC
+
+    # Returns
+        Numpy array.
+    """
+
+    if (type(image) != np.ndarray):
+        raise ValueError(
+            'Recieved Image is not of type numpy array', type(image))
+    else:
+        # old_size is in (height, width) format(numpy)
+        old_height, old_width = image.shape[:2]
+        target_width, target_height = size
+        width_ratio = target_width / old_width
+        height_ratio = target_height / old_height
+        ratio = min([width_ratio, height_ratio])
+        new_size = (int(ratio * old_width), int(ratio * old_height))
+
+        image = resize_image(image, new_size)
+
+        new_image = pad_image(image, size=size, color=color)
+        return new_image
+
+
 def resize_image(image, size, method=BILINEAR):
     """Resize image.
 
