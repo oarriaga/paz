@@ -1,14 +1,13 @@
-import numpy as np
 import pytest
+import numpy as np
 import tensorflow as tf
 from keras.utils.layer_utils import count_params
 from tensorflow.keras.layers import Input
-
 from anchors import build_prior_boxes
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientnet_model import efficientnet, get_drop_connect
+from efficientnet import EFFICIENTNET, apply_drop_connect
 
 
 @pytest.fixture
@@ -48,7 +47,7 @@ def get_test_images(image_size, batch_size=1):
 def test_drop_connect(input_shape, dtype, target_shape, is_training):
     x = tf.random.uniform(input_shape, minval=0, maxval=5, dtype=dtype)
     survival_rate = np.random.uniform(0.0, 1.0)
-    y = get_drop_connect(x, is_training, survival_rate)
+    y = apply_drop_connect(x, is_training, survival_rate)
     assert y.shape == target_shape, 'Incorrect target shape'
     assert y.dtype == dtype, 'Incorrect target datatype'
 
@@ -66,59 +65,59 @@ def test_efficientdet_model():
     del detector
 
 
-def test_efficientnet_model():
+def test_EfficientNet_model():
     image_size = 512
     images = get_test_images(image_size)
-    features = efficientnet(images, 'efficientnet-b0', (512, 512, 3))
+    features = EFFICIENTNET(images, (1.0, 1.0, 0.8))
     assert len(features) == 5, 'EfficientNet model features length mismatch'
     del features
 
 
-def test_efficientnet_bottleneck_block():
+def test_EfficientNet_bottleneck_block():
     images = get_test_images(128, 10)
-    output_shape = efficientnet(
-        images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
+    output_shape = EFFICIENTNET(
+        images, (1.0, 1.0, 0.8), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6])[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
-def test_efficientnet_se_block():
+def test_EfficientNet_se_block():
     images = get_test_images(128, 10)
-    output_shape = efficientnet(
-        images, 'efficientnet-b0', (128, 10), strides=[[2, 2]],
+    output_shape = EFFICIENTNET(
+        images, (1.0, 1.0, 0.8), strides=[[2, 2]],
         kernel_sizes=[3], repeats=[3], intro_filters=[3],
         outro_filters=[6], expand_ratios=[6], SE_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
-@pytest.mark.parametrize(('input_shape, backbone, feature_shape,'
+@pytest.mark.parametrize(('input_shape, scaling_coefficients, feature_shape,'
                           'feature_channels'),
                          [
-                            (512,  'efficientnet-b0', (256, 128, 64, 32, 16),
+                            (512,  (1.0, 1.0, 0.8), (256, 128, 64, 32, 16),
                              (16, 24, 40, 112, 320)),
-                            (640,  'efficientnet-b1', (320, 160, 80, 40, 20),
+                            (640,  (1.0, 1.1, 0.8), (320, 160, 80, 40, 20),
                              (16, 24, 40, 112, 320)),
-                            (768,  'efficientnet-b2', (384, 192, 96, 48, 24),
+                            (768,  (1.1, 1.2, 0.7), (384, 192, 96, 48, 24),
                              (16, 24, 48, 120, 352)),
-                            (896,  'efficientnet-b3', (448, 224, 112, 56, 28),
+                            (896,  (1.2, 1.4, 0.7), (448, 224, 112, 56, 28),
                              (24, 32, 48, 136, 384)),
-                            (1024, 'efficientnet-b4', (512, 256, 128, 64, 32),
+                            (1024, (1.4, 1.8, 0.6), (512, 256, 128, 64, 32),
                              (24, 32, 56, 160, 448)),
-                            (1280, 'efficientnet-b5', (640, 320, 160, 80, 40),
+                            (1280, (1.6, 2.2, 0.6), (640, 320, 160, 80, 40),
                              (24, 40, 64, 176, 512)),
-                            (1280, 'efficientnet-b6', (640, 320, 160, 80, 40),
+                            (1280, (1.8, 2.6, 0.5), (640, 320, 160, 80, 40),
                              (32, 40, 72, 200, 576)),
-                            (1536, 'efficientnet-b6', (768, 384, 192, 96, 48),
+                            (1536, (1.8, 2.6, 0.5), (768, 384, 192, 96, 48),
                              (32, 40, 72, 200, 576))
                          ])
-def test_efficientnet_features(input_shape, backbone, feature_shape,
-                               feature_channels):
+def test_EfficientNet_features(input_shape, scaling_coefficients,
+                               feature_shape, feature_channels):
     shape = (input_shape, input_shape, 3)
     image = Input(shape=shape, name='image')
-    branch_tensors = efficientnet(image, backbone, shape)
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
     assert len(branch_tensors) == 5, "Number of features mismatch"
     for branch_tensor, feature_shape_per_tensor, feature_channel  \
             in zip(branch_tensors, feature_shape, feature_channels):
@@ -200,7 +199,7 @@ def test_build_prior_boxes(min_level, max_level, num_scales, aspect_ratios,
         image_size)
     anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
     anchor_W, anchor_H = prior_boxes[:, 2], prior_boxes[:, 3]
-    measured_aspect_ratios = set(np.unique(np.round((anchor_W/anchor_H), 2)))
+    measured_aspect_ratios = set(np.unique(np.round((anchor_W / anchor_H), 2)))
     assert np.logical_and(anchor_x >= 0, anchor_x <= 1).all(), (
         "Invalid x-coordinates of anchor centre")
     assert np.logical_and(anchor_y >= 0, anchor_y <= 1).all(), (

@@ -1,14 +1,10 @@
 import numpy as np
-import tensorflow as tf
 from paz import processors as pr
 from paz.abstract import Processor, SequentialProcessor
 from paz.datasets import VOC
+from paz.pipelines.detection import AugmentDetection
 
-from detection import AugmentDetection
 from efficientdet import EFFICIENTDETD0
-
-# gpus = tf.config.experimental.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(gpus[0], True)
 
 
 class ShowBoxes(Processor):

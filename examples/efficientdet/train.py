@@ -1,16 +1,14 @@
 import argparse
 import os
-
 import tensorflow as tf
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
+from tensorflow.keras.optimizers import SGD
 from paz.abstract import ProcessingSequence
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.pipelines import AugmentDetection
 from paz.processors import TRAIN, VAL
-from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
-from tensorflow.keras.optimizers import SGD
-
 from efficientdet import EFFICIENTDETD0
 
 gpus = tf.config.experimental.list_physical_devices('GPU')

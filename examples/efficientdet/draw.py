@@ -8,70 +8,51 @@ def put_text(image, text, point, scale, color, thickness):
     """Puts text on image.
 
     # Arguments
-        image: Numpy array, input image.
+        image: Array of shape `(H, W, 3)`, input image.
         text: String, text to show.
         point: Tuple, coordinate of top corner of text.
         scale: Float, scale of text.
-        color: Tuple, holding RGB color coordinates.
+        color: Tuple, RGB color coordinates.
         thickness: Int, text thickness.
 
     # Returns
-        Numpy array: image with text.
+        Array: image with text.
     """
-    args = (image, text, point, FONT, scale, color, thickness, LINE)
-    image = cv2.putText(*args)
+    image = cv2.putText(
+        image, text, point, FONT, scale, color, thickness, LINE)
     return image
 
 
-def get_text_size(text, scale, FONT_THICKNESS, FONT=FONT):
+def compute_text_bounds(text, scale, thickness, FONT=FONT):
     """Computes given text size.
 
     # Arguments
         text: Str, given text.
         scale: Float, text scale.
-        FONT_THICKNESS: Int, text line thickness.
+        thickness: Int, text line thickness.
         FONT: Int, text font.
 
     # Returns
         Tuple: holding width and height of given text.
     """
-    text_size = cv2.getTextSize(text, FONT, scale, FONT_THICKNESS)
+    text_size = cv2.getTextSize(text, FONT, scale, thickness)
     return text_size
-
-
-def add_box_border(image, corner_A, corner_B, color, thickness):
-    """ Draws open rectangle.
-
-    # Arguments
-        image: Numpy array, input image.
-        corner_A: List, top left rectangle coordinate.
-        corner_B: List, bottom right rectangle coordinate.
-        color: List, holding rectangle RGB color.
-        thickness: Int, rectangle line thickness.
-
-    # Returns
-        Numpy array: image with open rectangle.
-    """
-    args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
-    image = cv2.rectangle(*args)
-    return image
 
 
 def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
     """ Draws filled rectangle.
 
     # Arguments
-        image: Numpy array, input image.
+        image: Array of shape `(H, W, 3)`, input image.
         corner_A: List, top left rectangle coordinate.
         corner_B: List, bottom right rectangle coordinate.
-        color: List, holding rectangle RGB color.
-        thickness: Int, rectangle line thickness.
+        color: List, rectangle's RGB color.
+        thickness: Int, rectangle's line thickness.
 
     # Returns
-        Numpy array: image with filled rectangle.
+        Array: image of shape `(H, W, 3)` with filled rectangle.
     """
-    args = (image, tuple(corner_A), tuple(corner_B), tuple(color), thickness)
-    image = cv2.rectangle(*args)
+    image = cv2.rectangle(image, corner_A, corner_B, color, thickness)
     return image
 
 
@@ -79,12 +60,12 @@ def make_box_transparent(raw_image, image, alpha=0.25):
     """ Blends two images for transparency.
 
     # Arguments
-        raw_image: Numpy array, first input image.
-        image: Numpy array, second input image.
+        raw_image: Array of shape `(H, W, 3)`, first input image.
+        image: Array of shape `(H, W, 3)`, second input image.
         alpha: Float, sum weight.
 
     # Returns
-        Numpy array: Blended image.
+        Array: Blended image of shape `(H, W, 3)`.
     """
-    image = cv2.addWeighted(raw_image, 1-alpha, image, alpha, 0.0)
+    image = cv2.addWeighted(raw_image, 1 - alpha, image, alpha, 0.0)
     return image
