@@ -202,8 +202,8 @@ def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
                             (1536, (1.8, 2.6, 0.5), (768, 384, 192, 96, 48),
                              (32, 40, 72, 200, 576))
                          ])
-def test_EfficientNet_features(input_shape, scaling_coefficients,
-                               feature_shape, feature_channels):
+def test_EfficientNet_branch(input_shape, scaling_coefficients,
+                             feature_shape, feature_channels):
     shape = (input_shape, input_shape, 3)
     image = Input(shape=shape, name='image')
     branch_tensors = EFFICIENTNET(image, scaling_coefficients)
