@@ -9,7 +9,7 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EfficientNet_to_BiFPN, BiFPN)
 from efficientnet import (EFFICIENTNET, apply_drop_connect, conv_block,
                           MBconv_blocks)
-from efficientdet_blocks import ClassNet
+from efficientdet_blocks import ClassNet, BoxesNet
 
 
 @pytest.fixture
@@ -296,10 +296,57 @@ def test_EfficientDet_ClassNet(input_shape, scaling_coefficients,
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
     class_outputs = ClassNet(*args, num_classes)
-    assert len(class_outputs) == 5
+    assert len(class_outputs) == 5, 'Class outputs length fail'
     for class_output, output_shape in zip(class_outputs, output_shapes):
-        assert class_output.shape == (None, output_shape)
+        assert class_output.shape == (None, output_shape), 'Class outputs'
+        'shape fail'
     del branch_tensors, branches, middles, skips, class_outputs
+
+
+@pytest.mark.parametrize(('input_shape, scaling_coefficients, FPN_num_filters,'
+                          'FPN_cell_repeats, fusion, box_class_repeats,'
+                          'output_shapes'),
+                         [
+                            (512,  (1.0, 1.0, 0.8), 64, 3, 'fast', 3,
+                                (147456, 36864, 9216, 2304, 576)),
+                            (640,  (1.0, 1.1, 0.8), 88, 4, 'fast', 3,
+                                (230400, 57600, 14400, 3600, 900)),
+                            (768,  (1.1, 1.2, 0.7), 112, 5, 'fast', 3,
+                                (331776, 82944, 20736, 5184, 1296)),
+                            (896,  (1.2, 1.4, 0.7), 160, 6, 'fast', 4,
+                                (451584, 112896, 28224, 7056, 1764)),
+                            (1024, (1.4, 1.8, 0.6), 224, 7, 'fast', 4,
+                                (589824, 147456, 36864, 9216, 2304)),
+                            (1280, (1.6, 2.2, 0.6), 288, 7, 'fast', 4,
+                                (921600, 230400, 57600, 14400, 3600)),
+                            (1280, (1.8, 2.6, 0.5), 384, 8, 'sum', 5,
+                                (921600, 230400, 57600, 14400, 3600)),
+                            (1536, (1.8, 2.6, 0.5), 384, 8, 'sum', 5,
+                                (1327104, 331776, 82944, 20736, 5184))
+                         ])
+def test_EfficientDet_BoxesNet(input_shape, scaling_coefficients,
+                               FPN_num_filters, FPN_cell_repeats, fusion,
+                               box_class_repeats, output_shapes):
+    shape = (input_shape, input_shape, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
+    branches, middles, skips = EfficientNet_to_BiFPN(
+        branch_tensors, FPN_num_filters)
+    for _ in range(FPN_cell_repeats):
+        middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
+    aspect_ratios = [1.0, 2.0, 0.5]
+    num_scales = 3
+    num_dims = 4
+    survival_rate = None
+    num_anchors = len(aspect_ratios) * num_scales
+    args = (middles, num_anchors, FPN_num_filters,
+            box_class_repeats, survival_rate)
+    boxes_outputs = BoxesNet(*args, num_dims)
+    assert len(boxes_outputs) == 5
+    for boxes_output, output_shape in zip(boxes_outputs, output_shapes):
+        assert boxes_output.shape == (None, output_shape), 'Boxes outputs'
+        'shape fail'
+    del branch_tensors, branches, middles, skips, boxes_outputs
 
 
 def test_EfficientDet_model():
