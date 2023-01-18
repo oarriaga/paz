@@ -51,19 +51,6 @@ def test_drop_connect(input_shape, dtype, target_shape, is_training):
     assert y.dtype == dtype, 'Incorrect target datatype'
 
 
-def test_efficientdet_model():
-    detector = EFFICIENTDETD0()
-    image_size = 512
-    num_classes = 90
-    expected_output_shape = list(detector.prior_boxes.shape)
-    expected_output_shape[1] = expected_output_shape[1] + num_classes
-    expected_output_shape = [1, ] + expected_output_shape
-    images = get_test_images(image_size)
-    output_shape = list(detector(images).shape)
-    assert output_shape == expected_output_shape, 'Class outputs length fail'
-    del detector
-
-
 def test_EfficientNet_model():
     image_size = 512
     images = get_test_images(image_size)
@@ -122,9 +109,22 @@ def test_EfficientNet_features(input_shape, scaling_coefficients,
             in zip(branch_tensors, feature_shape, feature_channels):
         target_shape = (None, feature_shape_per_tensor,
                         feature_shape_per_tensor, feature_channel)
-        assert branch_tensor.shape == target_shape, ("Shape of features"
+        assert branch_tensor.shape == target_shape, ("Feature shape"
                                                      "mismatch")
     del branch_tensors
+
+
+def test_efficientdet_model():
+    detector = EFFICIENTDETD0()
+    image_size = 512
+    num_classes = 90
+    expected_output_shape = list(detector.prior_boxes.shape)
+    expected_output_shape[1] = expected_output_shape[1] + num_classes
+    expected_output_shape = [1, ] + expected_output_shape
+    images = get_test_images(image_size)
+    output_shape = list(detector(images).shape)
+    assert output_shape == expected_output_shape, 'Class outputs length fail'
+    del detector
 
 
 @pytest.mark.parametrize(('model, model_name, trainable_parameters,'
