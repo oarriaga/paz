@@ -6,7 +6,8 @@ from tensorflow.keras.layers import Input
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
-from efficientnet import EFFICIENTNET, apply_drop_connect
+from efficientnet import (EFFICIENTNET, apply_drop_connect, conv_block,
+                          MBconv_blocks)
 
 
 @pytest.fixture
@@ -30,6 +31,20 @@ def get_test_images(image_size, batch_size=1):
         image: Zeros of shape (batch_size, H, W, C)
     """
     return tf.zeros((batch_size, image_size, image_size, 3), dtype=tf.float32)
+
+
+def get_efficientnet_hyperparameters():
+    efficientnet_hyperparameters = {
+        "intro_filters": [32, 16, 24, 40, 80, 112, 192],
+        "outro_filters": [16, 24, 40, 80, 112, 192, 320],
+        "D_divisor": 8,
+        "kernel_sizes": [3, 3, 5, 3, 5, 5, 3],
+        "repeats": [1, 2, 2, 3, 3, 4, 1],
+        "SE_ratio": 0.25,
+        "strides": [[1, 1], [2, 2], [2, 2], [2, 2], [1, 1], [2, 2], [1, 1]],
+        "expand_ratios": [1, 6, 6, 6, 6, 6, 6]
+    }
+    return efficientnet_hyperparameters
 
 
 @pytest.mark.parametrize(('input_shape, dtype, target_shape, is_training'),
@@ -77,6 +92,94 @@ def test_EfficientNet_se_block():
         outro_filters=[6], expand_ratios=[6], SE_ratio=0.8)[0].shape
     expected_shape = (10, 32, 32, 8)
     assert output_shape == expected_shape, 'SE Block output shape mismatch'
+
+
+@pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
+                         [
+                            (512,  (1.0, 1.0, 0.8), (1, 256, 256, 32)),
+                            (640,  (1.0, 1.1, 0.8), (1, 320, 320, 32)),
+                            (768,  (1.1, 1.2, 0.7), (1, 384, 384, 32)),
+                            (896,  (1.2, 1.4, 0.7), (1, 448, 448, 40)),
+                            (1024, (1.4, 1.8, 0.6), (1, 512, 512, 48)),
+                            (1280, (1.6, 2.2, 0.6), (1, 640, 640, 48)),
+                            (1280, (1.8, 2.6, 0.5), (1, 640, 640, 56)),
+                            (1536, (1.8, 2.6, 0.5), (1, 768, 768, 56)),
+                         ])
+def test_EfficientNet_conv_block(image_size, scaling_coefficients,
+                                 output_shape):
+    images = get_test_images(image_size, 1)
+    efficientnet_hyperparameters = get_efficientnet_hyperparameters()
+    intro_filters = efficientnet_hyperparameters["intro_filters"]
+    D_divisor = efficientnet_hyperparameters["D_divisor"]
+    W_coefficient, D_coefficient, survival_rate = scaling_coefficients
+    x = conv_block(images, intro_filters, W_coefficient, D_divisor)
+    assert x.shape == output_shape, "Output shape mismatch"
+
+
+@pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
+                         [
+                            (512, (1.0, 1.0, 0.8), [(1, 256, 256, 16),
+                                                    (1, 128, 128, 24),
+                                                    (1, 64, 64, 40),
+                                                    (1, 32, 32, 112),
+                                                    (1, 16, 16, 320)]),
+                            (640, (1.0, 1.1, 0.8), [(1, 320, 320, 16),
+                                                    (1, 160, 160, 24),
+                                                    (1, 80, 80, 40),
+                                                    (1, 40, 40, 112),
+                                                    (1, 20, 20, 320)]),
+                            (768, (1.1, 1.2, 0.7), [(1, 384, 384, 16),
+                                                    (1, 192, 192, 24),
+                                                    (1, 96, 96, 48),
+                                                    (1, 48, 48, 120),
+                                                    (1, 24, 24, 352)]),
+                            (896,  (1.2, 1.4, 0.7), [(1, 448, 448, 24),
+                                                     (1, 224, 224, 32),
+                                                     (1, 112, 112, 48),
+                                                     (1, 56, 56, 136),
+                                                     (1, 28, 28, 384)]),
+                            (1024, (1.4, 1.8, 0.6), [(1, 512, 512, 24),
+                                                     (1, 256, 256, 32),
+                                                     (1, 128, 128, 56),
+                                                     (1, 64, 64, 160),
+                                                     (1, 32, 32, 448)]),
+                            (1280, (1.6, 2.2, 0.6), [(1, 640, 640, 24),
+                                                     (1, 320, 320, 40),
+                                                     (1, 160, 160, 64),
+                                                     (1, 80, 80, 176),
+                                                     (1, 40, 40, 512)]),
+                            (1280, (1.8, 2.6, 0.5), [(1, 640, 640, 32),
+                                                     (1, 320, 320, 40),
+                                                     (1, 160, 160, 72),
+                                                     (1, 80, 80, 200),
+                                                     (1, 40, 40, 576)]),
+                            (1536, (1.8, 2.6, 0.5), [(1, 768, 768, 32),
+                                                     (1, 384, 384, 40),
+                                                     (1, 192, 192, 72),
+                                                     (1, 96, 96, 200),
+                                                     (1, 48, 48, 576)])
+                         ])
+def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
+                                    output_shape):
+    images = get_test_images(image_size, 1)
+    efficientnet_hyperparameters = get_efficientnet_hyperparameters()
+    intro_filters = efficientnet_hyperparameters["intro_filters"]
+    D_divisor = efficientnet_hyperparameters["D_divisor"]
+    kernel_sizes = efficientnet_hyperparameters["kernel_sizes"]
+    outro_filters = efficientnet_hyperparameters["outro_filters"]
+    repeats = efficientnet_hyperparameters["repeats"]
+    SE_ratio = efficientnet_hyperparameters["SE_ratio"]
+    strides = efficientnet_hyperparameters["strides"]
+    expand_ratios = efficientnet_hyperparameters["expand_ratios"]
+    W_coefficient, D_coefficient, survival_rate = scaling_coefficients
+    x = conv_block(images, intro_filters, W_coefficient, D_divisor)
+    x = MBconv_blocks(
+        x, kernel_sizes, intro_filters, outro_filters,
+        W_coefficient, D_coefficient, D_divisor, repeats,
+        SE_ratio, survival_rate, strides, expand_ratios)
+    assert len(x) == len(output_shape), "Feature count mismatch"
+    for feature, target_shape in zip(x, output_shape):
+        assert feature.shape == target_shape, "Feature shape mismatch"
 
 
 @pytest.mark.parametrize(('input_shape, scaling_coefficients, feature_shape,'
