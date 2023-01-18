@@ -5,7 +5,8 @@ from keras.utils.layer_utils import count_params
 from tensorflow.keras.layers import Input
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
-                          EFFICIENTDETD6, EFFICIENTDETD7)
+                          EFFICIENTDETD6, EFFICIENTDETD7,
+                          EfficientNet_to_BiFPN, BiFPN)
 from efficientnet import (EFFICIENTNET, apply_drop_connect, conv_block,
                           MBconv_blocks)
 
@@ -217,6 +218,52 @@ def test_EfficientNet_branch(input_shape, scaling_coefficients,
         assert branch_tensor.shape == target_shape, ("Feature shape"
                                                      "mismatch")
     del branch_tensors
+
+
+@pytest.mark.parametrize(('input_shape, scaling_coefficients, FPN_num_filters,'
+                          'FPN_cell_repeats, fusion, output_shapes'),
+                         [
+                            (512,  (1.0, 1.0, 0.8), 64, 3, 'fast',
+                                [(64, 64, 64), (32, 32, 64), (16, 16, 64),
+                                 (8, 8, 64), (4, 4, 64)]),
+                            (640,  (1.0, 1.1, 0.8), 88, 4, 'fast',
+                                [(80, 80, 88), (40, 40, 88), (20, 20, 88),
+                                 (10, 10, 88), (5, 5, 88)]),
+                            (768,  (1.1, 1.2, 0.7), 112, 5, 'fast',
+                                [(96, 96, 112), (48, 48, 112), (24, 24, 112),
+                                 (12, 12, 112), (6, 6, 112)]),
+                            (896,  (1.2, 1.4, 0.7), 160, 6, 'fast',
+                                [(112, 112, 160), (56, 56, 160), (28, 28, 160),
+                                 (14, 14, 160), (7, 7, 160)]),
+                            (1024, (1.4, 1.8, 0.6), 224, 7, 'fast',
+                                [(128, 128, 224), (64, 64, 224), (32, 32, 224),
+                                 (16, 16, 224), (8, 8, 224)]),
+                            (1280, (1.6, 2.2, 0.6), 288, 7, 'fast',
+                                [(160, 160, 288), (80, 80, 288), (40, 40, 288),
+                                 (20, 20, 288), (10, 10, 288)]),
+                            (1280, (1.8, 2.6, 0.5), 384, 8, 'sum',
+                                [(160, 160, 384), (80, 80, 384), (40, 40, 384),
+                                 (20, 20, 384), (10, 10, 384)]),
+                            (1536, (1.8, 2.6, 0.5), 384, 8, 'sum',
+                                [(192, 192, 384), (96, 96, 384), (48, 48, 384),
+                                 (24, 24, 384), (12, 12, 384)]),
+                         ])
+def test_EfficientDet_BiFPN(input_shape, scaling_coefficients, FPN_num_filters,
+                            FPN_cell_repeats, fusion, output_shapes):
+    shape = (input_shape, input_shape, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
+    branches, middles, skips = EfficientNet_to_BiFPN(
+        branch_tensors, FPN_num_filters)
+    for _ in range(FPN_cell_repeats):
+        middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
+    assert len(middles) == 5, "Incorrect middle features count"
+    assert len(skips) == 5, "Incorrect skip features count"
+    for middle, skip,  output_shape in zip(middles, skips, output_shapes):
+        target_shape = (None,) + output_shape
+        assert middle.shape == target_shape, "Middle feature shape mismatch"
+        assert skip.shape == target_shape, "Skip feature shape mismatch"
+    del branch_tensors, branches, middles, skips
 
 
 def test_efficientdet_model():
