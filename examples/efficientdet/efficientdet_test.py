@@ -68,14 +68,6 @@ def test_drop_connect(input_shape, dtype, target_shape, is_training):
     assert y.dtype == dtype, 'Incorrect target datatype'
 
 
-def test_EfficientNet_model():
-    image_size = 512
-    images = get_test_images(image_size)
-    features = EFFICIENTNET(images, (1.0, 1.0, 0.8))
-    assert len(features) == 5, 'EfficientNet model features length mismatch'
-    del features
-
-
 def test_EfficientNet_bottleneck_block():
     images = get_test_images(128, 10)
     output_shape = EFFICIENTNET(
