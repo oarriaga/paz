@@ -9,6 +9,7 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EfficientNet_to_BiFPN, BiFPN)
 from efficientnet import (EFFICIENTNET, apply_drop_connect, conv_block,
                           MBconv_blocks)
+from efficientdet_blocks import ClassNet
 
 
 @pytest.fixture
@@ -34,7 +35,7 @@ def get_test_images(image_size, batch_size=1):
     return tf.zeros((batch_size, image_size, image_size, 3), dtype=tf.float32)
 
 
-def get_efficientnet_hyperparameters():
+def get_EfficientNet_hyperparameters():
     efficientnet_hyperparameters = {
         "intro_filters": [32, 16, 24, 40, 80, 112, 192],
         "outro_filters": [16, 24, 40, 80, 112, 192, 320],
@@ -109,7 +110,7 @@ def test_EfficientNet_se_block():
 def test_EfficientNet_conv_block(image_size, scaling_coefficients,
                                  output_shape):
     images = get_test_images(image_size, 1)
-    efficientnet_hyperparameters = get_efficientnet_hyperparameters()
+    efficientnet_hyperparameters = get_EfficientNet_hyperparameters()
     intro_filters = efficientnet_hyperparameters["intro_filters"]
     D_divisor = efficientnet_hyperparameters["D_divisor"]
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
@@ -164,7 +165,7 @@ def test_EfficientNet_conv_block(image_size, scaling_coefficients,
 def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
                                     output_shape):
     images = get_test_images(image_size, 1)
-    efficientnet_hyperparameters = get_efficientnet_hyperparameters()
+    efficientnet_hyperparameters = get_EfficientNet_hyperparameters()
     intro_filters = efficientnet_hyperparameters["intro_filters"]
     D_divisor = efficientnet_hyperparameters["D_divisor"]
     kernel_sizes = efficientnet_hyperparameters["kernel_sizes"]
@@ -264,7 +265,52 @@ def test_EfficientDet_BiFPN(input_shape, scaling_coefficients, FPN_num_filters,
     del branch_tensors, branches, middles, skips
 
 
-def test_efficientdet_model():
+@pytest.mark.parametrize(('input_shape, scaling_coefficients, FPN_num_filters,'
+                          'FPN_cell_repeats, fusion, box_class_repeats,'
+                          'output_shapes'),
+                         [
+                            (512,  (1.0, 1.0, 0.8), 64, 3, 'fast', 3,
+                                (774144, 193536, 48384, 12096, 3024)),
+                            (640,  (1.0, 1.1, 0.8), 88, 4, 'fast', 3,
+                                (1209600, 302400, 75600, 18900, 4725)),
+                            (768,  (1.1, 1.2, 0.7), 112, 5, 'fast', 3,
+                                (1741824, 435456, 108864, 27216, 6804)),
+                            (896,  (1.2, 1.4, 0.7), 160, 6, 'fast', 4,
+                                (2370816, 592704, 148176, 37044, 9261)),
+                            (1024, (1.4, 1.8, 0.6), 224, 7, 'fast', 4,
+                                (3096576, 774144, 193536, 48384, 12096)),
+                            (1280, (1.6, 2.2, 0.6), 288, 7, 'fast', 4,
+                                (4838400, 1209600, 302400, 75600, 18900)),
+                            (1280, (1.8, 2.6, 0.5), 384, 8, 'sum', 5,
+                                (4838400, 1209600, 302400, 75600, 18900)),
+                            (1536, (1.8, 2.6, 0.5), 384, 8, 'sum', 5,
+                                (6967296, 1741824, 435456, 108864, 27216))
+                         ])
+def test_EfficientDet_ClassNet(input_shape, scaling_coefficients,
+                               FPN_num_filters, FPN_cell_repeats, fusion,
+                               box_class_repeats, output_shapes):
+    shape = (input_shape, input_shape, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
+    branches, middles, skips = EfficientNet_to_BiFPN(
+        branch_tensors, FPN_num_filters)
+    for _ in range(FPN_cell_repeats):
+        middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
+    aspect_ratios = [1.0, 2.0, 0.5]
+    num_scales = 3
+    num_classes = 21
+    survival_rate = None
+    num_anchors = len(aspect_ratios) * num_scales
+    args = (middles, num_anchors, FPN_num_filters,
+            box_class_repeats, survival_rate)
+    class_outputs = ClassNet(*args, num_classes)
+    assert len(class_outputs) == 5
+    for class_output, output_shape in zip(class_outputs, output_shapes):
+        assert class_output.shape == (None, output_shape)
+    del branch_tensors, branches, middles, skips, class_outputs
+
+
+def test_EfficientDet_model():
     detector = EFFICIENTDETD0()
     image_size = 512
     num_classes = 90
@@ -298,7 +344,7 @@ def test_efficientdet_model():
                             (EFFICIENTDETD7, 'efficientdet-d7', 51871934,
                                 311984, (1536, 1536, 3), (441936, 94)),
                          ])
-def test_efficientdet_architecture(model, model_name, model_input_name,
+def test_EfficientDet_architecture(model, model_name, model_input_name,
                                    model_output_name, trainable_parameters,
                                    non_trainable_parameters, input_shape,
                                    output_shape):
