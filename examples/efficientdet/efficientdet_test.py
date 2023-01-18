@@ -114,6 +114,7 @@ def test_EfficientNet_conv_block(image_size, scaling_coefficients,
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
     x = conv_block(images, intro_filters, W_coefficient, D_divisor)
     assert x.shape == output_shape, "Output shape mismatch"
+    del x
 
 
 @pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
@@ -180,6 +181,7 @@ def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
     assert len(x) == len(output_shape), "Feature count mismatch"
     for feature, target_shape in zip(x, output_shape):
         assert feature.shape == target_shape, "Feature shape mismatch"
+    del x
 
 
 @pytest.mark.parametrize(('input_shape, scaling_coefficients, feature_shape,'
