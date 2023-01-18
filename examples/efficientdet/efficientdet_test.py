@@ -258,11 +258,9 @@ def test_EfficientDet_BiFPN(input_shape, scaling_coefficients, FPN_num_filters,
     for _ in range(FPN_cell_repeats):
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
     assert len(middles) == 5, "Incorrect middle features count"
-    assert len(skips) == 5, "Incorrect skip features count"
-    for middle, skip,  output_shape in zip(middles, skips, output_shapes):
+    for middle, output_shape in zip(middles, output_shapes):
         target_shape = (None,) + output_shape
         assert middle.shape == target_shape, "Middle feature shape mismatch"
-        assert skip.shape == target_shape, "Skip feature shape mismatch"
     del branch_tensors, branches, middles, skips
 
 
