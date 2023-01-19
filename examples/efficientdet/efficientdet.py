@@ -15,7 +15,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
                  anchor_scale, fusion, return_base, model_name, EfficientNet,
                  num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
                  survival_rate=None, num_dims=4):
-    """ Creates EfficientDet model.
+    """Creates EfficientDet model.
 
     # Arguments
         image: Tensor of shape `(batch_size, input_shape)`.
@@ -88,7 +88,7 @@ def EFFICIENTDETD0(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d0',
                    scaling_coefficients=(1.0, 1.0, 0.8)):
-    """ Instantiates EfficientDet-D0 model.
+    """Instantiates EfficientDet-D0 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -123,7 +123,7 @@ def EFFICIENTDETD1(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d1',
                    scaling_coefficients=(1.0, 1.1, 0.8)):
-    """ Instantiates EfficientDet-D1 model.
+    """Instantiates EfficientDet-D1 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -158,7 +158,7 @@ def EFFICIENTDETD2(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d2',
                    scaling_coefficients=(1.1, 1.2, 0.7)):
-    """ Instantiate EfficientDet-D2 model.
+    """Instantiate EfficientDet-D2 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -193,7 +193,7 @@ def EFFICIENTDETD3(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d3',
                    scaling_coefficients=(1.2, 1.4, 0.7)):
-    """ Instantiates EfficientDet-D3 model.
+    """Instantiates EfficientDet-D3 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -228,7 +228,7 @@ def EFFICIENTDETD4(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d4',
                    scaling_coefficients=(1.4, 1.8, 0.6)):
-    """ Instantiates EfficientDet-D4 model.
+    """Instantiates EfficientDet-D4 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -263,7 +263,7 @@ def EFFICIENTDETD5(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientdet-d5',
                    scaling_coefficients=(1.6, 2.2, 0.6)):
-    """ Instantiates EfficientDet-D5 model.
+    """Instantiates EfficientDet-D5 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -298,7 +298,7 @@ def EFFICIENTDETD6(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='sum', return_base=False,
                    model_name='efficientdet-d6',
                    scaling_coefficients=(1.8, 2.6, 0.5)):
-    """ Instantiates EfficientDet-D6 model.
+    """Instantiates EfficientDet-D6 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -333,7 +333,7 @@ def EFFICIENTDETD7(num_classes=90, base_weights='COCO', head_weights='COCO',
                    fusion='sum', return_base=False,
                    model_name='efficientdet-d7',
                    scaling_coefficients=(1.8, 2.6, 0.5)):
-    """ Instantiates EfficientDet-D7 model.
+    """Instantiates EfficientDet-D7 model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -368,7 +368,7 @@ def EFFICIENTDETD7x(num_classes=90, base_weights='COCO', head_weights='COCO',
                     fusion='sum', return_base=False,
                     model_name='efficientdet-d7x',
                     scaling_coefficients=(2.0, 3.1, 0.5)):
-    """ Instantiates EfficientDet-D7x model.
+    """Instantiates EfficientDet-D7x model.
 
     # Arguments
         num_classes: Int, number of object classes.
