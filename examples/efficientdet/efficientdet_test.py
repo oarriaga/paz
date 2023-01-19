@@ -10,6 +10,7 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
 from efficientnet import (EFFICIENTNET, apply_drop_connect, conv_block,
                           MBconv_blocks)
 from efficientdet_blocks import ClassNet, BoxesNet
+from layers import FuseFeature
 
 
 @pytest.fixture
@@ -66,6 +67,7 @@ def test_drop_connect(input_shape, dtype, target_shape, is_training):
     y = apply_drop_connect(x, is_training, survival_rate)
     assert y.shape == target_shape, 'Incorrect target shape'
     assert y.dtype == dtype, 'Incorrect target datatype'
+    del x, y
 
 
 @pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
@@ -84,8 +86,9 @@ def test_EfficientNet_bottleneck_block(image_size, scaling_coefficients,
     shape = (image_size, image_size, 3)
     image = Input(shape=shape, name='image')
     branch_tensors = EFFICIENTNET(image, scaling_coefficients)
-    assert branch_tensors[0].shape == (None, ) + output_shape, 'Bottleneck'
-    'block output shape mismatch'
+    assert branch_tensors[0].shape == (None, ) + output_shape, (
+        'Bottleneck block output shape mismatch')
+    del image, branch_tensors
 
 
 @pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
@@ -104,8 +107,9 @@ def test_EfficientNet_SE_block(image_size, scaling_coefficients,
     shape = (image_size, image_size, 3)
     image = Input(shape=shape, name='image')
     branch_tensors = EFFICIENTNET(image, scaling_coefficients, SE_ratio=0.8)
-    assert branch_tensors[0].shape == (None, ) + output_shape, 'SE block'
-    'output shape mismatch'
+    assert branch_tensors[0].shape == (None, ) + output_shape, (
+        'SE block output shape mismatch')
+    del image, branch_tensors
 
 
 @pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
@@ -128,7 +132,7 @@ def test_EfficientNet_conv_block(image_size, scaling_coefficients,
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
     x = conv_block(images, intro_filters, W_coefficient, D_divisor)
     assert x.shape == output_shape, "Output shape mismatch"
-    del x
+    del images, x
 
 
 @pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
@@ -195,7 +199,7 @@ def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
     assert len(x) == len(output_shape), "Feature count mismatch"
     for feature, target_shape in zip(x, output_shape):
         assert feature.shape == target_shape, "Feature shape mismatch"
-    del x
+    del images, x
 
 
 @pytest.mark.parametrize(('input_shape, scaling_coefficients, feature_shape,'
@@ -228,9 +232,35 @@ def test_EfficientNet_branch(input_shape, scaling_coefficients,
             in zip(branch_tensors, feature_shape, feature_channels):
         target_shape = (None, feature_shape_per_tensor,
                         feature_shape_per_tensor, feature_channel)
-        assert branch_tensor.shape == target_shape, ("Feature shape"
-                                                     "mismatch")
-    del branch_tensors
+        assert branch_tensor.shape == target_shape, (
+            "Feature shape mismatch")
+    del image, branch_tensors
+
+
+@pytest.mark.parametrize(('input_shape, fusion'),
+                         [
+                            ((5, 5), 'fast'),
+                            ((10, 10), 'sum'),
+                            ((15, 10), 'fast'),
+                            ((10, 15), 'sum'),
+                            ((15, 25), 'fast'),
+                            ((25, 15), 'sum'),
+                            ((30, 25), 'fast'),
+                            ((25, 30), 'sum')
+                         ])
+def test_fuse_feature(input_shape, fusion):
+    x = tf.random.uniform(input_shape, minval=0, maxval=1,
+                          dtype=tf.dtypes.float32)
+    y = tf.random.uniform(input_shape, minval=0, maxval=1,
+                          dtype=tf.dtypes.float32)
+    z = tf.random.uniform(input_shape, minval=0, maxval=1,
+                          dtype=tf.dtypes.float32)
+    to_fuse = [x, y, z]
+    fused_feature = FuseFeature(fusion=fusion)(to_fuse, fusion)
+    assert fused_feature.shape == input_shape, 'Incorrect target shape'
+    assert fused_feature.dtype == tf.dtypes.float32, (
+        'Incorrect target datatype')
+    del x, y, z
 
 
 @pytest.mark.parametrize(('input_shape, scaling_coefficients, FPN_num_filters,'
@@ -318,8 +348,8 @@ def test_EfficientDet_ClassNet(input_shape, scaling_coefficients,
     class_outputs = ClassNet(*args, num_classes)
     assert len(class_outputs) == 5, 'Class outputs length fail'
     for class_output, output_shape in zip(class_outputs, output_shapes):
-        assert class_output.shape == (None, output_shape), 'Class outputs'
-        'shape fail'
+        assert class_output.shape == (None, output_shape), (
+            'Class outputs shape fail')
     del branch_tensors, branches, middles, skips, class_outputs
 
 
@@ -364,22 +394,9 @@ def test_EfficientDet_BoxesNet(input_shape, scaling_coefficients,
     boxes_outputs = BoxesNet(*args, num_dims)
     assert len(boxes_outputs) == 5
     for boxes_output, output_shape in zip(boxes_outputs, output_shapes):
-        assert boxes_output.shape == (None, output_shape), 'Boxes outputs'
-        'shape fail'
+        assert boxes_output.shape == (None, output_shape), (
+            'Boxes outputs shape fail')
     del branch_tensors, branches, middles, skips, boxes_outputs
-
-
-def test_EfficientDet_model():
-    detector = EFFICIENTDETD0()
-    image_size = 512
-    num_classes = 90
-    expected_output_shape = list(detector.prior_boxes.shape)
-    expected_output_shape[1] = expected_output_shape[1] + num_classes
-    expected_output_shape = [1, ] + expected_output_shape
-    images = get_test_images(image_size)
-    output_shape = list(detector(images).shape)
-    assert output_shape == expected_output_shape, 'Class outputs length fail'
-    del detector
 
 
 @pytest.mark.parametrize(('model, model_name, trainable_parameters,'
@@ -426,6 +443,29 @@ def test_EfficientDet_architecture(model, model_name, model_input_name,
     assert implemented_model.output_shape[1:] == output_shape, (
         "Incorrect output shape")
     del implemented_model
+
+
+@pytest.mark.parametrize(('model, image_size'),
+                         [
+                            (EFFICIENTDETD0, 512),
+                            (EFFICIENTDETD1, 640),
+                            (EFFICIENTDETD2, 768),
+                            (EFFICIENTDETD3, 896),
+                            (EFFICIENTDETD4, 1024),
+                            (EFFICIENTDETD5, 1280),
+                            (EFFICIENTDETD6, 1280),
+                            (EFFICIENTDETD7, 1536),
+                         ])
+def test_EfficientDet_output(model, image_size):
+    detector = model()
+    image = get_test_images(image_size)
+    output_shape = list(detector(image).shape)
+    expected_output_shape = list(detector.prior_boxes.shape)
+    num_classes = 90
+    expected_output_shape[1] = expected_output_shape[1] + num_classes
+    expected_output_shape = [1, ] + expected_output_shape
+    assert output_shape == expected_output_shape, 'Outputs length fail'
+    del detector
 
 
 @pytest.mark.parametrize(('model, aspect_ratios, num_boxes'),
