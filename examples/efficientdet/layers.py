@@ -10,10 +10,18 @@ class GetDropConnect(Layer):
     of the model and encouraging the model to rely on a more diverse set
     of weights.
 
+    # Arguments
+        survival_rate: Float, survival probability to drop features.
+
+    # Properties
+        survival_rate: Float.
+
+    # Methods
+        call()
+
     # References
         [Deep Networks with Stochastic Depth]
         (https://arxiv.org/pdf/1603.09382.pdf)
-
     """
     def __init__(self, survival_rate, **kwargs):
         super(GetDropConnect, self).__init__(**kwargs)
@@ -43,10 +51,22 @@ class FuseFeature(Layer):
     different features and create a more robust and accurate
     representation of the input image.
 
+    # Arguments
+        fusion: Str, feature fusion method.
+
+    # Properties
+        fusion: Str.
+
+    # Methods
+        build()
+        call()
+        _fuse_fast()
+        _fuse_sum()
+        get_config()
+
     # References
         [EfficientDet: Scalable and Efficient Object Detection]
         (https://arxiv.org/pdf/1911.09070.pdf)
-
     """
     def __init__(self, fusion, **kwargs):
         super().__init__(**kwargs)
@@ -65,14 +85,6 @@ class FuseFeature(Layer):
         self.w = self.add_weight(*args, trainable=True)
 
     def call(self, inputs, fusion):
-        """
-        # Arguments
-            inputs: Tensor, features to fuse.
-            fusion: Str, feature fusion method.
-
-        # Returns
-            x: Tensor, fused feature.
-        """
         inputs = [input for input in inputs if input is not None]
         return self.fuse_method(inputs)
 

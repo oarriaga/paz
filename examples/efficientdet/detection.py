@@ -13,6 +13,12 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         weighted: Bool, whether to weight bounding box color.
         scale: Float. Scale of text drawn.
         with_score: Bool, denoting if confidence be shown.
+
+    # Methods
+        compute_box_color()
+        compute_text()
+        get_text_box_parameters()
+        call()
     """
     def __init__(
             self, class_names=None, colors=None,
