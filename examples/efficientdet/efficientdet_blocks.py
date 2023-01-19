@@ -15,7 +15,7 @@ def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
     The built head includes ClassNet and BoxNet for classification and
     regression respectively.
 
-    Args:
+    # Arguments
         middles: List, BiFPN layer output.
         num_classes: Int, number of object classes.
         num_dims: Int, number of output dimensions to regress.
@@ -26,7 +26,7 @@ def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
             and classification blocks.
         survival_rate: Float, used in drop connect.
 
-    Returns:
+    # Returns
         outputs: Tensor of shape `[num_boxes, num_classes+num_dims]`
     """
     num_anchors = len(aspect_ratios) * num_scales
