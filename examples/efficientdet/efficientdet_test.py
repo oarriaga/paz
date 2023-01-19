@@ -68,14 +68,24 @@ def test_drop_connect(input_shape, dtype, target_shape, is_training):
     assert y.dtype == dtype, 'Incorrect target datatype'
 
 
-def test_EfficientNet_bottleneck_block():
-    images = get_test_images(128, 10)
-    output_shape = EFFICIENTNET(
-        images, (1.0, 1.0, 0.8), strides=[[2, 2]],
-        kernel_sizes=[3], repeats=[3], intro_filters=[3],
-        outro_filters=[6], expand_ratios=[6])[0].shape
-    expected_shape = (10, 32, 32, 8)
-    assert output_shape == expected_shape, 'SE Block output shape mismatch'
+@pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
+                         [
+                            (512,  (1.0, 1.0, 0.8), (256, 256, 16)),
+                            (640,  (1.0, 1.1, 0.8), (320, 320, 16)),
+                            (768,  (1.1, 1.2, 0.7), (384, 384, 16)),
+                            (896,  (1.2, 1.4, 0.7), (448, 448, 24)),
+                            (1024, (1.4, 1.8, 0.6), (512, 512, 24)),
+                            (1280, (1.6, 2.2, 0.6), (640, 640, 24)),
+                            (1280, (1.8, 2.6, 0.5), (640, 640, 32)),
+                            (1536, (1.8, 2.6, 0.5), (768, 768, 32)),
+                         ])
+def test_EfficientNet_bottleneck_block(image_size, scaling_coefficients,
+                                       output_shape):
+    shape = (image_size, image_size, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
+    assert branch_tensors[0].shape == (None, ) + output_shape, 'SE Block'
+    'output shape mismatch'
 
 
 def test_EfficientNet_se_block():
@@ -252,7 +262,7 @@ def test_EfficientDet_BiFPN(input_shape, scaling_coefficients, FPN_num_filters,
         middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
     assert len(middles) == 5, "Incorrect middle features count"
     for middle, output_shape in zip(middles, output_shapes):
-        target_shape = (None,) + output_shape
+        target_shape = (None, ) + output_shape
         assert middle.shape == target_shape, "Middle feature shape mismatch"
     del branch_tensors, branches, middles, skips
 
@@ -419,7 +429,7 @@ def test_EfficientDet_architecture(model, model_name, model_input_name,
                             (EFFICIENTDETD6, [1.0, 2.0, 0.5], 306900),
                             (EFFICIENTDETD7, [1.0, 2.0, 0.5], 441936),
                          ])
-def test_build_prior_boxes(model, aspect_ratios, num_boxes):
+def test_prior_boxes(model, aspect_ratios, num_boxes):
     model = model()
     prior_boxes = model.prior_boxes
     anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
