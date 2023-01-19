@@ -84,18 +84,28 @@ def test_EfficientNet_bottleneck_block(image_size, scaling_coefficients,
     shape = (image_size, image_size, 3)
     image = Input(shape=shape, name='image')
     branch_tensors = EFFICIENTNET(image, scaling_coefficients)
-    assert branch_tensors[0].shape == (None, ) + output_shape, 'SE Block'
+    assert branch_tensors[0].shape == (None, ) + output_shape, 'Bottleneck'
+    'block output shape mismatch'
+
+
+@pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
+                         [
+                            (512,  (1.0, 1.0, 0.8), (256, 256, 16)),
+                            (640,  (1.0, 1.1, 0.8), (320, 320, 16)),
+                            (768,  (1.1, 1.2, 0.7), (384, 384, 16)),
+                            (896,  (1.2, 1.4, 0.7), (448, 448, 24)),
+                            (1024, (1.4, 1.8, 0.6), (512, 512, 24)),
+                            (1280, (1.6, 2.2, 0.6), (640, 640, 24)),
+                            (1280, (1.8, 2.6, 0.5), (640, 640, 32)),
+                            (1536, (1.8, 2.6, 0.5), (768, 768, 32)),
+                         ])
+def test_EfficientNet_SE_block(image_size, scaling_coefficients,
+                               output_shape):
+    shape = (image_size, image_size, 3)
+    image = Input(shape=shape, name='image')
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients, SE_ratio=0.8)
+    assert branch_tensors[0].shape == (None, ) + output_shape, 'SE block'
     'output shape mismatch'
-
-
-def test_EfficientNet_se_block():
-    images = get_test_images(128, 10)
-    output_shape = EFFICIENTNET(
-        images, (1.0, 1.0, 0.8), strides=[[2, 2]],
-        kernel_sizes=[3], repeats=[3], intro_filters=[3],
-        outro_filters=[6], expand_ratios=[6], SE_ratio=0.8)[0].shape
-    expected_shape = (10, 32, 32, 8)
-    assert output_shape == expected_shape, 'SE Block output shape mismatch'
 
 
 @pytest.mark.parametrize(('image_size, scaling_coefficients, output_shape'),
