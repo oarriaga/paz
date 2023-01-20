@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from keras.utils.layer_utils import count_params
 from tensorflow.keras.layers import Input
+from tensorflow.keras.utils import get_file
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7,
@@ -21,6 +22,13 @@ def model_input_name():
 @pytest.fixture
 def model_output_name():
     return 'boxes'
+
+
+@pytest.fixture
+def model_weight_path():
+    WEIGHT_PATH = (
+        'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
+    return WEIGHT_PATH
 
 
 def get_test_images(image_size, batch_size=1):
@@ -466,6 +474,34 @@ def test_EfficientDet_output(model, image_size):
     expected_output_shape = [1, ] + expected_output_shape
     assert output_shape == expected_output_shape, 'Outputs length fail'
     del detector
+
+
+@pytest.mark.parametrize(('model, model_name'),
+                         [
+                            (EFFICIENTDETD0, 'efficientdet-d0'),
+                            (EFFICIENTDETD1, 'efficientdet-d1'),
+                            (EFFICIENTDETD2, 'efficientdet-d2'),
+                            (EFFICIENTDETD3, 'efficientdet-d3'),
+                            (EFFICIENTDETD4, 'efficientdet-d4'),
+                            (EFFICIENTDETD5, 'efficientdet-d5'),
+                            (EFFICIENTDETD6, 'efficientdet-d6'),
+                            (EFFICIENTDETD7, 'efficientdet-d7'),
+                         ])
+def test_load_weights(model, model_name, model_weight_path):
+    WEIGHT_PATH = model_weight_path
+    base_weights = ['COCO', 'COCO']
+    head_weights = ['COCO', None]
+    num_classes = [90, 21]
+    for base_weight, head_weight, num_class in zip(
+            base_weights, head_weights, num_classes):
+        detector = model(num_classes=num_class, base_weights=base_weight,
+                         head_weights=head_weight)
+        model_filename = '-'.join([model_name, base_weight, str(head_weight)
+                                   + '_weights.hdf5'])
+        weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        detector.load_weights(weights_path)
+        del detector
 
 
 @pytest.mark.parametrize(('model, aspect_ratios, num_boxes'),
