@@ -22,8 +22,8 @@ def get_cover_matrix(shape):
     # Arguments
         shape: Tuple. Shape of the cover matrix.
     """
-    row_covered = np.zeros(shape, dtype=bool)
-    col_covered = np.zeros(shape, dtype=bool)
+    row_covered = np.zeros(shape, dtype='bool')
+    col_covered = np.zeros(shape, dtype='bool')
     return row_covered, col_covered
 
 
