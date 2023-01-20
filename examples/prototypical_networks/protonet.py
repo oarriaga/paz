@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.layers import (Input, Conv2D, BatchNormalization,
-                                     Layer, ReLU, MaxPool2D, Flatten)
+from tensorflow.keras.layers import (Input, Conv2D, BatchNormalization, Layer,
+                                     ReLU, MaxPool2D, Flatten, Softmax)
 
 
 def conv_block(x):
@@ -21,7 +21,8 @@ def Embedding(image_shape, num_blocks):
 
 
 class FullReshape(Layer):
-    # reshapes full tensor including batch dimension
+    """Reshapes all tensor dimensions including the batch dimension.
+    """
     def __init__(self, shape, **kwargs):
         super(FullReshape, self).__init__(**kwargs)
         self.shape = shape
@@ -40,7 +41,8 @@ class ComputePrototypes(Layer):
         return class_prototypes
 
 
-def compute_euclidean_distance(x, y):
+def compute_pairwise_distances(x, y):
+    """Compute euclidean distance for each vector x with each vector y"""
     n = x.shape[0]
     m = y.shape[0]
     x = tf.tile(tf.expand_dims(x, 1), [1, m, 1])
@@ -48,15 +50,12 @@ def compute_euclidean_distance(x, y):
     return tf.reduce_mean(tf.math.pow(x - y, 2), 2)
 
 
-class ComputeDistances(Layer):
-    def __init__(self, axis=1, **kwargs):
-        super(ComputeDistances, self).__init__(**kwargs)
-        self.axis = axis
+class ComputePairwiseDistances(Layer):
+    def __init__(self, **kwargs):
+        super(ComputePairwiseDistances, self).__init__(**kwargs)
 
     def call(self, z_queries, class_prototypes):
-        distances = compute_euclidean_distance(z_queries, class_prototypes)
-        distances = tf.nn.softmax(-distances, axis=-1)
-        return distances
+        return compute_pairwise_distances(z_queries, class_prototypes)
 
 
 def PROTONET(embed, num_classes, num_support, num_queries, image_shape):
@@ -70,8 +69,9 @@ def PROTONET(embed, num_classes, num_support, num_queries, image_shape):
     z_support = FullReshape((num_classes, num_support, z_dim))(z_support)
     z_queries = FullReshape((num_classes * num_queries, z_dim))(z_queries)
     class_prototypes = ComputePrototypes(axis=1)(z_support)
-    distances = ComputeDistances(axis=1)(z_queries, class_prototypes)
-    return Model(inputs=[support, queries], outputs=distances, name='PROTONET')
+    distances = ComputePairwiseDistances()(z_queries, class_prototypes)
+    outputs = Softmax()(-distances)
+    return Model(inputs=[support, queries], outputs=outputs, name='PROTONET')
 
 
 def schedule(period=20, rate=0.5):
