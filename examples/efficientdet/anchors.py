@@ -42,7 +42,20 @@ def build_octaves(num_scales, aspect_ratios):
     which are integers raised to the power of 2 are normalized.
     This makes the values differ from each other by a multiplicative
     factor of approximately 1.2599. Therefore in this case it is not a
-    perfect octave however is an approximation of octave.
+    perfect octave however is an approximation of octave. The
+    following shows an example visualization of anchor boxes each with
+    same aspect ratio and scale but with different octaves.
+
+    +--------+       +---------------+       +----------------------+
+    |        |       |               |       |                      |
+    |  0.0   |       |               |       |                      |
+    |        |       |     0.33      |       |                      |
+    +--------+       |               |       |         0.67         |
+                     |               |       |                      |
+                     +---------------+       |                      |
+                                             |                      |
+                                             |                      |
+                                             +----------------------+
 
     # Arguments
         num_scales: Int, number of anchor scales.
@@ -62,7 +75,18 @@ def build_aspect(num_scales, aspect_ratios):
     to its height. They define the shape of the object that the object
     detector is trying to detect. If aspect ratio is 1, the anchor box
     is a square. If it is greater than 1, the box is wider than it is
-    tall. If it is less than 1, the box is taller than its is wide.
+    tall. If it is less than 1, the box is taller than its is wide. The
+    following shows visualization of anchor boxes each with same octave
+    and scale but different aspect ratios.
+
+    +--------+       +---------------+       +--------+
+    |        |       |               |       |        |
+    |  1.0   |       |      2.0      |       |        |
+    |        |       |               |       |  0.5   |
+    +--------+       +---------------+       |        |
+                                             |        |
+                                             |        |
+                                             +--------+
 
     # Arguments
         num_scales: Int, number of anchor scales.
@@ -81,7 +105,23 @@ def build_scales(scale, num_scale_aspect):
     object it is trying to detect. If the object detector is trying to
     detect smaller objects, anchor box with smaller scales may be more
     effective. If the object detector is trying to detect larger
-    objects, anchor box with larger scales my be more effective.
+    objects, anchor box with larger scales my be more effective. The
+    following shows an example visualization of anchor boxes each with
+    same octave and aspect ratio but with different scales.
+
+    +--------+       +----------------+       +------------------------+
+    |        |       |                |       |                        |
+    |  1.0   |       |                |       |                        |
+    |        |       |                |       |                        |
+    +--------+       |       2.0      |       |                        |
+                     |                |       |                        |
+                     |                |       |           3.0          |
+                     |                |       |                        |
+                     +----------------+       |                        |
+                                              |                        |
+                                              |                        |
+                                              |                        |
+                                              +------------------------+
 
     # Arguments
         scale: Float, anchor box scale.
@@ -104,7 +144,20 @@ def build_strides(branch_arg, image_shape, branches, num_scale_aspect):
     objects, while a larger stride is more effective at detecting larger
     objects. The optimal stride for a particular object detection system
     will depend on the sizes of the objects that it is trying to detect
-    and the resolution of the input images.
+    and the resolution of the input images. The following shows an
+    example visualization of anchor box's centre marked by + each with
+    same octave and aspect ratio and scale but with different strides.
+
+            8.0                     16.0                     32.0
+    +----------------+       +----------------+       +----------------+
+    | + + + + + + + +|       |                |       |   +    +    +  |
+    | + + + + + + + +|       |  +  +  +  +  + |       |                |
+    | + + + + + + + +|       |                |       |                |
+    | + + + + + + + +|       |  +  +  +  +  + |       |   +    +    +  |
+    | + + + + + + + +|       |                |       |                |
+    | + + + + + + + +|       |  +  +  +  +  + |       |                |
+    | + + + + + + + +|       |                |       |   +    +    +  |
+    +----------------+       +----------------+       +----------------+
 
     # Arguments
         branch_arg: Int, branch index.
