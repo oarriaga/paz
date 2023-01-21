@@ -41,10 +41,10 @@ class Munkres(Processor):
         self.H, self.W = np.array(cost_matrix).shape[:2]
         self.cost_matrix = pad_matrix(cost_matrix, padding='square')
         self.n = len(self.cost_matrix)
-        self.marked = np.zeros((self.n, self.n), dtype=np.int)
-        self.path = np.zeros((self.n * 2, self.n * 2), dtype=np.int)
-        self.row_covered = np.zeros((self.n, 1), dtype=bool)
-        self.col_covered = np.zeros((self.n, 1), dtype=bool)
+        self.marked = np.zeros((self.n, self.n), dtype='int')
+        self.path = np.zeros((self.n * 2, self.n * 2), dtype='int')
+        self.row_covered = np.zeros((self.n, 1), 'bool')
+        self.col_covered = np.zeros((self.n, 1), 'bool')
 
         step = 1
         while not self.done:
