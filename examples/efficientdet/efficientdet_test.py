@@ -236,8 +236,8 @@ def test_EfficientNet_branch(input_shape, scaling_coefficients,
     image = Input(shape=shape, name='image')
     branch_tensors = EFFICIENTNET(image, scaling_coefficients)
     assert len(branch_tensors) == 5, "Number of features mismatch"
-    for branch_tensor, feature_shape_per_tensor, feature_channel  \
-            in zip(branch_tensors, feature_shape, feature_channels):
+    for branch_tensor, feature_shape_per_tensor, feature_channel in zip(
+            branch_tensors, feature_shape, feature_channels):
         target_shape = (None, feature_shape_per_tensor,
                         feature_shape_per_tensor, feature_channel)
         assert branch_tensor.shape == target_shape, (
