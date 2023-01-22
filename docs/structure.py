@@ -315,7 +315,8 @@ PAGES = [
             datasets.FERPlus,
             datasets.OpenImages,
             datasets.CityScapes,
-            datasets.Shapes
+            datasets.Shapes,
+            datasets.omniglot
         ],
     },
 
