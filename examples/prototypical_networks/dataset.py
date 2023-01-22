@@ -1,9 +1,10 @@
 import os
 import glob
 import numpy as np
+from paz.abstract import Loader
 
 from tensorflow.keras.utils import Sequence, get_file
-from paz.backend.image import load_image, resize_image
+from paz.backend.image import load_image, resize_image, make_mosaic
 
 
 def download(split):
@@ -72,6 +73,13 @@ def load_shot(filepath, shape):
 
 def load_shots(shot_filepaths, shape):
     """Loads all images in character directory
+
+    # Arguments:
+        shot_filepaths: String. Filepath to character images.
+        shape: List of integers indicating new shape (height, width).
+
+    # Returns:
+        Image array with all shots
     """
     shots = []
     for shot_filepath in shot_filepaths:
@@ -132,11 +140,12 @@ def load(split='train', shape=(28, 28), flat=True):
 
 def flatten(dataset):
     """Removes language hierarchy by having classes as each possible character.
-    # Arguments
+
+    # Arguments:
         dataset: Dictionary with key names language name, and as value a
             dictionary with key names character names, and value an image array
 
-    # Returns
+    # Returns:
         Dictionary with key names as numbers and as values image arrays.
     """
     flat_dataset = {}
@@ -149,6 +158,20 @@ def flatten(dataset):
 
 
 def sample_between_alphabet(RNG, dataset, num_ways, num_shots, num_tests=1):
+    """Samples classification problems with flat dataset.
+    Each sample is a meta learning problem with classes from all languages.
+
+    # Arguments:
+        RNG: Numpy random number generator.
+        dataset: Dictionary.
+        num_ways: Int. Number of classes for each meta learning episode.
+        num_shots: Int. Number of train images used at each episode.
+        num_tests: In. Number of test images at each episode.
+
+    # Returns:
+        Two lists. First list has `(train_images, train_labels)` and
+        Second list has `(test_images, test_labels)`.
+    """
     # dataset is flat, easier for sampling without replacement
     random_classes = RNG.choice(list(dataset.keys()), num_ways, replace=False)
     test_images, test_labels = [], []
@@ -169,6 +192,20 @@ def sample_between_alphabet(RNG, dataset, num_ways, num_shots, num_tests=1):
 
 
 def sample_within_alphabet(RNG, dataset, num_ways, num_shots, num_tests=1):
+    """Samples classification problems with class hierarchical dataset.
+    Each sample is a meta learning problem with classes from the same language.
+
+    # Arguments:
+        RNG: Numpy random number generator.
+        dataset: Dictionary.
+        num_ways: Int. Number of classes for each meta learning episode.
+        num_shots: Int. Number of train images used at each episode.
+        num_tests: In. Number of test images at each episode.
+
+    # Returns:
+        Two lists. First list has `(train_images, train_labels)` and
+        Second list has `(test_images, test_labels)`.
+    """
     alphabet_name = RNG.choice(list(dataset.keys()))
     alphabet = dataset[alphabet_name]
     reuse = True if num_ways > len(alphabet) else False  # FIX as 2019 Lake
@@ -191,8 +228,17 @@ def sample_within_alphabet(RNG, dataset, num_ways, num_shots, num_tests=1):
 
 
 class Generator(Sequence):
-    def __init__(self, sampler, num_classes, num_support,
-                 num_queries, image_shape, num_steps=2000):
+    """Data generator for omniglot dataset with meta-learning episodes
+    # Arguments
+        sampler:
+        num_classes: Int. Number of classes for each meta learning episode.
+        num_support: Int. Number of train images used at each episode.
+        num_queries: In. Number of test images at each episode.
+        image_shape: List of integers indicating new shape (height, width).
+        num_steps: Int. Number of samples per epoch.
+    """
+    def __init__(self, sampler, num_classes, num_support, num_queries,
+                 image_shape, num_steps=2000):
         self.sampler = sampler
         self.support_shape = (num_classes, num_support, *image_shape)
         self.queries_shape = (num_classes, num_queries, *image_shape)
@@ -209,12 +255,31 @@ class Generator(Sequence):
 
 
 def remove_classes(RNG, data, num_classes):
+    """Removes classes by randomly taking out keys from data dictionary.
+
+    # Arguments:
+        RNG: Numpy random number generator.
+        data: Dictionary with keys as class names and values image arrays.
+
+    # Returns:
+        Dictionary with number of classes euqal to `num_classes`.
+    """
     keys = RNG.choice(len(data.keys()), num_classes, replace=False)
     data = {key: data[key] for key in keys}
     return data
 
 
 def split_data(data, validation_split):
+    """Splits data keys into training and validation.
+
+    # Arguments:
+        data: Dictionary with keys as class names and values image arrays.
+        validation_split: Float between `[0, 1]`. Porcentange of training
+            data to be used for validation.
+
+    # Returns:
+        Two dictionaries with train and vlaidation data dictionaries.
+    """
     keys = list(data.keys())
     num_train_keys = int(len(keys) * (1 - validation_split))
     train_keys = keys[:num_train_keys]
@@ -222,27 +287,6 @@ def split_data(data, validation_split):
     train_data = {key: data[key] for key in train_keys}
     valid_data = {key: data[key] for key in valid_keys}
     return train_data, valid_data
-
-
-def make_mosaic(images, shape, border=0):
-    num_images, H, W, num_channels = images.shape
-    num_rows, num_cols = shape
-    if num_images > (num_rows * num_cols):
-        raise ValueError('Number of images is bigger than shape')
-
-    total_rows = (num_rows * H) + ((num_rows - 1) * border)
-    total_cols = (num_cols * W) + ((num_cols - 1) * border)
-    mosaic = np.ones((total_rows, total_cols, num_channels))
-
-    padded_H = H + border
-    padded_W = W + border
-
-    for image_arg, image in enumerate(images):
-        row = int(np.floor(image_arg / num_cols))
-        col = image_arg % num_cols
-        mosaic[row * padded_H:row * padded_H + H,
-               col * padded_W:col * padded_W + W, :] = image
-    return mosaic
 
 
 def plot_language(language):
@@ -255,10 +299,27 @@ def plot_language(language):
     return characters
 
 
+class Omniglot(Loader):
+    def __init__(self, split='train', shape=(28, 28), flat=True):
+        self.shape = shape
+        self.flat = flat
+        self.__doc__ = load.__doc__
+        super(Omniglot, self).__init__(None, split, None, 'Omniglot')
+
+    def load_data(self):
+        return load(self.split, self.shape, self.flat)
+
+# Omniglot.__doc__ = load.__doc__
+
+
 if __name__ == '__main__':
+    """
     from paz.backend.image import show_image
     train_data = load('train', flat=False)
     for language_name, language in train_data.items():
         characters = plot_language(language)
         characters = (characters * 255.0).astype('uint8')
         show_image(characters, language_name)
+    """
+    data_loader = Omniglot('train', (28, 28))
+    data = data_loader.load_data()
