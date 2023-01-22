@@ -9,9 +9,9 @@ from tensorflow.keras import callbacks as cb
 
 from protonet import PROTONET, Embedding, schedule
 from logger import build_directory, write_dictionary, write_weights
-from dataset import (load_omniglot, remove_classes, split_data,
-                     sample_between_alphabet, sample_within_alphabet,
-                     Generator)
+from paz.datasets.omniglot import (load, remove_classes, split_data,
+                                   sample_between_alphabet,
+                                   sample_within_alphabet, Generator)
 
 description = 'Train and evaluation of prototypical networks'
 parser = argparse.ArgumentParser(description=description)
@@ -64,7 +64,7 @@ callbacks = [
     cb.EarlyStopping('val_loss', args.stop_delta, args.stop_patience, 1)
 ]
 
-train_data = load_omniglot(args.train_path, image_shape[:2])
+train_data = load('train', image_shape[:2], True)
 train_data = remove_classes(RNG, train_data, args.train_classes)
 train_data, validation_data = split_data(train_data, args.validation_split)
 
@@ -85,7 +85,7 @@ for way in args.test_ways:
         test_model.compile(optimizer, loss=args.loss, metrics=metrics)
         test_args = (way, shot, args.test_queries)
 
-        data = load_omniglot(args.tests_path, image_shape[:2], flat=False)
+        data = load('test', image_shape[:2], flat=False)
         sampler = partial(sample_within_alphabet, RNG, data, *test_args)
         sequence = Generator(sampler, *test_args, image_shape, args.test_steps)
         losses, accuracy = test_model.evaluate(sequence)
@@ -93,7 +93,7 @@ for way in args.test_ways:
         results[f'{way}-way_{shot}-shot_within_alphabet'] = accuracy
         print(f'Within alphabet {way}-way {shot}-shot accuracy {accuracy} %')
 
-        data = load_omniglot(args.tests_path, image_shape[:2], flat=True)
+        data = load('test', image_shape[:2], flat=True)
         sampler = partial(sample_between_alphabet, RNG, data, *test_args)
         sequence = Generator(sampler, *test_args, image_shape, args.test_steps)
         losses, accuracy = test_model.evaluate(sequence)
