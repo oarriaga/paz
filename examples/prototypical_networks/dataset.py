@@ -1,15 +1,21 @@
 import os
 import glob
 import numpy as np
-from tensorflow.keras.utils import Sequence
-from paz.backend.image import load_image, show_image, resize_image
-from tensorflow.keras.utils import get_file
 
-
-ROOT_URL = 'https://github.com/brendenlake/omniglot/blob/master/python/'
+from tensorflow.keras.utils import Sequence, get_file
+from paz.backend.image import load_image, resize_image
 
 
 def download(split):
+    """Downloads omniglot dataset from original repository source.
+
+    # Arguments:
+        split: String indicating dataset split i.e. `train` or `test`.
+
+    # Returns:
+        filepath string to data split directory.
+    """
+    ROOT_URL = 'https://github.com/brendenlake/omniglot/blob/master/python/'
     split_to_name = {'train': 'images_background', 'test': 'images_evaluation'}
     filename = split_to_name[split]
     URL = ROOT_URL + filename + '.zip?raw=true'
@@ -20,12 +26,28 @@ def download(split):
 
 
 def build_keyname(string):
+    """Builds keynames in lower case and without parenthesis.
+
+    # Arguments:
+        string: Keyname string.
+
+    # Returns
+        String name for easy dictionary access.
+    """
     string = os.path.basename(string)
     translations = {ord('('): None, ord(')'): None}
     return string.translate(translations).lower()
 
 
 def enumerate_filenames(root_path):
+    """Enumerates all file names inside given path.
+
+    # Arguments
+        root_path: String, path in which to search.
+
+    # Returns
+        list of sorted file names inside root path.
+    """
     wildcard = os.path.join(root_path, '*')
     directories = glob.glob(wildcard)
     directories = sorted(directories)
@@ -33,6 +55,15 @@ def enumerate_filenames(root_path):
 
 
 def load_shot(filepath, shape):
+    """Loads images and preprocess it by resizing and normalizing it.
+
+    # Arguments
+        filepath: String indicating path to image.
+        shape: List of integers indicating new shape (height, width).
+
+    # Returns
+        image as numpy array.
+    """
     image = load_image(filepath, num_channels=1)
     image = resize_image(image, (shape))
     image = image / 255.0
@@ -40,6 +71,8 @@ def load_shot(filepath, shape):
 
 
 def load_shots(shot_filepaths, shape):
+    """Loads all images in character directory
+    """
     shots = []
     for shot_filepath in shot_filepaths:
         shots.append(load_shot(shot_filepath, shape))
@@ -47,6 +80,15 @@ def load_shots(shot_filepaths, shape):
 
 
 def load_characters(character_filepaths, shape):
+    """Loads all characters in data directory.
+
+    # Arguments
+        character_filepaths: String indicating path to images.
+        shape: List of integers indicating new shape (height, width).
+
+    # Returns
+        Dictionary with key name character name and value image array.
+    """
     characters = {}
     for character_filepath in character_filepaths:
         character_name = build_keyname(character_filepath)
@@ -57,6 +99,26 @@ def load_characters(character_filepaths, shape):
 
 
 def load(split='train', shape=(28, 28), flat=True):
+    """Loads omniglot dataset for in between and within alphabet sampling.
+
+    # Arguments
+        split: String. Either `train` or `test`. Indicates which split to load.
+        shape: List of two integers indicating resize shape `(H, W)`.
+        flat: Boolean. If `True` the returned data dictionary is organized
+            using each possible character as a class, with each key being a
+            number having as value an image array.
+            If `False` the returned data dictionary is organized using as keys
+            the language names and as value another dictionary with keys being
+            the character number, and as value the image array.
+            This is to perform either sampling between alpahabet (`flat=True`)
+            or to perform sampling within alphabet (`flat=False`).
+            Usually, neural few-shot learning algorithms have been tested using
+            in between alphabet sampling, but the original authors tested using
+            the more challenging within alphabet sampling.
+
+    # Returns
+        dictionary with class names as keys and image numpy arrays as values.
+    """
     filepath = download(split)
     language_filepaths = enumerate_filenames(filepath)
     languages = {}
@@ -69,6 +131,14 @@ def load(split='train', shape=(28, 28), flat=True):
 
 
 def flatten(dataset):
+    """Removes language hierarchy by having classes as each possible character.
+    # Arguments
+        dataset: Dictionary with key names language name, and as value a
+            dictionary with key names character names, and value an image array
+
+    # Returns
+        Dictionary with key names as numbers and as values image arrays.
+    """
     flat_dataset = {}
     flat_key = 0
     for language_name, language in dataset.items():
@@ -186,7 +256,7 @@ def plot_language(language):
 
 
 if __name__ == '__main__':
-    RNG = np.random.default_rng(777)
+    from paz.backend.image import show_image
     train_data = load('train', flat=False)
     for language_name, language in train_data.items():
         characters = plot_language(language)
