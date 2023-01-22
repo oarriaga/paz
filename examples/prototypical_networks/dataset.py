@@ -1,11 +1,22 @@
-from functools import partial
 import os
 import glob
 import numpy as np
 from tensorflow.keras.utils import Sequence
-import matplotlib.pyplot as plt
-import jax
-jax.config.update('jax_platform_name', 'cpu')
+from paz.backend.image import load_image, show_image, resize_image
+from tensorflow.keras.utils import get_file
+
+
+ROOT_URL = 'https://github.com/brendenlake/omniglot/blob/master/python/'
+
+
+def download(split):
+    split_to_name = {'train': 'images_background', 'test': 'images_evaluation'}
+    filename = split_to_name[split]
+    URL = ROOT_URL + filename + '.zip?raw=true'
+    directory = 'paz/datasets/omniglot'
+    filepath = get_file(None, URL, cache_subdir=directory, extract=True)
+    filepath = os.path.join(os.path.dirname(filepath), filename)
+    return filepath
 
 
 def build_keyname(string):
@@ -21,38 +32,40 @@ def enumerate_filenames(root_path):
     return directories
 
 
-def load_shot(filepath):
-    return plt.imread(filepath)
+def load_shot(filepath, shape):
+    image = load_image(filepath, num_channels=1)
+    image = resize_image(image, (shape))
+    image = image / 255.0
+    return image
 
 
-def load_shots(shot_filepaths):
+def load_shots(shot_filepaths, shape):
     shots = []
     for shot_filepath in shot_filepaths:
-        shots.append(load_shot(shot_filepath))
+        shots.append(load_shot(shot_filepath, shape))
     return np.array(shots)
 
 
-def load_characters(character_filepaths):
+def load_characters(character_filepaths, shape):
     characters = {}
     for character_filepath in character_filepaths:
         character_name = build_keyname(character_filepath)
         shot_filepaths = enumerate_filenames(character_filepath)
-        shots = load_shots(shot_filepaths)
+        shots = load_shots(shot_filepaths, shape)
         characters[character_name] = shots
     return characters
 
 
-def load_omniglot(split_path, shape=(28, 28), flat=True):
-    language_filepaths = enumerate_filenames(split_path)
+def load(split='train', shape=(28, 28), flat=True):
+    filepath = download(split)
+    language_filepaths = enumerate_filenames(filepath)
     languages = {}
     for language_filepath in language_filepaths:
         language_name = build_keyname(language_filepath)
         character_directories = enumerate_filenames(language_filepath)
-        characters = load_characters(character_directories)
+        characters = load_characters(character_directories, shape)
         languages[language_name] = characters
-    dataset = flatten(languages) if flat else languages
-    resize = partial(jax.image.resize, shape=shape, method='bilinear')
-    return jax.tree_map(np.array, jax.tree_map(jax.vmap(resize), dataset))
+    return flatten(languages) if flat else languages
 
 
 def flatten(dataset):
@@ -174,16 +187,8 @@ def plot_language(language):
 
 if __name__ == '__main__':
     RNG = np.random.default_rng(777)
-    background_path = 'omniglot/images_background/'
-    evaluation_path = 'omniglot/images_evaluation/'
-
-    train_data = load_omniglot(background_path)
-    train_data = load_omniglot(background_path, flat=False)
-    tests_data = load_omniglot(evaluation_path, flat=False)
-
+    train_data = load('train', flat=False)
     for language_name, language in train_data.items():
         characters = plot_language(language)
-        plt.imshow(characters)
-        plt.title(language_name)
-        plt.axis('off')
-        plt.show()
+        characters = (characters * 255.0).astype('uint8')
+        show_image(characters, language_name)
