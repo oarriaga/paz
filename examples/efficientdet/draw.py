@@ -5,7 +5,7 @@ LINE = cv2.LINE_AA
 
 
 def put_text(image, text, point, scale, color, thickness):
-    """Puts text on image.
+    """Puts text on given image.
 
     # Arguments
         image: Array of shape `(H, W, 3)`, input image.
@@ -16,7 +16,7 @@ def put_text(image, text, point, scale, color, thickness):
         thickness: Int, text thickness.
 
     # Returns
-        Array: image with text.
+        Array: Image of shape `(H, W, 3)` with text.
     """
     image = cv2.putText(
         image, text, point, FONT, scale, color, thickness, LINE)
@@ -40,7 +40,7 @@ def compute_text_bounds(text, scale, thickness, FONT=FONT):
 
 
 def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
-    """ Draws filled rectangle.
+    """Draws filled rectangle.
 
     # Arguments
         image: Array of shape `(H, W, 3)`, input image.
@@ -57,7 +57,7 @@ def draw_opaque_box(image, corner_A, corner_B, color, thickness=-1):
 
 
 def make_box_transparent(raw_image, image, alpha=0.25):
-    """ Blends two images for transparency.
+    """Blends two images for transparency.
 
     # Arguments
         raw_image: Array of shape `(H, W, 3)`, first input image.

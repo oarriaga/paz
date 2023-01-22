@@ -4,11 +4,24 @@ from tensorflow.keras.layers import Layer
 
 class GetDropConnect(Layer):
     """Dropout for model layers.
+    DropConnect is similar to dropout, but instead of setting
+    activations to zero, it sets a fraction of the weights in a layer to
+    zero. This helps to prevent overfitting by reducing the complexity
+    of the model and encouraging the model to rely on a more diverse set
+    of weights.
+
+    # Arguments
+        survival_rate: Float, survival probability to drop features.
+
+    # Properties
+        survival_rate: Float.
+
+    # Methods
+        call()
 
     # References
         [Deep Networks with Stochastic Depth]
         (https://arxiv.org/pdf/1603.09382.pdf)
-
     """
     def __init__(self, survival_rate, **kwargs):
         super(GetDropConnect, self).__init__(**kwargs)
@@ -28,13 +41,32 @@ class GetDropConnect(Layer):
 
 
 class FuseFeature(Layer):
-    """Fuse features from different resolutions
-    and return a weighted sum.
+    """Fuse features from different resolutions and return a
+    weighted sum. The resulting weighted sum is the fused feature.
+    Lower layers of the network tend to extract more basic features,
+    such as edges and shapes, while higher layers extract more complex
+    features that are useful for making predictions.
+    This class implements function that combines features from various
+    levels/layers of the model. This helps to combine the strengths of
+    different features and create a more robust and accurate
+    representation of the input image.
+
+    # Arguments
+        fusion: Str, feature fusion method.
+
+    # Properties
+        fusion: Str.
+
+    # Methods
+        build()
+        call()
+        _fuse_fast()
+        _fuse_sum()
+        get_config()
 
     # References
         [EfficientDet: Scalable and Efficient Object Detection]
         (https://arxiv.org/pdf/1911.09070.pdf)
-
     """
     def __init__(self, fusion, **kwargs):
         super().__init__(**kwargs)
@@ -53,14 +85,6 @@ class FuseFeature(Layer):
         self.w = self.add_weight(*args, trainable=True)
 
     def call(self, inputs, fusion):
-        """
-        # Arguments
-        inputs: Tensor, features to fuse.
-        fusion: Str, feature fusion method.
-
-        # Returns
-        x: fused feature.
-        """
         inputs = [input for input in inputs if input is not None]
         return self.fuse_method(inputs)
 
