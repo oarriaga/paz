@@ -7,11 +7,21 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import callbacks as cb
 
-from protonet import PROTONET, Embedding, schedule
-from logger import build_directory, write_dictionary, write_weights
-from dataset import (load_omniglot, remove_classes, split_data,
-                     sample_between_alphabet, sample_within_alphabet,
-                     Generator)
+from paz.models import ProtoEmbedding, ProtoNet
+from paz.utils import build_directory, write_dictionary, write_weights
+from paz.datasets.omniglot import (load, remove_classes, split_data,
+                                   sample_between_alphabet,
+                                   sample_within_alphabet, Generator)
+
+
+# TODO move to optimization and add tests
+def schedule(period=20, rate=0.5):
+    def apply(epoch, learning_rate):
+        if ((epoch % period) == 0) and (epoch != 0):
+            learning_rate = rate * learning_rate
+        return learning_rate
+    return apply
+
 
 description = 'Train and evaluation of prototypical networks'
 parser = argparse.ArgumentParser(description=description)
@@ -52,8 +62,8 @@ write_dictionary(args.__dict__, directory, 'parameters.json')
 
 image_shape = (args.image_H, args.image_W, 1)
 train_args = (args.train_ways, args.train_shots, args.train_queries)
-embed = Embedding(image_shape, args.num_blocks)
-model = PROTONET(embed, *train_args, image_shape)
+embed = ProtoEmbedding(image_shape, args.num_blocks)
+model = ProtoNet(embed, *train_args, image_shape)
 optimizer = Adam(args.learning_rate)
 metrics = [args.metric]
 model.compile(Adam(args.learning_rate), loss=args.loss, metrics=metrics)
@@ -64,7 +74,7 @@ callbacks = [
     cb.EarlyStopping('val_loss', args.stop_delta, args.stop_patience, 1)
 ]
 
-train_data = load_omniglot(args.train_path, image_shape[:2])
+train_data = load('train', image_shape[:2], True)
 train_data = remove_classes(RNG, train_data, args.train_classes)
 train_data, validation_data = split_data(train_data, args.validation_split)
 
@@ -81,11 +91,11 @@ model.fit(sequence,
 results = {}
 for way in args.test_ways:
     for shot in args.test_shots:
-        test_model = PROTONET(embed, way, shot, args.test_queries, image_shape)
+        test_model = ProtoNet(embed, way, shot, args.test_queries, image_shape)
         test_model.compile(optimizer, loss=args.loss, metrics=metrics)
         test_args = (way, shot, args.test_queries)
 
-        data = load_omniglot(args.tests_path, image_shape[:2], flat=False)
+        data = load('test', image_shape[:2], flat=False)
         sampler = partial(sample_within_alphabet, RNG, data, *test_args)
         sequence = Generator(sampler, *test_args, image_shape, args.test_steps)
         losses, accuracy = test_model.evaluate(sequence)
@@ -93,7 +103,7 @@ for way in args.test_ways:
         results[f'{way}-way_{shot}-shot_within_alphabet'] = accuracy
         print(f'Within alphabet {way}-way {shot}-shot accuracy {accuracy} %')
 
-        data = load_omniglot(args.tests_path, image_shape[:2], flat=True)
+        data = load('test', image_shape[:2], flat=True)
         sampler = partial(sample_between_alphabet, RNG, data, *test_args)
         sequence = Generator(sampler, *test_args, image_shape, args.test_steps)
         losses, accuracy = test_model.evaluate(sequence)

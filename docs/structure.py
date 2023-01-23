@@ -18,6 +18,8 @@ from paz.optimization import losses
 from paz.optimization import callbacks
 from paz import datasets
 from paz import pipelines
+from paz.utils import logger
+from paz.utils import documentation
 
 EXCLUDE = {}
 
@@ -248,7 +250,9 @@ PAGES = [
     {
         'page': 'models/classification.md',
         'functions': [
-            models.classification.MiniXception
+            models.classification.MiniXception,
+            models.ProtoEmbedding,
+            models.ProtoNet
         ],
     },
 
@@ -315,7 +319,8 @@ PAGES = [
             datasets.FERPlus,
             datasets.OpenImages,
             datasets.CityScapes,
-            datasets.Shapes
+            datasets.Shapes,
+            datasets.Omniglot
         ],
     },
 
@@ -725,5 +730,23 @@ PAGES = [
     },
 
 
+    {
+        'page': 'utils/logger.md',
+        'functions': [
+            logger.build_directory,
+            logger.make_directory,
+            logger.write_dictionary,
+            logger.write_weights
+        ]
+
+    },
+
+    {
+        'page': 'utils/documentation.md',
+        'functions': [
+            documentation.docstring
+        ]
+
+    },
 
 ]
