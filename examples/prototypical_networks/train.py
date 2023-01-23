@@ -8,7 +8,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import callbacks as cb
 
 from protonet import PROTONET, Embedding, schedule
-from logger import build_directory, write_dictionary, write_weights
+from paz.utils import build_directory, write_dictionary, write_weights
 from paz.datasets.omniglot import (load, remove_classes, split_data,
                                    sample_between_alphabet,
                                    sample_within_alphabet, Generator)

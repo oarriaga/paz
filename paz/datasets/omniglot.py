@@ -6,6 +6,7 @@ from tensorflow.keras.utils import Sequence, get_file
 
 from ..backend.image import load_image, resize_image, make_mosaic
 from ..abstract import Loader
+from ..utils.documentation import docstring
 
 
 def download(split):
@@ -306,21 +307,6 @@ def plot_language(language):
     characters = np.array(characters)
     characters = make_mosaic(characters, (8, 7), 20)
     return characters
-
-
-def docstring(original):
-    """Doctors (documents) `target` `Callable` with `original` docstring.
-
-    # Arguments:
-        original: Object with documentation string.
-
-    # Returns
-        Function that replaces `target` docstring with `original` docstring.
-    """
-    def wrapper(target):
-        target.__doc__ = original.__doc__
-        return target
-    return wrapper
 
 
 @docstring(load)
