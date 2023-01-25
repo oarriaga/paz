@@ -62,7 +62,7 @@ def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     """
     filters = scale_filters(intro_filters[0], width_coefficient, depth_divisor)
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
-               None, False, normal_kernel_initializer)(image)
+               None, False, kernel_initializer)(image)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
@@ -90,9 +90,9 @@ def scale_filters(filters, width_coefficient, depth_divisor):
     return scaled_filters
 
 
-def normal_kernel_initializer(shape, dtype=None):
-    """Initialize convolutional kernel using zero
-    centred Gaussian distribution.
+def kernel_initializer(shape, dtype=None):
+    """Initialize convolutional kernel with
+    zero centred Gaussian distribution.
 
     # Arguments
         shape: variable shape.
@@ -223,8 +223,7 @@ def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
 
 def MB_input(inputs, filters, expand_ratio):
     if expand_ratio != 1:
-        x = Conv2D(filters, 1, padding='same', use_bias=False,
-                   kernel_initializer=normal_kernel_initializer)(inputs)
+        x = MB_conv2D(inputs, filters, use_bias=False)
         x = BatchNormalization()(x)
         x = tf.nn.swish(x)
     else:
@@ -232,9 +231,14 @@ def MB_input(inputs, filters, expand_ratio):
     return x
 
 
+def MB_conv2D(x, filters, use_bias=False):
+    kwargs = {'padding': 'same', 'kernel_initializer': kernel_initializer}
+    return Conv2D(filters, 1, use_bias=use_bias, **kwargs)(x)
+
+
 def MB_convolution(x, kernel_size, strides):
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
-                        depthwise_initializer=normal_kernel_initializer)(x)
+                        depthwise_initializer=kernel_initializer)(x)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
@@ -243,18 +247,15 @@ def MB_convolution(x, kernel_size, strides):
 def MB_squeeze_excitation(x, intro_filters, expand_ratio, SE_ratio):
     num_reduced_filters = max(1, int(intro_filters * SE_ratio))
     SE = tf.reduce_mean(x, [1, 2], keepdims=True)
-    SE = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
-                kernel_initializer=normal_kernel_initializer)(SE)
+    SE = MB_conv2D(SE, num_reduced_filters, use_bias=True)
     SE = tf.nn.swish(SE)
-    SE = Conv2D(intro_filters * expand_ratio, 1, padding='same', use_bias=True,
-                kernel_initializer=normal_kernel_initializer)(SE)
+    SE = MB_conv2D(SE, intro_filters * expand_ratio, use_bias=True)
     SE = tf.sigmoid(SE)
     return SE * x
 
 
 def MB_output(x, inputs, intro_filters, outro_filters, strides, survival_rate):
-    x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
-               kernel_initializer=normal_kernel_initializer)(x)
+    x = MB_conv2D(x, outro_filters, use_bias=False)
     x = BatchNormalization()(x)
     all_strides_one = all(stride == 1 for stride in strides)
     if all_strides_one and intro_filters == outro_filters:
