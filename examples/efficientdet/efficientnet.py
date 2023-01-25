@@ -144,7 +144,7 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     feature_maps = []
     for args_1, args_2, should_append_feature in zip(
             iterator_1, iterator_2, feature_append_mask):
-        x = MBconv_features(x, survival_rate, *args_1, *args_2)
+        x = repeat_MB(x, survival_rate, *args_1, *args_2)
         if should_append_feature:
             feature_maps.append(x)
 
@@ -164,8 +164,8 @@ def round_repeats(repeats, depth_coefficient):
     return int(math.ceil(depth_coefficient * repeats))
 
 
-def MBconv_features(x, survival_rate, excite_ratio, intro_filter, outro_filter,
-                    repeats, kernel_size, expand_ratio, stride):
+def repeat_MB(x, survival_rate, excite_ratio, intro_filter, outro_filter,
+              repeats, kernel_size, expand_ratio, stride):
     """Computes given MBConv block's features.
 
     # Arguments
@@ -183,9 +183,9 @@ def MBconv_features(x, survival_rate, excite_ratio, intro_filter, outro_filter,
         Tensor: Output features.
     """
     args = (kernel_size, survival_rate, expand_ratio, excite_ratio)
-    x = MB_block(x, intro_filter, outro_filter, stride, *args)
-    for _ in range(1, repeats):
-        x = MB_block(x, outro_filter, outro_filter, [1, 1], *args)
+    for _ in range(repeats):
+        x = MB_block(x, intro_filter, outro_filter, stride, *args)
+        intro_filter, stride = outro_filter, [1, 1]
     return x
 
 
