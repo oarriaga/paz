@@ -131,23 +131,23 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
     """
     feature_append_mask = [stride[0] == 2 for stride in strides[1:]]
     feature_append_mask.append(True)
-
     intro_filters = [scale_filters(intro_filter, W_coefficient, D_divisor)
                      for intro_filter in intro_filters]
     outro_filters = [scale_filters(outro_filter, W_coefficient, D_divisor)
                      for outro_filter in outro_filters]
     repeats = [round_repeats(repeat, D_coefficient) for repeat in repeats]
-    excite_ratios = [excite_ratio for _ in outro_filters]
+    excite_ratios = [excite_ratio] * len(outro_filters)
+    survival_rates = [survival_rate] * len(outro_filters)
 
-    iterator_1 = zip(excite_ratios, intro_filters, outro_filters, repeats)
-    iterator_2 = zip(kernel_sizes, expand_ratios, strides)
     feature_maps = []
-    for args_1, args_2, should_append_feature in zip(
-            iterator_1, iterator_2, feature_append_mask):
-        x = repeat_MB(x, survival_rate, *args_1, *args_2)
-        if should_append_feature:
+    iterator_1 = list(zip(intro_filters, outro_filters, strides, repeats))
+    iterator_2 = list(zip(kernel_sizes, survival_rates, expand_ratios,
+                          excite_ratios))
+    for feature_arg, args in enumerate(zip(iterator_1, iterator_2)):
+        repeat_args, block_args = args
+        x = MB_repeat(x, *repeat_args, block_args)
+        if feature_append_mask[feature_arg]:
             feature_maps.append(x)
-
     return feature_maps
 
 
@@ -164,8 +164,7 @@ def round_repeats(repeats, depth_coefficient):
     return int(math.ceil(depth_coefficient * repeats))
 
 
-def repeat_MB(x, survival_rate, excite_ratio, intro_filter, outro_filter,
-              repeats, kernel_size, expand_ratio, stride):
+def MB_repeat(x, intro_filter, outro_filter, stride, repeats, block_args):
     """Computes given MBConv block's features.
 
     # Arguments
@@ -182,9 +181,8 @@ def repeat_MB(x, survival_rate, excite_ratio, intro_filter, outro_filter,
     # Returns
         Tensor: Output features.
     """
-    args = (kernel_size, survival_rate, expand_ratio, excite_ratio)
     for _ in range(repeats):
-        x = MB_block(x, intro_filter, outro_filter, stride, *args)
+        x = MB_block(x, intro_filter, outro_filter, stride, *block_args)
         intro_filter, stride = outro_filter, [1, 1]
     return x
 
