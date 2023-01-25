@@ -213,8 +213,15 @@ def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
         (https://arxiv.org/pdf/1905.11946.pdf)
     """
     filters = intro_filters * expand_ratio
+    x = MB_input(inputs, filters, expand_ratio)
+    x = MB_convolution(x, kernel_size, strides)
+    x = MB_squeeze_excitation(x, intro_filters, expand_ratio, SE_ratio)
+    x = MB_output(x, inputs, intro_filters, outro_filters, strides,
+                  survival_rate)
+    return x
 
-    # MB Block Input ----------------------------------------------------------
+
+def MB_input(inputs, filters, expand_ratio):
     if expand_ratio != 1:
         x = Conv2D(filters, 1, padding='same', use_bias=False,
                    kernel_initializer=normal_kernel_initializer)(inputs)
@@ -222,25 +229,30 @@ def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
         x = tf.nn.swish(x)
     else:
         x = inputs
+    return x
 
-    # MB Block Convolution  ---------------------------------------------------
+
+def MB_convolution(x, kernel_size, strides):
     x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
                         depthwise_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
+    return x
 
-    # MB Block Squeeze Excitation ---------------------------------------------
+
+def MB_squeeze_excitation(x, intro_filters, expand_ratio, SE_ratio):
     num_reduced_filters = max(1, int(intro_filters * SE_ratio))
     SE = tf.reduce_mean(x, [1, 2], keepdims=True)
     SE = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
                 kernel_initializer=normal_kernel_initializer)(SE)
     SE = tf.nn.swish(SE)
-    SE = Conv2D(filters, 1, padding='same', use_bias=True,
+    SE = Conv2D(intro_filters * expand_ratio, 1, padding='same', use_bias=True,
                 kernel_initializer=normal_kernel_initializer)(SE)
     SE = tf.sigmoid(SE)
-    x = SE * x
+    return SE * x
 
-    # MB Block Output ---------------------------------------------------------
+
+def MB_output(x, inputs, intro_filters, outro_filters, strides, survival_rate):
     x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
                kernel_initializer=normal_kernel_initializer)(x)
     x = BatchNormalization()(x)
