@@ -46,7 +46,7 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
     if head_weights not in ['COCO', None]:
-        raise ValueError('Invalid base_weights: ', head_weights)
+        raise ValueError('Invalid head_weights: ', head_weights)
     if (base_weights is None) and (head_weights == 'COCO'):
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
