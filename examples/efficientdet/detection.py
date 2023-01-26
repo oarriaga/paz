@@ -2,6 +2,7 @@ import numpy as np
 from paz import processors as pr
 from paz.abstract import SequentialProcessor, Processor
 from paz.backend.image import resize_image
+from efficientdet import EFFICIENTDETD0
 
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
@@ -51,7 +52,7 @@ class DetectSingleShotEfficientDet(Processor):
             pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
             ScaleBox(image_scales),
             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
-            pr.FilterBoxes(get_class_name_efficientdet('COCO'),
+            pr.FilterBoxes(get_class_names('COCO'),
                            self.score_thresh)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
@@ -178,7 +179,41 @@ def process_outputs(outputs):
     return outputs
 
 
-def get_class_name_efficientdet(dataset_name):
+class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with SSD512 trained on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD512COCO
+
+        detect = SSD512COCO()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+     # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    # Reference
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        model = EFFICIENTDETD0()
+        names = get_class_names('COCO')
+        super(EFFICIENTDETD0COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+def get_class_names(dataset_name):
     if dataset_name == 'COCO':
         return ['person', 'bicycle', 'car', 'motorcycle',
                 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
