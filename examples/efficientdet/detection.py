@@ -143,7 +143,7 @@ class DetectSingleShotEfficientDet(Processor):
         draw: Boolean. If ``True`` prediction are drawn in the returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 mean=pr.BGR_IMAGENET_MEAN, variances=[1.0, 1.0, 1.0, 1.0],
+                 mean=pr.BGR_IMAGENET_MEAN, variances=[1, 1, 1, 1],
                  draw=True):
         self.model = model
         self.class_names = class_names
@@ -208,36 +208,6 @@ def get_class_name_efficientdet(dataset_name):
                 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
                 'diningtable', 'dog', 'horse', 'motorbike', 'person',
                 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
-
-
-def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
-    """EfficientDet output postprocessing function.
-
-    # Arguments
-        model: EfficientDet model
-        class_outputs: Tensor, logits for all classes corresponding to the
-        features associated with the box coordinates at each feature levels.
-        box_outputs: Tensor, box coordinate offsets for the corresponding prior
-        boxes at each feature levels.
-        image_scale: Numpy array, scale to reconstruct each of the raw images
-        to original size from the resized image.
-        raw_images: Numpy array, RGB image to draw the detections on the image.
-
-    # Returns
-        image: Numpy array, RGB input image with detections overlaid.
-        outputs: List of Box2D, containing the detections with bounding box
-        and class details.
-    """
-    outputs = process_outputs(outputs)
-    postprocessing = SequentialProcessor(
-        [pr.Squeeze(axis=None),
-         pr.DecodeBoxes(model.prior_boxes, variances=[1, 1, 1, 1]),
-         ScaleBox(1.0), pr.NonMaximumSuppressionPerClass(0.4),
-         pr.FilterBoxes(get_class_name_efficientdet('COCO'), 0.4)])
-    outputs = postprocessing(outputs)
-    draw_boxes2D = pr.DrawBoxes2D(get_class_name_efficientdet('COCO'))
-    image = draw_boxes2D(raw_images.astype('uint8'), outputs)
-    return image, outputs
 
 
 def process_outputs(outputs):
@@ -401,7 +371,7 @@ def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
     outputs = process_outputs(outputs)
     postprocessing = SequentialProcessor(
         [pr.Squeeze(axis=None),
-         pr.DecodeBoxes(model.prior_boxes, variances=[1, 1, 1, 1]),
+         pr.DecodeBoxes(model.prior_boxes*512, variances=[1, 1, 1, 1]),
          ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
          pr.FilterBoxes(get_class_name_efficientdet('COCO'), 0.8)])
     outputs = postprocessing(outputs)

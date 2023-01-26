@@ -12,7 +12,7 @@ IMAGE_PATH = ('/home/manummk95/Desktop/efficientdet_BKP/paz/examples/efficientde
 if __name__ == "__main__":
     raw_image = LoadImage()(IMAGE_PATH)
     model = EFFICIENTDETD0(base_weights='COCO', head_weights='COCO')
-    model.prior_boxes = model.prior_boxes*512.0
+    # model.prior_boxes = model.prior_boxes*512.0
     image_size = model.input_shape[1]
     input_image, image_scales = efficientdet_preprocess(raw_image, image_size)
 
