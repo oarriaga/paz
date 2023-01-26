@@ -210,7 +210,7 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
     def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD0(num_classes=len(names),
-                               base_weights='COCO', head_weights='COCO')        
+                               base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD0COCO, self).__init__(
             model, names, score_thresh, nms_thresh, draw=draw)
 
