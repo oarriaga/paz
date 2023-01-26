@@ -6,6 +6,7 @@ from paz.backend.image import resize_image
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
 
+
 class DetectSingleShotEfficientDet(Processor):
     """Single-shot object detection prediction.
 
