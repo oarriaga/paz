@@ -16,7 +16,8 @@ class DetectSingleShotEfficientDet(Processor):
         score_thresh: Float between [0, 1]
         nms_thresh: Float between [0, 1].
         mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.RGB_IMAGENET_MEAN, variances=[1, 1, 1, 1],
@@ -32,7 +33,8 @@ class DetectSingleShotEfficientDet(Processor):
         preprocessing = SequentialProcessor([
             pr.CastImage(float),
             pr.SubtractMeanImage(mean=mean),
-            DivideStandardDeviationImage(standard_deviation=RGB_IMAGENET_STDEV),
+            DivideStandardDeviationImage(
+                standard_deviation=RGB_IMAGENET_STDEV),
             ScaledResize(image_size=self.model.input_shape[1]),
         ])
         self.preprocessing = preprocessing
@@ -56,88 +58,6 @@ class DetectSingleShotEfficientDet(Processor):
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
-
-
-def get_class_name_efficientdet(dataset_name):
-    if dataset_name == 'COCO':
-        return ['person', 'bicycle', 'car', 'motorcycle',
-                'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
-                'fire hydrant', '0', 'stop sign', 'parking meter', 'bench',
-                'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant',
-                'bear', 'zebra', 'giraffe', '0', 'backpack', 'umbrella', '0',
-                '0', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis',
-                'snowboard', 'sports ball', 'kite', 'baseball bat',
-                'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-                'bottle', '0', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
-                'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli',
-                'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair',
-                'couch', 'potted plant', 'bed', '0', 'dining table', '0', '0',
-                'toilet', '0', 'tv', 'laptop', 'mouse', 'remote', 'keyboard',
-                'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-                'refrigerator', '0', 'book', 'clock', 'vase', 'scissors',
-                'teddy bear', 'hair drier', 'toothbrush']
-
-    elif dataset_name == 'VOC':
-        return ['background', 'aeroplane', 'bicycle', 'bird', 'boat',
-                'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
-                'diningtable', 'dog', 'horse', 'motorbike', 'person',
-                'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
-
-
-def process_outputs(outputs):
-    """Merges all feature levels into single tensor and combines box offsets
-    and class scores.
-
-    # Arguments
-        class_outputs: Tensor, logits for all classes corresponding to the
-        features associated with the box coordinates at each feature levels.
-        box_outputs: Tensor, box coordinate offsets for the corresponding prior
-        boxes at each feature levels.
-        num_levels: Int, number of levels considered at efficientnet features.
-        num_classes: Int, number of classes in the dataset.
-
-    # Returns
-        outputs: Numpy array, Processed outputs by merging the features at
-        all levels. Each row corresponds to box coordinate offsets and
-        sigmoid of the class logits.
-    """
-    outputs = outputs[0]
-    boxes, classes = outputs[:, :4], outputs[:, 4:]
-    s1, s2, s3, s4 = np.hsplit(boxes, 4)
-    boxes = np.concatenate([s2, s1, s4, s3], axis=1)
-    boxes = boxes[np.newaxis]
-    classes = classes[np.newaxis]
-    outputs = np.concatenate([boxes, classes], axis=2)
-    return outputs
-
-
-def scale_box(predictions, image_scales=None):
-    """
-    # Arguments
-        image: Numpy array.
-        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
-    # Returns
-        Numpy array of shape `[num_boxes, N]`.
-    """
-
-    if image_scales is not None:
-        boxes = predictions[:, :4]
-        scales = image_scales[np.newaxis][np.newaxis]
-        boxes = boxes * scales
-        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
-    return predictions
-
-
-class ScaleBox(Processor):
-    """Scale box coordinates of the prediction.
-    """
-    def __init__(self, scales):
-        super(ScaleBox, self).__init__()
-        self.scales = scales
-
-    def call(self, boxes):
-        boxes = scale_box(boxes, self.scales)
-        return boxes
 
 
 class DivideStandardDeviationImage(Processor):
@@ -198,3 +118,87 @@ class ScaledResize(Processor):
         image_scale = 1 / image_scale
         output_images = output_images[np.newaxis]
         return output_images, image_scale
+
+
+class ScaleBox(Processor):
+    """Scale box coordinates of the prediction.
+    """
+    def __init__(self, scales):
+        super(ScaleBox, self).__init__()
+        self.scales = scales
+
+    def call(self, boxes):
+        boxes = scale_box(boxes, self.scales)
+        return boxes
+
+
+def scale_box(predictions, image_scales=None):
+    """
+    # Arguments
+        image: Numpy array.
+        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
+    # Returns
+        Numpy array of shape `[num_boxes, N]`.
+    """
+
+    if image_scales is not None:
+        boxes = predictions[:, :4]
+        scales = image_scales[np.newaxis][np.newaxis]
+        boxes = boxes * scales
+        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
+    return predictions
+
+
+def process_outputs(outputs):
+    """Merges all feature levels into single tensor and combines
+    box offsets and class scores.
+
+    # Arguments
+        class_outputs: Tensor, logits for all classes corresponding
+            to the features associated with the box coordinates at each
+            feature levels.
+        box_outputs: Tensor, box coordinate offsets for the
+            corresponding prior boxes at each feature levels.
+        num_levels: Int, number of levels considered at efficientnet
+            features.
+        num_classes: Int, number of classes in the dataset.
+
+    # Returns
+        outputs: Numpy array, Processed outputs by merging the features
+            at all levels. Each row corresponds to box coordinate
+            offsets and sigmoid of the class logits.
+    """
+    outputs = outputs[0]
+    boxes, classes = outputs[:, :4], outputs[:, 4:]
+    s1, s2, s3, s4 = np.hsplit(boxes, 4)
+    boxes = np.concatenate([s2, s1, s4, s3], axis=1)
+    boxes = boxes[np.newaxis]
+    classes = classes[np.newaxis]
+    outputs = np.concatenate([boxes, classes], axis=2)
+    return outputs
+
+
+def get_class_name_efficientdet(dataset_name):
+    if dataset_name == 'COCO':
+        return ['person', 'bicycle', 'car', 'motorcycle',
+                'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+                'fire hydrant', '0', 'stop sign', 'parking meter', 'bench',
+                'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant',
+                'bear', 'zebra', 'giraffe', '0', 'backpack', 'umbrella', '0',
+                '0', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis',
+                'snowboard', 'sports ball', 'kite', 'baseball bat',
+                'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+                'bottle', '0', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
+                'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli',
+                'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair',
+                'couch', 'potted plant', 'bed', '0', 'dining table', '0', '0',
+                'toilet', '0', 'tv', 'laptop', 'mouse', 'remote', 'keyboard',
+                'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+                'refrigerator', '0', 'book', 'clock', 'vase', 'scissors',
+                'teddy bear', 'hair drier', 'toothbrush']
+
+    elif dataset_name == 'VOC':
+        return ['background', 'aeroplane', 'bicycle', 'bird', 'boat',
+                'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
+                'diningtable', 'dog', 'horse', 'motorbike', 'person',
+                'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
