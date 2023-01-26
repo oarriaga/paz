@@ -52,7 +52,7 @@ class DetectSingleShotEfficientDet(Processor):
             ScaleBox(image_scales),
             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
             pr.FilterBoxes(get_class_name_efficientdet('COCO'),
-                           self.score_thresh)])        
+                           self.score_thresh)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
