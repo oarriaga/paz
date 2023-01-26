@@ -28,6 +28,7 @@ class DetectSingleShotEfficientDet(Processor):
         self.nms_thresh = nms_thresh
         self.variances = variances
         self.draw = draw
+        self.model.prior_boxes = model.prior_boxes * model.input_shape[1]
 
         super(DetectSingleShotEfficientDet, self).__init__()
         preprocessing = SequentialProcessor([
@@ -47,8 +48,7 @@ class DetectSingleShotEfficientDet(Processor):
         outputs = self.model(preprocessed_image)
         postprocessing = SequentialProcessor([
             pr.Squeeze(axis=None),
-            pr.DecodeBoxes(self.model.prior_boxes*self.model.input_shape[1],
-                           variances=self.variances),
+            pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
             ScaleBox(image_scales),
             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
             pr.FilterBoxes(get_class_name_efficientdet('COCO'),
