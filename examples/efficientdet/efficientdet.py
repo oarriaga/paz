@@ -43,11 +43,13 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    if base_weights not in ['COCO', None]:
+    if base_weights not in ['COCO', 'VOC', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
-    if head_weights not in ['COCO', None]:
+    if head_weights not in ['COCO', 'VOC', None]:
         raise ValueError('Invalid head_weights: ', head_weights)
     if (base_weights is None) and (head_weights == 'COCO'):
+        raise NotImplementedError('Invalid `base_weights` with head_weights')
+    if (base_weights is None) and (head_weights == 'VOC'):
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
     branches, middles, skips = EfficientNet_to_BiFPN(
@@ -65,6 +67,9 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
     if ((base_weights == 'COCO') and (head_weights == 'COCO')):
+        model_filename = '-'.join([model_name, str(base_weights),
+                                   str(head_weights) + '_weights.hdf5'])
+    if ((base_weights == 'VOC') and (head_weights == 'VOC')):
         model_filename = '-'.join([model_name, str(base_weights),
                                    str(head_weights) + '_weights.hdf5'])
     elif ((base_weights == 'COCO') and (head_weights is None)):

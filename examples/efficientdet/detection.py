@@ -1,6 +1,7 @@
 import numpy as np
 from paz import processors as pr
 from paz.abstract import SequentialProcessor, Processor
+from paz.pipelines.detection import DetectSingleShot
 from paz.backend.image import resize_image
 from efficientdet import EFFICIENTDETD0
 
@@ -207,9 +208,45 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
             Detector](https://arxiv.org/abs/1512.02325)
     """
     def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
-        model = EFFICIENTDETD0()
         names = get_class_names('COCO')
+        model = EFFICIENTDETD0(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')        
         super(EFFICIENTDETD0COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD0VOC(DetectSingleShot):
+    """Single-shot inference pipeline with SSD512 trained on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+
+    # Example
+        ``` python
+        from paz.pipelines import SSD512COCO
+
+        detect = SSD512COCO()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+     # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    # Reference
+        - [SSD: Single Shot MultiBox
+            Detector](https://arxiv.org/abs/1512.02325)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('VOC')
+        model = EFFICIENTDETD0(num_classes=len(names),
+                               base_weights='VOC', head_weights='VOC')
+        super(EFFICIENTDETD0VOC, self).__init__(
             model, names, score_thresh, nms_thresh, draw=draw)
 
 
