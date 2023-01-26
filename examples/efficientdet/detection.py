@@ -96,7 +96,7 @@ class DetectSingleShotEfficientDet(Processor):
         draw: Boolean. If ``True`` prediction are drawn in the returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 mean=pr.BGR_IMAGENET_MEAN, variances=[1, 1, 1, 1],
+                 mean=pr.RGB_IMAGENET_MEAN, variances=[1, 1, 1, 1],
                  draw=True):
         self.model = model
         self.class_names = class_names
@@ -106,34 +106,20 @@ class DetectSingleShotEfficientDet(Processor):
         self.draw = draw
 
         super(DetectSingleShotEfficientDet, self).__init__()
-        # preprocessing = SequentialProcessor(
-        #     [pr.ResizeImage(self.model.input_shape[1:3]),
-        #      pr.ConvertColorSpace(pr.RGB2BGR),
-        #      pr.SubtractMeanImage(mean),
-        #      pr.CastImage(float),
-        #      pr.ExpandDims(axis=0)])
-
         preprocessing = SequentialProcessor([
             pr.CastImage(float),
-            pr.SubtractMeanImage(mean=RGB_IMAGENET_MEAN),
+            pr.SubtractMeanImage(mean=mean),
             DivideStandardDeviationImage(standard_deviation=RGB_IMAGENET_STDEV),
             ScaledResize(image_size=self.model.input_shape[1]),
         ])
         self.preprocessing = preprocessing
 
-        # postprocessing = SequentialProcessor(
-        #     [pr.Squeeze(axis=None),
-        #      pr.DecodeBoxes(self.model.prior_boxes, self.variances),
-        #      pr.NonMaximumSuppressionPerClass(self.nms_thresh),
-        #      pr.FilterBoxes(self.class_names, self.score_thresh)])
-        
-
-        self.denormalize = pr.DenormalizeBoxes2D()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
         preprocessed_image, image_scales = self.preprocessing(image)
+        outputs = self.model(preprocessed_image)
         postprocessing = SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(self.model.prior_boxes*self.model.input_shape[1],
@@ -141,8 +127,7 @@ class DetectSingleShotEfficientDet(Processor):
             ScaleBox(image_scales),
             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
             pr.FilterBoxes(get_class_name_efficientdet('COCO'),
-                           self.score_thresh)])
-        outputs = self.model(preprocessed_image)
+                           self.score_thresh)])        
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
@@ -232,31 +217,6 @@ class ScaleBox(Processor):
         return boxes
 
 
-def efficientdet_preprocess(image, image_size):
-    """Preprocess image for EfficientDet model.
-
-    # Arguments
-        image: Tensor, raw input image to be preprocessed
-        of shape [bs, h, w, c]
-        image_size: Tensor, size to resize the raw image
-        of shape [bs, new_h, new_w, c]
-
-    # Returns
-        image: Numpy array, resized and preprocessed image
-        image_scale: Numpy array, scale to reconstruct each of
-        the raw images to original size from the resized
-        image.
-    """
-
-    preprocessing = SequentialProcessor([
-        pr.CastImage(float),
-        pr.SubtractMeanImage(mean=RGB_IMAGENET_MEAN),
-        DivideStandardDeviationImage(standard_deviation=RGB_IMAGENET_STDEV),
-        ScaledResize(image_size=image_size),
-        ])
-    image, image_scale = preprocessing(image)
-    return image, image_scale
-
 class DivideStandardDeviationImage(Processor):
     """Divide channel-wise standard deviation to image.
 
@@ -309,38 +269,8 @@ class ScaledResize(Processor):
                                   self.image_size,
                                   image.shape[2]))
         output_images[:scaled_image.shape[0],
-        :scaled_image.shape[1],
-        :scaled_image.shape[2]] = scaled_image
+                      :scaled_image.shape[1],
+                      :scaled_image.shape[2]] = scaled_image
         image_scale = 1 / image_scale
         output_images = output_images[np.newaxis]
         return output_images, image_scale
-
-
-def efficientdet_postprocess(model, outputs, image_scales, raw_images=None):
-    """EfficientDet output postprocessing function.
-
-    # Arguments
-        model: EfficientDet model
-        class_outputs: Tensor, logits for all classes corresponding to the
-        features associated with the box coordinates at each feature levels.
-        box_outputs: Tensor, box coordinate offsets for the corresponding prior
-        boxes at each feature levels.
-        image_scale: Numpy array, scale to reconstruct each of the raw images
-        to original size from the resized image.
-        raw_images: Numpy array, RGB image to draw the detections on the image.
-
-    # Returns
-        image: Numpy array, RGB input image with detections overlaid.
-        outputs: List of Box2D, containing the detections with bounding box
-        and class details.
-    """
-    outputs = process_outputs(outputs)
-    postprocessing = SequentialProcessor(
-        [pr.Squeeze(axis=None),
-         pr.DecodeBoxes(model.prior_boxes*512, variances=[1, 1, 1, 1]),
-         ScaleBox(image_scales), pr.NonMaximumSuppressionPerClass(0.4),
-         pr.FilterBoxes(get_class_name_efficientdet('COCO'), 0.8)])
-    outputs = postprocessing(outputs)
-    draw_boxes2D = pr.DrawBoxes2D(get_class_name_efficientdet('COCO'))
-    image = draw_boxes2D(raw_images.astype('uint8'), outputs)
-    return image, outputs
