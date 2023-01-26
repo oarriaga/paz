@@ -12,14 +12,16 @@ IMAGE_PATH = ('/home/manummk95/Desktop/efficientdet_BKP/paz/examples/efficientde
 if __name__ == "__main__":
     raw_image = LoadImage()(IMAGE_PATH)
     model = EFFICIENTDETD0(base_weights='COCO', head_weights='COCO')
-    # model.prior_boxes = model.prior_boxes*512.0
-    image_size = model.input_shape[1]
-    input_image, image_scales = efficientdet_preprocess(raw_image, image_size)
+    # image_size = model.input_shape[1]
+    # input_image, image_scales = efficientdet_preprocess(raw_image, image_size)
 
-    outputs = model(input_image)
+    # outputs = model(input_image)
     
-    image, detections = efficientdet_postprocess(
-        model, outputs, image_scales, raw_image)
-    print(detections)
-    write_image('paz_postprocess.jpg', image)
+    # image, detections = efficientdet_postprocess(
+    #     model, outputs, image_scales, raw_image)
+
+    detect = DetectSingleShotEfficientDet(model, get_class_name_efficientdet('COCO'), 0.8, 0.4)
+    detections = detect(raw_image)
+    show_image(detections['image'])
+    write_image('detections.png', detections['image'])
     print('task completed')
