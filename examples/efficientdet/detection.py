@@ -14,15 +14,29 @@ class DetectSingleShotEfficientDet(Processor):
 
     # Arguments
         model: Keras model.
-        class_names: List of strings indicating the class names.
-        score_thresh: Float between [0, 1]
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
         nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the
+        mean: List of three elements indicating per channel mean.
+        variances: List of floats indicating variances to be encoded
+            for bounding boxes.
+        draw: Bool. If ``True`` prediction are drawn on the
             returned image.
+
+    # Properties
+        model: Keras model.
+        class_names: List.
+        score_thresh: Float.
+        nms_thresh: Float.
+        variances: List.
+        draw: Bool.
+        model.prior_boxes: Array.
+
+    # Methods
+        call()
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 mean=pr.RGB_IMAGENET_MEAN, variances=[1, 1, 1, 1],
+                 mean=pr.RGB_IMAGENET_MEAN, variances=[1.0, 1.0, 1.0, 1.0],
                  draw=True):
         self.model = model
         self.class_names = class_names
@@ -66,7 +80,14 @@ class DivideStandardDeviationImage(Processor):
     """Divide channel-wise standard deviation to image.
 
     # Arguments
-        mean: List of length 3, containing the channel-wise mean.
+        standard_deviation: List of length 3, containing the
+            channel-wise standard deviation.
+
+    # Properties
+        standard_deviation: List.
+
+    # Methods
+        call()
     """
     def __init__(self, standard_deviation):
         self.standard_deviation = standard_deviation
@@ -82,11 +103,11 @@ class ScaledResize(Processor):
     # Arguments
         image_size: Int, desired size of the model input.
 
-    # Returns
-        output_images: Numpy array, image resized to match
-        image size.
-        image_scales: Numpy array, scale to reconstruct the
-        raw image from the output_images.
+    # Properties
+        image_size: Int.
+
+    # Methods
+        call()
     """
     def __init__(self, image_size):
         self.image_size = image_size
@@ -95,7 +116,7 @@ class ScaledResize(Processor):
     def call(self, image):
         """
         # Arguments
-            image: Numpy array, raw input image.
+            image: Array, raw input image.
         """
         crop_offset_y = np.array(0)
         crop_offset_x = np.array(0)
@@ -124,6 +145,15 @@ class ScaledResize(Processor):
 
 class ScaleBox(Processor):
     """Scale box coordinates of the prediction.
+
+    # Arguments
+        scales: Array of shape `()`, value to scale boxes.
+
+    # Properties
+        scales: Int.
+
+    # Methods
+        call()
     """
     def __init__(self, scales):
         super(ScaleBox, self).__init__()
@@ -137,10 +167,13 @@ class ScaleBox(Processor):
 def scale_box(predictions, image_scales=None):
     """
     # Arguments
-        image: Numpy array.
-        boxes: Numpy array of shape `[num_boxes, N]` where N >= 4.
+        predictions: Array of shape `(num_boxes, num_classes+N)`
+            model predictions.
+        image_scales: Array of shape `()`, scale value of boxes.
+
     # Returns
-        Numpy array of shape `[num_boxes, N]`.
+        predictions: Array of shape `(num_boxes, num_classes+N)`
+            model predictions.
     """
 
     if image_scales is not None:
@@ -156,17 +189,10 @@ def process_outputs(outputs):
     box offsets and class scores.
 
     # Arguments
-        class_outputs: Tensor, logits for all classes corresponding
-            to the features associated with the box coordinates at each
-            feature levels.
-        box_outputs: Tensor, box coordinate offsets for the
-            corresponding prior boxes at each feature levels.
-        num_levels: Int, number of levels considered at efficientnet
-            features.
-        num_classes: Int, number of classes in the dataset.
+        outputs: Tensor, model output.
 
     # Returns
-        outputs: Numpy array, Processed outputs by merging the features
+        outputs: Array, Processed outputs by merging the features
             at all levels. Each row corresponds to box coordinate
             offsets and sigmoid of the class logits.
     """
@@ -181,31 +207,18 @@ def process_outputs(outputs):
 
 
 class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
-    """Single-shot inference pipeline with SSD512 trained on COCO.
+    """Single-shot inference pipeline with EFFICIENTDETD0 trained
+    on COCO.
 
     # Arguments
         score_thresh: Float between [0, 1]
         nms_thresh: Float between [0, 1].
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
 
-    # Example
-        ``` python
-        from paz.pipelines import SSD512COCO
-
-        detect = SSD512COCO()
-
-        # apply directly to an image (numpy-array)
-        inferences = detect(image)
-        ```
-     # Returns
-        A function that takes an RGB image and outputs the predictions
-        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
-        The corresponding values of these keys contain the image with the drawn
-        inferences and a list of ``paz.abstract.messages.Boxes2D``.
-
-    # Reference
-        - [SSD: Single Shot MultiBox
-            Detector](https://arxiv.org/abs/1512.02325)
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
@@ -216,31 +229,18 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
 
 
 class EFFICIENTDETD0VOC(DetectSingleShot):
-    """Single-shot inference pipeline with SSD512 trained on COCO.
+    """Single-shot inference pipeline with EFFICIENTDETD0 trained
+    on VOC.
 
     # Arguments
         score_thresh: Float between [0, 1]
         nms_thresh: Float between [0, 1].
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
 
-    # Example
-        ``` python
-        from paz.pipelines import SSD512COCO
-
-        detect = SSD512COCO()
-
-        # apply directly to an image (numpy-array)
-        inferences = detect(image)
-        ```
-     # Returns
-        A function that takes an RGB image and outputs the predictions
-        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
-        The corresponding values of these keys contain the image with the drawn
-        inferences and a list of ``paz.abstract.messages.Boxes2D``.
-
-    # Reference
-        - [SSD: Single Shot MultiBox
-            Detector](https://arxiv.org/abs/1512.02325)
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
         names = get_class_names('VOC')
