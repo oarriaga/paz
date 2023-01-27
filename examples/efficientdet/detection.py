@@ -68,8 +68,7 @@ class DetectSingleShotEfficientDet(Processor):
             pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
             ScaleBox(image_scales),
             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
-            pr.FilterBoxes(get_class_names('COCO'),
-                           self.score_thresh)])
+            pr.FilterBoxes(self.class_names, self.score_thresh)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
