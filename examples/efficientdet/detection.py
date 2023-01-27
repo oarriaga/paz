@@ -60,7 +60,7 @@ class DetectSingleShotEfficientDet(Processor):
             ScaledResize(image_size=self.model.input_shape[1])])
         self.preprocessing = preprocessing
 
-        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
+        self.draw_boxes2D = DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
@@ -223,7 +223,7 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -245,7 +245,7 @@ class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD1(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -267,7 +267,7 @@ class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD2(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -289,7 +289,7 @@ class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD3(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -311,7 +311,7 @@ class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD4(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -333,7 +333,7 @@ class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD5(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -355,7 +355,7 @@ class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD6(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -377,7 +377,7 @@ class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD7(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -399,7 +399,7 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('VOC')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='VOC', head_weights='VOC')
@@ -482,7 +482,7 @@ class DrawBoxes2D(pr.DrawBoxes2D):
     def call(self, image, boxes2D):
         raw_image = image.copy()
         for box2D in boxes2D:
-            x_min, y_min, x_max, y_max = box2D.coordinates
+            x_min, y_min, x_max, y_max = box2D.coordinates.astype(np.int)
             color = self.compute_box_color(box2D)
             draw_opaque_box(image, (x_min, y_min), (x_max, y_max), color)
         image = make_box_transparent(raw_image, image)
@@ -490,7 +490,7 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         offset_start, offset_end, text_box_color = text_box_parameters
         text_thickness, offset_x, offset_y, text_color = text_parameters
         for box2D in boxes2D:
-            x_min, y_min, x_max, y_max = box2D.coordinates
+            x_min, y_min, x_max, y_max = box2D.coordinates.astype(np.int)
             color = self.compute_box_color(box2D)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
             text = self.compute_text(box2D)
@@ -503,4 +503,4 @@ class DrawBoxes2D(pr.DrawBoxes2D):
             args = (image, text, (x_min + offset_x, y_min + offset_y),
                     self.scale, text_color, text_thickness)
             put_text(*args)
-        return
+        return image
