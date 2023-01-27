@@ -3,7 +3,9 @@ from paz import processors as pr
 from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines.detection import DetectSingleShot
 from paz.backend.image import resize_image
-from efficientdet import EFFICIENTDETD0
+from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
+                          EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
+                          EFFICIENTDETD6, EFFICIENTDETD7)
 
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
@@ -224,6 +226,160 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD0COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD1 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD1(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD1COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD2 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD2(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD2COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD3 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD3(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD3COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD4 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD4(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD4COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD5 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD5(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD5COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD6 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD6(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD6COCO, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
+    """Single-shot inference pipeline with EFFICIENTDETD7 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.80, nms_thresh=0.45, draw=True):
+        names = get_class_names('COCO')
+        model = EFFICIENTDETD7(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTDETD7COCO, self).__init__(
             model, names, score_thresh, nms_thresh, draw=draw)
 
 
