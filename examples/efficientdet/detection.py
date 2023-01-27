@@ -52,8 +52,7 @@ class DetectSingleShotEfficientDet(Processor):
             pr.SubtractMeanImage(mean=mean),
             DivideStandardDeviationImage(
                 standard_deviation=RGB_IMAGENET_STDEV),
-            ScaledResize(image_size=self.model.input_shape[1]),
-        ])
+            ScaledResize(image_size=self.model.input_shape[1])])
         self.preprocessing = preprocessing
 
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
