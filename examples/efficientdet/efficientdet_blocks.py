@@ -129,11 +129,12 @@ def build_head_conv2D(num_blocks, num_filters, bias_initializer):
         conv_blocks: List, head convolutional blocks.
     """
     conv_blocks = []
+    args_1 = (num_filters, 3, (1, 1), 'same', 'channels_last', (1, 1),
+              1, None, True)
     for _ in range(num_blocks):
-        args = (num_filters, 3, (1, 1), 'same', 'channels_last', (1, 1),
-                1, None, True, tf.initializers.variance_scaling(),
-                tf.initializers.variance_scaling(), bias_initializer)
-        conv_blocks.append(SeparableConv2D(*args))
+        args_2 = (tf.initializers.variance_scaling(),
+                  tf.initializers.variance_scaling(), bias_initializer)
+        conv_blocks.append(SeparableConv2D(*args_1, *args_2))
     return conv_blocks
 
 

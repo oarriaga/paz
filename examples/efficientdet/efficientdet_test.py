@@ -51,7 +51,7 @@ def get_EfficientNet_hyperparameters():
         "D_divisor": 8,
         "kernel_sizes": [3, 3, 5, 3, 5, 5, 3],
         "repeats": [1, 2, 2, 3, 3, 4, 1],
-        "SE_ratio": 0.25,
+        "excite_ratio": 0.25,
         "strides": [[1, 1], [2, 2], [2, 2], [2, 2], [1, 1], [2, 2], [1, 1]],
         "expand_ratios": [1, 6, 6, 6, 6, 6, 6]
     }
@@ -114,7 +114,8 @@ def test_EfficientNet_SE_block(image_size, scaling_coefficients,
                                output_shape):
     shape = (image_size, image_size, 3)
     image = Input(shape=shape, name='image')
-    branch_tensors = EFFICIENTNET(image, scaling_coefficients, SE_ratio=0.8)
+    branch_tensors = EFFICIENTNET(image, scaling_coefficients,
+                                  excite_ratio=0.8)
     assert branch_tensors[0].shape == (None, ) + output_shape, (
         'SE block output shape mismatch')
     del image, branch_tensors
@@ -195,7 +196,7 @@ def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
     kernel_sizes = efficientnet_hyperparameters["kernel_sizes"]
     outro_filters = efficientnet_hyperparameters["outro_filters"]
     repeats = efficientnet_hyperparameters["repeats"]
-    SE_ratio = efficientnet_hyperparameters["SE_ratio"]
+    excite_ratio = efficientnet_hyperparameters["excite_ratio"]
     strides = efficientnet_hyperparameters["strides"]
     expand_ratios = efficientnet_hyperparameters["expand_ratios"]
     W_coefficient, D_coefficient, survival_rate = scaling_coefficients
@@ -203,7 +204,7 @@ def test_EfficientNet_MBconv_blocks(image_size, scaling_coefficients,
     x = MBconv_blocks(
         x, kernel_sizes, intro_filters, outro_filters,
         W_coefficient, D_coefficient, D_divisor, repeats,
-        SE_ratio, survival_rate, strides, expand_ratios)
+        excite_ratio, survival_rate, strides, expand_ratios)
     assert len(x) == len(output_shape), "Feature count mismatch"
     for feature, target_shape in zip(x, output_shape):
         assert feature.shape == target_shape, "Feature shape mismatch"

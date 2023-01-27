@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import BatchNormalization, Conv2D, DepthwiseConv2D
 
 
-def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, SE_ratio=0.25,
+def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, excite_ratio=0.25,
                  kernel_sizes=[3, 3, 5, 3, 5, 5, 3],
                  repeats=[1, 2, 2, 3, 3, 4, 1],
                  intro_filters=[32, 16, 24, 40, 80, 112, 192],
@@ -18,7 +18,7 @@ def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, SE_ratio=0.25,
         image: Tensor of shape `(batch_size, input_shape)`, input image.
         scaling_coefficients: List, EfficientNet scaling coefficients.
         D_divisor: Int, network depth divisor.
-        SE_ratio: Float, block's squeeze excite ratio.
+        excite_ratio: Float, block's squeeze excite ratio.
         kernel_sizes: List, kernel sizes.
         repeats: Int, number of block repeats.
         intro_filters: Int, block's input filters.
@@ -44,7 +44,7 @@ def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, SE_ratio=0.25,
     x = MBconv_blocks(
         x, kernel_sizes, intro_filters, outro_filters,
         W_coefficient, D_coefficient, D_divisor, repeats,
-        SE_ratio, survival_rate, strides, expand_ratios)
+        excite_ratio, survival_rate, strides, expand_ratios)
     return x
 
 
@@ -62,7 +62,7 @@ def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     """
     filters = scale_filters(intro_filters[0], width_coefficient, depth_divisor)
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
-               None, False, normal_kernel_initializer)(image)
+               None, False, kernel_initializer)(image)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
     return x
@@ -90,9 +90,9 @@ def scale_filters(filters, width_coefficient, depth_divisor):
     return scaled_filters
 
 
-def normal_kernel_initializer(shape, dtype=None):
-    """Initialize convolutional kernel using zero
-    centred Gaussian distribution.
+def kernel_initializer(shape, dtype=None):
+    """Initialize convolutional kernel with
+    zero centred Gaussian distribution.
 
     # Arguments
         shape: variable shape.
@@ -107,7 +107,7 @@ def normal_kernel_initializer(shape, dtype=None):
 
 
 def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
-                  D_coefficient, D_divisor, repeats, SE_ratio,
+                  D_coefficient, D_divisor, repeats, excite_ratio,
                   survival_rate, strides, expand_ratios):
     """Builds EfficientNet's MBConv blocks.
     MBConv stands for Mobile Inverted Bottleneck Convolution.
@@ -121,31 +121,34 @@ def MBconv_blocks(x, kernel_sizes, intro_filters, outro_filters, W_coefficient,
         D_coefficient: Float, network depth scaling coefficient.
         D_divisor: Int, network depth divisor.
         repeats: Int, number of block repeats.
-        SE_ratio: Float, block's squeeze excite ratio.
+        excite_ratio: Float, block's squeeze excite ratio.
         survival_rate: Float, survival probability to drop features.
         strides: List, filter strides.
-        expand_ratios: Int, MBConv block expansion ratio.
+        expand_ratios: List, MBConv block's expansion ratio.
 
     # Returns
         feature_maps: List, of output features.
     """
-    iterator_1 = zip(intro_filters, outro_filters, repeats)
-    iterator_2 = zip(kernel_sizes, expand_ratios, strides)
     feature_append_mask = [stride[0] == 2 for stride in strides[1:]]
     feature_append_mask.append(True)
+
+    intro_filters = [scale_filters(intro_filter, W_coefficient, D_divisor)
+                     for intro_filter in intro_filters]
+    outro_filters = [scale_filters(outro_filter, W_coefficient, D_divisor)
+                     for outro_filter in outro_filters]
+    repeats = [round_repeats(repeat, D_coefficient) for repeat in repeats]
+    excite_ratios = [excite_ratio] * len(outro_filters)
+    survival_rates = [survival_rate] * len(outro_filters)
+
+    iterator_1 = list(zip(intro_filters, outro_filters, strides, repeats))
+    iterator_2 = list(zip(kernel_sizes, survival_rates, expand_ratios,
+                          excite_ratios))
     feature_maps = []
-
-    for args_1, args_2, should_append_feature in zip(iterator_1, iterator_2,
-                                                     feature_append_mask):
-        intro_filter, outro_filter, repeat = args_1
-        intro_filter = scale_filters(intro_filter, W_coefficient, D_divisor)
-        outro_filter = scale_filters(outro_filter, W_coefficient, D_divisor)
-        repeat = round_repeats(repeat, D_coefficient)
-        args_1 = intro_filter, outro_filter, repeat
-        x = MBconv_block_features(x, survival_rate, SE_ratio, *args_1, *args_2)
-        if should_append_feature:
+    for feature_arg, args in enumerate(zip(iterator_1, iterator_2)):
+        repeat_args, block_args = args
+        x = MB_repeat(x, *repeat_args, block_args)
+        if feature_append_mask[feature_arg]:
             feature_maps.append(x)
-
     return feature_maps
 
 
@@ -162,34 +165,29 @@ def round_repeats(repeats, depth_coefficient):
     return int(math.ceil(depth_coefficient * repeats))
 
 
-def MBconv_block_features(x, survival_rate, SE_ratio, intro_filter,
-                          outro_filter, repeats, kernel_size, expand_ratio,
-                          stride):
+def MB_repeat(x, intro_filter, outro_filter, stride, repeats, block_args):
     """Computes given MBConv block's features.
 
     # Arguments
         x: Tensor, input features.
-        survival_rate: Float, survival probability to drop features.
-        SE_ratio: Float, block's squeeze excite ratio.
         intro_filter: Int, block's input filter.
         outro_filter: Int, block's output filter.
-        repeats: Int, number of block repeats.
-        kernel_size: Int, kernel size.
-        expand_ratio: Int, MBConv block expansion ratio.
         stride: Int, filter strides.
+        repeats: Int, number of block repeats.
+        block_args: Tuple, holding kernel_sizes, survival_rates,
+            expand_ratios, excite_ratios.
 
     # Returns
         Tensor: Output features.
     """
-    args = (kernel_size, survival_rate, expand_ratio, SE_ratio)
-    x = MB_block(x, intro_filter, outro_filter, stride, *args)
-    for _ in range(1, repeats):
-        x = MB_block(x, outro_filter, outro_filter, [1, 1], *args)
+    for _ in range(repeats):
+        x = MB_block(x, intro_filter, outro_filter, stride, *block_args)
+        intro_filter, stride = outro_filter, [1, 1]
     return x
 
 
 def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
-             survival_rate, expand_ratio, SE_ratio):
+             survival_rate, expand_ratio, excite_ratio):
     """Initialize Mobile Inverted Residual Bottleneck block.
 
     # Arguments
@@ -200,7 +198,7 @@ def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
         kernel_size: Int, conv block kernel size.
         survival_rate: Float, survival probability to drop features.
         expand_ratio: Int, conv block expansion ratio.
-        SE_ratio: Float, squeeze excite block ratio.
+        excite_ratio: Float, squeeze excite block ratio.
 
     # Returns
         x: Tensor, output features.
@@ -213,36 +211,49 @@ def MB_block(inputs, intro_filters, outro_filters, strides, kernel_size,
         (https://arxiv.org/pdf/1905.11946.pdf)
     """
     filters = intro_filters * expand_ratio
+    x = MB_input(inputs, filters, expand_ratio)
+    x = MB_convolution(x, kernel_size, strides)
+    x = MB_squeeze_excitation(x, intro_filters, expand_ratio, excite_ratio)
+    x = MB_output(x, inputs, intro_filters, outro_filters, strides,
+                  survival_rate)
+    return x
 
-    # MB Block Input ----------------------------------------------------------
+
+def MB_input(inputs, filters, expand_ratio):
     if expand_ratio != 1:
-        x = Conv2D(filters, 1, padding='same', use_bias=False,
-                   kernel_initializer=normal_kernel_initializer)(inputs)
+        x = MB_conv2D(inputs, filters, use_bias=False)
         x = BatchNormalization()(x)
         x = tf.nn.swish(x)
     else:
         x = inputs
+    return x
 
-    # MB Block Convolution  ---------------------------------------------------
-    x = DepthwiseConv2D(kernel_size, strides, padding='same', use_bias=False,
-                        depthwise_initializer=normal_kernel_initializer)(x)
+
+def MB_conv2D(x, filters, use_bias=False):
+    kwargs = {'padding': 'same', 'kernel_initializer': kernel_initializer}
+    return Conv2D(filters, 1, use_bias=use_bias, **kwargs)(x)
+
+
+def MB_convolution(x, kernel_size, strides):
+    kwargs = {'padding': 'same', 'depthwise_initializer': kernel_initializer}
+    x = DepthwiseConv2D(kernel_size, strides, use_bias=False, **kwargs)(x)
     x = BatchNormalization()(x)
     x = tf.nn.swish(x)
+    return x
 
-    # MB Block Squeeze Excitation ---------------------------------------------
-    num_reduced_filters = max(1, int(intro_filters * SE_ratio))
+
+def MB_squeeze_excitation(x, intro_filters, expand_ratio, excite_ratio):
+    num_reduced_filters = max(1, int(intro_filters * excite_ratio))
     SE = tf.reduce_mean(x, [1, 2], keepdims=True)
-    SE = Conv2D(num_reduced_filters, 1, padding='same', use_bias=True,
-                kernel_initializer=normal_kernel_initializer)(SE)
+    SE = MB_conv2D(SE, num_reduced_filters, use_bias=True)
     SE = tf.nn.swish(SE)
-    SE = Conv2D(filters, 1, padding='same', use_bias=True,
-                kernel_initializer=normal_kernel_initializer)(SE)
+    SE = MB_conv2D(SE, intro_filters * expand_ratio, use_bias=True)
     SE = tf.sigmoid(SE)
-    x = SE * x
+    return SE * x
 
-    # MB Block Output ---------------------------------------------------------
-    x = Conv2D(outro_filters, 1, padding='same', use_bias=False,
-               kernel_initializer=normal_kernel_initializer)(x)
+
+def MB_output(x, inputs, intro_filters, outro_filters, strides, survival_rate):
+    x = MB_conv2D(x, outro_filters, use_bias=False)
     x = BatchNormalization()(x)
     all_strides_one = all(stride == 1 for stride in strides)
     if all_strides_one and intro_filters == outro_filters:
