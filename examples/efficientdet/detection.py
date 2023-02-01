@@ -507,7 +507,7 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         return image
 
 
-#################### Modification on paz modules #######################
+#################### Modifications to paz modules #######################
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
 
@@ -568,7 +568,7 @@ class FilterBoxes(Processor):
     def call(self, boxes):
         num_classes = boxes.shape[0]
         boxes2D = []
-        for class_arg in range(1, num_classes):
+        for class_arg in range(num_classes):
             class_detections = boxes[class_arg, :]
             confidence_mask = np.squeeze(
                 class_detections[:, -1] >= self.conf_thresh)

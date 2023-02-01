@@ -88,7 +88,7 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     output = np.zeros((num_classes, top_k, 5))
 
     # skip the background class (start counter in 1)
-    for class_arg in range(1, num_classes):
+    for class_arg in range(num_classes):
         conf_mask = class_predictions[:, class_arg] >= conf_thresh
         scores = class_predictions[:, class_arg][conf_mask]
         if len(scores) == 0:
@@ -102,4 +102,3 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
             (boxes[selected_indices], scores[selected_indices]), axis=1)
         output[class_arg, :count, :] = selections
     return output
-
