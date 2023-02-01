@@ -1,9 +1,10 @@
 import numpy as np
 from paz import processors as pr
-from paz.abstract import SequentialProcessor, Processor
+from paz.abstract import SequentialProcessor, Processor, Box2D
 from paz.pipelines.detection import DetectSingleShot
 from paz.backend.image import resize_image
 from paz.backend.image.draw import draw_rectangle
+from boxes import nms_per_class
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
@@ -70,8 +71,8 @@ class DetectSingleShotEfficientDet(Processor):
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
             ScaleBox(image_scales),
-            pr.NonMaximumSuppressionPerClass(self.nms_thresh),
-            pr.FilterBoxes(self.class_names, self.score_thresh)])
+            NonMaximumSuppressionPerClass(self.nms_thresh),
+            FilterBoxes(self.class_names, self.score_thresh)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
@@ -504,3 +505,79 @@ class DrawBoxes2D(pr.DrawBoxes2D):
                     self.scale, text_color, text_thickness)
             put_text(*args)
         return image
+
+
+#################### Modification on paz modules #######################
+class ToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages.
+
+    # Arguments
+        class_names: List of class names ordered with respect to the class
+            indices from the dataset ``boxes``.
+    """
+    def __init__(self, class_names=None, one_hot_encoded=False):
+        if class_names is not None:
+            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+        self.one_hot_encoded = one_hot_encoded
+        super(ToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        numpy_boxes2D, boxes2D = boxes, []
+        for numpy_box2D in numpy_boxes2D:
+            if self.one_hot_encoded:
+                class_name = self.arg_to_class[np.argmax(numpy_box2D[4:])]
+            elif numpy_box2D.shape[-1] == 5:
+                class_name = self.arg_to_class[numpy_box2D[-1]]
+            elif numpy_box2D.shape[-1] == 4:
+                class_name = None
+            boxes2D.append(Box2D(numpy_box2D[:4], 1.0, class_name))
+        return boxes2D
+
+
+class NonMaximumSuppressionPerClass(Processor):
+    """Applies non maximum suppression per class.
+
+    # Arguments
+        nms_thresh: Float between [0, 1].
+        conf_thresh: Float between [0, 1].
+    """
+    def __init__(self, nms_thresh=.45, conf_thresh=0.01):
+        self.nms_thresh = nms_thresh
+        self.conf_thresh = conf_thresh
+        super(NonMaximumSuppressionPerClass, self).__init__()
+
+    def call(self, boxes):
+        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
+        return boxes
+
+
+class FilterBoxes(Processor):
+    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
+
+    # Arguments
+        class_names: List of class names.
+        conf_thresh: Float between [0, 1].
+    """
+    def __init__(self, class_names, conf_thresh=0.5):
+        self.class_names = class_names
+        self.conf_thresh = conf_thresh
+        self.arg_to_class = dict(zip(
+            list(range(len(self.class_names))), self.class_names))
+        super(FilterBoxes, self).__init__()
+
+    def call(self, boxes):
+        num_classes = boxes.shape[0]
+        boxes2D = []
+        for class_arg in range(1, num_classes):
+            class_detections = boxes[class_arg, :]
+            confidence_mask = np.squeeze(
+                class_detections[:, -1] >= self.conf_thresh)
+            confident_class_detections = class_detections[confidence_mask]
+            if len(confident_class_detections) == 0:
+                continue
+            class_name = self.arg_to_class[class_arg]
+            for confident_class_detection in confident_class_detections:
+                coordinates = confident_class_detection[:4]
+                score = confident_class_detection[4]
+                boxes2D.append(Box2D(coordinates, score, class_name))
+        return boxes2D
