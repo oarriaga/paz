@@ -566,18 +566,14 @@ class FilterBoxes(Processor):
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
-        num_classes = boxes.shape[0]
+        max_class_score = np.amax(boxes[:, 4:], axis=1)
+        confidence_mask = max_class_score >= self.conf_thresh
+        confident_class_detections = boxes[confidence_mask]
         boxes2D = []
-        for class_arg in range(num_classes):
-            class_detections = boxes[class_arg, :]
-            confidence_mask = np.squeeze(
-                class_detections[:, -1] >= self.conf_thresh)
-            confident_class_detections = class_detections[confidence_mask]
-            if len(confident_class_detections) == 0:
-                continue
+        for confident_class_detection in confident_class_detections:
+            coordinates = confident_class_detection[:4]
+            score = np.max(confident_class_detection[4:])
+            class_arg = np.argmax(confident_class_detection[4:])
             class_name = self.arg_to_class[class_arg]
-            for confident_class_detection in confident_class_detections:
-                coordinates = confident_class_detection[:4]
-                score = confident_class_detection[4]
-                boxes2D.append(Box2D(coordinates, score, class_name))
+            boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D
