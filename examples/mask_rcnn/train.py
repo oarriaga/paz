@@ -17,8 +17,10 @@ from mask_rcnn.model import MaskRCNN, get_imagenet_weights
 import numpy as np
 import cv2
 
-from tensorflow.keras.layers import Layer, Input, Lambda
+from tensorflow.python.keras.layers import Layer, Input, Lambda
 from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
+from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
+    BBoxLoss, ClassLoss, MaskLoss
 
 
 class ShapesConfig(Config):
@@ -35,9 +37,8 @@ class ShapesConfig(Config):
     STEPS_PER_EPOCH = 100
     VALIDATION_STEPS = 5
 
+
 # Extra arguments to be passed to model from default values
-
-
 description = 'Training script for Mask RCNN model'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=8, type=int,
@@ -71,7 +72,7 @@ print('Data path: ', args.data_path)
 
 # Dataset initialisation
 config = ShapesConfig()
-optimizer = SGD(args.learning_rate, args.momentum, clipnorm=config.GRADIRNT_CLIP_NORM)
+optimizer = SGD(args.learning_rate, args.momentum, clipnorm=config.GRADIENT_CLIP_NORM)
 dataset_train = Shapes(50, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 dataset_val = Shapes(5, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 train_generator = DataGenerator(dataset_train, config, shuffle=True,
@@ -84,7 +85,7 @@ model = MaskRCNN(config=config, model_dir=args.data_path, train_bn=config.TRAIN_
                  top_down_pyramid_size=config.TOP_DOWN_PYRAMID_SIZE)
 
 # Network head creation
-losses = model.build_complete_network()
+model.build_complete_network()
 
 model.keras_model.load_weights('weights/mask_rcnn_coco (1).h5', by_name=True, skip_mismatch=True)
 
@@ -105,17 +106,27 @@ if args.layers in layer_regex.keys():
     layers = layer_regex[args.layers]
 model.set_trainable(layer_regex=layers)
 
+# Add losses and compile
+rpn_class_loss = ProposalClassLoss(config=config)
+rpn_bbox_loss = ProposalBBoxLoss(config=config)
+mrcnn_class_loss = ClassLoss(config=config)
+mrcnn_bbox_loss = BBoxLoss(config=config)
+mrcnn_mask_loss = MaskLoss(config=config)
+
+custom_losses = {
+        "rpn_class_logits": rpn_class_loss,
+        "rpn_bbox": rpn_bbox_loss,
+        "mrcnn_class_logits": mrcnn_class_loss,
+        "mrcnn_bbox": mrcnn_bbox_loss,
+        "mrcnn_mask": mrcnn_mask_loss
+        }
 reg_losses = [
-    l2(config.WEIGHT_DECAY)(w) / tf.cast(tf.size(input=w), tf.float32)
-    for w in model.keras_model.trainable_weights
-    if 'gamma' not in w.name and 'beta' not in w.name]
+            keras.regularizers.l2(self.config.WEIGHT_DECAY)(w) / tf.cast(tf.size(w), tf.float32)
+            for w in self.keras_model.trainable_weights
+            if 'gamma' not in w.name and 'beta' not in w.name]
 
 model.keras_model.add_loss(tf.add_n(reg_losses))
-
-model.keras_model.compile(
-            optimizer=optimizer,
-            loss=[None] * len(model.keras_model.outputs))
-
+model.keras_model.compile(optimizer=optimizer, loss=custom_losses, loss_weigth=config.LOSS_WEIGHTS)
 
 # Checkpoints
 model_path = os.path.join(args.save_path, 'shapes')
@@ -126,7 +137,6 @@ log = CSVLogger(os.path.join(model_path, 'shapes' + '-optimization.log'))
 save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 early_stop = EarlyStopping(monitor='loss', patience=3)
-
 
 model.keras_model.fit(
     train_generator,
