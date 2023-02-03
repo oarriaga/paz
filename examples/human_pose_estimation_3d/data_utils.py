@@ -4,7 +4,7 @@ import numpy as np
 import json
 from backend import destandardize, filter_keypoints
 
-# Joints in H3.6M -- data has 32 joints, but only 17 that move
+# Joints in H3.6M -- data has 32 joints, but only 17  that move
 H36M_NAMES = [''] * 32
 H36M_NAMES[0] = 'Hip'
 H36M_NAMES[1] = 'RHip'
