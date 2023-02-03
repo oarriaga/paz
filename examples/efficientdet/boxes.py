@@ -109,3 +109,15 @@ def filter_boxes(boxes, conf_thresh):
     confidence_mask = max_class_score >= conf_thresh
     confident_class_detections = boxes[confidence_mask]
     return confident_class_detections
+
+
+def BoxesToBoxes2D(boxes):
+    raise NotImplementedError
+
+
+def BoxesWithOneHotVectorsToBoxes2D(boxes):
+    raise NotImplementedError
+
+
+def BoxesWithClassArgToBoxes2D(boxes):
+    raise NotImplementedError

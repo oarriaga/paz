@@ -1,10 +1,11 @@
 import numpy as np
 from paz import processors as pr
-from paz.abstract import SequentialProcessor, Processor, Box2D
+from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines.detection import DetectSingleShot
 from paz.backend.image import resize_image
 from paz.backend.image.draw import draw_rectangle
-from boxes import nms_per_class, filter_boxes
+from boxes import (nms_per_class, filter_boxes, BoxesToBoxes2D,
+                   BoxesWithOneHotVectorsToBoxes2D, BoxesWithClassArgToBoxes2D)
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
@@ -43,13 +44,14 @@ class DetectSingleShotEfficientDet(Processor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.RGB_IMAGENET_MEAN, variances=[1.0, 1.0, 1.0, 1.0],
-                 draw=True):
+                 box_type="Boxes", draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
         self.draw = draw
+        self.box_type = box_type
         self.model.prior_boxes = model.prior_boxes * model.input_shape[1]
 
         super(DetectSingleShotEfficientDet, self).__init__()
@@ -72,7 +74,8 @@ class DetectSingleShotEfficientDet(Processor):
             pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
             ScaleBox(image_scales),
             NonMaximumSuppressionPerClass(self.nms_thresh),
-            FilterBoxes(self.class_names, self.score_thresh)])
+            FilterBoxes(self.class_names, self.score_thresh),
+            ToBoxes2D(self.class_names, box_type=self.box_type)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
@@ -224,12 +227,15 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD0COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
@@ -246,12 +252,15 @@ class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD1(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD1COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
@@ -268,12 +277,15 @@ class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD2(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD2COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
@@ -290,12 +302,15 @@ class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD3(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD3COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
@@ -312,12 +327,15 @@ class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD4(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD4COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
@@ -334,12 +352,15 @@ class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD5(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD5COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
@@ -356,12 +377,15 @@ class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD6(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD6COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
@@ -378,12 +402,15 @@ class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(
+            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
+            draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD7(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTDETD7COCO, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, box_type=box_type,
+            draw=draw)
 
 
 class EFFICIENTDETD0VOC(DetectSingleShot):
@@ -507,7 +534,6 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         return image
 
 
-#################### Modifications to paz modules #######################
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
 
@@ -533,18 +559,6 @@ class ToBoxes2D(Processor):
         else:
             raise ValueError('Invalid box type: ', self.box_type)
         return boxes2D
-
-
-def BoxesToBoxes2D(boxes):
-    pass
-
-
-def BoxesWithOneHotVectorsToBoxes2D(boxes):
-    pass
-
-
-def BoxesWithClassArgToBoxes2D(boxes):
-    pass
 
 
 class NonMaximumSuppressionPerClass(Processor):
@@ -580,12 +594,4 @@ class FilterBoxes(Processor):
 
     def call(self, boxes):
         boxes = filter_boxes(boxes, self.conf_thresh)
-        boxes2D = ToBoxes2D(self.class_names, box_type="Boxes")(boxes)
-        # boxes2D = []
-        # for box in boxes:
-        #     coordinates = box[:4]
-        #     score = np.max(box[4:])
-        #     class_arg = np.argmax(box[4:])
-        #     class_name = self.arg_to_class[class_arg]
-        #     boxes2D.append(Box2D(coordinates, score, class_name))
-        return boxes2D
+        return boxes
