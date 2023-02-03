@@ -27,7 +27,7 @@ H36M_NAMES[27] = 'RWrist'
 # Joints in COCO, 2D poses from HigherHRNet --> data has 17 joints; 
 # these are the indices. Hip,12,14,16,11,13,15,
 # Spine,Thorax,0,Head,5,7,9,6,8,10
-# to make compatible with Human3.6M, Nose -> Neck/Nose; Ankle -> Foot
+
 COCO_NAMES = [''] * 17
 COCO_NAMES[0] = 'Head'  # Nose renamed as head
 COCO_NAMES[1] = 'Thorax'
