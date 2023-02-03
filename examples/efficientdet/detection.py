@@ -4,7 +4,7 @@ from paz.abstract import SequentialProcessor, Processor, Box2D
 from paz.pipelines.detection import DetectSingleShot
 from paz.backend.image import resize_image
 from paz.backend.image.draw import draw_rectangle
-from boxes import nms_per_class
+from boxes import nms_per_class, filter_boxes
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
@@ -566,14 +566,12 @@ class FilterBoxes(Processor):
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
-        max_class_score = np.max(boxes[:, 4:], axis=1)
-        confidence_mask = max_class_score >= self.conf_thresh
-        confident_class_detections = boxes[confidence_mask]
+        boxes = filter_boxes(boxes, self.conf_thresh)
         boxes2D = []
-        for confident_class_detection in confident_class_detections:
-            coordinates = confident_class_detection[:4]
-            score = np.max(confident_class_detection[4:])
-            class_arg = np.argmax(confident_class_detection[4:])
+        for box in boxes:
+            coordinates = box[:4]
+            score = np.max(box[4:])
+            class_arg = np.argmax(box[4:])
             class_name = self.arg_to_class[class_arg]
             boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D

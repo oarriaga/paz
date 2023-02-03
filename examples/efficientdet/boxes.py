@@ -102,3 +102,10 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
              confident_class_predictions[selected_indices]), axis=1)
         output = np.concatenate((output, selections))
     return output
+
+
+def filter_boxes(boxes, conf_thresh):
+    max_class_score = np.max(boxes[:, 4:], axis=1)
+    confidence_mask = max_class_score >= conf_thresh
+    confident_class_detections = boxes[confidence_mask]
+    return confident_class_detections
