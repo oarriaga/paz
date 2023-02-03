@@ -4,7 +4,7 @@ from paz.abstract import SequentialProcessor, Processor, Box2D
 from paz.pipelines.detection import DetectSingleShot
 from paz.backend.image import resize_image
 from paz.backend.image.draw import draw_rectangle
-from boxes import nms_per_class
+from boxes import nms_per_class, boxes_to_boxes_one_hot
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
@@ -548,6 +548,7 @@ class NonMaximumSuppressionPerClass(Processor):
 
     def call(self, boxes):
         boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
+        boxes = boxes_to_boxes_one_hot(boxes)
         return boxes
 
 

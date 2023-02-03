@@ -85,9 +85,8 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
-    output = np.zeros((num_classes, top_k, 5))
+    output = []
 
-    # skip the background class (start counter in 1)
     for class_arg in range(num_classes):
         conf_mask = class_predictions[:, class_arg] >= conf_thresh
         scores = class_predictions[:, class_arg][conf_mask]
@@ -98,7 +97,21 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
             boxes, scores, nms_thresh, top_k)
         scores = np.expand_dims(scores, -1)
         selected_indices = indices[:count]
+        confident_class_predictions = class_predictions[conf_mask]
         selections = np.concatenate(
-            (boxes[selected_indices], scores[selected_indices]), axis=1)
-        output[class_arg, :count, :] = selections
-    return output
+            (boxes[selected_indices],
+             confident_class_predictions[selected_indices]), axis=1)
+        output.append(selections)
+    return np.concatenate(output, axis=0)
+
+
+def boxes_to_boxes_one_hot(boxes):
+    num_classes = boxes[0][4:].shape[0]
+    decoded_boxes = boxes[:, :4]
+    class_scores = boxes[:, 4:]
+    max_score_per_class = np.amax(class_scores, axis=1)
+    max_score_per_class = max_score_per_class.reshape(-1, 1)
+    max_score_array = np.tile(max_score_per_class, (1, num_classes))
+    one_hot_vectors = (class_scores == max_score_array).astype(int)
+    boxes_one_hot = np.concatenate((decoded_boxes, one_hot_vectors), axis=1)
+    return boxes_one_hot
