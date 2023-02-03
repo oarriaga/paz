@@ -515,23 +515,36 @@ class ToBoxes2D(Processor):
         class_names: List of class names ordered with respect to the class
             indices from the dataset ``boxes``.
     """
-    def __init__(self, class_names=None, one_hot_encoded=False):
+    def __init__(
+            self, class_names=None, one_hot_encoded=False, box_type='Boxes'):
         if class_names is not None:
             self.arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
+        self.box_type = box_type
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
-        numpy_boxes2D, boxes2D = boxes, []
-        for numpy_box2D in numpy_boxes2D:
-            if self.one_hot_encoded:
-                class_name = self.arg_to_class[np.argmax(numpy_box2D[4:])]
-            elif numpy_box2D.shape[-1] == 5:
-                class_name = self.arg_to_class[numpy_box2D[-1]]
-            elif numpy_box2D.shape[-1] == 4:
-                class_name = None
-            boxes2D.append(Box2D(numpy_box2D[:4], 1.0, class_name))
+        if self.box_type == 'Boxes':
+            boxes2D = BoxesToBoxes2D(boxes)
+        elif self.box_type == 'BoxesWithOneHotVectors':
+            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes)
+        elif self.box_type == "BoxesWithClassArg":
+            boxes2D = BoxesWithClassArgToBoxes2D(boxes)
+        else:
+            raise ValueError('Invalid box type: ', self.box_type)
         return boxes2D
+
+
+def BoxesToBoxes2D(boxes):
+    pass
+
+
+def BoxesWithOneHotVectorsToBoxes2D(boxes):
+    pass
+
+
+def BoxesWithClassArgToBoxes2D(boxes):
+    pass
 
 
 class NonMaximumSuppressionPerClass(Processor):
@@ -567,11 +580,12 @@ class FilterBoxes(Processor):
 
     def call(self, boxes):
         boxes = filter_boxes(boxes, self.conf_thresh)
-        boxes2D = []
-        for box in boxes:
-            coordinates = box[:4]
-            score = np.max(box[4:])
-            class_arg = np.argmax(box[4:])
-            class_name = self.arg_to_class[class_arg]
-            boxes2D.append(Box2D(coordinates, score, class_name))
+        boxes2D = ToBoxes2D(self.class_names, box_type="Boxes")(boxes)
+        # boxes2D = []
+        # for box in boxes:
+        #     coordinates = box[:4]
+        #     score = np.max(box[4:])
+        #     class_arg = np.argmax(box[4:])
+        #     class_name = self.arg_to_class[class_arg]
+        #     boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D
