@@ -566,7 +566,7 @@ class FilterBoxes(Processor):
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
-        max_class_score = np.amax(boxes[:, 4:], axis=1)
+        max_class_score = np.max(boxes[:, 4:], axis=1)
         confidence_mask = max_class_score >= self.conf_thresh
         confident_class_detections = boxes[confidence_mask]
         boxes2D = []
