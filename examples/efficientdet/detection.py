@@ -542,20 +542,23 @@ class ToBoxes2D(Processor):
             indices from the dataset ``boxes``.
     """
     def __init__(
-            self, class_names=None, one_hot_encoded=False, box_type='Boxes'):
+            self, class_names=None, one_hot_encoded=False, box_type='Boxes',
+            default_score=1.0):
         if class_names is not None:
             self.arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
         self.box_type = box_type
+        self.default_score = default_score
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
         if self.box_type == 'Boxes':
-            boxes2D = BoxesToBoxes2D(boxes)
+            boxes2D = BoxesToBoxes2D(boxes, self.default_score)
         elif self.box_type == 'BoxesWithOneHotVectors':
             boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes, self.arg_to_class)
         elif self.box_type == "BoxesWithClassArg":
-            boxes2D = BoxesWithClassArgToBoxes2D(boxes, self.arg_to_class)
+            boxes2D = BoxesWithClassArgToBoxes2D(
+                boxes, self.arg_to_class, self.default_score)
         else:
             raise ValueError('Invalid box type: ', self.box_type)
         return boxes2D
