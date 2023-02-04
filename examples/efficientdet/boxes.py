@@ -129,5 +129,9 @@ def BoxesWithOneHotVectorsToBoxes2D(boxes, arg_to_class):
     return boxes2D
 
 
-def BoxesWithClassArgToBoxes2D(boxes):
-    raise NotImplementedError
+def BoxesWithClassArgToBoxes2D(boxes, arg_to_class):
+    boxes2D = []
+    for box in boxes:
+        class_name = arg_to_class[box[-1]]
+        boxes2D.append(Box2D(box[:4], 1.0, class_name))
+    return boxes2D
