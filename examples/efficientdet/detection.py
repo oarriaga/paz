@@ -44,7 +44,7 @@ class DetectSingleShotEfficientDet(Processor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.RGB_IMAGENET_MEAN, variances=[1.0, 1.0, 1.0, 1.0],
-                 box_type="Boxes", draw=True):
+                 box_type="BoxesWithOneHotVectors", draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -228,8 +228,8 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -253,8 +253,8 @@ class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD1(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -278,8 +278,8 @@ class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD2(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -303,8 +303,8 @@ class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD3(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -328,8 +328,8 @@ class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD4(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -353,8 +353,8 @@ class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD5(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -378,8 +378,8 @@ class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD6(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -403,8 +403,8 @@ class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
         https://github.com/google/automl/tree/master/efficientdet)
     """
     def __init__(
-            self, score_thresh=0.60, nms_thresh=0.45, box_type="Boxes",
-            draw=True):
+            self, score_thresh=0.60, nms_thresh=0.45,
+            box_type="BoxesWithOneHotVectors", draw=True):
         names = get_class_names('COCO')
         model = EFFICIENTDETD7(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
@@ -553,9 +553,9 @@ class ToBoxes2D(Processor):
         if self.box_type == 'Boxes':
             boxes2D = BoxesToBoxes2D(boxes)
         elif self.box_type == 'BoxesWithOneHotVectors':
-            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes)
+            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes, self.arg_to_class)
         elif self.box_type == "BoxesWithClassArg":
-            boxes2D = BoxesWithClassArgToBoxes2D(boxes)
+            boxes2D = BoxesWithClassArgToBoxes2D(boxes, self.arg_to_class)
         else:
             raise ValueError('Invalid box type: ', self.box_type)
         return boxes2D

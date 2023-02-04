@@ -119,8 +119,14 @@ def BoxesToBoxes2D(boxes):
     return boxes2D
 
 
-def BoxesWithOneHotVectorsToBoxes2D(boxes):
-    raise NotImplementedError
+def BoxesWithOneHotVectorsToBoxes2D(boxes, arg_to_class):
+    boxes2D = []
+    for box in boxes:
+        score = np.max(box[4:])
+        class_arg = np.argmax(box[4:])
+        class_name = arg_to_class[class_arg]
+        boxes2D.append(Box2D(box[:4], score, class_name))
+    return boxes2D
 
 
 def BoxesWithClassArgToBoxes2D(boxes):
