@@ -87,16 +87,16 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     num_classes = class_predictions.shape[1]
     output = np.array([], dtype=float).reshape(0, box_data.shape[1])
     for class_arg in range(num_classes):
-        conf_mask = class_predictions[:, class_arg] >= conf_thresh
-        scores = class_predictions[:, class_arg][conf_mask]
+        mask = class_predictions[:, class_arg] >= conf_thresh
+        scores = class_predictions[:, class_arg][mask]
         if len(scores) == 0:
             continue
-        boxes = decoded_boxes[conf_mask]
+        boxes = decoded_boxes[mask]
         indices, count = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
         scores = np.expand_dims(scores, -1)
         selected_indices = indices[:count]
-        confident_class_predictions = class_predictions[conf_mask]
+        confident_class_predictions = class_predictions[mask]
         selections = np.concatenate(
             (boxes[selected_indices],
              confident_class_predictions[selected_indices]), axis=1)
