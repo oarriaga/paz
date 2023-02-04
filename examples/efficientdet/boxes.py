@@ -1,4 +1,5 @@
 import numpy as np
+from paz.abstract import Box2D
 
 
 def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
@@ -112,7 +113,10 @@ def filter_boxes(boxes, conf_thresh):
 
 
 def BoxesToBoxes2D(boxes):
-    raise NotImplementedError
+    boxes2D = []
+    for box in boxes:
+        boxes2D.append(Box2D(box[:4], 1.0, None))
+    return boxes2D
 
 
 def BoxesWithOneHotVectorsToBoxes2D(boxes):
