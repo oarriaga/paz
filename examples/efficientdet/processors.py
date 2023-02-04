@@ -117,6 +117,72 @@ def scale_box(predictions, image_scales=None):
     return predictions
 
 
+class NonMaximumSuppressionPerClass(Processor):
+    """Applies non maximum suppression per class.
+
+    # Arguments
+        nms_thresh: Float between [0, 1].
+        conf_thresh: Float between [0, 1].
+    """
+    def __init__(self, nms_thresh=.45, conf_thresh=0.01):
+        self.nms_thresh = nms_thresh
+        self.conf_thresh = conf_thresh
+        super(NonMaximumSuppressionPerClass, self).__init__()
+
+    def call(self, boxes):
+        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
+        return boxes
+
+
+class FilterBoxes(Processor):
+    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
+
+    # Arguments
+        class_names: List of class names.
+        conf_thresh: Float between [0, 1].
+    """
+    def __init__(self, class_names, conf_thresh=0.5):
+        self.class_names = class_names
+        self.conf_thresh = conf_thresh
+        self.arg_to_class = dict(zip(
+            list(range(len(self.class_names))), self.class_names))
+        super(FilterBoxes, self).__init__()
+
+    def call(self, boxes):
+        boxes = filter_boxes(boxes, self.conf_thresh)
+        return boxes
+
+
+class ToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages.
+
+    # Arguments
+        class_names: List of class names ordered with respect to the class
+            indices from the dataset ``boxes``.
+    """
+    def __init__(
+            self, class_names=None, one_hot_encoded=False, box_type='Boxes',
+            default_score=1.0):
+        if class_names is not None:
+            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+        self.one_hot_encoded = one_hot_encoded
+        self.box_type = box_type
+        self.default_score = default_score
+        super(ToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        if self.box_type == 'Boxes':
+            boxes2D = BoxesToBoxes2D(boxes, self.default_score)
+        elif self.box_type == 'BoxesWithOneHotVectors':
+            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes, self.arg_to_class)
+        elif self.box_type == "BoxesWithClassArg":
+            boxes2D = BoxesWithClassArgToBoxes2D(
+                boxes, self.arg_to_class, self.default_score)
+        else:
+            raise ValueError('Invalid box type: ', self.box_type)
+        return boxes2D
+
+
 class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
     # Arguments
@@ -188,69 +254,3 @@ class DrawBoxes2D(pr.DrawBoxes2D):
                     self.scale, text_color, text_thickness)
             put_text(*args)
         return image
-
-
-class ToBoxes2D(Processor):
-    """Transforms boxes from dataset into `Boxes2D` messages.
-
-    # Arguments
-        class_names: List of class names ordered with respect to the class
-            indices from the dataset ``boxes``.
-    """
-    def __init__(
-            self, class_names=None, one_hot_encoded=False, box_type='Boxes',
-            default_score=1.0):
-        if class_names is not None:
-            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
-        self.one_hot_encoded = one_hot_encoded
-        self.box_type = box_type
-        self.default_score = default_score
-        super(ToBoxes2D, self).__init__()
-
-    def call(self, boxes):
-        if self.box_type == 'Boxes':
-            boxes2D = BoxesToBoxes2D(boxes, self.default_score)
-        elif self.box_type == 'BoxesWithOneHotVectors':
-            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes, self.arg_to_class)
-        elif self.box_type == "BoxesWithClassArg":
-            boxes2D = BoxesWithClassArgToBoxes2D(
-                boxes, self.arg_to_class, self.default_score)
-        else:
-            raise ValueError('Invalid box type: ', self.box_type)
-        return boxes2D
-
-
-class NonMaximumSuppressionPerClass(Processor):
-    """Applies non maximum suppression per class.
-
-    # Arguments
-        nms_thresh: Float between [0, 1].
-        conf_thresh: Float between [0, 1].
-    """
-    def __init__(self, nms_thresh=.45, conf_thresh=0.01):
-        self.nms_thresh = nms_thresh
-        self.conf_thresh = conf_thresh
-        super(NonMaximumSuppressionPerClass, self).__init__()
-
-    def call(self, boxes):
-        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
-        return boxes
-
-
-class FilterBoxes(Processor):
-    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
-
-    # Arguments
-        class_names: List of class names.
-        conf_thresh: Float between [0, 1].
-    """
-    def __init__(self, class_names, conf_thresh=0.5):
-        self.class_names = class_names
-        self.conf_thresh = conf_thresh
-        self.arg_to_class = dict(zip(
-            list(range(len(self.class_names))), self.class_names))
-        super(FilterBoxes, self).__init__()
-
-    def call(self, boxes):
-        boxes = filter_boxes(boxes, self.conf_thresh)
-        return boxes
