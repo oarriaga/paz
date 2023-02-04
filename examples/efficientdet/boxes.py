@@ -97,10 +97,10 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
             boxes, scores, nms_thresh, top_k)
         scores = np.expand_dims(scores, -1)
         selected_indices = indices[:count]
-        confident_class_predictions = class_predictions[mask]
+        classes = class_predictions[mask]
         selections = np.concatenate(
             (boxes[selected_indices],
-             confident_class_predictions[selected_indices]), axis=1)
+             classes[selected_indices]), axis=1)
         output = np.concatenate((output, selections))
     return output
 
