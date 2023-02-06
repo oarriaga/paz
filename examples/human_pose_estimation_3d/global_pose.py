@@ -6,11 +6,12 @@ import viz
 from backend import standardize
 from helper_functions import initialize_translation, project_3D_to_2D, \
     get_cam_parameters, get_bones_length, solve_least_squares
-from data_utils import unnormalize_data, filter_joints_3D, load_params, \
-    load_joints_2D
+from data_utils import unnormalize_data, filter_keypoints_3D, load_joints_2D
 from paz.applications import HigherHRNetHumanPose2D
 from paz.backend.image import load_image
 from linear_model import SIMPLE_BASELINE
+from data import mean2D, stdd2D, data_mean3D, \
+        data_std3D, dim_to_use3D
 
 
 def joints_2D_from_image():
@@ -27,11 +28,12 @@ def compute_joints_distance(initial_joint_translation, poses3D, poses2D,
     """compute distance etween each person joints
 
     # Arguments
-        initial_joint_translation: initial guess of position of joint 
+        initial_joint_translation: initial guess of position of joint
         poses3d: 3D poses to be optimized
         poses2d: 2D poses
         focal_length: focal length
-        img_center: principal point of the camera       
+        img_center: principal point of the camera
+
     # Returns
         person_sum: sum of L2 distances between each joint per person
     """
@@ -41,21 +43,18 @@ def compute_joints_distance(initial_joint_translation, poses3D, poses2D,
                                img_center)
     proj_2D = proj_2D.reshape((poses2D.shape[0], -1, 2))
     poses2D = poses2D.reshape((poses2D.shape[0], -1, 2))
-    person_sum = np.sum(
-        [np.linalg.norm(poses2D[i] - proj_2D[i], axis=1) for i in
-         range(len(poses2D))])
-    return person_sum
+    joints_distance =  [np.linalg.norm(poses2D[i] - proj_2D[i], axis=1)
+                        for i in range(len(poses2D))]
+    return np.sum(joints_distance)
 
 
-def predict_3d_poses():
+def predict_3d_keypoints():
     """Predicts 3d human pose for each person from the m
     ulti-human 2D poses obtained from HigherHRNet"""
 
     poses2D, image_h, image_w = joints_2D_from_image()
-    mean_2D, stdd_2D, data_mean3D, \
-        data_std3D, dim_to_use3D = load_params()
     poses2D = load_joints_2D(poses2D)
-    norm_data = standardize(poses2D, mean_2D, stdd_2D)
+    norm_data = standardize(poses2D, mean2D, stdd2D)
     model = SIMPLE_BASELINE(1024, (32,), 2, True, True, True, 1)
     model.load_weights('weights.h5')
     poses3D = model.predict(norm_data)
@@ -65,19 +64,19 @@ def predict_3d_poses():
 
 
 def solve_translation():
-    """Finds the optimal translation of root joint for each person 
-       to give a good enough estimate of the global human pose 
+    """Finds the optimal translation of root joint for each person
+       to give a good enough estimate of the global human pose
        in camera coordinates"""
 
-    poses2D, poses3D, image_h, image_w = predict_3d_poses()
-    joints_3D = filter_joints_3D(poses3D)
+    poses2D, poses3D, image_h, image_w = predict_3d_keypoints()
+    joints_3D = filter_keypoints_3D(poses3D)
     root_2D = poses2D[:, :2]
     focal_length, image_center = get_cam_parameters(image_h, image_w)
     length_2D, length_3D = get_bones_length(poses2D, joints_3D)
     ratio = length_3D / length_2D
-    initial_joint_translation = initialize_translation(focal_length, 
+    initial_joint_translation = initialize_translation(focal_length,
                                                        root_2D,
-                                                       image_center[0], 
+                                                       image_center[0],
                                                        ratio)
     joint_translation = solve_least_squares(compute_joints_distance,
                                             initial_joint_translation,
@@ -98,8 +97,8 @@ def visualize(poses2D, poses3D, points_3D, opimized_pose_3D):
     # Arguments
         poses2D: 2D poses
         poses3D: 3D poses
-        points_3D: 
-        opimized_pose_3D: 
+        points_3D:
+        opimized_pose_3D:
     """
     fig = plt.figure(figsize=(19.2, 10.8))
     gs1 = gridspec.GridSpec(1, 4)

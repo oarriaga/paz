@@ -61,7 +61,6 @@ def show2Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c",
         lcolor: color for left part of the body
         rcolor: color for right part of the body
         add_labels: whether to add coordinate labels
-        
     # Returns
         Nothing. Draws on ax.
     """

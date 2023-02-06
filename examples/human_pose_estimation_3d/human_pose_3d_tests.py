@@ -2,9 +2,11 @@ import pytest
 import numpy as np
 from paz.backend.image import load_image
 from paz.applications import HigherHRNetHumanPose2D
-from data_utils import load_joints_2D, load_params, unnormalize_data
+from data_utils import load_joints_2D, unnormalize_data
 from linear_model import SIMPLE_BASELINE
-from paz.backend.keypoints import standardize
+from backend import standardize
+from data import mean2D, stdd2D, data_mean3D, \
+    data_std3D, dim_to_use3D
 
 
 def get_poses2D(image):
@@ -16,9 +18,7 @@ def get_poses2D(image):
 
 
 def get_poses3D(poses2D, model):
-    mean_2D, stdd_2D, data_mean3D, \
-        data_std3D, dim_to_use3D = load_params()
-    norm_data = standardize(poses2D, mean_2D, stdd_2D)
+    norm_data = standardize(poses2D, mean2D, stdd2D)
     poses3D = model.predict(norm_data)
     poses3D = unnormalize_data(poses3D, data_mean3D, data_std3D,
                                dim_to_use3D)

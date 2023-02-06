@@ -1,34 +1,35 @@
 import numpy as np
 
 
-def standardize(poses2D, mean, scale):
+
+def standardize(data, mean, scale):
     """Standardize the data.
 
     # Arguments
-        poses2D: nxd matrix to normalize
+        data: nxd matrix to normalize
         mean: Array of means
         scale: standard deviation
 
     # Returns
         standardized poses2D
     # """
-    return np.divide((poses2D - mean), scale)
-    
+    return np.divide((data - mean), scale)
 
-def destandardize(poses3D, mean, scale):
+
+def destandardize(data, mean, scale):
     """Destandardize the data.
 
     # Arguments
-        poses3D: nxd matrix to unnormalize
+        data: nxd matrix to unnormalize
         mean: Array of means
         scale: standard deviation
 
     # Returns
         destandardized poses3D
     # """
-    return (poses3D * scale) + mean
-    
-    
+    return (data * scale) + mean
+
+
 def filter_keypoints(keypoints, valid_args):
     """filter keypoints.
 
