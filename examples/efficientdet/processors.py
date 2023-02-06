@@ -152,6 +152,38 @@ class FilterBoxes(Processor):
         return boxes
 
 
+class ToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages.
+    # Arguments
+        class_names: List of class names ordered with respect to the class
+            indices from the dataset ``boxes``.
+    """
+    def __init__(
+            self, class_names=None, one_hot_encoded=False,
+            default_score=1.0, default_class=None,
+            box_type='BoxesWithOneHotVectors'):
+        if class_names is not None:
+            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+        self.one_hot_encoded = one_hot_encoded
+        self.default_score = default_score
+        self.default_class = default_class
+        self.box_type = box_type
+        super(ToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        if self.box_type == 'Boxes':
+            box_processor = BoxesToBoxes2D(
+                self.default_score, self.default_class)
+        elif self.box_type == 'BoxesWithOneHotVectors':
+            box_processor = BoxesWithOneHotVectorsToBoxes2D(self.arg_to_class)
+        elif self.box_type == "BoxesWithClassArg":
+            box_processor = BoxesWithClassArgToBoxes2D(
+                self.arg_to_class, self.default_score)
+        else:
+            raise ValueError('Invalid box type: ', self.box_type)
+        return box_processor(boxes)
+
+
 class BoxesToBoxes2D(Processor):
     def __init__(self, default_score=1.0, default_class=None):
         self.default_score = default_score
@@ -167,9 +199,8 @@ class BoxesToBoxes2D(Processor):
 
 
 class BoxesWithOneHotVectorsToBoxes2D(Processor):
-    def __init__(self, class_names=None):
-        if class_names is not None:
-            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+    def __init__(self, arg_to_class):
+        self.arg_to_class = arg_to_class
         super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
 
     def call(self, boxes):
@@ -183,10 +214,9 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
 
 
 class BoxesWithClassArgToBoxes2D(Processor):
-    def __init__(self, class_names=None, default_score=1.0):
+    def __init__(self, arg_to_class, default_score=1.0):
         self.default_score = default_score
-        if class_names is not None:
-            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+        self.arg_to_class = arg_to_class
         super(BoxesWithClassArgToBoxes2D, self).__init__()
 
     def call(self, boxes):
@@ -194,6 +224,16 @@ class BoxesWithClassArgToBoxes2D(Processor):
         for box in boxes:
             class_name = self.arg_to_class[box[-1]]
             boxes2D.append(Box2D(box[:4], self.default_score, class_name))
+        return boxes2D
+
+
+class RemoveClass(Processor):
+    def __init__(self, class_arg=None):
+        self.class_arg = class_arg
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes2D):
+        print("HI")
         return boxes2D
 
 
