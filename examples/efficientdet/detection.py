@@ -72,7 +72,7 @@ class DetectSingleShotEfficientDet(Processor):
             NonMaximumSuppressionPerClass(self.nms_thresh),
             FilterBoxes(self.class_names, self.score_thresh),
             ToBoxes2D(self.class_names, box_type='BoxesWithOneHotVectors'),
-            RemoveClass(class_arg=0)])
+            RemoveClass(self.class_names, class_arg=None)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:

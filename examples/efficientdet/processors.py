@@ -228,13 +228,20 @@ class BoxesWithClassArgToBoxes2D(Processor):
 
 
 class RemoveClass(Processor):
-    def __init__(self, class_arg=None):
+    def __init__(self, class_names, class_arg=None):
+        self.class_names = class_names
         self.class_arg = class_arg
         super(RemoveClass, self).__init__()
 
     def call(self, boxes2D):
-        print("HI")
-        return boxes2D
+        if self.class_arg is None:
+            selected_boxes2D = boxes2D
+        else:
+            selected_boxes2D = []
+            for box2D in boxes2D:
+                if box2D.class_name != self.class_names[self.class_arg]:
+                    selected_boxes2D.append(box2D)
+        return selected_boxes2D
 
 
 class DrawBoxes2D(pr.DrawBoxes2D):
