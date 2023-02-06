@@ -1,12 +1,11 @@
 import numpy as np
-from paz.abstract import Processor
+from paz.abstract import Processor, Box2D
 from paz.backend.image import resize_image
 from paz.backend.image.draw import draw_rectangle
 from paz import processors as pr
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
-from boxes import (nms_per_class, filter_boxes, BoxesToBoxes2D,
-                   BoxesWithOneHotVectorsToBoxes2D, BoxesWithClassArgToBoxes2D)
+from boxes import nms_per_class, filter_boxes
 
 
 class DivideStandardDeviationImage(Processor):
@@ -153,33 +152,49 @@ class FilterBoxes(Processor):
         return boxes
 
 
-class ToBoxes2D(Processor):
-    """Transforms boxes from dataset into `Boxes2D` messages.
-
-    # Arguments
-        class_names: List of class names ordered with respect to the class
-            indices from the dataset ``boxes``.
-    """
-    def __init__(
-            self, class_names=None, one_hot_encoded=False, box_type='Boxes',
-            default_score=1.0):
-        if class_names is not None:
-            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
-        self.one_hot_encoded = one_hot_encoded
-        self.box_type = box_type
+class BoxesToBoxes2D(Processor):
+    def __init__(self, default_score=1.0, default_class=None):
         self.default_score = default_score
-        super(ToBoxes2D, self).__init__()
+        self.default_class = default_class
+        super(BoxesToBoxes2D, self).__init__()
 
     def call(self, boxes):
-        if self.box_type == 'Boxes':
-            boxes2D = BoxesToBoxes2D(boxes, self.default_score)
-        elif self.box_type == 'BoxesWithOneHotVectors':
-            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes, self.arg_to_class)
-        elif self.box_type == "BoxesWithClassArg":
-            boxes2D = BoxesWithClassArgToBoxes2D(
-                boxes, self.arg_to_class, self.default_score)
-        else:
-            raise ValueError('Invalid box type: ', self.box_type)
+        boxes2D = []
+        for box in boxes:
+            boxes2D.append(
+                Box2D(box[:4], self.default_score, self.default_class))
+        return boxes2D
+
+
+class BoxesWithOneHotVectorsToBoxes2D(Processor):
+    def __init__(
+            self, class_names=None):
+        if class_names is not None:
+            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+        super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            score = np.max(box[4:])
+            class_arg = np.argmax(box[4:])
+            class_name = self.arg_to_class[class_arg]
+            boxes2D.append(Box2D(box[:4], score, class_name))
+        return boxes2D
+
+
+class BoxesWithClassArgToBoxes2D(Processor):
+    def __init__(self, class_names=None, default_score=1.0):
+        self.default_score = default_score
+        if class_names is not None:
+            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+        super(BoxesWithClassArgToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            class_name = self.arg_to_class[box[-1]]
+            boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
 
 

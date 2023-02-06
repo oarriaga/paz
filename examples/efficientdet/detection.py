@@ -6,8 +6,8 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
 from processors import (DivideStandardDeviationImage, ScaledResize, ScaleBox,
-                        NonMaximumSuppressionPerClass, FilterBoxes, ToBoxes2D,
-                        DrawBoxes2D)
+                        NonMaximumSuppressionPerClass, FilterBoxes,
+                        BoxesWithOneHotVectorsToBoxes2D, DrawBoxes2D)
 
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
@@ -72,7 +72,7 @@ class DetectSingleShotEfficientDet(Processor):
             ScaleBox(image_scales),
             NonMaximumSuppressionPerClass(self.nms_thresh),
             FilterBoxes(self.class_names, self.score_thresh),
-            ToBoxes2D(self.class_names, box_type=self.box_type)])
+            BoxesWithOneHotVectorsToBoxes2D(self.class_names)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:

@@ -1,5 +1,4 @@
 import numpy as np
-from paz.abstract import Box2D
 from paz.backend.boxes import apply_non_max_suppression
 
 
@@ -41,28 +40,3 @@ def filter_boxes(boxes, conf_thresh):
     confidence_mask = max_class_score >= conf_thresh
     confident_class_detections = boxes[confidence_mask]
     return confident_class_detections
-
-
-def BoxesToBoxes2D(boxes, default_score):
-    boxes2D = []
-    for box in boxes:
-        boxes2D.append(Box2D(box[:4], default_score, None))
-    return boxes2D
-
-
-def BoxesWithOneHotVectorsToBoxes2D(boxes, arg_to_class):
-    boxes2D = []
-    for box in boxes:
-        score = np.max(box[4:])
-        class_arg = np.argmax(box[4:])
-        class_name = arg_to_class[class_arg]
-        boxes2D.append(Box2D(box[:4], score, class_name))
-    return boxes2D
-
-
-def BoxesWithClassArgToBoxes2D(boxes, arg_to_class, default_score):
-    boxes2D = []
-    for box in boxes:
-        class_name = arg_to_class[box[-1]]
-        boxes2D.append(Box2D(box[:4], default_score, class_name))
-    return boxes2D
