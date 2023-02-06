@@ -167,8 +167,7 @@ class BoxesToBoxes2D(Processor):
 
 
 class BoxesWithOneHotVectorsToBoxes2D(Processor):
-    def __init__(
-            self, class_names=None):
+    def __init__(self, class_names=None):
         if class_names is not None:
             self.arg_to_class = dict(zip(range(len(class_names)), class_names))
         super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()

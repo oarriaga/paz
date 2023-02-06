@@ -59,7 +59,7 @@ class DetectSingleShotEfficientDet(Processor):
             ScaledResize(image_size=self.model.input_shape[1])])
         self.preprocessing = preprocessing
 
-        self.draw_boxes2D = DrawBoxes2D(self.class_names)
+        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
