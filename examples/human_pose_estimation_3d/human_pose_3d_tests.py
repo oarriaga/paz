@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 from paz.backend.image import load_image
+from global_pose import predict_3d_keypoints
 from paz.applications import HigherHRNetHumanPose2D
 from data_utils import load_joints_2D, unnormalize_data
 from linear_model import SIMPLE_BASELINE
@@ -132,7 +133,7 @@ def keypoints2D_single_person():
 
 @pytest.fixture
 def keypoints_2D_multi_persons():
-    poses2D, poses3D, image_h, image_w = predict_3d_poses()
+    poses2D, poses3D, image_h, image_w = predict_3d_keypoints()
     return poses2D[0]
 
 
