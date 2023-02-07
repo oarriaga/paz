@@ -223,22 +223,19 @@ class BoxesWithClassArgToBoxes2D(Processor):
 
 
 class RemoveClass(Processor):
-    def __init__(self, class_names, class_arg=None):
-        self.class_names = class_names
+    def __init__(self, class_arg=None, renormalize=False):
         self.class_arg = class_arg
+        self.renormalize = renormalize
         super(RemoveClass, self).__init__()
 
-    def call(self, boxes2D):
-        if self.class_arg is None:
-            selected_boxes2D = boxes2D
-        else:
-            selected_boxes2D = []
-            for box2D in boxes2D:
-                if box2D.class_name != self.class_names[self.class_arg]:
-                    selected_boxes2D.append(box2D)
-        return selected_boxes2D
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes[:, 4 + self.class_arg] = 0
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
 
-
+        
 class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
     # Arguments

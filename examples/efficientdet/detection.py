@@ -68,11 +68,11 @@ class DetectSingleShotEfficientDet(Processor):
         postprocessing = SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
+            RemoveClass(class_arg=None, renormalize=False),
             ScaleBox(image_scales),
             NonMaximumSuppressionPerClass(self.nms_thresh),
             FilterBoxes(self.class_names, self.score_thresh),
-            ToBoxes2D(self.class_names, method=0),
-            RemoveClass(self.class_names, class_arg=None)])
+            ToBoxes2D(self.class_names, method=0)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
