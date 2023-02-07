@@ -235,7 +235,7 @@ class RemoveClass(Processor):
             raise NotImplementedError
         return boxes
 
-        
+
 class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
     # Arguments
