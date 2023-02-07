@@ -160,28 +160,23 @@ class ToBoxes2D(Processor):
     """
     def __init__(
             self, class_names=None, one_hot_encoded=False,
-            default_score=1.0, default_class=None,
-            box_type='BoxesWithOneHotVectors'):
+            default_score=1.0, default_class=None, method=0):
         if class_names is not None:
             self.arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
         self.default_score = default_score
         self.default_class = default_class
-        self.box_type = box_type
+        method_to_processor = {0: BoxesWithOneHotVectorsToBoxes2D(
+                                    self.arg_to_class),
+                               1: BoxesToBoxes2D(
+                                    self.default_score, self.default_class),
+                               2: BoxesWithClassArgToBoxes2D(
+                                    self.arg_to_class, self.default_score)}
+        self.box_processor = method_to_processor[method]
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
-        if self.box_type == 'Boxes':
-            box_processor = BoxesToBoxes2D(
-                self.default_score, self.default_class)
-        elif self.box_type == 'BoxesWithOneHotVectors':
-            box_processor = BoxesWithOneHotVectorsToBoxes2D(self.arg_to_class)
-        elif self.box_type == "BoxesWithClassArg":
-            box_processor = BoxesWithClassArgToBoxes2D(
-                self.arg_to_class, self.default_score)
-        else:
-            raise ValueError('Invalid box type: ', self.box_type)
-        return box_processor(boxes)
+        return self.box_processor(boxes)
 
 
 class BoxesToBoxes2D(Processor):
