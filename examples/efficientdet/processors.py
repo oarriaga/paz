@@ -1,12 +1,11 @@
 import numpy as np
-from paz.abstract import Processor
+from paz.abstract import Processor, Box2D
 from paz.backend.image import resize_image
 from paz.backend.image.draw import draw_rectangle
 from paz import processors as pr
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
-from boxes import (nms_per_class, filter_boxes, BoxesToBoxes2D,
-                   BoxesWithOneHotVectorsToBoxes2D, BoxesWithClassArgToBoxes2D)
+from boxes import nms_per_class, filter_boxes
 
 
 class DivideStandardDeviationImage(Processor):
@@ -155,32 +154,94 @@ class FilterBoxes(Processor):
 
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
-
     # Arguments
         class_names: List of class names ordered with respect to the class
             indices from the dataset ``boxes``.
     """
     def __init__(
-            self, class_names=None, one_hot_encoded=False, box_type='Boxes',
-            default_score=1.0):
+            self, class_names=None, one_hot_encoded=False,
+            default_score=1.0, default_class=None,
+            box_type='BoxesWithOneHotVectors'):
         if class_names is not None:
             self.arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
-        self.box_type = box_type
         self.default_score = default_score
+        self.default_class = default_class
+        self.box_type = box_type
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
         if self.box_type == 'Boxes':
-            boxes2D = BoxesToBoxes2D(boxes, self.default_score)
+            box_processor = BoxesToBoxes2D(
+                self.default_score, self.default_class)
         elif self.box_type == 'BoxesWithOneHotVectors':
-            boxes2D = BoxesWithOneHotVectorsToBoxes2D(boxes, self.arg_to_class)
+            box_processor = BoxesWithOneHotVectorsToBoxes2D(self.arg_to_class)
         elif self.box_type == "BoxesWithClassArg":
-            boxes2D = BoxesWithClassArgToBoxes2D(
-                boxes, self.arg_to_class, self.default_score)
+            box_processor = BoxesWithClassArgToBoxes2D(
+                self.arg_to_class, self.default_score)
         else:
             raise ValueError('Invalid box type: ', self.box_type)
+        return box_processor(boxes)
+
+
+class BoxesToBoxes2D(Processor):
+    def __init__(self, default_score=1.0, default_class=None):
+        self.default_score = default_score
+        self.default_class = default_class
+        super(BoxesToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            boxes2D.append(
+                Box2D(box[:4], self.default_score, self.default_class))
         return boxes2D
+
+
+class BoxesWithOneHotVectorsToBoxes2D(Processor):
+    def __init__(self, arg_to_class):
+        self.arg_to_class = arg_to_class
+        super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            score = np.max(box[4:])
+            class_arg = np.argmax(box[4:])
+            class_name = self.arg_to_class[class_arg]
+            boxes2D.append(Box2D(box[:4], score, class_name))
+        return boxes2D
+
+
+class BoxesWithClassArgToBoxes2D(Processor):
+    def __init__(self, arg_to_class, default_score=1.0):
+        self.default_score = default_score
+        self.arg_to_class = arg_to_class
+        super(BoxesWithClassArgToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            class_name = self.arg_to_class[box[-1]]
+            boxes2D.append(Box2D(box[:4], self.default_score, class_name))
+        return boxes2D
+
+
+class RemoveClass(Processor):
+    def __init__(self, class_names, class_arg=None):
+        self.class_names = class_names
+        self.class_arg = class_arg
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes2D):
+        if self.class_arg is None:
+            selected_boxes2D = boxes2D
+        else:
+            selected_boxes2D = []
+            for box2D in boxes2D:
+                if box2D.class_name != self.class_names[self.class_arg]:
+                    selected_boxes2D.append(box2D)
+        return selected_boxes2D
 
 
 class DrawBoxes2D(pr.DrawBoxes2D):
