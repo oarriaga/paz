@@ -75,6 +75,20 @@ class ScaledResize(Processor):
         return output_images, image_scale
 
 
+class RemoveClass(Processor):
+    def __init__(self, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes[:, 4 + self.class_arg] = 0
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
+
+
 class ScaleBox(Processor):
     """Scale box coordinates of the prediction.
 
@@ -219,20 +233,6 @@ class BoxesWithClassArgToBoxes2D(Processor):
             class_name = self.arg_to_class[box[-1]]
             boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
-
-
-class RemoveClass(Processor):
-    def __init__(self, class_arg=None, renormalize=False):
-        self.class_arg = class_arg
-        self.renormalize = renormalize
-        super(RemoveClass, self).__init__()
-
-    def call(self, boxes):
-        if not self.renormalize and self.class_arg is not None:
-            boxes[:, 4 + self.class_arg] = 0
-        elif self.renormalize:
-            raise NotImplementedError
-        return boxes
 
 
 class DrawBoxes2D(pr.DrawBoxes2D):
