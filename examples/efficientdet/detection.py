@@ -86,8 +86,7 @@ class EfficientDetPostprocess(SequentialProcessor):
         self.add(pr.ControlMap(ScaleBox(), intro_indices=[0, 1]))
         self.add(pr.ControlMap(NonMaximumSuppressionPerClass(
             nms_thresh)))
-        self.add(pr.ControlMap(FilterBoxes(
-            class_names, score_thresh)))
+        self.add(pr.ControlMap(FilterBoxes(score_thresh)))
         self.add(pr.ControlMap(ToBoxes2D(class_names, method)))
 
 

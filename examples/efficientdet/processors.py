@@ -169,11 +169,8 @@ class FilterBoxes(Processor):
         class_names: List of class names.
         conf_thresh: Float between [0, 1].
     """
-    def __init__(self, class_names, conf_thresh=0.5):
-        self.class_names = class_names
+    def __init__(self, conf_thresh=0.5):
         self.conf_thresh = conf_thresh
-        self.arg_to_class = dict(zip(
-            list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
