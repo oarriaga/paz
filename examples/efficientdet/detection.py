@@ -7,7 +7,7 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD6, EFFICIENTDETD7)
 from processors import (DivideStandardDeviationImage, ScaledResize, ScaleBox,
                         NonMaximumSuppressionPerClass, FilterBoxes,
-                        ToBoxes2D, RemoveClass)
+                        ToBoxes2D, SetClassToZero)
 
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
@@ -81,7 +81,7 @@ class EfficientDetPostprocess(SequentialProcessor):
         self.add(pr.ControlMap(pr.Squeeze(axis=None)))
         self.add(pr.ControlMap(pr.DecodeBoxes(
             model.prior_boxes, variances=variances)))
-        self.add(pr.ControlMap(RemoveClass(class_arg, renormalize)))
+        self.add(pr.ControlMap(SetClassToZero(class_arg, renormalize)))
         self.add(pr.ControlMap(ScaleBox(), intro_indices=[0, 1]))
         self.add(pr.ControlMap(NonMaximumSuppressionPerClass(
             nms_thresh)))

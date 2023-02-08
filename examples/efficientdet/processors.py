@@ -75,11 +75,11 @@ class ScaledResize(Processor):
         return output_images, image_scale
 
 
-class RemoveClass(Processor):
+class SetClassToZero(Processor):
     def __init__(self, class_arg=None, renormalize=False):
         self.class_arg = class_arg
         self.renormalize = renormalize
-        super(RemoveClass, self).__init__()
+        super(SetClassToZero, self).__init__()
 
     def call(self, boxes):
         if not self.renormalize and self.class_arg is not None:
