@@ -41,13 +41,16 @@ class DetectSingleShotEfficientDet(Processor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  mean=pr.RGB_IMAGENET_MEAN, variances=[1.0, 1.0, 1.0, 1.0],
-                 draw=True):
+                 class_arg=None, renormalize=False, method=0, draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
         self.draw = draw
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        self.method = method
         self.model.prior_boxes = model.prior_boxes * model.input_shape[1]
 
         super(DetectSingleShotEfficientDet, self).__init__()
@@ -68,11 +71,11 @@ class DetectSingleShotEfficientDet(Processor):
         postprocessing = SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
-            RemoveClass(class_arg=None, renormalize=False),
+            RemoveClass(self.class_arg, self.renormalize),
             ScaleBox(image_scales),
             NonMaximumSuppressionPerClass(self.nms_thresh),
             FilterBoxes(self.class_names, self.score_thresh),
-            ToBoxes2D(self.class_names, method=0)])
+            ToBoxes2D(self.class_names, self.method)])
         outputs = process_outputs(outputs)
         boxes2D = postprocessing(outputs)
         if self.draw:
