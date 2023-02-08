@@ -75,6 +75,22 @@ class ScaledResize(Processor):
         return output_images, image_scale
 
 
+class RemoveClass(Processor):
+    def __init__(self, class_names, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        if class_arg is not None:
+            del class_names[class_arg]
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes = np.delete(boxes, 4 + self.class_arg, axis=1)
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
+
+
 class SetClassToZero(Processor):
     def __init__(self, class_arg=None, renormalize=False):
         self.class_arg = class_arg
