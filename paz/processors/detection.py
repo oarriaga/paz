@@ -11,6 +11,9 @@ from ..backend.boxes import clip
 from ..backend.boxes import nms_per_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
+from ..backend.boxes import filter_boxes
+from ..backend.boxes import scale_box
+from ..backend.image import resize_image
 
 
 class SquareBoxes2D(Processor):
@@ -26,7 +29,8 @@ class SquareBoxes2D(Processor):
 
 
 class DenormalizeBoxes2D(Processor):
-    """Denormalizes boxes shapes to be in accordance to the original image size.
+    """Denormalizes boxes shapes to be in accordance to the original
+    image size.
 
     # Arguments:
         image_size: List containing height and width of an image.
@@ -120,25 +124,118 @@ class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
 
     # Arguments
-        class_names: List of class names ordered with respect to the class
-            indices from the dataset ``boxes``.
+        class_names: List of class names ordered with respect to the
+            class indices from the dataset ``boxes``.
+        one_hot_encoded: Bool, indicating if scores are one hot vectors.
+        default_score: Float, score to set.
+        default_class: Str, class to set.
+        method: Int, method to convert boxes to ``Boxes2D``.
+
+    # Properties
+        one_hot_encoded: Bool.
+        box_processor: Callable.
+
+    # Methods
+        call()
     """
-    def __init__(self, class_names=None, one_hot_encoded=False):
+    def __init__(
+            self, class_names=None, one_hot_encoded=False,
+            default_score=1.0, default_class=None, method=0):
         if class_names is not None:
-            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+            arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
+        method_to_processor = {0: BoxesWithOneHotVectorsToBoxes2D(
+                                    arg_to_class),
+                               1: BoxesToBoxes2D(default_score, default_class),
+                               2: BoxesWithClassArgToBoxes2D(
+                                    arg_to_class, default_score)}
+        self.box_processor = method_to_processor[method]
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
-        numpy_boxes2D, boxes2D = boxes, []
-        for numpy_box2D in numpy_boxes2D:
-            if self.one_hot_encoded:
-                class_name = self.arg_to_class[np.argmax(numpy_box2D[4:])]
-            elif numpy_box2D.shape[-1] == 5:
-                class_name = self.arg_to_class[numpy_box2D[-1]]
-            elif numpy_box2D.shape[-1] == 4:
-                class_name = None
-            boxes2D.append(Box2D(numpy_box2D[:4], 1.0, class_name))
+        return self.box_processor(boxes)
+
+
+class BoxesWithOneHotVectorsToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages given boxes
+    with scores as one hot vectors.
+
+    # Arguments
+        arg_to_class: List, of classes.
+
+    # Properties
+        arg_to_class: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, arg_to_class):
+        self.arg_to_class = arg_to_class
+        super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            score = np.max(box[4:])
+            class_arg = np.argmax(box[4:])
+            class_name = self.arg_to_class[class_arg]
+            boxes2D.append(Box2D(box[:4], score, class_name))
+        return boxes2D
+
+
+class BoxesToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages given no
+    class names and score.
+
+    # Arguments
+        default_score: Float, score to set.
+        default_class: Str, class to set.
+
+    # Properties
+        default_score: Float.
+        default_class: Str.
+
+    # Methods
+        call()
+    """
+    def __init__(self, default_score=1.0, default_class=None):
+        self.default_score = default_score
+        self.default_class = default_class
+        super(BoxesToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            boxes2D.append(
+                Box2D(box[:4], self.default_score, self.default_class))
+        return boxes2D
+
+
+class BoxesWithClassArgToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages given boxes
+    with class argument.
+
+    # Arguments
+        default_score: Float, score to set.
+        arg_to_class: List, of classes.
+
+    # Properties
+        default_score: Float.
+        arg_to_class: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, arg_to_class, default_score=1.0):
+        self.default_score = default_score
+        self.arg_to_class = arg_to_class
+        super(BoxesWithClassArgToBoxes2D, self).__init__()
+
+    def call(self, boxes):
+        boxes2D = []
+        for box in boxes:
+            class_name = self.arg_to_class[box[-1]]
+            boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
 
 
@@ -202,6 +299,13 @@ class NonMaximumSuppressionPerClass(Processor):
     # Arguments
         nms_thresh: Float between [0, 1].
         conf_thresh: Float between [0, 1].
+
+    # Properties
+        nms_thresh: Float.
+        conf_thresh: Float.
+
+    # Methods
+        call()
     """
     def __init__(self, nms_thresh=.45, conf_thresh=0.01):
         self.nms_thresh = nms_thresh
@@ -214,35 +318,25 @@ class NonMaximumSuppressionPerClass(Processor):
 
 
 class FilterBoxes(Processor):
-    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
+    """Filters boxes outputted from function ``detect`` as ``Box2D``
+    messages.
 
     # Arguments
-        class_names: List of class names.
         conf_thresh: Float between [0, 1].
+
+    # Properties
+        conf_thresh: Float.
+
+    # Methods
+        call()
     """
-    def __init__(self, class_names, conf_thresh=0.5):
-        self.class_names = class_names
+    def __init__(self, conf_thresh=0.5):
         self.conf_thresh = conf_thresh
-        self.arg_to_class = dict(zip(
-            list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
-        num_classes = boxes.shape[0]
-        boxes2D = []
-        for class_arg in range(1, num_classes):
-            class_detections = boxes[class_arg, :]
-            confidence_mask = np.squeeze(
-                class_detections[:, -1] >= self.conf_thresh)
-            confident_class_detections = class_detections[confidence_mask]
-            if len(confident_class_detections) == 0:
-                continue
-            class_name = self.arg_to_class[class_arg]
-            for confident_class_detection in confident_class_detections:
-                coordinates = confident_class_detection[:4]
-                score = confident_class_detection[4]
-                boxes2D.append(Box2D(coordinates, score, class_name))
-        return boxes2D
+        boxes = filter_boxes(boxes, self.conf_thresh)
+        return boxes
 
 
 class CropImage(Processor):
@@ -254,3 +348,147 @@ class CropImage(Processor):
     def call(self, image, box2D):
         x_min, y_min, x_max, y_max = box2D.coordinates
         return image[y_min:y_max, x_min:x_max]
+
+
+class DivideStandardDeviationImage(Processor):
+    """Divide channel-wise standard deviation to image.
+
+    # Arguments
+        standard_deviation: List of length 3, containing the
+            channel-wise standard deviation.
+
+    # Properties
+        standard_deviation: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, standard_deviation):
+        self.standard_deviation = standard_deviation
+        super(DivideStandardDeviationImage, self).__init__()
+
+    def call(self, image):
+        return image / self.standard_deviation
+
+
+class ScaledResize(Processor):
+    """Resizes image by returning the scales to original image.
+
+    # Arguments
+        image_size: Int, desired size of the model input.
+
+    # Properties
+        image_size: Int.
+
+    # Methods
+        call()
+    """
+    def __init__(self, image_size):
+        self.image_size = image_size
+        super(ScaledResize, self).__init__()
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Array, raw input image.
+        """
+        crop_offset_y = np.array(0)
+        crop_offset_x = np.array(0)
+        height = np.array(image.shape[0]).astype('float32')
+        width = np.array(image.shape[1]).astype('float32')
+        image_scale_y = np.array(self.image_size).astype('float32') / height
+        image_scale_x = np.array(self.image_size).astype('float32') / width
+        image_scale = np.minimum(image_scale_x, image_scale_y)
+        scaled_height = (height * image_scale).astype('int32')
+        scaled_width = (width * image_scale).astype('int32')
+        scaled_image = resize_image(image, (scaled_width, scaled_height))
+        scaled_image = scaled_image[
+                       crop_offset_y: crop_offset_y + self.image_size,
+                       crop_offset_x: crop_offset_x + self.image_size,
+                       :]
+        output_images = np.zeros((self.image_size,
+                                  self.image_size,
+                                  image.shape[2]))
+        output_images[:scaled_image.shape[0],
+                      :scaled_image.shape[1],
+                      :scaled_image.shape[2]] = scaled_image
+        image_scale = 1 / image_scale
+        output_images = output_images[np.newaxis]
+        return output_images, image_scale
+
+
+class RemoveClass(Processor):
+    """Remove a particular class from the pipeline.
+
+    # Arguments
+        class_names: List, indicating given class names.
+        class_arg: Int, index of the class to be removed.
+        renormalize: Bool, if true scores are renormalized.
+
+    # Properties
+        class_arg: Int.
+        renormalize: Bool
+
+    # Methods
+        call()
+    """
+    def __init__(self, class_names, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        if class_arg is not None:
+            del class_names[class_arg]
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes = np.delete(boxes, 4 + self.class_arg, axis=1)
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
+
+
+class SetClassToZero(Processor):
+    """Set scores a particular class to zero.
+
+    # Arguments
+        class_arg: Int, index of class whose score is to be set to zero.
+        renormalize: Bool, if true scores are renormalized.
+
+    # Properties
+        class_arg: Int.
+        renormalize: Bool
+
+    # Methods
+        call()
+    """
+    def __init__(self, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        super(SetClassToZero, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes[:, 4 + self.class_arg] = 0
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
+
+
+class ScaleBox(Processor):
+    """Scale box coordinates of the prediction.
+
+    # Arguments
+        scales: Array of shape `()`, value to scale boxes.
+
+    # Properties
+        scales: Int.
+
+    # Methods
+        call()
+    """
+    def __init__(self):
+        super(ScaleBox, self).__init__()
+
+    def call(self, boxes, scales):
+        boxes = scale_box(boxes, scales)
+        return boxes
