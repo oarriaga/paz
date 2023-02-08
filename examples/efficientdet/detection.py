@@ -40,44 +40,45 @@ class DetectSingleShotEfficientDet(Processor):
         call()
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 mean=pr.RGB_IMAGENET_MEAN, variances=[1.0, 1.0, 1.0, 1.0],
+                 mean=pr.RGB_IMAGENET_MEAN,
+                 standard_deviation=RGB_IMAGENET_STDEV,
+                 variances=[1.0, 1.0, 1.0, 1.0],
                  class_arg=None, renormalize=False, method=0, draw=True):
         self.model = model
-        self.class_names = class_names
-        self.score_thresh = score_thresh
-        self.nms_thresh = nms_thresh
-        self.variances = variances
         self.draw = draw
-        self.class_arg = class_arg
-        self.renormalize = renormalize
-        self.method = method
         self.model.prior_boxes = model.prior_boxes * model.input_shape[1]
 
         super(DetectSingleShotEfficientDet, self).__init__()
-        preprocessing = SequentialProcessor([
-            pr.CastImage(float),
-            pr.SubtractMeanImage(mean=mean),
-            DivideStandardDeviationImage(
-                standard_deviation=RGB_IMAGENET_STDEV),
-            ScaledResize(image_size=self.model.input_shape[1])])
+        preprocessing = SequentialProcessor()
+        preprocessing.add(pr.ControlMap(pr.CastImage(float)))
+        preprocessing.add(pr.ControlMap(pr.SubtractMeanImage(mean=mean)))
+        preprocessing.add(pr.ControlMap(DivideStandardDeviationImage(
+            standard_deviation)))
+        preprocessing.add(pr.ControlMap(ScaledResize(
+            image_size=model.input_shape[1]), outro_indices=[0, 1]))
         self.preprocessing = preprocessing
 
-        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
+        postprocessing = SequentialProcessor()
+        postprocessing.add(pr.ControlMap(pr.Squeeze(axis=None)))
+        postprocessing.add(pr.ControlMap(pr.DecodeBoxes(
+            self.model.prior_boxes, variances=variances)))
+        postprocessing.add(pr.ControlMap(RemoveClass(class_arg, renormalize)))
+        postprocessing.add(pr.ControlMap(ScaleBox(), intro_indices=[0, 1]))
+        postprocessing.add(pr.ControlMap(NonMaximumSuppressionPerClass(
+            nms_thresh)))
+        postprocessing.add(pr.ControlMap(FilterBoxes(
+            class_names, score_thresh)))
+        postprocessing.add(pr.ControlMap(ToBoxes2D(class_names, method)))
+        self.postprocessing = postprocessing
+
+        self.draw_boxes2D = pr.DrawBoxes2D(class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
         preprocessed_image, image_scales = self.preprocessing(image)
         outputs = self.model(preprocessed_image)
-        postprocessing = SequentialProcessor([
-            pr.Squeeze(axis=None),
-            pr.DecodeBoxes(self.model.prior_boxes, variances=self.variances),
-            RemoveClass(self.class_arg, self.renormalize),
-            ScaleBox(image_scales),
-            NonMaximumSuppressionPerClass(self.nms_thresh),
-            FilterBoxes(self.class_names, self.score_thresh),
-            ToBoxes2D(self.class_names, self.method)])
         outputs = process_outputs(outputs)
-        boxes2D = postprocessing(outputs)
+        boxes2D = self.postprocessing(outputs, image_scales)[0]
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)

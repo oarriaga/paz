@@ -87,12 +87,11 @@ class ScaleBox(Processor):
     # Methods
         call()
     """
-    def __init__(self, scales):
+    def __init__(self):
         super(ScaleBox, self).__init__()
-        self.scales = scales
 
-    def call(self, boxes):
-        boxes = scale_box(boxes, self.scales)
+    def call(self, boxes, scales):
+        boxes = scale_box(boxes, scales)
         return boxes
 
 
