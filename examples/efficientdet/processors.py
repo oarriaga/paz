@@ -75,6 +75,20 @@ class ScaledResize(Processor):
         return output_images, image_scale
 
 
+class RemoveClass(Processor):
+    def __init__(self, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes[:, 4 + self.class_arg] = 0
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
+
+
 class ScaleBox(Processor):
     """Scale box coordinates of the prediction.
 
@@ -87,12 +101,11 @@ class ScaleBox(Processor):
     # Methods
         call()
     """
-    def __init__(self, scales):
+    def __init__(self):
         super(ScaleBox, self).__init__()
-        self.scales = scales
 
-    def call(self, boxes):
-        boxes = scale_box(boxes, self.scales)
+    def call(self, boxes, scales):
+        boxes = scale_box(boxes, scales)
         return boxes
 
 
@@ -160,28 +173,23 @@ class ToBoxes2D(Processor):
     """
     def __init__(
             self, class_names=None, one_hot_encoded=False,
-            default_score=1.0, default_class=None,
-            box_type='BoxesWithOneHotVectors'):
+            default_score=1.0, default_class=None, method=0):
         if class_names is not None:
             self.arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
         self.default_score = default_score
         self.default_class = default_class
-        self.box_type = box_type
+        method_to_processor = {0: BoxesWithOneHotVectorsToBoxes2D(
+                                    self.arg_to_class),
+                               1: BoxesToBoxes2D(
+                                    self.default_score, self.default_class),
+                               2: BoxesWithClassArgToBoxes2D(
+                                    self.arg_to_class, self.default_score)}
+        self.box_processor = method_to_processor[method]
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
-        if self.box_type == 'Boxes':
-            box_processor = BoxesToBoxes2D(
-                self.default_score, self.default_class)
-        elif self.box_type == 'BoxesWithOneHotVectors':
-            box_processor = BoxesWithOneHotVectorsToBoxes2D(self.arg_to_class)
-        elif self.box_type == "BoxesWithClassArg":
-            box_processor = BoxesWithClassArgToBoxes2D(
-                self.arg_to_class, self.default_score)
-        else:
-            raise ValueError('Invalid box type: ', self.box_type)
-        return box_processor(boxes)
+        return self.box_processor(boxes)
 
 
 class BoxesToBoxes2D(Processor):
@@ -225,23 +233,6 @@ class BoxesWithClassArgToBoxes2D(Processor):
             class_name = self.arg_to_class[box[-1]]
             boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
-
-
-class RemoveClass(Processor):
-    def __init__(self, class_names, class_arg=None):
-        self.class_names = class_names
-        self.class_arg = class_arg
-        super(RemoveClass, self).__init__()
-
-    def call(self, boxes2D):
-        if self.class_arg is None:
-            selected_boxes2D = boxes2D
-        else:
-            selected_boxes2D = []
-            for box2D in boxes2D:
-                if box2D.class_name != self.class_names[self.class_arg]:
-                    selected_boxes2D.append(box2D)
-        return selected_boxes2D
 
 
 class DrawBoxes2D(pr.DrawBoxes2D):
