@@ -19,22 +19,18 @@ class DetectSingleShotEfficientDet(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating class names.
-        score_thresh: Float between [0, 1].
-        nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating per channel mean.
-        variances: List of floats indicating variances to be encoded
-            for bounding boxes.
+        preprocessing: Callable, preprocessing pipeline.
+        postprocessing: Callable, postprocessing pipeline.
         draw: Bool. If ``True`` prediction are drawn on the
             returned image.
 
     # Properties
         model: Keras model.
-        class_names: List.
-        score_thresh: Float.
-        nms_thresh: Float.
-        variances: List.
         draw: Bool.
-        model.prior_boxes: Array.
+        preprocessing: Callable.
+        postprocessing: Callable.
+        draw_boxes2D: Callable.
+        wrap: Callable.
 
     # Methods
         call()
@@ -61,6 +57,14 @@ class DetectSingleShotEfficientDet(Processor):
 
 
 class EfficientDetPreprocess(SequentialProcessor):
+    """Preprocessing pipeline for EfficientDet.
+
+    # Arguments
+        model: Keras model.
+        mean: Tuple, containing mean per channel on ImageNet.
+        standard_deviation: Tuple, containing standard deviations
+            per channel on ImageNet.
+    """
     def __init__(self, model, mean=pr.RGB_IMAGENET_MEAN,
                  standard_deviation=RGB_IMAGENET_STDEV):
         super(EfficientDetPreprocess, self).__init__()
@@ -73,6 +77,18 @@ class EfficientDetPreprocess(SequentialProcessor):
 
 
 class EfficientDetPostprocess(SequentialProcessor):
+    """Postprocessing pipeline for EfficientDet.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        variances: List of float values.
+        class_arg: Int, index of the class to be removed.
+        renormalize: Bool, if true scores are renormalized.
+        method: Int, method to convert boxes to ``Boxes2D``.
+    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
                  renormalize=False, method=0):
