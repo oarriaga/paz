@@ -160,12 +160,14 @@ class SSDPostprocess(SequentialProcessor):
         variances: List, of floats.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[0.1, 0.1, 0.2, 0.2]):
+                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None, method=0):
         super(SSDPostprocess, self).__init__()
         self.add(pr.Squeeze(axis=None))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances))
+        self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
         self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
         self.add(pr.FilterBoxes(class_names, score_thresh))
+        self.add(pr.ToBoxes2D(class_names, method))
 
 
 class SSD512COCO(DetectSingleShot):
@@ -199,7 +201,8 @@ class SSD512COCO(DetectSingleShot):
         model = SSD512()
         names = get_class_names('COCO')
         preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
+        postprocess = SSDPostprocess(
+            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD512COCO, self).__init__(
             model, names, preprocess, postprocess, draw=draw)
 
@@ -232,7 +235,8 @@ class SSD512YCBVideo(DetectSingleShot):
         names = get_class_names('YCBVideo')
         model = SSD512(head_weights='YCBVideo', num_classes=len(names))
         preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
+        postprocess = SSDPostprocess(
+            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD512YCBVideo, self).__init__(
             model, names, preprocess, postprocess, draw=draw)
 
@@ -269,7 +273,8 @@ class SSD300VOC(DetectSingleShot):
         model = SSD300()
         names = get_class_names('VOC')
         preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
+        postprocess = SSDPostprocess(
+            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD300VOC, self).__init__(
             model, names, preprocess, postprocess, draw=draw)
 
@@ -302,7 +307,8 @@ class SSD300FAT(DetectSingleShot):
         model = SSD300(22, 'FAT', 'FAT')
         names = get_class_names('FAT')
         preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
+        postprocess = SSDPostprocess(
+            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD300FAT, self).__init__(
             model, names, preprocess, postprocess, draw=draw)
 
@@ -539,7 +545,7 @@ class SSD512HandDetection(DetectSingleShot):
                        head_weights='OIV6Hand')
         preprocess = SSDPreprocess(model)
         postprocess = SSDPostprocess(
-            model, class_names, score_thresh, nms_thresh)
+            model, class_names, score_thresh, nms_thresh, class_arg=0)
         super(SSD512HandDetection, self).__init__(
             model, class_names, preprocess, postprocess, draw=draw)
 
