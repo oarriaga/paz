@@ -109,16 +109,15 @@ class DetectSingleShot(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating the class names.
-        preprocessing: Callable, preprocessing pipeline.
-        postprocessing: Callable, postprocessing pipeline.
+        preprocess: Callable, preprocessing pipeline.
+        postprocess: Callable, postprocessing pipeline.
         draw: Boolean. If ``True`` prediction are drawn in the
             returned image.
     """
-    def __init__(self, model, class_names, preprocessing, postprocessing,
-                 draw=True):
+    def __init__(self, model, class_names, preprocess, postprocess, draw=True):
         self.draw = draw
         super(DetectSingleShot, self).__init__()
-        self.predict = pr.Predict(model, preprocessing, postprocessing)
+        self.predict = pr.Predict(model, preprocess, postprocess)
         self.denormalize = pr.DenormalizeBoxes2D()
         self.draw_boxes2D = pr.DrawBoxes2D(class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
