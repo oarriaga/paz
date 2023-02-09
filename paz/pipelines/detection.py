@@ -109,10 +109,10 @@ class DetectSingleShot(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating the class names.
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        preprocessing: Callable, preprocessing pipeline.
+        postprocessing: Callable, postprocessing pipeline.
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
     """
     def __init__(self, model, class_names, preprocessing, postprocessing,
                  draw=True):
@@ -132,6 +132,13 @@ class DetectSingleShot(Processor):
 
 
 class SSDPreprocess(SequentialProcessor):
+    """Preprocessing pipeline for SSD.
+
+    # Arguments
+        model: Keras model.
+        mean: List, of three elements indicating the per channel mean.
+        color_space: Int, specifying the color space to transform.
+    """
     def __init__(
             self, model, mean=pr.BGR_IMAGENET_MEAN, color_space=pr.RGB2BGR):
         super(SSDPreprocess, self).__init__()
@@ -143,6 +150,15 @@ class SSDPreprocess(SequentialProcessor):
 
 
 class SSDPostprocess(SequentialProcessor):
+    """Postprocessing pipeline for SSD.
+
+    # Arguments
+        model: Keras model.
+        class_names: List, of strings indicating the class names.
+        score_thresh: Float, between [0, 1]
+        nms_thresh: Float, between [0, 1].
+        variances: List, of floats.
+    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2]):
         super(SSDPostprocess, self).__init__()
