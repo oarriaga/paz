@@ -39,7 +39,6 @@ class DetectSingleShotEfficientDet(Processor):
                  postprocessing, draw=True):
         self.model = model
         self.draw = draw
-        self.model.prior_boxes = model.prior_boxes * model.input_shape[1]
         self.preprocessing = preprocessing
         self.postprocessing = postprocessing
         self.draw_boxes2D = pr.DrawBoxes2D(class_names)
@@ -56,7 +55,7 @@ class DetectSingleShotEfficientDet(Processor):
         return self.wrap(image, boxes2D)
 
 
-class EfficientDetPreprocess(Processor):
+class EfficientDetPreprocess(SequentialProcessor):
     """Preprocessing pipeline for EfficientDet.
 
     # Arguments
@@ -67,17 +66,11 @@ class EfficientDetPreprocess(Processor):
     """
     def __init__(self, model, mean=pr.RGB_IMAGENET_MEAN,
                  standard_deviation=RGB_IMAGENET_STDEV):
-        self.model = model
-        self.mean = mean
-        self.standard_deviation = standard_deviation
         super(EfficientDetPreprocess, self).__init__()
-
-    def call(self, image):
-        args = pr.CastImage(float)(image)
-        args = pr.SubtractMeanImage(mean=self.mean)(args)
-        args = DivideStandardDeviationImage(self.standard_deviation)(args)
-        args = ScaledResize(image_size=self.model.input_shape[1])(args)
-        return args
+        self.add(pr.CastImage(float))
+        self.add(pr.SubtractMeanImage(mean=mean))
+        self.add(DivideStandardDeviationImage(standard_deviation))
+        self.add(ScaledResize(image_size=model.input_shape[1]))
 
 
 class EfficientDetPostprocess(Processor):
@@ -94,28 +87,25 @@ class EfficientDetPostprocess(Processor):
         method: Int, method to convert boxes to ``Boxes2D``.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
-                 renormalize=False, box_method=0):
-        self.model = model
-        self.class_names = class_names
-        self.score_thresh = score_thresh
-        self.nms_thresh = nms_thresh
-        self.variances = variances
-        self.class_arg = class_arg
-        self.renormalize = renormalize
-        self.box_method = box_method
+                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=None):
         super(EfficientDetPostprocess, self).__init__()
+        model.prior_boxes = model.prior_boxes * model.input_shape[1]
+        self.postprocess = pr.SequentialProcessor([
+            pr.Squeeze(axis=None),
+            pr.DecodeBoxes(model.prior_boxes, variances),
+            RemoveClass(class_names, class_arg)])
+        self.scale = ScaleBox()
+        self.nms_per_class = NonMaximumSuppressionPerClass(nms_thresh)
+        self.filter_boxes = FilterBoxes(score_thresh)
+        self.to_boxes2D = ToBoxes2D(class_names)
 
-    def call(self, preprocessed, image_scales):
-        args = pr.Squeeze(axis=None)(preprocessed)
-        args = pr.DecodeBoxes(self.model.prior_boxes, self.variances)(args)
-        args = RemoveClass(
-            self.class_names, self.class_arg, self.renormalize)(args)
-        args = ScaleBox()(args, image_scales)
-        args = NonMaximumSuppressionPerClass(self.nms_thresh)(args)
-        args = FilterBoxes(self.score_thresh)(args)
-        args = ToBoxes2D(self.class_names, self.box_method)(args)
-        return args
+    def call(self, output, image_scales):
+        box_data = self.postprocess(output)
+        box_data = self.scale(box_data, image_scales)
+        box_data = self.nms_per_class(box_data)
+        box_data = self.filter_boxes(box_data)
+        boxes2D = self.to_boxes2D(box_data)
+        return boxes2D
 
 
 class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
