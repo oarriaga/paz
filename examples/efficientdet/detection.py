@@ -19,37 +19,36 @@ class DetectSingleShotEfficientDet(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating class names.
-        preprocessing: Callable, preprocessing pipeline.
-        postprocessing: Callable, postprocessing pipeline.
+        preprocess: Callable, preprocessing pipeline.
+        postprocess: Callable, postprocessing pipeline.
         draw: Bool. If ``True`` prediction are drawn on the
             returned image.
 
     # Properties
         model: Keras model.
         draw: Bool.
-        preprocessing: Callable.
-        postprocessing: Callable.
+        preprocess: Callable.
+        postprocess: Callable.
         draw_boxes2D: Callable.
         wrap: Callable.
 
     # Methods
         call()
     """
-    def __init__(self, model, class_names, preprocessing,
-                 postprocessing, draw=True):
+    def __init__(self, model, class_names, preprocess, postprocess, draw=True):
         self.model = model
         self.draw = draw
-        self.preprocessing = preprocessing
-        self.postprocessing = postprocessing
+        self.preprocess = preprocess
+        self.postprocess = postprocess
         self.draw_boxes2D = pr.DrawBoxes2D(class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
         super(DetectSingleShotEfficientDet, self).__init__()
 
     def call(self, image):
-        preprocessed_image, image_scales = self.preprocessing(image)
+        preprocessed_image, image_scales = self.preprocess(image)
         outputs = self.model(preprocessed_image)
         outputs = process_outputs(outputs)
-        boxes2D = self.postprocessing(outputs, image_scales)
+        boxes2D = self.postprocess(outputs, image_scales)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
@@ -126,11 +125,11 @@ class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD0COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
@@ -151,11 +150,11 @@ class EFFICIENTDETD1COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD1(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD1COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
@@ -176,11 +175,11 @@ class EFFICIENTDETD2COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD2(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD2COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
@@ -202,11 +201,11 @@ class EFFICIENTDETD3COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD3(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD3COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
@@ -227,11 +226,11 @@ class EFFICIENTDETD4COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD4(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD4COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
@@ -252,11 +251,11 @@ class EFFICIENTDETD5COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD5(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD5COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
@@ -277,11 +276,11 @@ class EFFICIENTDETD6COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD6(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD6COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
@@ -302,11 +301,11 @@ class EFFICIENTDETD7COCO(DetectSingleShotEfficientDet):
         names = get_class_names('COCO')
         model = EFFICIENTDETD7(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
-        preprocessing = EfficientDetPreprocess(model)
-        postprocessing = EfficientDetPostprocess(
+        preprocess = EfficientDetPreprocess(model)
+        postprocess = EfficientDetPostprocess(
             model, names, score_thresh, nms_thresh)
         super(EFFICIENTDETD7COCO, self).__init__(
-            model, names, preprocessing, postprocessing, draw=draw)
+            model, names, preprocess, postprocess, draw=draw)
 
 
 class EFFICIENTDETD0VOC(DetectSingleShot):
