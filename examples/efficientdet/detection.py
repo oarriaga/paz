@@ -8,7 +8,7 @@ from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD6, EFFICIENTDETD7)
 from processors import (DivideStandardDeviationImage, ScaledResize, ScaleBox,
                         NonMaximumSuppressionPerClass, FilterBoxes,
-                        ToBoxes2D, RemoveClass)
+                        ToBoxes2D, RemoveClass, RoundBoxes)
 
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
@@ -98,6 +98,7 @@ class EfficientDetPostprocess(Processor):
         self.nms_per_class = NonMaximumSuppressionPerClass(nms_thresh)
         self.filter_boxes = FilterBoxes(score_thresh)
         self.to_boxes2D = ToBoxes2D(class_names)
+        self.round_boxes = RoundBoxes()
 
     def call(self, output, image_scales):
         box_data = self.postprocess(output)
@@ -105,6 +106,7 @@ class EfficientDetPostprocess(Processor):
         box_data = self.nms_per_class(box_data)
         box_data = self.filter_boxes(box_data)
         boxes2D = self.to_boxes2D(box_data)
+        boxes2D = self.round_boxes(boxes2D)
         return boxes2D
 
 

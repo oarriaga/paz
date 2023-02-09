@@ -337,6 +337,22 @@ class BoxesWithClassArgToBoxes2D(Processor):
         return boxes2D
 
 
+class RoundBoxes(Processor):
+    """Rounds the floating value coordinates of the box coordinates
+    into integer type.
+
+    # Methods
+        call()
+    """
+    def __init__(self):
+        super(RoundBoxes, self).__init__()
+
+    def call(self, boxes2D):
+        for box2D in boxes2D:
+            box2D.coordinates = box2D.coordinates.astype(int)
+        return boxes2D
+
+
 class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
 
