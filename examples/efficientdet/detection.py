@@ -1,7 +1,8 @@
 import numpy as np
 from paz import processors as pr
 from paz.abstract import SequentialProcessor, Processor
-from paz.pipelines.detection import DetectSingleShot
+from paz.pipelines.detection import (DetectSingleShot, SSDPreprocess,
+                                     SSDPostprocess)
 from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
                           EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
                           EFFICIENTDETD6, EFFICIENTDETD7)
@@ -326,8 +327,11 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
         names = get_class_names('VOC')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='VOC', head_weights='VOC')
+        preprocess = SSDPreprocess(model)
+        postprocess = SSDPostprocess(
+            model, names, score_thresh, nms_thresh, class_arg=0)
         super(EFFICIENTDETD0VOC, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+             model, names, preprocess, postprocess, draw=draw)
 
 
 def process_outputs(outputs):
