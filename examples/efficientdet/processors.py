@@ -227,7 +227,7 @@ class ToBoxes2D(Processor):
         one_hot_encoded: Bool, indicating if scores are one hot vectors.
         default_score: Float, score to set.
         default_class: Str, class to set.
-        method: Int, method to convert boxes to ``Boxes2D``.
+        box_method: Int, method to convert boxes to ``Boxes2D``.
 
     # Properties
         one_hot_encoded: Bool.
@@ -238,7 +238,7 @@ class ToBoxes2D(Processor):
     """
     def __init__(
             self, class_names=None, one_hot_encoded=False,
-            default_score=1.0, default_class=None, method=0):
+            default_score=1.0, default_class=None, box_method=0):
         if class_names is not None:
             arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
@@ -247,7 +247,7 @@ class ToBoxes2D(Processor):
                                1: BoxesToBoxes2D(default_score, default_class),
                                2: BoxesWithClassArgToBoxes2D(
                                     arg_to_class, default_score)}
-        self.box_processor = method_to_processor[method]
+        self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):

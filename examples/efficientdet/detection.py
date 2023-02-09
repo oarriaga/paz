@@ -50,13 +50,13 @@ class DetectSingleShotEfficientDet(Processor):
         preprocessed_image, image_scales = self.preprocessing(image)
         outputs = self.model(preprocessed_image)
         outputs = process_outputs(outputs)
-        boxes2D = self.postprocessing(outputs, image_scales)[0]
+        boxes2D = self.postprocessing(outputs, image_scales)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
 
 
-class EfficientDetPreprocess(SequentialProcessor):
+class EfficientDetPreprocess(Processor):
     """Preprocessing pipeline for EfficientDet.
 
     # Arguments
@@ -67,16 +67,20 @@ class EfficientDetPreprocess(SequentialProcessor):
     """
     def __init__(self, model, mean=pr.RGB_IMAGENET_MEAN,
                  standard_deviation=RGB_IMAGENET_STDEV):
+        self.model = model
+        self.mean = mean
+        self.standard_deviation = standard_deviation
         super(EfficientDetPreprocess, self).__init__()
-        self.add(pr.ControlMap(pr.CastImage(float)))
-        self.add(pr.ControlMap(pr.SubtractMeanImage(mean=mean)))
-        self.add(pr.ControlMap(DivideStandardDeviationImage(
-            standard_deviation)))
-        self.add(pr.ControlMap(ScaledResize(
-            image_size=model.input_shape[1]), outro_indices=[0, 1]))
+
+    def call(self, image):
+        args = pr.CastImage(float)(image)
+        args = pr.SubtractMeanImage(mean=self.mean)(args)
+        args = DivideStandardDeviationImage(self.standard_deviation)(args)
+        args = ScaledResize(image_size=self.model.input_shape[1])(args)
+        return args
 
 
-class EfficientDetPostprocess(SequentialProcessor):
+class EfficientDetPostprocess(Processor):
     """Postprocessing pipeline for EfficientDet.
 
     # Arguments
@@ -91,19 +95,27 @@ class EfficientDetPostprocess(SequentialProcessor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
-                 renormalize=False, method=0):
+                 renormalize=False, box_method=0):
+        self.model = model
+        self.class_names = class_names
+        self.score_thresh = score_thresh
+        self.nms_thresh = nms_thresh
+        self.variances = variances
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        self.box_method = box_method
         super(EfficientDetPostprocess, self).__init__()
-        model.prior_boxes = model.prior_boxes * model.input_shape[1]
-        self.add(pr.ControlMap(pr.Squeeze(axis=None)))
-        self.add(pr.ControlMap(pr.DecodeBoxes(
-            model.prior_boxes, variances=variances)))
-        self.add(pr.ControlMap(RemoveClass(
-            class_names, class_arg, renormalize)))
-        self.add(pr.ControlMap(ScaleBox(), intro_indices=[0, 1]))
-        self.add(pr.ControlMap(NonMaximumSuppressionPerClass(
-            nms_thresh)))
-        self.add(pr.ControlMap(FilterBoxes(score_thresh)))
-        self.add(pr.ControlMap(ToBoxes2D(class_names, method)))
+
+    def call(self, preprocessed, image_scales):
+        args = pr.Squeeze(axis=None)(preprocessed)
+        args = pr.DecodeBoxes(self.model.prior_boxes, self.variances)(args)
+        args = RemoveClass(
+            self.class_names, self.class_arg, self.renormalize)(args)
+        args = ScaleBox()(args, image_scales)
+        args = NonMaximumSuppressionPerClass(self.nms_thresh)(args)
+        args = FilterBoxes(self.score_thresh)(args)
+        args = ToBoxes2D(self.class_names, self.box_method)(args)
+        return args
 
 
 class EFFICIENTDETD0COCO(DetectSingleShotEfficientDet):
