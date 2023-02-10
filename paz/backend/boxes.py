@@ -534,10 +534,14 @@ def filter_boxes(boxes, conf_thresh):
     Returns
         Numpy array of shape `(num_boxes, 4 + num_classes)`.
     """
-    max_class_score = np.max(boxes[:, 4:], axis=1)
-    confidence_mask = max_class_score >= conf_thresh
-    confident_class_detections = boxes[confidence_mask]
-    return confident_class_detections
+    classes = boxes[:, 4:]
+    output = np.array([], dtype=float).reshape(0, boxes.shape[1])
+    for class_arg in range(classes.shape[1]):
+        per_class_score = classes[:, class_arg]
+        mask = per_class_score >= conf_thresh
+        selected_boxes = boxes[mask]
+        output = np.concatenate((output, selected_boxes), axis=0)
+    return output
 
 
 def scale_box(predictions, image_scales=None):
