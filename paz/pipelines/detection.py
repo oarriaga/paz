@@ -1,5 +1,7 @@
 import numpy as np
 
+from paz.models.detection.haar_cascade import WEIGHT_PATH
+
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
 from ..models import SSD512, SSD300, HaarCascadeDetector
@@ -7,8 +9,7 @@ from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
 from .classification import MiniXceptionFER
-from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
-from .keypoints import MinimalHandPoseEstimation
+from .keypoints import FaceKeypointNet2D32
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -109,17 +110,37 @@ class DetectSingleShot(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating the class names.
-        preprocess: Callable, preprocessing pipeline.
-        postprocess: Callable, postprocessing pipeline.
-        draw: Boolean. If ``True`` prediction are drawn in the
-            returned image.
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        mean: List of three elements indicating the per channel mean.
+        draw: Boolean. If ``True`` prediction are drawn in the returned image.
     """
-    def __init__(self, model, class_names, preprocess, postprocess, draw=True):
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
+                 draw=True):
+        self.model = model
+        self.class_names = class_names
+        self.score_thresh = score_thresh
+        self.nms_thresh = nms_thresh
+        self.variances = variances
         self.draw = draw
+
         super(DetectSingleShot, self).__init__()
-        self.predict = pr.Predict(model, preprocess, postprocess)
+        preprocessing = SequentialProcessor(
+            [pr.ResizeImage(self.model.input_shape[1:3]),
+             pr.ConvertColorSpace(pr.RGB2BGR),
+             pr.SubtractMeanImage(mean),
+             pr.CastImage(float),
+             pr.ExpandDims(axis=0)])
+        postprocessing = SequentialProcessor(
+            [pr.Squeeze(axis=None),
+             pr.DecodeBoxes(self.model.prior_boxes, self.variances),
+             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
+             pr.FilterBoxes(self.class_names, self.score_thresh)])
+        self.predict = pr.Predict(self.model, preprocessing, postprocessing)
+
         self.denormalize = pr.DenormalizeBoxes2D()
-        self.draw_boxes2D = pr.DrawBoxes2D(class_names)
+        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
@@ -128,45 +149,6 @@ class DetectSingleShot(Processor):
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
-
-
-class SSDPreprocess(SequentialProcessor):
-    """Preprocessing pipeline for SSD.
-
-    # Arguments
-        model: Keras model.
-        mean: List, of three elements indicating the per channel mean.
-        color_space: Int, specifying the color space to transform.
-    """
-    def __init__(
-            self, model, mean=pr.BGR_IMAGENET_MEAN, color_space=pr.RGB2BGR):
-        super(SSDPreprocess, self).__init__()
-        self.add(pr.ResizeImage(model.input_shape[1:3]))
-        self.add(pr.ConvertColorSpace(color_space))
-        self.add(pr.SubtractMeanImage(mean))
-        self.add(pr.CastImage(float))
-        self.add(pr.ExpandDims(axis=0))
-
-
-class SSDPostprocess(SequentialProcessor):
-    """Postprocessing pipeline for SSD.
-
-    # Arguments
-        model: Keras model.
-        class_names: List, of strings indicating the class names.
-        score_thresh: Float, between [0, 1]
-        nms_thresh: Float, between [0, 1].
-        variances: List, of floats.
-    """
-    def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None, box_method=0):
-        super(SSDPostprocess, self).__init__()
-        self.add(pr.Squeeze(axis=None))
-        self.add(pr.DecodeBoxes(model.prior_boxes, variances))
-        self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
-        self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
-        self.add(pr.FilterBoxes(score_thresh))
-        self.add(pr.ToBoxes2D(class_names, box_method))
 
 
 class SSD512COCO(DetectSingleShot):
@@ -199,11 +181,8 @@ class SSD512COCO(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD512()
         names = get_class_names('COCO')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(
-            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD512COCO, self).__init__(
-            model, names, preprocess, postprocess, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD512YCBVideo(DetectSingleShot):
@@ -229,15 +208,14 @@ class SSD512YCBVideo(DetectSingleShot):
         as a dictionary with ``keys``: ``image`` and ``boxes2D``.
         The corresponding values of these keys contain the image with the drawn
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('YCBVideo')
         model = SSD512(head_weights='YCBVideo', num_classes=len(names))
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(
-            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD512YCBVideo, self).__init__(
-            model, names, preprocess, postprocess, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD300VOC(DetectSingleShot):
@@ -271,11 +249,8 @@ class SSD300VOC(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD300()
         names = get_class_names('VOC')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(
-            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD300VOC, self).__init__(
-            model, names, preprocess, postprocess, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD300FAT(DetectSingleShot):
@@ -305,11 +280,8 @@ class SSD300FAT(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD300(22, 'FAT', 'FAT')
         names = get_class_names('FAT')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(
-            model, names, score_thresh, nms_thresh, class_arg=0)
         super(SSD300FAT, self).__init__(
-            model, names, preprocess, postprocess, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class DetectHaarCascade(Processor):
@@ -542,39 +514,5 @@ class SSD512HandDetection(DetectSingleShot):
         num_classes = len(class_names)
         model = SSD512(num_classes, base_weights='OIV6Hand',
                        head_weights='OIV6Hand')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(
-            model, class_names, score_thresh, nms_thresh, class_arg=0)
         super(SSD512HandDetection, self).__init__(
-            model, class_names, preprocess, postprocess, draw=draw)
-
-
-class SSD512MinimalHandPose(DetectMinimalHand):
-    """Hand detection and minimal hand pose estimation pipeline.
-
-    # Arguments
-        right_hand: Boolean. True for right hand inference.
-        offsets: List of two elements. Each element must be between [0, 1].
-
-    # Example
-        ``` python
-        from paz.pipelines import SSD512MinimalHandPose
-
-        detect = SSD512MinimalHandPose()
-
-        # apply directly to an image (numpy-array)
-        inferences = detect(image)
-        ```
-
-    # Returns
-        A function that takes an RGB image and outputs the predictions
-        as a dictionary with ``keys``: ``image``,  ``boxes2D``,
-        ``Keypoints2D``, ``Keypoints3D``.
-        The corresponding values of these keys contain the image with the drawn
-        inferences.
-    """
-    def __init__(self, right_hand=False, offsets=[0.25, 0.25]):
-        detector = SSD512HandDetection()
-        keypoint_estimator = MinimalHandPoseEstimation(right_hand)
-        super(SSD512MinimalHandPose, self).__init__(
-            detector, keypoint_estimator, offsets)
+            model, class_names, score_thresh, nms_thresh, draw=draw)
