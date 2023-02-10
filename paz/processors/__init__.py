@@ -14,7 +14,6 @@ from .detection import NonMaximumSuppressionPerClass
 from .detection import FilterBoxes
 from .detection import OffsetBoxes2D
 from .detection import CropImage
-from .detection import RemoveClass
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
