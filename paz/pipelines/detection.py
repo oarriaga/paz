@@ -115,8 +115,8 @@ class DetectSingleShot(Processor):
         draw: Boolean. If ``True`` prediction are drawn in the returned image.
     """
     def __init__(self, model, class_names, preprocess, postprocess,
-                 score_thresh, nms_thresh, mean=pr.BGR_IMAGENET_MEAN,
-                 variances=[0.1, 0.1, 0.2, 0.2], draw=True):
+                 score_thresh, nms_thresh, variances=[0.1, 0.1, 0.2, 0.2],
+                 draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -125,11 +125,6 @@ class DetectSingleShot(Processor):
         self.draw = draw
 
         super(DetectSingleShot, self).__init__()
-        # postprocessing = SequentialProcessor(
-        #     [pr.Squeeze(axis=None),
-        #      pr.DecodeBoxes(self.model.prior_boxes, self.variances),
-        #      pr.NonMaximumSuppressionPerClass(self.nms_thresh),
-        #      pr.FilterBoxes(self.class_names, self.score_thresh)])
         self.predict = pr.Predict(self.model, preprocess, postprocess)
 
         self.denormalize = pr.DenormalizeBoxes2D()
@@ -212,7 +207,8 @@ class SSD512COCO(DetectSingleShot):
         preprocess = SSDPreprocess(model)
         postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD512COCO, self).__init__(
-            model, names, preprocess, postprocess, score_thresh, nms_thresh, draw=draw)
+            model, names, preprocess, postprocess, score_thresh,
+            nms_thresh, draw=draw)
 
 
 class SSD512YCBVideo(DetectSingleShot):
@@ -245,7 +241,8 @@ class SSD512YCBVideo(DetectSingleShot):
         preprocess = SSDPreprocess(model)
         postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD512YCBVideo, self).__init__(
-            model, names, preprocess, postprocess, score_thresh, nms_thresh, draw=draw)
+            model, names, preprocess, postprocess, score_thresh,
+            nms_thresh, draw=draw)
 
 
 class SSD300VOC(DetectSingleShot):
@@ -282,7 +279,8 @@ class SSD300VOC(DetectSingleShot):
         preprocess = SSDPreprocess(model)
         postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD300VOC, self).__init__(
-            model, names, preprocess, postprocess, score_thresh, nms_thresh, draw=draw)
+            model, names, preprocess, postprocess, score_thresh,
+            nms_thresh, draw=draw)
 
 
 class SSD300FAT(DetectSingleShot):
@@ -315,7 +313,8 @@ class SSD300FAT(DetectSingleShot):
         preprocess = SSDPreprocess(model)
         postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD300FAT, self).__init__(
-            model, names, preprocess, postprocess, score_thresh, nms_thresh, draw=draw)
+            model, names, preprocess, postprocess, score_thresh,
+            nms_thresh, draw=draw)
 
 
 class DetectHaarCascade(Processor):
@@ -549,10 +548,11 @@ class SSD512HandDetection(DetectSingleShot):
         model = SSD512(num_classes, base_weights='OIV6Hand',
                        head_weights='OIV6Hand')
         preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, class_names, score_thresh, nms_thresh)
+        postprocess = SSDPostprocess(model, class_names, score_thresh,
+                                     nms_thresh)
         super(SSD512HandDetection, self).__init__(
-            model, class_names, preprocess, class_names, score_thresh,
-            nms_thresh, draw=draw)
+            model, class_names, preprocess, postprocess, class_names,
+            score_thresh, nms_thresh, draw=draw)
 
 
 class SSD512MinimalHandPose(DetectMinimalHand):
