@@ -209,8 +209,8 @@ class NonMaximumSuppressionPerClass(Processor):
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
-        return boxes
+        boxes, class_data = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
+        return boxes, class_data
 
 
 class FilterBoxes(Processor):
@@ -227,22 +227,87 @@ class FilterBoxes(Processor):
             list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes):
-        num_classes = boxes.shape[0]
-        boxes2D = []
-        for class_arg in range(num_classes):
-            class_detections = boxes[class_arg, :]
-            confidence_mask = np.squeeze(
-                class_detections[:, -1] >= self.conf_thresh)
-            confident_class_detections = class_detections[confidence_mask]
-            if len(confident_class_detections) == 0:
-                continue
-            class_name = self.arg_to_class[class_arg]
-            for confident_class_detection in confident_class_detections:
-                coordinates = confident_class_detection[:4]
-                score = confident_class_detection[4]
-                boxes2D.append(Box2D(coordinates, score, class_name))
-        return boxes2D
+    def call(self, boxes, class_data):
+        boxes = filter_boxes(boxes, class_data, self.conf_thresh)
+        return boxes
+
+
+class CropImage(Processor):
+    """Crop images using a list of ``box2D``.
+    """
+    def __init__(self):
+        super(CropImage, self).__init__()
+
+    def call(self, image, box2D):
+        x_min, y_min, x_max, y_max = box2D.coordinates
+        return image[y_min:y_max, x_min:x_max]
+
+
+class DivideStandardDeviationImage(Processor):
+    """Divide channel-wise standard deviation to image.
+
+    # Arguments
+        standard_deviation: List of length 3, containing the
+            channel-wise standard deviation.
+
+    # Properties
+        standard_deviation: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, standard_deviation):
+        self.standard_deviation = standard_deviation
+        super(DivideStandardDeviationImage, self).__init__()
+
+    def call(self, image):
+        return image / self.standard_deviation
+
+
+class ScaledResize(Processor):
+    """Resizes image by returning the scales to original image.
+
+    # Arguments
+        image_size: Int, desired size of the model input.
+
+    # Properties
+        image_size: Int.
+
+    # Methods
+        call()
+    """
+    def __init__(self, image_size):
+        self.image_size = image_size
+        super(ScaledResize, self).__init__()
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Array, raw input image.
+        """
+        crop_offset_y = np.array(0)
+        crop_offset_x = np.array(0)
+        height = np.array(image.shape[0]).astype('float32')
+        width = np.array(image.shape[1]).astype('float32')
+        image_scale_y = np.array(self.image_size).astype('float32') / height
+        image_scale_x = np.array(self.image_size).astype('float32') / width
+        image_scale = np.minimum(image_scale_x, image_scale_y)
+        scaled_height = (height * image_scale).astype('int32')
+        scaled_width = (width * image_scale).astype('int32')
+        scaled_image = resize_image(image, (scaled_width, scaled_height))
+        scaled_image = scaled_image[
+                       crop_offset_y: crop_offset_y + self.image_size,
+                       crop_offset_x: crop_offset_x + self.image_size,
+                       :]
+        output_images = np.zeros((self.image_size,
+                                  self.image_size,
+                                  image.shape[2]))
+        output_images[:scaled_image.shape[0],
+                      :scaled_image.shape[1],
+                      :scaled_image.shape[2]] = scaled_image
+        image_scale = 1 / image_scale
+        output_images = output_images[np.newaxis]
+        return output_images, image_scale
 
 
 class RemoveClass(Processor):
