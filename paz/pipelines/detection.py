@@ -339,7 +339,7 @@ class DetectHaarCascade(Processor):
         self.draw = draw
         RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
         postprocess = SequentialProcessor()
-        postprocess.add(pr.ToBoxes2D(self.class_names))
+        postprocess.add(pr.ToBoxes2D(self.class_names, box_method=2))
         self.predict = pr.Predict(self.detector, RGB2GRAY, postprocess)
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names, self.colors)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
