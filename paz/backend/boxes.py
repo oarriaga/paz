@@ -330,37 +330,26 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
-<<<<<<< HEAD
-    output = np.zeros((num_classes, top_k, 5))
-
-    # skip the background class (start counter in 1)
-=======
     output = np.array([], dtype=float).reshape(0, box_data.shape[1])
     class_data = np.array([], dtype=float).reshape(0, 1)
->>>>>>> tmp
     for class_arg in range(num_classes):
-        conf_mask = class_predictions[:, class_arg] >= conf_thresh
-        scores = class_predictions[:, class_arg][conf_mask]
+        mask = class_predictions[:, class_arg] >= conf_thresh
+        scores = class_predictions[:, class_arg][mask]
         if len(scores) == 0:
             continue
-        boxes = decoded_boxes[conf_mask]
+        boxes = decoded_boxes[mask]
         indices, count = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
         scores = np.expand_dims(scores, -1)
         selected_indices = indices[:count]
+        classes = class_predictions[mask]
         selections = np.concatenate(
-<<<<<<< HEAD
-            (boxes[selected_indices], scores[selected_indices]), axis=1)
-        output[class_arg, :count, :] = selections
-    return output
-=======
             (boxes[selected_indices],
              classes[selected_indices]), axis=1)
         output = np.concatenate((output, selections))
         per_class_mask = np.full((selections.shape[0], 1), class_arg)
         class_data = np.concatenate((class_data, per_class_mask))
     return output, class_data
->>>>>>> tmp
 
 
 def to_one_hot(class_indices, num_classes):
@@ -534,8 +523,6 @@ def extract_bounding_box_corners(points3D):
     XYZ_min = np.min(points3D, axis=0)
     XYZ_max = np.max(points3D, axis=0)
     return XYZ_min, XYZ_max
-<<<<<<< HEAD
-=======
 
 
 def filter_boxes(boxes, class_data, conf_thresh):
@@ -578,4 +565,3 @@ def scale_box(predictions, image_scales=None):
         boxes = boxes * scales
         predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
     return predictions
->>>>>>> tmp
