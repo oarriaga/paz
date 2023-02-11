@@ -192,8 +192,9 @@ class NonMaximumSuppressionPerClass(Processor):
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
-        return boxes
+        boxes, class_data = nms_per_class(boxes, self.nms_thresh,
+                                          self.conf_thresh)
+        return boxes, class_data
 
 
 class FilterBoxes(Processor):
@@ -213,8 +214,8 @@ class FilterBoxes(Processor):
         self.conf_thresh = conf_thresh
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes):
-        boxes = filter_boxes(boxes, self.conf_thresh)
+    def call(self, boxes, class_data):
+        boxes = filter_boxes(boxes, class_data, self.conf_thresh)
         return boxes
 
 

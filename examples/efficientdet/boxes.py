@@ -18,6 +18,7 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
     output = np.array([], dtype=float).reshape(0, box_data.shape[1])
+    class_data = np.array([], dtype=float).reshape(0, 1)
     for class_arg in range(num_classes):
         mask = class_predictions[:, class_arg] >= conf_thresh
         scores = class_predictions[:, class_arg][mask]
@@ -33,10 +34,12 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
             (boxes[selected_indices],
              classes[selected_indices]), axis=1)
         output = np.concatenate((output, selections))
-    return output
+        per_class_mask = np.full((selections.shape[0], 1), class_arg)
+        class_data = np.concatenate((class_data, per_class_mask))
+    return output, class_data
 
 
-def filter_boxes(boxes, conf_thresh):
+def filter_boxes(boxes, class_data, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
@@ -50,8 +53,9 @@ def filter_boxes(boxes, conf_thresh):
     classes = boxes[:, 4:]
     output = np.array([], dtype=float).reshape(0, boxes.shape[1])
     for class_arg in range(classes.shape[1]):
-        per_class_score = classes[:, class_arg]
+        class_mask = (class_data == class_arg).reshape(1, -1)[0]
+        per_class_score = classes[class_mask][:, class_arg]
         mask = per_class_score >= conf_thresh
-        selected_boxes = boxes[mask]
+        selected_boxes = boxes[class_mask][mask]
         output = np.concatenate((output, selected_boxes), axis=0)
     return output
