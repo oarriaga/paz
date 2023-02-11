@@ -76,10 +76,53 @@ class ScaledResize(Processor):
 
 
 class RemoveClass(Processor):
+    """Remove a particular class from the pipeline.
+
+    # Arguments
+        class_names: List, indicating given class names.
+        class_arg: Int, index of the class to be removed.
+        renormalize: Bool, if true scores are renormalized.
+
+    # Properties
+        class_arg: Int.
+        renormalize: Bool
+
+    # Methods
+        call()
+    """
+    def __init__(self, class_names, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        if class_arg is not None:
+            del class_names[class_arg]
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes = np.delete(boxes, 4 + self.class_arg, axis=1)
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
+
+
+class SetClassToZero(Processor):
+    """Set scores a particular class to zero.
+
+    # Arguments
+        class_arg: Int, index of class whose score is to be set to zero.
+        renormalize: Bool, if true scores are renormalized.
+
+    # Properties
+        class_arg: Int.
+        renormalize: Bool
+
+    # Methods
+        call()
+    """
     def __init__(self, class_arg=None, renormalize=False):
         self.class_arg = class_arg
         self.renormalize = renormalize
-        super(RemoveClass, self).__init__()
+        super(SetClassToZero, self).__init__()
 
     def call(self, boxes):
         if not self.renormalize and self.class_arg is not None:
@@ -135,6 +178,13 @@ class NonMaximumSuppressionPerClass(Processor):
     # Arguments
         nms_thresh: Float between [0, 1].
         conf_thresh: Float between [0, 1].
+
+    # Properties
+        nms_thresh: Float.
+        conf_thresh: Float.
+
+    # Methods
+        call()
     """
     def __init__(self, nms_thresh=.45, conf_thresh=0.01):
         self.nms_thresh = nms_thresh
@@ -147,17 +197,20 @@ class NonMaximumSuppressionPerClass(Processor):
 
 
 class FilterBoxes(Processor):
-    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
+    """Filters boxes outputted from function ``detect`` as ``Box2D``
+    messages.
 
     # Arguments
-        class_names: List of class names.
         conf_thresh: Float between [0, 1].
+
+    # Properties
+        conf_thresh: Float.
+
+    # Methods
+        call()
     """
-    def __init__(self, class_names, conf_thresh=0.5):
-        self.class_names = class_names
+    def __init__(self, conf_thresh=0.5):
         self.conf_thresh = conf_thresh
-        self.arg_to_class = dict(zip(
-            list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes):
@@ -167,25 +220,34 @@ class FilterBoxes(Processor):
 
 class ToBoxes2D(Processor):
     """Transforms boxes from dataset into `Boxes2D` messages.
+
     # Arguments
-        class_names: List of class names ordered with respect to the class
-            indices from the dataset ``boxes``.
+        class_names: List of class names ordered with respect to the
+            class indices from the dataset ``boxes``.
+        one_hot_encoded: Bool, indicating if scores are one hot vectors.
+        default_score: Float, score to set.
+        default_class: Str, class to set.
+        box_method: Int, method to convert boxes to ``Boxes2D``.
+
+    # Properties
+        one_hot_encoded: Bool.
+        box_processor: Callable.
+
+    # Methods
+        call()
     """
     def __init__(
             self, class_names=None, one_hot_encoded=False,
-            default_score=1.0, default_class=None, method=0):
+            default_score=1.0, default_class=None, box_method=0):
         if class_names is not None:
-            self.arg_to_class = dict(zip(range(len(class_names)), class_names))
+            arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
-        self.default_score = default_score
-        self.default_class = default_class
         method_to_processor = {0: BoxesWithOneHotVectorsToBoxes2D(
-                                    self.arg_to_class),
-                               1: BoxesToBoxes2D(
-                                    self.default_score, self.default_class),
+                                    arg_to_class),
+                               1: BoxesToBoxes2D(default_score, default_class),
                                2: BoxesWithClassArgToBoxes2D(
-                                    self.arg_to_class, self.default_score)}
-        self.box_processor = method_to_processor[method]
+                                    arg_to_class, default_score)}
+        self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
     def call(self, boxes):
@@ -193,6 +255,20 @@ class ToBoxes2D(Processor):
 
 
 class BoxesToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages given no
+    class names and score.
+
+    # Arguments
+        default_score: Float, score to set.
+        default_class: Str, class to set.
+
+    # Properties
+        default_score: Float.
+        default_class: Str.
+
+    # Methods
+        call()
+    """
     def __init__(self, default_score=1.0, default_class=None):
         self.default_score = default_score
         self.default_class = default_class
@@ -207,6 +283,18 @@ class BoxesToBoxes2D(Processor):
 
 
 class BoxesWithOneHotVectorsToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages given boxes
+    with scores as one hot vectors.
+
+    # Arguments
+        arg_to_class: List, of classes.
+
+    # Properties
+        arg_to_class: List.
+
+    # Methods
+        call()
+    """
     def __init__(self, arg_to_class):
         self.arg_to_class = arg_to_class
         super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
@@ -222,6 +310,20 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
 
 
 class BoxesWithClassArgToBoxes2D(Processor):
+    """Transforms boxes from dataset into `Boxes2D` messages given boxes
+    with class argument.
+
+    # Arguments
+        default_score: Float, score to set.
+        arg_to_class: List, of classes.
+
+    # Properties
+        default_score: Float.
+        arg_to_class: List.
+
+    # Methods
+        call()
+    """
     def __init__(self, arg_to_class, default_score=1.0):
         self.default_score = default_score
         self.arg_to_class = arg_to_class
@@ -235,14 +337,32 @@ class BoxesWithClassArgToBoxes2D(Processor):
         return boxes2D
 
 
+class RoundBoxes(Processor):
+    """Rounds the floating value coordinates of the box coordinates
+    into integer type.
+
+    # Methods
+        call()
+    """
+    def __init__(self):
+        super(RoundBoxes, self).__init__()
+
+    def call(self, boxes2D):
+        for box2D in boxes2D:
+            box2D.coordinates = box2D.coordinates.astype(int)
+        return boxes2D
+
+
 class DrawBoxes2D(pr.DrawBoxes2D):
     """Draws bounding boxes from Boxes2D messages.
+
     # Arguments
         class_names: List, class names.
         colors: List, color values.
         weighted: Bool, whether to weight bounding box color.
         scale: Float. Scale of text drawn.
         with_score: Bool, denoting if confidence be shown.
+
     # Methods
         compute_box_color()
         compute_text()

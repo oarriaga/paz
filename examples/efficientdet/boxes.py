@@ -4,6 +4,7 @@ from paz.backend.boxes import apply_non_max_suppression
 
 def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """Applies non-maximum-suppression per class.
+
     # Arguments
         box_data: Numpy array of shape `(num_prior_boxes, 4 + num_classes)`.
         nsm_thresh: Float. Non-maximum suppression threshold.
@@ -36,7 +37,21 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
 
 
 def filter_boxes(boxes, conf_thresh):
-    max_class_score = np.max(boxes[:, 4:], axis=1)
-    confidence_mask = max_class_score >= conf_thresh
-    confident_class_detections = boxes[confidence_mask]
-    return confident_class_detections
+    """Filters given boxes based on scores.
+
+    # Arguments
+        boxes: Numpy array of shape `(num_boxes, 4 + num_classes)`.
+        conf_thresh: Float. Filter boxes with a confidence value lower
+            than this.
+
+    Returns
+        Numpy array of shape `(num_boxes, 4 + num_classes)`.
+    """
+    classes = boxes[:, 4:]
+    output = np.array([], dtype=float).reshape(0, boxes.shape[1])
+    for class_arg in range(classes.shape[1]):
+        per_class_score = classes[:, class_arg]
+        mask = per_class_score >= conf_thresh
+        selected_boxes = boxes[mask]
+        output = np.concatenate((output, selected_boxes), axis=0)
+    return output
