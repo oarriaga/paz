@@ -28,7 +28,8 @@ class SquareBoxes2D(Processor):
 
 
 class DenormalizeBoxes2D(Processor):
-    """Denormalizes boxes shapes to be in accordance to the original image size.
+    """Denormalizes boxes shapes to be in accordance to the original
+    image size.
 
     # Arguments:
         image_size: List containing height and width of an image.
