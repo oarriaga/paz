@@ -166,10 +166,11 @@ class SSDPostprocess(SequentialProcessor):
         variances: List, of floats.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None, box_method=0):
+                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=0, box_method=0):
         super(SSDPostprocess, self).__init__()
         self.add(pr.Squeeze(axis=None))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances))
+        self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
         self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
         self.add(pr.FilterBoxes(class_names, score_thresh))
 

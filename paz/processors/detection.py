@@ -230,7 +230,7 @@ class FilterBoxes(Processor):
     def call(self, boxes):
         num_classes = boxes.shape[0]
         boxes2D = []
-        for class_arg in range(1, num_classes):
+        for class_arg in range(num_classes):
             class_detections = boxes[class_arg, :]
             confidence_mask = np.squeeze(
                 class_detections[:, -1] >= self.conf_thresh)
@@ -243,6 +243,36 @@ class FilterBoxes(Processor):
                 score = confident_class_detection[4]
                 boxes2D.append(Box2D(coordinates, score, class_name))
         return boxes2D
+
+
+class RemoveClass(Processor):
+    """Remove a particular class from the pipeline.
+
+    # Arguments
+        class_names: List, indicating given class names.
+        class_arg: Int, index of the class to be removed.
+        renormalize: Bool, if true scores are renormalized.
+
+    # Properties
+        class_arg: Int.
+        renormalize: Bool
+
+    # Methods
+        call()
+    """
+    def __init__(self, class_names, class_arg=None, renormalize=False):
+        self.class_arg = class_arg
+        self.renormalize = renormalize
+        if class_arg is not None:
+            del class_names[class_arg]
+        super(RemoveClass, self).__init__()
+
+    def call(self, boxes):
+        if not self.renormalize and self.class_arg is not None:
+            boxes = np.delete(boxes, 4 + self.class_arg, axis=1)
+        elif self.renormalize:
+            raise NotImplementedError
+        return boxes
 
 
 class CropImage(Processor):
