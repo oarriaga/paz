@@ -5,7 +5,7 @@ from paz.backend.image.draw import draw_rectangle
 from paz import processors as pr
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
-from boxes import nms_per_class, filter_boxes
+from boxes import nms_per_class, filter_boxes, scale_box
 
 
 class DivideStandardDeviationImage(Processor):
@@ -152,26 +152,6 @@ class ScaleBox(Processor):
         return boxes
 
 
-def scale_box(predictions, image_scales=None):
-    """
-    # Arguments
-        predictions: Array of shape `(num_boxes, num_classes+N)`
-            model predictions.
-        image_scales: Array of shape `()`, scale value of boxes.
-
-    # Returns
-        predictions: Array of shape `(num_boxes, num_classes+N)`
-            model predictions.
-    """
-
-    if image_scales is not None:
-        boxes = predictions[:, :4]
-        scales = image_scales[np.newaxis][np.newaxis]
-        boxes = boxes * scales
-        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
-    return predictions
-
-
 class NonMaximumSuppressionPerClass(Processor):
     """Applies non maximum suppression per class.
 
@@ -192,8 +172,9 @@ class NonMaximumSuppressionPerClass(Processor):
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes = nms_per_class(boxes, self.nms_thresh, self.conf_thresh)
-        return boxes
+        boxes, class_data = nms_per_class(boxes, self.nms_thresh,
+                                          self.conf_thresh)
+        return boxes, class_data
 
 
 class FilterBoxes(Processor):
@@ -213,8 +194,8 @@ class FilterBoxes(Processor):
         self.conf_thresh = conf_thresh
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes):
-        boxes = filter_boxes(boxes, self.conf_thresh)
+    def call(self, boxes, class_data):
+        boxes = filter_boxes(boxes, class_data, self.conf_thresh)
         return boxes
 
 
