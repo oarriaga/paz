@@ -5,7 +5,7 @@ from paz.backend.image.draw import draw_rectangle
 from paz import processors as pr
 from draw import (compute_text_bounds, draw_opaque_box, make_box_transparent,
                   put_text)
-from boxes import nms_per_class, filter_boxes
+from boxes import nms_per_class, filter_boxes, scale_box
 
 
 class DivideStandardDeviationImage(Processor):
@@ -150,26 +150,6 @@ class ScaleBox(Processor):
     def call(self, boxes, scales):
         boxes = scale_box(boxes, scales)
         return boxes
-
-
-def scale_box(predictions, image_scales=None):
-    """
-    # Arguments
-        predictions: Array of shape `(num_boxes, num_classes+N)`
-            model predictions.
-        image_scales: Array of shape `()`, scale value of boxes.
-
-    # Returns
-        predictions: Array of shape `(num_boxes, num_classes+N)`
-            model predictions.
-    """
-
-    if image_scales is not None:
-        boxes = predictions[:, :4]
-        scales = image_scales[np.newaxis][np.newaxis]
-        boxes = boxes * scales
-        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
-    return predictions
 
 
 class NonMaximumSuppressionPerClass(Processor):

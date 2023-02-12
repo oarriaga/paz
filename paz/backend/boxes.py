@@ -318,15 +318,16 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
 
 def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """Applies non-maximum-suppression per class.
-    # Arguments
-        box_data: Numpy array of shape `(num_prior_boxes, 4 + num_classes)`.
-        nsm_thresh: Float. Non-maximum suppression threshold.
-        conf_thresh: Float. Filter scores with a lower confidence value before
-            performing non-maximum supression.
-        top_k: Integer. Maximum number of boxes per class outputted by nms.
 
-    Returns
-        Numpy array of shape `(num_classes, top_k, 5)`.
+    # Arguments
+        box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
+        nsm_thresh: Float, Non-maximum suppression threshold.
+        conf_thresh: Float, Filter scores with a lower confidence
+            value before performing non-maximum supression.
+        top_k: Int, Maximum number of boxes per class outputted by nms.
+
+    # Returns
+        Array of shape `(num_boxes, 4+ num_classes)`.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
@@ -529,11 +530,12 @@ def filter_boxes(boxes, class_data, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
-        boxes: Numpy array of shape `(num_boxes, 4 + num_classes)`.
-        conf_thresh: Float. Filter boxes with a confidence value lower
+        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        class_data: Array of shape `(num_boxes, 1)`.
+        conf_thresh: Float, Filter boxes with a confidence value lower
             than this.
 
-    Returns
+    # Returns
         Numpy array of shape `(num_boxes, 4 + num_classes)`.
     """
     classes = boxes[:, 4:]

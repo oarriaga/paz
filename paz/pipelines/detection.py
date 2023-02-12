@@ -141,6 +141,7 @@ class DetectSingleShot(Processor):
 
 class SSDPreprocess(SequentialProcessor):
     """Preprocessing pipeline for SSD.
+
     # Arguments
         model: Keras model.
         mean: List, of three elements indicating the per channel mean.
@@ -158,12 +159,15 @@ class SSDPreprocess(SequentialProcessor):
 
 class SSDPostprocess(SequentialProcessor):
     """Postprocessing pipeline for SSD.
+
     # Arguments
         model: Keras model.
         class_names: List, of strings indicating the class names.
         score_thresh: Float, between [0, 1]
         nms_thresh: Float, between [0, 1].
         variances: List, of floats.
+        class_arg: Int, index of class to be removed.
+        box_method: Int, type of boxes to boxes2D conversion method.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2], class_arg=0, box_method=0):
@@ -173,7 +177,7 @@ class SSDPostprocess(SequentialProcessor):
         self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
         self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
         self.add(pr.FilterBoxes(class_names, score_thresh))
-        self.add(pr.ToBoxes2D(class_names))
+        self.add(pr.ToBoxes2D(class_names, box_method))
 
 
 class SSD512COCO(DetectSingleShot):

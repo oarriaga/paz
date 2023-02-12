@@ -6,14 +6,14 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """Applies non-maximum-suppression per class.
 
     # Arguments
-        box_data: Numpy array of shape `(num_prior_boxes, 4 + num_classes)`.
-        nsm_thresh: Float. Non-maximum suppression threshold.
-        conf_thresh: Float. Filter scores with a lower confidence value before
-            performing non-maximum supression.
-        top_k: Integer. Maximum number of boxes per class outputted by nms.
+        box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
+        nsm_thresh: Float, Non-maximum suppression threshold.
+        conf_thresh: Float, Filter scores with a lower confidence
+            value before performing non-maximum supression.
+        top_k: Int, Maximum number of boxes per class outputted by nms.
 
-    Returns
-        Numpy array of shape `(num_classes, top_k, 5)`.
+    # Returns
+        Array of shape `(num_boxes, 4+ num_classes)`.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
@@ -43,11 +43,12 @@ def filter_boxes(boxes, class_data, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
-        boxes: Numpy array of shape `(num_boxes, 4 + num_classes)`.
-        conf_thresh: Float. Filter boxes with a confidence value lower
+        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        class_data: Array of shape `(num_boxes, 1)`.
+        conf_thresh: Float, Filter boxes with a confidence value lower
             than this.
 
-    Returns
+    # Returns
         Numpy array of shape `(num_boxes, 4 + num_classes)`.
     """
     classes = boxes[:, 4:]
@@ -59,3 +60,23 @@ def filter_boxes(boxes, class_data, conf_thresh):
         selected_boxes = boxes[class_mask][mask]
         output = np.concatenate((output, selected_boxes), axis=0)
     return output
+
+
+def scale_box(predictions, image_scales=None):
+    """
+    # Arguments
+        predictions: Array of shape `(num_boxes, num_classes+N)`
+            model predictions.
+        image_scales: Array of shape `()`, scale value of boxes.
+
+    # Returns
+        predictions: Array of shape `(num_boxes, num_classes+N)`
+            model predictions.
+    """
+
+    if image_scales is not None:
+        boxes = predictions[:, :4]
+        scales = image_scales[np.newaxis][np.newaxis]
+        boxes = boxes * scales
+        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
+    return predictions
