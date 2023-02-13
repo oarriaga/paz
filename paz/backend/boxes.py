@@ -316,7 +316,8 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
+def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
+                  conf_thresh=0.5, top_k=200):
     """Applies non-maximum-suppression per class.
 
     # Arguments
@@ -331,26 +332,25 @@ def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
-    output = np.array([], dtype=float).reshape(0, box_data.shape[1])
-    class_data = np.array([], dtype=float).reshape(0, 1)
+    non_suppressed_boxes = np.array(
+        [], dtype=float).reshape(0, box_data.shape[1])
     for class_arg in range(num_classes):
-        mask = class_predictions[:, class_arg] >= conf_thresh
+        mask = class_predictions[:, class_arg] >= epsilon
         scores = class_predictions[:, class_arg][mask]
         if len(scores) == 0:
             continue
         boxes = decoded_boxes[mask]
         indices, count = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
-        scores = np.expand_dims(scores, -1)
         selected_indices = indices[:count]
         classes = class_predictions[mask]
         selections = np.concatenate(
             (boxes[selected_indices],
              classes[selected_indices]), axis=1)
-        output = np.concatenate((output, selections))
-        per_class_mask = np.full((selections.shape[0], 1), class_arg)
-        class_data = np.concatenate((class_data, per_class_mask))
-    return output, class_data
+        filter_mask = selections[:, 4 + class_arg] >= conf_thresh
+        non_suppressed_boxes = np.concatenate(
+            (non_suppressed_boxes, selections[filter_mask]), axis=0)
+    return non_suppressed_boxes
 
 
 def to_one_hot(class_indices, num_classes):
@@ -526,27 +526,21 @@ def extract_bounding_box_corners(points3D):
     return XYZ_min, XYZ_max
 
 
-def filter_boxes(boxes, class_data, conf_thresh):
+def filter_boxes(boxes, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
         boxes: Array of shape `(num_boxes, 4 + num_classes)`.
-        class_data: Array of shape `(num_boxes, 1)`.
         conf_thresh: Float, Filter boxes with a confidence value lower
             than this.
 
     # Returns
         Numpy array of shape `(num_boxes, 4 + num_classes)`.
     """
-    classes = boxes[:, 4:]
-    output = np.array([], dtype=float).reshape(0, boxes.shape[1])
-    for class_arg in range(classes.shape[1]):
-        class_mask = (class_data == class_arg).reshape(1, -1)[0]
-        per_class_score = classes[class_mask][:, class_arg]
-        mask = per_class_score >= conf_thresh
-        selected_boxes = boxes[class_mask][mask]
-        output = np.concatenate((output, selected_boxes), axis=0)
-    return output
+    max_class_score = np.max(boxes[:, 4:], axis=1)
+    confidence_mask = max_class_score >= conf_thresh
+    confident_class_detections = boxes[confidence_mask]
+    return confident_class_detections
 
 
 def scale_box(predictions, image_scales=None):

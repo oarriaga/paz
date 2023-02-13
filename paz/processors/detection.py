@@ -315,15 +315,16 @@ class NonMaximumSuppressionPerClass(Processor):
         nms_thresh: Float between [0, 1].
         conf_thresh: Float between [0, 1].
     """
-    def __init__(self, nms_thresh=.45, conf_thresh=0.01):
+    def __init__(self, nms_thresh=.45, epsilon=0.01, conf_thresh=0.5):
         self.nms_thresh = nms_thresh
+        self.epsilon = epsilon
         self.conf_thresh = conf_thresh
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes, class_data = nms_per_class(boxes, self.nms_thresh,
-                                          self.conf_thresh)
-        return boxes, class_data
+        boxes = nms_per_class(
+            boxes, self.nms_thresh, self.epsilon, self.conf_thresh)
+        return boxes
 
 
 class FilterBoxes(Processor):
@@ -340,8 +341,8 @@ class FilterBoxes(Processor):
             list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes, class_data):
-        boxes = filter_boxes(boxes, class_data, self.conf_thresh)
+    def call(self, boxes):
+        boxes = filter_boxes(boxes, self.conf_thresh)
         return boxes
 
 
