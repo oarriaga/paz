@@ -1,4 +1,4 @@
-import cv2 
+import cv2
 import numpy as np
 
 
@@ -8,15 +8,45 @@ def detect_SIFT_features(image):
     return keypoints, descriptors
 
 
-def brute_force_matcher(descriptor1, descriptor2, k=2, ratio_test=True):
+def brute_force_matcher(descriptor1, descriptor2, k=2):
     bf = cv2.BFMatcher()
     matches = bf.knnMatch(descriptor1, descriptor2, k)
-    if ratio_test:
-        good_matches = []
-        for m, n in matches:
-            if m.distance < 0.4*n.distance:
-                good_matches.append([m])
+    return matches
+
+
+def match_ratio_test(matches, ratio=0.6):
+    good_matches = []
+    for m, n in matches:
+        if m.distance < ratio * n.distance:
+            good_matches.append([m])
     return good_matches
+
+
+def get_match_points(keypoints1, keypoints2, matches):
+    points1 = np.zeros((len(matches), 2), dtype=np.float32)
+    points2 = np.zeros((len(matches), 2), dtype=np.float32)
+    for i, match in enumerate(matches):
+        points1[i, :] = keypoints1[match[0].queryIdx].pt
+        points2[i, :] = keypoints2[match[0].trainIdx].pt
+    return [points1, points2]
+
+
+def get_match_indices(matches):
+    query_indices = []
+    train_indices = []
+    for i, match in enumerate(matches):
+        query_indices.append(match[0].queryIdx)
+        train_indices.append(match[0].trainIdx)
+    return [query_indices, train_indices]
+
+
+# def get_match_descriptors(descriptors1, descriptors2, matches):
+#     descriptors1_ = np.zeros((len(matches), 128), dtype=np.float32)
+#     descriptors2_ = np.zeros((len(matches), 128), dtype=np.float32)
+#     for i, match in enumerate(matches):
+#         descriptors1_[i, :] = descriptors1[match[0].queryIdx]
+#         descriptors2_[i, :] = descriptors2[match[0].trainIdx]
+#     return [descriptors1_, descriptors2_]
 
 
 def find_homography_RANSAC(points1, points2):
@@ -25,7 +55,7 @@ def find_homography_RANSAC(points1, points2):
 
 
 def find_fundamental_matrix(points1, points2):
-    F, mask = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC)
+    F, mask = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC, 0.001, 0.99)
     return F, mask
 
 
@@ -40,6 +70,7 @@ def triangulate_points(P1, P2, points1, points2):
     return points3D
 
 
-def solve_PNP(points3D, points2D, projection_matrix):
-    points, R, t = cv2.solvePnPRansac(points3D, points2D, projection_matrix)
-    return points, R, t
+def compute_essential_matrix(fundamental_matrix, camera_intrinsics):
+    essential_matrix = camera_intrinsics.T @ (fundamental_matrix @
+                                              camera_intrinsics)
+    return essential_matrix
