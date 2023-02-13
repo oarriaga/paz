@@ -109,24 +109,31 @@ class DetectSingleShot(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating the class names.
+        preprocess: Callable, pre-processing pipeline.
+        postprocess: Callable, post-processing pipeline.
         score_thresh: Float between [0, 1]
         nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        variances: List, of floats.
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
     """
-    def __init__(self, model, class_names, preprocess, postprocess,
-                 score_thresh, nms_thresh, variances=[0.1, 0.1, 0.2, 0.2],
-                 draw=True):
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 preprocess=None, postprocess=None,
+                 variances=[0.1, 0.1, 0.2, 0.2], draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
         self.draw = draw
+        if preprocess is None:
+            preprocess = SSDPreprocess(model)
+        if postprocess is None:
+            postprocess = SSDPostprocess(
+                model, class_names, score_thresh, nms_thresh)
 
         super(DetectSingleShot, self).__init__()
         self.predict = pr.Predict(self.model, preprocess, postprocess)
-
         self.denormalize = pr.DenormalizeBoxes2D()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
@@ -210,11 +217,8 @@ class SSD512COCO(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD512()
         names = get_class_names('COCO')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD512COCO, self).__init__(
-            model, names, preprocess, postprocess, score_thresh,
-            nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD512YCBVideo(DetectSingleShot):
@@ -244,11 +248,8 @@ class SSD512YCBVideo(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('YCBVideo')
         model = SSD512(head_weights='YCBVideo', num_classes=len(names))
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD512YCBVideo, self).__init__(
-            model, names, preprocess, postprocess, score_thresh,
-            nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD300VOC(DetectSingleShot):
@@ -282,11 +283,8 @@ class SSD300VOC(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD300()
         names = get_class_names('VOC')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD300VOC, self).__init__(
-            model, names, preprocess, postprocess, score_thresh,
-            nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD300FAT(DetectSingleShot):
@@ -316,11 +314,8 @@ class SSD300FAT(DetectSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         model = SSD300(22, 'FAT', 'FAT')
         names = get_class_names('FAT')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, names, score_thresh, nms_thresh)
         super(SSD300FAT, self).__init__(
-            model, names, preprocess, postprocess, score_thresh,
-            nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 class DetectHaarCascade(Processor):
@@ -553,12 +548,8 @@ class SSD512HandDetection(DetectSingleShot):
         num_classes = len(class_names)
         model = SSD512(num_classes, base_weights='OIV6Hand',
                        head_weights='OIV6Hand')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(model, class_names, score_thresh,
-                                     nms_thresh)
         super(SSD512HandDetection, self).__init__(
-            model, class_names, preprocess, postprocess, class_names,
-            score_thresh, nms_thresh, draw=draw)
+            model, class_names, score_thresh, nms_thresh, draw=draw)
 
 
 class SSD512MinimalHandPose(DetectMinimalHand):
