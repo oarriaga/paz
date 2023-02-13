@@ -322,9 +322,11 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
 
     # Arguments
         box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
-        nsm_thresh: Float, Non-maximum suppression threshold.
-        conf_thresh: Float, Filter scores with a lower confidence
+        nms_thresh: Float, Non-maximum suppression threshold.
+        epsilon: Float, Filter scores with a lower confidence
             value before performing non-maximum supression.
+        conf_thresh: Float, Filter out boxes with a confidence value
+            lower than this.
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns

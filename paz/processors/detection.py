@@ -313,6 +313,7 @@ class NonMaximumSuppressionPerClass(Processor):
 
     # Arguments
         nms_thresh: Float between [0, 1].
+        epsilon: Float between [0, 1].
         conf_thresh: Float between [0, 1].
     """
     def __init__(self, nms_thresh=.45, epsilon=0.01, conf_thresh=0.5):
@@ -328,7 +329,8 @@ class NonMaximumSuppressionPerClass(Processor):
 
 
 class FilterBoxes(Processor):
-    """Filters boxes outputted from function ``detect`` as ``Box2D`` messages.
+    """Filters boxes outputted from function ``detect`` as
+    ``Box2D`` messages.
 
     # Arguments
         class_names: List of class names.
