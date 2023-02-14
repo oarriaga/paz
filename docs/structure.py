@@ -1,5 +1,6 @@
 from paz.backend import angles
 from paz.backend import boxes
+from paz.backend import anchors
 from paz.backend import camera
 from paz.backend import render
 from paz.backend import keypoints
@@ -63,6 +64,23 @@ PAGES = [
         ],
     },
 
+
+    {
+        'page': 'backend/anchors.md',
+        'functions': [
+            anchors.build_anchors,
+            anchors.build_octaves,
+            anchors.build_aspect,
+            anchors.build_scales,
+            anchors.build_strides,
+            anchors.make_branch_boxes,
+            anchors.compute_box_coordinates,
+            anchors.build_base_anchor,
+            anchors.compute_aspect_size,
+            anchors.compute_anchor_dims,
+            anchors.compute_anchor_centres
+        ],
+    },
 
     {
         'page': 'backend/keypoints.md',
@@ -263,7 +281,15 @@ PAGES = [
         'functions': [
             models.detection.SSD300,
             models.detection.SSD512,
-            models.detection.HaarCascadeDetector
+            models.detection.HaarCascadeDetector,
+            models.detection.EFFICIENTDETD0,
+            models.detection.EFFICIENTDETD1,
+            models.detection.EFFICIENTDETD2,
+            models.detection.EFFICIENTDETD3,
+            models.detection.EFFICIENTDETD4,
+            models.detection.EFFICIENTDETD5,
+            models.detection.EFFICIENTDETD6,
+            models.detection.EFFICIENTDETD7,
         ],
     },
 

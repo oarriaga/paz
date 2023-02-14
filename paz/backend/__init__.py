@@ -9,4 +9,3 @@ from .anchors import build_base_anchor
 from .anchors import compute_aspect_size
 from .anchors import compute_anchor_dims
 from .anchors import compute_anchor_centres
-from .anchors import compute_anchor_centres

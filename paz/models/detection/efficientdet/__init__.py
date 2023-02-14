@@ -1,6 +1,3 @@
-from .ssd300 import SSD300
-from .ssd512 import SSD512
-from .haar_cascade import HaarCascadeDetector
 from .efficientdet import EFFICIENTDETD0
 from .efficientdet import EFFICIENTDETD1
 from .efficientdet import EFFICIENTDETD2
@@ -9,3 +6,4 @@ from .efficientdet import EFFICIENTDETD4
 from .efficientdet import EFFICIENTDETD5
 from .efficientdet import EFFICIENTDETD6
 from .efficientdet import EFFICIENTDETD7
+from .efficientnet import EFFICIENTNET
