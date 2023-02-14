@@ -2,9 +2,9 @@ import numpy as np
 import paz.processors as pr
 from paz.abstract import SequentialProcessor, Processor
 from paz.pipelines.detection import DetectSingleShot
-from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
-                          EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
-                          EFFICIENTDETD6, EFFICIENTDETD7)
+from paz.models import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
+                        EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
+                        EFFICIENTDETD6, EFFICIENTDETD7)
 
 
 class DetectSingleShotEfficientDet(Processor):
