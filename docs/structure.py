@@ -58,7 +58,8 @@ PAGES = [
             boxes.to_one_hot,
             boxes.to_normalized_coordinates,
             boxes.to_corner_form,
-            boxes.extract_bounding_box_corners
+            boxes.extract_bounding_box_corners,
+            boxes.scale_box
         ],
     },
 
@@ -395,7 +396,9 @@ PAGES = [
             processors.ReplaceLowerThanThreshold,
             processors.GetNonZeroValues,
             processors.GetNonZeroArguments,
-            processors.FlipLeftRightImage
+            processors.FlipLeftRightImage,
+            processors.DivideStandardDeviationImage,
+            processors.ScaledResize
         ]
     },
 
@@ -454,7 +457,13 @@ PAGES = [
             processors.NonMaximumSuppressionPerClass,
             processors.FilterBoxes,
             processors.OffsetBoxes2D,
-            processors.CropImage
+            processors.CropImage,
+            processors.BoxesToBoxes2D,
+            processors.BoxesWithOneHotVectorsToBoxes2D,
+            processors.BoxesWithClassArgToBoxes2D,
+            processors.RoundBoxes,
+            processors.RemoveClass,
+            processors.ScaleBox
         ]
     },
 
@@ -590,7 +599,9 @@ PAGES = [
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
             pipelines.SSD512HandDetection,
-            pipelines.SSD512MinimalHandPose
+            pipelines.SSD512MinimalHandPose,
+            pipelines.SSDPreprocess,
+            pipelines.SSDPostprocess
         ]
     },
 
