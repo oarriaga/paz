@@ -12,7 +12,7 @@ from ..backend.boxes import nms_per_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
 from ..backend.boxes import filter_boxes
-from ..backend.image import resize_image
+from ..backend.boxes import scale_box
 
 
 class SquareBoxes2D(Processor):
@@ -359,73 +359,6 @@ class CropImage(Processor):
         return image[y_min:y_max, x_min:x_max]
 
 
-class DivideStandardDeviationImage(Processor):
-    """Divide channel-wise standard deviation to image.
-
-    # Arguments
-        standard_deviation: List of length 3, containing the
-            channel-wise standard deviation.
-
-    # Properties
-        standard_deviation: List.
-
-    # Methods
-        call()
-    """
-    def __init__(self, standard_deviation):
-        self.standard_deviation = standard_deviation
-        super(DivideStandardDeviationImage, self).__init__()
-
-    def call(self, image):
-        return image / self.standard_deviation
-
-
-class ScaledResize(Processor):
-    """Resizes image by returning the scales to original image.
-
-    # Arguments
-        image_size: Int, desired size of the model input.
-
-    # Properties
-        image_size: Int.
-
-    # Methods
-        call()
-    """
-    def __init__(self, image_size):
-        self.image_size = image_size
-        super(ScaledResize, self).__init__()
-
-    def call(self, image):
-        """
-        # Arguments
-            image: Array, raw input image.
-        """
-        crop_offset_y = np.array(0)
-        crop_offset_x = np.array(0)
-        height = np.array(image.shape[0]).astype('float32')
-        width = np.array(image.shape[1]).astype('float32')
-        image_scale_y = np.array(self.image_size).astype('float32') / height
-        image_scale_x = np.array(self.image_size).astype('float32') / width
-        image_scale = np.minimum(image_scale_x, image_scale_y)
-        scaled_height = (height * image_scale).astype('int32')
-        scaled_width = (width * image_scale).astype('int32')
-        scaled_image = resize_image(image, (scaled_width, scaled_height))
-        scaled_image = scaled_image[
-                       crop_offset_y: crop_offset_y + self.image_size,
-                       crop_offset_x: crop_offset_x + self.image_size,
-                       :]
-        output_images = np.zeros((self.image_size,
-                                  self.image_size,
-                                  image.shape[2]))
-        output_images[:scaled_image.shape[0],
-                      :scaled_image.shape[1],
-                      :scaled_image.shape[2]] = scaled_image
-        image_scale = 1 / image_scale
-        output_images = output_images[np.newaxis]
-        return output_images, image_scale
-
-
 class RemoveClass(Processor):
     """Remove a particular class from the pipeline.
 
@@ -453,4 +386,24 @@ class RemoveClass(Processor):
             boxes = np.delete(boxes, 4 + self.class_arg, axis=1)
         elif self.renormalize:
             raise NotImplementedError
+        return boxes
+
+
+class ScaleBox(Processor):
+    """Scale box coordinates of the prediction.
+
+    # Arguments
+        scales: Array of shape `()`, value to scale boxes.
+
+    # Properties
+        scales: Int.
+
+    # Methods
+        call()
+    """
+    def __init__(self):
+        super(ScaleBox, self).__init__()
+
+    def call(self, boxes, scales):
+        boxes = scale_box(boxes, scales)
         return boxes
