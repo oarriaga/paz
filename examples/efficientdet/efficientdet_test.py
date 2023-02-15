@@ -2,16 +2,23 @@ import pytest
 import numpy as np
 import tensorflow as tf
 from keras.utils.layer_utils import count_params
+from paz.processors.image import LoadImage
 from tensorflow.keras.layers import Input
 from tensorflow.keras.utils import get_file
-from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
-                          EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
-                          EFFICIENTDETD6, EFFICIENTDETD7,
-                          EfficientNet_to_BiFPN, BiFPN)
-from efficientnet import (EFFICIENTNET, apply_drop_connect, conv_block,
-                          MBconv_blocks)
-from efficientdet_blocks import ClassNet, BoxesNet
-from layers import FuseFeature
+from paz.models.detection.efficientdet import (
+    EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2, EFFICIENTDETD3,
+    EFFICIENTDETD4, EFFICIENTDETD5, EFFICIENTDETD6, EFFICIENTDETD7,
+    EfficientNet_to_BiFPN, BiFPN)
+from paz.models.detection.efficientdet.efficientnet import (
+    EFFICIENTNET, apply_drop_connect, conv_block, MBconv_blocks)
+from paz.models.detection.efficientdet.efficientdet_blocks import (
+    ClassNet, BoxesNet)
+from paz.models.detection.efficientdet.layers import FuseFeature
+from paz.abstract.messages import Box2D
+from detection import (
+    EFFICIENTDETD0COCO, EFFICIENTDETD1COCO, EFFICIENTDETD2COCO,
+    EFFICIENTDETD3COCO, EFFICIENTDETD4COCO, EFFICIENTDETD5COCO,
+    EFFICIENTDETD6COCO, EFFICIENTDETD7COCO)
 
 
 @pytest.fixture
@@ -29,6 +36,86 @@ def model_weight_path():
     WEIGHT_PATH = (
         'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
     return WEIGHT_PATH
+
+
+@pytest.fixture
+def image_with_multiple_objects():
+    IMAGE_PATH = ('/home/manummk95/Desktop/efficientdet_BKP/'
+                  'paz/examples/efficientdet/image_with_multiple_objects.jpg')
+    image = LoadImage()(IMAGE_PATH)
+    return image
+
+
+def boxes_EFFICIENTDETD0COCO():
+    boxes2D = [
+        Box2D(np.array([378, 150, 553, 481]), 0.98516708, 'person'),
+        Box2D(np.array([327, 321, 689, 538]), 0.96702063, 'bicycle'),
+        Box2D(np.array([142, 181, 344, 320]), 0.97085154, 'car'),
+        Box2D(np.array([463, 188, 560, 280]), 0.89321392, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD1COCO():
+    boxes2D = [
+        Box2D(np.array([376, 159, 553, 466]), 0.99500101, 'person'),
+        Box2D(np.array([323, 308, 689, 536]), 0.93614238, 'bicycle'),
+        Box2D(np.array([140, 180, 345, 321]), 0.93196129, 'car'),
+        Box2D(np.array([460, 186, 559, 281]), 0.92992687, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD2COCO():
+    boxes2D = [
+        Box2D(np.array([383, 154, 559, 469]), 0.98922938, 'person'),
+        Box2D(np.array([329, 322, 693, 541]), 0.95577913, 'bicycle'),
+        Box2D(np.array([141, 183, 342, 320]), 0.98643678, 'car'),
+        Box2D(np.array([467, 187, 561, 282]), 0.88741940, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD3COCO():
+    boxes2D = [
+        Box2D(np.array([379, 157, 562, 472]), 0.98448812, 'person'),
+        Box2D(np.array([327, 316, 689, 542]), 0.98004740, 'bicycle'),
+        Box2D(np.array([140, 183, 344, 319]), 0.98859566, 'car'),
+        Box2D(np.array([467, 188, 560, 281]), 0.96396237, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD4COCO():
+    boxes2D = [
+        Box2D(np.array([379, 154, 556, 458]), 0.98714488, 'person'),
+        Box2D(np.array([327, 316, 688, 536]), 0.99204492, 'bicycle'),
+        Box2D(np.array([140, 184, 342, 320]), 0.98895394, 'car'),
+        Box2D(np.array([466, 184, 560, 281]), 0.93321716, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD5COCO():
+    boxes2D = [
+        Box2D(np.array([381, 156, 555, 458]), 0.98374682, 'person'),
+        Box2D(np.array([327, 314, 689, 537]), 0.97623592, 'bicycle'),
+        Box2D(np.array([141, 182, 344, 321]), 0.96728980, 'car'),
+        Box2D(np.array([464, 185, 560, 282]), 0.93755936, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD6COCO():
+    boxes2D = [
+        Box2D(np.array([363, 121, 578, 499]), 0.98815745, 'person'),
+        Box2D(np.array([279, 286, 734, 569]), 0.98365491, 'bicycle'),
+        Box2D(np.array([109, 160, 362, 336]), 0.97541159, 'car'),
+        Box2D(np.array([452, 173, 572, 293]), 0.92620795, 'backpack')]
+    return boxes2D
+
+
+def boxes_EFFICIENTDETD7COCO():
+    boxes2D = [
+        Box2D(np.array([383, 156, 554, 456]), 0.99214124, 'person'),
+        Box2D(np.array([326, 317, 688, 540]), 0.99320131, 'bicycle'),
+        Box2D(np.array([141, 180, 344, 319]), 0.99019050, 'car'),
+        Box2D(np.array([463, 186, 560, 281]), 0.93246346, 'backpack')]
+    return boxes2D
 
 
 def get_test_images(image_size, batch_size=1):
@@ -537,3 +624,28 @@ def test_prior_boxes(model, aspect_ratios, num_boxes):
     assert prior_boxes.shape[0] == num_boxes, (
         "Incorrect number of anchor boxes")
     del model
+
+
+@pytest.mark.parametrize(('detection_pipeline, boxes_EFFICIENTDET'),
+                         [
+                            (EFFICIENTDETD0COCO, boxes_EFFICIENTDETD0COCO),
+                            (EFFICIENTDETD1COCO, boxes_EFFICIENTDETD1COCO),
+                            (EFFICIENTDETD2COCO, boxes_EFFICIENTDETD2COCO),
+                            (EFFICIENTDETD3COCO, boxes_EFFICIENTDETD3COCO),
+                            (EFFICIENTDETD4COCO, boxes_EFFICIENTDETD4COCO),
+                            (EFFICIENTDETD5COCO, boxes_EFFICIENTDETD5COCO),
+                            (EFFICIENTDETD6COCO, boxes_EFFICIENTDETD6COCO),
+                            (EFFICIENTDETD7COCO, boxes_EFFICIENTDETD7COCO),
+                         ])
+def test_EfficientDet_inference(
+        detection_pipeline, image_with_multiple_objects, boxes_EFFICIENTDET):
+    detect = detection_pipeline(score_thresh=0.75, nms_thresh=0.35)
+    detections = detect(image_with_multiple_objects)
+    predicted_boxes2D = detections['boxes2D']
+    labelled_boxes = boxes_EFFICIENTDET()
+    assert len(predicted_boxes2D) == len(labelled_boxes)
+    for box2D, predicted_box2D in zip(labelled_boxes, predicted_boxes2D):
+        assert np.allclose(box2D.coordinates, predicted_box2D.coordinates)
+        assert np.allclose(box2D.score, predicted_box2D.score)
+        assert (box2D.class_name == predicted_box2D.class_name)
+    del detection_pipeline
