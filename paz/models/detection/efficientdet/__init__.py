@@ -6,4 +6,6 @@ from .efficientdet import EFFICIENTDETD4
 from .efficientdet import EFFICIENTDETD5
 from .efficientdet import EFFICIENTDETD6
 from .efficientdet import EFFICIENTDETD7
+from .efficientdet import EfficientNet_to_BiFPN
+from .efficientdet import BiFPN
 from .efficientnet import EFFICIENTNET
