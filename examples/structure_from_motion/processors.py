@@ -1,8 +1,8 @@
 from paz import processors as pr
-from backend1 import detect_SIFT_features, recover_pose, triangulate_points
-from backend1 import brute_force_matcher
-from backend1 import find_homography_RANSAC
-from backend1 import find_fundamental_matrix, compute_essential_matrix
+from backend import detect_SIFT_features, recover_pose, triangulate_points
+from backend import brute_force_matcher
+from backend import find_homography_RANSAC
+from backend import find_fundamental_matrix, compute_essential_matrix
 from paz.backend.keypoints import solve_PnP_RANSAC
 
 

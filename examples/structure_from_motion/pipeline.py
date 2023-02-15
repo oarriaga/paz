@@ -1,9 +1,9 @@
 from paz import processors as pr
-from processors1 import DetecetSiftFeatures, RecoverPose
-from processors1 import FindHomographyRANSAC, ComputeEssentialMatrix
-from processors1 import ComputeFundamentalMatrix, TriangulatePoints
-from processors1 import BruteForceMatcher, SolvePnP
-from backend1 import match_ratio_test, get_match_points, get_match_indices
+from processors import DetecetSiftFeatures, RecoverPose
+from processors import FindHomographyRANSAC, ComputeEssentialMatrix
+from processors import ComputeFundamentalMatrix, TriangulatePoints
+from processors import BruteForceMatcher, SolvePnP
+from backend import match_ratio_test, get_match_points, get_match_indices
 # from backend import get_match_descriptors
 import cv2
 import numpy as np
@@ -195,7 +195,7 @@ class StructureFromMotion(pr.Processor):
             print('##################')
             P2 = P3.copy()
             # break
-        plot_3D_keypoints(self.points3D)
+        # plot_3D_keypoints(self.points3D)
         return self.points3D
 
 

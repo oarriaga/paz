@@ -17,7 +17,7 @@ def brute_force_matcher(descriptor1, descriptor2, k=2):
 def match_ratio_test(matches, ratio=0.6):
     good_matches = []
     for m, n in matches:
-        if m.distance < ratio * n.distance:
+        if m.distance < 0.9 * n.distance:
             good_matches.append([m])
     return good_matches
 
