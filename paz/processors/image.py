@@ -558,5 +558,5 @@ class ScaledResize(Processor):
         # Arguments
             image: Array, raw input image.
         """
-        output_images, image_scale = scale_resize(image, self.image_size)
-        return output_images, image_scale
+        output_image, image_scale = scale_resize(image, self.image_size)
+        return output_image, image_scale

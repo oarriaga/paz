@@ -326,26 +326,27 @@ def get_scaling_factor(image, scale=1, shape=(128, 128)):
 
 
 def scale_resize(image, image_size):
-    crop_offset_y = np.array(0)
-    crop_offset_x = np.array(0)
-    height = np.array(image.shape[0]).astype('float32')
-    width = np.array(image.shape[1]).astype('float32')
-    image_scale_y = np.array(image_size).astype('float32') / height
-    image_scale_x = np.array(image_size).astype('float32') / width
-    image_scale = np.minimum(image_scale_x, image_scale_y)
-    scaled_height = (height * image_scale).astype('int32')
-    scaled_width = (width * image_scale).astype('int32')
-    scaled_image = resize_image(image, (scaled_width, scaled_height))
-    scaled_image = scaled_image[
-                    crop_offset_y: crop_offset_y + image_size,
-                    crop_offset_x: crop_offset_x + image_size,
-                    :]
-    output_images = np.zeros((image_size,
-                              image_size,
-                              image.shape[2]))
-    output_images[:scaled_image.shape[0],
-                  :scaled_image.shape[1],
-                  :scaled_image.shape[2]] = scaled_image
-    image_scale = 1 / image_scale
-    output_images = output_images[np.newaxis]
-    return output_images, image_scale
+    """Resizes image by returning the scales to original image.
+
+    Args:
+        image: Numpy array.
+        image_size: Int, size of the image.
+
+    Returns:
+        Tuple: output_images and image_scale.
+    """
+    H, W = image.shape[0], image.shape[1]
+    image_scale_x = image_size / W
+    image_scale_y = image_size / H
+    image_scale = min(image_scale_x, image_scale_y)
+    scaled_H = int(H * image_scale)
+    scaled_W = int(W * image_scale)
+    scaled_image = resize_image(image, (scaled_W, scaled_H))
+    scaled_image = scaled_image[:image_size, :image_size, :]
+    output_image = np.zeros((image_size, image_size, image.shape[2]))
+    output_image[:scaled_image.shape[0],
+                 :scaled_image.shape[1],
+                 :scaled_image.shape[2]] = scaled_image
+    image_scale = np.array(1 / image_scale)
+    output_image = output_image[np.newaxis]
+    return output_image, image_scale
