@@ -1,17 +1,10 @@
 import numpy as np
-from paz import processors as pr
+import paz.processors as pr
 from paz.abstract import SequentialProcessor, Processor
-from paz.pipelines.detection import (DetectSingleShot, SSDPreprocess,
-                                     SSDPostprocess)
-from efficientdet import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
-                          EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
-                          EFFICIENTDETD6, EFFICIENTDETD7)
-from processors import (DivideStandardDeviationImage, ScaledResize, ScaleBox,
-                        NonMaximumSuppressionPerClass, FilterBoxes,
-                        ToBoxes2D, RemoveClass, RoundBoxes)
-
-B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
-RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
+from paz.pipelines.detection import DetectSingleShot
+from paz.models import (EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2,
+                        EFFICIENTDETD3, EFFICIENTDETD4, EFFICIENTDETD5,
+                        EFFICIENTDETD6, EFFICIENTDETD7)
 
 
 class DetectSingleShotEfficientDet(Processor):
@@ -65,12 +58,12 @@ class EfficientDetPreprocess(SequentialProcessor):
             per channel on ImageNet.
     """
     def __init__(self, model, mean=pr.RGB_IMAGENET_MEAN,
-                 standard_deviation=RGB_IMAGENET_STDEV):
+                 standard_deviation=pr.RGB_IMAGENET_STDEV):
         super(EfficientDetPreprocess, self).__init__()
         self.add(pr.CastImage(float))
         self.add(pr.SubtractMeanImage(mean=mean))
-        self.add(DivideStandardDeviationImage(standard_deviation))
-        self.add(ScaledResize(image_size=model.input_shape[1]))
+        self.add(pr.DivideStandardDeviationImage(standard_deviation))
+        self.add(pr.ScaledResize(image_size=model.input_shape[1]))
 
 
 class EfficientDetPostprocess(Processor):
@@ -93,18 +86,17 @@ class EfficientDetPostprocess(Processor):
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
-            RemoveClass(class_names, class_arg)])
-        self.scale = ScaleBox()
-        self.nms_per_class = NonMaximumSuppressionPerClass(nms_thresh)
-        self.filter_boxes = FilterBoxes(score_thresh)
-        self.to_boxes2D = ToBoxes2D(class_names)
-        self.round_boxes = RoundBoxes()
+            pr.RemoveClass(class_names, class_arg)])
+        self.scale = pr.ScaleBox()
+        self.nms_per_class = pr.NonMaximumSuppressionPerClass(
+            nms_thresh, conf_thresh=score_thresh)
+        self.to_boxes2D = pr.ToBoxes2D(class_names)
+        self.round_boxes = pr.RoundBoxes2D()
 
-    def call(self, output, image_scales):
+    def call(self, output, image_scale):
         box_data = self.postprocess(output)
-        box_data = self.scale(box_data, image_scales)
-        box_data, class_data = self.nms_per_class(box_data)
-        box_data = self.filter_boxes(box_data, class_data)
+        box_data = self.scale(box_data, image_scale)
+        box_data = self.nms_per_class(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
         return boxes2D
@@ -329,11 +321,8 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
         names = get_class_names('VOC')
         model = EFFICIENTDETD0(num_classes=len(names),
                                base_weights='VOC', head_weights='VOC')
-        preprocess = SSDPreprocess(model)
-        postprocess = SSDPostprocess(
-            model, names, score_thresh, nms_thresh, class_arg=0)
         super(EFFICIENTDETD0VOC, self).__init__(
-             model, names, preprocess, postprocess, draw=draw)
+            model, names, score_thresh, nms_thresh, draw=draw)
 
 
 def process_outputs(outputs):

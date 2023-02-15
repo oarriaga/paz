@@ -9,6 +9,7 @@ from ..backend.image import random_brightness
 from ..backend.image import random_contrast
 from ..backend.image import random_hue
 from ..backend.image import resize_image
+from ..backend.image import scale_resize
 from ..backend.image import random_image_blur
 from ..backend.image import random_flip_left_right
 from ..backend.image import convert_color_space
@@ -30,6 +31,8 @@ from ..backend.image.tensorflow_image import imagenet_preprocess_input
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
 RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
+B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
+RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
 
 
 class CastImage(Processor):
@@ -511,3 +514,49 @@ class FlipLeftRightImage(Processor):
 
     def call(self, image):
         return flip_left_right(image)
+
+
+class DivideStandardDeviationImage(Processor):
+    """Divide channel-wise standard deviation to image.
+
+    # Arguments
+        standard_deviation: List of length 3, containing the
+            channel-wise standard deviation.
+
+    # Properties
+        standard_deviation: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, standard_deviation):
+        self.standard_deviation = standard_deviation
+        super(DivideStandardDeviationImage, self).__init__()
+
+    def call(self, image):
+        return image / self.standard_deviation
+
+
+class ScaledResize(Processor):
+    """Resizes image by returning the scales to original image.
+
+    # Arguments
+        image_size: Int, desired size of the model input.
+
+    # Properties
+        image_size: Int.
+
+    # Methods
+        call()
+    """
+    def __init__(self, image_size):
+        self.image_size = image_size
+        super(ScaledResize, self).__init__()
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Array, raw input image.
+        """
+        output_image, image_scale = scale_resize(image, self.image_size)
+        return output_image, image_scale

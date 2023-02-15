@@ -5,7 +5,8 @@ from tensorflow.keras.layers import Activation, Concatenate, Reshape
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
                                      MaxPooling2D, SeparableConv2D,
                                      UpSampling2D)
-from layers import FuseFeature, GetDropConnect
+from paz.models.detection.efficientdet.layers import (FuseFeature,
+                                                      GetDropConnect)
 
 
 def build_detector_head(middles, num_classes, num_dims, aspect_ratios,

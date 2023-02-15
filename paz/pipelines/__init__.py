@@ -21,6 +21,8 @@ from .detection import DetectKeypoints2D
 from .detection import DetectFaceKeypointNet2D32
 from .detection import SSD512HandDetection
 from .detection import SSD512MinimalHandPose
+from .detection import SSDPreprocess
+from .detection import SSDPostprocess
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
