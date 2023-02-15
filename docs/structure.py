@@ -209,7 +209,8 @@ PAGES = [
             image.get_rotation_matrix,
             image.calculate_image_center,
             image.get_affine_transform,
-            image.get_scaling_factor
+            image.get_scaling_factor,
+            image.scale_resize
         ],
     },
 
