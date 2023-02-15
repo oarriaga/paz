@@ -326,14 +326,15 @@ def get_scaling_factor(image, scale=1, shape=(128, 128)):
 
 
 def scale_resize(image, image_size):
-    """Resizes image by returning the scales to original image.
+    """Resizes and crops image by returning the scales to original
+    image.
 
     Args:
-        image: Numpy array.
+        image: Numpy array, raw image.
         image_size: Int, size of the image.
 
     Returns:
-        Tuple: output_images and image_scale.
+        Tuple: output_image, image_scale.
     """
     H, W = image.shape[0], image.shape[1]
     image_scale_x = image_size / W
