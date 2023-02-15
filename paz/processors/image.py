@@ -9,6 +9,7 @@ from ..backend.image import random_brightness
 from ..backend.image import random_contrast
 from ..backend.image import random_hue
 from ..backend.image import resize_image
+from ..backend.image import scale_resize
 from ..backend.image import random_image_blur
 from ..backend.image import random_flip_left_right
 from ..backend.image import convert_color_space
@@ -557,26 +558,5 @@ class ScaledResize(Processor):
         # Arguments
             image: Array, raw input image.
         """
-        crop_offset_y = np.array(0)
-        crop_offset_x = np.array(0)
-        height = np.array(image.shape[0]).astype('float32')
-        width = np.array(image.shape[1]).astype('float32')
-        image_scale_y = np.array(self.image_size).astype('float32') / height
-        image_scale_x = np.array(self.image_size).astype('float32') / width
-        image_scale = np.minimum(image_scale_x, image_scale_y)
-        scaled_height = (height * image_scale).astype('int32')
-        scaled_width = (width * image_scale).astype('int32')
-        scaled_image = resize_image(image, (scaled_width, scaled_height))
-        scaled_image = scaled_image[
-                       crop_offset_y: crop_offset_y + self.image_size,
-                       crop_offset_x: crop_offset_x + self.image_size,
-                       :]
-        output_images = np.zeros((self.image_size,
-                                  self.image_size,
-                                  image.shape[2]))
-        output_images[:scaled_image.shape[0],
-                      :scaled_image.shape[1],
-                      :scaled_image.shape[2]] = scaled_image
-        image_scale = 1 / image_scale
-        output_images = output_images[np.newaxis]
+        output_images, image_scale = scale_resize(image, self.image_size)
         return output_images, image_scale
