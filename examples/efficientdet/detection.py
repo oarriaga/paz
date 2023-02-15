@@ -93,9 +93,9 @@ class EfficientDetPostprocess(Processor):
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
 
-    def call(self, output, image_scales):
+    def call(self, output, image_scale):
         box_data = self.postprocess(output)
-        box_data = self.scale(box_data, image_scales)
+        box_data = self.scale(box_data, image_scale)
         box_data = self.nms_per_class(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)

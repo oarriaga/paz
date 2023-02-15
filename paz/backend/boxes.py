@@ -545,7 +545,7 @@ def filter_boxes(boxes, conf_thresh):
     return confident_class_detections
 
 
-def scale_box(predictions, image_scales=None):
+def scale_box(predictions, image_scales):
     """
     # Arguments
         predictions: Array of shape `(num_boxes, num_classes+N)`
@@ -556,10 +556,8 @@ def scale_box(predictions, image_scales=None):
         predictions: Array of shape `(num_boxes, num_classes+N)`
             model predictions.
     """
-
-    if image_scales is not None:
-        boxes = predictions[:, :4]
-        scales = image_scales[np.newaxis][np.newaxis]
-        boxes = boxes * scales
-        predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
+    boxes = predictions[:, :4]
+    scales = image_scales[np.newaxis][np.newaxis]
+    boxes = boxes * scales
+    predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
     return predictions
