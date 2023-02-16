@@ -32,7 +32,7 @@ def model():
     backbone = MaskRCNNConfig().BACKBONE
     top_down_pyramid_size = MaskRCNNConfig().TOP_DOWN_PYRAMID_SIZE
     base_model = MaskRCNN(config=MaskRCNNConfig(),
-                          model_dir='../../mask_rcnn',train_bn=train_bn,
+                          model_dir='../../mask_rcnn', train_bn=train_bn,
                           image_shape=image_shape,
                           backbone=backbone,
                           top_down_pyramid_size=top_down_pyramid_size)
@@ -86,20 +86,20 @@ def proposal_layer(RPN_model, anchors, config):
                          rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
                          pre_nms_limit=config.PRE_NMS_LIMIT,
                          images_per_gpu=config.IMAGES_PER_GPU,
-                         batch_size= config.BATCH_SIZE)\
+                         batch_size=config.BATCH_SIZE)\
         ([RPN_class, RPN_box, anchors])
 
 
 @pytest.fixture
 def detection_target_layer(proposal_layer, ground_truth, config):
     class_ids, boxes, masks = ground_truth
-    target_layer = DetectionTargetLayer(images_per_gpu= config.IMAGES_PER_GPU,
+    target_layer = DetectionTargetLayer(images_per_gpu=config.IMAGES_PER_GPU,
                                         mask_shape=config.MASK_SHAPE,
                                         train_rois_per_image=config.TRAIN_ROIS_PER_IMAGE,
                                         roi_positive_ratio=config.ROI_POSITIVE_RATIO,
                                         bbox_std_dev=config.BBOX_STD_DEV,
                                         use_mini_mask=config.USE_MINI_MASK,
-                                        batch_size= config.BATCH_SIZE
+                                        batch_size=config.BATCH_SIZE
                                         )
     return target_layer([proposal_layer, class_ids, boxes, masks])
 
@@ -116,7 +116,7 @@ def test_detection_target_layer(detection_target_layer, shapes):
     ROIs, target_class, target_box, target_mask = detection_target_layer
     mask_shape = (28, 28)
     results_shape = [K.shape(ROIs).shape, K.shape(target_class).shape,
-                    K.shape(target_box).shape, K.shape(target_mask).shape]
+                     K.shape(target_box).shape, K.shape(target_mask).shape]
     assert shapes == results_shape
     assert target_mask.shape[-2:] == mask_shape
     assert ROIs.shape[2] == target_box.shape[2] == 4
@@ -131,8 +131,7 @@ def test_detection_layer(proposal_layer, FPN_classifier, config, shape):
                                 detection_max_instances=config.DETECTION_MAX_INSTANCES,
                                 detection_min_confidence=config.DETECTION_MIN_CONFIDENCE,
                                 detection_nms_threshold=config.DETECTION_NMS_THRESHOLD,
-                                name='mrcnn_detection')\
-         ([proposal_layer, mrcnn_class, mrcnn_bbox])
+                                name='mrcnn_detection')([proposal_layer, mrcnn_class, mrcnn_bbox])
     assert detections.shape == shape
 
 

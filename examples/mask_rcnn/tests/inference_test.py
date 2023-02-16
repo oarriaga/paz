@@ -13,19 +13,15 @@ def test_results():
     return inference.test([image], weights_path)[0]
 
 
-@pytest.mark.parametrize('box', [np.array([[ 337,  661,  585,  969],
- [ 274,  894,  381,  974],
- [ 334,  232,  565,  488],
- [ 368,    1,  563,  252],
- [ 290,   84,  375,  149],
- [  69,  268,  316,  708],
- [ 364,  399,  577,  744],
- [ 333,  911,  380,  960],
- [ 546,  703,  682, 1023],
- [ 384,  147,  546,  302]])])
+@pytest.mark.parametrize('box', [np.array([[337,  661,  585,  969], [274,  894,  381,  974],
+                                           [334,  232,  565,  488], [368,    1,  563,  252],
+                                           [290,   84,  375,  149], [69,  268,  316,  708],
+                                           [364,  399,  577,  744], [333,  911,  380,  960],
+                                           [546,  703,  682, 1023], [384,  147,  546,  302]])])
 def test_bounding_box(test_results, box):
     boxes = np.array(test_results['rois'])
-    np.testing.assert_array_equal(box,boxes)
+    np.testing.assert_array_equal(box, boxes)
+
 
 @pytest.mark.parametrize('mask_shape', [(682, 1023)])
 def test_mask_shape(test_results, mask_shape):
@@ -40,15 +36,15 @@ def test_mask_shape(test_results, mask_shape):
 def test_mask(test_results, ones):
     num_obj = (test_results['masks'].shape)[2]
     masks = test_results['masks']
-    mask=[]
     for i in range(num_obj):
-        mask = masks[:,:,i]
+        mask = masks[:, :, i]
         mask = np.array(mask)
         assert(ones[i] == np.sum(mask))
 
+
 @pytest.mark.parametrize('classes', [(1,  59, 1,  1,  59, 63,  1,  76, 58,  1, 76, 58)])
 def test_class_id(test_results, classes):
-   ids = test_results['class_ids']
-   ids = np.array(ids)
-   for i in range (len(ids)) :
-         assert(classes[i] ==ids[i])
+    ids = test_results['class_ids']
+    ids = np.array(ids)
+    for i in range(len(ids)):
+        assert(classes[i] == ids[i])

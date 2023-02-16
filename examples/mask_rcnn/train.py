@@ -73,6 +73,7 @@ print('Data path: ', args.data_path)
 # Dataset initialisation
 config = ShapesConfig()
 optimizer = SGD(args.learning_rate, args.momentum, clipnorm=config.GRADIENT_CLIP_NORM)
+
 dataset_train = Shapes(50, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 dataset_val = Shapes(5, (config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1]))
 train_generator = DataGenerator(dataset_train, config, shuffle=True,
@@ -109,20 +110,14 @@ model.set_trainable(layer_regex=layers)
 # Add losses and compile
 rpn_class_loss = ProposalClassLoss(config=config)
 rpn_bbox_loss = ProposalBBoxLoss(config=config)
-mrcnn_class_loss = ClassLoss(config=config)
-mrcnn_bbox_loss = BBoxLoss(config=config)
-mrcnn_mask_loss = MaskLoss(config=config)
 
 custom_losses = {
         "rpn_class_logits": rpn_class_loss,
-        "rpn_bbox": rpn_bbox_loss,
-        "mrcnn_class_logits": mrcnn_class_loss,
-        "mrcnn_bbox": mrcnn_bbox_loss,
-        "mrcnn_mask": mrcnn_mask_loss
+        "rpn_bbox": rpn_bbox_loss
         }
 reg_losses = [
-            keras.regularizers.l2(self.config.WEIGHT_DECAY)(w) / tf.cast(tf.size(w), tf.float32)
-            for w in self.keras_model.trainable_weights
+            keras.regularizers.l2(config.WEIGHT_DECAY)(w) / tf.cast(tf.size(w), tf.float32)
+            for w in model.keras_model.trainable_weights
             if 'gamma' not in w.name and 'beta' not in w.name]
 
 model.keras_model.add_loss(tf.add_n(reg_losses))

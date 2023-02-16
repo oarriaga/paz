@@ -33,7 +33,7 @@ class Config(object):
     # number that your GPU can handle for best performance.
     IMAGES_PER_GPU = 2
 
-    WINDOW = None
+    WINDOW = [0, 0, 128, 128]
 
     # Number of training steps per epoch
     # This doesn't need to match the size of the training set. Tensorboard
@@ -191,10 +191,9 @@ class Config(object):
     LOSS_WEIGHTS = {
         "rpn_class_logits": 1.,
         "rpn_bbox": 1.,
-        "mrcnn": 1.,
-        "mrcnn_class": 1.,
-        "mrcnn_bbox": 1.,
-        "mrcnn_mask": 1.
+        "mrcnn_class_loss": 1.,
+        "mrcnn_bbox_loss": 1.,
+        "mrcnn_mask_loss": 1.
     }
 
     # Use RPN ROIs or externally generated ROIs for training
