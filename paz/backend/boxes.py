@@ -316,37 +316,43 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def nms_per_class(box_data, nms_thresh=.45, conf_thresh=0.01, top_k=200):
+def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
+                  conf_thresh=0.5, top_k=200):
     """Applies non-maximum-suppression per class.
-    # Arguments
-        box_data: Numpy array of shape `(num_prior_boxes, 4 + num_classes)`.
-        nsm_thresh: Float. Non-maximum suppression threshold.
-        conf_thresh: Float. Filter scores with a lower confidence value before
-            performing non-maximum supression.
-        top_k: Integer. Maximum number of boxes per class outputted by nms.
 
-    Returns
-        Numpy array of shape `(num_classes, top_k, 5)`.
+    # Arguments
+        box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
+        nms_thresh: Float, Non-maximum suppression threshold.
+        epsilon: Float, Filter scores with a lower confidence
+            value before performing non-maximum supression.
+        conf_thresh: Float, Filter out boxes with a confidence value
+            lower than this.
+        top_k: Int, Maximum number of boxes per class outputted by nms.
+
+    # Returns
+        Array of shape `(num_boxes, 4+ num_classes)`.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
-    output = np.zeros((num_classes, top_k, 5))
-
-    # skip the background class (start counter in 1)
-    for class_arg in range(1, num_classes):
-        conf_mask = class_predictions[:, class_arg] >= conf_thresh
-        scores = class_predictions[:, class_arg][conf_mask]
+    non_suppressed_boxes = np.array(
+        [], dtype=float).reshape(0, box_data.shape[1])
+    for class_arg in range(num_classes):
+        mask = class_predictions[:, class_arg] >= epsilon
+        scores = class_predictions[:, class_arg][mask]
         if len(scores) == 0:
             continue
-        boxes = decoded_boxes[conf_mask]
+        boxes = decoded_boxes[mask]
         indices, count = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
-        scores = np.expand_dims(scores, -1)
         selected_indices = indices[:count]
+        classes = class_predictions[mask]
         selections = np.concatenate(
-            (boxes[selected_indices], scores[selected_indices]), axis=1)
-        output[class_arg, :count, :] = selections
-    return output
+            (boxes[selected_indices],
+             classes[selected_indices]), axis=1)
+        filter_mask = selections[:, 4 + class_arg] >= conf_thresh
+        non_suppressed_boxes = np.concatenate(
+            (non_suppressed_boxes, selections[filter_mask]), axis=0)
+    return non_suppressed_boxes
 
 
 def to_one_hot(class_indices, num_classes):
@@ -520,3 +526,38 @@ def extract_bounding_box_corners(points3D):
     XYZ_min = np.min(points3D, axis=0)
     XYZ_max = np.max(points3D, axis=0)
     return XYZ_min, XYZ_max
+
+
+def filter_boxes(boxes, conf_thresh):
+    """Filters given boxes based on scores.
+
+    # Arguments
+        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        conf_thresh: Float, Filter boxes with a confidence value lower
+            than this.
+
+    # Returns
+        Numpy array of shape `(num_boxes, 4 + num_classes)`.
+    """
+    max_class_score = np.max(boxes[:, 4:], axis=1)
+    confidence_mask = max_class_score >= conf_thresh
+    confident_class_detections = boxes[confidence_mask]
+    return confident_class_detections
+
+
+def scale_box(predictions, image_scales):
+    """
+    # Arguments
+        predictions: Array of shape `(num_boxes, num_classes+N)`
+            model predictions.
+        image_scales: Array of shape `()`, scale value of boxes.
+
+    # Returns
+        predictions: Array of shape `(num_boxes, num_classes+N)`
+            model predictions.
+    """
+    boxes = predictions[:, :4]
+    scales = image_scales[np.newaxis][np.newaxis]
+    boxes = boxes * scales
+    predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
+    return predictions

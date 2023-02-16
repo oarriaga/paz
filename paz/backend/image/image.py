@@ -1,7 +1,8 @@
 import numpy as np
 
 from .opencv_image import (convert_color_space, gaussian_image_blur,
-                           median_image_blur, warp_affine, RGB2HSV, HSV2RGB)
+                           median_image_blur, warp_affine, resize_image,
+                           RGB2HSV, HSV2RGB)
 
 
 def cast_image(image, dtype):
@@ -322,3 +323,31 @@ def get_scaling_factor(image, scale=1, shape=(128, 128)):
     H_scale = H / shape[0]
     W_scale = W / shape[1]
     return np.array([W_scale * scale, H_scale * scale])
+
+
+def scale_resize(image, image_size):
+    """Resizes and crops image by returning the scales to original
+    image.
+
+    Args:
+        image: Numpy array, raw image.
+        image_size: Int, size of the image.
+
+    Returns:
+        Tuple: output_image, image_scale.
+    """
+    H, W = image.shape[0], image.shape[1]
+    image_scale_x = image_size / W
+    image_scale_y = image_size / H
+    image_scale = min(image_scale_x, image_scale_y)
+    scaled_H = int(H * image_scale)
+    scaled_W = int(W * image_scale)
+    scaled_image = resize_image(image, (scaled_W, scaled_H))
+    scaled_image = scaled_image[:image_size, :image_size, :]
+    output_image = np.zeros((image_size, image_size, image.shape[2]))
+    output_image[:scaled_image.shape[0],
+                 :scaled_image.shape[1],
+                 :scaled_image.shape[2]] = scaled_image
+    image_scale = np.array(1 / image_scale)
+    output_image = output_image[np.newaxis]
+    return output_image, image_scale

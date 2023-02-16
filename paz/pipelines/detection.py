@@ -109,35 +109,31 @@ class DetectSingleShot(Processor):
     # Arguments
         model: Keras model.
         class_names: List of strings indicating the class names.
+        preprocess: Callable, pre-processing pipeline.
+        postprocess: Callable, post-processing pipeline.
         score_thresh: Float between [0, 1]
         nms_thresh: Float between [0, 1].
-        mean: List of three elements indicating the per channel mean.
-        draw: Boolean. If ``True`` prediction are drawn in the returned image.
+        variances: List, of floats.
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 mean=pr.BGR_IMAGENET_MEAN, variances=[0.1, 0.1, 0.2, 0.2],
-                 draw=True):
+                 preprocess=None, postprocess=None,
+                 variances=[0.1, 0.1, 0.2, 0.2], draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
         self.draw = draw
+        if preprocess is None:
+            preprocess = SSDPreprocess(model)
+        if postprocess is None:
+            postprocess = SSDPostprocess(
+                model, class_names, score_thresh, nms_thresh)
 
         super(DetectSingleShot, self).__init__()
-        preprocessing = SequentialProcessor(
-            [pr.ResizeImage(self.model.input_shape[1:3]),
-             pr.ConvertColorSpace(pr.RGB2BGR),
-             pr.SubtractMeanImage(mean),
-             pr.CastImage(float),
-             pr.ExpandDims(axis=0)])
-        postprocessing = SequentialProcessor(
-            [pr.Squeeze(axis=None),
-             pr.DecodeBoxes(self.model.prior_boxes, self.variances),
-             pr.NonMaximumSuppressionPerClass(self.nms_thresh),
-             pr.FilterBoxes(self.class_names, self.score_thresh)])
-        self.predict = pr.Predict(self.model, preprocessing, postprocessing)
-
+        self.predict = pr.Predict(self.model, preprocess, postprocess)
         self.denormalize = pr.DenormalizeBoxes2D()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
@@ -148,6 +144,47 @@ class DetectSingleShot(Processor):
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
+
+
+class SSDPreprocess(SequentialProcessor):
+    """Preprocessing pipeline for SSD.
+
+    # Arguments
+        model: Keras model.
+        mean: List, of three elements indicating the per channel mean.
+        color_space: Int, specifying the color space to transform.
+    """
+    def __init__(
+            self, model, mean=pr.BGR_IMAGENET_MEAN, color_space=pr.RGB2BGR):
+        super(SSDPreprocess, self).__init__()
+        self.add(pr.ResizeImage(model.input_shape[1:3]))
+        self.add(pr.ConvertColorSpace(color_space))
+        self.add(pr.SubtractMeanImage(mean))
+        self.add(pr.CastImage(float))
+        self.add(pr.ExpandDims(axis=0))
+
+
+class SSDPostprocess(SequentialProcessor):
+    """Postprocessing pipeline for SSD.
+
+    # Arguments
+        model: Keras model.
+        class_names: List, of strings indicating the class names.
+        score_thresh: Float, between [0, 1]
+        nms_thresh: Float, between [0, 1].
+        variances: List, of floats.
+        class_arg: Int, index of class to be removed.
+        box_method: Int, type of boxes to boxes2D conversion method.
+    """
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=0, box_method=0):
+        super(SSDPostprocess, self).__init__()
+        self.add(pr.Squeeze(axis=None))
+        self.add(pr.DecodeBoxes(model.prior_boxes, variances))
+        self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
+        self.add(pr.NonMaximumSuppressionPerClass(
+            nms_thresh, conf_thresh=score_thresh))
+        self.add(pr.ToBoxes2D(class_names, box_method))
 
 
 class SSD512COCO(DetectSingleShot):
@@ -301,7 +338,7 @@ class DetectHaarCascade(Processor):
         self.draw = draw
         RGB2GRAY = pr.ConvertColorSpace(pr.RGB2GRAY)
         postprocess = SequentialProcessor()
-        postprocess.add(pr.ToBoxes2D(self.class_names))
+        postprocess.add(pr.ToBoxes2D(self.class_names, box_method=2))
         self.predict = pr.Predict(self.detector, RGB2GRAY, postprocess)
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names, self.colors)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])

@@ -1,5 +1,6 @@
 from paz.backend import angles
 from paz.backend import boxes
+from paz.backend import anchors
 from paz.backend import camera
 from paz.backend import render
 from paz.backend import keypoints
@@ -58,10 +59,28 @@ PAGES = [
             boxes.to_one_hot,
             boxes.to_normalized_coordinates,
             boxes.to_corner_form,
-            boxes.extract_bounding_box_corners
+            boxes.extract_bounding_box_corners,
+            boxes.scale_box
         ],
     },
 
+
+    {
+        'page': 'backend/anchors.md',
+        'functions': [
+            anchors.build_anchors,
+            anchors.build_octaves,
+            anchors.build_aspect,
+            anchors.build_scales,
+            anchors.build_strides,
+            anchors.make_branch_boxes,
+            anchors.compute_box_coordinates,
+            anchors.build_base_anchor,
+            anchors.compute_aspect_size,
+            anchors.compute_anchor_dims,
+            anchors.compute_anchor_centres
+        ],
+    },
 
     {
         'page': 'backend/keypoints.md',
@@ -190,7 +209,8 @@ PAGES = [
             image.get_rotation_matrix,
             image.calculate_image_center,
             image.get_affine_transform,
-            image.get_scaling_factor
+            image.get_scaling_factor,
+            image.scale_resize
         ],
     },
 
@@ -262,7 +282,15 @@ PAGES = [
         'functions': [
             models.detection.SSD300,
             models.detection.SSD512,
-            models.detection.HaarCascadeDetector
+            models.detection.HaarCascadeDetector,
+            models.detection.EFFICIENTDETD0,
+            models.detection.EFFICIENTDETD1,
+            models.detection.EFFICIENTDETD2,
+            models.detection.EFFICIENTDETD3,
+            models.detection.EFFICIENTDETD4,
+            models.detection.EFFICIENTDETD5,
+            models.detection.EFFICIENTDETD6,
+            models.detection.EFFICIENTDETD7,
         ],
     },
 
@@ -395,7 +423,9 @@ PAGES = [
             processors.ReplaceLowerThanThreshold,
             processors.GetNonZeroValues,
             processors.GetNonZeroArguments,
-            processors.FlipLeftRightImage
+            processors.FlipLeftRightImage,
+            processors.DivideStandardDeviationImage,
+            processors.ScaledResize
         ]
     },
 
@@ -454,7 +484,13 @@ PAGES = [
             processors.NonMaximumSuppressionPerClass,
             processors.FilterBoxes,
             processors.OffsetBoxes2D,
-            processors.CropImage
+            processors.CropImage,
+            processors.BoxesToBoxes2D,
+            processors.BoxesWithOneHotVectorsToBoxes2D,
+            processors.BoxesWithClassArgToBoxes2D,
+            processors.RoundBoxes,
+            processors.RemoveClass,
+            processors.ScaleBox
         ]
     },
 
@@ -590,7 +626,9 @@ PAGES = [
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
             pipelines.SSD512HandDetection,
-            pipelines.SSD512MinimalHandPose
+            pipelines.SSD512MinimalHandPose,
+            pipelines.SSDPreprocess,
+            pipelines.SSDPostprocess
         ]
     },
 

@@ -1,10 +1,10 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
-from anchors import build_anchors
-from efficientdet_blocks import (BiFPN, build_detector_head,
-                                 EfficientNet_to_BiFPN)
-from efficientnet import EFFICIENTNET
+from paz.backend.anchors import build_anchors
+from paz.models.detection.efficientdet.efficientdet_blocks import (
+    BiFPN, build_detector_head, EfficientNet_to_BiFPN)
+from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 
 WEIGHT_PATH = (
     'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')

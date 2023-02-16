@@ -14,6 +14,12 @@ from .detection import NonMaximumSuppressionPerClass
 from .detection import FilterBoxes
 from .detection import OffsetBoxes2D
 from .detection import CropImage
+from .detection import RemoveClass
+from .detection import ScaleBox
+from .detection import BoxesToBoxes2D
+from .detection import BoxesWithOneHotVectorsToBoxes2D
+from .detection import BoxesWithClassArgToBoxes2D
+from .detection import RoundBoxes
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
@@ -59,10 +65,13 @@ from .image import GetNonZeroArguments
 from .image import GetNonZeroValues
 from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
+from .image import DivideStandardDeviationImage
+from .image import ScaledResize
 
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
+from .image import RGB_IMAGENET_STDEV
 
 from .renderer import Render
 
