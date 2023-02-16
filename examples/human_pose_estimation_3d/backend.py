@@ -1,10 +1,8 @@
 import numpy as np
 
 
-
 def standardize(data, mean, scale):
     """Standardize the data.
-
     # Arguments
         data: nxd matrix to normalize
         mean: Array of means
@@ -34,7 +32,7 @@ def filter_keypoints(keypoints, valid_args):
     """filter keypoints.
 
     # Arguments
-        keypoints: Nx96 points in camera coordinates
+        keypoints: points in camera coordinates
         valid_args: Array of joints indices
 
     # Returns
