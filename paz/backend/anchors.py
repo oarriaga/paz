@@ -1,5 +1,5 @@
 import numpy as np
-from paz.backend.boxes import to_center_form
+from .boxes import to_center_form
 
 
 def build_anchors(image_shape, branches, num_scales, aspect_ratios, scale):

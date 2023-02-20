@@ -4,15 +4,15 @@ import tensorflow as tf
 from keras.utils.layer_utils import count_params
 from tensorflow.keras.layers import Input
 from tensorflow.keras.utils import get_file
-from paz.models.detection.efficientdet import (
+from ....models.detection.efficientdet import (
     EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2, EFFICIENTDETD3,
     EFFICIENTDETD4, EFFICIENTDETD5, EFFICIENTDETD6, EFFICIENTDETD7,
     EfficientNet_to_BiFPN, BiFPN)
-from paz.models.detection.efficientdet.efficientnet import (
+from ....models.detection.efficientdet.efficientnet import (
     EFFICIENTNET, apply_drop_connect, conv_block, MBconv_blocks)
-from paz.models.detection.efficientdet.efficientdet_blocks import (
+from ....models.detection.efficientdet.efficientdet_blocks import (
     ClassNet, BoxesNet)
-from paz.models.detection.efficientdet.layers import FuseFeature
+from ....models.detection.efficientdet.layers import FuseFeature
 
 
 @pytest.fixture
