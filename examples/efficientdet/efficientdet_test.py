@@ -1,6 +1,8 @@
 import pytest
+import os
 import numpy as np
 import tensorflow as tf
+from paz.backend.image import load_image
 from keras.utils.layer_utils import count_params
 from paz.processors.image import LoadImage
 from tensorflow.keras.layers import Input
@@ -40,9 +42,11 @@ def model_weight_path():
 
 @pytest.fixture
 def image_with_multiple_objects():
-    IMAGE_PATH = ('/home/manummk95/Desktop/efficientdet_BKP/'
-                  'paz/examples/efficientdet/image_with_multiple_objects.jpg')
-    image = LoadImage()(IMAGE_PATH)
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download/v0.16/'
+           'image_with_multiple_objects.png')
+    filename = os.path.basename(URL)
+    fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+    image = load_image(fullpath)
     return image
 
 
