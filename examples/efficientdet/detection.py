@@ -45,7 +45,7 @@ class DetectSingleShotEfficientDet(Processor):
     def call(self, image):
         preprocessed_image, image_scales = self.preprocess(image)
         outputs = self.model(preprocessed_image)
-        outputs = process_outputs(outputs)
+        outputs = change_box_coordinates(outputs)
         boxes2D = self.postprocess(outputs, image_scales)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
@@ -304,9 +304,9 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
             model, names, score_thresh, nms_thresh, draw=draw)
 
 
-def process_outputs(outputs):
-    """Merges all feature levels into single tensor and combines
-    box offsets and class scores.
+def change_box_coordinates(outputs):
+    """Converts box coordinates format from (y_min, x_min, y_max, x_max)
+    to (x_min, y_min, x_max, y_max).
 
     # Arguments
         outputs: Tensor, model output.
