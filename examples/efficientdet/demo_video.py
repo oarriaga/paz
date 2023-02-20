@@ -1,7 +1,7 @@
 import argparse
 from paz.backend.camera import Camera
 from paz.backend.camera import VideoPlayer
-from detection import EFFICIENTDETD0COCO
+from paz.pipelines import EFFICIENTDETD0COCO
 
 description = 'Demo script for object detection using EfficientDet model'
 parser = argparse.ArgumentParser(description=description)
