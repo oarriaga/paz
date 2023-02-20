@@ -44,6 +44,16 @@ def image_with_faces():
 
 
 @pytest.fixture
+def image_with_multiple_objects():
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download/'
+           'v0.16/image_with_multiple_objects.png')
+    filename = os.path.basename(URL)
+    fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+    image = load_image(fullpath)
+    return image
+
+
+@pytest.fixture
 def boxes_SSD512COCO():
     boxes2D = [
         Box2D(np.array([544, 373, 1018, 807]), 0.9982471, 'person'),
