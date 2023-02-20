@@ -17,7 +17,7 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
     ClassNet, BoxesNet)
 from paz.models.detection.efficientdet.layers import FuseFeature
 from paz.abstract.messages import Box2D
-from detection import (
+from paz.pipelines import (
     EFFICIENTDETD0COCO, EFFICIENTDETD1COCO, EFFICIENTDETD2COCO,
     EFFICIENTDETD3COCO, EFFICIENTDETD4COCO, EFFICIENTDETD5COCO,
     EFFICIENTDETD6COCO, EFFICIENTDETD7COCO)
