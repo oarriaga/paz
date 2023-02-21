@@ -9,7 +9,7 @@ from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.pipelines import AugmentDetection
 from paz.processors import TRAIN, VAL
-from efficientdet import EFFICIENTDETD0
+from paz.models import EFFICIENTDETD0
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 

@@ -561,3 +561,25 @@ def scale_box(predictions, image_scales):
     boxes = boxes * scales
     predictions = np.concatenate([boxes, predictions[:, 4:]], 1)
     return predictions
+
+
+def change_box_coordinates(outputs):
+    """Converts box coordinates format from (y_min, x_min, y_max, x_max)
+    to (x_min, y_min, x_max, y_max).
+
+    # Arguments
+        outputs: Tensor, model output.
+
+    # Returns
+        outputs: Array, Processed outputs by merging the features
+            at all levels. Each row corresponds to box coordinate
+            offsets and sigmoid of the class logits.
+    """
+    outputs = outputs[0]
+    boxes, classes = outputs[:, :4], outputs[:, 4:]
+    s1, s2, s3, s4 = np.hsplit(boxes, 4)
+    boxes = np.concatenate([s2, s1, s4, s3], axis=1)
+    boxes = boxes[np.newaxis]
+    classes = classes[np.newaxis]
+    outputs = np.concatenate([boxes, classes], axis=2)
+    return outputs
