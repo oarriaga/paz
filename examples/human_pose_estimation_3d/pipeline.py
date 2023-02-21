@@ -1,10 +1,8 @@
 from paz.abstract import Processor
-import numpy as np
 import paz.processors as pr
-from human36m import unnormalize_data, filter_keypoints2D, data_mean2D, \
-	data_stdev2D, \
-	data_mean3D, data_stdev3D, dim_to_use3D
-from backend import standardize
+from keypoints_processors import SimpleBaselines3D
+from human36m import data_mean2D, data_stdev2D, data_mean3D, data_stdev3D, \
+	dim_to_use3D
 
 
 class SIMPLEBASELINES(Processor):
@@ -16,9 +14,9 @@ class SIMPLEBASELINES(Processor):
 	def call(self, image):
 		inferences2D = self.estimate_keypoints_2D(image)
 		keypoints2D = inferences2D['keypoints']
-		keypoints2D = filter_keypoints2D(keypoints2D)
-		norm_data = standardize(keypoints2D, data_mean2D, data_stdev2D)
-		keypoints3D = self.estimate_keypoints_3D.predict(norm_data)
-		keypoints3D = unnormalize_data(keypoints3D, data_mean3D, data_stdev3D,
-		                               dim_to_use3D)
+		baseline_model = SimpleBaselines3D(self.estimate_keypoints_3D,
+		                                   data_mean2D, data_stdev2D,
+		                                   data_mean3D, data_stdev3D,
+		                                   dim_to_use3D)
+		keypoints2D, keypoints3D = baseline_model(keypoints2D)
 		return self.wrap(keypoints2D, keypoints3D)

@@ -13,7 +13,7 @@ def show3Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c",
         rcolor: color for right part of the body
         add_labels: whether to add coordinate labels   
     """
-    if channels.shape[1] == 48:
+    if channels.shape[1] == 48 or channels.shape[1]==16:
         vals = np.reshape(channels, (channels.shape[0], 16, -1))
         I = np.array([1, 2, 3, 1, 5, 6, 1, 8, 9, 9, 11, 12, 9, 14, 15]) - 1
         J = np.array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) - 1
