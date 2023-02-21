@@ -146,7 +146,7 @@ def boxes_EFFICIENTDETD1COCO():
         Box2D(np.array([33, 159, 199, 455]), 0.88892513, 'tv'),
         Box2D(np.array([184, 271, 239, 305]), 0.81121546, 'mouse'),
         Box2D(np.array([176, 270, 302, 331]), 0.74208050, 'mouse'),
-        Box2D(np.array([221, 307, 412, 477]), 0.95129591, 'keyboard')
+        Box2D(np.array([221, 306, 412, 477]), 0.95130372, 'keyboard')
         ]
     return boxes2D
 
@@ -176,7 +176,7 @@ def boxes_EFFICIENTDETD3COCO():
         Box2D(np.array([187, 274, 241, 306]), 0.91222530, 'mouse'),
         Box2D(np.array([258, 281, 304, 313]), 0.80773502, 'mouse'),
         Box2D(np.array([222, 307, 413, 477]), 0.94964569, 'keyboard'),
-        Box2D(np.array([9, 396, 169, 476]), 0.69263541, 'book'),
+        Box2D(np.array([9, 396, 169, 476]), 0.69264298, 'book'),
         Box2D(np.array([460, 412, 483, 452]), 0.69318473, 'clock')
         ]
     return boxes2D
@@ -193,7 +193,7 @@ def boxes_EFFICIENTDETD4COCO():
         Box2D(np.array([238, 279, 303, 311]), 0.72419583, 'mouse'),
         Box2D(np.array([219, 309, 409, 477]), 0.97060418, 'keyboard'),
         Box2D(np.array([10, 395, 170, 477]), 0.84335249, 'book'),
-        Box2D(np.array([459, 411, 484, 451]), 0.70197939, 'clock')
+        Box2D(np.array([459, 411, 484, 451]), 0.70195990, 'clock')
         ]
     return boxes2D
 
