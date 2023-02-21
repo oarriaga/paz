@@ -60,7 +60,8 @@ PAGES = [
             boxes.to_normalized_coordinates,
             boxes.to_corner_form,
             boxes.extract_bounding_box_corners,
-            boxes.scale_box
+            boxes.scale_box,
+            boxes.change_box_coordinates
         ],
     },
 
