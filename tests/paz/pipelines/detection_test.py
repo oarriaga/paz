@@ -294,7 +294,7 @@ def test_boxes_DetectFaceKeypointNet2D32(image_with_faces,
     assert_inferences(detector, image_with_faces, boxes_FaceKeypointNet2D32)
 
 
-@pytest.mark.parametrize(('detection_pipeline, boxes_EFFICIENTDET'),
+@pytest.mark.parametrize(('detection_pipeline, boxes_EFFICIENTDETDXCOCO'),
                          [
                             (EFFICIENTDETD0COCO, boxes_EFFICIENTDETD0COCO),
                             (EFFICIENTDETD1COCO, boxes_EFFICIENTDETD1COCO),
