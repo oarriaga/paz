@@ -177,7 +177,7 @@ def boxes_EFFICIENTDETD3COCO():
         Box2D(np.array([258, 281, 304, 313]), 0.80773502, 'mouse'),
         Box2D(np.array([222, 307, 413, 477]), 0.94964569, 'keyboard'),
         Box2D(np.array([9, 396, 169, 476]), 0.69264298, 'book'),
-        Box2D(np.array([460, 412, 483, 452]), 0.69318473, 'clock')
+        Box2D(np.array([460, 412, 483, 452]), 0.69317573, 'clock')
         ]
     return boxes2D
 
