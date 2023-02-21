@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow as tf
 from paz.backend.image import load_image
 from keras.utils.layer_utils import count_params
-from paz.processors.image import LoadImage
 from tensorflow.keras.layers import Input
 from tensorflow.keras.utils import get_file
 from paz.models.detection.efficientdet import (
