@@ -60,7 +60,8 @@ PAGES = [
             boxes.to_normalized_coordinates,
             boxes.to_corner_form,
             boxes.extract_bounding_box_corners,
-            boxes.scale_box
+            boxes.scale_box,
+            boxes.change_box_coordinates
         ],
     },
 
@@ -628,7 +629,19 @@ PAGES = [
             pipelines.SSD512HandDetection,
             pipelines.SSD512MinimalHandPose,
             pipelines.SSDPreprocess,
-            pipelines.SSDPostprocess
+            pipelines.SSDPostprocess,
+            pipelines.DetectSingleShotEfficientDet,
+            pipelines.EfficientDetPreprocess,
+            pipelines.EfficientDetPostprocess,
+            pipelines.EFFICIENTDETD0COCO,
+            pipelines.EFFICIENTDETD1COCO,
+            pipelines.EFFICIENTDETD2COCO,
+            pipelines.EFFICIENTDETD3COCO,
+            pipelines.EFFICIENTDETD4COCO,
+            pipelines.EFFICIENTDETD5COCO,
+            pipelines.EFFICIENTDETD6COCO,
+            pipelines.EFFICIENTDETD7COCO,
+            pipelines.EFFICIENTDETD0VOC
         ]
     },
 
