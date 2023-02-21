@@ -308,7 +308,7 @@ def test_boxes_DetectFaceKeypointNet2D32(image_with_faces,
 def test_EFFICIENTDETDXCOCO(
         detection_pipeline, image_with_multiple_objects,
         boxes_EFFICIENTDETDXCOCO):
-    detector = detection_pipeline()
+    detector = detection_pipeline(score_thresh=0.60, nms_thresh=0.25)
     boxes_EFFICIENTDETDXCOCO = boxes_EFFICIENTDETDXCOCO()
     assert_inferences(
         detector, image_with_multiple_objects, boxes_EFFICIENTDETDXCOCO)
