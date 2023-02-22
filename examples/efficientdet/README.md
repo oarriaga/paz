@@ -6,10 +6,15 @@
 ### 1. Using COCO pre-trained EfficientDet models <br>
 * `paz` contains Efficientdet models EfficientDetD0, EfficientDetD1, EfficientDetD2, ... until EfficientDetD7 that are pre-trained on COCO dataset and are ready to be used.
 * An example usage of COCO pre-trained EfficientDetD0 model is shown in `demo.py` python script.
-To run the inference simply run the following command:
+* To run the inference simply run the following command:
 ```
 python demo.py
 ```
+* To test the live object detection from camera, run:
+```
+python demo_video.py
+```
+
 * To perform inference using larger EfficientDet models, replace `EFFICIENTDETD0COCO` with `EFFICIENTDETDXCOCO` in the `demo.py` script, where X in `EFFICIENTDETDXCOCO` can take values from (0,) 1 to 7.
 * In this way any of the readily available COCO pre-trained EfficientDet model can be used.
 
