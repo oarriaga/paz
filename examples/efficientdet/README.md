@@ -1,6 +1,6 @@
 ### This example shows the following:
-#### &emsp;  1. How to use EfficientDet models out of the box for object detection. [(explained in section-1)](#1-using-coco-pre-trained-efficientdet-models)
-#### &emsp;  2. How to train or fine-tune an EfficientDet model on a custom dataset. [(explained in section-2)](#2-training-or-fine-tuning-efficientdet-models-on-custom-dataset)
+#### &emsp;  1. How to use EfficientDet models out of the box for object detection. (explained in [section-1](#1-using-coco-pre-trained-efficientdet-models))
+#### &emsp;  2. How to train or fine-tune an EfficientDet model on a custom dataset. (explained in [section-2](#2-training-or-fine-tuning-efficientdet-models-on-custom-dataset))
 ---
 
 ### 1. Using COCO pre-trained EfficientDet models
