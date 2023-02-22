@@ -1,9 +1,9 @@
 ### This example shows the following:
-#### &emsp; &emsp;  1. How to use EfficientDet models out of the box for object detection. (explained in section-1)
-#### &emsp; &emsp;  2. How to train an EfficientDet model on a custom dataset. (explained in section-2)
+#### &emsp;  1. How to use EfficientDet models out of the box for object detection. (explained in section-1)
+#### &emsp;  2. How to train or fine-tune an EfficientDet model on a custom dataset. (explained in section-2)
+---
 
-
-### 1. Using COCO pre-trained EfficientDet models <br>
+### 1. Using COCO pre-trained EfficientDet models
 * `paz` contains Efficientdet models EfficientDetD0, EfficientDetD1, EfficientDetD2, ... until EfficientDetD7 that are pre-trained on COCO dataset and are ready to be used.
 * An example usage of COCO pre-trained EfficientDetD0 model is shown in `demo.py` python script.
 * To run the inference simply run the following command:
@@ -15,8 +15,10 @@ python demo.py
 python demo_video.py
 ```
 
-* To perform inference using larger EfficientDet models, replace `EFFICIENTDETD0COCO` with `EFFICIENTDETDXCOCO` in the `demo.py` script, where X in `EFFICIENTDETDXCOCO` can take values from (0,) 1 to 7.
-* In this way any of the readily available COCO pre-trained EfficientDet model can be used.
+* To perform inference using larger EfficientDet models, replace `EFFICIENTDETD0COCO` with `EFFICIENTDETDXCOCO` in the `demo.py` or `demo_video.py` script, where X in `EFFICIENTDETDXCOCO` can take values from (0,) 1 to 7.
+* In this way any of the readily available COCO pre-trained EfficientDet model can be used for inference.
+
+---
 
 ### 2. Training (or fine tuning) EfficientDet models on custom dataset
 * To train or fine tune an EfficientDet model on a custom dataset, you may wish to use COCO pretrained weights rather than training the model from scratch.
