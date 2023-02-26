@@ -53,16 +53,17 @@ class ToNormalizedBoxCoordinates(Processor):
 
 
 class RandomSampleCrop(Processor):
-    """Crops image while adjusting the normalized corner form bounding boxes.
+    """Crops image while adjusting the normalized corner form
+    bounding boxes.
 
     # Arguments
         probability: Float between ''[0, 1]''.
     """
-
-    def __init__(self, probability=0.80, max_trials=50):
+    def __init__(self, probability=0.50, max_trials=50):
         self.probability = probability
         self.max_trials = max_trials
         self.jaccard_min_max = (
+            None,
             (0.1, np.inf),
             (0.3, np.inf),
             (0.7, np.inf),
@@ -77,9 +78,9 @@ class RandomSampleCrop(Processor):
         labels = boxes[:, -1:]
         boxes = boxes[:, :4]
         H_original, W_original = image.shape[:2]
-        while True:
-            mode = np.random.randint(0, len(self.jaccard_min_max), 1)[0]
-            print(mode)
+
+        mode = np.random.randint(0, len(self.jaccard_min_max), 1)[0]
+        if self.jaccard_min_max[mode] is not None:
             min_iou, max_iou = self.jaccard_min_max[mode]
             for trial_arg in range(self.max_trials):
                 W = np.random.uniform(0.3 * W_original, W_original)
@@ -122,6 +123,9 @@ class RandomSampleCrop(Processor):
                 # adjust to crop (by substracting crop's left,top)
                 masked_boxes[:, 2:] -= image_crop_box[:2]
                 return cropped_image, np.hstack([masked_boxes, masked_labels])
+
+        boxes = np.hstack([boxes, labels])
+        return image, boxes
 
 
 class Expand(Processor):
