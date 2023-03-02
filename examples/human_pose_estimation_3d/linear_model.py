@@ -1,7 +1,6 @@
 from tensorflow.keras.models import Model
 from tensorflow.keras.initializers import HeNormal
 from tensorflow.keras.constraints import MaxNorm
-import tensorflow as tf
 from tensorflow.keras.layers import (
     BatchNormalization,
     ReLU,
@@ -61,6 +60,6 @@ def SIMPLE_BASELINE(num_keypoints, keypoints_dim, hidden_dim, input_shape,
     for layer in range(num_layers):
         x = dense_block(x, hidden_dim, rate)
     x = Dense(num_keypoints * keypoints_dim, **kwargs)(x)
-    x = tf.squeeze(Reshape((num_keypoints, keypoints_dim))(x))
+    x = Reshape((num_keypoints, keypoints_dim))(x)
     model = Model(inputs, outputs=x)
     return model

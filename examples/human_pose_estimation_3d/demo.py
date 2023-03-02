@@ -12,7 +12,7 @@ model = SIMPLE_BASELINE(16, 3, 1024, (32,), 2, 1)
 model.load_weights('weights.h5')
 pipeline = SIMPLEBASELINES(keypoints2D, model)
 keypoints = pipeline(image)
-keypoints2D, joints3D, keypoints3D, poses3D = solve_translation(
+joints3D, keypoints3D, poses3D = solve_translation(
     keypoints['keypoints2D'], keypoints['keypoints3D'], image_height,
     image_width)
-visualize(keypoints2D, joints3D, keypoints3D, poses3D)
+visualize(keypoints['keypoints2D'], joints3D, keypoints3D, poses3D)
