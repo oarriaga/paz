@@ -21,7 +21,6 @@ from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
 from tensorflow.keras.layers import Input, Conv2DTranspose
 from tensorflow.keras.layers import BatchNormalization, Add
 from tensorflow.keras.models import Model
-
 import cv2
 
 
@@ -63,12 +62,12 @@ def compute_overlaps(boxes_A, boxes_B):
     return overlaps
 
 
-def DataGenerator(dataset, config, shuffle=True, augmentation=False):
+def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size, num_classes,
+                  shuffle=True, augmentation=False):
     """An iterable that returns images and corresponding target class ids,
         bounding box deltas, and masks. It inherits from keras.utils.Sequence to avoid data redundancy
         when multiprocessing=True.
         dataset: The Dataset object to pick data from
-        config: The model config object
         shuffle: If True, shuffles the samples before every epoch
         augmentation: Optional. From paz pipeline for augmentation.
         inputs list:
@@ -87,90 +86,92 @@ def DataGenerator(dataset, config, shuffle=True, augmentation=False):
     b = 0
     image_index = -1
     image_ids = np.array([i for i in range(len(dataset.load_data()))])
-    backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
-    anchors = generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
-                                       config.RPN_ANCHOR_RATIOS,
-                                       backbone_shapes,
-                                       config.BACKBONE_STRIDES,
-                                       config.RPN_ANCHOR_STRIDE)
+    backbone_shapes = compute_backbone_shapes(backbone, image_shape)
+    anchors = generate_pyramid_anchors(anchor_scales, [0.5, 1, 2],
+                                       backbone_shapes, [4, 8, 16, 32, 64], 1)
 
-    batch_size = config.BATCH_SIZE
-    while b < batch_size:
-        # Increment index to pick next image. Shuffle if at the start of an epoch.
-        image_index = (image_index + 1) % len(image_ids)
+    while True:
+        try:
 
-        if shuffle and image_index == 0:
-            np.random.shuffle(image_ids)
+            # Increment index to pick next image. Shuffle if at the start of an epoch.
+            image_index = (image_index + 1) % len(image_ids)
 
-        # Get GT bounding boxes and masks for image.
-        image_id = image_ids[image_index]
-        image, gt_class_ids, gt_boxes, gt_masks= load_image_gt(dataset, config, image_id,
-                                                               augmentation=augmentation)
-        # Skip images that have no instances.
-        if not np.any(np.array(gt_class_ids) > 0):
-            continue
-        rpn_match, rpn_bbox = build_rpn_targets(anchors, gt_class_ids, gt_boxes, config)
-        if b == 0:
-            batch_rpn_match = np.zeros(
-                [batch_size, anchors.shape[0], 1], dtype=rpn_match.dtype)
-            batch_rpn_bbox = np.zeros(
-                [batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4], dtype=rpn_bbox.dtype)
-            batch_images = np.zeros(
-                [batch_size, image.shape[0], image.shape[1], image.shape[2]], dtype=np.float32)
-            batch_gt_class_ids = np.zeros(
-                (batch_size, config.MAX_GT_INSTANCES), dtype=np.int32)
-            batch_gt_boxes = np.zeros(
-                (batch_size, config.MAX_GT_INSTANCES, 4), dtype=np.int32)
-            batch_gt_masks = np.zeros(
-                (batch_size, gt_masks.shape[0], gt_masks.shape[1],
-                 config.MAX_GT_INSTANCES), dtype=bool)
+            if shuffle and image_index == 0:
+                np.random.shuffle(image_ids)
 
-            # If more instances than fits in the array, sub-sample from them.
-        if gt_boxes.shape[0] > config.MAX_GT_INSTANCES:
-            ids = np.random.choice(
-                np.arange(gt_boxes.shape[0]), config.MAX_GT_INSTANCES, replace=False)
-            gt_class_ids = gt_class_ids[ids]
-            gt_boxes = gt_boxes[ids]
-            gt_masks = gt_masks[:, :, ids]
+            # Get GT bounding boxes and masks for image.
+            image_id = image_ids[image_index]
+            image, gt_class_ids, gt_boxes, gt_masks = load_image_gt(dataset, num_classes, image_id,
+                                                                    augmentation=augmentation)
 
-            # Add to batch
-        batch_rpn_match[b] = rpn_match[:, np.newaxis]
-        batch_rpn_bbox[b] = rpn_bbox
-        batch_images[b] = normalize_image(image.astype(np.float32), config)
-        batch_gt_class_ids[b, :gt_class_ids.shape[0]] = gt_class_ids
-        batch_gt_boxes[b, :gt_boxes.shape[0]] = gt_boxes
-        batch_gt_masks[b, :, :, :gt_masks.shape[-1]] = gt_masks
+            rpn_match, rpn_bbox = build_rpn_targets(anchors, gt_class_ids, gt_boxes)
 
-        b += 1
-        # print("rpn_batch", batch_rpn_match.shape)
+            if b == 0:
+                batch_rpn_match = np.zeros(
+                    [batch_size, anchors.shape[0], 1], dtype=rpn_match.dtype)
+                batch_rpn_bbox = np.zeros(
+                    [batch_size, 256, 4], dtype=rpn_bbox.dtype)
+                batch_images = np.zeros(
+                    [batch_size, image_shape[0], image_shape[1], image_shape[2]], dtype=np.float32)
+                batch_gt_class_ids = np.zeros(
+                    (batch_size, 100), dtype=np.int32)
+                batch_gt_boxes = np.zeros(
+                    (batch_size, 100, 4), dtype=np.int32)
+                batch_gt_masks = np.zeros(
+                    (batch_size, gt_masks.shape[0], gt_masks.shape[1],
+                     100), dtype=bool)
 
-    inputs = [batch_images, batch_gt_class_ids, batch_gt_boxes, batch_gt_masks]
+                # If more instances than fits in the array, sub-sample from them.
+            if gt_boxes.shape[0] > 100:
+                ids = np.random.choice(
+                    np.arange(gt_boxes.shape[0]), 100, replace=False)
+                gt_class_ids = gt_class_ids[ids]
+                gt_boxes = gt_boxes[ids]
+                gt_masks = gt_masks[:, :, ids]
 
-    zeros_array = np.zeros((batch_size, anchors.shape[0], 3))
-    rpn_match_padded = np.concatenate((batch_rpn_match, zeros_array), axis=2)
-    zeros_array = np.zeros((batch_size, anchors.shape[0] - config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4))
-    rpn_bbox_padded = np.concatenate((batch_rpn_bbox, zeros_array), axis=1)
+                # Add to batch
+            batch_rpn_match[b] = rpn_match[:, np.newaxis]
+            batch_rpn_bbox[b] = rpn_bbox
+            batch_images[b] = normalize_image(image.astype(np.float32))
+            batch_gt_class_ids[b, :gt_class_ids.shape[0]] = gt_class_ids
+            batch_gt_boxes[b, :gt_boxes.shape[0]] = gt_boxes
+            batch_gt_masks[b, :, :, :gt_masks.shape[-1]] = gt_masks
 
-    batch_rpn = np.concatenate((rpn_bbox_padded, rpn_match_padded), axis=1)
+            b += 1
+            # print("rpn_batch", batch_rpn_match.shape)
+            if b >= batch_size:
 
-    outputs = [batch_rpn_match, batch_rpn]
-    return inputs, outputs
+                inputs = [batch_images, batch_gt_class_ids, batch_gt_boxes, batch_gt_masks]
+                zeros_array = np.zeros((batch_size, anchors.shape[0], 3))
+                rpn_match_padded = np.concatenate((batch_rpn_match, zeros_array), axis=2)
+
+                c = []
+                for i in range(batch_size):
+                    c.append(np.concatenate((batch_rpn_bbox[i], rpn_match_padded[i])))
+                batch_rpn = np.stack(c, axis=0)
+                batch_rpn = np.concatenate((rpn_bbox_padded, rpn_match_padded), axis=1)
+                outputs = [batch_rpn_match, batch_rpn]
+                yield inputs, outputs
+
+                b = 0
+        except (GeneratorExit, KeyboardInterrupt):
+            raise
 
 
-def compute_backbone_shapes(config, image_shape):
+def compute_backbone_shapes(backbone, image_shape):
     """Computes the width and height of each stage of the backbone network.
     Returns:
         [N, (height, width)]. Where N is the number of stages
     """
-    if callable(config.BACKBONE):
-        return config.COMPUTE_BACKBONE_SHAPE(image_shape)
+    if callable(backbone):
+        return compute_backbone_shapes(image_shape)
 
     # Currently supports ResNet only
-    assert config.BACKBONE in ["resnet50", "resnet101"]
+    assert backbone in ["resnet50", "resnet101"]
     return np.array(
         [[int(math.ceil(image_shape[0] / stride)),
             int(math.ceil(image_shape[1] / stride))]
-            for stride in config.BACKBONE_STRIDES])
+            for stride in [4, 8, 16, 32, 64]])
 
 
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
@@ -223,15 +224,16 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     return boxes
 
 
-def normalize_image(images, config):
+def normalize_image(images):
     """Expects an RGB image (or array of images) and subtracts
     the mean pixel and converts it to float. Expects image
     colors in RGB order.
     """
-    return images.astype(np.float32) - config.MEAN_PIXEL
+    return images.astype(np.float32) - np.array([123.7, 116.8, 103.9])
 
 
-def load_image_gt(dataset, config, image_id, augmentation=True):
+def load_image_gt(dataset, num_classes, image_id, augmentation=False,
+                  use_mini_mask=False, mini_mask_shape=[28, 28]):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
     augmentation: using paz library for augmentation
 
@@ -247,25 +249,19 @@ def load_image_gt(dataset, config, image_id, augmentation=True):
     image = data[image_id]['image']
     mask = data[image_id]['masks']
     class_ids = data[image_id]['box_data'][:, -1]
-    num_classes = config.NUM_CLASSES
-
-    image, window, scale, padding, crop = resize_image(
-        image,
-        min_dim=config.IMAGE_MIN_DIM,
-        min_scale=config.IMAGE_MIN_SCALE,
-        max_dim=config.IMAGE_MAX_DIM,
-        mode=config.IMAGE_RESIZE_MODE)
 
     mask = resize_mask(mask, scale, padding, crop)
+    _idx = np.sum(mask, axis=(0, 1)) > 0
+    mask = mask[:, :, _idx]
     bbox = extract_bboxes(mask)
 
-    if config.USE_MINI_MASK:
-        mask = minimize_mask(bbox.astype(np.int32), mask, config.MINI_MASK_SHAPE)
+    if use_mini_mask:
+        mask = minimize_mask(bbox.astype(np.int32), mask, mini_mask_shape)
 
-    return image, np.array(class_ids).astype(np.int32), bbox[:, :4].astype(np.float32), mask.astype(np.bool)
+    return image, np.array(class_ids), bbox, mask.astype(np.bool)
 
 
-def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config):
+def build_rpn_targets(anchors, gt_class_ids, gt_boxes):
     """Given the anchors and GT boxes, compute overlaps and identify positive
     anchors and deltas to refine them to match their corresponding GT boxes.
     anchors: [num_anchors, (y1, x1, y2, x2)]
@@ -277,11 +273,11 @@ def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config):
                1 = positive anchor, -1 = negative anchor, 0 = neutral
     rpn_bbox: [N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas.
     """
-    overlaps, no_crowd_bool = compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes)
+    overlaps, no_crowd_bool, gt_boxes = compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes)
 
-    rpn_match, anchor_iou_argmax = compute_rpn_match(anchors, overlaps, no_crowd_bool, config)
+    rpn_match, anchor_iou_argmax = compute_rpn_match(anchors, overlaps, no_crowd_bool)
 
-    rpn_bbox = compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax)
+    rpn_bbox = compute_rpn_bbox(gt_boxes, rpn_match, anchors, anchor_iou_argmax)
 
     return rpn_match, rpn_bbox.astype(np.float32)
 
@@ -313,10 +309,10 @@ def compute_anchor_boxes_overlaps(anchors, gt_class_ids, gt_boxes):
         no_crowd_bool = np.ones([anchors.shape[0]], dtype=bool)
 
     overlaps = compute_overlaps(anchors, gt_boxes)
-    return overlaps, no_crowd_bool
+    return overlaps, no_crowd_bool, gt_boxes
 
 
-def compute_rpn_match(anchors, overlaps, no_crowd_bool, config):
+def compute_rpn_match(anchors, overlaps, no_crowd_bool):
     """
     Match anchors to GT Boxes
     If an anchor overlaps a GT box with IoU >= 0.7 then it's positive.
@@ -347,21 +343,20 @@ def compute_rpn_match(anchors, overlaps, no_crowd_bool, config):
     rpn_match[anchor_iou_max >= 0.7] = 1
 
     ids = np.where(rpn_match == 1)[0]
-    extra = len(ids) - (config.RPN_TRAIN_ANCHORS_PER_IMAGE // 2)
+    extra = len(ids) - (256 // 2)
     if extra > 0:
         ids = np.random.choice(ids, extra, replace=False)
         rpn_match[ids] = 0
 
     ids = np.where(rpn_match == -1)[0]
-    extra = len(ids) - (config.RPN_TRAIN_ANCHORS_PER_IMAGE -
-                        np.sum(rpn_match == 1))
+    extra = len(ids) - (256 - np.sum(rpn_match == 1))
     if extra > 0:
         ids = np.random.choice(ids, extra, replace=False)
         rpn_match[ids] = 0
     return rpn_match, anchor_iou_argmax
 
 
-def compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax):
+def compute_rpn_bbox(gt_boxes, rpn_match, anchors, anchor_iou_argmax):
     """
     For positive anchors, compute shift and scale needed to transform them
     to match the corresponding GT boxes.
@@ -369,7 +364,7 @@ def compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax):
     # Return:
     RPN bounding boxes: [max anchors per image, (dy, dx, log(dh), log(dw))]
     """
-    rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4))
+    rpn_bbox = np.zeros((256, 4))
     ids = np.where(rpn_match == 1)[0]
     ix = 0
     for i, a in zip(ids, anchors[ids]):
@@ -379,7 +374,7 @@ def compute_rpn_bbox(gt_boxes, rpn_match, anchors, config, anchor_iou_argmax):
         a = box_to_center_format(a)
 
         rpn_bbox[ix] = normalize_log_refinement(a, gt)
-        rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
+        rpn_bbox[ix] /= np.array([0.1, 0.1, 0.2, 0.2])
         ix += 1
     return rpn_bbox
 
@@ -607,26 +602,3 @@ def extract_bboxes(mask):
             x1, x2, y1, y2 = 0, 0, 0, 0
         boxes[i] = np.array([y1, x1, y2, x2])
     return boxes.astype(np.int32)
-
-
-def generate_masks(mask, bounding_box, config):
-    """Compute instance masks from masks and bounding box.
-        mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
-        Returns: modified instance masks .
-        """
-    mask_inst = np.zeros([mask.shape[0], mask.shape[1], len(class_ids)], dtype=np.uint8)
-    for count, i in enumerate(class_ids):
-        mask_box = bounding_box[count]
-        mask1 = mask[:, :, i]
-        mask_bg = np.zeros(mask1.shape)
-        x1, y1, x2, y2 = mask_box[:4]
-        mask_bg[y1:y2, x1:x2] = 1
-        mask_inst[:, :, count] = np.logical_and(mask_bg, mask1).astype(np.uint8)
-
-    for i in range(mask_inst.shape[-1]):
-        if i != 0:
-            occulusions = np.logical_and(mask_inst[:, :, i], mask_inst[:, :, i - 1])
-            mask_inst[:, :, i] = np.logical_xor(mask_inst[:, :, i], occulusions).astype(np.uint8)
-
-    mask_inst = np.dstack((mask[:, :, 0], mask_inst))
-    return mask_inst

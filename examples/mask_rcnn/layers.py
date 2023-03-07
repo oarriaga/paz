@@ -16,7 +16,6 @@ class DetectionLayer(Layer):
     """Detects final bounding boxes and masks for given proposals
 
     # Arguments:
-        config: instance of base configuration class
 
     # Returns:
         [batch, num_detections, (y_min, x_min, y_max, x_max, class_id,

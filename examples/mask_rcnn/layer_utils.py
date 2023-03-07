@@ -3,7 +3,7 @@ import numpy as np
 from tensorflow.keras.layers import Layer
 
 
-def refine_bbox(box, prior_box):
+def refine_bbox(box, prior_box):  # TODO: rename refine_box
     """Compute refinement needed to transform box to groundtruth_box.
 
     # Arguments:
@@ -111,7 +111,7 @@ def apply_box_delta(boxes, deltas):
     y_max = y_min + H
     x_max = x_min + W
     result = tf.stack([y_min, x_min, y_max, x_max], axis=1,
-                      name='apply_box_deltas_out')
+                      name='apply_box_deltas_out')    # TODO: remove names for tensors
 
     return result
 
@@ -225,8 +225,9 @@ def apply_NMS(class_ids, scores, refined_ROIs, keep,
     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
     keeps = keep
 
-    nms_keep = NMS_map_call(pre_nms_class_ids, pre_nms_scores, pre_nms_ROIs, keeps, detection_max_instances,
-                            detection_nms_threshold, unique_pre_nms_class_ids)
+    nms_keep = NMS_map_call(pre_nms_class_ids, pre_nms_scores, pre_nms_ROIs, keeps,
+                            detection_max_instances, detection_nms_threshold,
+                            unique_pre_nms_class_ids)
     return merge_results(nms_keep)
 
 
@@ -524,7 +525,7 @@ def get_empty_list():
 
 def compute_target_boxes(positive_overlaps, positive_ROIs, boxes,
                          bbox_standard_deviation):
-    """Final computation of each target boundding boxes based on positive overlaps.
+    """Final computation of each target bounding boxes based on positive overlaps.
 
     # Arguments:
         positive_overlaps: [batch, N] value of overlaps containing instances
@@ -563,8 +564,8 @@ def compute_target_class_ids(gt_class_ids, positive_overlaps):
     return ROI_class_ids
 
 
-def compute_target_masks(positive_ROIs, ROI_boxes, masks, mask_shape,
-                         mini_mask, positive_overlaps):
+def compute_target_masks(positive_ROIs, ROI_boxes, masks, positive_overlaps, mask_shape,
+                         mini_mask):
     """Final computation of each target masks based on positive overlaps.
 
     # Arguments:
@@ -867,8 +868,8 @@ def compute_targets_from_groundtruth_values(proposals, gt_class_ids, gt_boxes, g
                                                  refined_boxes, bbox_std_dev)
     ROI_class_ids = compute_target_class_ids(refined_class_ids, positive_overlaps)
 
-    ROI_masks = compute_target_masks(positive_ROIs, ROI_boxes, refined_masks,
-                                     mask_shape, use_mini_mask, positive_overlaps)
+    ROI_masks = compute_target_masks(positive_ROIs, ROI_boxes, refined_masks, positive_overlaps,
+                                     mask_shape, use_mini_mask)
 
     # Padding operation on the modified groundtruth values
     ROIs, ROI_class_ids, ROI_deltas, ROI_masks = \

@@ -2,73 +2,79 @@ import numpy as np
 from paz.abstract import Processor
 from mask_rcnn.utils import resize_image, normalize_image
 from mask_rcnn.utils import compute_backbone_shapes, norm_boxes
-from mask_rcnn.utils import generate_pyramid_anchors, denorm_boxes
+from mask_rcnn.utils import denorm_boxes
 from mask_rcnn.utils import unmold_mask
+from mask_rcnn.utils2 import generate_pyramid_anchors
+from tensorflow.keras.layers import Layer, Input, Lambda
+import tensorflow as tf
 
 
 class NormalizeImages(Processor):
-    def __init__(self, config):
-        self.config = config
+    def __init__(self):
         super(NormalizeImages, self).__init__()
 
     def call(self, images, windows):
         normalized_images = []
         for image in images:
-            molded_image = normalize_image(image, self.config)
+            molded_image = normalize_image(image)
             normalized_images.append(molded_image)
         return normalized_images, windows
 
 
 class ResizeImages(Processor):
-    def __init__(self, config):
-        self.IMAGE_MIN_DIM = config.IMAGE_MIN_DIM
-        self.IMAGE_MIN_SCALE = config.IMAGE_MIN_SCALE
-        self.IMAGE_MAX_DIM = config.IMAGE_MAX_DIM
-        self.IMAGE_RESIZE_MODE = config.IMAGE_RESIZE_MODE
+    def init(self, min_dim, min_scale, max_dim, resize_mode="square"):
+        self.min_dim = min_dim
+        self.min_Scale = min_scale
+        self.max_dim = max_dim
+        self.resize_mode = resize_mode
 
     def call(self, images):
         resized_images, windows = [], []
         for image in images:
-            resized_image, window, _, _, _ = resize_image(image, min_dim=self.IMAGE_MIN_DIM,
-                                                          min_scale=self.IMAGE_MIN_SCALE,
-                                                          max_dim=self.IMAGE_MAX_DIM,
-                                                          mode=self.IMAGE_RESIZE_MODE)
+            resized_image, window, _, _, _ = resize_image(image, min_dim=self.min_dim,
+                                                          min_scale=self.min_Scale,
+                                                          max_dim=self.max_dim,
+                                                          mode=self.resize_mode)
+
             resized_images.append(resized_image)
             windows.append(window)
         return resized_images, windows
 
 
 class Detect(Processor):
-    def __init__(self, model, config, preprocess=None, postprocess=None):
+    def init(self, model, anchor_scales, batch_size, preprocess=None, postprocess=None):
         self.base_model = model
         self.model = model.keras_model
         self.preprocess = preprocess
         self.postprocess = postprocess
-        self.config = config
+        self.anchor_scales = anchor_scales
+        self.batch_size = batch_size
 
     def call(self, images):
         normalized_images, windows = self.preprocess(images)
         image_shape = normalized_images[0].shape
+
         anchors = self.get_anchors(image_shape)
         anchors = np.broadcast_to(anchors,
-                                  (self.config.BATCH_SIZE,) + anchors.shape)
-        detections, _, _, predicted_masks, _, _, _ =\
+                                  (self.batch_size,) + anchors.shape)
+        detections, predicted_classes, mrcnn_bbox, predicted_masks, rpn_rois, rpn_class, rpn_bbox = \
             self.model.predict([normalized_images, anchors])
+
         results = self.postprocess(images, normalized_images, windows,
                                    detections, predicted_masks)
+
         return results
 
     def get_anchors(self, image_shape):
-        backbone_shapes = compute_backbone_shapes(self.config, image_shape)
+        backbone_shapes = compute_backbone_shapes(image_shape)
         if not hasattr(self, '_anchor_cache'):
             self._anchor_cache = {}
         if not tuple(image_shape) in self._anchor_cache:
             anchors = generate_pyramid_anchors(
-                self.config.RPN_ANCHOR_SCALES,
-                self.config.RPN_ANCHOR_RATIOS,
+                self.anchor_scales,
+                [0.5, 1, 2],
                 backbone_shapes,
-                self.config.BACKBONE_STRIDES,
-                self.config.RPN_ANCHOR_STRIDE)
+                [4, 8, 16, 32, 64], 1)
             self.anchors = anchors
             self._anchor_cache[tuple(image_shape)] = norm_boxes(
                 anchors, image_shape[:2])
@@ -128,7 +134,8 @@ class PostprocessInputs(Processor):
 
     def filter_detections(self, N, boxes, class_ids, scores, masks):
         exclude_index = np.where(
-            (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
+            (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0
+                   )[0]
         if exclude_index.shape[0] > 0:
             boxes = np.delete(boxes, exclude_index, axis=0)
             class_ids = np.delete(class_ids, exclude_index, axis=0)
@@ -143,6 +150,5 @@ class PostprocessInputs(Processor):
             full_mask = unmold_mask(masks[index], boxes[index],
                                     original_image_shape)
             full_masks.append(full_mask)
-        full_masks = np.stack(full_masks, axis=-1)\
-            if full_masks else np.empty(original_image_shape[:2] + (0,))
+        full_masks = np.stack(full_masks, axis=-1) if full_masks else np.empty(original_image_shape[:2] + (0,))
         return full_masks
