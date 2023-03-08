@@ -1,6 +1,5 @@
 from mask_rcnn.model import MaskRCNN
-import tensorflow.compat.v1 as tf
-from config import Config
+import tensorflow as tf
 from mask_rcnn.utils import norm_boxes_graph
 from mask_rcnn.inference_graph import InferenceGraph
 from mask_rcnn.detection import ResizeImages, NormalizeImages
@@ -12,43 +11,26 @@ import utils
 import numpy as np
 
 
-class TestConfig(Config):
-    NAME = "test"
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
-    NUM_CLASSES = 1 + 3
-    IMAGE_MIN_DIM = 128
-    IMAGE_MAX_DIM = 128
-
-
 def test(images, weights_path):
-    config = TestConfig()
-    resize = SequentialProcessor([ResizeImages(config)])
-    molded_images, windows = resize(images)
+    resize = SequentialProcessor([ResizeImages(800, 0, 1024)])
+    molded_images, windows = resize([images])
     image_shape = molded_images[0].shape
     window = norm_boxes_graph(windows[0], image_shape[:2])
-    config.WINDOW = window
-    train_bn = config.TRAIN_BN
-    image_shape = config.IMAGE_SHAPE
-    backbone = config.BACKBONE
-    top_down_pyramid_size = config.TOP_DOWN_PYRAMID_SIZE
 
-    base_model = MaskRCNN(config=config, model_dir='../../mask_rcnn', train_bn=train_bn, image_shape=image_shape,
-                          backbone=backbone, top_down_pyramid_size=top_down_pyramid_size)
-    inference_model = InferenceGraph(model=base_model, config=config)
+    base_model = MaskRCNN(model_dir='../../mask_rcnn', image_shape=image_shape, backbone="resnet101",
+                          batch_size=1, images_per_gpu=1, rpn_anchor_scales=(32, 64, 128, 256, 512),
+                          train_rois_per_image=200, num_classes=81, window=window)
 
-    base_model.keras_model = inference_model()
+    inference_model = base_model.build_inference_model()
 
-    tf.keras.Model.load_weights(base_model.keras_model, weights_path, by_name=True)
-
-    preprocess = SequentialProcessor([ResizeImages(config),
-                                      NormalizeImages(config)])
+    base_model.keras_model = inference_model
+    base_model.keras_model.load_weights(weights_path, by_name=True)
+    preprocess = SequentialProcessor([ResizeImages(800, 0, 1024),
+                                      NormalizeImages()])
     postprocess = SequentialProcessor([PostprocessInputs()])
-    detect = Detect(base_model, config, preprocess, postprocess)
-
-    results = detect(images)
+    detect = Detect(base_model, (32, 64, 128, 256, 512), 1, preprocess, postprocess)
+    results = detect([images])
     return results
-
 
 path = ''  # Weights path to declare
 

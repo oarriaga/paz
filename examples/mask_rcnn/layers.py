@@ -1,11 +1,13 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
+from tensorflow.python.eager import context
 
-from mask_rcnn.layer_utils import slice_batch, trim_by_score, compute_NMS, apply_NMS, get_top_detections, \
+from mask_rcnn.utils import norm_boxes_graph
+from mask_rcnn.layer_utils import slice_batch, trim_anchors_by_score, compute_NMS, apply_NMS, get_top_detections, \
     refine_detections
-from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries, detection_targets, filter_low_confidence, \
-    filter_low_confidence
+from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries, filter_low_confidence, \
+    filter_low_confidence, compute_targets_from_groundtruth_values
 from mask_rcnn.layer_utils import compute_ROI_level, apply_ROI_pooling, rearrange_pooled_features, apply_box_deltas,\
     clip_boxes, zero_pad_detections
 
@@ -14,7 +16,6 @@ class DetectionLayer(Layer):
     """Detects final bounding boxes and masks for given proposals
 
     # Arguments:
-        config: instance of base configuration class
 
     # Returns:
         [batch, num_detections, (y_min, x_min, y_max, x_max, class_id,
@@ -34,6 +35,7 @@ class DetectionLayer(Layer):
 
     def __call__(self, inputs):
         rois, mrcnn_class, mrcnn_bbox = inputs
+        self.window = norm_boxes_graph(self.window, self.image_shape[:2])
         detections_batch = slice_batch([rois, mrcnn_class, mrcnn_bbox],
                                        [tf.cast(self.bbox_std_dev, dtype=tf.float32),
                                         self.window, self.detection_min_confidence,
@@ -75,15 +77,19 @@ class ProposalLayer(Layer):
         scores, deltas, anchors = inputs
         scores = scores[:, :, 1]
         deltas = deltas * np.reshape(self.rpn_bbox_std_dev, [1, 1, 4])
-
-        scores, deltas, pre_nms_anchors = trim_by_score(scores, deltas,
-                                                        anchors, self.images_per_gpu,
-                                                        self.pre_nms_limit)
+        scores, deltas, pre_nms_anchors = trim_anchors_by_score(scores, deltas,
+                                                                anchors, self.images_per_gpu,
+                                                                self.pre_nms_limit)
         boxes = apply_box_deltas(pre_nms_anchors, deltas, self.images_per_gpu)
         boxes = clip_image_boundaries(boxes, self.images_per_gpu)
 
         proposals = slice_batch([boxes, scores], [self.proposal_count, self.nms_threshold], compute_NMS,
                                 self.images_per_gpu)
+        if not context.executing_eagerly():
+            # Infer the static output shape:
+            out_shape = self.compute_output_shape(None)
+            proposals.set_shape(out_shape)
+
         return proposals
 
 
@@ -126,7 +132,7 @@ class DetectionTargetLayer(Layer):
                               [self.train_rois_per_image, self.roi_positive_ratio,
                                self.mask_shape, self.use_mini_mask,
                                tf.cast(self.bbox_std_dev, dtype=tf.float32)],
-                              detection_targets, self.images_per_gpu, names=names)
+                              compute_targets_from_groundtruth_values, self.images_per_gpu, names=names)
         return outputs
 
 
@@ -164,3 +170,12 @@ class PyramidROIAlign(Layer):
                                  axis=1)
         pooled = rearrange_pooled_features(pooled, box_to_level, boxes)
         return pooled
+
+
+class AnchorsLayer(Layer):
+    def __init__(self, anchors, name="anchors", **kwargs):
+        super(AnchorsLayer, self).__init__(name=name, **kwargs)
+        self.anchors = tf.Variable(anchors, trainable=False)
+
+    def call(self, input_image):
+        return self.anchors

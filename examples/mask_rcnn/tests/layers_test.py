@@ -1,41 +1,24 @@
 import pytest
 import tensorflow as tf
+import numpy as np
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Input, Lambda
 
-from mask_rcnn.config import Config
-import numpy as np
 
 from mask_rcnn.layers import ProposalLayer, DetectionTargetLayer
 from mask_rcnn.layers import DetectionLayer, PyramidROIAlign
 from mask_rcnn.utils import norm_boxes_graph, fpn_classifier_graph
-from mask_rcnn.model import MaskRCNN
-
-
-class MaskRCNNConfig(Config):
-    NAME = 'ycb'
-    IMAGES_PER_GPU = 1
-    NUM_CLASSES = 80 + 1
-
-
-@pytest.fixture
-def config():
-    config = MaskRCNNConfig()
-    config.WINDOW = norm_boxes_graph((171, 0, 853, 1024), (640, 640))
-    return config
+from mask_rcnn.model import MaskRCNN, rpn_model
 
 
 @pytest.fixture
 def model():
-    train_bn = MaskRCNNConfig().TRAIN_BN
-    image_shape = MaskRCNNConfig().IMAGE_SHAPE
-    backbone = MaskRCNNConfig().BACKBONE
-    top_down_pyramid_size = MaskRCNNConfig().TOP_DOWN_PYRAMID_SIZE
-    base_model = MaskRCNN(config=MaskRCNNConfig(),
-                          model_dir='../../mask_rcnn',train_bn=train_bn,
-                          image_shape=image_shape,
-                          backbone=backbone,
-                          top_down_pyramid_size=top_down_pyramid_size)
+    window = norm_boxes_graph((171, 0, 853, 1024), (640, 640))
+    base_model = MaskRCNN(model_dir='../../mask_rcnn', image_shape=[128, 128, 3], backbone="resnet101",
+                          batch_size=8, images_per_gpu=1,
+                          rpn_anchor_scales=(32, 64, 128, 256, 512),
+                          train_rois_per_image=200,
+                          num_classes=81, window=window)
     return base_model
 
 
@@ -45,8 +28,8 @@ def feature_maps(model):
 
 
 @pytest.fixture
-def RPN_model(model, feature_maps):
-    return model.RPN(feature_maps)
+def RPN_model(feature_maps):
+    return rpn_model(1, [0.5, 1, 2], 256, feature_maps)
 
 
 @pytest.fixture
@@ -71,35 +54,33 @@ def ground_truth_boxes():
 
 
 @pytest.fixture
-def FPN_classifier(proposal_layer, feature_maps, config):
+def FPN_classifier(proposal_layer, feature_maps):
     _, mrcnn_class, mrcnn_bbox = fpn_classifier_graph(proposal_layer,
-                                                      feature_maps[:-1],
-                                                      config=config,
-                                                      train_bn=config.TRAIN_BN)
+                                                      feature_maps[:-1], 81,
+                                                      [128, 128, 3])
     return mrcnn_class, mrcnn_bbox
 
 
 @pytest.fixture
-def proposal_layer(RPN_model, anchors, config):
+def proposal_layer(RPN_model, anchors):
     _, RPN_class, RPN_box = RPN_model
     return ProposalLayer(proposal_count=2000, nms_threshold=0.7, name='ROI',
-                         rpn_bbox_std_dev=config.RPN_BBOX_STD_DEV,
-                         pre_nms_limit=config.PRE_NMS_LIMIT,
-                         images_per_gpu=config.IMAGES_PER_GPU,
-                         batch_size= config.BATCH_SIZE)\
-        ([RPN_class, RPN_box, anchors])
+                         rpn_bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
+                         pre_nms_limit=6000,
+                         images_per_gpu=1,
+                         batch_size=1)([RPN_class, RPN_box, anchors])
 
 
 @pytest.fixture
-def detection_target_layer(proposal_layer, ground_truth, config):
+def detection_target_layer(proposal_layer, ground_truth):
     class_ids, boxes, masks = ground_truth
-    target_layer = DetectionTargetLayer(images_per_gpu= config.IMAGES_PER_GPU,
-                                        mask_shape=config.MASK_SHAPE,
-                                        train_rois_per_image=config.TRAIN_ROIS_PER_IMAGE,
-                                        roi_positive_ratio=config.ROI_POSITIVE_RATIO,
-                                        bbox_std_dev=config.BBOX_STD_DEV,
-                                        use_mini_mask=config.USE_MINI_MASK,
-                                        batch_size= config.BATCH_SIZE
+    target_layer = DetectionTargetLayer(images_per_gpu=1,
+                                        mask_shape=[28, 28],
+                                        train_rois_per_image=1,
+                                        roi_positive_ratio=0.33,
+                                        bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
+                                        use_mini_mask=False,
+                                        batch_size=1
                                         )
     return target_layer([proposal_layer, class_ids, boxes, masks])
 
@@ -116,23 +97,23 @@ def test_detection_target_layer(detection_target_layer, shapes):
     ROIs, target_class, target_box, target_mask = detection_target_layer
     mask_shape = (28, 28)
     results_shape = [K.shape(ROIs).shape, K.shape(target_class).shape,
-                    K.shape(target_box).shape, K.shape(target_mask).shape]
+                     K.shape(target_box).shape, K.shape(target_mask).shape]
     assert shapes == results_shape
     assert target_mask.shape[-2:] == mask_shape
     assert ROIs.shape[2] == target_box.shape[2] == 4
 
 
 @pytest.mark.parametrize('shape', [(1, 100, 6)])
-def test_detection_layer(proposal_layer, FPN_classifier, config, shape):
+def test_detection_layer(proposal_layer, FPN_classifier, shape):
     mrcnn_class, mrcnn_bbox = FPN_classifier
-    detections = DetectionLayer(batch_size=config.BATCH_SIZE, window=config.WINDOW,
-                                bbox_std_dev=config.BBOX_STD_DEV,
-                                images_per_gpu=config.IMAGES_PER_GPU,
-                                detection_max_instances=config.DETECTION_MAX_INSTANCES,
-                                detection_min_confidence=config.DETECTION_MIN_CONFIDENCE,
-                                detection_nms_threshold=config.DETECTION_NMS_THRESHOLD,
-                                name='mrcnn_detection')\
-         ([proposal_layer, mrcnn_class, mrcnn_bbox])
+    detections = DetectionLayer(batch_size=1, window=[0, 0, 128, 128],
+                                bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
+                                images_per_gpu=1,
+                                detection_max_instances=100,
+                                detection_min_confidence=0.7,
+                                detection_nms_threshold=0.3,
+                                name='mrcnn_detection', image_shape=[128, 128, 3]
+                                )([proposal_layer, mrcnn_class, mrcnn_bbox])
     assert detections.shape == shape
 
 
