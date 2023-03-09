@@ -198,7 +198,7 @@ class StructureFromMotion(pr.Processor):
             print('##################')
             P2 = P3.copy()
             # break
-        plot_3D_keypoints(self.points3D)
+        # plot_3D_keypoints(self.points3D)
         return self.points3D
 
 
