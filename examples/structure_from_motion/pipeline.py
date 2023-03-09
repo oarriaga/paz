@@ -1,9 +1,9 @@
 from paz import processors as pr
-from processors1 import DetecetSiftFeatures, RecoverPose
-from processors1 import FindHomographyRANSAC, ComputeEssentialMatrix
-from processors1 import ComputeFundamentalMatrix, TriangulatePoints
-from processors1 import BruteForceMatcher, SolvePnP
-from backend1 import match_ratio_test, get_match_points, get_match_indices
+from processors import DetecetSiftFeatures, RecoverPose
+from processors import FindHomographyRANSAC, ComputeEssentialMatrix
+from processors import ComputeFundamentalMatrix, TriangulatePoints
+from processors import BruteForceMatcher, SolvePnP
+from backend import match_ratio_test, get_match_points, get_match_indices
 # from backend import get_match_descriptors
 import cv2
 import numpy as np
@@ -57,11 +57,14 @@ class InitializeSFM(pr.Processor):
         points1, points2 = points
 
         # compute fundamental matrix
+        print('***********', points1.shape)
+        print('***********', points2.shape)
         fundamental_matrix, mask = self.compute_fundamental_matrix(points1,
                                                                    points2)
-
+        print(fundamental_matrix.shape)
         # compute essential matrix
         essential_matrix = self.compute_essential_matrix(fundamental_matrix)
+        print(essential_matrix.shape)
 
         # recover camera pose
         points, rotation, translation, mask = self.recover_pose(

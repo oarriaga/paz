@@ -14,7 +14,7 @@ def brute_force_matcher(descriptor1, descriptor2, k=2):
     return matches
 
 
-def match_ratio_test(matches, ratio=0.6):
+def match_ratio_test(matches, ratio=0.75):
     good_matches = []
     for m, n in matches:
         if m.distance < ratio * n.distance:
@@ -50,12 +50,12 @@ def get_match_indices(matches):
 
 
 def find_homography_RANSAC(points1, points2):
-    H, mask = cv2.findHomography(points1, points2, cv2.RANSAC)
+    H, mask = cv2.findHomography(points1, points2, cv2.RANSAC, 0.5)
     return H, mask
 
 
 def find_fundamental_matrix(points1, points2):
-    F, mask = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC, 0.001, 0.99)
+    F, mask = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC, 0.5, 0.99)
     return F, mask
 
 
