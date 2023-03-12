@@ -1,14 +1,29 @@
 import paz.processors as pr
-from backend import standardize
+from backend import standardize, solve_translation3D
 from human36m import filter_keypoints2D, unnormalize_data
 
 
 class FilterKeypoints2D(pr.Processor):
-    def __init__(self):
+    def __init__(self, args_to_mean, h36m_to_coco_joints2D):
         super(FilterKeypoints2D, self).__init__()
+        self.h36m_to_coco_joints2D = h36m_to_coco_joints2D
+        self.args_to_mean = args_to_mean
 
     def call(self, keypoints2D):
-        return filter_keypoints2D(keypoints2D)
+        return filter_keypoints2D(keypoints2D, self.args_to_mean,
+                                  self.h36m_to_coco_joints2D)
+
+
+class SolveTranslation3D(pr.Processor):
+    def __init__(self, camera_intrinsics, args_to_joints3D):
+        super(SolveTranslation3D, self).__init__()
+        self.focal_length = camera_intrinsics[0]
+        self.image_center = camera_intrinsics[1]
+        self.args_to_joints3D = args_to_joints3D
+
+    def call(self, keypoints2D, keypoints3D):
+        return solve_translation3D(keypoints2D, keypoints3D, self.focal_length,
+                                   self.image_center, self.args_to_joints3D)
 
 
 class StandardizeKeypoints2D(pr.Processor):
@@ -35,17 +50,16 @@ class UnnormalizeData(pr.Processor):
 
 class SimpleBaselines3D(pr.Processor):
     def __init__(self, model, data_mean2D, data_stdev2D, data_mean3D,
-                 data_stdev3D, dim_to_use3D):
+                 data_stdev3D, dim_to_use3D, args_to_mean,
+                 h36m_to_coco_joints2D):
         super(SimpleBaselines3D, self).__init__()
-        self.filter = FilterKeypoints2D()
+        self.filter = FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)
         self.preprocess = StandardizeKeypoints2D(data_mean2D, data_stdev2D)
-        self.predict = pr.Predict(model)
         self.postprocess = UnnormalizeData(data_mean3D, data_stdev3D,
                                            dim_to_use3D)
+        self.predict = pr.Predict(model, self.preprocess, self.postprocess)
 
     def call(self, keypoints2D):
         keypoints2D = self.filter(keypoints2D)
-        normalized_data = self.preprocess(keypoints2D)
-        keypoints3D = self.predict(normalized_data)
-        keypoints3D = self.postprocess(keypoints3D)
+        keypoints3D = self.predict(keypoints2D)
         return keypoints2D, keypoints3D

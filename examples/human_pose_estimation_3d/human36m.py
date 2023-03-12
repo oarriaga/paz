@@ -79,16 +79,13 @@ data_mean2D = np.array(
      533.49380106, 391.72324565, 533.52579143, 330.09494671,
      532.50804963, 374.19047901, 532.72786933, 380.61615716])
 
-args_to_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0, 5, 7, 9, 6, 8, 10]
-args_to_joints3D = [0, 1, 2, 3, 6, 7, 8, 12, 13, 15, 17, 18, 19, 25, 26, 27]
-args_to_mean = {1: [5, 6], 4: [11, 12], 2: [1, 4]}
-
 
 def merge_into_mean(keypoints2D, args_to_mean):
     """Rearrange keypoints2D
 
             # Arguments
                     keypoints2D: keypoints2D (Nx17x2)
+                    args_to_mean: list of joint indices
 
             # Returns
                     keypoints2D: keypoints2D after merging
@@ -104,7 +101,7 @@ def filter_keypoints(keypoints, args_to_joints):
 
     # Arguments
             keypoints: points in camera coordinates
-            valid_args: Array of joints indices
+            args_to_joints: Array of joints indices
 
     # Returns
             filtered keypoints
@@ -112,12 +109,13 @@ def filter_keypoints(keypoints, args_to_joints):
     return keypoints[:, args_to_joints, :]
 
 
-def filter_keypoints3D(keypoints3D, joints=args_to_joints3D):
+def filter_keypoints3D(keypoints3D, args_to_joints3D):
     """Selects 16 moving joints (Neck/Nose excluded) from 32 predicted
     joints in 3D
 
     # Arguments
             keypoints3D: Nx96 points in camera coordinates
+            args_to_joints3D: list of list indices
 
     # Returns
             filtered_joints_3D: Nx48 points (moving joints)
@@ -128,7 +126,7 @@ def filter_keypoints3D(keypoints3D, joints=args_to_joints3D):
     return joints3D
 
 
-def filter_keypoints2D(keypoints2D):
+def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
     """Selects 16 moving joints (Neck/Nose excluded) from 17 predicted
             joints in 2D
 
@@ -139,7 +137,7 @@ def filter_keypoints2D(keypoints2D):
                     joints2D: Nx32 points (moving joints)
             """
     keypoints2D = merge_into_mean(keypoints2D, args_to_mean)
-    joints2D = filter_keypoints(keypoints2D, args_to_joints2D)
+    joints2D = filter_keypoints(keypoints2D, h36m_to_coco_joints2D)
     joints2D = np.reshape(joints2D, [joints2D.shape[0], -1])
     return joints2D
 

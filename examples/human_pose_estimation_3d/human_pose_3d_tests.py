@@ -1,35 +1,38 @@
 import pytest
+from pipeline import SIMPLEBASELINES
 import numpy as np
 from paz.backend.image import load_image
-from backend import solve_translation, standardize
-from paz.applications import HigherHRNetHumanPose2D
-from human36m import filter_keypoints2D, unnormalize_data
+from paz.backend.camera import Camera
 from linear_model import SIMPLE_BASELINE
-from human36m import data_mean2D, data_stdev2D, data_mean3D, data_stdev3D,\
-    dim_to_use3D
+from keypoints_processors import SolveTranslation3D
 
 
-def get_poses2D(image):
-    detect = HigherHRNetHumanPose2D()
-    poses2D = detect(image)
-    poses2D = poses2D['keypoints']
-    poses2D = filter_keypoints2D(np.array(poses2D))
-    return poses2D
+h36m_to_coco_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0, 5, 7, 9, 6, 8, 10]
+args_to_joints3D = [0, 1, 2, 3, 6, 7, 8, 12, 13, 15, 17, 18, 19, 25, 26, 27]
+args_to_mean = {1: [5, 6], 4: [11, 12], 2: [1, 4]}
 
 
-def get_poses3D(poses2D, model):
-    norm_data = standardize(poses2D, data_mean2D, data_stdev2D)
-    poses3D = model.predict(norm_data)
-    poses3D = unnormalize_data(
-        poses3D, data_mean3D, data_stdev3D, dim_to_use3D)
-    return poses3D
+def get_camera_intrinsics(image_height, image_width):
+    camera = Camera()
+    camera.intrinsics_from_HFOV(HFOV=70,
+                                image_shape=[image_height, image_width])
+    intrinsics = [camera.intrinsics[0, 0], np.array([[camera.intrinsics[0, 2],
+                                                      camera.intrinsics[1, 2]]]
+                                                    ).flatten()]
+    return intrinsics
+
+
+def get_poses(pipeline, image):
+    keypoints = pipeline(image)
+    return keypoints
 
 
 @pytest.fixture
 def model():
     model = SIMPLE_BASELINE(16, 3, 1024, (32,), 2, 1)
     model.load_weights('weights.h5')
-    return model
+    pipeline = SIMPLEBASELINES(model, args_to_mean, h36m_to_coco_joints2D)
+    return pipeline
 
 
 @pytest.fixture
@@ -173,15 +176,18 @@ def optimised_pose_multiple():
 def test_simple_baselines_multiple_persons(image_with_multiple_persons_A,
                                            keypoints3D_multiple_persons,
                                            keypoints2D_multiple_persons,
-                                           optimised_pose_multiple,
-                                           model):
-    keypoints2D = get_poses2D(image_with_multiple_persons_A)
-    assert np.allclose(keypoints2D[0], keypoints2D_multiple_persons)
-    keypoints3D = get_poses3D(keypoints2D, model)
-    assert np.allclose(keypoints3D[0], keypoints3D_multiple_persons)
+                                           optimised_pose_multiple, model):
+    keypoints = get_poses(model, image_with_multiple_persons_A)
+    assert np.allclose(keypoints['keypoints2D'][0],
+                       keypoints2D_multiple_persons)
+    assert np.allclose(keypoints['keypoints3D'][0],
+                       keypoints3D_multiple_persons)
     image_height, image_width = image_with_multiple_persons_A.shape[:2]
-    _, _, poses3D = solve_translation(keypoints2D, keypoints3D, image_height,
-                                      image_width)
+    intrinsics = get_camera_intrinsics(image_height, image_width)
+    solvetranslation_processor = SolveTranslation3D(intrinsics,
+                                                    args_to_joints3D)
+    _, _, poses3D = solvetranslation_processor(keypoints['keypoints2D'],
+                                               keypoints['keypoints3D'])
 
     assert np.allclose(poses3D[0], optimised_pose_multiple)
 
@@ -190,11 +196,13 @@ def test_simple_baselines_single_persons(image_with_single_person_B,
                                          keypoints3D_single_person,
                                          keypoints2D_single_person,
                                          optimised_pose_single, model):
-    keypoints2D = get_poses2D(image_with_single_person_B)
-    assert np.allclose(keypoints2D, keypoints2D_single_person)
-    keypoints3D = get_poses3D(keypoints2D, model)
-    assert np.allclose(keypoints3D, keypoints3D_single_person)
+    keypoints = get_poses(model, image_with_single_person_B)
+    assert np.allclose(keypoints['keypoints2D'], keypoints2D_single_person)
+    assert np.allclose(keypoints['keypoints3D'], keypoints3D_single_person)
     image_height, image_width = image_with_single_person_B.shape[:2]
-    _, _, poses3D = solve_translation(keypoints2D, keypoints3D, image_height,
-                                      image_width)
+    intrinsics = get_camera_intrinsics(image_height, image_width)
+    solvetranslation_processor = SolveTranslation3D(intrinsics,
+                                                    args_to_joints3D)
+    _, _, poses3D = solvetranslation_processor(keypoints['keypoints2D'],
+                                               keypoints['keypoints3D'])
     assert np.allclose(poses3D, optimised_pose_single)

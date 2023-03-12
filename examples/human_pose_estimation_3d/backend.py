@@ -1,5 +1,4 @@
 import numpy as np
-from paz.backend.camera import Camera
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -20,8 +19,9 @@ def compute_reprojection_error(initial_translation, keypoints3D,
         person_sum: sum of L2 distances between each joint per person
     """
     initial_translation = np.reshape(initial_translation, (-1, 3))
-    new_poses3D = np.array([keypoints3D[i] + initial_translation[i] for
-                            i in range(len(initial_translation))])
+    new_poses3D = np.zeros((keypoints3D.shape))
+    for person in range(len(initial_translation)):
+        new_poses3D[person] = keypoints3D[person] + initial_translation[person]
     project2D = project_3D_to_2D(new_poses3D.reshape((-1, 3)), focal_length,
                                  image_center)
     joints_distance = np.linalg.norm(np.ravel(keypoints2D) -
@@ -29,7 +29,8 @@ def compute_reprojection_error(initial_translation, keypoints3D,
     return np.sum(joints_distance)
 
 
-def solve_translation(keypoints2D, keypoints3D, image_height, image_width):
+def solve_translation3D(keypoints2D, keypoints3D, focal_length, image_center,
+                        args_to_joints3D):
     """Finds the optimal translation of root joint for each person
     to give a good enough estimate of the global human pose
     in camera coordinates
@@ -44,10 +45,8 @@ def solve_translation(keypoints2D, keypoints3D, image_height, image_width):
         keypoints3D: array of keypoints in 3D
         optimezed_poses3D: optimized pose 3D
     """
-    joints3D = human36m.filter_keypoints3D(keypoints3D)
+    joints3D = human36m.filter_keypoints3D(keypoints3D, args_to_joints3D)
     root2D = keypoints2D[:, :2]
-    focal_length, image_center = get_camera_intrinsic_parameters(image_height,
-                                                                 image_width)
     length2D, length3D = get_bones_length(keypoints2D, joints3D)
     ratio = length3D / length2D
     initial_joint_translation = initialize_translation(focal_length, root2D,
@@ -58,9 +57,9 @@ def solve_translation(keypoints2D, keypoints3D, image_height, image_width):
                                             focal_length, image_center)
     optimized_poses3D = []
     keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
-    for i in range(keypoints3D.shape[0]):
-        keypoints3D[i] = keypoints3D[i] + joint_translation[i]
-        points = project_3D_to_2D(keypoints3D[i].reshape((-1, 3)),
+    for person in range(keypoints3D.shape[0]):
+        keypoints3D[person] = keypoints3D[person] + joint_translation[person]
+        points = project_3D_to_2D(keypoints3D[person].reshape((-1, 3)),
                                   focal_length, image_center)
         optimized_poses3D.append(np.reshape(points, [1, 64]))
     return joints3D, keypoints3D, np.array(optimized_poses3D)
@@ -94,10 +93,10 @@ def get_bones_length(poses2D, poses3D):
     sum_bones3D = np.zeros(poses3D.shape[0])
     start_joints = np.arange(0, 15)
     end_joints = np.arange(1, 16)
-    for idx, person in enumerate(poses2D):
+    for person in poses2D:
         bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
         sum_bones2D += bone_length
-    for idx, person in enumerate(poses3D):
+    for person in poses3D:
         bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
         sum_bones3D += bone_length
     return sum_bones2D, sum_bones3D
@@ -122,23 +121,6 @@ def initialize_translation(focal_length, joints2D, image_center, ratio):
     return translation.flatten()
 
 
-def get_camera_intrinsic_parameters(image_height, image_width):
-    """Computes orthographic projection of 3D pose
-    # Arguments
-        image_heigth: height of image
-        image_width: width of image
-    # Returns
-        focal length and image center
-    """
-    camera = Camera()
-    camera.intrinsics_from_HFOV(HFOV=70,
-                                image_shape=[image_height, image_width])
-    focal_length = camera.intrinsics[0, 0]
-    image_center = np.array(
-        [[camera.intrinsics[0, 2], camera.intrinsics[1, 2]]]).flatten()
-    return focal_length, image_center
-
-
 def solve_least_squares(compute_joints_distance, initial_joints_translation,
                         joints3D, poses2D, focal_length, image_center):
     """ Solve the least squares
@@ -152,10 +134,9 @@ def solve_least_squares(compute_joints_distance, initial_joints_translation,
     Returns
         optimal translation of root joint for each person
     """
-    joints_translation = least_squares(compute_joints_distance,
-                                       initial_joints_translation, verbose=0,
-                                       args=(joints3D, poses2D, focal_length,
-                                             image_center))
+    joints_translation = least_squares(
+        compute_joints_distance, initial_joints_translation, verbose=0,
+        args=(joints3D, poses2D, focal_length, image_center))
     joints_translation = np.reshape(joints_translation.x, (-1, 3))
     return joints_translation
 
@@ -172,22 +153,22 @@ def visualize(keypoints2D, joints3D, keypoints3D, opimized_pose3D):
     grid_spec = gridspec.GridSpec(1, 4)
     grid_spec.update(wspace=-0.00, hspace=0.05)
     plt.axis('off')
-    ax = plt.subplot(grid_spec[0])
-    viz.show2Dpose(keypoints2D, ax, add_labels=True)
-    ax.invert_yaxis()
-    ax.title.set_text('HRNet 2D poses')
-    ax1 = plt.subplot(grid_spec[1], projection='3d')
-    ax1.view_init(-90, -90)
-    viz.show3Dpose(joints3D, ax1, add_labels=True)
-    ax1.title.set_text('Baseline prediction')
-    ax2 = plt.subplot(grid_spec[2], projection='3d')
-    ax2.view_init(-90, -90)
-    viz.show3Dpose(keypoints3D, ax2, add_labels=True)
-    ax2.title.set_text('Optimized 3D poses')
-    ax3 = plt.subplot(grid_spec[3])
-    viz.show2Dpose(opimized_pose3D, ax3, add_labels=True)
-    ax3.invert_yaxis()
-    ax3.title.set_text('2D projection of optimized poses')
+    axis1 = plt.subplot(grid_spec[0])
+    viz.show2Dpose(keypoints2D, axis1, add_labels=True)
+    axis1.invert_yaxis()
+    axis1.title.set_text('HRNet 2D poses')
+    axis2 = plt.subplot(grid_spec[1], projection='3d')
+    axis2.view_init(-90, -90)
+    viz.show3Dpose(joints3D, axis2, add_labels=True)
+    axis2.title.set_text('Baseline prediction')
+    axis3 = plt.subplot(grid_spec[2], projection='3d')
+    axis3.view_init(-90, -90)
+    viz.show3Dpose(keypoints3D, axis3, add_labels=True)
+    axis3.title.set_text('Optimized 3D poses')
+    axis4 = plt.subplot(grid_spec[3])
+    viz.show2Dpose(opimized_pose3D, axis4, add_labels=True)
+    axis4.invert_yaxis()
+    axis4.title.set_text('2D projection of optimized poses')
     plt.show()
 
 
