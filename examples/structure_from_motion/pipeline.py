@@ -1,13 +1,15 @@
+import numpy as np
+import matplotlib.pyplot as plt
 from paz import processors as pr
 from processors import DetecetSiftFeatures, RecoverPose
-from processors import FindHomographyRANSAC, ComputeEssentialMatrix
+from processors import ComputeEssentialMatrix
 from processors import ComputeFundamentalMatrix, TriangulatePoints
 from processors import BruteForceMatcher, SolvePnP
 from backend import match_ratio_test, get_match_points, get_match_indices
-# from backend import get_match_descriptors
-import cv2
-import numpy as np
-import matplotlib.pyplot as plt
+from backend import detect_ORB_fratures, brute_force_matcher
+from backend import detect_SIFT_features
+from skimage.transform import FundamentalMatrixTransform
+from skimage.measure import ransac
 
 
 class MatchFeatures(pr.Processor):
@@ -16,73 +18,14 @@ class MatchFeatures(pr.Processor):
         self.matcher = matcher
         self.ratio_test = ratio_test
 
-    def call(self,  descriptor1, descriptor2):
-        matches = self.matcher(descriptor1, descriptor2)
+    def call(self,  des1, des2):
+        matches = self.matcher(des1, des2)
         if self.ratio_test:
-            matches = match_ratio_test(matches)
-        # points = get_match_points(keypoints1, keypoints2, matches)
+            matches = match_ratio_test(matches, ratio=0.6)
+        # points = get_match_points(kps1, kps2, matches)
         # indices = get_match_indices(matches)
         # return points, indices
         return matches
-
-
-class InitializeSFM(pr.Processor):
-    def __init__(self, camera_intrinsics, draw=True):
-        super(InitializeSFM, self).__init__()
-        self.K = camera_intrinsics
-        self.draw = draw
-        self.detector = DetecetSiftFeatures()
-        self.match_features = MatchFeatures()
-        self.compute_fundamental_matrix = ComputeFundamentalMatrix()
-        self.compute_essential_matrix = ComputeEssentialMatrix(self.K)
-        self.recover_pose = RecoverPose(self.K)
-        self.triangulate_points = TriangulatePoints()
-        self.warp = pr.WrapOutput(['points3D', 'base_features', 'P2'])
-        self.projection_matrix = np.array([[1, 0, 0, 0],
-                                           [0, 1, 0, 0],
-                                           [0, 0, 1, 0]])
-
-    def call(self, images):
-        # take two images
-        image1, image2 = images
-
-        # extract features
-        keypoints1, descriptor1 = self.detector(image1)
-        keypoints2, descriptor2 = self.detector(image2)
-
-        # match features
-        matches = self.match_features(descriptor1, descriptor2)
-        points = get_match_points(keypoints1, keypoints2, matches)
-        indices = get_match_indices(matches)
-        points1, points2 = points
-
-        # compute fundamental matrix
-        print('***********', points1.shape)
-        print('***********', points2.shape)
-        fundamental_matrix, mask = self.compute_fundamental_matrix(points1,
-                                                                   points2)
-        print(fundamental_matrix.shape)
-        # compute essential matrix
-        essential_matrix = self.compute_essential_matrix(fundamental_matrix)
-        print(essential_matrix.shape)
-
-        # recover camera pose
-        points, rotation, translation, mask = self.recover_pose(
-            essential_matrix, points1, points2)
-
-        # get projection matrix
-        P1 = self.K @ self.projection_matrix
-        P2 = rotation @ self.projection_matrix
-        P2[:3, 3] = translation.ravel()
-        P2 = self.K @ P2
-
-        # triangulation
-        points3D = self.triangulate_points(P1, P2, points1.T, points2.T)
-        # print(points3D)
-        keypoints2 = np.array(keypoints2)
-        descriptor2 = np.array(descriptor2)
-        return self.warp(points3D, [keypoints2[indices[1]],
-                                    descriptor2[indices[1]]], P2)
 
 
 def plot_3D_keypoints(keypoints3D):
@@ -137,6 +80,83 @@ class ProjectionFromCorrespondances(pr.Processor):
         P3 = self.K @ P3
 
 
+class InitializeSFM(pr.Processor):
+    def __init__(self, camera_intrinsics, draw=True):
+        super(InitializeSFM, self).__init__()
+        self.K = camera_intrinsics
+        self.draw = draw
+        self.detector = DetecetSiftFeatures()
+        self.match_features = MatchFeatures()
+        self.compute_fundamental_matrix = ComputeFundamentalMatrix()
+        self.compute_essential_matrix = ComputeEssentialMatrix(self.K)
+        self.recover_pose = RecoverPose(self.K)
+        self.triangulate_points = TriangulatePoints()
+        self.warp = pr.WrapOutput(['points3D', 'base_features', 'P2'])
+        self.projection_matrix = np.array([[1, 0, 0, 0],
+                                           [0, 1, 0, 0],
+                                           [0, 0, 1, 0]])
+
+    def call(self, images):
+        # take two images
+        image1, image2 = images[:2]
+
+        # extract features
+        # kps1, des1 = detect_ORB_fratures(image1)
+        # kps2, des2 = detect_ORB_fratures(image2)
+
+        kps1, des1 = detect_SIFT_features(image1)
+        kps2, des2 = detect_SIFT_features(image2)
+
+        # match features
+        matches = brute_force_matcher(des1, des2)
+        matches = match_ratio_test(matches, ratio=0.75)
+        points1, points2 = get_match_points(kps1, kps2, matches)
+        indices = get_match_indices(matches)
+
+
+        # skimage ransac
+        model, inliers = ransac((points1, points2),
+                                # EssentialMatrixTransform, min_samples=8,
+                                FundamentalMatrixTransform, min_samples=8,
+                                residual_threshold=0.5, max_trials=1000)
+
+        matches = np.array(matches)[inliers]
+        p1_inliers = points1[inliers]
+        p2_inliers = points2[inliers]
+        print('Number of inliers', p1_inliers.shape[0])
+
+        # compute fundamental matrix
+        # F = model.params
+        F, _ = self.compute_fundamental_matrix(p1_inliers, p2_inliers)
+
+        # compute_essential_matrix
+        E = self.compute_essential_matrix(F)
+
+        # recover camera pose
+        points, rotation, translation, mask = self.recover_pose(
+            E, p1_inliers, p2_inliers)
+
+        # get projection matrix
+        P1 = self.K @ self.projection_matrix
+        P2 = rotation @ self.projection_matrix
+        P2[:3, 3] = translation.ravel()
+        P2 = self.K @ P2
+
+        # triangulation
+        points3D = self.triangulate_points(P1, P2, p1_inliers.T, p2_inliers.T)
+        print(points3D.shape)
+
+        kps2 = np.array(kps2)
+        des2 = np.array(des2)
+        i = np.array(indices[1])[inliers]
+
+        base_kps = kps2[i]
+        base_des = des2[i]
+        print(i.shape)
+        print('good till here')
+        return self.warp(points3D, [base_kps, base_des], P2)
+
+
 class StructureFromMotion(pr.Processor):
     def __init__(self, camera_intrinsics):
         super(StructureFromMotion, self).__init__()
@@ -160,47 +180,73 @@ class StructureFromMotion(pr.Processor):
         inference = self.initialize_sfm(images[:2])
         points3d = np.array(inference['points3D'])
         self.points3D.append(points3d)
-        base_features = inference['base_features']
+        base_kps, base_des = inference['base_features']
         P2 = inference['P2']
         # points, indices = self.find_correspondences(base_features, images[3])
 
         for arg in range(len(images)-2):
 
-            keypoints1, descriptor1 = self.detector(images[arg + 1])
-            keypoints2, descriptor2 = self.detector(images[arg + 2])
+            # keypoints1, descriptor1 = self.detector(images[arg + 1])
+            # keypoints2, descriptor2 = self.detector(images[arg + 2])
 
-            matches = self.match_features(base_features[1], descriptor2)
-            points = get_match_points(base_features[0], keypoints2, matches)
+            keypoints1, descriptor1 = detect_SIFT_features(images[arg + 1])
+            keypoints2, descriptor2 = detect_SIFT_features(images[arg + 2])
+
+            matches = brute_force_matcher(base_des, descriptor2)
+            matches = match_ratio_test(matches, ratio=0.75)
             indices = get_match_indices(matches)
+            points1, points2 = get_match_points(base_kps, keypoints2, matches)
 
-            _, rotation, translation = self.solve_pnp(points3d[indices[0]],
-                                                      points[1])
+            model, inliers = ransac((points1, points2),
+                                    FundamentalMatrixTransform, min_samples=8,
+                                    residual_threshold=2.0, max_trials=100)
+
+            matches = np.array(matches)[inliers]
+            p1_inliers = points1[inliers]
+            p2_inliers = points2[inliers]
+            i = np.array(indices[0])[inliers]
+            print('Number of inliers****', p1_inliers.shape[0])
+
+            _, rotation, translation = self.solve_pnp(points3d[i],
+                                                      p1_inliers)
             rotation = self.rotation_vector_to_matrix(rotation)
             P3 = rotation @ self.projection_matrix
             P3[:3, 3] = translation.ravel()
             P3 = self.K @ P3
 
-            matches = self.match_features(descriptor1, descriptor2)
-            points = get_match_points(keypoints1, keypoints2, matches)
+            matches = brute_force_matcher(descriptor1, descriptor2)
+            matches = match_ratio_test(matches, ratio=0.75)
             indices = get_match_indices(matches)
-            print(indices)
-            print('********************************')
-            points1, points2 = points
 
-            points3d = self.triangulate_points(P2, P3, points1.T, points2.T)
+            points1, points2 = get_match_points(keypoints1, keypoints2,
+                                                matches)
 
+            model, inliers = ransac((points1, points2),
+                                    FundamentalMatrixTransform, min_samples=8,
+                                    residual_threshold=0.5, max_trials=1000)
+
+            p1_inliers = points1[inliers]
+            p2_inliers = points2[inliers]
+            points3d = self.triangulate_points(P2, P3, p1_inliers.T,
+                                               p2_inliers.T)
+
+            print(points3d.shape)
             self.points3D.append(points3d)
+            P2 = P3.copy()
 
             keypoints2 = np.array(keypoints2)
             descriptor2 = np.array(descriptor2)
-            base_features = [keypoints2[indices[1]], descriptor2[indices[1]]]
-            print(P3)
-            print('##################')
-            P2 = P3.copy()
-            # break
-        # plot_3D_keypoints(self.points3D)
-        return self.points3D
+            i = np.array(indices[1])[inliers]
 
+            base_kps = keypoints2[i]
+            base_des = descriptor2[i]
+            print(i.shape)
+            print('good till here agin')
+
+            print('##################')
+            # break
+        plot_3D_keypoints(self.points3D)
+        return self.points3D
 
 # todo
 # RANSAC implemenatation in numpy 
