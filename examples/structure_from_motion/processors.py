@@ -3,6 +3,7 @@ from backend import detect_SIFT_features, recover_pose, triangulate_points
 from backend import brute_force_matcher
 from backend import find_homography_RANSAC
 from backend import find_fundamental_matrix, compute_essential_matrix
+from backend import skimgage_ransac, custom_ransac
 from paz.backend.keypoints import solve_PnP_RANSAC
 
 
@@ -75,3 +76,33 @@ class SolvePnP(pr.Processor):
     def call(self, points3D, points2D):
         return solve_PnP_RANSAC(points3D, points2D, self.camera_intrinsics,
                                 inlier_threshold=5)
+
+
+class SkimageRANSAC(pr.Processor):
+    def __init__(self, model_class, min_samples=8,
+                 residual_thresh=0.5, max_iterations=1000):
+        super(SkimageRANSAC, self).__init__()
+        self.model_class = model_class
+        self.min_samples = min_samples
+        self.residual_thresh = residual_thresh
+        self.max_trials = max_iterations
+
+    def call(self, points1, points2):
+        model, inliers = skimgage_ransac(
+            points1, points2, self.model_class, self.min_samples,
+            self.residual_thresh, self.max_trials)
+        return model, inliers
+
+
+class CustomRANSAC(pr.Processor):
+    def __init__(self, min_samples=8, residual_thresh=2, max_iterations=1000):
+        super(CustomRANSAC, self).__init__()
+        self.min_samples = min_samples
+        self.residual_thresh = residual_thresh
+        self.max_iterations = max_iterations
+
+    def call(self, points1, points2):
+        homography, inlieres = custom_ransac(
+            points1, points2, self.min_sample, self.residual_thresh,
+            self.max_iterations)
+        return homography, inlieres
