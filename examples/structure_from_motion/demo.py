@@ -1,8 +1,6 @@
 import argparse
 import os
-import matplotlib.pyplot as plt
-
-from paz.backend.image import load_image, show_image
+from paz.backend.image import load_image
 from pipeline import StructureFromMotion
 import numpy as np
 
@@ -27,12 +25,7 @@ camera_intrinsics = np.array([[568.996140852, 0, 643.21055941],
 images = []
 for filename in os.listdir(args.images_path):
     image = load_image(os.path.join(args.images_path, filename))
-    # show_image(image)
     images.append(load_image(os.path.join(args.images_path, filename)))
-
 
 detect = StructureFromMotion(camera_intrinsics)
 inferences = detect(images)
-# show_image(inferences['keypoint_image'])
-# show_image(inferences['match_image'])
-# show_image(inferences['image'])
