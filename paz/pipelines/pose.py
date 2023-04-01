@@ -198,7 +198,7 @@ class SingleInstancePIX2POSE6D(Processor):
 
 
 class MultiInstancePIX2POSE6D(Processor):
-    """Predicts poses6D of multiple instances the same object from a single image.
+    """Predicts poses6D of multiple instances the same object from an image.
 
     # Arguments
         estimate_pose: Function that takes as input an image and outputs a
