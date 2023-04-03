@@ -143,11 +143,10 @@ class ToBoxes2D(Processor):
         if class_names is not None:
             arg_to_class = dict(zip(range(len(class_names)), class_names))
         self.one_hot_encoded = one_hot_encoded
-        method_to_processor = {0: BoxesWithOneHotVectorsToBoxes2D(
-                                    arg_to_class),
-                               1: BoxesToBoxes2D(default_score, default_class),
-                               2: BoxesWithClassArgToBoxes2D(
-                                    arg_to_class, default_score)}
+        method_to_processor = {
+            0: BoxesWithOneHotVectorsToBoxes2D(arg_to_class),
+            1: BoxesToBoxes2D(default_score, default_class),
+            2: BoxesWithClassArgToBoxes2D(arg_to_class, default_score)}
         self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
