@@ -115,7 +115,7 @@ def filter_keypoints3D(keypoints3D, args_to_joints3D):
 
     # Arguments
             keypoints3D: Nx96 points in camera coordinates
-            args_to_joints3D: list of list indices
+            args_to_joints3D: list of indices
 
     # Returns
             filtered_joints_3D: Nx48 points (moving joints)
@@ -132,6 +132,9 @@ def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
 
             # Arguments
                     keypoints3D: Nx17x2 points in camera coordinates
+                    args_to_mean: keypoints indices
+                    36m_to_coco_joints2D: human36m dataset list of joints
+                    indices
 
             # Returns
                     joints2D: Nx32 points (moving joints)

@@ -10,6 +10,15 @@ from human36m import data_mean2D, data_stdev2D, data_mean3D, data_stdev3D, \
 class SIMPLEBASELINES(Processor):
     def __init__(self, estimate_keypoints_3D, args_to_mean,
                  h36m_to_coco_joints2D):
+        """
+        # Arguments
+            estimate_keypoints_3D: 3D simple baseline model
+            args_to_mean: keypoints indices
+            h36m_to_coco_joints2D: h36m joints indices
+
+        # Returns
+            wrapped keypoints2D, keypoints3D
+        """
         self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
         self.estimate_keypoints_3D = estimate_keypoints_3D
         self.baseline_model = SimpleBaselines3D(self.estimate_keypoints_3D,

@@ -15,7 +15,7 @@ def dense_block(input_x, num_keypoints, rate):
     """Make a bi-linear block with optional residual connection
     # Arguments
         input_x: the batch that enters the block
-        linear_size: integer. The size of the linear units
+        num_keypoints: integer. The size of the linear units
         rate: float [0,1]. Probability of dropping something out
 
     # Returns

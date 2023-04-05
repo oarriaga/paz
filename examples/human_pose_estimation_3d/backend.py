@@ -146,7 +146,7 @@ def visualize(keypoints2D, joints3D, keypoints3D, opimized_pose3D):
     # Arguments
         keypoints2D: 2D poses
         joints3D: 3D poses
-        keypoints3D:
+        keypoints3D: kepoints 3D
         opimized_pose_3D: Optimized posed3D
     """
     plt.figure(figsize=(19.2, 10.8))
