@@ -37,13 +37,15 @@ def solve_translation3D(keypoints2D, keypoints3D, focal_length, image_center,
     #Arguments
         keypoints2D: array of keypoints in 2D (Nx32)
         keypoints3D: array of keypoints in 3D (Nx96)
+        focal_length: focal_length
+        image_center: image center
         image_height: height of the image
         image_width: width of image
     #Returns
         keypoints2D: array of keypoints in 2D
         Joints3D: array of joints in 3D
         keypoints3D: array of keypoints in 3D
-        optimezed_poses3D: optimized pose 3D
+        optimized_poses3D: optimized pose 3D
     """
     joints3D = human36m.filter_keypoints3D(keypoints3D, args_to_joints3D)
     root2D = keypoints2D[:, :2]
@@ -108,8 +110,7 @@ def initialize_translation(focal_length, joints2D, image_center, ratio):
         focal_length: focal length of the camera in pixels
         joints2D: 2D root joint from HigherHRNet
         image_center: center of the image (or principal point)
-        sum_bones2D: sum of bone lengths of 2D skeleton
-        sum_bones3D: sum of bone lengths of 3D skeleton
+        ratio: ration of sum of 3D bones to 2D bones
     # Returns
         Array of initial estimate of the global position
         of the root joint in 3D

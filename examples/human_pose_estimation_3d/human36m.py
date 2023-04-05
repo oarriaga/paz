@@ -133,7 +133,7 @@ def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
             # Arguments
                     keypoints3D: Nx17x2 points in camera coordinates
                     args_to_mean: keypoints indices
-                    36m_to_coco_joints2D: human36m dataset list of joints
+                    h36m_to_coco_joints2D: human36m dataset list of joints
                     indices
 
             # Returns
@@ -151,7 +151,7 @@ def unnormalize_data(data, mean, stdev, valid):
     might also be missing
 
     # Arguments
-            normalized_data: nxd matrix to unnormalize
+            data: nxd matrix to unnormalize
             mean: array with the mean of the data
             std: array with the standard deviation of the data
             valid: list of dimensions to keep in the data
