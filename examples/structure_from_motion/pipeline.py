@@ -1,14 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from paz import processors as pr
-from processors import DetecetSiftFeatures, RecoverPose
+from processors import DetecetSIFTFeatures, RecoverPose
 from processors import ComputeEssentialMatrix
 from processors import ComputeFundamentalMatrix, TriangulatePoints
 from processors import BruteForceMatcher, SolvePnP
-from processors import SkimageRANSAC, CustomRANSAC
+# from processors import EstimateHomographyRANSAC as RANSAC
+from processors import ComputeFundamentalMatrixRANSAC as RANSAC
 from backend import match_ratio_test, get_match_points, get_match_indices
 from backend import contruct_projection_matrix
-from skimage.transform import FundamentalMatrixTransform
+from backend import triangulate_points_custom
+from backend import compute_recover_pose_custom
+from backend import solve_perspective_n_points
 
 
 class MatchFeatures(pr.Processor):
@@ -41,17 +44,13 @@ def plot_3D_keypoints(keypoints3D):
 class FindCorrespondances(pr.Processor):
     def __init__(self):
         super(FindCorrespondances, self).__init__()
-        self.detector = DetecetSiftFeatures()
+        self.detector = DetecetSIFTFeatures()
         self.match_features = MatchFeatures()
-        self.ransac_filter = SkimageRANSAC(
-            FundamentalMatrixTransform, residual_thresh=2, max_iterations=100)
-        # self.ransac_filter = CustomRANSAC(residual_thresh=5,
-        #                                   max_iterations=100)
+        self.ransac_filter = RANSAC(residual_thresh=2, max_trials=100)
 
     def call(self, base_features, image):
         base_kps, base_des = base_features
         keypoints1, descriptor1 = self.detector(image)
-
         matches = self.match_features(base_des, descriptor1)
         points1, points2 = get_match_points(base_kps, keypoints1, matches)
         indices = get_match_indices(matches)
@@ -85,10 +84,9 @@ class InitializeSFM(pr.Processor):
         super(InitializeSFM, self).__init__()
         self.K = camera_intrinsics
         self.draw = draw
-        self.detector = DetecetSiftFeatures()
+        self.detector = DetecetSIFTFeatures()
         self.match_features = MatchFeatures()
-        self.ransac_filter = SkimageRANSAC(FundamentalMatrixTransform)
-        # self.ransac_filter = CustomRANSAC()
+        self.ransac_filter = RANSAC()
         self.compute_fundamental_matrix = ComputeFundamentalMatrix()
         self.compute_essential_matrix = ComputeEssentialMatrix(self.K)
         self.recover_pose = RecoverPose(self.K)
@@ -129,10 +127,9 @@ class StructureFromMotion(pr.Processor):
         super(StructureFromMotion, self).__init__()
         self.K = camera_intrinsics
         self.initialize_sfm = InitializeSFM(camera_intrinsics)
-        self.detector = DetecetSiftFeatures()
+        self.detector = DetecetSIFTFeatures()
         self.match_features = MatchFeatures()
-        self.ransac_filter = SkimageRANSAC(FundamentalMatrixTransform)
-        # self.ransac_filter = CustomRANSAC()
+        self.ransac_filter = RANSAC()
         self.find_correspondences = FindCorrespondances()
         self.solve_pnp = SolvePnP(camera_intrinsics)
         self.rotation_vector_to_matrix = pr.RotationVectorToRotationMatrix()
@@ -156,6 +153,7 @@ class StructureFromMotion(pr.Processor):
 
             _, rotation, translation = self.solve_pnp(points3d[indices],
                                                       p1_inliers)
+
             rotation = self.rotation_vector_to_matrix(rotation)
             P3 = contruct_projection_matrix(rotation, translation)
             P3 = self.K @ P3
