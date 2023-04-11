@@ -13,21 +13,20 @@ from tensorflow.keras.utils import get_file
 from tensorflow.python.keras.layers import Input, Add, Conv2D, Concatenate
 from tensorflow.python.keras.layers import UpSampling2D, MaxPooling2D
 
-from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
 import numpy as np
 import tensorflow.python.keras.backend as K
 from tensorflow.python.keras.layers import Layer, Input, Lambda
 from tensorflow.python.keras.models import Model
 
-
+from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
 from mask_rcnn.utils import generate_pyramid_anchors, norm_boxes_graph
 from mask_rcnn.utils import fpn_classifier_graph, compute_backbone_shapes
 from mask_rcnn.utils import build_fpn_mask_graph, norm_boxes
 from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer, AnchorsLayer, DetectionLayer
 from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
     BBoxLoss, ClassLoss, MaskLoss, L2RegLoss
-from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 
+from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 disable_eager_execution()
 
 
@@ -40,7 +39,7 @@ class MaskRCNN():
     def __init__(self, model_dir, image_shape, backbone, batch_size, images_per_gpu,
                  rpn_anchor_scales, train_rois_per_image, num_classes, window=None):
         self.model_dir = model_dir
-        self.image_shape = image_shape
+        self.image_shape = np.array(image_shape)
         self.get_backbone = backbone
         self.batch_size = batch_size
         self.images_per_gpu = images_per_gpu
@@ -49,10 +48,6 @@ class MaskRCNN():
         self.window = window
         self.num_classes = num_classes
         self.keras_model = build_backbone(image_shape, backbone, fpn_size=256, train_bn=False)
-
-    def RPN(self, rpn_feature_maps):
-        return rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
-                         fpn_size=256, rpn_feature_maps=rpn_feature_maps)
 
     def set_trainable(self, layer_regex, keras_model=None, indent=0, verbose=1):
         """Build all the layers by selecting the model.
@@ -93,7 +88,8 @@ class MaskRCNN():
     def build_train_model(self):
         image = self.keras_model.input
         RPN_class_logits, RPN_class, RPN_bbox = \
-            self.RPN(self.keras_model.output)
+            rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
+                      fpn_size=256, rpn_feature_maps=self.keras_model.output)
 
         anchors = get_anchors(image_shape, self.rpn_anchor_scales, backbone="resnet101")
         anchors = np.broadcast_to(anchors, (self.batch_size,) + anchors.shape)
@@ -121,9 +117,9 @@ class MaskRCNN():
         mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_ROIs = \
             create_head(self.keras_model, ROIs, num_classes=self.num_classes, image_shape=self.image_shape)
 
-        mrcnn_class_loss = ClassLoss(num_classes=num_classes).call(target_class_ids, mrcnn_class_logits)
-        mrcnn_bbox_loss = BBoxLoss().call([target_boxes, target_class_ids], mrcnn_bbox)
-        mrcnn_mask_loss = MaskLoss().call([target_masks, target_class_ids], mrcnn_mask)
+        mrcnn_class_loss = ClassLoss(num_classes=self.num_classes)(target_class_ids, mrcnn_class_logits)
+        mrcnn_bbox_loss = BBoxLoss()([target_boxes, target_class_ids], mrcnn_bbox)
+        mrcnn_mask_loss = MaskLoss()([target_masks, target_class_ids], mrcnn_mask)
 
         inputs = [image, input_gt_class_ids, input_gt_boxes, groundtruth_masks]
 
@@ -138,7 +134,9 @@ class MaskRCNN():
         anchors = Input(shape=[None, 4], name='input_anchors')
         feature_maps = keras_model.output
 
-        rpn_class_logits, rpn_class, rpn_bbox = self.RPN(feature_maps)
+        rpn_class_logits, rpn_class, rpn_bbox = \
+            rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
+                      fpn_size=256, rpn_feature_maps=feature_maps)
         rpn_rois = ProposalLayer(
             proposal_count=1000,
             nms_threshold=0.7, rpn_bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
