@@ -3,7 +3,7 @@ import tensorflow.keras.backend as K
 from keras.layers import Layer
 
 
-class ProposalClassLoss(Layer):
+class ProposalClassLoss(tf.keras.losses.Loss):
     """Computes loss for Mask RCNN architecture, Region Proposal
     Network Class loss. RPN anchor classifier loss.
 
@@ -27,13 +27,13 @@ class ProposalClassLoss(Layer):
                                                  from_logits=True)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
 
-        self.add_loss(tf.math.reduce_mean(loss, keepdims=True) * self.loss_weight)
-        metric = (loss * self.loss_weight)
-        self.add_metric(metric, name='rpn_class_loss', aggregation='mean')
+        # self.add_loss(tf.math.reduce_mean(loss, keepdims=True) * self.loss_weight)
+        # metric = (loss * self.loss_weight)
+        # self.add_metric(metric, name='rpn_class_loss', aggregation='mean')
         return loss
 
 
-class ProposalBBoxLoss(Layer):
+class ProposalBBoxLoss(tf.keras.losses.Loss):
     """Computes loss for Mask RCNN architecture for Region Proposal
      Network Bounding box loss.
      Return the RPN bounding box loss graph.
@@ -66,9 +66,9 @@ class ProposalBBoxLoss(Layer):
         loss = smooth_L1_loss(target_boxes, rpn_bbox)
         loss = K.switch(tf.size(input=loss) > 0, K.mean(loss), tf.constant(0.0))
 
-        self.add_loss(tf.math.reduce_mean(loss, keepdims=True) * self.loss_weight)
-        metric = (loss * self.loss_weight)
-        self.add_metric(metric, name='rpn_bbox_loss', aggregation='mean')
+        # self.add_loss(tf.math.reduce_mean(loss, keepdims=True) * self.loss_weight)
+        # metric = (loss * self.loss_weight)
+        # self.add_metric(metric, name='rpn_bbox_loss', aggregation='mean')
         return loss
 
 

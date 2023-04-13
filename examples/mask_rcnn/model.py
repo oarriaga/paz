@@ -24,7 +24,7 @@ from mask_rcnn.utils import fpn_classifier_graph, compute_backbone_shapes
 from mask_rcnn.utils import build_fpn_mask_graph, norm_boxes
 from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer, AnchorsLayer, DetectionLayer
 from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
-    BBoxLoss, ClassLoss, MaskLoss, L2RegLoss
+    BBoxLoss, ClassLoss, MaskLoss
 
 from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 disable_eager_execution()
@@ -91,7 +91,7 @@ class MaskRCNN():
             rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
                       fpn_size=256, rpn_feature_maps=self.keras_model.output)
 
-        anchors = get_anchors(image_shape, self.rpn_anchor_scales, backbone="resnet101")
+        anchors = get_anchors(self.image_shape, self.rpn_anchor_scales, backbone="resnet101")
         anchors = np.broadcast_to(anchors, (self.batch_size,) + anchors.shape)
         anchors = AnchorsLayer(anchors, name='anchors')(image)
 
@@ -128,7 +128,7 @@ class MaskRCNN():
 
         self.keras_model = Model(inputs=inputs, outputs=outputs, name='mask_rcnn')
 
-    def build_inference_model(self, config):
+    def build_inference_model(self):
         keras_model = self.keras_model
         input_image = keras_model.input
         anchors = Input(shape=[None, 4], name='input_anchors')
@@ -179,7 +179,7 @@ def get_anchors(image_shape, rpn_anchor_scales, backbone, compute_backbone_shape
     backbone_shapes = compute_backbone_shapes(image_shape, backbone, compute_backbone_shape)
     # Cache anchors and reuse if image shape is the same
     _anchor_cache = {}
-    if not tuple(image_shape) in self._anchor_cache:
+    if not tuple(image_shape) in _anchor_cache:
         # Generate Anchors
         a = generate_pyramid_anchors(rpn_anchor_scales,
                                      [0.5, 1, 2], backbone_shapes,
