@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 from tensorflow.python.eager import context
 
-from mask_rcnn.utils import norm_boxes_graph
+#from mask_rcnn.utils import norm_boxes_graph
 from mask_rcnn.layer_utils import slice_batch, trim_anchors_by_score, compute_NMS, apply_NMS, get_top_detections, \
     refine_detections
 from mask_rcnn.layer_utils import apply_box_delta, clip_image_boundaries, filter_low_confidence, \
@@ -24,7 +24,7 @@ class DetectionLayer(Layer):
 
     def __init__(self, batch_size, window, bbox_std_dev, images_per_gpu, detection_max_instances,
                  detection_min_confidence, detection_nms_threshold, **kwargs,):
-        super(DetectionLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.batch_size = batch_size
         self.window = window
         self.bbox_std_dev = bbox_std_dev
@@ -33,7 +33,7 @@ class DetectionLayer(Layer):
         self.detection_min_confidence = detection_min_confidence
         self.detection_nms_threshold = detection_nms_threshold
 
-    def __call__(self, inputs):
+    def call(self, inputs):
         rois, mrcnn_class, mrcnn_bbox = inputs
         self.window = norm_boxes_graph(self.window, self.image_shape[:2])
         detections_batch = slice_batch([rois, mrcnn_class, mrcnn_bbox],
@@ -65,7 +65,7 @@ class ProposalLayer(Layer):
 
     def __init__(self, proposal_count, nms_threshold, rpn_bbox_std_dev,
                  pre_nms_limit, images_per_gpu, batch_size, **kwargs):
-        super(ProposalLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.rpn_bbox_std_dev = rpn_bbox_std_dev
         self.pre_nms_limit = pre_nms_limit
         self.images_per_gpu = images_per_gpu
@@ -73,7 +73,7 @@ class ProposalLayer(Layer):
         self.nms_threshold = nms_threshold
         self.batch_size = batch_size
 
-    def __call__(self, inputs):
+    def call(self, inputs):
         scores, deltas, anchors = inputs
         scores = scores[:, :, 1]
         deltas = deltas * np.reshape(self.rpn_bbox_std_dev, [1, 1, 4])
@@ -85,12 +85,14 @@ class ProposalLayer(Layer):
 
         proposals = slice_batch([boxes, scores], [self.proposal_count, self.nms_threshold], compute_NMS,
                                 self.images_per_gpu)
-        if not context.executing_eagerly():
-            # Infer the static output shape:
-            out_shape = self.compute_output_shape(None)
-            proposals.set_shape(out_shape)
-
+        # if not context.executing_eagerly():
+        #     # Infer the static output shape:
+        #     out_shape = self.compute_output_shape(None)
+        #     proposals.set_shape(out_shape)
         return proposals
+
+    def compute_output_shape(self, input_shape):
+        return (None, self.proposal_count, 4)
 
 
 class DetectionTargetLayer(Layer):
@@ -116,7 +118,7 @@ class DetectionTargetLayer(Layer):
 
     def __init__(self, images_per_gpu, mask_shape, train_rois_per_image, roi_positive_ratio,
                  bbox_std_dev, use_mini_mask, batch_size, **kwargs):
-        super(DetectionTargetLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.images_per_gpu = images_per_gpu
         self.mask_shape = mask_shape
         self.train_rois_per_image = train_rois_per_image
@@ -125,7 +127,7 @@ class DetectionTargetLayer(Layer):
         self.use_mini_mask = use_mini_mask
         self.batch_size = batch_size
 
-    def __call__(self, inputs):
+    def call(self, inputs):
         proposals, prior_class_ids, prior_boxes, prior_masks = inputs
         names = ['rois', 'target_class_ids', 'target_bbox', 'target_mask']
         outputs = slice_batch([proposals, prior_class_ids, prior_boxes, prior_masks],
@@ -155,10 +157,10 @@ class PyramidROIAlign(Layer):
     """
 
     def __init__(self, pool_shape, **kwargs):
-        super(PyramidROIAlign, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.pool_shape = tuple(pool_shape)
 
-    def __call__(self, inputs):
+    def call(self, inputs):
         boxes, image_shape = inputs[0], inputs[1]
         feature_maps = inputs[2:]
 
@@ -174,7 +176,7 @@ class PyramidROIAlign(Layer):
 
 class AnchorsLayer(Layer):
     def __init__(self, anchors, name="anchors", **kwargs):
-        super(AnchorsLayer, self).__init__(name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
         self.anchors = tf.Variable(anchors, trainable=False)
 
     def call(self, input_image):
