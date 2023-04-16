@@ -1,5 +1,7 @@
 """Functions to visualize human poses"""
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 
 def show3Dpose(keypoints, ax, lcolor="#3498db", rcolor="#e74c3c",
@@ -97,3 +99,34 @@ def show2Dpose(keypoints, ax, lcolor="#3498db", rcolor="#e74c3c",
         ax.set_xlabel("x")
         ax.set_ylabel("z")
     ax.set_aspect('equal')
+
+
+def visualize(keypoints2D, joints3D, keypoints3D, opimized_pose3D):
+    """Vizualize points
+    # Arguments
+    keypoints2D: 2D poses
+    joints3D: 3D poses
+    keypoints3D: kepoints 3D
+    opimized_pose_3D: Optimized posed3D
+    """
+    plt.figure(figsize=(19.2, 10.8))
+    grid_spec = gridspec.GridSpec(1, 4)
+    grid_spec.update(wspace=-0.00, hspace=0.05)
+    plt.axis('off')
+    axis1 = plt.subplot(grid_spec[0])
+    show2Dpose(keypoints2D, axis1, add_labels=True)
+    axis1.invert_yaxis()
+    axis1.title.set_text('HRNet 2D poses')
+    axis2 = plt.subplot(grid_spec[1], projection='3d')
+    axis2.view_init(-90, -90)
+    show3Dpose(joints3D, axis2, add_labels=True)
+    axis2.title.set_text('Baseline prediction')
+    axis3 = plt.subplot(grid_spec[2], projection='3d')
+    axis3.view_init(-90, -90)
+    show3Dpose(keypoints3D, axis3, add_labels=True)
+    axis3.title.set_text('Optimized 3D poses')
+    axis4 = plt.subplot(grid_spec[3])
+    show2Dpose(opimized_pose3D, axis4, add_labels=True)
+    axis4.invert_yaxis()
+    axis4.title.set_text('2D projection of optimized poses')
+    plt.show()

@@ -23,21 +23,23 @@ class FilterKeypoints2D(pr.Processor):
 
 
 class SolveTranslation3D(pr.Processor):
-    def __init__(self, camera_intrinsics, args_to_joints3D):
+    def __init__(self, solver, camera_intrinsics, args_to_joints3D):
         """ Processor class of the solve translation function in backend
         # Arguments
+            solver: from scipy.optimize import least_squares
             camera_intrinsics: camera intrinsics parameters
             args_to_joints3D: joints indices
 
 
         """
         super(SolveTranslation3D, self).__init__()
+        self.solver=solver
         self.focal_length = camera_intrinsics[0]
         self.image_center = camera_intrinsics[1]
         self.args_to_joints3D = args_to_joints3D
 
     def call(self, keypoints2D, keypoints3D):
-        return solve_translation3D(keypoints2D, keypoints3D, self.focal_length,
+        return solve_translation3D(keypoints2D, keypoints3D, self.solver, self.focal_length,
                                    self.image_center, self.args_to_joints3D)
 
 

@@ -1,9 +1,9 @@
 import pytest
-from pipeline import SIMPLEBASELINES
+from pipeline import SimpleBaselines
 import numpy as np
 from paz.backend.image import load_image
 from paz.backend.camera import Camera
-from linear_model import SIMPLE_BASELINE
+from linear_model import Simple_Baseline
 from keypoints_processors import SolveTranslation3D
 
 
@@ -29,9 +29,9 @@ def get_poses(pipeline, image):
 
 @pytest.fixture
 def model():
-    model = SIMPLE_BASELINE(16, 3, 1024, (32,), 2, 1)
+    model = Simple_Baseline(16, 3, 1024, (32,), 2, 1)
     model.load_weights('weights.h5')
-    pipeline = SIMPLEBASELINES(model, args_to_mean, h36m_to_coco_joints2D)
+    pipeline = SimpleBaselines(model, args_to_mean, h36m_to_coco_joints2D)
     return pipeline
 
 

@@ -7,7 +7,7 @@ from human36m import data_mean2D, data_stdev2D, data_mean3D, data_stdev3D, \
     dim_to_use3D
 
 
-class SIMPLEBASELINES(Processor):
+class SimpleBaselines(Processor):
     def __init__(self, estimate_keypoints_3D, args_to_mean,
                  h36m_to_coco_joints2D):
         """

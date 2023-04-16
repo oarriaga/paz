@@ -1,8 +1,4 @@
 import numpy as np
-from scipy.optimize import least_squares
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import viz
 import human36m
 
 
@@ -26,10 +22,11 @@ def compute_reprojection_error(initial_translation, keypoints3D,
                                  image_center)
     joints_distance = np.linalg.norm(np.ravel(keypoints2D) -
                                      np.ravel(project2D))
+
     return np.sum(joints_distance)
 
 
-def solve_translation3D(keypoints2D, keypoints3D, focal_length, image_center,
+def solve_translation3D(keypoints2D, keypoints3D, solver, focal_length, image_center,
                         args_to_joints3D):
     """Finds the optimal translation of root joint for each person
     to give a good enough estimate of the global human pose
@@ -37,6 +34,7 @@ def solve_translation3D(keypoints2D, keypoints3D, focal_length, image_center,
     #Arguments
         keypoints2D: array of keypoints in 2D (Nx32)
         keypoints3D: array of keypoints in 3D (Nx96)
+        solver: from scipy.optimize import least_squares
         focal_length: focal_length
         image_center: image center
         image_height: height of the image
@@ -53,7 +51,7 @@ def solve_translation3D(keypoints2D, keypoints3D, focal_length, image_center,
     ratio = length3D / length2D
     initial_joint_translation = initialize_translation(focal_length, root2D,
                                                        image_center, ratio)
-    joint_translation = solve_least_squares(compute_reprojection_error,
+    joint_translation = solve_least_squares(solver, compute_reprojection_error,
                                             initial_joint_translation,
                                             joints3D, keypoints2D,
                                             focal_length, image_center)
@@ -97,10 +95,10 @@ def get_bones_length(poses2D, poses3D):
     end_joints = np.arange(1, 16)
     for person in poses2D:
         bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
-        sum_bones2D += bone_length
+        sum_bones2D = sum_bones2D + bone_length
     for person in poses3D:
         bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
-        sum_bones3D += bone_length
+        sum_bones3D = sum_bones3D+ bone_length
     return sum_bones2D, sum_bones3D
 
 
@@ -122,10 +120,11 @@ def initialize_translation(focal_length, joints2D, image_center, ratio):
     return translation.flatten()
 
 
-def solve_least_squares(compute_joints_distance, initial_joints_translation,
+def solve_least_squares(solver, compute_joints_distance, initial_joints_translation,
                         joints3D, poses2D, focal_length, image_center):
     """ Solve the least squares
     # Arguments
+        solver: from scipy.optimize import least_squares
         compute_joints_distance: global_pose.compute_joints_distance
         initial_root_translation: initial 3D translation of root joint
         joints3D: 16 moving joints in 3D
@@ -135,42 +134,11 @@ def solve_least_squares(compute_joints_distance, initial_joints_translation,
     Returns
         optimal translation of root joint for each person
     """
-    joints_translation = least_squares(
+    joints_translation = solver(
         compute_joints_distance, initial_joints_translation, verbose=0,
         args=(joints3D, poses2D, focal_length, image_center))
     joints_translation = np.reshape(joints_translation.x, (-1, 3))
     return joints_translation
-
-
-def visualize(keypoints2D, joints3D, keypoints3D, opimized_pose3D):
-    """Vizualize points
-    # Arguments
-        keypoints2D: 2D poses
-        joints3D: 3D poses
-        keypoints3D: kepoints 3D
-        opimized_pose_3D: Optimized posed3D
-    """
-    plt.figure(figsize=(19.2, 10.8))
-    grid_spec = gridspec.GridSpec(1, 4)
-    grid_spec.update(wspace=-0.00, hspace=0.05)
-    plt.axis('off')
-    axis1 = plt.subplot(grid_spec[0])
-    viz.show2Dpose(keypoints2D, axis1, add_labels=True)
-    axis1.invert_yaxis()
-    axis1.title.set_text('HRNet 2D poses')
-    axis2 = plt.subplot(grid_spec[1], projection='3d')
-    axis2.view_init(-90, -90)
-    viz.show3Dpose(joints3D, axis2, add_labels=True)
-    axis2.title.set_text('Baseline prediction')
-    axis3 = plt.subplot(grid_spec[2], projection='3d')
-    axis3.view_init(-90, -90)
-    viz.show3Dpose(keypoints3D, axis3, add_labels=True)
-    axis3.title.set_text('Optimized 3D poses')
-    axis4 = plt.subplot(grid_spec[3])
-    viz.show2Dpose(opimized_pose3D, axis4, add_labels=True)
-    axis4.invert_yaxis()
-    axis4.title.set_text('2D projection of optimized poses')
-    plt.show()
 
 
 def standardize(data, mean, scale):
