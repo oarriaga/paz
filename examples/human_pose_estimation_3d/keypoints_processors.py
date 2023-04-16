@@ -33,14 +33,15 @@ class SolveTranslation3D(pr.Processor):
 
         """
         super(SolveTranslation3D, self).__init__()
-        self.solver=solver
+        self.solver = solver
         self.focal_length = camera_intrinsics[0]
         self.image_center = camera_intrinsics[1]
         self.args_to_joints3D = args_to_joints3D
 
     def call(self, keypoints2D, keypoints3D):
-        return solve_translation3D(keypoints2D, keypoints3D, self.solver, self.focal_length,
-                                   self.image_center, self.args_to_joints3D)
+        return solve_translation3D(keypoints2D, keypoints3D, self.solver,
+                                   self.focal_length, self.image_center,
+                                   self.args_to_joints3D)
 
 
 class StandardizeKeypoints2D(pr.Processor):

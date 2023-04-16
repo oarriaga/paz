@@ -26,8 +26,8 @@ def compute_reprojection_error(initial_translation, keypoints3D,
     return np.sum(joints_distance)
 
 
-def solve_translation3D(keypoints2D, keypoints3D, solver, focal_length, image_center,
-                        args_to_joints3D):
+def solve_translation3D(keypoints2D, keypoints3D, solver, focal_length,
+                        image_center, args_to_joints3D):
     """Finds the optimal translation of root joint for each person
     to give a good enough estimate of the global human pose
     in camera coordinates
@@ -98,7 +98,7 @@ def get_bones_length(poses2D, poses3D):
         sum_bones2D = sum_bones2D + bone_length
     for person in poses3D:
         bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
-        sum_bones3D = sum_bones3D+ bone_length
+        sum_bones3D = sum_bones3D + bone_length
     return sum_bones2D, sum_bones3D
 
 
@@ -120,8 +120,9 @@ def initialize_translation(focal_length, joints2D, image_center, ratio):
     return translation.flatten()
 
 
-def solve_least_squares(solver, compute_joints_distance, initial_joints_translation,
-                        joints3D, poses2D, focal_length, image_center):
+def solve_least_squares(solver, compute_joints_distance,
+                        initial_joints_translation, joints3D,
+                        poses2D, focal_length, image_center):
     """ Solve the least squares
     # Arguments
         solver: from scipy.optimize import least_squares

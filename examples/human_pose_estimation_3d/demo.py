@@ -25,7 +25,8 @@ model = Simple_Baseline(16, 3, 1024, (32,), 2, 1)
 model.load_weights('weights.h5')
 pipeline = SimpleBaselines(model, args_to_mean, h36m_to_coco_joints2D)
 keypoints = pipeline(image)
-solvetranslation_processor = SolveTranslation3D(least_squares, intrinsics, args_to_joints3D)
+solvetranslation_processor = SolveTranslation3D(least_squares, intrinsics,
+                                                args_to_joints3D)
 joints3D, keypoints3D, poses3D = solvetranslation_processor(
                                  keypoints['keypoints2D'],
                                  keypoints['keypoints3D'])

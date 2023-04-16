@@ -5,6 +5,7 @@ from paz.backend.image import load_image
 from paz.backend.camera import Camera
 from linear_model import Simple_Baseline
 from keypoints_processors import SolveTranslation3D
+from scipy.optimize import least_squares
 
 
 h36m_to_coco_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0, 5, 7, 9, 6, 8, 10]
@@ -184,7 +185,7 @@ def test_simple_baselines_multiple_persons(image_with_multiple_persons_A,
                        keypoints3D_multiple_persons)
     image_height, image_width = image_with_multiple_persons_A.shape[:2]
     intrinsics = get_camera_intrinsics(image_height, image_width)
-    solvetranslation_processor = SolveTranslation3D(intrinsics,
+    solvetranslation_processor = SolveTranslation3D(least_squares, intrinsics,
                                                     args_to_joints3D)
     _, _, poses3D = solvetranslation_processor(keypoints['keypoints2D'],
                                                keypoints['keypoints3D'])
@@ -201,7 +202,7 @@ def test_simple_baselines_single_persons(image_with_single_person_B,
     assert np.allclose(keypoints['keypoints3D'], keypoints3D_single_person)
     image_height, image_width = image_with_single_person_B.shape[:2]
     intrinsics = get_camera_intrinsics(image_height, image_width)
-    solvetranslation_processor = SolveTranslation3D(intrinsics,
+    solvetranslation_processor = SolveTranslation3D(least_squares, intrinsics,
                                                     args_to_joints3D)
     _, _, poses3D = solvetranslation_processor(keypoints['keypoints2D'],
                                                keypoints['keypoints3D'])
