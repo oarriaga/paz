@@ -852,6 +852,7 @@ def compute_targets_from_groundtruth_values(proposals, gt_class_ids, gt_boxes, g
     ]
     with tf.control_dependencies(asserts):
         proposals = tf.identity(proposals)
+    
     proposals, refined_class_ids, refined_boxes, refined_masks, \
         crowd_boxes = check_if_crowded(proposals, gt_class_ids,
                                        gt_boxes, gt_masks)
