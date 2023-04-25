@@ -1,12 +1,13 @@
-from pipeline import SimpleBaselines
-from paz.applications import HigherHRNetHumanPose2D
+from paz.pipelines.keypoints import SimpleBaselines
 from paz.backend.image import load_image
-from linear_model import Simple_Baseline
+from paz.models.keypoint.simplebaselines import Simple_Baseline
 import numpy as np
 from paz.backend.camera import Camera
 from viz import visualize
 from scipy.optimize import least_squares
-from keypoints_processors import SolveTranslation3D
+from paz.backend.keypoints import filter_keypoints3D
+from paz.backend.keypoints import initialize_translation, solve_least_squares,\
+    get_bones_length, compute_reprojection_error, compute_optimized_pose3D
 
 
 h36m_to_coco_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0, 5, 7, 9, 6, 8, 10]
@@ -20,15 +21,25 @@ camera.intrinsics_from_HFOV(HFOV=70, image_shape=[image_height, image_width])
 intrinsics = [camera.intrinsics[0, 0], np.array([[camera.intrinsics[0, 2],
                                                   camera.intrinsics[1, 2]]]
                                                 ).flatten()]
-keypoints2D = HigherHRNetHumanPose2D()
-model = Simple_Baseline(16, 3, 1024, (32,), 2, 1)
+model = Simple_Baseline((32,), 16, 3, 1024, 2, 1)
 model.load_weights('weights.h5')
 pipeline = SimpleBaselines(model, args_to_mean, h36m_to_coco_joints2D)
 keypoints = pipeline(image)
-solvetranslation_processor = SolveTranslation3D(least_squares, intrinsics,
-                                                args_to_joints3D)
-joints3D, keypoints3D, poses3D = solvetranslation_processor(
-                                 keypoints['keypoints2D'],
-                                 keypoints['keypoints3D'])
+focal_length = intrinsics[0]
+image_center = intrinsics[1]
 
-visualize(keypoints['keypoints2D'], joints3D, keypoints3D, poses3D)
+joints3D = filter_keypoints3D(keypoints['keypoints3D'], args_to_joints3D)
+root2D = keypoints['keypoints2D'][:, :2]
+length2D, length3D = get_bones_length(keypoints['keypoints2D'], joints3D)
+ratio = length3D / length2D
+initial_joint_translation = initialize_translation(focal_length, root2D,
+                                                   image_center, ratio)
+joint_translation = solve_least_squares(least_squares, compute_reprojection_error,
+                                        initial_joint_translation,
+                                        joints3D, keypoints['keypoints2D'],
+                                        focal_length, image_center)
+keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
+optimized_poses3D = compute_optimized_pose3D(keypoints3D,
+                                             joint_translation,
+                                             focal_length, image_center)
+visualize(keypoints['keypoints2D'], joints3D, keypoints3D, optimized_poses3D)

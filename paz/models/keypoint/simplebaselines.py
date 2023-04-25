@@ -32,11 +32,10 @@ def dense_block(input_x, num_keypoints, rate):
     x = ReLU()(x)
     x = Dropout(rate)(x)
     x = (x + input_x)
-
     return x
 
 
-def Simple_Baseline(num_keypoints, keypoints_dim, hidden_dim, input_shape,
+def Simple_Baseline(input_shape, num_keypoints, keypoints_dim, hidden_dim,
                     num_layers, rate):
     """keypoints model
     # Arguments
