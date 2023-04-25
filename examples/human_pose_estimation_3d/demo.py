@@ -34,7 +34,8 @@ length2D, length3D = get_bones_length(keypoints['keypoints2D'], joints3D)
 ratio = length3D / length2D
 initial_joint_translation = initialize_translation(focal_length, root2D,
                                                    image_center, ratio)
-joint_translation = solve_least_squares(least_squares, compute_reprojection_error,
+joint_translation = solve_least_squares(least_squares,
+                                        compute_reprojection_error,
                                         initial_joint_translation,
                                         joints3D, keypoints['keypoints2D'],
                                         focal_length, image_center)

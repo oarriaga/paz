@@ -11,7 +11,7 @@ from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
-from ..backend.standard import append_values, predict
+from ..backend.standard import predict
 from paz.backend.keypoints import standardize, filter_keypoints2D,\
     destandardize, merge_into_mean
 
@@ -223,11 +223,10 @@ class ComputeOrientationVector(Processor):
         return orientation
 
 
-
 class FilterKeypoints2D(Processor):
     def __init__(self, args_to_mean, h36m_to_coco_joints2D):
         """ Processor class for the filter_keypoints2D in human36m
-        
+
         # Arguments
             args_to_mean: keypoints indices
             h36m_to_coco_joints2D: h36m joints indices
@@ -248,11 +247,11 @@ class FilterKeypoints2D(Processor):
 class StandardizeKeypoints2D(Processor):
     def __init__(self, data_mean2D, data_stdev2D):
         """ Processor class for standerize
-        
+
         # Arguments
             data_mean2D: mean 2D
             data_stdev2D: standard deviation 2D
-            
+
         # Return
             standerized keypoints2D
         """
@@ -267,12 +266,12 @@ class StandardizeKeypoints2D(Processor):
 class UnnormalizeData(Processor):
     def __init__(self, data_mean3D, data_stdev3D, dim_to_use):
         """ Processor class for unnormalize function in human36m.py
-        
+
         # Arguments
             data_mean3D: mean 3D
             data_stdev3D: standard deviation 3D
             dim_to_use: dimensions to use
-            
+
         # Return
             Unormalized data
         """
@@ -283,9 +282,11 @@ class UnnormalizeData(Processor):
 
     def call(self, keypoints2D):
         data = keypoints2D.reshape(-1, 48)
-        rearanged_data = np.zeros((len(data), len(self.mean)), dtype=np.float32)
+        rearanged_data = np.zeros((len(data), len(self.mean)),
+                                  dtype=np.float32)
         rearanged_data[:, self.valid] = data
-        unnormalized_data = destandardize(rearanged_data, self.mean, self.stdev)
+        unnormalized_data = destandardize(rearanged_data, self.mean,
+                                          self.stdev)
         return unnormalized_data
 
 
@@ -294,7 +295,7 @@ class SimpleBaselines3D(Processor):
                  data_stdev3D, dim_to_use3D, args_to_mean,
                  h36m_to_coco_joints2D):
         """ Processor class to predict the 3D keypoints
-        
+
         # Arguments
             model: Simplebaseline 3D model
             data_mean2D: mean 2D
@@ -304,18 +305,18 @@ class SimpleBaselines3D(Processor):
             dim_to_use: dimensions to use
             args_to_mean: joints indices
             h36m_to_coco_joints2D: h36m data joints indices
-            
+
         # Return
             keypoints2D: 2D keypoints
             keypoints3D: 3D keypoints
         """
         super(SimpleBaselines3D, self).__init__()
-        self.model=model
+        self.model = model
         self.filter = FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)
         self.preprocess = StandardizeKeypoints2D(data_mean2D, data_stdev2D)
         self.postprocess = UnnormalizeData(data_mean3D, data_stdev3D,
                                            dim_to_use3D)
-        
+
     def call(self, keypoints2D):
         keypoints2D = self.filter(keypoints2D)
         keypoints3D = predict(keypoints2D, self.model, self.preprocess,
