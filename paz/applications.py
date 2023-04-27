@@ -28,4 +28,3 @@ from .pipelines import MinimalHandPoseEstimation
 from .pipelines import DetectMinimalHand
 from .pipelines import ClassifyHandClosure
 from .pipelines import SSD512MinimalHandPose
-from .pipelines import SimpleBaselines
