@@ -1,12 +1,14 @@
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras.layers import Layer, Input, Lambda
+
 from paz.abstract import Processor
+
 from mask_rcnn.utils import resize_image, normalize_image
 from mask_rcnn.utils import compute_backbone_shapes, norm_boxes
 from mask_rcnn.utils import denorm_boxes
 from mask_rcnn.utils import unmold_mask
 from mask_rcnn.utils2 import generate_pyramid_anchors
-from tensorflow.keras.layers import Layer, Input, Lambda
-import tensorflow as tf
 
 
 class NormalizeImages(Processor):
@@ -22,7 +24,7 @@ class NormalizeImages(Processor):
 
 
 class ResizeImages(Processor):
-    def init(self, min_dim, min_scale, max_dim, resize_mode="square"):
+    def __init__(self, min_dim, min_scale, max_dim, resize_mode="square"):
         self.min_dim = min_dim
         self.min_Scale = min_scale
         self.max_dim = max_dim
@@ -42,7 +44,7 @@ class ResizeImages(Processor):
 
 
 class Detect(Processor):
-    def init(self, model, anchor_scales, batch_size, preprocess=None, postprocess=None):
+    def __init__(self, model, anchor_scales, batch_size, preprocess=None, postprocess=None):
         self.base_model = model
         self.model = model.keras_model
         self.preprocess = preprocess

@@ -1,7 +1,8 @@
-import paz.processors as pr
+from paz.processors import pr
 from paz.abstract import Processor, SequentialProcessor
 from paz.pipelines import AugmentImage, PreprocessImage
 from paz.pipelines import AugmentBoxes
+
 from mask_rcnn.utils import build_rpn_targets
 
 

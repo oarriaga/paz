@@ -138,18 +138,18 @@ def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size, num
             batch_gt_masks[b, :, :, :gt_masks.shape[-1]] = gt_masks
 
             b += 1
-            # print("rpn_batch", batch_rpn_match.shape)
+
             if b >= batch_size:
 
                 inputs = [batch_images, batch_gt_class_ids, batch_gt_boxes, batch_gt_masks]
+
                 zeros_array = np.zeros((batch_size, anchors.shape[0], 3))
                 rpn_match_padded = np.concatenate((batch_rpn_match, zeros_array), axis=2)
-
-                c = []
+                rpn_bbox_padded = np.concatenate((batch_rpn_bbox, zeros_array), axis=1)
                 for i in range(batch_size):
                     c.append(np.concatenate((batch_rpn_bbox[i], rpn_match_padded[i])))
                 batch_rpn = np.stack(c, axis=0)
-                batch_rpn = np.concatenate((rpn_bbox_padded, rpn_match_padded), axis=1)
+
                 outputs = [batch_rpn_match, batch_rpn]
                 yield inputs, outputs
 
@@ -233,7 +233,7 @@ def normalize_image(images):
 
 
 def load_image_gt(dataset, num_classes, image_id, augmentation=False,
-                  use_mini_mask=False, mini_mask_shape=[28, 28]):
+                  use_mini_mask=False, mini_mask_shape=(28, 28)):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
     augmentation: using paz library for augmentation
 
@@ -250,9 +250,18 @@ def load_image_gt(dataset, num_classes, image_id, augmentation=False,
     mask = data[image_id]['masks']
     class_ids = data[image_id]['box_data'][:, -1]
 
+    # mask = resize_mask(mask, scale, padding, crop)
+    image, window, scale, padding, crop = resize_image(
+        image,
+        min_dim=128,
+        min_scale=0,
+        max_dim=128,
+        mode='square')
     mask = resize_mask(mask, scale, padding, crop)
+
     _idx = np.sum(mask, axis=(0, 1)) > 0
     mask = mask[:, :, _idx]
+
     bbox = extract_bboxes(mask)
 
     if use_mini_mask:

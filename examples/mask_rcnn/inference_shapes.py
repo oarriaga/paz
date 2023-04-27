@@ -1,15 +1,16 @@
 import cv2
-import utils
 import numpy as np
 import tensorflow as tf
 
-from mask_rcnn.model import MaskRCNN
-from mask_rcnn.utils import norm_boxes_graph, display_instances
-from mask_rcnn.inference_graph import InferenceGraph
-from mask_rcnn.detection import ResizeImages, NormalizeImages
-from mask_rcnn.detection import Detect, PostprocessInputs
 from paz.abstract import SequentialProcessor
-from paz.datasets.shapes import Shapes
+
+from mask_rcnn.model.model import MaskRCNN
+from mask_rcnn.datasets.shapes import Shapes
+from mask_rcnn.evaluation.inference_graph import InferenceGraph
+from mask_rcnn.pipelines.detection import ResizeImages, NormalizeImages
+from mask_rcnn.pipelines.detection import Detect, PostprocessInputs
+
+from mask_rcnn.utils import norm_boxes_graph, display_instances
 
 
 def test(image, weights_path):
@@ -34,7 +35,7 @@ def test(image, weights_path):
     return result
 
 
-path = ''  # Weigths file after training
+path = '/Users/poornimakaushik/Desktop/mask_rcnn/weights.20-0.43.hdf5'  # Weigths file after training
 
 dataset_train = Shapes(1, (128, 128))
 data = dataset_train.load_data()

@@ -10,21 +10,29 @@ Written by Waleed Abdulla
 import re
 import tensorflow as tf
 from tensorflow.keras.utils import get_file
-from tensorflow.python.keras.layers import Input, Add, Conv2D, Concatenate
-from tensorflow.python.keras.layers import UpSampling2D, MaxPooling2D
+from tensorflow.keras.layers import Input, Add, Conv2D, Concatenate
+from tensorflow.keras.layers import UpSampling2D, MaxPooling2D
 
 import numpy as np
-import tensorflow.python.keras.backend as K
-from tensorflow.python.keras.layers import Layer, Input, Lambda
-from tensorflow.python.keras.models import Model
+import tensorflow.keras.backend as K
+from tensorflow.keras.layers import Input, Lambda
+from tensorflow.keras.models import Model
+
+from mask_rcnn.model.DetectionTargetLayer import DetectionTargetLayer
+from mask_rcnn.model.ProposalLayer import ProposalLayer
+from mask_rcnn.model.DetectionLayer import DetectionLayer
+from mask_rcnn.model.AnchorsLayer import AnchorsLayer
+
+from mask_rcnn.model.model_utils import call_ROIs, gnd_truth_call
+from mask_rcnn.model.BBoxLoss import BBoxLoss
+from mask_rcnn.model.ClassLoss import ClassLoss
+from mask_rcnn.model.MaskLoss import MaskLoss
 
 from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
 from mask_rcnn.utils import generate_pyramid_anchors, norm_boxes_graph
 from mask_rcnn.utils import fpn_classifier_graph, compute_backbone_shapes
 from mask_rcnn.utils import build_fpn_mask_graph, norm_boxes
-from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer, AnchorsLayer, DetectionLayer
-from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
-    BBoxLoss, ClassLoss, MaskLoss
+
 
 from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 disable_eager_execution()
@@ -101,6 +109,7 @@ class MaskRCNN():
                                  pre_nms_limit=6000,
                                  images_per_gpu=self.images_per_gpu,
                                  batch_size=self.batch_size, name='ROI')([RPN_class, RPN_bbox, anchors])
+
         input_gt_class_ids, input_gt_boxes, groundtruth_boxes, \
             groundtruth_masks = get_ground_truth_values(self.image_shape, image, mini_mask=False)
 
@@ -137,6 +146,7 @@ class MaskRCNN():
         rpn_class_logits, rpn_class, rpn_bbox = \
             rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
                       fpn_size=256, rpn_feature_maps=feature_maps)
+
         rpn_rois = ProposalLayer(
             proposal_count=1000,
             nms_threshold=0.7, rpn_bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
@@ -165,6 +175,7 @@ class MaskRCNN():
                                 [detections, classes, mrcnn_bbox,
                                  mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
                                 name='mask_rcnn')
+        self.keras_model = inference_model
         return inference_model
 
 
@@ -339,58 +350,6 @@ def rpn_model(rpn_anchor_stride, rpn_anchor_ratios, fpn_size, rpn_feature_maps):
     return outputs
 
 
-def get_trainable(model, layer_regex, keras_model=None, indent=0, verbose=1):
-    """Build all the layers by selecting the model.
-
-    # Arguments:
-        model
-        layer_regex
-        keras_model
-    # Returns:
-        Model output.
-    """
-    if verbose > 0 and keras_model is None:
-        log('Selecting layers to train')
-
-    keras_model = keras_model or model
-    if hasattr(keras_model, 'inner_model'):
-        layers = keras_model.inner_model.layers
-
-    layers = keras_model.layers
-    for layer in layers:
-        if layer.__class__.__name__ == 'Model':
-            get_trainable(model, layer_regex=layer_regex, keras_model=layer,
-                          indent=indent + 4)
-            continue
-        if not layer.weights:
-            continue
-        trainable = bool(re.fullmatch(layer_regex, layer.name))
-        if layer.__class__.__name__ == 'TimeDistributed':
-            layer.layer.trainable = trainable
-        else:
-            layer.trainable = trainable
-        if trainable and verbose > 0:
-                log("{}{:20}   ({})".format(" " * indent, layer.name,
-                                            layer.__class__.__name__))
-
-
-def gnd_truth_call(image):
-    """Decorator function used to call the norm_boxes_graph function.
-
-    # Arguments
-        image: Input image in original form [H, W, C].
-        boxes: Bounding box in original form [N, (y1, x1, y2, x2)].
-    # Returns
-        bounding box: Bounding box in normalised form [N, (y1, x1, y2, x2)].
-    """
-    shape = tf.shape(image)[1:3]
-
-    def _gnd_truth_call(boxes):
-        return norm_boxes_graph(boxes, shape)
-
-    return _gnd_truth_call
-
-
 def get_ground_truth_values(image_shape, image, mini_mask=False, mini_mask_shape=(56, 56)):
     """Returns groundtruth values needed for network head
     creation of the type required by the model.
@@ -442,18 +401,6 @@ def create_head(backbone_model, ROIs, num_classes, image_shape, train_bn=False):
 
     mrcnn_mask = build_fpn_mask_graph(ROIs, feature_maps[:-1], num_classes, image_shape,
                                       train_bn=train_bn)
-    output_ROIs = call_ROIs()(ROIs)
+    output_ROIs = call_ROIs()(ROIs) #TODO: Modify to call_ROIs
 
     return mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_ROIs
-
-
-def call_ROIs():
-    """ Decorator function to call the output ROIs.
-
-    # Returns:
-        output ROIs [No. of ROIs before nms (y1, x1, y2, x2)]
-    """
-    def _call_ROIs(value):
-        return value * 1
-
-    return _call_ROIs

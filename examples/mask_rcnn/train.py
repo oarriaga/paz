@@ -1,25 +1,22 @@
 import os
 import argparse
 import tensorflow as tf
+import numpy as np
+import cv2
+
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.models import Model
 
-from mask_rcnn.pipeline import DetectionPipeline
 from paz.models.detection.utils import create_prior_boxes
+
+from mask_rcnn.datasets.shapes import Shapes
+from mask_rcnn.model.model import MaskRCNN
+from mask_rcnn.losses.ProposalBBoxLoss import ProposalBBoxLoss
+from mask_rcnn.losses.ProposalClassLoss import ProposalClassLoss
 from mask_rcnn.utils2 import DataGenerator
-
-from mask_rcnn.shapes_loader import Shapes
-from mask_rcnn.model import MaskRCNN, get_imagenet_weights
-import numpy as np
-import cv2
-
-from tensorflow.python.keras.layers import Layer, Input, Lambda
-from mask_rcnn.layers import DetectionTargetLayer, ProposalLayer
-from mask_rcnn.loss_end_point import ProposalBBoxLoss, ProposalClassLoss,\
-    BBoxLoss, ClassLoss, MaskLoss
 
 
 # Extra arguments to be passed to model from default values
@@ -73,8 +70,8 @@ print('Data path: ', args.data_path)
 
 optimizer = SGD(args.learning_rate, args.momentum, clipnorm=5.0)
 
-dataset_train = Shapes(500, (args.image_shape[0], args.image_shape[1]))
-dataset_val = Shapes(50, (args.image_shape[0], args.image_shape[1]))
+dataset_train = Shapes(50, (args.image_shape[0], args.image_shape[1]))
+dataset_val = Shapes(5, (args.image_shape[0], args.image_shape[1]))
 
 train_generator = DataGenerator(dataset_train, "resnet101", args.image_shape, args.anchor_scales,
                                 args.batch_size, args.num_classes, shuffle=True)
@@ -88,7 +85,7 @@ model = MaskRCNN(model_dir=args.data_path, image_shape=args.image_shape, backbon
                  num_classes=args.num_classes)
 
 # Network head creation
-model.build_train_model()
+model.build_complete_network()
 
 model.keras_model.load_weights('weights/mask_rcnn_coco.h5', by_name=True, skip_mismatch=True)
 
@@ -110,22 +107,19 @@ if args.layers in layer_regex.keys():
 model.set_trainable(layer_regex=layers)
 
 # Add losses and compile
-rpn_class_loss = ProposalClassLoss()
+rpn_class_loss = ProposalClassLoss
 rpn_bbox_loss = ProposalBBoxLoss(args.anchors_per_image, args.images_per_gpu)
 
 custom_losses = {
         "rpn_class_logits": rpn_class_loss,
         "rpn_bbox": rpn_bbox_loss
         }
-
 loss_weights = {
         'rpn_class_logits': 1.,
         'rpn_bbox': 1.,
     }
 
-
 loss_names = ['mrcnn_class_loss', 'mrcnn_bbox_loss', 'mrcnn_mask_loss']
-
 added_loss_name = []
 for name in loss_names:
     layer = model.keras_model.get_layer(name)
@@ -135,14 +129,12 @@ for name in loss_names:
     model.keras_model.add_loss(loss)
     added_loss_name.append(layer.name)
 
-
 reg_losses = [
-    l2(0.0001)(w) / tf.cast(tf.size(w), tf.float32)
-    for w in model.keras_model.trainable_weights
-    if 'gamma' not in w.name and 'beta' not in w.name]
+            l2(0.0001)(w) / tf.cast(tf.size(w), tf.float32)
+            for w in model.keras_model.trainable_weights
+            if 'gamma' not in w.name and 'beta' not in w.name]
 
 model.keras_model.add_loss(tf.add_n(reg_losses))
-
 model.keras_model.compile(optimizer=optimizer, loss=custom_losses, loss_weights=loss_weights)
 
 for name in loss_names:
@@ -151,6 +143,7 @@ for name in loss_names:
     layer = model.keras_model.get_layer(name)
     loss = (tf.math.reduce_mean(input_tensor=layer.output, keepdims=True))
     model.keras_model.add_metric(loss, name=name, aggregation='mean')
+
 
 # Checkpoints
 model_path = os.path.join(args.save_path, 'shapes')
