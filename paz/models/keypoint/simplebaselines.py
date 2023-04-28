@@ -35,8 +35,8 @@ def dense_block(input_x, num_keypoints, rate):
     return x
 
 
-def Simple_Baseline(input_shape, num_keypoints, keypoints_dim, hidden_dim,
-                    num_layers, rate):
+def SimpleBaseline(input_shape, num_keypoints, keypoints_dim, hidden_dim,
+                   num_layers, rate):
     """keypoints model
     # Arguments
         num_keypoints: numer of kepoints

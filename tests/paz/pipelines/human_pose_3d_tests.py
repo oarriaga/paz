@@ -3,7 +3,7 @@ from paz.pipelines.keypoints import SimpleBaselines
 import numpy as np
 from paz.backend.image import load_image
 from paz.backend.camera import Camera
-from paz.models.keypoint.simplebaselines import Simple_Baseline
+from paz.models.keypoint.simplebaselines import SimpleBaseline
 from scipy.optimize import least_squares
 from paz.backend.keypoints import filter_keypoints3D
 from paz.backend.keypoints import initialize_translation, solve_least_squares,\
@@ -52,7 +52,7 @@ def get_poses(pipeline, image):
 
 @pytest.fixture
 def model():
-    model = Simple_Baseline((32,), 16, 3, 1024, 2, 1)
+    model = SimpleBaseline((32,), 16, 3, 1024, 2, 1)
     model.load_weights('weights.h5')
     pipeline = SimpleBaselines(model, args_to_mean, h36m_to_coco_joints2D)
     return pipeline

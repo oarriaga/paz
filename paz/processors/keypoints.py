@@ -12,8 +12,10 @@ from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
 from ..backend.standard import predict
-from paz.backend.keypoints import standardize, filter_keypoints2D,\
-    destandardize, merge_into_mean
+from ..backend.keypoints import standardize
+from ..backend.keypoints import filter_keypoints2D
+from ..backend.keypoints import destandardize
+from ..backend.keypoints import merge_into_mean
 
 
 class ProjectKeypoints(Processor):
@@ -223,6 +225,23 @@ class ComputeOrientationVector(Processor):
         return orientation
 
 
+class MergeKeypoints2D(Processor):
+    def __init__(self, args_to_mean):
+        """ Processor class for the filter_keypoints2D in human36m
+
+        # Arguments
+            args_to_mean: keypoints indices
+
+        # Returns
+            Filtered keypoints2D
+        """
+        super(MergeKeypoints2D, self).__init__()
+        self.args_to_mean = args_to_mean
+
+    def call(self, keypoints2D):
+        return merge_into_mean(keypoints2D, self.args_to_mean)
+
+
 class FilterKeypoints2D(Processor):
     def __init__(self, args_to_mean, h36m_to_coco_joints2D):
         """ Processor class for the filter_keypoints2D in human36m
@@ -239,7 +258,6 @@ class FilterKeypoints2D(Processor):
         self.args_to_mean = args_to_mean
 
     def call(self, keypoints2D):
-        keypoints2D = merge_into_mean(keypoints2D, self.args_to_mean)
         return filter_keypoints2D(keypoints2D, self.args_to_mean,
                                   self.h36m_to_coco_joints2D)
 
@@ -312,12 +330,14 @@ class SimpleBaselines3D(Processor):
         """
         super(SimpleBaselines3D, self).__init__()
         self.model = model
+        self.merge_keypoints2D = MergeKeypoints2D(args_to_mean)
         self.filter = FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)
         self.preprocess = StandardizeKeypoints2D(data_mean2D, data_stdev2D)
         self.postprocess = UnnormalizeData(data_mean3D, data_stdev3D,
                                            dim_to_use3D)
 
     def call(self, keypoints2D):
+        keypoints2D = self.merge_keypoints2D(keypoints2D)
         keypoints2D = self.filter(keypoints2D)
         keypoints3D = predict(keypoints2D, self.model, self.preprocess,
                               self.postprocess)

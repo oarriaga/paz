@@ -15,9 +15,9 @@ from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 import numpy as np
-from paz.processors.keypoints import SimpleBaselines3D
-from paz.datasets.human36m import data_mean2D, data_stdev2D, data_mean3D,\
-    data_stdev3D, dim_to_use3D
+from ..processors.keypoints import SimpleBaselines3D
+from ..datasets.human36m import data_mean2D, data_stdev2D
+from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):

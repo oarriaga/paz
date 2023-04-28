@@ -1,6 +1,6 @@
 from paz.pipelines.keypoints import SimpleBaselines
 from paz.backend.image import load_image
-from paz.models.keypoint.simplebaselines import Simple_Baseline
+from paz.models.keypoint.simplebaselines import SimpleBaseline
 import numpy as np
 from paz.backend.camera import Camera
 from viz import visualize
@@ -21,7 +21,7 @@ camera.intrinsics_from_HFOV(HFOV=70, image_shape=[image_height, image_width])
 intrinsics = [camera.intrinsics[0, 0], np.array([[camera.intrinsics[0, 2],
                                                   camera.intrinsics[1, 2]]]
                                                 ).flatten()]
-model = Simple_Baseline((32,), 16, 3, 1024, 2, 1)
+model = SimpleBaseline((32,), 16, 3, 1024, 2, 1)
 model.load_weights('weights.h5')
 pipeline = SimpleBaselines(model, args_to_mean, h36m_to_coco_joints2D)
 keypoints = pipeline(image)

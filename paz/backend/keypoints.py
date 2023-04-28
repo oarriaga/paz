@@ -649,11 +649,11 @@ def filter_keypoints(keypoints, args_to_joints):
     """filter keypoints.
 
     # Arguments
-            keypoints: points in camera coordinates
-            args_to_joints: Array of joints indices
+        keypoints: points in camera coordinates
+        args_to_joints: Array of joints indices
 
     # Returns
-            filtered keypoints
+        filtered keypoints
     # """
     return keypoints[:, args_to_joints, :]
 
@@ -663,11 +663,11 @@ def filter_keypoints3D(keypoints3D, args_to_joints3D):
     joints in 3D
 
     # Arguments
-            keypoints3D: Nx96 points in camera coordinates
-            args_to_joints3D: list of indices
+        keypoints3D: Nx96 points in camera coordinates
+        args_to_joints3D: list of indices
 
     # Returns
-            filtered_joints_3D: Nx48 points (moving joints)
+        filtered_joints_3D: Nx48 points (moving joints)
     """
     keypoints_num = len(keypoints3D)
     keypoints3D = np.reshape(keypoints3D, [keypoints_num, 32, 3])
@@ -680,12 +680,12 @@ def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
             joints in 2D
 
     # Arguments
-            keypoints3D: Nx17x2 points in camera coordinates
-            args_to_mean: keypoints indices
-            h36m_to_coco_joints2D: human36m dataset list of joints indices
+        keypoints3D: Nx17x2 points in camera coordinates
+        args_to_mean: keypoints indices
+        h36m_to_coco_joints2D: human36m dataset list of joints indices
 
     # Returns
-            joints2D: Nx32 points (moving joints)
+        joints2D: Nx32 points (moving joints)
     """
     joints2D = filter_keypoints(keypoints2D, h36m_to_coco_joints2D)
     joints2D = np.reshape(joints2D, [joints2D.shape[0], -1])
@@ -697,13 +697,13 @@ def compute_optimized_pose3D(keypoints3D, joint_translation, focal_length,
     """Compute the optimized 3D pose
 
     # Arguments
-            keypoints3D: 3D keypoints
-            joint_translation: np array joints translation
-            focal_length: focal_length
-            image_center: image center
+        keypoints3D: 3D keypoints
+        joint_translation: np array joints translation
+        focal_length: focal_length
+        image_center: image center
 
     # Returns
-            optimized_poses3D: np array of optimized posed3D
+        optimized_poses3D: np array of optimized posed3D
     """
     optimized_poses3D = []
     for person in range(keypoints3D.shape[0]):
