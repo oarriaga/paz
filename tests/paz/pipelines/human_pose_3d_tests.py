@@ -1,10 +1,12 @@
 import pytest
 from paz.pipelines.keypoints import SimpleBaselines
 import numpy as np
+import os
 from paz.backend.image import load_image
 from paz.backend.camera import Camera
 from paz.models.keypoint.simplebaselines import SimpleBaseline
 from scipy.optimize import least_squares
+from tensorflow.keras.utils import get_file
 from paz.backend.keypoints import filter_keypoints3D
 from paz.backend.keypoints import initialize_translation, solve_least_squares,\
     get_bones_length, compute_reprojection_error,\
@@ -53,22 +55,32 @@ def get_poses(pipeline, image):
 @pytest.fixture
 def model():
     model = SimpleBaseline((32,), 16, 3, 1024, 2, 1)
-    model.load_weights('weights.h5')
+    URL=('https://github.com/oarriaga/altamira-data/releases/download/v0.17/'
+     'SIMPLE-BASELINES.hdf5')
+    filename = os.path.basename(URL)
+    weights_path = get_file(filename, URL, cache_subdir='paz/models')
+    model.load_weights(weights_path)
     pipeline = SimpleBaselines(model, args_to_mean, h36m_to_coco_joints2D)
     return pipeline
 
 
 @pytest.fixture
 def image_with_multiple_persons_A():
-    path = 'test_image.jpg'
-    image = load_image(path)
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download'
+           '/v0.17/multiple_persons_posing.png')
+    filename = os.path.basename(URL)
+    fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+    image = load_image(fullpath)
     return image
 
 
 @pytest.fixture
 def image_with_single_person_B():
-    path = 'test.jpg'
-    image = load_image(path)
+    URL = ('https://github.com/oarriaga/altamira-data/releases/download/'
+    'v0.17/one_person_posing.png')
+    filename = os.path.basename(URL)
+    fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+    image = load_image(fullpath)
     return image
 
 
