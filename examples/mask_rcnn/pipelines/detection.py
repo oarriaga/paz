@@ -4,11 +4,10 @@ from tensorflow.keras.layers import Layer, Input, Lambda
 
 from paz.abstract import Processor
 
-from mask_rcnn.utils import resize_image, normalize_image
-from mask_rcnn.utils import compute_backbone_shapes, norm_boxes
-from mask_rcnn.utils import denorm_boxes
-from mask_rcnn.utils import unmold_mask
-from mask_rcnn.utils2 import generate_pyramid_anchors
+from mask_rcnn.utils import compute_backbone_shapes
+from mask_rcnn.backend.image import resize_images, normalize_image
+from mask_rcnn.backend.image import unmold_mask
+from mask_rcnn.backend.boxes import generate_pyramid_anchors, denorm_boxes, norm_boxes
 
 
 class NormalizeImages(Processor):
@@ -26,17 +25,17 @@ class NormalizeImages(Processor):
 class ResizeImages(Processor):
     def __init__(self, min_dim, min_scale, max_dim, resize_mode="square"):
         self.min_dim = min_dim
-        self.min_Scale = min_scale
+        self.min_scale = min_scale
         self.max_dim = max_dim
         self.resize_mode = resize_mode
 
     def call(self, images):
         resized_images, windows = [], []
         for image in images:
-            resized_image, window, _, _, _ = resize_image(image, min_dim=self.min_dim,
-                                                          min_scale=self.min_Scale,
-                                                          max_dim=self.max_dim,
-                                                          mode=self.resize_mode)
+            resized_image, window, _, _, _ = resize_images(image, min_dim=self.min_dim,
+                                                           min_scale=self.min_scale,
+                                                           max_dim=self.max_dim,
+                                                           mode=self.resize_mode)
 
             resized_images.append(resized_image)
             windows.append(window)
@@ -59,7 +58,7 @@ class Detect(Processor):
         anchors = self.get_anchors(image_shape)
         anchors = np.broadcast_to(anchors,
                                   (self.batch_size,) + anchors.shape)
-        detections, predicted_classes, mrcnn_bbox, predicted_masks, rpn_rois, rpn_class, rpn_bbox = \
+        detections, predicted_classes, mrcnn_bounding_box, predicted_masks, rpn_rois, rpn_class, rpn_bounding_box = \
             self.model.predict([normalized_images, anchors])
 
         results = self.postprocess(images, normalized_images, windows,

@@ -11,28 +11,31 @@ import re
 import tensorflow as tf
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.layers import Input, Add, Conv2D, Concatenate
-from tensorflow.keras.layers import UpSampling2D, MaxPooling2D
+from tensorflow.keras.layers import UpSampling2D, MaxPooling2D, ZeroPadding2D
+from tensorflow.keras.layers import Activation, TimeDistributed, Lambda
 
 import numpy as np
 import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Input, Lambda
 from tensorflow.keras.models import Model
 
-from mask_rcnn.model.DetectionTargetLayer import DetectionTargetLayer
-from mask_rcnn.model.ProposalLayer import ProposalLayer
-from mask_rcnn.model.DetectionLayer import DetectionLayer
-from mask_rcnn.model.AnchorsLayer import AnchorsLayer
+from mask_rcnn.model.detection_target_layer import DetectionTargetLayer
+from mask_rcnn.model.proposal_layer import ProposalLayer
+from mask_rcnn.model.detection_layer import DetectionLayer
+from mask_rcnn.model.anchors_layer import AnchorsLayer
 
-from mask_rcnn.model.model_utils import call_ROIs, gnd_truth_call
-from mask_rcnn.model.BBoxLoss import BBoxLoss
-from mask_rcnn.model.ClassLoss import ClassLoss
-from mask_rcnn.model.MaskLoss import MaskLoss
+from mask_rcnn.model.bounding_box_loss_layer import BoundingBoxLoss
+from mask_rcnn.model.class_loss_layer import ClassLoss
+from mask_rcnn.model.mask_loss_layer import MaskLoss
 
-from mask_rcnn.utils import log, get_resnet_features, build_rpn_model
-from mask_rcnn.utils import generate_pyramid_anchors, norm_boxes_graph
-from mask_rcnn.utils import fpn_classifier_graph, compute_backbone_shapes
-from mask_rcnn.utils import build_fpn_mask_graph, norm_boxes
+from mask_rcnn.model.feature_pyramid_network_layer import fpn_classifier_graph, build_fpn_mask_graph
+from mask_rcnn.model.rpn_model import rpn_model
 
+from mask_rcnn.backend.boxes import norm_boxes, generate_pyramid_anchors
+from mask_rcnn.backend.tensorflow_boxes import norm_boxes_graph
+
+from mask_rcnn.pipelines.data_generator import compute_backbone_shapes
+
+from mask_rcnn.utils import log, BatchNorm
 
 from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 disable_eager_execution()
@@ -95,7 +98,7 @@ class MaskRCNN():
 
     def build_train_model(self):
         image = self.keras_model.input
-        RPN_class_logits, RPN_class, RPN_bbox = \
+        RPN_class_logits, RPN_class, RPN_box = \
             rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
                       fpn_size=256, rpn_feature_maps=self.keras_model.output)
 
@@ -105,12 +108,12 @@ class MaskRCNN():
 
         rpn_ROIs = ProposalLayer(proposal_count=2000,
                                  nms_threshold=0.7,
-                                 rpn_bbox_std_dev=[0.1, 0.1, 0.2, 0.2],
+                                 rpn_bounding_box_std_dev=[0.1, 0.1, 0.2, 0.2],
                                  pre_nms_limit=6000,
                                  images_per_gpu=self.images_per_gpu,
-                                 batch_size=self.batch_size, name='ROI')([RPN_class, RPN_bbox, anchors])
+                                 batch_size=self.batch_size, name='ROI')([RPN_class, RPN_box, anchors])
 
-        input_gt_class_ids, input_gt_boxes, groundtruth_boxes, \
+        input_groundtruth_class_ids, input_groundtruth_boxes, groundtruth_boxes, \
             groundtruth_masks = get_ground_truth_values(self.image_shape, image, mini_mask=False)
 
         ROIs, target_class_ids, target_boxes, target_masks = \
@@ -118,22 +121,22 @@ class MaskRCNN():
                                  mask_shape=[28, 28],
                                  train_rois_per_image=self.train_rois_per_image,
                                  roi_positive_ratio=0.33,
-                                 bbox_std_dev=[0.1, 0.1, 0.2, 0.2],
+                                 bounding_box_std_dev=[0.1, 0.1, 0.2, 0.2],
                                  use_mini_mask=False,
                                  batch_size=self.batch_size, name='proposal_targets')(
-                [rpn_ROIs, input_gt_class_ids, groundtruth_boxes, groundtruth_masks])
+                [rpn_ROIs, input_groundtruth_class_ids, groundtruth_boxes, groundtruth_masks])
 
-        mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_ROIs = \
+        mrcnn_class_logits, mrcnn_class, mrcnn_box, mrcnn_mask = \
             create_head(self.keras_model, ROIs, num_classes=self.num_classes, image_shape=self.image_shape)
 
         mrcnn_class_loss = ClassLoss(num_classes=self.num_classes)(target_class_ids, mrcnn_class_logits)
-        mrcnn_bbox_loss = BBoxLoss()([target_boxes, target_class_ids], mrcnn_bbox)
+        mrcnn_box_loss = BoundingBoxLoss()([target_boxes, target_class_ids], mrcnn_box)
         mrcnn_mask_loss = MaskLoss()([target_masks, target_class_ids], mrcnn_mask)
 
-        inputs = [image, input_gt_class_ids, input_gt_boxes, groundtruth_masks]
+        inputs = [image, input_groundtruth_class_ids, input_groundtruth_boxes, groundtruth_masks]
 
-        outputs = [RPN_class_logits, RPN_bbox, mrcnn_class_loss,
-                   mrcnn_bbox_loss, mrcnn_mask_loss]
+        outputs = [RPN_class_logits, RPN_box, mrcnn_class_loss,
+                   mrcnn_box_loss, mrcnn_mask_loss]
 
         self.keras_model = Model(inputs=inputs, outputs=outputs, name='mask_rcnn')
 
@@ -143,28 +146,28 @@ class MaskRCNN():
         anchors = Input(shape=[None, 4], name='input_anchors')
         feature_maps = keras_model.output
 
-        rpn_class_logits, rpn_class, rpn_bbox = \
+        rpn_class_logits, rpn_class, rpn_box = \
             rpn_model(rpn_anchor_stride=1, rpn_anchor_ratios=[0.5, 1, 2],
                       fpn_size=256, rpn_feature_maps=feature_maps)
 
         rpn_rois = ProposalLayer(
             proposal_count=1000,
-            nms_threshold=0.7, rpn_bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
+            nms_threshold=0.7, rpn_bounding_box_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
             pre_nms_limit=6000, images_per_gpu=self.images_per_gpu,
-            batch_size=self.batch_size, name='ROI')([rpn_class, rpn_bbox, anchors])
+            batch_size=self.batch_size, name='ROI')([rpn_class, rpn_box, anchors])
 
-        _, classes, mrcnn_bbox = fpn_classifier_graph(rpn_rois, feature_maps[:-1],
-                                                      num_classes=self.num_classes,
-                                                      image_shape=self.image_shape)
+        _, classes, mrcnn_box = fpn_classifier_graph(rpn_rois, feature_maps[:-1],
+                                                     num_classes=self.num_classes,
+                                                     image_shape=self.image_shape)
 
         detections = DetectionLayer(batch_size=self.batch_size, window=self.window,
-                                    bbox_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
+                                    bounding_box_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
                                     images_per_gpu=self.images_per_gpu,
                                     detection_max_instances=100,
                                     detection_min_confidence=0.7,
                                     detection_nms_threshold=0.3, image_shape=self.image_shape,
                                     name='mrcnn_detection')(
-            [rpn_rois, classes, mrcnn_bbox])
+            [rpn_rois, classes, mrcnn_box])
 
         detection_boxes = Lambda(lambda x: x[..., :4])(detections)
         mrcnn_mask = build_fpn_mask_graph(detection_boxes, feature_maps[:-1],
@@ -172,14 +175,14 @@ class MaskRCNN():
                                           image_shape=self.image_shape)
 
         inference_model = Model([input_image, anchors],
-                                [detections, classes, mrcnn_bbox,
-                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
+                                [detections, classes, mrcnn_box,
+                                 mrcnn_mask, rpn_rois, rpn_class, rpn_box],
                                 name='mask_rcnn')
         self.keras_model = inference_model
         return inference_model
 
 
-def get_anchors(image_shape, rpn_anchor_scales, backbone, compute_backbone_shape=None):
+def get_anchors(image_shape, rpn_anchor_scales, backbone=None):
     """The function returns a set of anchor
     boxes for a given image size.
 
@@ -187,7 +190,7 @@ def get_anchors(image_shape, rpn_anchor_scales, backbone, compute_backbone_shape
         anchors : Normalized to match the shape of
         the input image [N, (y1, x1, y2, x2)]
     """
-    backbone_shapes = compute_backbone_shapes(image_shape, backbone, compute_backbone_shape)
+    backbone_shapes = compute_backbone_shapes(backbone, image_shape)
     # Cache anchors and reuse if image shape is the same
     _anchor_cache = {}
     if not tuple(image_shape) in _anchor_cache:
@@ -315,6 +318,135 @@ def raise_exception(height, width):
                         '6 times')
 
 
+def get_resnet_features(input_image, architecture,
+                        stage5=True, train_bn=True):
+    """Builds ResNet graph.
+
+    # Arguments:
+        architecture: Can be resnet50 or resnet101
+        stage5: Boolean. If False, stage5 of the network is not created
+        train_bn: Boolean. Train or freeze Batch Norm layers
+    """
+    assert architecture in ["resnet50", "resnet101"]
+    # Stage 1
+    x = ZeroPadding2D((3, 3))(input_image)
+    x = Conv2D(64, (7, 7), strides=(2, 2), name='conv1', use_bias=True)(x)
+    x = BatchNorm(name='bn_conv1')(x, training=train_bn)
+    x = Activation('relu')(x)
+    C1 = x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+    # Stage 2
+    x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1),
+                   train_bn=train_bn)
+    x = identity_block(x, 3, [64, 64, 256], stage=2, block='b',
+                       train_bn=train_bn)
+    C2 = x = identity_block(x, 3, [64, 64, 256], stage=2, block='c',
+                            train_bn=train_bn)
+    # Stage 3
+    x = conv_block(x, 3, [128, 128, 512], stage=3, block='a',
+                   train_bn=train_bn)
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='b',
+                       train_bn=train_bn)
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='c',
+                       train_bn=train_bn)
+    C3 = x = identity_block(x, 3, [128, 128, 512], stage=3, block='d',
+                            train_bn=train_bn)
+    # Stage 4
+    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a',
+                   train_bn=train_bn)
+    block_count = {'resnet50': 5, 'resnet101': 22}[architecture]
+    for i in range(block_count):
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block=chr(98 + i),
+                           train_bn=train_bn)
+    C4 = x
+    # Stage 5
+    if stage5:
+        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a',
+                       train_bn=train_bn)
+        x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b',
+                           train_bn=train_bn)
+        C5 = x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c',
+                                train_bn=train_bn)
+    else:
+        C5 = None
+    return [C1, C2, C3, C4, C5]
+
+
+def identity_block(input_tensor, kernel_size, filters, stage, block,
+                   use_bias=True, train_bn=True):
+    """The identity_block is the block that has no conv layer at shortcut
+    # Arguments
+        input_tensor: input tensor
+        kernel_size: default 3, the kernel size of middle conv layer at main path
+        filters: list of integers, the nb_filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'..., current block label, used for generating layer names
+        use_bias: Boolean. To use or not use a bias in conv layers.
+        train_bn: Boolean. Train or freeze Batch Norm layers
+    """
+    nb_filter1, nb_filter2, nb_filter3 = filters
+    conv_name_base = 'res' + str(stage) + block + '_branch'
+    bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+    x = Conv2D(nb_filter1, (1, 1), name=conv_name_base + '2a',
+               use_bias=use_bias)(input_tensor)
+    x = BatchNorm(name=bn_name_base + '2a')(x, training=train_bn)
+    x = Activation('relu')(x)
+
+    x = Conv2D(nb_filter2, (kernel_size, kernel_size), padding='same',
+               name=conv_name_base + '2b', use_bias=use_bias)(x)
+    x = BatchNorm(name=bn_name_base + '2b')(x, training=train_bn)
+    x = Activation('relu')(x)
+
+    x = Conv2D(nb_filter3, (1, 1), name=conv_name_base + '2c',
+               use_bias=use_bias)(x)
+    x = BatchNorm(name=bn_name_base + '2c')(x, training=train_bn)
+
+    x = Add()([x, input_tensor])
+    x = Activation('relu', name='res' + str(stage) + block + '_out')(x)
+    return x
+
+
+def conv_block(input_tensor, kernel_size, filters, stage, block,
+               strides=(2, 2), use_bias=True, train_bn=True):
+    """conv_block is the block that has a conv layer at shortcut
+    # Arguments
+        input_tensor: input tensor
+        kernel_size: default 3, the kernel size of middle conv layer at main path
+        filters: list of integers, the nb_filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'..., current block label, used for generating layer names
+        use_bias: Boolean. To use or not use a bias in conv layers.
+        train_bn: Boolean. Train or freeze Batch Norm layers
+    Note that from stage 3, the first conv layer at main path is with subsample=(2,2)
+    And the shortcut should have subsample=(2,2) as well
+    """
+    nb_filter1, nb_filter2, nb_filter3 = filters
+    conv_name_base = 'res' + str(stage) + block + '_branch'
+    bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+    x = Conv2D(nb_filter1, (1, 1), strides=strides,
+               name=conv_name_base + '2a', use_bias=use_bias)(input_tensor)
+    x = BatchNorm(name=bn_name_base + '2a')(x, training=train_bn)
+    x = Activation('relu')(x)
+
+    x = Conv2D(nb_filter2, (kernel_size, kernel_size), padding='same',
+               name=conv_name_base + '2b', use_bias=use_bias)(x)
+    x = BatchNorm(name=bn_name_base + '2b')(x, training=train_bn)
+    x = Activation('relu')(x)
+
+    x = Conv2D(nb_filter3, (1, 1), name=conv_name_base +
+               '2c', use_bias=use_bias)(x)
+    x = BatchNorm(name=bn_name_base + '2c')(x, training=train_bn)
+
+    shortcut = Conv2D(nb_filter3, (1, 1), strides=strides,
+                      name=conv_name_base + '1', use_bias=use_bias)(input_tensor)
+    shortcut = BatchNorm(name=bn_name_base + '1')(shortcut, training=train_bn)
+
+    x = Add()([x, shortcut])
+    x = Activation('relu', name='res' + str(stage) + block + '_out')(x)
+    return x
+
+
 def get_imagenet_weights():
     """Define path for weights default.
 
@@ -331,25 +463,6 @@ def get_imagenet_weights():
     return weights_file
 
 
-def rpn_model(rpn_anchor_stride, rpn_anchor_ratios, fpn_size, rpn_feature_maps):
-    """Build complete region specific network.
-
-    # Arguments:
-        fpn_size
-        rpn_feature_masks
-    # Returns:
-        Model output.
-    """
-    rpn = build_rpn_model(rpn_anchor_stride, len(rpn_anchor_ratios), fpn_size)
-    layer_outputs = [rpn([feature]) for feature in rpn_feature_maps]
-    names = ['rpn_class_logits', 'rpn_class', 'rpn_bbox']
-    outputs = list(zip(*layer_outputs))
-    outputs = [Concatenate(axis=1, name=name)(list(output))
-               for output, name in zip(outputs, names)]
-
-    return outputs
-
-
 def get_ground_truth_values(image_shape, image, mini_mask=False, mini_mask_shape=(56, 56)):
     """Returns groundtruth values needed for network head
     creation of the type required by the model.
@@ -361,22 +474,22 @@ def get_ground_truth_values(image_shape, image, mini_mask=False, mini_mask_shape
         input bounding boxes in normalised form [N, (y1, x1, y2, x2)]
         input groundtruth masks [N, (Shape of Input image/Mini mask shape)]
     """
-    class_ids = Input(shape=[None], name='input_gt_class_ids', dtype=tf.int32)
-    input_boxes = Input(shape=[None, 4], name='input_gt_boxes', dtype=tf.float32)
+    class_ids = Input(shape=[None], name='input_groundtruth_class_ids', dtype=tf.int32)
+    input_boxes = Input(shape=[None, 4], name='input_groundtruth_boxes', dtype=tf.float32)
 
     boxes = gnd_truth_call(image)(input_boxes)
 
     if mini_mask:
-        input_gt_masks = Input(
+        input_groundtruth_masks = Input(
             shape=[mini_mask_shape[0],
                    mini_mask_shape[1], None],
-            name="input_gt_masks", dtype=bool)
+            name="input_groundtruth_masks", dtype=bool)
     else:
-        input_gt_masks = Input(
+        input_groundtruth_masks = Input(
             shape=[image_shape[0], image_shape[1], None],
-            name="input_gt_masks", dtype=bool)
+            name="input_groundtruth_masks", dtype=bool)
 
-    return class_ids, input_boxes, boxes, input_gt_masks
+    return class_ids, input_boxes, boxes, input_groundtruth_masks
 
 
 def create_head(backbone_model, ROIs, num_classes, image_shape, train_bn=False):
@@ -390,17 +503,33 @@ def create_head(backbone_model, ROIs, num_classes, image_shape, train_bn=False):
         logits: classifier logits (before softmax)
                 [batch, num_rois, NUM_CLASSES]
         probs: [batch, num_rois, NUM_CLASSES] classifier probabilities
-        bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))]
+        box_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))]
                      Deltas to apply to proposal boxes
         Masks [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, NUM_CLASSES]
     """
     feature_maps = backbone_model.output
-    mrcnn_class_logits, mrcnn_class, mrcnn_bbox = \
+    mrcnn_class_logits, mrcnn_class, mrcnn_box = \
         fpn_classifier_graph(ROIs, feature_maps[:-1], num_classes, image_shape,
                              train_bn=train_bn, fc_layers_size=1024)
 
     mrcnn_mask = build_fpn_mask_graph(ROIs, feature_maps[:-1], num_classes, image_shape,
                                       train_bn=train_bn)
-    output_ROIs = call_ROIs()(ROIs) #TODO: Modify to call_ROIs
 
-    return mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask, output_ROIs
+    return mrcnn_class_logits, mrcnn_class, mrcnn_box, mrcnn_mask
+
+
+def gnd_truth_call(image):
+    """Decorator function used to call the norm_boxes_graph function.
+
+    # Arguments
+        image: Input image in original form [H, W, C].
+        boxes: Bounding box in original form [N, (y1, x1, y2, x2)].
+    # Returns
+        bounding box: Bounding box in normalised form [N, (y1, x1, y2, x2)].
+    """
+    shape = tf.shape(image)[1:3]
+
+    def _gnd_truth_call(boxes):
+        return norm_boxes_graph(boxes, shape)
+
+    return _gnd_truth_call
