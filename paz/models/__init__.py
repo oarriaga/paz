@@ -9,6 +9,7 @@ from .detection import EFFICIENTDETD4
 from .detection import EFFICIENTDETD5
 from .detection import EFFICIENTDETD6
 from .detection import EFFICIENTDETD7
+from .keypoint.simplebaselines import SimpleBaseline
 from .keypoint.projector import Projector
 from .keypoint.keypointnet import KeypointNet
 from .keypoint.keypointnet import KeypointNetShared

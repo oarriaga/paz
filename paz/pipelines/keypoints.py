@@ -1,3 +1,5 @@
+import numpy as np
+
 from tensorflow.keras.utils import get_file
 
 from .renderer import RenderTwoViews
@@ -9,12 +11,10 @@ from ..abstract import SequentialProcessor, Processor
 from ..models import KeypointNet2D, HigherHRNet, DetNet
 from .angles import IKNetHandJointAngles
 
-
 from ..backend.image import get_affine_transform, lincolor
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
-import numpy as np
 from ..processors.keypoints import SimpleBaselines3D
 from ..datasets.human36m import data_mean2D, data_stdev2D
 from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
@@ -391,9 +391,8 @@ class DetectMinimalHand(pr.Processor):
         return self.wrap(image, boxes2D, keypoints2D, keypoints3D)
 
 
-class SimpleBaselines(pr.Processor):
-    def __init__(self, estimate_keypoints_3D, args_to_mean,
-                 h36m_to_coco_joints2D):
+class HRNetSimpleBaselines(pr.Processor):
+    def __init__(self, estimate_keypoints_3D):
         """
         # Arguments
             estimate_keypoints_3D: 3D simple baseline model
@@ -405,6 +404,9 @@ class SimpleBaselines(pr.Processor):
         """
         self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
         self.estimate_keypoints_3D = estimate_keypoints_3D
+        h36m_to_coco_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0,
+                                 5, 7, 9, 6, 8, 10]
+        args_to_mean = {1: [5, 6], 4: [11, 12], 2: [1, 4]}
         self.baseline_model = SimpleBaselines3D(self.estimate_keypoints_3D,
                                                 data_mean2D, data_stdev2D,
                                                 data_mean3D, data_stdev3D,

@@ -6,11 +6,11 @@ from tensorflow.keras.layers import Permute
 from tensorflow.keras.layers import Reshape
 from tensorflow.keras.layers import Activation
 from tensorflow.keras.layers import Concatenate
+from tensorflow.keras.models import Model
 
 from ..layers import ExpectedDepth
 from ..layers import ExpectedValue2D
 from ..layers import SubtractScalar
-from tensorflow.keras.models import Model
 
 
 def block(x, num_filters, dilation_rate, alpha, name, kernel_size=(3, 3)):
@@ -19,6 +19,7 @@ def block(x, num_filters, dilation_rate, alpha, name, kernel_size=(3, 3)):
     x = BatchNormalization()(x)
     x = LeakyReLU(alpha)(x)
     return x
+
 
 def KeypointNet2D(input_shape, num_keypoints, filters=64, alpha=0.1):
     """Model for discovering keypoint locations in 2D space, modified from
@@ -130,4 +131,3 @@ def KeypointNetShared(input_shape, num_keypoints, depth, filters, alpha):
         [uv_volume_A, uv_volume_B])
     inputs, outputs = [image_A, image_B], [uvz_points, uv_volumes]
     return Model(inputs, outputs, name='keypointnet-shared')
-

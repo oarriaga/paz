@@ -1,3 +1,5 @@
+import os
+from tensorflow.keras.utils import get_file
 from tensorflow.keras.models import Model
 from tensorflow.keras.initializers import HeNormal
 from tensorflow.keras.constraints import MaxNorm
@@ -36,7 +38,7 @@ def dense_block(input_x, num_keypoints, rate):
 
 
 def SimpleBaseline(input_shape, num_keypoints, keypoints_dim, hidden_dim,
-                   num_layers, rate):
+                   num_layers, rate, weights):
     """keypoints model
     # Arguments
         num_keypoints: numer of kepoints
@@ -61,4 +63,11 @@ def SimpleBaseline(input_shape, num_keypoints, keypoints_dim, hidden_dim,
     x = Dense(num_keypoints * keypoints_dim, **kwargs)(x)
     x = Reshape((num_keypoints, keypoints_dim))(x)
     model = Model(inputs, outputs=x)
+    if weights=='human36m':
+        URL = (
+            'https://github.com/oarriaga/altamira-data/releases/download/v0.17/'
+            'SIMPLE-BASELINES.hdf5')
+        filename = os.path.basename(URL)
+        weights_path = get_file(filename, URL, cache_subdir='paz/models')
+        model.load_weights(weights_path)
     return model
