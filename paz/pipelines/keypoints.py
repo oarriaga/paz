@@ -16,6 +16,11 @@ from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 from ..processors.keypoints import SimpleBaselines3D
+from scipy.optimize import least_squares
+from paz.backend.keypoints import filter_keypoints3D
+from paz.backend.keypoints import initialize_translation, solve_least_squares
+from paz.backend.keypoints import get_bones_length, compute_reprojection_error
+from paz.backend.keypoints import compute_optimized_pose3D
 from ..datasets.human36m import data_mean2D, data_stdev2D
 from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
 
@@ -393,14 +398,15 @@ class DetectMinimalHand(pr.Processor):
 
 class HRNetSimpleBaselines(pr.Processor):
     def __init__(self, estimate_keypoints_3D):
-        """
+        """ it outupts 2D and 3D keypoints estimation from an image
+        
         # Arguments
             estimate_keypoints_3D: 3D simple baseline model
             args_to_mean: keypoints indices
             h36m_to_coco_joints2D: h36m joints indices
 
         # Returns
-            wrapped keypoints2D, keypoints3D
+            keypoints2D, keypoints3D
         """
         self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
         self.estimate_keypoints_3D = estimate_keypoints_3D
@@ -419,3 +425,43 @@ class HRNetSimpleBaselines(pr.Processor):
         keypoints2D = inferences2D['keypoints']
         keypoints2D, keypoints3D = self.baseline_model(np.array(keypoints2D))
         return self.wrap(keypoints2D, keypoints3D)
+
+
+class SolveTranslation3D(pr.Processor):
+    def __init__(self, args_to_joints3D, intrinsics):
+        """ it calculates the optimized 3d pose estimation
+
+                #Arguments
+                    args_to_mean: keypoints indices
+                    focal_length: focal length
+                    image_center: image center
+
+                #Returns
+                    keypoints2D, keypoints3D
+                """
+        self.args_to_joints3D = args_to_joints3D
+        self.focal_length = intrinsics[0]
+        self.image_center = intrinsics[1]
+    def call(self, keypoints):
+        joints3D = filter_keypoints3D(keypoints['keypoints3D'],
+                                      self.args_to_joints3D)
+        root2D = keypoints['keypoints2D'][:, :2]
+        length2D, length3D = get_bones_length(keypoints['keypoints2D'], joints3D)
+        ratio = length3D / length2D
+        initial_joint_translation = initialize_translation(self.focal_length,
+                                                           root2D,
+                                                           self.image_center,
+                                                           ratio)
+        joint_translation = solve_least_squares(least_squares,
+                                                compute_reprojection_error,
+                                                initial_joint_translation,
+                                                joints3D,
+                                                keypoints['keypoints2D'],
+                                                self.focal_length,
+                                                self.image_center)
+        keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
+        optimized_poses3D = compute_optimized_pose3D(keypoints3D,
+                                                     joint_translation,
+                                                     self.focal_length,
+                                                     self.image_center)
+        return joints3D, optimized_poses3D

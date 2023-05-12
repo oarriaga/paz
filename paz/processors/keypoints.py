@@ -12,7 +12,6 @@ from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
-from ..backend.standard import predict
 from ..processors.standard import Predict
 from ..backend.keypoints import standardize
 from ..backend.keypoints import filter_keypoints2D
@@ -229,7 +228,7 @@ class ComputeOrientationVector(Processor):
 
 class MergeKeypoints2D(Processor):
     def __init__(self, args_to_mean):
-        """ Processor class for the filter_keypoints2D in human36m
+        """ Merges keypoints together then takes the mean of the keypoints
 
         # Arguments
             args_to_mean: keypoints indices
@@ -246,7 +245,7 @@ class MergeKeypoints2D(Processor):
 
 class FilterKeypoints2D(Processor):
     def __init__(self, args_to_mean, h36m_to_coco_joints2D):
-        """ Processor class for the filter_keypoints2D in human36m
+        """ filter keypoints2d
 
         # Arguments
             args_to_mean: keypoints indices

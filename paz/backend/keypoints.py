@@ -491,7 +491,8 @@ def uv_to_vu(keypoints):
 
 
 def standardize(data, mean, scale):
-    """Standardize the data.
+    """it takes the data the mean and the standard deviation
+       and returns the standardized data
 
     # Arguments
         data: nxd matrix to normalize
@@ -505,7 +506,8 @@ def standardize(data, mean, scale):
 
 
 def destandardize(data, mean, scale):
-    """Destandardize the data.
+    """it takes the standardized data the mean and the standard
+       deviation and returns the destandardized data
 
     # Arguments
         data: nxd matrix to unnormalize
@@ -630,7 +632,7 @@ def compute_reprojection_error(initial_translation, keypoints3D,
 
 
 def merge_into_mean(keypoints2D, args_to_mean):
-    """Rearrange keypoints2D
+    """merge keypoints and take the mean
 
     # Arguments:
              keypoints2D: keypoints2D (Nx17x2)
