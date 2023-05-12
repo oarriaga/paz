@@ -16,7 +16,6 @@ from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 from ..processors.keypoints import SimpleBaselines3D
-from scipy.optimize import least_squares
 from paz.backend.keypoints import filter_keypoints3D
 from paz.backend.keypoints import initialize_translation, solve_least_squares
 from paz.backend.keypoints import get_bones_length, compute_reprojection_error
@@ -428,7 +427,7 @@ class HRNetSimpleBaselines(pr.Processor):
 
 
 class SolveTranslation3D(pr.Processor):
-    def __init__(self, args_to_joints3D, intrinsics):
+    def __init__(self, args_to_joints3D, intrinsics, solver):
         """ it calculates the optimized 3d pose estimation
 
                 #Arguments
@@ -442,17 +441,19 @@ class SolveTranslation3D(pr.Processor):
         self.args_to_joints3D = args_to_joints3D
         self.focal_length = intrinsics[0]
         self.image_center = intrinsics[1]
+        self.solver = solver
     def call(self, keypoints):
         joints3D = filter_keypoints3D(keypoints['keypoints3D'],
                                       self.args_to_joints3D)
         root2D = keypoints['keypoints2D'][:, :2]
-        length2D, length3D = get_bones_length(keypoints['keypoints2D'], joints3D)
+        length2D, length3D = get_bones_length(keypoints['keypoints2D'],
+                                              joints3D)
         ratio = length3D / length2D
         initial_joint_translation = initialize_translation(self.focal_length,
                                                            root2D,
                                                            self.image_center,
                                                            ratio)
-        joint_translation = solve_least_squares(least_squares,
+        joint_translation = solve_least_squares(self.solver,
                                                 compute_reprojection_error,
                                                 initial_joint_translation,
                                                 joints3D,
