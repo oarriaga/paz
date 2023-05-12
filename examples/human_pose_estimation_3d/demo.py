@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from scipy.optimize import least_squares
 from paz.backend.camera import Camera
 from paz.pipelines.keypoints import HRNetSimpleBaselines
 from paz.backend.image import load_image
@@ -8,6 +9,7 @@ from tensorflow.keras.utils import get_file
 from paz.pipelines.keypoints import SolveTranslation3D
 from paz.datasets.human36m import args_to_joints3D
 from viz import visualize
+
 
 
 URL = ('https://github.com/oarriaga/altamira-data/releases/download'
@@ -25,6 +27,6 @@ model = SimpleBaseline((32,), 16, 3, 1024, 2, 1, 'human36m')
 pipeline = HRNetSimpleBaselines(model)
 keypoints = pipeline(image)
 keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
-solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D, intrinsics)
+solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D, intrinsics, least_squares)
 joints3D, optimized_poses3D = solveTranslation_pipeline(keypoints)
 visualize(keypoints['keypoints2D'], joints3D, keypoints3D, optimized_poses3D)
