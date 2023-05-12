@@ -22,7 +22,8 @@ from paz.pipelines.keypoints import SolveTranslation3D
 
 def get_optimized_posed3D(keypoints, intrinsics):
     solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D,
-                                                   intrinsics)
+                                                   intrinsics,
+                                                   least_squares)
     _, optimized_poses3D = solveTranslation_pipeline(keypoints)
     return optimized_poses3D
 

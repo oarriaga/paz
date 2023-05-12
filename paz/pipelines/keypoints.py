@@ -442,6 +442,7 @@ class SolveTranslation3D(pr.Processor):
         self.focal_length = intrinsics[0]
         self.image_center = intrinsics[1]
         self.solver = solver
+        
     def call(self, keypoints):
         joints3D = filter_keypoints3D(keypoints['keypoints3D'],
                                       self.args_to_joints3D)

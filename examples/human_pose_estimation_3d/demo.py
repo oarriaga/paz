@@ -29,4 +29,5 @@ keypoints = pipeline(image)
 keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
 solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D, intrinsics, least_squares)
 joints3D, optimized_poses3D = solveTranslation_pipeline(keypoints)
+
 visualize(keypoints['keypoints2D'], joints3D, keypoints3D, optimized_poses3D)
