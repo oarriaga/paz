@@ -6,11 +6,12 @@ from paz.abstract import SequentialProcessor
 
 from mask_rcnn.model.model import MaskRCNN
 from mask_rcnn.datasets.shapes import Shapes
-from mask_rcnn.evaluation.inference_graph import InferenceGraph
+
 from mask_rcnn.pipelines.detection import ResizeImages, NormalizeImages
 from mask_rcnn.pipelines.detection import Detect, PostprocessInputs
 
-from mask_rcnn.utils import norm_boxes_graph, display_instances
+from mask_rcnn.backend.tensorflow_boxes import norm_boxes_graph
+from mask_rcnn.utils import display_instances
 
 
 def test(image, weights_path):

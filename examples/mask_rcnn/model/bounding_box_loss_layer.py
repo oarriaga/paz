@@ -2,19 +2,17 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from keras.layers import Layer
 
-from mask_rcnn.model.model_utils import smooth_L1_loss
 
-
-class BBoxLoss(Layer):
-    """Computes loss for Mask RCNN architecture, MRCNN BBox loss
+class BoundingBoxLoss(Layer):
+    """Computes loss for Mask RCNN architecture, MRCNN bounding Box loss
     Loss for Mask R-CNN bounding box refinement.
 
-    target_bbox: [batch, num_rois, (dy, dx, log(dh), log(dw))]
+    target_bounding_box: [batch, num_rois, (dy, dx, log(dh), log(dw))]
     target_class_ids: [batch, num_rois]. Integer class IDs.
-    pred_bbox: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
+    pred_bounding_box: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
     """
 
-    def __init__(self, loss_weight=1.0, name='mrcnn_bbox_loss', **kwargs):
+    def __init__(self, loss_weight=1.0, name='mrcnn_bounding_box_loss', **kwargs):
         super().__init__(name=name, **kwargs)
         self.loss_weight = loss_weight
 
@@ -39,5 +37,13 @@ class BBoxLoss(Layer):
 
         self.add_loss(loss * self.loss_weight)
         metric = (loss * self.loss_weight)
-        self.add_metric(metric, name='mrcnn_bbox_loss', aggregation='mean')
+        self.add_metric(metric, name='mrcnn_bounding_box_loss', aggregation='mean')
         return loss
+
+
+def smooth_L1_loss(y_true, y_pred):
+    diff = tf.math.abs(y_true - y_pred)
+    less_than_one = K.cast(K.less(diff, 1.0), 'float32')
+    loss = (less_than_one * 0.5 * diff ** 2) + \
+           (1 - less_than_one) * (diff - 0.5)
+    return loss

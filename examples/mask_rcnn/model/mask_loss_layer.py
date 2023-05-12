@@ -2,8 +2,6 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from keras.layers import Layer
 
-from mask_rcnn.model.model_utils import reshape_data
-
 
 class MaskLoss(Layer):
     """Computes loss for Mask RCNN architecture, for MRCNN mask loss.
@@ -41,3 +39,15 @@ class MaskLoss(Layer):
         metric = (loss * self.loss_weight)
         self.add_metric(metric, name='mrcnn_mask_loss', aggregation='mean')
         return loss
+
+
+def reshape_data(target_ids, target_masks, y_pred):
+    target_ids = K.reshape(target_ids, (-1,))
+    mask_shape = tf.shape(target_masks)
+    target_masks = K.reshape(target_masks,
+                             (-1, mask_shape[2], mask_shape[3]))
+    pred_shape = tf.shape(y_pred)
+    y_pred = K.reshape(y_pred,
+                       (-1, pred_shape[2], pred_shape[3], pred_shape[4]))
+    y_pred = tf.transpose(y_pred, [0, 3, 1, 2])
+    return target_ids, target_masks, y_pred
