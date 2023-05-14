@@ -336,14 +336,23 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
     num_classes = class_predictions.shape[1]
     non_suppressed_boxes = np.array(
         [], dtype=float).reshape(0, box_data.shape[1])
+    target_class_id = np.argmax(class_predictions, axis=1)
     for class_arg in range(num_classes):
-        mask = class_predictions[:, class_arg] >= epsilon
-        scores = class_predictions[:, class_arg][mask]
+        score_mask = class_predictions[:, class_arg] >= epsilon
+        scores = class_predictions[:, class_arg][score_mask]
         if len(scores) == 0:
             continue
+        target_class_mask = target_class_id == class_arg
+        mask = np.logical_and(score_mask, target_class_mask)
         boxes = decoded_boxes[mask]
-        indices, count = apply_non_max_suppression(
+        scores = class_predictions[:, class_arg][mask]
+        nms_output = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
+
+        if type(nms_output) is not type(()) and nms_output.size == 0:
+            continue
+
+        indices, count = nms_output
         selected_indices = indices[:count]
         classes = class_predictions[mask]
         selections = np.concatenate(

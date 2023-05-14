@@ -108,8 +108,8 @@ class RemoveKeypointsDepth(Processor):
 
 
 class PartitionKeypoints(Processor):
-    """Partitions keypoints from shape [num_keypoints, 2] into a list of the form
-        ((2), (2), ....) and length equal to num_of_keypoints.
+    """Partitions keypoints from shape [num_keypoints, 2] into a list of the
+    form ((2), (2), ....) and length equal to num_of_keypoints.
     """
     def __init__(self):
         super(PartitionKeypoints, self).__init__()
