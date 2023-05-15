@@ -150,7 +150,7 @@ class ToBoxes2D(Processor):
         self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
-    def call(self, boxes, class_labels):
+    def call(self, boxes, class_labels=None):
         return self.box_processor(boxes, class_labels)
 
 
@@ -201,10 +201,17 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
 
     def call(self, boxes, class_labels):
         boxes2D = []
-        for box, class_label in zip(boxes, class_labels):
-            score = box[4:][class_label]
-            class_name = self.arg_to_class[class_label]
-            boxes2D.append(Box2D(box[:4], score, class_name))
+        if class_labels is None:
+            for box in boxes:
+                score = np.max(box[4:])
+                class_arg = np.argmax(box[4:])
+                class_name = self.arg_to_class[class_arg]
+                boxes2D.append(Box2D(box[:4], score, class_name))
+        else:
+            for box, class_label in zip(boxes, class_labels):
+                score = box[4:][class_label]
+                class_name = self.arg_to_class[class_label]
+                boxes2D.append(Box2D(box[:4], score, class_name))
         return boxes2D
 
 
@@ -230,9 +237,14 @@ class BoxesWithClassArgToBoxes2D(Processor):
 
     def call(self, boxes, class_labels):
         boxes2D = []
-        for box, class_label in zip(boxes, class_labels):
-            class_name = self.arg_to_class[class_label]
-            boxes2D.append(Box2D(box[:4], self.default_score, class_name))
+        if class_labels is None:
+            for box in boxes:
+                class_name = self.arg_to_class[box[-1]]
+                boxes2D.append(Box2D(box[:4], self.default_score, class_name))
+        else:
+            for box, class_label in zip(boxes, class_labels):
+                class_name = self.arg_to_class[class_label]
+                boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
 
 
