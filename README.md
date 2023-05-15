@@ -29,9 +29,9 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="335">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="340"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="330"> |
 
-| [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) | | |
+| [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) |[Prototypical Networks](https://github.com/oarriaga/paz/tree/master/examples/prototypical_networks) | |
 |---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330">
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">
 
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
@@ -206,6 +206,7 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Hand pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/detnet.py)            |[DetNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
 |[Hand closure classification](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/iknet.py)            |[IKNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
 |[Hand detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)            |[SSD512](https://arxiv.org/abs/1512.02325)|
+|[Few-shot classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/protonet.py)| [Prototypical Networks](https://arxiv.org/abs/1703.05175)|
 
 
 ## Motivation
