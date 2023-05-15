@@ -150,8 +150,8 @@ class ToBoxes2D(Processor):
         self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
-    def call(self, boxes):
-        return self.box_processor(boxes)
+    def call(self, boxes, class_labels):
+        return self.box_processor(boxes, class_labels)
 
 
 class BoxesToBoxes2D(Processor):
@@ -174,7 +174,7 @@ class BoxesToBoxes2D(Processor):
         self.default_class = default_class
         super(BoxesToBoxes2D, self).__init__()
 
-    def call(self, boxes):
+    def call(self, boxes, class_labels):
         boxes2D = []
         for box in boxes:
             boxes2D.append(
@@ -199,12 +199,11 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
         self.arg_to_class = arg_to_class
         super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
 
-    def call(self, boxes):
+    def call(self, boxes, class_labels):
         boxes2D = []
-        for box in boxes:
-            score = np.max(box[4:])
-            class_arg = np.argmax(box[4:])
-            class_name = self.arg_to_class[class_arg]
+        for box, class_label in zip(boxes, class_labels):
+            score = box[4:][class_label]
+            class_name = self.arg_to_class[class_label]
             boxes2D.append(Box2D(box[:4], score, class_name))
         return boxes2D
 
@@ -229,10 +228,10 @@ class BoxesWithClassArgToBoxes2D(Processor):
         self.arg_to_class = arg_to_class
         super(BoxesWithClassArgToBoxes2D, self).__init__()
 
-    def call(self, boxes):
+    def call(self, boxes, class_labels):
         boxes2D = []
-        for box in boxes:
-            class_name = self.arg_to_class[box[-1]]
+        for box, class_label in zip(boxes, class_labels):
+            class_name = self.arg_to_class[class_label]
             boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
 
@@ -322,9 +321,9 @@ class NonMaximumSuppressionPerClass(Processor):
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes = nms_per_class(
+        boxes, class_labels = nms_per_class(
             boxes, self.nms_thresh, self.epsilon, self.conf_thresh)
-        return boxes
+        return boxes, class_labels
 
 
 class FilterBoxes(Processor):
