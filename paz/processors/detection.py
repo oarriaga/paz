@@ -203,6 +203,7 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
         boxes2D = []
         for box in boxes:
             score = np.max(box[4:])
+            score = score - 1 if score > 1.0 else score
             class_arg = np.argmax(box[4:])
             class_name = self.arg_to_class[class_arg]
             boxes2D.append(Box2D(box[:4], score, class_name))

@@ -330,7 +330,7 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns
-        Array of shape `(num_boxes, 4+ num_classes)`.
+        Array of shape `(num_boxes, 4 + num_classes)`.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
@@ -350,8 +350,11 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
             (boxes[selected_indices],
              classes[selected_indices]), axis=1)
         filter_mask = selections[:, 4 + class_arg] >= conf_thresh
+        score_filtered = selections[filter_mask]
+        score_filtered[:, 4:][:, class_arg] = (
+            1.0 + score_filtered[:, 4:][:, class_arg])
         non_suppressed_boxes = np.concatenate(
-            (non_suppressed_boxes, selections[filter_mask]), axis=0)
+            (non_suppressed_boxes, score_filtered), axis=0)
     return non_suppressed_boxes
 
 
