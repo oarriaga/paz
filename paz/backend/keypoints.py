@@ -105,6 +105,20 @@ def denormalize_keypoints2D(points2D, height, width):
     return points2D
 
 
+"""
+def denormalize_keypoints(keypoints, height, width):
+    for keypoint_arg, keypoint in enumerate(keypoints):
+        x, y = keypoint[:2]
+        # transform key-point coordinates to image coordinates
+        x = (min(max(x, -1), 1) * width / 2 + width / 2) - 0.5
+        # flip since the image coordinates for y are flipped
+        y = height - 0.5 - (min(max(y, -1), 1) * height / 2 + height / 2)
+        x, y = int(round(x)), int(round(y))
+        keypoints[keypoint_arg][:2] = [x, y]
+    return keypoints
+"""
+
+
 def cascade_classifier(path):
     """OpenCV Cascade classifier.
 

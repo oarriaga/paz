@@ -336,14 +336,12 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
     num_classes = class_predictions.shape[1]
     non_suppressed_boxes = np.array(
         [], dtype=float).reshape(0, box_data.shape[1])
-    class_labels = np.array([], dtype=np.int)
     for class_arg in range(num_classes):
         mask = class_predictions[:, class_arg] >= epsilon
         scores = class_predictions[:, class_arg][mask]
         if len(scores) == 0:
             continue
         boxes = decoded_boxes[mask]
-        scores = class_predictions[:, class_arg][mask]
         indices, count = apply_non_max_suppression(
             boxes, scores, nms_thresh, top_k)
         selected_indices = indices[:count]
@@ -352,11 +350,9 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
             (boxes[selected_indices],
              classes[selected_indices]), axis=1)
         filter_mask = selections[:, 4 + class_arg] >= conf_thresh
-        class_label = np.repeat(class_arg, filter_mask.sum())
-        class_labels = np.append(class_labels, class_label)
         non_suppressed_boxes = np.concatenate(
             (non_suppressed_boxes, selections[filter_mask]), axis=0)
-    return non_suppressed_boxes, class_labels
+    return non_suppressed_boxes
 
 
 def to_one_hot(class_indices, num_classes):

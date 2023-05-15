@@ -253,7 +253,7 @@ def compute_aspect_size(aspect):
     # Returns
         Tuple: Aspect width and height.
     """
-    return np.sqrt(aspect), 1 / np.sqrt(aspect)
+    return np.sqrt(aspect), 1/np.sqrt(aspect)
 
 
 def compute_anchor_dims(base_anchor_W, base_anchor_H,

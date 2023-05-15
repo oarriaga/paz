@@ -61,7 +61,7 @@ class ScaleOutput(Processor):
     def call(self, outputs):
         for arg in range(len(outputs)):
             H, W = outputs[arg].shape[-2:]
-            H, W = self.scale_factor * H, self.scale_factor * W
+            H, W = self.scale_factor*H, self.scale_factor*W
             if self.full_scaling:
                 outputs[arg] = self._resize_output(outputs[arg], (W, H))
             else:
@@ -173,7 +173,7 @@ class AggregateResults(Processor):
 
     def _calculate_heatmaps_average(self, heatmaps):
         if self.with_flip:
-            heatmaps_average = (heatmaps[0] + heatmaps[1]) / 2.0
+            heatmaps_average = (heatmaps[0] + heatmaps[1])/2.0
         else:
             heatmaps_average = heatmaps[0]
         return heatmaps_average
@@ -249,7 +249,7 @@ class TopKDetections(Processor):
         heatmaps = self._filter_heatmaps(heatmaps)
         num_images, keypoints_count, H, W = heatmaps.shape[:4]
         heatmaps = np.reshape(heatmaps, [num_images, keypoints_count, -1])
-        tags = np.reshape(tags, [num_images, keypoints_count, W * H, -1])
+        tags = np.reshape(tags, [num_images, keypoints_count, W*H, -1])
 
         top_k_keypoints, indices = self._get_top_k_keypoints(
             heatmaps, self.k, self.use_numpy)
@@ -349,7 +349,7 @@ class AdjustKeypointsLocations(Processor):
                         x = compare_horizontal_neighbours(x, y, heatmap)
                         grouped_keypoints[batch_id][
                             object_id, keypoint_id, 0:2] = add_offset_to_point(
-                                (y, x), offset=0.5)
+                                                            (y, x), offset=0.5)
         return grouped_keypoints
 
 
