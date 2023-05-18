@@ -427,20 +427,19 @@ class HRNetSimpleBaselines(pr.Processor):
 
 
 class SolveTranslation3D(pr.Processor):
-    def __init__(self, args_to_joints3D, intrinsics, solver):
+    def __init__(self, args_to_joints3D, solver, camera_intrinsics):
         """ it calculates the optimized 3d pose estimation
 
                 #Arguments
                     args_to_mean: keypoints indices
-                    focal_length: focal length
-                    image_center: image center
+                    solver: library solver
+                    camera_intrinsics: camera intrinsic parameters
 
                 #Returns
                     keypoints2D, keypoints3D
                 """
         self.args_to_joints3D = args_to_joints3D
-        self.focal_length = intrinsics[0]
-        self.image_center = intrinsics[1]
+        self.camera_intrinsics = camera_intrinsics
         self.solver = solver
         
     def call(self, keypoints):
@@ -450,20 +449,16 @@ class SolveTranslation3D(pr.Processor):
         length2D, length3D = get_bones_length(keypoints['keypoints2D'],
                                               joints3D)
         ratio = length3D / length2D
-        initial_joint_translation = initialize_translation(self.focal_length,
-                                                           root2D,
-                                                           self.image_center,
-                                                           ratio)
+        initial_joint_translation = initialize_translation(root2D,
+                                    self.camera_intrinsics, ratio)
         joint_translation = solve_least_squares(self.solver,
                                                 compute_reprojection_error,
                                                 initial_joint_translation,
                                                 joints3D,
                                                 keypoints['keypoints2D'],
-                                                self.focal_length,
-                                                self.image_center)
+                                                self.camera_intrinsics)
         keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
         optimized_poses3D = compute_optimized_pose3D(keypoints3D,
                                                      joint_translation,
-                                                     self.focal_length,
-                                                     self.image_center)
+                                                     self.camera_intrinsics)
         return joints3D, optimized_poses3D

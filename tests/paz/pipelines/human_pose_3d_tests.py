@@ -20,10 +20,10 @@ from paz.pipelines.keypoints import SolveTranslation3D
 
 
 
-def get_optimized_posed3D(keypoints, intrinsics):
+def get_optimized_posed3D(keypoints, camera_intrinsics):
     solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D,
-                                                   intrinsics,
-                                                   least_squares)
+                                                   least_squares,
+                                                   camera_intrinsics)
     _, optimized_poses3D = solveTranslation_pipeline(keypoints)
     return optimized_poses3D
 
@@ -32,10 +32,7 @@ def get_camera_intrinsics(image_height, image_width):
     camera = Camera()
     camera.intrinsics_from_HFOV(HFOV=70,
                                 image_shape=[image_height, image_width])
-    intrinsics = [camera.intrinsics[0, 0], np.array([[camera.intrinsics[0, 2],
-                                                      camera.intrinsics[1, 2]]]
-                                                    ).flatten()]
-    return intrinsics
+    return camera.intrinsics
 
 
 def get_poses(pipeline, image):
@@ -204,8 +201,8 @@ def test_simple_baselines_multiple_persons(image_with_multiple_persons_A,
     assert np.allclose(keypoints['keypoints3D'][0],
                        keypoints3D_multiple_persons)
     image_height, image_width = image_with_multiple_persons_A.shape[:2]
-    intrinsics = get_camera_intrinsics(image_height, image_width)
-    optimized_poses3D = get_optimized_posed3D(keypoints, intrinsics)
+    camera_intrinsics = get_camera_intrinsics(image_height, image_width)
+    optimized_poses3D = get_optimized_posed3D(keypoints, camera_intrinsics)
     assert np.allclose(optimized_poses3D[0], optimised_pose_multiple)
 
 
@@ -217,6 +214,6 @@ def test_simple_baselines_single_person(image_with_single_person_B,
     assert np.allclose(keypoints['keypoints2D'], keypoints2D_single_person)
     assert np.allclose(keypoints['keypoints3D'], keypoints3D_single_person)
     image_height, image_width = image_with_single_person_B.shape[:2]
-    intrinsics = get_camera_intrinsics(image_height, image_width)
-    optimized_poses3D = get_optimized_posed3D(keypoints, intrinsics)
+    camera_intrinsics = get_camera_intrinsics(image_height, image_width)
+    optimized_poses3D = get_optimized_posed3D(keypoints, camera_intrinsics)
     assert np.allclose(optimized_poses3D, optimised_pose_single)

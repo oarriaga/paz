@@ -20,14 +20,11 @@ image = load_image(fullpath)
 image_height, image_width = image.shape[:2]
 camera = Camera()
 camera.intrinsics_from_HFOV(HFOV=70, image_shape=[image_height, image_width])
-intrinsics = [camera.intrinsics[0, 0], np.array([[camera.intrinsics[0, 2],
-                                                  camera.intrinsics[1, 2]]]
-                                                ).flatten()]
 model = SimpleBaseline((32,), 16, 3, 1024, 2, 1, 'human36m')
 pipeline = HRNetSimpleBaselines(model)
 keypoints = pipeline(image)
 keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
-solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D, intrinsics, least_squares)
+solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D, least_squares, camera.intrinsics)
 joints3D, optimized_poses3D = solveTranslation_pipeline(keypoints)
 
 visualize(keypoints['keypoints2D'], joints3D, keypoints3D, optimized_poses3D)

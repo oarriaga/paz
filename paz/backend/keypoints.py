@@ -520,29 +520,31 @@ def destandardize(data, mean, scale):
     return (data * scale) + mean
 
 
-def initialize_translation(focal_length, joints2D, image_center, ratio):
+def initialize_translation(joints2D, camera_intrinsics, ratio):
     """Computes initial 3D translation of root joint
 
     # Arguments
-        focal_length: focal length of the camera in pixels
         joints2D: 2D root joint from HigherHRNet
-        image_center: center of the image (or principal point)
+        camera_intrinsics: camera intrinsic parameters
         ratio: ration of sum of 3D bones to 2D bones
 
     # Returns
         Array of initial estimate of the global position
         of the root joint in 3D
     """
-    z = focal_length * ratio  # depth coord
-    x = (joints2D[:, 0] - image_center[0]) * ratio
-    y = (joints2D[:, 1] - image_center[1]) * ratio
+    focal_length = camera_intrinsics[0, 0]
+    image_center_x = camera_intrinsics[0, 2]
+    image_center_y = camera_intrinsics[1, 2]
+    z = focal_length * ratio 
+    x = (joints2D[:, 0] - image_center_x) * ratio
+    y = (joints2D[:, 1] - image_center_y) * ratio
     translation = np.array((x, y, z))
     return translation.flatten()
 
 
 def solve_least_squares(solver, compute_joints_distance,
                         initial_joints_translation, joints3D,
-                        poses2D, focal_length, image_center):
+                        poses2D, camera_intrinsics):
     """ Solve the least squares
 
     # Arguments
@@ -551,34 +553,16 @@ def solve_least_squares(solver, compute_joints_distance,
         initial_root_translation: initial 3D translation of root joint
         joints3D: 16 moving joints in 3D
         poses2d: 2D poses
-        focal_length: focal length
-        img_center: image center
+        camera_intrinsics: camera intrinsic parameters
 
     Returns
         optimal translation of root joint for each person
     """
     joints_translation = solver(
         compute_joints_distance, initial_joints_translation, verbose=0,
-        args=(joints3D, poses2D, focal_length, image_center))
+        args=(joints3D, poses2D, camera_intrinsics))
     joints_translation = np.reshape(joints_translation.x, (-1, 3))
     return joints_translation
-
-
-def project_3D_to_2D(points3D, focal_length, image_center):
-    """ Project points in camera frame from 3D to 2D using intrinsic matrix
-
-    # Arguments
-        points3D: Nx3 points in camera coordinates (32x3)
-        focal_length: (scalar) Camera focal length
-        img_center: 2x1 image center
-
-    # Returns
-        Nx2 points in pixel space
-    """
-    z = points3D[:, 2]
-    u = (focal_length / z) * points3D[:, 0] + image_center[0]
-    v = (focal_length / z) * points3D[:, 1] + image_center[1]
-    return np.column_stack((u, v))
 
 
 def get_bones_length(poses2D, poses3D):
@@ -597,24 +581,25 @@ def get_bones_length(poses2D, poses3D):
     start_joints = np.arange(0, 15)
     end_joints = np.arange(1, 16)
     for person in poses2D:
-        bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
+        bone_length = np.linalg.norm(person[start_joints] -
+                                     person[end_joints])
         sum_bones2D = sum_bones2D + bone_length
     for person in poses3D:
-        bone_length = np.linalg.norm(person[start_joints] - person[end_joints])
+        bone_length = np.linalg.norm(person[start_joints] - 
+                                     person[end_joints])
         sum_bones3D = sum_bones3D + bone_length
     return sum_bones2D, sum_bones3D
 
 
 def compute_reprojection_error(initial_translation, keypoints3D,
-                               keypoints2D, focal_length, image_center):
+                               keypoints2D, camera_intrinsics):
     """compute distance between each person joints
 
     # Arguments
         initial_translation: initial guess of position of joint
         keypoints3D: 3D keypoints to be optimized (Nx16x3)
         keypoints2D: 2D keypoints (Nx32)
-        focal_length: focal length
-        img_center: principal point of the camera
+        camera_inrinsics: camera intrinsic parameters
 
     # Returns
         person_sum: sum of L2 distances between each joint per person
@@ -622,9 +607,13 @@ def compute_reprojection_error(initial_translation, keypoints3D,
     initial_translation = np.reshape(initial_translation, (-1, 3))
     new_poses3D = np.zeros((keypoints3D.shape))
     for person in range(len(initial_translation)):
-        new_poses3D[person] = keypoints3D[person] + initial_translation[person]
+        new_poses3D[person] = (keypoints3D[person] +
+                             initial_translation[person])
     new_poses3D = new_poses3D.reshape((-1, 3))
-    project2D = project_3D_to_2D(new_poses3D, focal_length, image_center)
+    rotation = np.identity(3)
+    translation = np.zeros((3,))
+    project2D = project_to_image(rotation, translation, new_poses3D,
+                                 camera_intrinsics)
     joints_distance = np.linalg.norm(np.ravel(keypoints2D) -
                                      np.ravel(project2D))
 
@@ -642,7 +631,7 @@ def merge_into_mean(keypoints2D, args_to_mean):
              keypoints2D: keypoints2D after merging
             """
     for point, joints_indices in args_to_mean.items():
-        keypoints2D[:, point] = (keypoints2D[:, joints_indices[0]] +
+        keypoints2D[:, point] = (keypoints2D[:, joints_indices[0]] + 
                                  keypoints2D[:, joints_indices[1]]) / 2
     return keypoints2D
 
@@ -694,15 +683,14 @@ def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
     return joints2D
 
 
-def compute_optimized_pose3D(keypoints3D, joint_translation, focal_length,
-                             image_center):
+def compute_optimized_pose3D(keypoints3D, joint_translation,
+                             camera_intrinsics):
     """Compute the optimized 3D pose
 
     # Arguments
         keypoints3D: 3D keypoints
         joint_translation: np array joints translation
-        focal_length: focal_length
-        image_center: image center
+        camera_intrinsics: camera intrinsics parameters
 
     # Returns
         optimized_poses3D: np array of optimized posed3D
@@ -710,7 +698,9 @@ def compute_optimized_pose3D(keypoints3D, joint_translation, focal_length,
     optimized_poses3D = []
     for person in range(keypoints3D.shape[0]):
         keypoints3D[person] = keypoints3D[person] + joint_translation[person]
-        points = project_3D_to_2D(keypoints3D[person].reshape((-1, 3)),
-                                  focal_length, image_center)
+        rotation = np.identity(3)
+        translation = np.zeros((3,))
+        points = project_to_image(rotation, translation,
+                 keypoints3D[person].reshape((-1, 3)), camera_intrinsics)
         optimized_poses3D.append(np.reshape(points, [1, 64]))
     return np.array(optimized_poses3D)
