@@ -336,12 +336,19 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
     nms_boxes = np.array([], dtype=float).reshape(0, box_data.shape[1])
     class_labels = np.array([], dtype=np.int)
     for class_arg in range(num_classes):
-        mask = class_predictions[:, class_arg] >= epsilon
-        scores = class_predictions[:, class_arg][mask]
-        if len(scores) == 0:
-            continue
+        nms_boxes, class_labels = nms_per_class(
+            nms_boxes, class_labels, class_arg, decoded_boxes,
+            class_predictions, epsilon, nms_thresh, top_k)
+
+    return nms_boxes, class_labels
+
+
+def nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
+                  class_predictions, epsilon, nms_thresh, top_k):
+    mask = class_predictions[:, class_arg] >= epsilon
+    scores = class_predictions[:, class_arg][mask]
+    if len(scores) != 0:
         boxes = decoded_boxes[mask]
-        scores = class_predictions[:, class_arg][mask]
         selected = apply_non_max_suppression(boxes, scores, nms_thresh, top_k)
         indices, count = selected
         selected_indices = indices[:count]
@@ -350,8 +357,8 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
         selected_classes = classes[selected_indices]
         selections = np.concatenate((selected_boxes, selected_classes), axis=1)
         class_label = np.repeat(class_arg, count)
-        class_labels = np.append(class_labels, class_label)
         nms_boxes = np.concatenate((nms_boxes, selections), axis=0)
+        class_labels = np.append(class_labels, class_label)
     return nms_boxes, class_labels
 
 
