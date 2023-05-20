@@ -326,15 +326,14 @@ class NonMaximumSuppressionPerClass(Processor):
         epsilon: Float between [0, 1].
         conf_thresh: Float between [0, 1].
     """
-    def __init__(self, nms_thresh=.45, epsilon=0.01, conf_thresh=0.5):
+    def __init__(self, nms_thresh=.45, epsilon=0.01):
         self.nms_thresh = nms_thresh
         self.epsilon = epsilon
-        self.conf_thresh = conf_thresh
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
         boxes, class_labels = nms_per_class(
-            boxes, self.nms_thresh, self.epsilon, self.conf_thresh)
+            boxes, self.nms_thresh, self.epsilon)
         return boxes, class_labels
 
 

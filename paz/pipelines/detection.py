@@ -186,8 +186,7 @@ class SSDPostprocess(SequentialProcessor):
         self.add(pr.Squeeze(axis=None))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances))
         self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
-        self.add(pr.NonMaximumSuppressionPerClass(
-            nms_thresh, conf_thresh=score_thresh))
+        self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
         self.add(pr.FilterBoxes(class_names, score_thresh))
         self.add(pr.ToBoxes2D(class_names, box_method))
 
@@ -277,8 +276,7 @@ class EfficientDetPostprocess(Processor):
             pr.DecodeBoxes(model.prior_boxes, variances),
             pr.RemoveClass(class_names, class_arg)])
         self.scale = pr.ScaleBox()
-        self.nms_per_class = pr.NonMaximumSuppressionPerClass(
-            nms_thresh, conf_thresh=score_thresh)
+        self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
         self.filter_boxes = pr.FilterBoxes(class_names, score_thresh)
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()

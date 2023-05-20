@@ -316,8 +316,7 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
-                  conf_thresh=0.5, top_k=200):
+def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
     """Applies non-maximum-suppression per class.
 
     # Arguments
