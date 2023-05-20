@@ -353,8 +353,9 @@ class FilterBoxes(Processor):
         super(FilterBoxes, self).__init__()
 
     def call(self, boxes, class_labels):
-        boxes = filter_boxes(boxes, class_labels, self.conf_thresh)
-        return boxes
+        boxes, class_labels = filter_boxes(
+            boxes, class_labels, self.conf_thresh)
+        return boxes, class_labels
 
 
 class CropImage(Processor):
