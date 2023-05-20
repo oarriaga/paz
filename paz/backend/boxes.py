@@ -339,7 +339,6 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
         nms_boxes, class_labels = nms_per_class(
             nms_boxes, class_labels, class_arg, decoded_boxes,
             class_predictions, epsilon, nms_thresh, top_k)
-
     return nms_boxes, class_labels
 
 
@@ -353,8 +352,7 @@ def nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
         indices, count = selected
         selected_indices = indices[:count]
         selected_boxes = boxes[selected_indices]
-        classes = class_predictions[mask]
-        selected_classes = classes[selected_indices]
+        selected_classes = class_predictions[mask][selected_indices]
         selections = np.concatenate((selected_boxes, selected_classes), axis=1)
         nms_boxes = np.concatenate((nms_boxes, selections), axis=0)
         class_label = np.repeat(class_arg, count)
