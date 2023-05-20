@@ -324,12 +324,11 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
         nms_thresh: Float, Non-maximum suppression threshold.
         epsilon: Float, Filter scores with a lower confidence
             value before performing non-maximum supression.
-        conf_thresh: Float, Filter out boxes with a confidence value
-            lower than this.
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns
-        Array of shape `(num_boxes, 4 + num_classes)`.
+        Tuple: Containing non suppressed boxes and
+            corresponding class labels.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]
@@ -344,6 +343,24 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
 
 def nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
                   class_predictions, epsilon, nms_thresh, top_k):
+    """Applies non-maximum-suppression for a given class.
+
+    # Arguments
+        nms_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        class_labels: Array of shape `(1, )`.
+        class_arg: Int, class index.
+        decoded_boxes: Array of shape `(num_prior_boxes, 4)`.
+        class_predictions: Array of shape
+            `(num_prior_boxes, num_classes)`.
+        epsilon: Float, Filter scores with a lower confidence
+            value before performing non-maximum supression.
+        nms_thresh: Float, Non-maximum suppression threshold.
+        top_k: Int, Maximum number of boxes per class outputted by nms.
+
+    # Returns
+        Tuple: Containing non suppressed boxes per class and
+            corresponding class labels.
+    """
     mask = class_predictions[:, class_arg] >= epsilon
     scores = class_predictions[:, class_arg][mask]
     if len(scores) != 0:
@@ -538,11 +555,12 @@ def filter_boxes(boxes, class_labels, conf_thresh):
 
     # Arguments
         boxes: Array of shape `(num_boxes, 4 + num_classes)`.
-        conf_thresh: Float, Filter boxes with a confidence value lower
-            than this.
+        class_labels: Array of shape `(1, )`.
+        conf_thresh: Float, Filter boxes with a confidence value
+            lower than this.
 
     # Returns
-        Numpy array of shape `(num_boxes, 4 + num_classes)`.
+        Array of shape `(num_boxes, 4 + num_classes)`.
     """
     class_predictions = boxes[:, 4:]
     num_boxes, num_classes = class_predictions.shape
