@@ -188,6 +188,7 @@ class SSDPostprocess(SequentialProcessor):
         self.add(pr.RemoveClass(class_names, class_arg, renormalize=False))
         self.add(pr.NonMaximumSuppressionPerClass(
             nms_thresh, conf_thresh=score_thresh))
+        self.add(pr.FilterBoxes(class_names, score_thresh))
         self.add(pr.ToBoxes2D(class_names, box_method))
 
 

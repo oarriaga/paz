@@ -353,8 +353,8 @@ class FilterBoxes(Processor):
             list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes):
-        boxes = filter_boxes(boxes, self.conf_thresh)
+    def call(self, boxes, class_labels):
+        boxes = filter_boxes(boxes, class_labels, self.conf_thresh)
         return boxes
 
 

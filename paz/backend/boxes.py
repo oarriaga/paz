@@ -351,11 +351,10 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
         selections = np.concatenate(
             (boxes[selected_indices],
              classes[selected_indices]), axis=1)
-        filter_mask = selections[:, 4 + class_arg] >= conf_thresh
-        class_label = np.repeat(class_arg, filter_mask.sum())
+        class_label = np.repeat(class_arg, count)
         class_labels = np.append(class_labels, class_label)
         non_suppressed_boxes = np.concatenate(
-            (non_suppressed_boxes, selections[filter_mask]), axis=0)
+            (non_suppressed_boxes, selections), axis=0)
     return non_suppressed_boxes, class_labels
 
 
@@ -532,7 +531,7 @@ def extract_bounding_box_corners(points3D):
     return XYZ_min, XYZ_max
 
 
-def filter_boxes(boxes, conf_thresh):
+def filter_boxes(boxes, class_labels, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
@@ -543,10 +542,13 @@ def filter_boxes(boxes, conf_thresh):
     # Returns
         Numpy array of shape `(num_boxes, 4 + num_classes)`.
     """
-    max_class_score = np.max(boxes[:, 4:], axis=1)
-    confidence_mask = max_class_score >= conf_thresh
+    class_predictions = boxes[:, 4:]
+    num_boxes, num_classes = class_predictions.shape
+    class_scores = class_predictions[np.arange(num_boxes), class_labels]
+    confidence_mask = class_scores >= conf_thresh
     confident_class_detections = boxes[confidence_mask]
-    return confident_class_detections
+    confident_class_labels = class_labels[confidence_mask]
+    return confident_class_detections, confident_class_labels
 
 
 def scale_box(predictions, image_scales):
