@@ -352,12 +352,12 @@ def nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
         selected = apply_non_max_suppression(boxes, scores, nms_thresh, top_k)
         indices, count = selected
         selected_indices = indices[:count]
-        classes = class_predictions[mask]
         selected_boxes = boxes[selected_indices]
+        classes = class_predictions[mask]
         selected_classes = classes[selected_indices]
         selections = np.concatenate((selected_boxes, selected_classes), axis=1)
-        class_label = np.repeat(class_arg, count)
         nms_boxes = np.concatenate((nms_boxes, selections), axis=0)
+        class_label = np.repeat(class_arg, count)
         class_labels = np.append(class_labels, class_label)
     return nms_boxes, class_labels
 
