@@ -316,7 +316,7 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
+def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
     """Applies non-maximum-suppression per class.
 
     # Arguments
@@ -329,7 +329,7 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns
-        Array of shape `(num_boxes, 4+ num_classes)`.
+        Array of shape `(num_boxes, 4 + num_classes)`.
     """
     decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
     num_classes = class_predictions.shape[1]

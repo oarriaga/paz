@@ -285,8 +285,7 @@ class EfficientDetPostprocess(Processor):
         box_data = self.postprocess(output)
         box_data = self.scale(box_data, image_scale)
         box_data, class_labels = self.nms_per_class(box_data)
-        box_data, class_labels = self.filter_boxes(
-            box_data, class_labels)
+        box_data, class_labels = self.filter_boxes(box_data, class_labels)
         boxes2D = self.to_boxes2D(box_data, class_labels)
         boxes2D = self.round_boxes(boxes2D)
         return boxes2D

@@ -8,7 +8,7 @@ from ..backend.boxes import encode
 from ..backend.boxes import decode
 from ..backend.boxes import offset
 from ..backend.boxes import clip
-from ..backend.boxes import nms_per_class
+from ..backend.boxes import nms
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
 from ..backend.boxes import filter_boxes
@@ -332,8 +332,7 @@ class NonMaximumSuppressionPerClass(Processor):
         super(NonMaximumSuppressionPerClass, self).__init__()
 
     def call(self, boxes):
-        boxes, class_labels = nms_per_class(
-            boxes, self.nms_thresh, self.epsilon)
+        boxes, class_labels = nms(boxes, self.nms_thresh, self.epsilon)
         return boxes, class_labels
 
 
