@@ -235,14 +235,12 @@ class BoxesWithClassArgToBoxes2D(Processor):
 
     def call(self, boxes, class_labels):
         boxes2D = []
-        if class_labels is None:
-            for box in boxes:
-                class_name = self.arg_to_class[box[-1]]
-                boxes2D.append(Box2D(box[:4], self.default_score, class_name))
-        else:
-            for box, class_label in zip(boxes, class_labels):
-                class_name = self.arg_to_class[class_label]
-                boxes2D.append(Box2D(box[:4], self.default_score, class_name))
+        class_labels = ([None] * len(boxes) if class_labels is None
+                        else class_labels)
+        for box, class_label in zip(boxes, class_labels):
+            class_arg = box[-1] if class_label is None else class_label
+            class_name = self.arg_to_class[class_arg]
+            boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
 
 
