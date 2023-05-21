@@ -330,7 +330,8 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
         Tuple: Containing non suppressed boxes and
             corresponding class labels.
     """
-    decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
+    decoded_boxes = box_data[:, :4]
+    class_predictions = box_data[:, 4:]
     num_classes = class_predictions.shape[1]
     nms_boxes = np.array([], dtype=float).reshape(0, box_data.shape[1])
     class_labels = np.array([], dtype=np.int)
@@ -563,8 +564,9 @@ def filter_boxes(boxes, class_labels, conf_thresh):
         Array of shape `(num_boxes, 4 + num_classes)`.
     """
     class_predictions = boxes[:, 4:]
-    num_boxes, num_classes = class_predictions.shape
-    class_scores = class_predictions[np.arange(num_boxes), class_labels]
+    num_boxes = class_predictions.shape[0]
+    class_row_args = np.arange(num_boxes)
+    class_scores = class_predictions[class_row_args, class_labels]
     confidence_mask = class_scores >= conf_thresh
     confident_class_detections = boxes[confidence_mask]
     confident_class_labels = class_labels[confidence_mask]
