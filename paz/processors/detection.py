@@ -201,28 +201,15 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
 
     def call(self, boxes, class_labels):
         boxes2D = []
-        ###################################
-        class_args = [None] * len(boxes) if class_labels is None else class_labels
+        class_args = ([None] * len(boxes) if class_labels is None
+                      else class_labels)
         for box, class_arg in zip(boxes, class_args):
             class_scores = box[4:]
-            class_arg = np.argmax(class_scores) if class_arg is None else class_arg
+            class_arg = (np.argmax(class_scores) if class_arg is None
+                         else class_arg)
             score = class_scores[class_arg]
             class_name = self.arg_to_class[class_arg]
             boxes2D.append(Box2D(box[:4], score, class_name))
-        ###################################
-        # if class_labels is None:
-        #     for box in boxes:
-        #         class_scores = box[4:]
-        #         score = np.max(class_scores)
-        #         class_arg = np.argmax(box[4:])
-        #         class_name = self.arg_to_class[class_arg]
-        #         boxes2D.append(Box2D(box[:4], score, class_name))
-        # else:
-        #     for box, class_arg in zip(boxes, class_labels):
-        #         class_scores = box[4:]
-        #         score = class_scores[class_arg]
-        #         class_name = self.arg_to_class[class_arg]
-        #         boxes2D.append(Box2D(box[:4], score, class_name))
         return boxes2D
 
 
