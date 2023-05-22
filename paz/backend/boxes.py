@@ -317,11 +317,11 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
 
 
 def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
-    """Applies non maximum suppression per class. This function takes
-    all the detections from the detector which consists of boxes and
-    their corresponding class scores to which it applies non maximum
-    suppression for every class independently and then combines the
-    result.
+    """Applies non maximum suppression per class.
+    This function takes all the detections from the detector which
+    consists of boxes and their corresponding class scores to which it
+    applies non maximum suppression for every class independently and
+    then combines the result.
 
     # Arguments
         box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
@@ -348,10 +348,10 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
 
 def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
                    class_predictions, epsilon, nms_thresh, top_k):
-    """Applies non maximum suppression for a given class. This function
-    takes all the detections that belong only to the given single class
-    and applies non maximum suppression for that class alone and returns
-    the resulting non suppressed boxes.
+    """Applies non maximum suppression for a given class.
+    This function takes all the detections that belong only to the given
+    single class and applies non maximum suppression for that class
+    alone and returns the resulting non suppressed boxes.
 
     # Arguments
         nms_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
@@ -369,8 +369,8 @@ def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
         Tuple: Containing non suppressed boxes per class and
             corresponding class labels.
     """
-    mask = class_predictions[:, class_arg] >= epsilon
-    scores = class_predictions[:, class_arg][mask]
+    scores, mask = pre_filter_nms(class_arg, class_predictions, epsilon)
+
     if len(scores) != 0:
         boxes = decoded_boxes[mask]
         selected = apply_non_max_suppression(boxes, scores, nms_thresh, top_k)
@@ -383,6 +383,25 @@ def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
         class_label = np.repeat(class_arg, count)
         class_labels = np.append(class_labels, class_label)
     return nms_boxes, class_labels
+
+
+def pre_filter_nms(class_arg, class_predictions, epsilon):
+    """Applies score filtering.
+    This function takes all the predicted scores of a given class and
+    filters out all the predictions less than the given `epsilon` value.
+
+    # Arguments
+        class_arg: Int, class index.
+        class_predictions: Array of shape
+            `(num_prior_boxes, num_classes)`.
+        epsilon: Float, threshold value for score filtering.
+
+    # Returns
+        Tuple: Containing filtered scores and filter mask.
+    """
+    mask = class_predictions[:, class_arg] >= epsilon
+    scores = class_predictions[:, class_arg][mask]
+    return scores, mask
 
 
 def to_one_hot(class_indices, num_classes):
