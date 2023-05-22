@@ -404,6 +404,28 @@ def pre_filter_nms(class_arg, class_predictions, epsilon):
     return scores, mask
 
 
+def merge_box_with_class(boxes, class_labels):
+    """Merges boxes and corresponding class.
+    This function retains only the predicted score of the class to
+    which the box belongs to and sets the scores of all the remaining
+    classes to zero, thereby combining box and class information in a
+    single variable.
+
+    # Arguments
+        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        class_labels: Array of shape `(1, )`.
+
+    # Returns
+        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+    """
+    class_predictions = boxes[:, 4:]
+    all_row = range(len(class_labels))
+    class_scores = class_predictions[all_row, class_labels]
+    boxes[:, 4:] = 0
+    boxes[:, 4:][all_row, class_labels] = class_scores
+    return boxes
+
+
 def to_one_hot(class_indices, num_classes):
     """ Transform from class index to one-hot encoded vector.
 
@@ -577,26 +599,22 @@ def extract_bounding_box_corners(points3D):
     return XYZ_min, XYZ_max
 
 
-def filter_boxes(boxes, class_labels, conf_thresh):
+def filter_boxes(boxes, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
         boxes: Array of shape `(num_boxes, 4 + num_classes)`.
-        class_labels: Array of shape `(1, )`.
         conf_thresh: Float, Filter boxes with a confidence value
             lower than this.
 
     # Returns
-        Array of shape `(num_boxes, 4 + num_classes)`.
+        confident_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
     """
     class_predictions = boxes[:, 4:]
-    num_boxes = class_predictions.shape[0]
-    class_row_args = np.arange(num_boxes)
-    class_scores = class_predictions[class_row_args, class_labels]
+    class_scores = np.max(class_predictions, axis=1)
     confidence_mask = class_scores >= conf_thresh
-    confident_class_detections = boxes[confidence_mask]
-    confident_class_labels = class_labels[confidence_mask]
-    return confident_class_detections, confident_class_labels
+    confident_boxes = boxes[confidence_mask]
+    return confident_boxes
 
 
 def scale_box(predictions, image_scales):

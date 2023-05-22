@@ -9,6 +9,7 @@ from ..backend.boxes import decode
 from ..backend.boxes import offset
 from ..backend.boxes import clip
 from ..backend.boxes import nms_per_class
+from ..backend.boxes import merge_box_with_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
 from ..backend.boxes import filter_boxes
@@ -150,8 +151,8 @@ class ToBoxes2D(Processor):
         self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
-    def call(self, boxes, class_labels=None):
-        return self.box_processor(boxes, class_labels)
+    def call(self, boxes):
+        return self.box_processor(boxes)
 
 
 class BoxesToBoxes2D(Processor):
@@ -174,7 +175,7 @@ class BoxesToBoxes2D(Processor):
         self.default_class = default_class
         super(BoxesToBoxes2D, self).__init__()
 
-    def call(self, boxes, class_labels):
+    def call(self, boxes):
         boxes2D = []
         for box in boxes:
             boxes2D.append(
@@ -199,14 +200,11 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
         self.arg_to_class = arg_to_class
         super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
 
-    def call(self, boxes, class_labels):
+    def call(self, boxes):
         boxes2D = []
-        class_args = ([None] * len(boxes) if class_labels is None
-                      else class_labels)
-        for box, class_arg in zip(boxes, class_args):
+        for box in boxes:
             class_scores = box[4:]
-            class_arg = (np.argmax(class_scores) if class_arg is None
-                         else class_arg)
+            class_arg = np.argmax(class_scores)
             score = class_scores[class_arg]
             class_name = self.arg_to_class[class_arg]
             boxes2D.append(Box2D(box[:4], score, class_name))
@@ -233,13 +231,10 @@ class BoxesWithClassArgToBoxes2D(Processor):
         self.arg_to_class = arg_to_class
         super(BoxesWithClassArgToBoxes2D, self).__init__()
 
-    def call(self, boxes, class_labels):
+    def call(self, boxes):
         boxes2D = []
-        class_labels = ([None] * len(boxes) if class_labels is None
-                        else class_labels)
-        for box, class_label in zip(boxes, class_labels):
-            class_arg = box[-1] if class_label is None else class_label
-            class_name = self.arg_to_class[class_arg]
+        for box in boxes:
+            class_name = self.arg_to_class[box[-1]]
             boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
 
@@ -332,6 +327,17 @@ class NonMaximumSuppressionPerClass(Processor):
         return boxes, class_labels
 
 
+class MergeBoxWithClass(Processor):
+    """
+    """
+    def __init__(self):
+        super(MergeBoxWithClass, self).__init__()
+
+    def call(self, boxes, class_labels):
+        boxes = merge_box_with_class(boxes, class_labels)
+        return boxes
+
+
 class FilterBoxes(Processor):
     """Filters boxes outputted from function ``detect`` as
     ``Box2D`` messages.
@@ -347,10 +353,9 @@ class FilterBoxes(Processor):
             list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes, class_labels):
-        boxes, class_labels = filter_boxes(
-            boxes, class_labels, self.conf_thresh)
-        return boxes, class_labels
+    def call(self, boxes):
+        boxes = filter_boxes(boxes, self.conf_thresh)
+        return boxes
 
 
 class CropImage(Processor):
