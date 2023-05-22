@@ -278,6 +278,7 @@ class EfficientDetPostprocess(Processor):
             pr.RemoveClass(class_names, class_arg)])
         self.scale = pr.ScaleBox()
         self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
+        self.merge_box_and_class = pr.MergeBoxWithClass()
         self.filter_boxes = pr.FilterBoxes(class_names, score_thresh)
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
@@ -286,8 +287,9 @@ class EfficientDetPostprocess(Processor):
         box_data = self.postprocess(output)
         box_data = self.scale(box_data, image_scale)
         box_data, class_labels = self.nms_per_class(box_data)
-        box_data, class_labels = self.filter_boxes(box_data, class_labels)
-        boxes2D = self.to_boxes2D(box_data, class_labels)
+        box_data = self.merge_box_and_class(box_data, class_labels)
+        box_data = self.filter_boxes(box_data)
+        boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
         return boxes2D
 
