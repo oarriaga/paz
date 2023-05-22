@@ -328,8 +328,8 @@ class NonMaximumSuppressionPerClass(Processor):
 
 
 class MergeBoxWithClass(Processor):
-    """Merges box coordinates with their corresponding class into a
-    single output.
+    """Merges box coordinates with their corresponding class
+    into a single output.
     """
     def __init__(self):
         super(MergeBoxWithClass, self).__init__()
