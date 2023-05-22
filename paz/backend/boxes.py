@@ -419,10 +419,10 @@ def merge_box_with_class(boxes, class_labels):
         boxes: Array of shape `(num_boxes, 4 + num_classes)`.
     """
     class_predictions = boxes[:, 4:]
-    all_row = range(len(class_labels))
-    class_scores = class_predictions[all_row, class_labels]
+    all_rows = range(len(class_labels))
+    class_scores = class_predictions[all_rows, class_labels]
     boxes[:, 4:] = 0
-    boxes[:, 4:][all_row, class_labels] = class_scores
+    boxes[:, 4:][all_rows, class_labels] = class_scores
     return boxes
 
 
