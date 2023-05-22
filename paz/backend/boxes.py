@@ -316,8 +316,12 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
-    """Applies non-maximum-suppression per class.
+def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
+    """Applies non maximum suppression per class. This function takes
+    all the detections from the detector which consists of boxes and
+    their corresponding class scores to which it applies non maximum
+    suppression for every class independently and then combines the
+    result.
 
     # Arguments
         box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
@@ -337,14 +341,17 @@ def nms(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
     class_labels = np.array([], dtype=np.int)
     args = (decoded_boxes, class_predictions, epsilon, nms_thresh, top_k)
     for class_arg in range(num_classes):
-        nms_boxes, class_labels = nms_per_class(
+        nms_boxes, class_labels = _nms_per_class(
             nms_boxes, class_labels, class_arg, *args)
     return nms_boxes, class_labels
 
 
-def nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
-                  class_predictions, epsilon, nms_thresh, top_k):
-    """Applies non-maximum-suppression for a given class.
+def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
+                   class_predictions, epsilon, nms_thresh, top_k):
+    """Applies non maximum suppression for a given class. This function
+    takes all the detections that belong only to the given single class
+    and applies non maximum suppression for that class alone and returns
+    the resulting non suppressed boxes.
 
     # Arguments
         nms_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
