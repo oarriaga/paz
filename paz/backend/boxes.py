@@ -426,11 +426,13 @@ def merge_nms_box_with_class(box_data, class_labels):
     # Returns
         boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
     """
+    decoded_boxes = box_data[:, :4]
     class_predictions = box_data[:, 4:]
     args = get_score_from_class_label(class_predictions, class_labels)
     class_scores, all_rows = args
-    box_data[:, 4:] = 0
-    box_data[:, 4:][all_rows, class_labels] = class_scores
+    retained_class_score = np.zeros_like(class_predictions)
+    retained_class_score[all_rows, class_labels] = class_scores
+    box_data = np.concatenate((decoded_boxes, retained_class_score), axis=1)
     return box_data
 
 
