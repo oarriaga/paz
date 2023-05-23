@@ -331,8 +331,9 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns
-        Tuple: Containing non suppressed boxes and
-            corresponding class labels.
+        Tuple: Containing an array non suppressed boxes of shape
+            `(num_nms_boxes, 4 + num_classes)` and an array
+            of corresponding class labels of shape `(num_nms_boxes, )`.
     """
     decoded_boxes = box_data[:, :4]
     class_predictions = box_data[:, 4:]
@@ -355,7 +356,7 @@ def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
 
     # Arguments
         nms_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
-        class_labels: Array of shape `(1, )`.
+        class_labels: Array of shape `(num_boxes, )`.
         class_arg: Int, class index.
         decoded_boxes: Array of shape `(num_prior_boxes, 4)`.
         class_predictions: Array of shape
@@ -366,8 +367,10 @@ def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns
-        Tuple: Containing non suppressed boxes per class and
-            corresponding class labels.
+        Tuple: Containing an array non suppressed boxes per class of
+            shape `(num_nms_boxes_per_class, 4 + num_classes) and an
+            array corresponding class labels of shape
+            `(num_nms_boxes_per_class, )`.
     """
     scores, mask = pre_filter_nms(class_arg, class_predictions, epsilon)
 
@@ -397,7 +400,9 @@ def pre_filter_nms(class_arg, class_predictions, epsilon):
         epsilon: Float, threshold value for score filtering.
 
     # Returns
-        Tuple: Containing filtered scores and filter mask.
+        Tuple: Containing an array filtered scores of shape
+            `(num_pre_filtered_boxes, )` and an array filter mask of
+            shape `(num_prior_boxes, )`.
     """
     mask = class_predictions[:, class_arg] >= epsilon
     scores = class_predictions[:, class_arg][mask]
@@ -412,11 +417,11 @@ def merge_box_with_class(boxes, class_labels):
     single variable.
 
     # Arguments
-        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
-        class_labels: Array of shape `(1, )`.
+        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
+        class_labels: Array of shape `(num_nms_boxes, )`.
 
     # Returns
-        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
     """
     class_predictions = boxes[:, 4:]
     all_rows = range(len(class_labels))
@@ -603,12 +608,13 @@ def filter_boxes(boxes, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
-        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
         conf_thresh: Float, Filter boxes with a confidence value
             lower than this.
 
     # Returns
-        confident_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        confident_boxes: Array of shape
+            `(num_filtered_boxes, 4 + num_classes)`.
     """
     class_predictions = boxes[:, 4:]
     class_scores = np.max(class_predictions, axis=1)
