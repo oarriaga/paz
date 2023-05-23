@@ -428,10 +428,9 @@ def merge_nms_box_with_class(box_data, class_labels):
     """
     decoded_boxes = box_data[:, :4]
     class_predictions = box_data[:, 4:]
-    args = get_score_from_class_label(class_predictions, class_labels)
-    class_scores, all_rows = args
-    retained_class_score = np.zeros_like(class_predictions)
-    retained_class_score[all_rows, class_labels] = class_scores
+    class_scores = get_score_from_class_label(class_predictions, class_labels)
+    retained_class_score = set_score_from_class_label(
+        class_predictions, class_labels, class_scores)
     box_data = np.concatenate((decoded_boxes, retained_class_score), axis=1)
     return box_data
 
@@ -445,13 +444,33 @@ def get_score_from_class_label(class_predictions, class_labels):
         class_labels: Array of shape `(num_nms_boxes, )`.
 
     # Returns
-        Tuple: Containing an array `class_scores` of shape
-            `(num_nms_boxes, )` and `all_rows` of shape
-            `(num_nms_boxes, )`.
+        class_scores: Array of shape `(num_nms_boxes, )`.
     """
     all_rows = np.arange(len(class_labels))
     class_scores = class_predictions[all_rows, class_labels]
-    return class_scores, all_rows
+    return class_scores
+
+
+def set_score_from_class_label(class_predictions, class_labels, class_scores):
+    """Retains the score of class in `class_labels` and
+    sets other class scores to zero.
+
+    # Arguments
+        class_predictions: Array of shape
+            `(num_nms_boxes, num_classes)`.
+        class_labels: Array of shape `(num_nms_boxes, )`.
+        class_scores: Array of shape `(num_nms_boxes, )`.
+
+    # Returns
+        retained_class_score: Array of shape
+            `(num_nms_boxes, num_classes)`.
+    """
+    retained_class_score = np.zeros_like(class_predictions)
+    all_rows = np.arange(len(class_labels))
+    indices_2D = np.array(list(zip(all_rows, class_labels)))
+    indices_1D = np.ravel_multi_index(indices_2D.T, retained_class_score.shape)
+    np.put(retained_class_score, indices_1D, class_scores)
+    return retained_class_score
 
 
 def to_one_hot(class_indices, num_classes):
