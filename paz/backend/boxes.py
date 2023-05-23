@@ -427,7 +427,7 @@ def merge_nms_box_with_class(box_data, class_labels):
         boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
     """
     class_predictions = box_data[:, 4:]
-    all_rows = range(len(class_labels))
+    all_rows = np.arange(len(class_labels))
     class_scores = class_predictions[all_rows, class_labels]
     box_data[:, 4:] = 0
     box_data[:, 4:][all_rows, class_labels] = class_scores
