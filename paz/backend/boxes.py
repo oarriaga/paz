@@ -410,7 +410,10 @@ def pre_filter_nms(class_arg, class_predictions, epsilon):
 
 
 def merge_box_with_class(boxes, class_labels):
-    """Merges boxes and corresponding class.
+    """Merges box coordinates with their corresponding class
+    defined by `class_labels` which is decided by best box geometry
+    by non maximum suppression (and not by the best scoring class)
+    into a single output.
     This function retains only the predicted score of the class to
     which the box belongs to and sets the scores of all the remaining
     classes to zero, thereby combining box and class information in a

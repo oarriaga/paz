@@ -329,6 +329,8 @@ class NonMaximumSuppressionPerClass(Processor):
 
 class MergeBoxWithClass(Processor):
     """Merges box coordinates with their corresponding class
+    defined by `class_labels` which is decided by best box geometry
+    by non maximum suppression (and not by the best scoring class)
     into a single output.
     """
     def __init__(self):
