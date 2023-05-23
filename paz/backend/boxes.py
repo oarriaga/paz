@@ -427,11 +427,29 @@ def merge_nms_box_with_class(box_data, class_labels):
         boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
     """
     class_predictions = box_data[:, 4:]
-    all_rows = np.arange(len(class_labels))
-    class_scores = class_predictions[all_rows, class_labels]
+    args = get_score_from_class_label(class_predictions, class_labels)
+    class_scores, all_rows = args
     box_data[:, 4:] = 0
     box_data[:, 4:][all_rows, class_labels] = class_scores
     return box_data
+
+
+def get_score_from_class_label(class_predictions, class_labels):
+    """Returns the score of class in `class_labels`.
+
+    # Arguments
+        class_predictions: Array of shape
+            `(num_nms_boxes, num_classes)`.
+        class_labels: Array of shape `(num_nms_boxes, )`.
+
+    # Returns
+        Tuple: Containing an array `class_scores` of shape
+            `(num_nms_boxes, )` and `all_rows` of shape
+            `(num_nms_boxes, )`.
+    """
+    all_rows = np.arange(len(class_labels))
+    class_scores = class_predictions[all_rows, class_labels]
+    return class_scores, all_rows
 
 
 def to_one_hot(class_indices, num_classes):
