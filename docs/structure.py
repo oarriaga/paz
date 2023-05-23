@@ -48,6 +48,7 @@ PAGES = [
             boxes.pre_filter_nms,
             boxes.merge_nms_box_with_class,
             boxes.get_score_from_class_label,
+            boxes.set_score_from_class_label,
             boxes.offset,
             boxes.clip,
             boxes.compute_iou,
