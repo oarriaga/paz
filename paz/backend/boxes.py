@@ -409,7 +409,7 @@ def pre_filter_nms(class_arg, class_predictions, epsilon):
     return scores, mask
 
 
-def merge_box_with_class(box_data, class_labels):
+def merge_nms_box_with_class(box_data, class_labels):
     """Merges box coordinates with their corresponding class
     defined by `class_labels` which is decided by best box geometry
     by non maximum suppression (and not by the best scoring class)

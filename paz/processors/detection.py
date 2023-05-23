@@ -9,7 +9,7 @@ from ..backend.boxes import decode
 from ..backend.boxes import offset
 from ..backend.boxes import clip
 from ..backend.boxes import nms_per_class
-from ..backend.boxes import merge_box_with_class
+from ..backend.boxes import merge_nms_box_with_class
 from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
 from ..backend.boxes import filter_boxes
@@ -327,17 +327,17 @@ class NonMaximumSuppressionPerClass(Processor):
         return box_data, class_labels
 
 
-class MergeBoxWithClass(Processor):
+class MergeNMSBoxWithClass(Processor):
     """Merges box coordinates with their corresponding class
     defined by `class_labels` which is decided by best box geometry
     by non maximum suppression (and not by the best scoring class)
     into a single output.
     """
     def __init__(self):
-        super(MergeBoxWithClass, self).__init__()
+        super(MergeNMSBoxWithClass, self).__init__()
 
     def call(self, box_data, class_labels):
-        box_data = merge_box_with_class(box_data, class_labels)
+        box_data = merge_nms_box_with_class(box_data, class_labels)
         return box_data
 
 
