@@ -278,7 +278,7 @@ class EfficientDetPostprocess(Processor):
             pr.RemoveClass(class_names, class_arg)])
         self.scale = pr.ScaleBox()
         self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
-        self.merge_box_and_class = pr.MergeBoxWithClass()
+        self.merge_box_and_class = pr.MergeNMSBoxWithClass()
         self.filter_boxes = pr.FilterBoxes(class_names, score_thresh)
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
