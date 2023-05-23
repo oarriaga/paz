@@ -409,7 +409,7 @@ def pre_filter_nms(class_arg, class_predictions, epsilon):
     return scores, mask
 
 
-def merge_box_with_class(boxes, class_labels):
+def merge_box_with_class(box_data, class_labels):
     """Merges box coordinates with their corresponding class
     defined by `class_labels` which is decided by best box geometry
     by non maximum suppression (and not by the best scoring class)
@@ -420,18 +420,18 @@ def merge_box_with_class(boxes, class_labels):
     single variable.
 
     # Arguments
-        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
+        box_data: Array of shape `(num_nms_boxes, 4 + num_classes)`.
         class_labels: Array of shape `(num_nms_boxes, )`.
 
     # Returns
         boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
     """
-    class_predictions = boxes[:, 4:]
+    class_predictions = box_data[:, 4:]
     all_rows = range(len(class_labels))
     class_scores = class_predictions[all_rows, class_labels]
-    boxes[:, 4:] = 0
-    boxes[:, 4:][all_rows, class_labels] = class_scores
-    return boxes
+    box_data[:, 4:] = 0
+    box_data[:, 4:][all_rows, class_labels] = class_scores
+    return box_data
 
 
 def to_one_hot(class_indices, num_classes):

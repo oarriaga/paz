@@ -151,8 +151,8 @@ class ToBoxes2D(Processor):
         self.box_processor = method_to_processor[box_method]
         super(ToBoxes2D, self).__init__()
 
-    def call(self, boxes):
-        return self.box_processor(boxes)
+    def call(self, box_data):
+        return self.box_processor(box_data)
 
 
 class BoxesToBoxes2D(Processor):
@@ -175,9 +175,9 @@ class BoxesToBoxes2D(Processor):
         self.default_class = default_class
         super(BoxesToBoxes2D, self).__init__()
 
-    def call(self, boxes):
+    def call(self, box_data):
         boxes2D = []
-        for box in boxes:
+        for box in box_data:
             boxes2D.append(
                 Box2D(box[:4], self.default_score, self.default_class))
         return boxes2D
@@ -200,9 +200,9 @@ class BoxesWithOneHotVectorsToBoxes2D(Processor):
         self.arg_to_class = arg_to_class
         super(BoxesWithOneHotVectorsToBoxes2D, self).__init__()
 
-    def call(self, boxes):
+    def call(self, box_data):
         boxes2D = []
-        for box in boxes:
+        for box in box_data:
             class_scores = box[4:]
             class_arg = np.argmax(class_scores)
             score = class_scores[class_arg]
@@ -231,9 +231,9 @@ class BoxesWithClassArgToBoxes2D(Processor):
         self.arg_to_class = arg_to_class
         super(BoxesWithClassArgToBoxes2D, self).__init__()
 
-    def call(self, boxes):
+    def call(self, box_data):
         boxes2D = []
-        for box in boxes:
+        for box in box_data:
             class_name = self.arg_to_class[box[-1]]
             boxes2D.append(Box2D(box[:4], self.default_score, class_name))
         return boxes2D
@@ -321,10 +321,10 @@ class NonMaximumSuppressionPerClass(Processor):
         self.epsilon = epsilon
         super(NonMaximumSuppressionPerClass, self).__init__()
 
-    def call(self, boxes):
-        boxes, class_labels = nms_per_class(
-            boxes, self.nms_thresh, self.epsilon)
-        return boxes, class_labels
+    def call(self, box_data):
+        box_data, class_labels = nms_per_class(
+            box_data, self.nms_thresh, self.epsilon)
+        return box_data, class_labels
 
 
 class MergeBoxWithClass(Processor):
@@ -336,9 +336,9 @@ class MergeBoxWithClass(Processor):
     def __init__(self):
         super(MergeBoxWithClass, self).__init__()
 
-    def call(self, boxes, class_labels):
-        boxes = merge_box_with_class(boxes, class_labels)
-        return boxes
+    def call(self, box_data, class_labels):
+        box_data = merge_box_with_class(box_data, class_labels)
+        return box_data
 
 
 class FilterBoxes(Processor):
@@ -356,9 +356,9 @@ class FilterBoxes(Processor):
             list(range(len(self.class_names))), self.class_names))
         super(FilterBoxes, self).__init__()
 
-    def call(self, boxes):
-        boxes = filter_boxes(boxes, self.conf_thresh)
-        return boxes
+    def call(self, box_data):
+        box_data = filter_boxes(box_data, self.conf_thresh)
+        return box_data
 
 
 class CropImage(Processor):
@@ -394,12 +394,12 @@ class RemoveClass(Processor):
             del class_names[class_arg]
         super(RemoveClass, self).__init__()
 
-    def call(self, boxes):
+    def call(self, box_data):
         if not self.renormalize and self.class_arg is not None:
-            boxes = np.delete(boxes, 4 + self.class_arg, axis=1)
+            box_data = np.delete(box_data, 4 + self.class_arg, axis=1)
         elif self.renormalize:
             raise NotImplementedError
-        return boxes
+        return box_data
 
 
 class ScaleBox(Processor):
