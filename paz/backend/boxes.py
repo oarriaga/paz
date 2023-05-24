@@ -465,14 +465,14 @@ def set_score_from_class_label(class_predictions, class_labels, class_scores):
         retained_class_score: Array of shape
             `(num_nms_boxes, num_classes)`.
     """
-    all_rows = np.arange(len(class_labels))
-    indices_2D = np.array(list(zip(all_rows, class_labels)))
-    indices_1D = np.ravel_multi_index(indices_2D.T, class_predictions.shape)
-    num_all_class_scores = class_predictions.flatten().shape[0]
-    suppress_mask = [arg in indices_1D for arg in range(num_all_class_scores)]
-    suppress_mask = np.array(suppress_mask)
-    suppress_mask = suppress_mask.reshape(class_predictions.shape)
-    retained_class_score = np.multiply(class_predictions, suppress_mask)
+    indices_1D = np.arange(class_predictions.shape[1])
+    indices_1D = np.expand_dims(indices_1D, axis=0)
+    indices_2D = np.repeat(indices_1D, class_predictions.shape[0], axis=0)
+    class_labels = np.expand_dims(class_labels, axis=1)
+    class_labels = np.repeat(class_labels, class_predictions.shape[1], axis=1)
+    mask_inverted = np.array(indices_2D - class_labels, dtype=bool)
+    score_suppress_mask = np.logical_not(mask_inverted)
+    retained_class_score = np.multiply(class_predictions, score_suppress_mask)
     return retained_class_score
 
 
