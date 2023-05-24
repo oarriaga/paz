@@ -428,30 +428,13 @@ def merge_nms_box_with_class(box_data, class_labels):
     """
     decoded_boxes = box_data[:, :4]
     class_predictions = box_data[:, 4:]
-    class_scores = get_score_from_class_label(class_predictions, class_labels)
-    retained_class_score = set_score_from_class_label(
-        class_predictions, class_labels, class_scores)
+    retained_class_score = suppress_other_class_scores(
+        class_predictions, class_labels)
     box_data = np.concatenate((decoded_boxes, retained_class_score), axis=1)
     return box_data
 
 
-def get_score_from_class_label(class_predictions, class_labels):
-    """Returns the score of class in `class_labels`.
-
-    # Arguments
-        class_predictions: Array of shape
-            `(num_nms_boxes, num_classes)`.
-        class_labels: Array of shape `(num_nms_boxes, )`.
-
-    # Returns
-        class_scores: Array of shape `(num_nms_boxes, )`.
-    """
-    all_rows = np.arange(len(class_labels))
-    class_scores = class_predictions[all_rows, class_labels]
-    return class_scores
-
-
-def set_score_from_class_label(class_predictions, class_labels, class_scores):
+def suppress_other_class_scores(class_predictions, class_labels):
     """Retains the score of class in `class_labels` and
     sets other class scores to zero.
 
@@ -459,7 +442,6 @@ def set_score_from_class_label(class_predictions, class_labels, class_scores):
         class_predictions: Array of shape
             `(num_nms_boxes, num_classes)`.
         class_labels: Array of shape `(num_nms_boxes, )`.
-        class_scores: Array of shape `(num_nms_boxes, )`.
 
     # Returns
         retained_class_score: Array of shape
