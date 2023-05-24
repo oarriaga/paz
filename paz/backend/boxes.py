@@ -465,11 +465,14 @@ def set_score_from_class_label(class_predictions, class_labels, class_scores):
         retained_class_score: Array of shape
             `(num_nms_boxes, num_classes)`.
     """
-    retained_class_score = np.zeros_like(class_predictions)
     all_rows = np.arange(len(class_labels))
     indices_2D = np.array(list(zip(all_rows, class_labels)))
-    indices_1D = np.ravel_multi_index(indices_2D.T, retained_class_score.shape)
-    np.put(retained_class_score, indices_1D, class_scores)
+    indices_1D = np.ravel_multi_index(indices_2D.T, class_predictions.shape)
+    num_all_class_scores = class_predictions.flatten().shape[0]
+    suppress_mask = [arg in indices_1D for arg in range(num_all_class_scores)]
+    suppress_mask = np.array(suppress_mask)
+    suppress_mask = suppress_mask.reshape(class_predictions.shape)
+    retained_class_score = np.multiply(class_predictions, suppress_mask)
     return retained_class_score
 
 
