@@ -14,6 +14,9 @@ from paz.backend.boxes import to_image_coordinates
 from paz.backend.boxes import to_normalized_coordinates
 from paz.models.detection.utils import create_prior_boxes
 from paz.backend.boxes import extract_bounding_box_corners
+from paz.backend.boxes import nms_per_class
+from paz.backend.boxes import merge_nms_box_with_class
+from paz.models import SSD300
 
 # from paz.datasets import VOC
 # from paz.core.ops import get_ground_truths
@@ -103,6 +106,50 @@ def target_image_count():
 @pytest.fixture
 def target_box_count():
     return ([47223, 14976])
+
+
+@pytest.fixture
+def prior_boxes_SSD300():
+    return SSD300().prior_boxes
+
+
+@pytest.fixture
+def input_box_indices():
+    return np.array([0, 1, 2, 3, 65])
+
+
+@pytest.fixture
+def class_predictions():
+    return np.array(
+            [[0.21607161, 0.1958673, 0.15782336, 0.14358733, 0.2866504],
+             [0.21370212, 0.25497785, 0.11090728, 0.14044093, 0.27997182],
+             [0.13075765, 0.29108782, 0.15743962, 0.17582314, 0.24489177],
+             [0.2383799, 0.14701877, 0.20044762, 0.20865859, 0.20549512],
+             [0.12209236, 0.12411443, 0.20841956, 0.27059405, 0.2747796]])
+
+
+@pytest.fixture
+def target_nms_box_indices():
+    return np.array([
+        [3, 1, 2, 65, 2, 1, 3, 65, 65, 3, 2, 1, 65, 3, 2, 1, 0, 65],
+        [3, 1, 2, 1, 65, 3, 65, 3, 0, 65],
+        [3, 0, 1, 2, 65, 2, 1, 0, 3, 65, 65, 3, 0, 2, 1, 65, 3, 2, 0,
+         1, 0, 1, 65, 2, 3],
+        [3, 0, 1, 2, 1, 65, 3, 65, 3, 0, 1, 65, 2, 3],
+        [3, 1, 2, 65, 2, 1, 3, 65, 65, 3, 2, 1, 65, 3, 2, 1, 0, 1, 65]
+        ])
+
+
+@pytest.fixture
+def target_class_labels():
+    return np.array([
+        [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4],
+        [0, 0, 1, 1, 2, 2, 3, 3, 4, 4],
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3,
+         4, 4, 4, 4, 4],
+        [0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4, 4],
+        [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4]
+        ])
 
 
 def test_compute_iou(boxes, target):
@@ -199,6 +246,43 @@ def test_extract_corners3D(points3D):
     assert np.allclose(bottom_left, np.array([10, 5, 2]))
     assert np.allclose(top_right, np.array([267, 310, 299]))
 
+
+@pytest.mark.parametrize(
+                            ('arg, nms_thresh, epsilon'),
+                            [
+                                (0, 0.45, 0.01),
+                                (1, 0.45, 0.2),
+                                (2, 0.75, 0.01),
+                                (3, 0.75, 0.2),
+                                (4, 0.50, 0.01),
+                            ]
+                        )
+def test_nms_per_class_and_merge_box(
+    arg, nms_thresh, epsilon, prior_boxes_SSD300, input_box_indices,
+        class_predictions, target_nms_box_indices, target_class_labels):
+    target_nms_box_indices = target_nms_box_indices[arg]
+    target_class_labels = target_class_labels[arg]
+    boxes = prior_boxes_SSD300[input_box_indices]
+    box_data = np.concatenate((boxes, class_predictions), axis=1)
+    nms_boxes, class_labels = nms_per_class(box_data, nms_thresh, epsilon, 200)
+    assert nms_boxes.shape[0] == len(class_labels), (
+        'Number of boxes and number of classes mismatch')
+    assert nms_boxes.shape[0] == len(target_class_labels), (
+        'Number of returned non suppressed boxes incorrect')
+    assert np.all(
+        nms_boxes[:, :4] == prior_boxes_SSD300[target_nms_box_indices]), (
+        'Incorrect non suppressed boxes')
+    assert np.all(class_labels == target_class_labels), (
+        'Incorrect returned class labels')
+    merged_box_data = merge_nms_box_with_class(nms_boxes, class_labels)
+    retained_score_index = np.argmax(merged_box_data[:, 4:], axis=1)
+    retained_scores = merged_box_data[:, 4:][np.arange(
+        len(retained_score_index)), retained_score_index]
+    row_wise_score_sum = np.sum(merged_box_data[:, 4:], axis=1)
+    assert np.all(retained_score_index == target_class_labels), (
+        'Expected score is not retained')
+    assert np.all(retained_scores == row_wise_score_sum), (
+        'Other scores are not all zeros')
 
 # def test_data_loader_check():
 #     voc_root = './examples/object_detection/data/VOCdevkit/'
