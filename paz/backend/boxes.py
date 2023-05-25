@@ -324,7 +324,9 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
     then combines the result.
 
     # Arguments
-        box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
+        box_data: Array of shape `(num_nms_boxes, 4 + num_classes)`
+            containing the box coordinates as well as the predicted
+            scores of all the classes for all non suppressed boxes.
         nms_thresh: Float, Non-maximum suppression threshold.
         epsilon: Float, Filter scores with a lower confidence
             value before performing non-maximum supression.
@@ -358,9 +360,12 @@ def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
         nms_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
         class_labels: Array of shape `(num_boxes, )`.
         class_arg: Int, class index.
-        decoded_boxes: Array of shape `(num_prior_boxes, 4)`.
+        decoded_boxes: Array of shape `(num_prior_boxes, 4)`
+            containing the box coordinates of all the
+            non suppressed boxes.
         class_predictions: Array of shape
-            `(num_prior_boxes, num_classes)`.
+            `(num_nms_boxes, num_classes)` containing the predicted
+            scores of all the classes for all the non suppressed boxes.
         epsilon: Float, Filter scores with a lower confidence
             value before performing non-maximum supression.
         nms_thresh: Float, Non-maximum suppression threshold.
@@ -396,7 +401,8 @@ def pre_filter_nms(class_arg, class_predictions, epsilon):
     # Arguments
         class_arg: Int, class index.
         class_predictions: Array of shape
-            `(num_prior_boxes, num_classes)`.
+            `(num_nms_boxes, num_classes)` containing the predicted
+            scores of all the classes for all the non suppressed boxes.
         epsilon: Float, threshold value for score filtering.
 
     # Returns
@@ -420,8 +426,11 @@ def merge_nms_box_with_class(box_data, class_labels):
     single variable.
 
     # Arguments
-        box_data: Array of shape `(num_nms_boxes, 4 + num_classes)`.
-        class_labels: Array of shape `(num_nms_boxes, )`.
+        box_data: Array of shape `(num_nms_boxes, 4 + num_classes)`
+            containing the box coordinates as well as the predicted
+            scores of all the classes for all non suppressed boxes.
+        class_labels: Array of shape `(num_nms_boxes, )` that contains
+            the indices of the class whose score is to be retained.
 
     # Returns
         boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
@@ -440,8 +449,10 @@ def suppress_other_class_scores(class_predictions, class_labels):
 
     # Arguments
         class_predictions: Array of shape
-            `(num_nms_boxes, num_classes)`.
-        class_labels: Array of shape `(num_nms_boxes, )`.
+            `(num_nms_boxes, num_classes)` containing the predicted
+            scores of all the classes for all the non suppressed boxes.
+        class_labels: Array of shape `(num_nms_boxes, )` that contains
+            the indices of the class whose score is to be retained.
 
     # Returns
         retained_class_score: Array of shape
