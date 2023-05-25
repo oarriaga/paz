@@ -433,7 +433,10 @@ def merge_nms_box_with_class(box_data, class_labels):
             the indices of the class whose score is to be retained.
 
     # Returns
-        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
+        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`,
+            containing coordinates of non supressed boxes along with
+            scores of the class to which the box belongs. The scores of
+            the other classes are zeros.
     """
     decoded_boxes = box_data[:, :4]
     class_predictions = box_data[:, 4:]
@@ -456,7 +459,19 @@ def suppress_other_class_scores(class_predictions, class_labels):
 
     # Returns
         retained_class_score: Array of shape
-            `(num_nms_boxes, num_classes)`.
+            `(num_nms_boxes, num_classes)` that consists of score at
+            only those location specified by 'class_labels' and zero
+            at other class locations.
+
+    # Note
+        This approach retains the scores of that class in
+        `class_predictions` defined by `class_labels` by generating
+        a boolean mask `score_suppress_mask` with elements True at the
+        locations where the score in `class_predictions` is to be
+        retained and False wherever the class score is to be suppressed.
+        This approach of retaining/suppressing scores does not make use
+        of for loop, if-else condition and direct value assignment
+        to arrays.
     """
     num_nms_boxes, num_classes = class_predictions.shape
     class_indices = np.arange(num_classes)
@@ -464,8 +479,15 @@ def suppress_other_class_scores(class_predictions, class_labels):
     class_indices = np.repeat(class_indices, num_nms_boxes, axis=0)
     class_labels = np.expand_dims(class_labels, axis=1)
     class_labels = np.repeat(class_labels, num_classes, axis=1)
-    mask_inverted = np.array(class_indices - class_labels, dtype=bool)
-    score_suppress_mask = np.logical_not(mask_inverted)
+    """
+    The difference of class_indices and class_labels contains zero
+    at those locations of the result where the score is to be retained
+    whose boolean value is False while others being True. This
+    difference obtained as a boolean array gives a negative mask which
+    when inverted gives the score_suppress_mask.
+    """
+    negative_mask = np.array(class_indices - class_labels, dtype=bool)
+    score_suppress_mask = np.logical_not(negative_mask)
     retained_class_score = np.multiply(class_predictions, score_suppress_mask)
     return retained_class_score
 
