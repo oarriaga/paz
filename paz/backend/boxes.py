@@ -447,12 +447,13 @@ def suppress_other_class_scores(class_predictions, class_labels):
         retained_class_score: Array of shape
             `(num_nms_boxes, num_classes)`.
     """
-    indices_1D = np.arange(class_predictions.shape[1])
-    indices_1D = np.expand_dims(indices_1D, axis=0)
-    indices_2D = np.repeat(indices_1D, class_predictions.shape[0], axis=0)
+    num_nms_boxes, num_classes = class_predictions.shape
+    class_indices = np.arange(num_classes)
+    class_indices = np.expand_dims(class_indices, axis=0)
+    class_indices = np.repeat(class_indices, num_nms_boxes, axis=0)
     class_labels = np.expand_dims(class_labels, axis=1)
-    class_labels = np.repeat(class_labels, class_predictions.shape[1], axis=1)
-    mask_inverted = np.array(indices_2D - class_labels, dtype=bool)
+    class_labels = np.repeat(class_labels, num_classes, axis=1)
+    mask_inverted = np.array(class_indices - class_labels, dtype=bool)
     score_suppress_mask = np.logical_not(mask_inverted)
     retained_class_score = np.multiply(class_predictions, score_suppress_mask)
     return retained_class_score
