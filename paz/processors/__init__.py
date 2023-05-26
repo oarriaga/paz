@@ -20,6 +20,7 @@ from .detection import BoxesToBoxes2D
 from .detection import BoxesWithOneHotVectorsToBoxes2D
 from .detection import BoxesWithClassArgToBoxes2D
 from .detection import RoundBoxes
+from .detection import MergeNMSBoxWithClass
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D

@@ -316,43 +316,180 @@ def apply_non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     return selected_indices.astype(int), num_selected_boxes
 
 
-def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01,
-                  conf_thresh=0.5, top_k=200):
-    """Applies non-maximum-suppression per class.
+def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
+    """Applies non maximum suppression per class.
+    This function takes all the detections from the detector which
+    consists of boxes and their corresponding class scores to which it
+    applies non maximum suppression for every class independently and
+    then combines the result.
 
     # Arguments
-        box_data: Array of shape `(num_prior_boxes, 4 + num_classes)`.
+        box_data: Array of shape `(num_nms_boxes, 4 + num_classes)`
+            containing the box coordinates as well as the predicted
+            scores of all the classes for all non suppressed boxes.
         nms_thresh: Float, Non-maximum suppression threshold.
         epsilon: Float, Filter scores with a lower confidence
             value before performing non-maximum supression.
-        conf_thresh: Float, Filter out boxes with a confidence value
-            lower than this.
         top_k: Int, Maximum number of boxes per class outputted by nms.
 
     # Returns
-        Array of shape `(num_boxes, 4+ num_classes)`.
+        Tuple: Containing an array non suppressed boxes of shape
+            `(num_nms_boxes, 4 + num_classes)` and an array
+            of corresponding class labels of shape `(num_nms_boxes, )`.
     """
-    decoded_boxes, class_predictions = box_data[:, :4], box_data[:, 4:]
+    decoded_boxes = box_data[:, :4]
+    class_predictions = box_data[:, 4:]
     num_classes = class_predictions.shape[1]
-    non_suppressed_boxes = np.array(
-        [], dtype=float).reshape(0, box_data.shape[1])
+    nms_boxes = np.array([], dtype=float).reshape(0, box_data.shape[1])
+    class_labels = np.array([], dtype=np.int)
+    args = (decoded_boxes, class_predictions, epsilon, nms_thresh, top_k)
     for class_arg in range(num_classes):
-        mask = class_predictions[:, class_arg] >= epsilon
-        scores = class_predictions[:, class_arg][mask]
-        if len(scores) == 0:
-            continue
+        nms_boxes, class_labels = _nms_per_class(
+            nms_boxes, class_labels, class_arg, *args)
+    return nms_boxes, class_labels
+
+
+def _nms_per_class(nms_boxes, class_labels, class_arg, decoded_boxes,
+                   class_predictions, epsilon, nms_thresh, top_k):
+    """Applies non maximum suppression for a given class.
+    This function takes all the detections that belong only to the given
+    single class and applies non maximum suppression for that class
+    alone and returns the resulting non suppressed boxes.
+
+    # Arguments
+        nms_boxes: Array of shape `(num_boxes, 4 + num_classes)`.
+        class_labels: Array of shape `(num_boxes, )`.
+        class_arg: Int, class index.
+        decoded_boxes: Array of shape `(num_prior_boxes, 4)`
+            containing the box coordinates of all the
+            non suppressed boxes.
+        class_predictions: Array of shape
+            `(num_nms_boxes, num_classes)` containing the predicted
+            scores of all the classes for all the non suppressed boxes.
+        epsilon: Float, Filter scores with a lower confidence
+            value before performing non-maximum supression.
+        nms_thresh: Float, Non-maximum suppression threshold.
+        top_k: Int, Maximum number of boxes per class outputted by nms.
+
+    # Returns
+        Tuple: Containing an array non suppressed boxes per class of
+            shape `(num_nms_boxes_per_class, 4 + num_classes) and an
+            array corresponding class labels of shape
+            `(num_nms_boxes_per_class, )`.
+    """
+    scores, mask = pre_filter_nms(class_arg, class_predictions, epsilon)
+
+    if len(scores) != 0:
         boxes = decoded_boxes[mask]
-        indices, count = apply_non_max_suppression(
-            boxes, scores, nms_thresh, top_k)
+        selected = apply_non_max_suppression(boxes, scores, nms_thresh, top_k)
+        indices, count = selected
         selected_indices = indices[:count]
-        classes = class_predictions[mask]
-        selections = np.concatenate(
-            (boxes[selected_indices],
-             classes[selected_indices]), axis=1)
-        filter_mask = selections[:, 4 + class_arg] >= conf_thresh
-        non_suppressed_boxes = np.concatenate(
-            (non_suppressed_boxes, selections[filter_mask]), axis=0)
-    return non_suppressed_boxes
+        selected_boxes = boxes[selected_indices]
+        selected_classes = class_predictions[mask][selected_indices]
+        selections = np.concatenate((selected_boxes, selected_classes), axis=1)
+        nms_boxes = np.concatenate((nms_boxes, selections), axis=0)
+        class_label = np.repeat(class_arg, count)
+        class_labels = np.append(class_labels, class_label)
+    return nms_boxes, class_labels
+
+
+def pre_filter_nms(class_arg, class_predictions, epsilon):
+    """Applies score filtering.
+    This function takes all the predicted scores of a given class and
+    filters out all the predictions less than the given `epsilon` value.
+
+    # Arguments
+        class_arg: Int, class index.
+        class_predictions: Array of shape
+            `(num_nms_boxes, num_classes)` containing the predicted
+            scores of all the classes for all the non suppressed boxes.
+        epsilon: Float, threshold value for score filtering.
+
+    # Returns
+        Tuple: Containing an array filtered scores of shape
+            `(num_pre_filtered_boxes, )` and an array filter mask of
+            shape `(num_prior_boxes, )`.
+    """
+    mask = class_predictions[:, class_arg] >= epsilon
+    scores = class_predictions[:, class_arg][mask]
+    return scores, mask
+
+
+def merge_nms_box_with_class(box_data, class_labels):
+    """Merges box coordinates with their corresponding class
+    defined by `class_labels` which is decided by best box geometry
+    by non maximum suppression (and not by the best scoring class)
+    into a single output.
+    This function retains only the predicted score of the class to
+    which the box belongs to and sets the scores of all the remaining
+    classes to zero, thereby combining box and class information in a
+    single variable.
+
+    # Arguments
+        box_data: Array of shape `(num_nms_boxes, 4 + num_classes)`
+            containing the box coordinates as well as the predicted
+            scores of all the classes for all non suppressed boxes.
+        class_labels: Array of shape `(num_nms_boxes, )` that contains
+            the indices of the class whose score is to be retained.
+
+    # Returns
+        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`,
+            containing coordinates of non supressed boxes along with
+            scores of the class to which the box belongs. The scores of
+            the other classes are zeros.
+    """
+    decoded_boxes = box_data[:, :4]
+    class_predictions = box_data[:, 4:]
+    retained_class_score = suppress_other_class_scores(
+        class_predictions, class_labels)
+    box_data = np.concatenate((decoded_boxes, retained_class_score), axis=1)
+    return box_data
+
+
+def suppress_other_class_scores(class_predictions, class_labels):
+    """Retains the score of class in `class_labels` and
+    sets other class scores to zero.
+
+    # Arguments
+        class_predictions: Array of shape
+            `(num_nms_boxes, num_classes)` containing the predicted
+            scores of all the classes for all the non suppressed boxes.
+        class_labels: Array of shape `(num_nms_boxes, )` that contains
+            the indices of the class whose score is to be retained.
+
+    # Returns
+        retained_class_score: Array of shape
+            `(num_nms_boxes, num_classes)` that consists of score at
+            only those location specified by 'class_labels' and zero
+            at other class locations.
+
+    # Note
+        This approach retains the scores of that class in
+        `class_predictions` defined by `class_labels` by generating
+        a boolean mask `score_suppress_mask` with elements True at the
+        locations where the score in `class_predictions` is to be
+        retained and False wherever the class score is to be suppressed.
+        This approach of retaining/suppressing scores does not make use
+        of for loop, if-else condition and direct value assignment
+        to arrays.
+    """
+    num_nms_boxes, num_classes = class_predictions.shape
+    class_indices = np.arange(num_classes)
+    class_indices = np.expand_dims(class_indices, axis=0)
+    class_indices = np.repeat(class_indices, num_nms_boxes, axis=0)
+    class_labels = np.expand_dims(class_labels, axis=1)
+    class_labels = np.repeat(class_labels, num_classes, axis=1)
+    """
+    The difference of class_indices and class_labels contains zero
+    at those locations of the result where the score is to be retained
+    whose boolean value is False while others being True. This
+    difference obtained as a boolean array gives a negative mask which
+    when inverted gives the score_suppress_mask.
+    """
+    negative_mask = np.array(class_indices - class_labels, dtype=bool)
+    score_suppress_mask = np.logical_not(negative_mask)
+    retained_class_score = np.multiply(class_predictions, score_suppress_mask)
+    return retained_class_score
 
 
 def to_one_hot(class_indices, num_classes):
@@ -532,17 +669,19 @@ def filter_boxes(boxes, conf_thresh):
     """Filters given boxes based on scores.
 
     # Arguments
-        boxes: Array of shape `(num_boxes, 4 + num_classes)`.
-        conf_thresh: Float, Filter boxes with a confidence value lower
-            than this.
+        boxes: Array of shape `(num_nms_boxes, 4 + num_classes)`.
+        conf_thresh: Float, Filter boxes with a confidence value
+            lower than this.
 
     # Returns
-        Numpy array of shape `(num_boxes, 4 + num_classes)`.
+        confident_boxes: Array of shape
+            `(num_filtered_boxes, 4 + num_classes)`.
     """
-    max_class_score = np.max(boxes[:, 4:], axis=1)
-    confidence_mask = max_class_score >= conf_thresh
-    confident_class_detections = boxes[confidence_mask]
-    return confident_class_detections
+    class_predictions = boxes[:, 4:]
+    class_scores = np.max(class_predictions, axis=1)
+    confidence_mask = class_scores >= conf_thresh
+    confident_boxes = boxes[confidence_mask]
+    return confident_boxes
 
 
 def scale_box(predictions, image_scales):
