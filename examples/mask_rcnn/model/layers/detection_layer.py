@@ -3,8 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 from tensorflow.python.eager import context
 
-from mask_rcnn.utils import slice_batch
-from mask_rcnn.backend.tensorflow_boxes import apply_box_delta, clip_boxes, norm_boxes_graph
+from mask_rcnn.model.layer_utils import apply_box_delta, clip_boxes, slice_batch
 
 
 def get_top_detections(scores, keep, nms_keep, detection_max_instances):

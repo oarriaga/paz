@@ -20,9 +20,6 @@ from mask_rcnn.layer_utils import transform_ROI_coordinates, compute_max_ROI_lev
 from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 
 
-# disable_eager_execution()
-
-
 @pytest.fixture
 def model():
     window = norm_boxes_graph((171, 0, 853, 1024), (640, 640))

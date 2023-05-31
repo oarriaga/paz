@@ -2,8 +2,51 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
-from mask_rcnn.utils import slice_batch
-from mask_rcnn.backend.tensorflow_boxes import refine_bounding_box, trim_zeros
+from mask_rcnn.model.layer_utils import slice_batch
+
+
+def trim_zeros(boxes, name='trim_zeros'):
+    """Often boxes are represented with matrices of shape [N, 4] and
+       are padded with zeros. This removes zero boxes.
+
+    # Arguments:
+        boxes: [N, 4] matrix of boxes.
+        non_zeros: [N] a 1D boolean mask identifying the rows to keep
+    """
+    non_zeros = tf.cast(tf.reduce_sum(tf.abs(boxes), axis=1), tf.bool)
+    boxes = tf.boolean_mask(boxes, non_zeros, name=name)
+    return boxes, non_zeros
+
+
+def refine_bounding_box(box, prior_box):
+    """Compute refinement needed to transform box to groundtruth_box.
+
+    # Arguments:
+        box: [N, (y_min, x_min, y_max, x_max)]
+        prior_box: Ground-truth box [N, (y_min, x_min, y_max, x_max)]
+    """
+    box = tf.cast(box, tf.float32)
+    prior_box = tf.cast(prior_box, tf.float32)
+    x_box = box[:, 0]
+    y_box = box[:, 1]
+
+    H = box[:, 2] - x_box
+    W = box[:, 3] - y_box
+    center_y = x_box + (0.5 * H)
+    center_x = y_box + (0.5 * W)
+
+    prior_H = prior_box[:, 2] - prior_box[:, 0]
+    prior_W = prior_box[:, 3] - prior_box[:, 1]
+    prior_center_y = prior_box[:, 0] + (0.5 * prior_H)
+    prior_center_x = prior_box[:, 1] + (0.5 * prior_W)
+
+    dy = (prior_center_y - center_y) / H
+    dx = (prior_center_x - center_x) / W
+    dh = tf.math.log(prior_H / H)
+    dw = tf.math.log(prior_W / W)
+
+    result = tf.stack([dy, dx, dh, dw], axis=1)
+    return result
 
 
 def pad_ROIs_value(positive_ROIs, negative_ROIs, ROI_class_ids, deltas,

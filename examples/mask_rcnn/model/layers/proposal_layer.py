@@ -3,8 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 from tensorflow.python.eager import context
 
-from mask_rcnn.utils import slice_batch
-from mask_rcnn.backend.tensorflow_boxes import apply_box_delta, clip_boxes
+from mask_rcnn.model.layer_utils import apply_box_delta, clip_boxes, slice_batch
 
 
 def trim_anchors_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit):
@@ -132,7 +131,7 @@ class ProposalLayer(Layer):
                                 compute_NMS, self.images_per_gpu)
 
         # if not context.executing_eagerly():
-        #     # Infer the static output shape:
         #     out_shape = self.compute_output_shape(None)
         #     proposals.set_shape(out_shape)
+
         return proposals

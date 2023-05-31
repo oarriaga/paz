@@ -1,9 +1,9 @@
 import numpy as np
 
-from paz.backend.boxes import to_center_form
+from paz.backend.boxes import to_center_form, compute_ious
 
 
-def norm_boxes(boxes, shape):
+def norm_boxes(boxes, shape):  # TODO: paz has to_normalised_coordinate function ; but doesnt work for graph execution
     """Converts boxes from pixel coordinates to normalized coordinates.
     boxes: [N, (y1, x1, y2, x2)] in pixel coordinates
     shape: [..., (height, width)] in pixels
@@ -14,13 +14,13 @@ def norm_boxes(boxes, shape):
     Returns:
         [N, (y1, x1, y2, x2)] in normalized coordinates
     """
-    h, w = shape
-    scale = np.array([h - 1., w - 1., h - 1., w - 1.])
+    W, H = shape
+    scale = np.array([W - 1., H - 1., W - 1., H - 1.])
     shift = np.array([0., 0., 1., 1.])
     return np.divide((boxes - shift), scale).astype(np.float32)
 
 
-def denorm_boxes(boxes, shape):
+def denorm_boxes(boxes, shape):  # TODO: paz has to_image_coordinate function ; but doesnt work for graph execution
     """Converts boxes from normalized coordinates to pixel coordinates.
     boxes: [N, (y1, x1, y2, x2)] in normalized coordinates
     shape: [..., (height, width)] in pixels
@@ -31,48 +31,10 @@ def denorm_boxes(boxes, shape):
     Returns:
         [N, (y1, x1, y2, x2)] in pixel coordinates
     """
-    h, w = shape
-    scale = np.array([h - 1, w - 1, h - 1, w - 1])
+    W, H = shape
+    scale = np.array([W - 1, H - 1, W - 1, H - 1])
     shift = np.array([0., 0., 1., 1.])
     return np.around(np.multiply(boxes, scale) + shift).astype(np.int32)
-
-
-def compute_iou(box, boxes, box_area, boxes_area):  # TODO: modify the function to match the paz function format
-    """Calculates IoU of the given box with the array of the given boxes.
-
-    # Arguments:
-        box: 1D vector [y_min, x_min, y_max, x_max]
-        boxes: [boxes_count, (y_min, x_min, y_max, x_max)]
-        box_area: float. the area of 'box'
-        boxes_area: array of length boxes_count.
-
-    # Returns:
-        Intersection over union of given boxes
-    """
-    y_min = np.maximum(box[0], boxes[:, 0])
-    y_max = np.minimum(box[2], boxes[:, 2])
-    x_min = np.maximum(box[1], boxes[:, 1])
-    x_max = np.minimum(box[3], boxes[:, 3])
-    intersection = np.maximum(x_max - x_min, 0) * np.maximum(y_max - y_min, 0)
-    union = box_area + boxes_area[:] - intersection[:]
-    iou = intersection / union
-    return iou
-
-
-def compute_overlaps(boxes_A, boxes_B):  # TODO: modify the function to match the paz function format
-    """Computes IoU overlaps between two sets of boxes.
-
-    # Arguments:
-        boxes_A, boxes_B: [N, (y_min, x_min, y_max, x_max)].
-    """
-    area1 = (boxes_A[:, 2] - boxes_A[:, 0]) * (boxes_A[:, 3] - boxes_A[:, 1])
-    area2 = (boxes_B[:, 2] - boxes_B[:, 0]) * (boxes_B[:, 3] - boxes_B[:, 1])
-
-    overlaps = np.zeros((boxes_A.shape[0], boxes_B.shape[0]))
-    for i in range(overlaps.shape[1]):
-        box_B = boxes_B[i]
-        overlaps[:, i] = compute_iou(box_B, boxes_A, area2[i], area1)
-    return overlaps
 
 
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
@@ -82,19 +44,19 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
        all levels of the pyramid.
 
     # Returns:
-        anchors: [N, (y1, x1, y2, x2)]. All generated anchors in one array.
+        anchors: [N, (x1, y1, x2, y2)]. All generated anchors in one array.
                  Sorted with the same order of the given scales.
     """
     anchors = []
-    for level in range(len(scales)):
-        anchors.append(generate_anchors(scales[level], ratios,
-                                        feature_shapes[level],
-                                        feature_strides[level], anchor_stride))
+    for scale, feature_shape, feature_stride in zip(scales, feature_shapes,
+                                                    feature_strides):
+        anchors.append(generate_anchors(scale, ratios, feature_shape,
+                                        feature_stride, anchor_stride))
     return np.concatenate(anchors, axis=0)
 
 
 def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
-    """Generates anchor boxes
+    """Generates anchor boxes.
 
     # Arguments:
         scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
@@ -104,6 +66,9 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
         feature_stride: feature map stride relative to the image in pixels.
         anchor_stride: anchor stride on feature map. For example, if the
             value is 2 then generate anchors for every other feature map pixel.
+
+    # Returns:
+        anchor boxes: [no. of anchors, (y_min, x_min, y_max, x_max)]
     """
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
@@ -111,46 +76,45 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
 
     heights = scales / np.sqrt(ratios)
     widths = scales * np.sqrt(ratios)
-    shifts_Y = np.arange(0, shape[0], anchor_stride) * feature_stride
-    shifts_X = np.arange(0, shape[1], anchor_stride) * feature_stride
+
+    shifts_X = np.arange(0, shape[0], anchor_stride) * feature_stride
+    shifts_Y = np.arange(0, shape[1], anchor_stride) * feature_stride
     shifts_X, shifts_Y = np.meshgrid(shifts_X, shifts_Y)
 
     box_widths, box_center_X = np.meshgrid(widths, shifts_X)
     box_heights, box_center_Y = np.meshgrid(heights, shifts_Y)
 
-    box_centers = np.stack([box_center_Y, box_center_X], axis=2).reshape([-1, 2])
-    box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
+    box_centers = np.stack([box_center_X, box_center_Y], axis=2).reshape([-1, 2])
+    box_sizes = np.stack([box_widths, box_heights], axis=2).reshape([-1, 2])
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
     return boxes
 
 
-def extract_boxes(mask):
+def extract_boxes_from_mask(mask):
     """Compute bounding boxes from masks.
     mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
-    Returns: box array [num_instances, (y1, x1, y2, x2)].
+
+    Returns: box array [no. of instances, (x1, y1, x2, y2)].
     """
     boxes = np.zeros([mask.shape[-1], 4], dtype=np.int32)
     for i in range(mask.shape[-1]):
         m = mask[:, :, i]
-        # Bounding box.
         horizontal_indicies = np.where(np.any(m, axis=0))[0]
         vertical_indicies = np.where(np.any(m, axis=1))[0]
         if horizontal_indicies.shape[0]:
             x1, x2 = horizontal_indicies[[0, -1]]
             y1, y2 = vertical_indicies[[0, -1]]
-            # x2 and y2 should not be part of the box. Increment by 1.
             x2 += 1
             y2 += 1
         else:
-            # No mask for this instance. Might happen due to
-            # resizing or cropping. Set box to zeros
             x1, x2, y1, y2 = 0, 0, 0, 0
-        boxes[i] = np.array([y1, x1, y2, x2])
+        boxes[i] = np.array([x1-1, y1-1, x2-1, y2-1])
     return boxes.astype(np.int32)
 
 
-def compute_rpn_bounding_box(groundtruth_boxes, rpn_match, anchors, anchor_iou_argmax):
+def compute_rpn_bounding_box(groundtruth_boxes, rpn_match, anchors,
+                             anchor_iou_argmax):
     """
     For positive anchors, compute shift and scale needed to transform them
     to match the corresponding groundtruth boxes.
@@ -165,33 +129,24 @@ def compute_rpn_bounding_box(groundtruth_boxes, rpn_match, anchors, anchor_iou_a
 
         groundtruth = groundtruth_boxes[anchor_iou_argmax[i]]
 
-        groundtruth = box_to_center_format(groundtruth)
-        a = box_to_center_format(a)
-        rpn_box[ix] = normalize_log_refinement(a, groundtruth)
+        groundtruth = np.expand_dims(groundtruth, axis=0)
+        a = np.expand_dims(a, axis=0)
 
+        groundtruth = to_center_form(groundtruth)
+        a = to_center_form(a)
+
+        groundtruth = np.squeeze(groundtruth, axis=0)
+        a = np.squeeze(a, axis=0)
+
+        rpn_box[ix] = normalize_log_refinement(a, groundtruth)
         rpn_box[ix] /= np.array([0.1, 0.1, 0.2, 0.2])
         ix += 1
     return rpn_box
 
 
-def box_to_center_format(box):
-    """
-    Converts bounding box of format center, width and height.
-    # Argument
-     box: [xmin, ymin, xmax, ymax]
-    # Return:
-     box: [xcenter, ycenter, width, height]
-    """
-    H = box[2] - box[0]
-    W = box[3] - box[1]
-    center_y = box[0] + 0.5 * H
-    center_x = box[1] + 0.5 * W
-    return [center_y, center_x, H, W]
-
-
 def normalize_log_refinement(box, ground_truth_box):
     """
-    Compute the box refinement that the RPN should predict
+    Compute the logarithmic box refinement that the RPN should predict.
     # Return:
      rpn_box = [dy, dx, log(dh), log(dw)]
     """
@@ -206,7 +161,7 @@ def normalize_log_refinement(box, ground_truth_box):
     return rpn_box
 
 
-def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids, groundtruth_boxes):
+def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids, groundtruth_boxes, crowd_threshold=0.001):
     """Given the anchors and groundtruth boxes, compute overlaps by handling the crowds.
     A crowd box in COCO is a bounding box around several instances. Exclude
     them from training. A crowd box is given a negative class ID.
@@ -226,17 +181,16 @@ def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids, groundtruth_bo
         crowd_boxes = groundtruth_boxes[crowd_ix]
         groundtruth_class_ids = groundtruth_class_ids[non_crowd_ix]
         groundtruth_boxes = groundtruth_boxes[non_crowd_ix]
-        crowd_overlaps = compute_overlaps(anchors, crowd_boxes)
+        crowd_overlaps = compute_ious(anchors, crowd_boxes)
         crowd_iou_max = np.amax(crowd_overlaps, axis=1)
-        no_crowd_bool = (crowd_iou_max < 0.001)
+        no_crowd_bool = (crowd_iou_max < crowd_threshold)
     else:
         no_crowd_bool = np.ones([anchors.shape[0]], dtype=bool)
-
-    overlaps = compute_overlaps(anchors, groundtruth_boxes)
+    overlaps = compute_ious(anchors, groundtruth_boxes)
     return overlaps, no_crowd_bool, groundtruth_boxes
 
 
-def compute_rpn_match(anchors, overlaps, no_crowd_bool):
+def compute_rpn_match(anchors, overlaps, no_crowd_bool, anchor_size=256):
     """
     Match anchors to groundtruth Boxes
     If an anchor overlaps a groundtruth box with IoU >= 0.7 then it's positive.
@@ -267,13 +221,13 @@ def compute_rpn_match(anchors, overlaps, no_crowd_bool):
     rpn_match[anchor_iou_max >= 0.7] = 1
 
     ids = np.where(rpn_match == 1)[0]
-    extra = len(ids) - (256 // 2)
+    extra = len(ids) - (anchor_size // 2)
     if extra > 0:
         ids = np.random.choice(ids, extra, replace=False)
         rpn_match[ids] = 0
 
     ids = np.where(rpn_match == -1)[0]
-    extra = len(ids) - (256 - np.sum(rpn_match == 1))
+    extra = len(ids) - (anchor_size - np.sum(rpn_match == 1))
     if extra > 0:
         ids = np.random.choice(ids, extra, replace=False)
         rpn_match[ids] = 0

@@ -3,7 +3,7 @@ from tensorflow.keras.layers import Conv2D, Dense, Activation
 from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
 from tensorflow.keras.layers import Conv2DTranspose
 
-from mask_rcnn.model.pyramid_ROI_align import PyramidROIAlign
+from mask_rcnn.model.layers.pyramid_ROI_align import PyramidROIAlign
 from mask_rcnn.utils import BatchNorm
 
 

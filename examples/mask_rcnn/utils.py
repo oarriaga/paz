@@ -25,49 +25,6 @@ from tensorflow.keras.layers import BatchNormalization, Add
 from tensorflow.keras.models import Model
 
 from paz.backend.image.opencv_image import resize_image
-from mask_rcnn.backend.image import normalize_image, minimize_mask
-
-
-def slice_batch(inputs, constants, function, batch_size, names=None):
-    """Splits inputs into slices and feeds each slice to a copy of the given
-       computation graph and then combines the results.
-
-    # Arguments:
-        inputs: list of tensors. All must have the same first dimension length
-        graph_function: Function that returns a tensor that's part of a graph.
-        batch_size: number of slices to divide the data into.
-        names: If provided, assigns names to the resulting tensors.
-    """
-    if not isinstance(inputs, list):
-        inputs = [inputs]
-    outputs = []
-    for sample_arg in range(batch_size):
-
-        input_slices = []
-        for x in inputs:
-            input_slice = x[sample_arg]
-            input_slices.append(input_slice)
-        for y in constants:
-            input_slices.append(y)
-
-        output_slice = function(*input_slices)
-        if not isinstance(output_slice, (tuple, list)):
-            output_slice = [output_slice]
-        outputs.append(output_slice)
-    outputs = list(zip(*outputs))
-
-    if names is None:
-        names = [None] * len(outputs)
-
-    results = []
-    for output, name in zip(outputs, names):
-        result = tf.stack(output, axis=0, name=name)
-        results.append(result)
-
-    if len(results) == 1:
-        results = results[0]
-
-    return results
 
 
 def trim_zeros(x):
@@ -229,7 +186,7 @@ def download_trained_weights(coco_model_path, verbose=1):
         print("... done downloading pretrained model!")
 
 
-class BatchNorm(BatchNormalization):
+class BatchNorm(BatchNormalization):  # TODO: Remove the class and check
     """Extends the Keras BatchNormalization class to allow a central place
     to make changes if needed.
     Batch normalization has a negative effect on training if batches are small
@@ -289,7 +246,7 @@ def display_images(images, titles=None, cols=7, cmap=None, norm=None,
     plt.show()
 
 
-def random_colors(N, bright=True):
+def random_colors(N, bright=True):  # TODO: check in paz backend
     """
     Generate random colors.
     To get visually distinct colors, generate them in HSV space then
