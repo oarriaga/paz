@@ -714,7 +714,7 @@ def remove_outliers_cKDTree(points, k=4, std_dev_threshold=0.1):
     return points[inliers], inliers
 
 
-def extract_RGB_of_keypoints(image, keypoints):
+def extract_keypoints_RGB(image, keypoints):
     """
     Extract the RGB values of the keypoints.
 
