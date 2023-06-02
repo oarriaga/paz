@@ -1,21 +1,24 @@
 from paz import processors as pr
-from backend import recover_pose
-from backend import triangulate_points
+from backend import recover_pose_cv
+from backend import triangulate_points_cv
 from backend import detect_SIFT_features
+from backend import FLANN_matcher
 from backend import brute_force_matcher
-from backend import find_homography_RANSAC
-from backend import find_fundamental_matrix
+from backend import find_homography_RANSAC_cv
+from backend import find_fundamental_matrix_cv
 from backend import compute_essential_matrix
-from backend import estimate_homography_ransac
+from backend import estimate_homography_ransac_np
+from backend import estimate_fundamental_matrix_ransac_np
+from backend import triangulate_points_np
+from backend import compute_fundamental_matrix_np
 from paz.backend.keypoints import solve_PnP_RANSAC
 from skimage_ransac import ransac
-from backend import estimate_fundamental_matrix_ransac
 from transform import FundamentalMatrixTransform
 
 
 class DetecetSIFTFeatures(pr.Processor):
     """
-    Detects SIFT features in an image
+    Detects SIFT features
 
     Returns:
         keypoints: numpy array of shape (num_keypoints, 2)
@@ -50,6 +53,26 @@ class BruteForceMatcher(pr.Processor):
         return brute_force_matcher(descriptor1, descriptor2, self.k)
 
 
+class FLANNMatcher(pr.Processor):
+    """
+    FLANN matcher for SIFT features
+
+    Arguments:
+        k: int
+           number of nearest neighbors to return
+
+    Returns:
+        matches: numpy array of shape (num_matches, 2)
+                 containing the matches between the descriptor of two images
+    """
+    def __init__(self, k=2):
+        self.k = k
+        super(FLANNMatcher, self).__init__()
+
+    def call(self, descriptor1, descriptor2):
+        return FLANN_matcher(descriptor1, descriptor2, self.k)
+
+
 class FindHomographyRANSAC(pr.Processor):
     """
     Finds homography between two images using RANSAC
@@ -68,11 +91,11 @@ class FindHomographyRANSAC(pr.Processor):
         self.maxIters = maxIters
 
     def call(self, points1, points2):
-        return find_homography_RANSAC(
+        return find_homography_RANSAC_cv(
             points1, points2, self.ransacReprojThreshold, self.maxIters)
 
 
-class ComputeFundamentalMatrix(pr.Processor):
+class FindFundamentalMatrix(pr.Processor):
     """
     Computes fundamental matrix between two points
 
@@ -90,13 +113,13 @@ class ComputeFundamentalMatrix(pr.Processor):
     """
     def __init__(self, ransacReprojThreshold=0.5, confidence=0.99,
                  maxIters=1000):
-        super(ComputeFundamentalMatrix, self).__init__()
+        super(FindFundamentalMatrix, self).__init__()
         self.ransacReprojThreshold = ransacReprojThreshold
         self.confidence = confidence
         self.maxIters = maxIters
 
     def call(self, points1, points2):
-        return find_fundamental_matrix(
+        return find_fundamental_matrix_cv(
             points1, points2, self.ransacReprojThreshold, self.confidence,
             self.maxIters)
 
@@ -141,8 +164,8 @@ class RecoverPose(pr.Processor):
         self.camera_intrinsics = camera_intrinsics
 
     def call(self, essensial_matrix, points1, points2):
-        return recover_pose(essensial_matrix, points1,
-                            points2, self.camera_intrinsics)
+        return recover_pose_cv(essensial_matrix, points1,
+                               points2, self.camera_intrinsics)
 
 
 class TriangulatePoints(pr.Processor):
@@ -166,7 +189,7 @@ class TriangulatePoints(pr.Processor):
         super(TriangulatePoints, self).__init__()
 
     def call(self, P1, P2, points1, points2):
-        return triangulate_points(P1, P2, points1, points2)
+        return triangulate_points_cv(P1, P2, points1, points2)
 
 
 class SolvePnP(pr.Processor):
@@ -217,7 +240,7 @@ class EstimateHomographyRANSAC(pr.Processor):
         self.max_trials = max_trials
 
     def call(self, points1, points2):
-        homography, inlieres = estimate_homography_ransac(
+        homography, inlieres = estimate_homography_ransac_np(
             points1, points2, self.min_samples, self.residual_thresh,
             self.max_trials)
         return homography, inlieres
@@ -281,4 +304,4 @@ class ComputeFundamentalMatrixRANSAC(pr.Processor):
         self.max_trials = max_trials
 
     def call(self, points1, points2):
-        return estimate_fundamental_matrix_ransac(points1, points2)
+        return estimate_fundamental_matrix_ransac_np(points1, points2)

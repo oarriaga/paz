@@ -1,16 +1,18 @@
 import cv2
 import numpy as np
+from scipy.spatial import cKDTree
+import math
 
 
 def detect_ORB_fratures(image):
     """
     Detect ORB features in the image.
 
-    Arguments:
+    # Arguments
         image -- numpy array of shape (height, width, 3)
                 containing the input image
 
-    Returns:
+    # Returns
         keypoints -- list of KeyPoint objects
                     containing the keypoints of the image
     """
@@ -29,11 +31,11 @@ def detect_SIFT_features(image):
     """
     Detect SIFT features in the image.
 
-    Arguments:
+    # Arguments
         image -- numpy array of shape (height, width, 3)
                 containing the input image
 
-    Returns:
+    # Returns
         keypoints -- numpy array of shape (n_keypoints,)
                     containing the keypoints of the image
         descriptors -- numpy array of shape (n_keypoints, 128)
@@ -48,7 +50,7 @@ def brute_force_matcher(descriptor1, descriptor2, k=2):
     """
     Perform the brute force matching between the descriptors of two images.
 
-    Arguments:
+    # Arguments
         descriptor1 -- numpy array of shape (n_descriptor1, 2)
                     containing the descriptors of the first image
         descriptor2 -- numpy array of shape (n_descriptor2, 128)
@@ -56,7 +58,7 @@ def brute_force_matcher(descriptor1, descriptor2, k=2):
         k -- int
             number of nearest neighbors to return
 
-    Returns:
+    # Returns
         matches -- list of lists of DMatch objects
                 containing the matches between the descriptor of two images
     """
@@ -65,18 +67,39 @@ def brute_force_matcher(descriptor1, descriptor2, k=2):
     return matches
 
 
+def FLANN_matcher(descriptor1, descriptor2, k):
+    """
+    Perform the FLANN matching between the descriptors of two images.
+
+    # Arguments
+        descriptor1 -- numpy array of shape (n_descriptor1, 2)
+                       containing the descriptors of the first image
+        descriptor2 -- numpy array of shape (n_descriptor2, 128)
+                       containing the descriptors of the second image
+        k -- int
+             number of nearest neighbors to return
+
+    # Returns
+        matches -- list of lists of DMatch objects
+                containing the matches between the descriptor of two images
+    """
+    flann = cv2.FlannBasedMatcher()
+    matches = flann.knnMatch(descriptor1, descriptor2, k)
+    return matches
+
+
 def match_ratio_test(matches, ratio=0.75):
     """
     Perform the ratio test to filter the matches.
 
-    Arguments:
+    # Arguments
         matches -- list of lists of DMatch objects
                 containing the matches between the keypoints of two images
         ratio -- float
                  ratio between the distance of the best match and the second
                  best match
 
-    Returns:
+    # Returns
         good_matches -- list of lists of DMatch objects
                         containing the matches between the keypoints of two
                         images after the ratio test
@@ -92,7 +115,7 @@ def get_match_points(keypoints1, keypoints2, matches):
     """
     Get the points corresponding to the matches.
 
-    Arguments:
+    # Arguments
         keypoints1 -- list of KeyPoint objects
                     containing the keypoints of the first image
         keypoints2 -- list of KeyPoint objects
@@ -100,7 +123,7 @@ def get_match_points(keypoints1, keypoints2, matches):
         matches -- list of lists of DMatch objects
                 containing the matches between the keypoints of two images
 
-    Returns:
+    # Returns
         points1 -- numpy array of shape (n_matches, 2)
                 containing the 2D points in the first image
         points2 -- numpy array of shape (n_matches, 2)
@@ -118,11 +141,11 @@ def get_match_indices(matches):
     """
     Get the indices of the matches.
 
-    Arguments:
+    # Arguments
         matches -- list of lists of DMatch objects
                 containing the matches between the keypoints of two images
 
-    Returns:
+    # Returns
         query_indices -- numpy array of shape (n_matches, 1)
                         containing the indices of the keypoints in the
                         first image
@@ -138,19 +161,19 @@ def get_match_indices(matches):
     return [np.array(query_indices), np.array(train_indices)]
 
 
-def find_homography_RANSAC(points1, points2, ransacReprojThreshold=0.5,
-                           maxIters=1000):
+def find_homography_RANSAC_cv(points1, points2, ransacReprojThreshold=0.5,
+                              maxIters=1000):
     """
     Compute the homography matrix from corresponding points using the RANSAC
     algorithm.
 
-    Arguments:
+    # Arguments
         points1 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the first image
         points2 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the second image
 
-    Returns:
+    # Returns
         H -- numpy array of shape (3, 3)
             containing the homography matrix
         mask -- numpy array of shape (n_points, 1)
@@ -161,19 +184,19 @@ def find_homography_RANSAC(points1, points2, ransacReprojThreshold=0.5,
     return H, mask
 
 
-def find_fundamental_matrix(points1, points2, ransacReprojThreshold=0.5,
-                            confidence=0.99, maxIters=1000):
+def find_fundamental_matrix_cv(points1, points2, ransacReprojThreshold=0.5,
+                               confidence=0.99, maxIters=1000):
     """
     Compute the fundamental matrix from corresponding points using the 8-point
     algorithm.
 
-    Arguments:
+    # Arguments
         points1 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the first image
         points2 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the second image
 
-    Returns:
+    # Returns
         F -- numpy array of shape (3, 3)
             containing the fundamental matrix
         mask -- numpy array of shape (n_points, 1)
@@ -190,17 +213,16 @@ def compute_essential_matrix(fundamental_matrix, camera_intrinsics):
     Compute the essential matrix from a fundamental matrix and camera
     intrinsics.
 
-    Arguments:
+    # Arguments
         fundamental_matrix -- numpy array of shape (3, 3)
                             containing the fundamental matrix
         camera_intrinsics -- numpy array of shape (3, 3)
                             containing the camera intrinsics
 
-    Returns:
+    # Returns
         essential_matrix -- numpy array of shape (3, 3)
                             containing the essential matrix
     """
-    # Compute the essential matrix
     E = np.matmul(np.matmul(camera_intrinsics.T, fundamental_matrix),
                   camera_intrinsics)
 
@@ -211,11 +233,11 @@ def compute_essential_matrix(fundamental_matrix, camera_intrinsics):
     return essential_matrix
 
 
-def recover_pose(E, points1, points2, K):
+def recover_pose_cv(E, points1, points2, K):
     """
     Recover the pose of a second camera from the essential matrix.
 
-    Arguments:
+    # Arguments
         E -- numpy array of shape (3, 3)
             containing the essential matrix
         points1 -- numpy array of shape (n_points, 2)
@@ -225,7 +247,7 @@ def recover_pose(E, points1, points2, K):
         K -- numpy array of shape (3, 3)
             containing the intrinsic camera matrix
 
-    Returns:
+    # Returns
         R -- numpy array of shape (3, 3)
             containing the rotation matrix
         t -- numpy array of shape (3, 1)
@@ -235,11 +257,11 @@ def recover_pose(E, points1, points2, K):
     return R, t
 
 
-def triangulate_points(P1, P2, points1, points2):
+def triangulate_points_cv(P1, P2, points1, points2):
     """
     Triangulate a set of points from two cameras.
 
-    Arguments:
+    # Arguments
         P1 -- numpy array of shape (3, 4)
             containing the projection matrix of the first camera
         P2 -- numpy array of shape (3, 4)
@@ -249,7 +271,7 @@ def triangulate_points(P1, P2, points1, points2):
         points2 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the second image
 
-    Returns:
+    # Returns
         points3D -- numpy array of shape (n_points, 3)
                     containing the triangulated 3D points
     """
@@ -262,13 +284,13 @@ def contruct_projection_matrix(rotation, translation):
     """
     Construct a projection matrix from a rotation and translation.
 
-    Arguments:
+    # Arguments
         rotation -- numpy array of shape (3, 3)
                     containing the rotation matrix
         translation -- numpy array of shape (3, 1)
-                    containing the translation vector
+                       containing the translation vector
 
-    Returns:
+    # Returns
         projection_matrix -- numpy array of shape (3, 4)
                             containing the projection matrix
     """
@@ -281,13 +303,13 @@ def center_and_normalize_points(points):
     """
     Center and normalize a set of 2D points.
 
-    Arguments:
+    # Arguments
         points -- numpy array of shape (n_points, 2)
-                containing the 2D points
+                  containing the 2D points
 
-    Returns:
+    # Returns
         T -- numpy array of shape (3, 3)
-            normalization matrix that was applied to the points
+             normalization matrix that was applied to the points
         normalized_points -- numpy array of shape (n_points, 2)
                             containing the normalized points
     """
@@ -311,18 +333,27 @@ def center_and_normalize_points(points):
     return T, normalized_points
 
 
-def compute_fundamental_matrix(points1, points2):
+def compute_fundamental_matrix_np(points1, points2):
     """
     Compute the fundamental matrix from corresponding points using
     the eight-point algorithm.
 
-    Arguments:
+    Algorithm:
+    0. Center and normalize points
+    1. Construct the M x 9 matrix A
+    2. Find the SVD of ATA
+    3. Entries of F are the elements of column of
+    V corresponding to the least singular value
+    4. (Enforce rank 2 constraint on F)
+    5. (Un-normalize F)
+
+    # Arguments
         points1 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the first image
         points2 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the second image
 
-    Returns:
+    # Returns
         F -- numpy array of shape (3, 3)
             containing the fundamental matrix
     """
@@ -331,11 +362,12 @@ def compute_fundamental_matrix(points1, points2):
     T1, points1 = center_and_normalize_points(points1)
     T2, points2 = center_and_normalize_points(points2)
 
-    A = np.zeros((N, 9))
+    values = []
     for i in range(len(points1)):
         x1, y1 = points1[i]
         x2, y2 = points2[i]
-        A[i] = [x1 * x2, x2 * y1, x2, y2 * x1, y1 * y2, y2, x1, y1, 1]
+        values.append([x1 * x2, x2 * y1, x2, y2 * x1, y1 * y2, y2, x1, y1, 1])
+    A = np.vstack(values)
 
     U, S, V = np.linalg.svd(A)
 
@@ -357,7 +389,7 @@ def compute_sampson_distance(F, points1, points2):
     Compute the Sampson distance between two sets of corresponding points,
     given the fundamental matrix F.
 
-    Arguments:
+    # Arguments
         F -- numpy array of shape (3, 3)
             representing the fundamental matrix
         points1 -- numpy array of shape (n_points, 2)
@@ -365,7 +397,7 @@ def compute_sampson_distance(F, points1, points2):
         points2 -- numpy array of shape (n_points, 2)
                 containing the corresponding 2D points in the second image
 
-    Returns:
+    # Returns
         distance -- numpy array of shape (n_points,)
                     containing the Sampson distance for each
                     corresponding pair of points
@@ -386,14 +418,14 @@ def compute_sampson_distance(F, points1, points2):
     return distance
 
 
-def estimate_fundamental_matrix_ransac(points1, points2, min_samples=8,
-                                       residual_threshold=0.5,
-                                       max_trials=1000):
+def estimate_fundamental_matrix_ransac_np(points1, points2, min_samples=8,
+                                          residual_threshold=0.5,
+                                          max_trials=1000):
     """
     Estimate the fundamental matrix between two sets of corresponding
     points using RANSAC.
 
-    Arguments:
+    # Arguments
         points1 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the first image
         points2 -- numpy array of shape (n_points, 2)
@@ -405,14 +437,13 @@ def estimate_fundamental_matrix_ransac(points1, points2, min_samples=8,
         max_trials -- int
                     maximum number of iterations to run RANSAC
 
-    Returns:
+    # Returns
         F -- numpy array of shape (3, 3)
             representing the estimated fundamental matrix
         inliers -- boolean numpy array of shape (n_points,)
                 indicating which points are inliers to the
                 estimated fundamental matrix
     """
-
     best_F = None
     best_inliers = None
     best_num_inliers = 0
@@ -423,7 +454,7 @@ def estimate_fundamental_matrix_ransac(points1, points2, min_samples=8,
         sample_points1 = points1[indices]
         sample_points2 = points2[indices]
 
-        F = compute_fundamental_matrix(sample_points1, sample_points2)
+        F = compute_fundamental_matrix_np(sample_points1, sample_points2)
         distance = np.abs(compute_sampson_distance(F, points1, points2))
 
         inliers = distance < residual_threshold
@@ -443,13 +474,13 @@ def estimate_fundamental_matrix_ransac(points1, points2, min_samples=8,
     return best_F, best_inliers
 
 
-def estimate_homography_ransac(points1, points2, min_samples=8,
-                               residual_threshold=2, max_trials=1000):
+def estimate_homography_ransac_np(points1, points2, min_samples=8,
+                                  residual_threshold=2, max_trials=1000):
     """
     Estimate the homography between two sets of corresponding points
     using RANSAC.
 
-    Arguments:
+    # Arguments
         points1 -- numpy array of shape (n_points, 2)
                 containing the 2D points in the first image
         points2 -- numpy array of shape (n_points, 2)
@@ -461,7 +492,7 @@ def estimate_homography_ransac(points1, points2, min_samples=8,
         max_trials -- int
                     maximum number of iterations to run RANSAC
 
-    Returns:
+    # Returns
         H -- numpy array of shape (3, 3)
             representing the estimated homography
         inliers -- boolean numpy array of shape (n_points,)
@@ -498,11 +529,11 @@ def estimate_homography_ransac(points1, points2, min_samples=8,
     return best_H, best_inliers
 
 
-def triangulate_points_custom(P1, P2, points1, points2):
+def triangulate_points_np(P1, P2, points1, points2):
     """
     Triangulate a set of corresponding points using the linear method.
 
-    Arguments:
+    # Arguments
         P1 -- numpy array of shape (3, 4)
             representing the projection matrix of the first camera
         P2 -- numpy array of shape (3, 4)
@@ -512,7 +543,7 @@ def triangulate_points_custom(P1, P2, points1, points2):
         points2 -- numpy array of shape (n_points, 2)
                 containing the corresponding 2D points in the second image
 
-    Returns:
+    # Returns
         points3D -- numpy array of shape (n_points, 3)
                     containing the triangulated 3D points
     """
@@ -533,7 +564,7 @@ def triangulate_points_custom(P1, P2, points1, points2):
     return points3D
 
 
-def compute_recover_pose_custom(E, points1, points2, K):
+def compute_recover_pose_np(E, points1, points2, K):
     """
     Recover the pose of the second camera from the essential matrix.
     Steps:
@@ -544,7 +575,7 @@ def compute_recover_pose_custom(E, points1, points2, K):
         4. Choose a solutions and flag all inliers that fail Cheirality
            check as outliers.
 
-    Arguments:
+    # Arguments
         E -- numpy array of shape (3, 3)
             representing the essential matrix
         points1 -- numpy array of shape (n_points, 2)
@@ -554,7 +585,7 @@ def compute_recover_pose_custom(E, points1, points2, K):
         K -- numpy array of shape (3, 3)
             representing the intrinsic camera matrix
 
-    Returns:
+    # Returns
         R -- numpy array of shape (3, 3)
             representing the rotation matrix
         t -- numpy array of shape (3,)
@@ -581,7 +612,7 @@ def compute_recover_pose_custom(E, points1, points2, K):
     best_inliers = None
     best_num_inliers = 0
     for P2 in P2s:
-        points3D = triangulate_points_custom(P1, P2, points1, points2)
+        points3D = triangulate_points_np(P1, P2, points1, points2)
         inliers = points3D[:, 2] > 0
         num_inliers = np.count_nonzero(inliers)
         if num_inliers > best_num_inliers:
@@ -592,3 +623,110 @@ def compute_recover_pose_custom(E, points1, points2, K):
     R = best_P2[:, :3]
     t = best_P2[:, 3]
     return R, t, best_inliers
+
+
+def camera_intrinsics_from_hfov(hfov, H, W):
+    """
+    Compute the camera matrix from the horizontal field of view.
+
+    # Arguments
+        fov -- float
+               field of view in degrees
+        image -- numpy array of shape (height, width, 3)
+                 representing the image
+
+    # Returns
+        K -- numpy array of shape (3, 3)
+            representing the intrinsic camera matrix
+    """
+    f = W / (2 * np.tan(np.deg2rad(hfov / 2)))
+    K = np.array([[f, 0, W / 2],
+                  [0, f, H / 2],
+                  [0, 0, 1]])
+    return K
+
+
+def camera_intrinsics_from_dfov(dfov, H, W):
+    dfov = np.deg2rad(dfov)
+    aspect_ratio = W / H
+    hfov = 2 * np.arctan(np.tan(dfov / 2) * aspect_ratio)
+    f = W / (2 * np.tan(hfov / 2))
+    K = np.array([[f, 0, W/2],
+                  [0, f, H/2],
+                  [0, 0, 1]])
+    return K
+
+
+def remove_outliers(points, threshold=10):
+    """
+    Remove outliers from a set of points.
+
+    # Arguments
+        points -- numpy array of shape (n_points, d)
+                    containing the points
+        threshold -- float
+                     threshold for outlier removal
+
+    # Returns
+        points -- numpy array of shape (n_points, 3)
+                    containing the 3D points after outlier removal
+    """
+    mean = np.mean(points, axis=0)
+    distance = np.linalg.norm(points - mean, axis=1)
+    inliers = distance < threshold
+    return points[inliers], inliers
+
+
+def remove_outliers_cKDTree(points, k=4, std_dev_threshold=0.1):
+    """
+    Removes outliers from a set of points.
+
+    # Arguments
+        points -- numpy array of shape (n, d) representing n 3D points
+        k -- int,
+             number of neighbors to use for outlier detection
+             std_dev_threshold: float, the number of standard deviations
+             from the mean distance at which a point is considered an outlier
+
+    # Returns
+        points -- numpy array of shape (m, d)
+                  representing the m inlier points
+    """
+
+    # Build a KD-Tree for efficient neighbor search
+    tree = cKDTree(points)
+
+    # Compute distances to each point's k nearest neighbors
+    dists, _ = tree.query(points, k=k+1)
+
+    # Compute the mean distance for each point
+    mean_dists = np.mean(dists[:, 1:], axis=1)
+
+    # Compute the standard deviation of the mean distances
+    std_dev = np.std(mean_dists)
+
+    # Identify points whose mean distance is more than std_dev_threshold
+    # standard deviations from the mean distance
+    inliers = np.where(mean_dists < (
+        np.mean(mean_dists) + std_dev_threshold * std_dev))[0]
+
+    # Remove outliers and return inliers
+    return points[inliers], inliers
+
+
+def extract_RGB_of_keypoints(image, keypoints):
+    """
+    Extract the RGB values of the keypoints.
+
+    # Arguments
+        keypoints -- list of cv2.KeyPoint objects
+                     representing the keypoints
+    # Returns
+        colors -- numpy array of shape (n_points, 3)
+                  representing the RGB values of the keypoints
+    """
+    colors = []
+    for arg, keypoint in enumerate(keypoints):
+        color = image[int(keypoint[1]), int(keypoint[0])]
+        colors.append(color)
+    return colors
