@@ -1,5 +1,6 @@
 from paz.backend import angles
 from paz.backend import boxes
+from paz.backend import anchors
 from paz.backend import camera
 from paz.backend import render
 from paz.backend import keypoints
@@ -18,6 +19,8 @@ from paz.optimization import losses
 from paz.optimization import callbacks
 from paz import datasets
 from paz import pipelines
+from paz.utils import logger
+from paz.utils import documentation
 
 EXCLUDE = {}
 
@@ -40,6 +43,11 @@ PAGES = [
         'page': 'backend/boxes.md',
         'functions': [
             boxes.apply_non_max_suppression,
+            boxes.nms_per_class,
+            boxes._nms_per_class,
+            boxes.pre_filter_nms,
+            boxes.merge_nms_box_with_class,
+            boxes.suppress_other_class_scores,
             boxes.offset,
             boxes.clip,
             boxes.compute_iou,
@@ -56,10 +64,29 @@ PAGES = [
             boxes.to_one_hot,
             boxes.to_normalized_coordinates,
             boxes.to_corner_form,
-            boxes.extract_bounding_box_corners
+            boxes.extract_bounding_box_corners,
+            boxes.scale_box,
+            boxes.change_box_coordinates
         ],
     },
 
+
+    {
+        'page': 'backend/anchors.md',
+        'functions': [
+            anchors.build_anchors,
+            anchors.build_octaves,
+            anchors.build_aspect,
+            anchors.build_scales,
+            anchors.build_strides,
+            anchors.make_branch_boxes,
+            anchors.compute_box_coordinates,
+            anchors.build_base_anchor,
+            anchors.compute_aspect_size,
+            anchors.compute_anchor_dims,
+            anchors.compute_anchor_centres
+        ],
+    },
 
     {
         'page': 'backend/keypoints.md',
@@ -188,7 +215,8 @@ PAGES = [
             image.get_rotation_matrix,
             image.calculate_image_center,
             image.get_affine_transform,
-            image.get_scaling_factor
+            image.get_scaling_factor,
+            image.scale_resize
         ],
     },
 
@@ -248,7 +276,9 @@ PAGES = [
     {
         'page': 'models/classification.md',
         'functions': [
-            models.classification.MiniXception
+            models.classification.MiniXception,
+            models.ProtoEmbedding,
+            models.ProtoNet
         ],
     },
 
@@ -258,7 +288,15 @@ PAGES = [
         'functions': [
             models.detection.SSD300,
             models.detection.SSD512,
-            models.detection.HaarCascadeDetector
+            models.detection.HaarCascadeDetector,
+            models.detection.EFFICIENTDETD0,
+            models.detection.EFFICIENTDETD1,
+            models.detection.EFFICIENTDETD2,
+            models.detection.EFFICIENTDETD3,
+            models.detection.EFFICIENTDETD4,
+            models.detection.EFFICIENTDETD5,
+            models.detection.EFFICIENTDETD6,
+            models.detection.EFFICIENTDETD7,
         ],
     },
 
@@ -315,7 +353,8 @@ PAGES = [
             datasets.FERPlus,
             datasets.OpenImages,
             datasets.CityScapes,
-            datasets.Shapes
+            datasets.Shapes,
+            datasets.Omniglot
         ],
     },
 
@@ -390,7 +429,9 @@ PAGES = [
             processors.ReplaceLowerThanThreshold,
             processors.GetNonZeroValues,
             processors.GetNonZeroArguments,
-            processors.FlipLeftRightImage
+            processors.FlipLeftRightImage,
+            processors.DivideStandardDeviationImage,
+            processors.ScaledResize
         ]
     },
 
@@ -447,9 +488,16 @@ PAGES = [
             processors.EncodeBoxes,
             processors.DecodeBoxes,
             processors.NonMaximumSuppressionPerClass,
+            processors.MergeNMSBoxWithClass,
             processors.FilterBoxes,
             processors.OffsetBoxes2D,
-            processors.CropImage
+            processors.CropImage,
+            processors.BoxesToBoxes2D,
+            processors.BoxesWithOneHotVectorsToBoxes2D,
+            processors.BoxesWithClassArgToBoxes2D,
+            processors.RoundBoxes,
+            processors.RemoveClass,
+            processors.ScaleBox
         ]
     },
 
@@ -585,7 +633,21 @@ PAGES = [
             pipelines.DetectSingleShot,
             pipelines.DetectHaarCascade,
             pipelines.SSD512HandDetection,
-            pipelines.SSD512MinimalHandPose
+            pipelines.SSD512MinimalHandPose,
+            pipelines.SSDPreprocess,
+            pipelines.SSDPostprocess,
+            pipelines.DetectSingleShotEfficientDet,
+            pipelines.EfficientDetPreprocess,
+            pipelines.EfficientDetPostprocess,
+            pipelines.EFFICIENTDETD0COCO,
+            pipelines.EFFICIENTDETD1COCO,
+            pipelines.EFFICIENTDETD2COCO,
+            pipelines.EFFICIENTDETD3COCO,
+            pipelines.EFFICIENTDETD4COCO,
+            pipelines.EFFICIENTDETD5COCO,
+            pipelines.EFFICIENTDETD6COCO,
+            pipelines.EFFICIENTDETD7COCO,
+            pipelines.EFFICIENTDETD0VOC
         ]
     },
 
@@ -725,5 +787,23 @@ PAGES = [
     },
 
 
+    {
+        'page': 'utils/logger.md',
+        'functions': [
+            logger.build_directory,
+            logger.make_directory,
+            logger.write_dictionary,
+            logger.write_weights
+        ]
+
+    },
+
+    {
+        'page': 'utils/documentation.md',
+        'functions': [
+            documentation.docstring
+        ]
+
+    },
 
 ]
