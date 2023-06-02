@@ -3,19 +3,16 @@ import matplotlib.pyplot as plt
 from paz import processors as pr
 from processors import DetecetSIFTFeatures, RecoverPose
 from processors import ComputeEssentialMatrix
-from processors import ComputeFundamentalMatrix, TriangulatePoints
-from processors import BruteForceMatcher, SolvePnP
-# from processors import EstimateHomographyRANSAC as RANSAC
+from processors import FindFundamentalMatrix, TriangulatePoints
+from processors import FLANNMatcher, SolvePnP
 from processors import ComputeFundamentalMatrixRANSAC as RANSAC
 from backend import match_ratio_test, get_match_points, get_match_indices
 from backend import contruct_projection_matrix
-from backend import triangulate_points_custom
-from backend import compute_recover_pose_custom
-from backend import solve_perspective_n_points
+from backend import triangulate_points_np
 
 
 class MatchFeatures(pr.Processor):
-    def __init__(self, matcher=BruteForceMatcher(k=2), ratio_test=True):
+    def __init__(self, matcher=FLANNMatcher(k=2), ratio_test=True):
         super(MatchFeatures, self).__init__()
         self.matcher = matcher
         self.ratio_test = ratio_test
@@ -67,9 +64,7 @@ class ProjectionFromCorrespondances(pr.Processor):
         self.K = camera_intrinsics
         self.solve_pnp = SolvePnP(camera_intrinsics)
         self.rotation_vector_to_matrix = pr.RotationVectorToRotationMatrix()
-        self.projection_matrix = np.array([[1, 0, 0, 0],
-                                           [0, 1, 0, 0],
-                                           [0, 0, 1, 0]])
+        self.projection_matrix = np.eye(3, 4)
 
     def call(self, points3D, points2D):
         _, rotation, translation = self.solve_pnp(points3D, points2D)
@@ -87,10 +82,9 @@ class InitializeSFM(pr.Processor):
         self.detector = DetecetSIFTFeatures()
         self.match_features = MatchFeatures()
         self.ransac_filter = RANSAC()
-        self.compute_fundamental_matrix = ComputeFundamentalMatrix()
+        self.compute_fundamental_matrix = FindFundamentalMatrix()
         self.compute_essential_matrix = ComputeEssentialMatrix(self.K)
         self.recover_pose = RecoverPose(self.K)
-        self.triangulate_points = TriangulatePoints()
         self.warp = pr.WrapOutput(['points3D', 'base_features', 'P2'])
 
     def call(self, images):
@@ -107,7 +101,7 @@ class InitializeSFM(pr.Processor):
         print('Number of inliers', p1_inliers.shape[0])
 
         # F = model.params
-        F, _ = self.compute_fundamental_matrix(p1_inliers, p2_inliers)
+        F, _ = self.ransac_filter(p1_inliers, p2_inliers)
         E = self.compute_essential_matrix(F)
         rotation, translation = self.recover_pose(E, p1_inliers, p2_inliers)
 
@@ -115,7 +109,7 @@ class InitializeSFM(pr.Processor):
         P2 = contruct_projection_matrix(rotation, translation)
         P2 = self.K @ P2
 
-        points3D = self.triangulate_points(P1, P2, p1_inliers.T, p2_inliers.T)
+        points3D = triangulate_points_np(P1, P2, p1_inliers, p2_inliers)
 
         base_kps = kps2[indices2[inliers]]
         base_des = des2[indices2[inliers]]
@@ -139,8 +133,8 @@ class StructureFromMotion(pr.Processor):
 
     def call(self, images):
         inference = self.initialize_sfm(images[:2])
-        points3d = inference['points3D']
-        self.points3D.append(points3d)
+        points3D = inference['points3D']
+        self.points3D.append(points3D)
         base_features = inference['base_features']
         P2 = inference['P2']
 
@@ -151,7 +145,7 @@ class StructureFromMotion(pr.Processor):
             p1_inliers, p2_inliers, indices = self.find_correspondences(
                 base_features, images[arg + 2])
 
-            _, rotation, translation = self.solve_pnp(points3d[indices],
+            _, rotation, translation = self.solve_pnp(points3D[indices],
                                                       p1_inliers)
 
             rotation = self.rotation_vector_to_matrix(rotation)
@@ -168,10 +162,9 @@ class StructureFromMotion(pr.Processor):
             p2_inliers = points2[inliers]
             print('Number of inliers', p1_inliers.shape[0])
 
-            points3d = self.triangulate_points(P2, P3, p1_inliers.T,
-                                               p2_inliers.T)
+            points3D = triangulate_points_np(P2, P3, p1_inliers, p2_inliers)
 
-            self.points3D.append(points3d)
+            self.points3D.append(points3D)
             P2 = P3.copy()
 
             arg = indices[1][inliers]
