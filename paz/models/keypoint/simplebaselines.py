@@ -35,8 +35,8 @@ def dense_block(input_x, num_keypoints, rate):
     return x
 
 
-def SimpleBaseline(input_shape, num_keypoints, keypoints_dim, hidden_dim,
-                   num_layers, rate, weights):
+def SimpleBaseline(input_shape=(32,), num_keypoints=16, keypoints_dim=3,
+                   hidden_dim=1024, num_layers=2, rate=1, weights='human36m'):
     """Model that predicts 3D keypoints from 2D keypoints
     # Arguments
         num_keypoints: numer of kepoints
