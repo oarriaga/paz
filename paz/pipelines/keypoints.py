@@ -397,8 +397,8 @@ class DetectMinimalHand(pr.Processor):
 
 class HRNetSimpleBaselines(pr.Processor):
     def __init__(self, estimate_keypoints_3D):
-        """ it outupts 2D and 3D keypoints estimation from an image
-        
+        """ Estimates 2D and 3D keypoints of human from an image
+
         # Arguments
             estimate_keypoints_3D: 3D simple baseline model
             args_to_mean: keypoints indices
@@ -428,20 +428,20 @@ class HRNetSimpleBaselines(pr.Processor):
 
 class SolveTranslation3D(pr.Processor):
     def __init__(self, args_to_joints3D, solver, camera_intrinsics):
-        """ it calculates the optimized 3d pose estimation
+        """ Estimate and optimize human 3D pose
 
-                #Arguments
-                    args_to_mean: keypoints indices
-                    solver: library solver
-                    camera_intrinsics: camera intrinsic parameters
+        #Arguments
+            args_to_mean: keypoints indices
+            solver: library solver
+            camera_intrinsics: camera intrinsic parameters
 
-                #Returns
-                    keypoints2D, keypoints3D
-                """
+        #Returns
+            keypoints3D, optimized keypoints3D
+        """
         self.args_to_joints3D = args_to_joints3D
         self.camera_intrinsics = camera_intrinsics
         self.solver = solver
-        
+
     def call(self, keypoints):
         joints3D = filter_keypoints3D(keypoints['keypoints3D'],
                                       self.args_to_joints3D)
@@ -449,8 +449,8 @@ class SolveTranslation3D(pr.Processor):
         length2D, length3D = get_bones_length(keypoints['keypoints2D'],
                                               joints3D)
         ratio = length3D / length2D
-        initial_joint_translation = initialize_translation(root2D,
-                                    self.camera_intrinsics, ratio)
+        initial_joint_translation = initialize_translation(
+            root2D, self.camera_intrinsics, ratio)
         joint_translation = solve_least_squares(self.solver,
                                                 compute_reprojection_error,
                                                 initial_joint_translation,

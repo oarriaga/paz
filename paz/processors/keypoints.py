@@ -245,7 +245,7 @@ class MergeKeypoints2D(Processor):
 
 class FilterKeypoints2D(Processor):
     def __init__(self, args_to_mean, h36m_to_coco_joints2D):
-        """ filter keypoints2d
+        """ Filter keypoints2d
 
         # Arguments
             args_to_mean: keypoints indices
@@ -265,7 +265,7 @@ class FilterKeypoints2D(Processor):
 
 class StandardizeKeypoints2D(Processor):
     def __init__(self, data_mean2D, data_stdev2D):
-        """ Processor class for standerize
+        """ Processor class for standardize
 
         # Arguments
             data_mean2D: mean 2D
@@ -339,8 +339,8 @@ class SimpleBaselines3D(Processor):
                                                       data_stdev2D))
         self.keypoints2D_prerocessing = SequentialProcessor()
         self.keypoints2D_prerocessing.add(MergeKeypoints2D(args_to_mean))
-        self.keypoints2D_prerocessing.add(FilterKeypoints2D(args_to_mean,
-                                                  h36m_to_coco_joints2D))
+        self.keypoints2D_prerocessing.add(FilterKeypoints2D(
+            args_to_mean, h36m_to_coco_joints2D))
         self.postprocess = UnnormalizeData(data_mean3D, data_stdev3D,
                                            dim_to_use3D)
         self.predict = Predict(self.model, self.preprocessing,
