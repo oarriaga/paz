@@ -12,11 +12,14 @@ from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
-from ..processors.standard import Predict
 from ..backend.keypoints import standardize
 from ..backend.keypoints import filter_keypoints2D
 from ..backend.keypoints import destandardize
 from ..backend.keypoints import merge_into_mean
+from ..backend.keypoints import filter_keypoints3D
+from ..backend.keypoints import initialize_translation, solve_least_squares
+from ..backend.keypoints import get_bones_length, compute_reprojection_error
+from ..backend.keypoints import compute_optimized_pose3D
 
 
 class ProjectKeypoints(Processor):
@@ -245,7 +248,7 @@ class MergeKeypoints2D(Processor):
 
 class FilterKeypoints2D(Processor):
     def __init__(self, args_to_mean, h36m_to_coco_joints2D):
-        """ Filter keypoints2d
+        """ Filter keypoints2D
 
         # Arguments
             args_to_mean: keypoints indices
@@ -265,7 +268,7 @@ class FilterKeypoints2D(Processor):
 
 class StandardizeKeypoints2D(Processor):
     def __init__(self, data_mean2D, data_stdev2D):
-        """ Processor class for standardize
+        """ Standardize 2D keypoints
 
         # Arguments
             data_mean2D: mean 2D
@@ -282,9 +285,9 @@ class StandardizeKeypoints2D(Processor):
         return standardize(keypoints2D, self.mean, self.stdev)
 
 
-class UnnormalizeData(Processor):
+class DestandardizeKeypoints2D(Processor):
     def __init__(self, data_mean3D, data_stdev3D, dim_to_use):
-        """ Processor class for unnormalize function in human36m.py
+        """ Destandardize 2D keypoints
 
         # Arguments
             data_mean3D: mean 3D
@@ -292,61 +295,49 @@ class UnnormalizeData(Processor):
             dim_to_use: dimensions to use
 
         # Return
-            Unormalized data
+            detandardize 2D keypoints
         """
         self.mean = data_mean3D
         self.stdev = data_stdev3D
         self.valid = dim_to_use
-        super(UnnormalizeData, self).__init__()
+        super(DestandardizeKeypoints2D, self).__init__()
 
     def call(self, keypoints2D):
         data = keypoints2D.reshape(-1, 48)
         rearanged_data = np.zeros((len(data), len(self.mean)),
                                   dtype=np.float32)
         rearanged_data[:, self.valid] = data
-        unnormalized_data = destandardize(rearanged_data, self.mean,
-                                          self.stdev)
-        return unnormalized_data
+        destandardize_data = destandardize(rearanged_data, self.mean,
+                                           self.stdev)
+        return destandardize_data
 
 
-class SimpleBaselines3D(Processor):
-    def __init__(self, model, data_mean2D, data_stdev2D, data_mean3D,
-                 data_stdev3D, dim_to_use3D, args_to_mean,
-                 h36m_to_coco_joints2D):
-        """ Processor class to predict the 3D keypoints
+class OptimizeHumanPose3D(Processor):
+    """ Optimize human 3D pose
 
-        # Arguments
-            model: Simplebaseline 3D model
-            data_mean2D: mean 2D
-            data_stdev2D: standard deviation 2D
-            data_mean3D: data mean 3D
-            data_stdev3D: standar deviation 3D
-            dim_to_use: dimensions to use
-            args_to_mean: joints indices
-            h36m_to_coco_joints2D: h36m data joints indices
+    #Arguments
+        solver: library solver
+        camera_intrinsics: camera intrinsic parameters
 
-        # Return
-            keypoints2D: 2D keypoints
-            keypoints3D: 3D keypoints
-        """
-        super(SimpleBaselines3D, self).__init__()
-        self.model = model
-        self.preprocessing = SequentialProcessor()
-        self.preprocessing.add(MergeKeypoints2D(args_to_mean))
-        self.preprocessing.add(FilterKeypoints2D(args_to_mean,
-                                                 h36m_to_coco_joints2D))
-        self.preprocessing.add(StandardizeKeypoints2D(data_mean2D,
-                                                      data_stdev2D))
-        self.keypoints2D_prerocessing = SequentialProcessor()
-        self.keypoints2D_prerocessing.add(MergeKeypoints2D(args_to_mean))
-        self.keypoints2D_prerocessing.add(FilterKeypoints2D(
-            args_to_mean, h36m_to_coco_joints2D))
-        self.postprocess = UnnormalizeData(data_mean3D, data_stdev3D,
-                                           dim_to_use3D)
-        self.predict = Predict(self.model, self.preprocessing,
-                               self.postprocess)
+    #Returns
+        keypoints3D, optimized keypoints3D
+    """
+    def __init__(self, args_to_joints3D, solver, camera_intrinsics):
+        super(OptimizeHumanPose3D, self).__init__()
+        self.args_to_joints3D = args_to_joints3D
+        self.camera_intrinsics = camera_intrinsics
+        self.solver = solver
 
-    def call(self, keypoints2D):
-        filtered_keypoints2D = self.keypoints2D_prerocessing(keypoints2D)
-        keypoints3D = self.predict(keypoints2D)
-        return filtered_keypoints2D, keypoints3D
+    def call(self, keypoints3D, keypoints2D):
+        joints3D = filter_keypoints3D(keypoints3D, self.args_to_joints3D)
+        root2D = keypoints2D[:, :2]
+        length2D, length3D = get_bones_length(keypoints2D, joints3D)
+        ratio = length3D / length2D
+        initial_joint_translation = initialize_translation(
+            root2D, self.camera_intrinsics, ratio)
+        joint_translation = solve_least_squares(
+            self.solver, compute_reprojection_error, initial_joint_translation,
+            joints3D, keypoints2D, self.camera_intrinsics)
+        optimized_poses3D = compute_optimized_pose3D(
+            keypoints3D, joint_translation, self.camera_intrinsics)
+        return joints3D, optimized_poses3D
