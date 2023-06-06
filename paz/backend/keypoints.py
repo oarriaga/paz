@@ -651,7 +651,7 @@ def filter_keypoints(keypoints, args_to_joints):
 
 def filter_keypoints3D(keypoints3D, args_to_joints3D):
     """Selects 16 moving joints (Neck/Nose excluded) from 32 predicted
-    joints in 3D
+       joints in 3D
 
     # Arguments
         keypoints3D: Nx96 points in camera coordinates
@@ -668,7 +668,7 @@ def filter_keypoints3D(keypoints3D, args_to_joints3D):
 
 def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
     """Selects 16 moving joints (Neck/Nose excluded) from 17 predicted
-            joints in 2D
+       joints in 2D
 
     # Arguments
         keypoints3D: Nx17x2 points in camera coordinates
