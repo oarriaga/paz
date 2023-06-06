@@ -1,30 +1,20 @@
+import os
 import pytest
 import numpy as np
-import os
-
-from tensorflow.keras.utils import get_file
-from scipy.optimize import least_squares
-
-from paz.pipelines.keypoints import HRNetSimpleBaselines
-from paz.backend.image import load_image
 from paz.backend.camera import Camera
-from paz.models.keypoint.simplebaselines import SimpleBaseline
-from paz.backend.keypoints import filter_keypoints3D
-from paz.backend.keypoints import initialize_translation
-from paz.backend.keypoints import solve_least_squares
-from paz.backend.keypoints import get_bones_length
-from paz.backend.keypoints import compute_reprojection_error
-from paz.backend.keypoints import compute_optimized_pose3D
+from paz.backend.image import load_image
+from scipy.optimize import least_squares
+from tensorflow.keras.utils import get_file
+from paz.pipelines import EstimateHumanPose
+from paz.processors import OptimizeHumanPose3D
 from paz.datasets.human36m import args_to_joints3D
-from paz.pipelines.keypoints import SolveTranslation3D
-
 
 
 def get_optimized_posed3D(keypoints, camera_intrinsics):
-    solveTranslation_pipeline = SolveTranslation3D(args_to_joints3D,
-                                                   least_squares,
-                                                   camera_intrinsics)
-    _, optimized_poses3D = solveTranslation_pipeline(keypoints)
+    optimize_3D = OptimizeHumanPose3D(args_to_joints3D,
+                                      least_squares, camera_intrinsics)
+    _, optimized_poses3D = optimize_3D(keypoints['keypoints3D'],
+                                       keypoints['keypoints2D'])
     return optimized_poses3D
 
 
@@ -42,8 +32,7 @@ def get_poses(pipeline, image):
 
 @pytest.fixture
 def model():
-    model = SimpleBaseline((32,), 16, 3, 1024, 2, 1, 'human36m')
-    pipeline = HRNetSimpleBaselines(model)
+    pipeline = EstimateHumanPose()
     return pipeline
 
 
@@ -60,7 +49,7 @@ def image_with_multiple_persons_A():
 @pytest.fixture
 def image_with_single_person_B():
     URL = ('https://github.com/oarriaga/altamira-data/releases/download/'
-    'v0.17/one_person_posing.png')
+           'v0.17/one_person_posing.png')
     filename = os.path.basename(URL)
     fullpath = get_file(filename, URL, cache_subdir='paz/tests')
     image = load_image(fullpath)
@@ -69,9 +58,9 @@ def image_with_single_person_B():
 
 @pytest.fixture
 def keypoints3D_multiple_persons():
-    return np.array(
+    keypoints = np.array(
         [[0.00000000e+00, 0.00000000e+00, 0.00000000e+00, -1.14726820e+02,
-            1.21343876e+01, -6.79812245e+01, -1.35863824e+02, 4.19467606e+02,
+          1.21343876e+01, -6.79812245e+01, -1.35863824e+02, 4.19467606e+02,
           9.37677967e+01, -2.14377161e+02, 8.06703618e+02, 2.89143238e+02,
           -1.15560633e+01, 7.42149725e+02, 1.66477287e+02, -1.18447102e+01,
           7.36763064e+02, 1.65182437e+02, 1.14726152e+02, -1.21343424e+01,
@@ -88,13 +77,14 @@ def keypoints3D_multiple_persons():
           1.26585821e+00, -1.20170579e+02, -2.82526049e+01, 1.57900698e+00,
           -1.51780249e+02, -3.52080548e+01, 8.84543990e-01, -1.07795356e+02,
           -2.56307189e+01, 8.84543990e-01, -1.07795356e+02, -2.56307189e+01,
-            5.67537804e+00, -4.35088906e+02, -9.76974016e+01, -1.35515689e+02,
+          5.67537804e+00, -4.35088906e+02, -9.76974016e+01, -1.35515689e+02,
           -4.50778918e+02, -2.07550560e+02, -1.54306546e+02, -1.97581166e+02,
           -2.56477770e+02, 6.74229966e+01, -2.08812250e+02, -3.18276339e+02,
           8.70569018e-01, -1.68664569e+02, -3.73902498e+01, 1.39982513e+00,
           -2.00884252e+02, -4.47207875e+01, 5.24591118e-01, -1.65867774e+02,
           -3.68342864e+01, 5.24591118e-01, -1.65867774e+02, -3.68342864e+01]
          ])
+    return np.reshape(keypoints, (-1, 32, 3))
 
 
 @pytest.fixture
@@ -111,7 +101,7 @@ def keypoints2D_multiple_persons():
 
 @pytest.fixture
 def keypoints3D_single_person():
-    return np.array(
+    keypoints = np.array(
         [[0.00000000e+00, 0.00000000e+00, 0.00000000e+00, -1.01613821e+02,
           -1.57045238e+00, -7.83579210e+01, -1.28771002e+02, 3.03492329e+02,
           -1.30643458e+02, -2.01166429e+02, 6.75673518e+02, -1.05658365e+02,
@@ -137,6 +127,7 @@ def keypoints3D_single_person():
           -2.00884252e+02, -4.47207875e+01, 5.24591118e-01, -1.65867774e+02,
           -3.68342864e+01, 5.24591118e-01, -1.65867774e+02, -3.68342864e+01]
          ])
+    return np.reshape(keypoints, (-1, 32, 3))
 
 
 @pytest.fixture
@@ -207,9 +198,9 @@ def test_simple_baselines_multiple_persons(image_with_multiple_persons_A,
 
 
 def test_simple_baselines_single_person(image_with_single_person_B,
-                                         keypoints3D_single_person,
-                                         keypoints2D_single_person,
-                                         optimised_pose_single, model):
+                                        keypoints3D_single_person,
+                                        keypoints2D_single_person,
+                                        optimised_pose_single, model):
     keypoints = get_poses(model, image_with_single_person_B)
     assert np.allclose(keypoints['keypoints2D'], keypoints2D_single_person)
     assert np.allclose(keypoints['keypoints3D'], keypoints3D_single_person)
