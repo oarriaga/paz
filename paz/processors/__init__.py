@@ -106,6 +106,12 @@ from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
 from .keypoints import ComputeOrientationVector
+from .keypoints import MergeKeypoints2D
+from .keypoints import FilterKeypoints2D
+from .keypoints import StandardizeKeypoints2D
+from .keypoints import DestandardizeKeypoints2D
+from .keypoints import OptimizeHumanPose3D
+
 
 from .standard import ControlMap
 from .standard import ExpandDomain

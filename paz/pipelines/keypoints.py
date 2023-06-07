@@ -1,3 +1,5 @@
+import numpy as np
+
 from tensorflow.keras.utils import get_file
 
 from .renderer import RenderTwoViews
@@ -6,13 +8,16 @@ from .heatmaps import GetHeatmapsAndTags
 
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
-from ..models import KeypointNet2D, HigherHRNet, DetNet
+from ..models import KeypointNet2D, HigherHRNet, DetNet, SimpleBaseline
 from .angles import IKNetHandJointAngles
-
 
 from ..backend.image import get_affine_transform, lincolor
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
+
+from ..datasets.human36m import data_mean2D, data_stdev2D, args_to_mean
+from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
+from ..datasets.human36m import h36m_to_coco_joints2D
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -384,3 +389,61 @@ class DetectMinimalHand(pr.Processor):
             image = self.draw(image, keypoints)
         image = self.draw_boxes(image, boxes2D)
         return self.wrap(image, boxes2D, keypoints2D, keypoints3D)
+
+
+class EstimateHumanPose3D(Processor):
+    """ Estimate human pose 3D from 2D human pose.
+
+    # Arguments
+    input_shape: tuple
+    num_keypoints: Int. Number of keypoints.
+
+    # Return
+        keypoints3D: human pose 3D
+    """
+    def __init__(self, input_shape=(32,), num_keypoints=16):
+        super(EstimateHumanPose3D, self).__init__()
+        self.model = SimpleBaseline(input_shape, num_keypoints)
+        self.preprocessing = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D),
+             pr.StandardizeKeypoints2D(data_mean2D, data_stdev2D)])
+        self.postprocess = pr.DestandardizeKeypoints2D(
+            data_mean3D, data_stdev3D, dim_to_use3D)
+        self.predict = pr.Predict(self.model, self.preprocessing,
+                                  self.postprocess)
+
+    def call(self, keypoints2D):
+        keypoints3D = self.predict(keypoints2D)
+        return keypoints3D
+
+
+class EstimateHumanPose(pr.Processor):
+    """ Estimates 2D and 3D keypoints of human from an image
+
+    # Arguments
+        estimate_keypoints_3D: 3D simple baseline model
+        args_to_mean: keypoints indices
+        h36m_to_coco_joints2D: h36m joints indices
+
+    # Returns
+        keypoints2D, keypoints3D
+    """
+    def __init__(self, filter=True):
+        super(EstimateHumanPose, self).__init__()
+        self.filter = filter
+        self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
+        self.filter_keypoints2D = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
+        self.estimate_keypoints_3D = EstimateHumanPose3D()
+        self.wrap = pr.WrapOutput(['keypoints2D', 'keypoints3D'])
+
+    def call(self, image):
+        inferences2D = self.estimate_keypoints_2D(image)
+        keypoints2D = np.array(inferences2D['keypoints'])
+        if self.filter:
+            filter_keypoints2D = self.filter_keypoints2D(keypoints2D)
+        keypoints3D = self.estimate_keypoints_3D(keypoints2D)
+        keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
+        return self.wrap(filter_keypoints2D, keypoints3D)
