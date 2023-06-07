@@ -9,7 +9,7 @@ from ..models import (
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
-from .classification import MiniXceptionFER
+from .classification import MiniXceptionFER, ClassifyVVAD
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
 from ..backend.boxes import change_box_coordinates
@@ -886,3 +886,62 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
                                base_weights='VOC', head_weights='VOC')
         super(EFFICIENTDETD0VOC, self).__init__(
             model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class DetectVVAD(Processor):
+    """Emotion classification and detection pipeline.
+
+    # Returns
+        Dictionary with ``image`` and ``boxes2D``.
+
+    # Example
+        ``` python
+        from paz.pipelines import DetectMiniXceptionFER
+
+        detect = DetectMiniXceptionFER()
+
+        # apply directly to an image (numpy-array)
+        inferences = detect(image)
+        ```
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+    """
+    def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
+        super(DetectVVAD, self).__init__()
+        self.offsets = offsets
+        self.colors = colors
+
+        # detection
+        self.detect = HaarCascadeFrontalFace()
+        self.square = SequentialProcessor()
+        self.square.add(pr.SquareBoxes2D())
+        self.square.add(pr.OffsetBoxes2D(offsets))
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
+
+        # classification
+        self.classify = ClassifyVVAD()
+
+        # drawing and wrapping
+        self.class_names = self.classify.class_names
+        self.draw = pr.DrawBoxes2D(self.class_names, self.colors, True)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+
+    def call(self, image):
+        boxes2D = self.detect(image.copy())['boxes2D']
+        boxes2D = self.square(boxes2D)
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        for cropped_image, box2D in zip(cropped_images, boxes2D):
+            predictions = self.classify(cropped_image)
+            box2D.class_name = predictions['class_name']
+            box2D.score = np.amax(predictions['scores'])
+        image = self.draw(image, boxes2D)
+        return self.wrap(image, boxes2D)

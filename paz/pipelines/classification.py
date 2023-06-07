@@ -75,3 +75,22 @@ class ClassifyHandClosure(SequentialProcessor):
         if draw:
             self.add(pr.ControlMap(pr.DrawText(), [0, 1], [0], {1: 1}))
         self.add(pr.WrapOutput(['image', 'status']))
+
+
+class ClassifyVVAD(SequentialProcessor):
+    """Visual Voice Activity Detection pipeline for classifying speaking and not speaking from RGB faces.
+    """
+    def __init__(self):
+        super(ClassifyVVAD, self).__init__()
+        self._classifier = MiniXception((48, 48, 1), 7, weights='FER')
+        self.classifier = VVAD((48, 48, 1), 7, weights='VVAD-LRS3')
+        self.class_names = get_class_names('VVAD-LRS3')
+
+        preprocess = PreprocessImage(self.classifier.input_shape[1:3], None)
+        preprocess.insert(0, pr.ConvertColorSpace(pr.RGB2GRAY))
+        preprocess.add(pr.ExpandDims(0))
+        preprocess.add(pr.ExpandDims(-1))
+        self.add(pr.Predict(self.classifier, preprocess))
+        self.add(pr.CopyDomain([0], [1]))
+        self.add(pr.ControlMap(pr.ToClassName(self.class_names), [0], [0]))
+        self.add(pr.WrapOutput(['class_name', 'scores']))
