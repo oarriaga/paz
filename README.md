@@ -31,7 +31,7 @@ PAZ is used in the following examples (links to **real-time demos** and training
 
 | [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) |[Prototypical Networks](https://github.com/oarriaga/paz/tree/master/examples/prototypical_networks) | [3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/examples/human_pose_estimation_3D) |
 |---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="330">
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="325"> |
 
 
 | | | |
