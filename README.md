@@ -17,7 +17,7 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|--------------------------| -----------------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
 
-|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | [Hand pose estimation](https://github.com/oarriaga/paz/tree/master/examples/hand_pose_estimation) |  [Human pose estimation](https://github.com/oarriaga/paz/tree/master/examples/human_pose_estimation_2D) |
+|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | [Hand pose estimation](https://github.com/oarriaga/paz/tree/master/examples/hand_pose_estimation) |  [2D Human pose estimation](https://github.com/oarriaga/paz/tree/master/examples/human_pose_estimation_2D) |
 |---------------------------|-----------------------|-----------------|
 | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/minimal_hand_example.jpg" width="330"> |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose.gif" width="250"> | 
 
@@ -29,9 +29,14 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="335">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="340"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="330"> |
 
-| [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) |[Prototypical Networks](https://github.com/oarriaga/paz/tree/master/examples/prototypical_networks) | |
+| [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) |[Prototypical Networks](https://github.com/oarriaga/paz/tree/master/examples/prototypical_networks) | [3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/examples/human_pose_estimation_3D) |
 |---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="330">
+
+
+| | | |
+|---------------------------|-----------------------|-----------------|
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">| | |
 
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
@@ -190,11 +195,11 @@ The following models are implemented in PAZ and they can be trained with your ow
 | Task (link to implementation)    |Model (link to paper)  |
 |---------------------------:|-----------------------| 
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|                
+|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|
 |[Probabilistic keypoint est.](https://github.com/oarriaga/paz/blob/master/examples/probabilistic_keypoint_estimation/model.py) |[Gaussian Mixture CNN](https://www.robots.ox.ac.uk/~vgg/publications/2018/Neumann18a/)   |
 |[Detection and Segmentation](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/hrnet.py)|[HRNet](https://arxiv.org/abs/1908.07919)|
-|[Semantic segmentation](https://github.com/oarriaga/paz/blob/master/paz/models/segmentation/unet.py)|[U-NET](https://arxiv.org/abs/1505.04597)|      
+|[Semantic segmentation](https://github.com/oarriaga/paz/blob/master/paz/models/segmentation/unet.py)|[U-NET](https://arxiv.org/abs/1505.04597)|
 |[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[Pix2Pose](https://arxiv.org/abs/1908.07433)          |
 |[Implicit orientation](https://github.com/oarriaga/paz/blob/master/examples/implicit_orientation_learning/model.py)        |[AutoEncoder](https://arxiv.org/abs/1902.01275)            |
 |[Emotion classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/xception.py)       |[MiniXception](https://arxiv.org/abs/1710.07557)           |
@@ -202,7 +207,8 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)  |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)  |
-|[Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/pose_estimation/higher_hrnet.py)            |[HigherHRNet](https://arxiv.org/abs/1908.10357)  |
+|[2D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/pose_estimation/higher_hrnet.py)            |[HigherHRNet](https://arxiv.org/abs/1908.10357)  |
+|[3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/simplebaselines.py) | [Simple Baseline](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/simplebaselines.py) |
 |[Hand pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/detnet.py)            |[DetNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
 |[Hand closure classification](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/iknet.py)            |[IKNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
 |[Hand detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)            |[SSD512](https://arxiv.org/abs/1512.02325)|
