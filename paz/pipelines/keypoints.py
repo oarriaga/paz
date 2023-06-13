@@ -8,20 +8,16 @@ from .heatmaps import GetHeatmapsAndTags
 
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
-from ..models import KeypointNet2D, HigherHRNet, DetNet
+from ..models import KeypointNet2D, HigherHRNet, DetNet, SimpleBaseline
 from .angles import IKNetHandJointAngles
 
 from ..backend.image import get_affine_transform, lincolor
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
-from ..processors.keypoints import SimpleBaselines3D
-from paz.backend.keypoints import filter_keypoints3D
-from paz.backend.keypoints import initialize_translation, solve_least_squares
-from paz.backend.keypoints import get_bones_length, compute_reprojection_error
-from paz.backend.keypoints import compute_optimized_pose3D
-from ..datasets.human36m import data_mean2D, data_stdev2D
+from ..datasets.human36m import data_mean2D, data_stdev2D, args_to_mean
 from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
+from ..datasets.human36m import h36m_to_coco_joints2D
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -395,70 +391,59 @@ class DetectMinimalHand(pr.Processor):
         return self.wrap(image, boxes2D, keypoints2D, keypoints3D)
 
 
-class HRNetSimpleBaselines(pr.Processor):
-    def __init__(self, estimate_keypoints_3D):
-        """ it outupts 2D and 3D keypoints estimation from an image
-        
-        # Arguments
-            estimate_keypoints_3D: 3D simple baseline model
-            args_to_mean: keypoints indices
-            h36m_to_coco_joints2D: h36m joints indices
+class EstimateHumanPose3D(Processor):
+    """ Estimate human pose 3D from 2D human pose.
 
-        # Returns
-            keypoints2D, keypoints3D
-        """
+    # Arguments
+    input_shape: tuple
+    num_keypoints: Int. Number of keypoints.
+
+    # Return
+        keypoints3D: human pose 3D
+    """
+    def __init__(self, input_shape=(32,), num_keypoints=16):
+        super(EstimateHumanPose3D, self).__init__()
+        self.model = SimpleBaseline(input_shape, num_keypoints)
+        self.preprocessing = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D),
+             pr.StandardizeKeypoints2D(data_mean2D, data_stdev2D)])
+        self.postprocess = pr.DestandardizeKeypoints2D(
+            data_mean3D, data_stdev3D, dim_to_use3D)
+        self.predict = pr.Predict(self.model, self.preprocessing,
+                                  self.postprocess)
+
+    def call(self, keypoints2D):
+        keypoints3D = self.predict(keypoints2D)
+        return keypoints3D
+
+
+class EstimateHumanPose(pr.Processor):
+    """ Estimates 2D and 3D keypoints of human from an image
+
+    # Arguments
+        estimate_keypoints_3D: 3D simple baseline model
+        args_to_mean: keypoints indices
+        h36m_to_coco_joints2D: h36m joints indices
+
+    # Returns
+        keypoints2D, keypoints3D
+    """
+    def __init__(self, filter=True):
+        super(EstimateHumanPose, self).__init__()
+        self.filter = filter
         self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
-        self.estimate_keypoints_3D = estimate_keypoints_3D
-        h36m_to_coco_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0,
-                                 5, 7, 9, 6, 8, 10]
-        args_to_mean = {1: [5, 6], 4: [11, 12], 2: [1, 4]}
-        self.baseline_model = SimpleBaselines3D(self.estimate_keypoints_3D,
-                                                data_mean2D, data_stdev2D,
-                                                data_mean3D, data_stdev3D,
-                                                dim_to_use3D, args_to_mean,
-                                                h36m_to_coco_joints2D)
+        self.filter_keypoints2D = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
+        self.estimate_keypoints_3D = EstimateHumanPose3D()
         self.wrap = pr.WrapOutput(['keypoints2D', 'keypoints3D'])
 
     def call(self, image):
         inferences2D = self.estimate_keypoints_2D(image)
-        keypoints2D = inferences2D['keypoints']
-        keypoints2D, keypoints3D = self.baseline_model(np.array(keypoints2D))
-        return self.wrap(keypoints2D, keypoints3D)
-
-
-class SolveTranslation3D(pr.Processor):
-    def __init__(self, args_to_joints3D, solver, camera_intrinsics):
-        """ it calculates the optimized 3d pose estimation
-
-                #Arguments
-                    args_to_mean: keypoints indices
-                    solver: library solver
-                    camera_intrinsics: camera intrinsic parameters
-
-                #Returns
-                    keypoints2D, keypoints3D
-                """
-        self.args_to_joints3D = args_to_joints3D
-        self.camera_intrinsics = camera_intrinsics
-        self.solver = solver
-        
-    def call(self, keypoints):
-        joints3D = filter_keypoints3D(keypoints['keypoints3D'],
-                                      self.args_to_joints3D)
-        root2D = keypoints['keypoints2D'][:, :2]
-        length2D, length3D = get_bones_length(keypoints['keypoints2D'],
-                                              joints3D)
-        ratio = length3D / length2D
-        initial_joint_translation = initialize_translation(root2D,
-                                    self.camera_intrinsics, ratio)
-        joint_translation = solve_least_squares(self.solver,
-                                                compute_reprojection_error,
-                                                initial_joint_translation,
-                                                joints3D,
-                                                keypoints['keypoints2D'],
-                                                self.camera_intrinsics)
-        keypoints3D = np.reshape(keypoints['keypoints3D'], (-1, 32, 3))
-        optimized_poses3D = compute_optimized_pose3D(keypoints3D,
-                                                     joint_translation,
-                                                     self.camera_intrinsics)
-        return joints3D, optimized_poses3D
+        keypoints2D = np.array(inferences2D['keypoints'])
+        if self.filter:
+            filter_keypoints2D = self.filter_keypoints2D(keypoints2D)
+        keypoints3D = self.estimate_keypoints_3D(keypoints2D)
+        keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
+        return self.wrap(filter_keypoints2D, keypoints3D)

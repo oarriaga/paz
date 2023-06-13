@@ -43,6 +43,11 @@ PAGES = [
         'page': 'backend/boxes.md',
         'functions': [
             boxes.apply_non_max_suppression,
+            boxes.nms_per_class,
+            boxes._nms_per_class,
+            boxes.pre_filter_nms,
+            boxes.merge_nms_box_with_class,
+            boxes.suppress_other_class_scores,
             boxes.offset,
             boxes.clip,
             boxes.compute_iou,
@@ -104,7 +109,18 @@ PAGES = [
             keypoints.compute_orientation_vector,
             keypoints.rotate_keypoints3D,
             keypoints.flip_along_x_axis,
-            keypoints.uv_to_vu
+            keypoints.uv_to_vu,
+            keypoints.standardize,
+            keypoints.destandardize,
+            keypoints.initialize_translation,
+            keypoints.solve_least_squares,
+            keypoints.get_bones_length,
+            keypoints.compute_reprojection_error,
+            keypoints.merge_into_mean,
+            keypoints.filter_keypoints,
+            keypoints.filter_keypoints3D,
+            keypoints.filter_keypoints2D,
+            keypoints.compute_optimized_pose3D
         ],
     },
 
@@ -304,6 +320,7 @@ PAGES = [
             models.Projector,
             models.DetNet,
             models.IKNet,
+            models.SimpleBaseline
 
         ],
     },
@@ -483,6 +500,7 @@ PAGES = [
             processors.EncodeBoxes,
             processors.DecodeBoxes,
             processors.NonMaximumSuppressionPerClass,
+            processors.MergeNMSBoxWithClass,
             processors.FilterBoxes,
             processors.OffsetBoxes2D,
             processors.CropImage,
@@ -511,6 +529,11 @@ PAGES = [
             processors.ArgumentsToImageKeypoints2D,
             processors.ScaleKeypoints,
             processors.ComputeOrientationVector,
+            processors.MergeKeypoints2D,
+            processors.FilterKeypoints2D,
+            processors.StandardizeKeypoints2D,
+            processors.DestandardizeKeypoints2D,
+            processors.OptimizeHumanPose3D
         ]
     },
 
@@ -678,7 +701,9 @@ PAGES = [
             pipelines.HigherHRNetHumanPose2D,
             pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation,
-            pipelines.DetectMinimalHand
+            pipelines.DetectMinimalHand,
+            pipelines.EstimateHumanPose3D,
+            pipelines.EstimateHumanPose
         ]
     },
 

@@ -535,7 +535,7 @@ def initialize_translation(joints2D, camera_intrinsics, ratio):
     focal_length = camera_intrinsics[0, 0]
     image_center_x = camera_intrinsics[0, 2]
     image_center_y = camera_intrinsics[1, 2]
-    z = focal_length * ratio 
+    z = focal_length * ratio
     x = (joints2D[:, 0] - image_center_x) * ratio
     y = (joints2D[:, 1] - image_center_y) * ratio
     translation = np.array((x, y, z))
@@ -585,7 +585,7 @@ def get_bones_length(poses2D, poses3D):
                                      person[end_joints])
         sum_bones2D = sum_bones2D + bone_length
     for person in poses3D:
-        bone_length = np.linalg.norm(person[start_joints] - 
+        bone_length = np.linalg.norm(person[start_joints] -
                                      person[end_joints])
         sum_bones3D = sum_bones3D + bone_length
     return sum_bones2D, sum_bones3D
@@ -608,7 +608,7 @@ def compute_reprojection_error(initial_translation, keypoints3D,
     new_poses3D = np.zeros((keypoints3D.shape))
     for person in range(len(initial_translation)):
         new_poses3D[person] = (keypoints3D[person] +
-                             initial_translation[person])
+                               initial_translation[person])
     new_poses3D = new_poses3D.reshape((-1, 3))
     rotation = np.identity(3)
     translation = np.zeros((3,))
@@ -631,7 +631,7 @@ def merge_into_mean(keypoints2D, args_to_mean):
              keypoints2D: keypoints2D after merging
             """
     for point, joints_indices in args_to_mean.items():
-        keypoints2D[:, point] = (keypoints2D[:, joints_indices[0]] + 
+        keypoints2D[:, point] = (keypoints2D[:, joints_indices[0]] +
                                  keypoints2D[:, joints_indices[1]]) / 2
     return keypoints2D
 
@@ -651,7 +651,7 @@ def filter_keypoints(keypoints, args_to_joints):
 
 def filter_keypoints3D(keypoints3D, args_to_joints3D):
     """Selects 16 moving joints (Neck/Nose excluded) from 32 predicted
-    joints in 3D
+       joints in 3D
 
     # Arguments
         keypoints3D: Nx96 points in camera coordinates
@@ -668,7 +668,7 @@ def filter_keypoints3D(keypoints3D, args_to_joints3D):
 
 def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
     """Selects 16 moving joints (Neck/Nose excluded) from 17 predicted
-            joints in 2D
+       joints in 2D
 
     # Arguments
         keypoints3D: Nx17x2 points in camera coordinates
@@ -701,6 +701,7 @@ def compute_optimized_pose3D(keypoints3D, joint_translation,
         rotation = np.identity(3)
         translation = np.zeros((3,))
         points = project_to_image(rotation, translation,
-                 keypoints3D[person].reshape((-1, 3)), camera_intrinsics)
+                                  keypoints3D[person].reshape((-1, 3)),
+                                  camera_intrinsics)
         optimized_poses3D.append(np.reshape(points, [1, 64]))
     return np.array(optimized_poses3D)
