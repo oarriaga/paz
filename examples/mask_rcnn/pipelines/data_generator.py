@@ -2,17 +2,17 @@ import numpy as np
 import math
 import tensorflow as tf
 
-# from paz.backend.image.opencv_image import resize_image
+from paz.backend.image.image import cast_image
 
-from mask_rcnn.backend.boxes import generate_pyramid_anchors, extract_boxes
+from mask_rcnn.backend.boxes import generate_pyramid_anchors, extract_boxes_from_masks
 from mask_rcnn.backend.boxes import compute_rpn_bounding_box, compute_anchor_boxes_overlaps
 from mask_rcnn.backend.boxes import compute_rpn_match
 
-from mask_rcnn.backend.image import normalize_image, minimize_mask, resize_images, resize_mask
+from mask_rcnn.backend.image import subtract_mean_image, crop_resize_masks
 
 
-def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size, num_classes,
-                  shuffle=True, augmentation=False):
+def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size,
+                  shuffle=True, pixel_mean=np.array([123.7, 116.8, 103.9])):
     """An iterable that returns images and corresponding target class ids,
         bounding box deltas, and masks. It inherits from keras.utils.Sequence to avoid data redundancy
         when multiprocessing=True.
@@ -50,8 +50,7 @@ def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size, num
 
             # Get GT bounding boxes and masks for image.
             image_id = image_ids[image_index]
-            image, gt_class_ids, gt_boxes, gt_masks = load_image_gt(dataset, image_id, image_shape,
-                                                                    augmentation=augmentation)
+            image, gt_class_ids, gt_boxes, gt_masks = load_image_gt(dataset, image_id)
 
             rpn_match, rpn_bounding_box = build_rpn_targets(anchors, gt_class_ids, gt_boxes)
 
@@ -78,10 +77,12 @@ def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size, num
                 gt_boxes = gt_boxes[ids]
                 gt_masks = gt_masks[:, :, ids]
 
-                # Add to batch
+            image = cast_image(image, 'float32')
+
+            # Add to batch
             batch_rpn_match[b] = rpn_match[:, np.newaxis]
             batch_rpn_bounding_box[b] = rpn_bounding_box
-            batch_images[b] = normalize_image(image.astype(np.float32))
+            batch_images[b] = subtract_mean_image(image, pixel_mean)
             batch_gt_class_ids[b, :gt_class_ids.shape[0]] = gt_class_ids
             batch_gt_boxes[b, :gt_boxes.shape[0]] = gt_boxes
             batch_gt_masks[b, :, :, :gt_masks.shape[-1]] = gt_masks
@@ -123,8 +124,7 @@ def compute_backbone_shapes(backbone, image_shape):
             for stride in [4, 8, 16, 32, 64]])
 
 
-def load_image_gt(dataset, image_id, image_shape, augmentation=False,
-                  use_mini_mask=False, mini_mask_shape=(28, 28)):
+def load_image_gt(dataset, image_id, use_mini_mask=False, smaller_mask_shape=(28, 28)):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
     augmentation: using paz library for augmentation
 
@@ -141,19 +141,19 @@ def load_image_gt(dataset, image_id, image_shape, augmentation=False,
     mask = data[image_id]['masks']
     class_ids = data[image_id]['box_data'][:, -1]
 
-    # image, window, scale, padding, crop = resize_images(
-    #     image, min_dim=128, min_scale=0, max_dim=128, mode='square')
-    # mask = resize_mask(mask, scale, padding, crop)
-
     _idx = np.sum(mask, axis=(0, 1)) > 0
     mask = mask[:, :, _idx]
 
-    bounding_box = extract_boxes(mask)
+    bounding_box = extract_boxes_from_masks(mask)
+
+    box_reshape = bounding_box.copy()
+    box_reshape[:, 0], box_reshape[:, 1], box_reshape[:, 2], box_reshape[:, 3] = \
+        bounding_box[:, 1], bounding_box[:, 0], bounding_box[:, 3], bounding_box[:, 2]
 
     if use_mini_mask:
-        mask = minimize_mask(bounding_box.astype(np.int32), mask, mini_mask_shape)
+        mask = generate_smaller_masks(bounding_box.astype(np.int32), mask, smaller_mask_shape)
 
-    return image, np.array(class_ids), bounding_box, mask.astype(np.bool)
+    return image, np.array(class_ids), box_reshape, mask.astype(np.bool)
 
 
 def build_rpn_targets(anchors, gt_class_ids, gt_boxes):
@@ -174,4 +174,4 @@ def build_rpn_targets(anchors, gt_class_ids, gt_boxes):
 
     rpn_bounding_box = compute_rpn_bounding_box(gt_boxes, rpn_match, anchors, anchor_iou_argmax)
 
-    return rpn_match, rpn_bounding_box.astype(np.float32)
+    return rpn_match, np.array(rpn_bounding_box).astype(np.float32)
