@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 from tensorflow.python.eager import context
 
-from mask_rcnn.model.layer_utils import apply_box_delta, clip_boxes, slice_batch
+from mask_rcnn.model.layer_utils import apply_box_delta, slice_batch, clip_boxes
 
 
 def trim_anchors_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit):
@@ -60,8 +60,8 @@ def clip_image_boundaries(boxes, images_per_gpu):
     # Returns:
         boxes: [N, (dy, dx, log(dh), log(dw))]
     """
-    window_size = np.array([0, 0, 1, 1], dtype=np.float32)
-    boxes = slice_batch(boxes, [window_size], clip_boxes, images_per_gpu,
+    size = np.array([0, 0, 1, 1], dtype=np.float32)
+    boxes = slice_batch(boxes, [size], clip_boxes, images_per_gpu,
                         names=['refined_anchors_clipped'])
 
     return boxes

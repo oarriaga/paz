@@ -51,21 +51,22 @@ def apply_box_delta(boxes, deltas):
         boxes: [N, (y_min, x_min, y_max, x_max)] boxes to update
         deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
     """
-    H = boxes[:, 2] - boxes[:, 0]
-    W = boxes[:, 3] - boxes[:, 1]
-    center_y = boxes[:, 0] + (0.5 * H)
-    center_x = boxes[:, 1] + (0.5 * W)
+    boxes = tf.cast(boxes, tf.float32)
+    W = boxes[:, 2] - boxes[:, 0]
+    H = boxes[:, 3] - boxes[:, 1]
+    center_y = boxes[:, 0] + (0.5 * W)
+    center_x = boxes[:, 1] + (0.5 * H)
 
-    center_y = center_y + (deltas[:, 0] * H)
-    center_x = center_x + (deltas[:, 1] * W)
-    H = H * tf.exp(deltas[:, 2])
-    W = W * tf.exp(deltas[:, 3])
+    center_y = center_y + (deltas[:, 0] * W)
+    center_x = center_x + (deltas[:, 1] * H)
+    W = W * tf.exp(deltas[:, 2])
+    H = H * tf.exp(deltas[:, 3])
 
-    y_min = center_y - (0.5 * H)
     x_min = center_x - (0.5 * W)
-    y_max = y_min + H
-    x_max = x_min + W
-    result = tf.stack([y_min, x_min, y_max, x_max], axis=1)
+    y_min = center_y - (0.5 * H)
+    x_max = y_min + W
+    y_max = x_min + H
+    result = tf.stack([x_min, y_min, x_max, y_max], axis=1)
 
     return result
 

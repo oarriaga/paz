@@ -3,12 +3,14 @@ import tensorflow as tf
 import numpy as np
 
 from mask_rcnn.backend.image import subtract_mean_image, add_mean_image
-from mask_rcnn.backend.image import generate_smaller_masks, generate_original_masks
+from mask_rcnn.backend.image import crop_resize_masks, resize_to_original_size
 
 from mask_rcnn.backend.boxes import compute_rpn_match, compute_anchor_boxes_overlaps
-from mask_rcnn.backend.boxes import norm_boxes, denorm_boxes
-from mask_rcnn.backend.boxes import generate_anchors, extract_boxes_from_mask
-from mask_rcnn.backend.boxes import compute_rpn_bounding_box, normalize_log_refinement
+from mask_rcnn.backend.boxes import normalized_boxes, denormalized_boxes
+from mask_rcnn.backend.boxes import generate_anchors, extract_boxes_from_masks
+from mask_rcnn.backend.boxes import compute_rpn_bounding_box, encode_boxes
+
+from mask_rcnn.datasets.shapes import Shapes
 
 
 @pytest.fixture
@@ -76,10 +78,10 @@ def rpn_match(anchor_boxes_overlaps, anchors):
 
 
 @pytest.fixture
-def rpn_box(rpn_match, data, anchors, config):
+def rpn_box(rpn_match, data, anchors):
     rpn, anchor_iou_max = rpn_match
     gt_boxes = data[0]['boxes'][:, :4]
-    rpn_box = compute_rpn_bbox(gt_boxes, rpn, anchors, config, anchor_iou_max)
+    rpn_box = compute_rpn_bbox(gt_boxes, rpn, anchors, anchor_iou_max)
     return rpn_box
 
 
@@ -128,7 +130,7 @@ def test_add_mean_image(image, add_mean):
 @pytest.mark.parametrize('small_mask', [[1., 1., 1., 1.], [1., 1., 1., 1.]])
 def test_small_mask(mask, small_mask):
     boxes = [[1, 1, 2, 2]]
-    reduced_mask = generate_smaller_masks(boxes, mask, (2, 4))
+    reduced_mask = crop_resize_masks(boxes, mask, (2, 4))
     assert reduced_mask == small_mask
 
 
@@ -137,17 +139,8 @@ def test_small_mask(mask, small_mask):
                                         [1.6850394, 0.86614174, 1.9055119, 1.2440945],
                                         [1.4173229, 1.4094489, 1.6535434, 1.6062992]])
 def test_original_mask(boxes, norm_boxes):
-    boxes_normalised = norm_boxes(boxes, [128, 128])
+    boxes_normalised = normalized_boxes(boxes, [128, 128])
     assert boxes_normalised == norm_boxes
-
-
-@pytest.mark.parametrize('norm_boxes', [[1.1732284, 0.5905512, 1.7637795,  1.1496063],
-                                        [1.7086614, 1.0787401, 2.3149607, 1.7244095],
-                                        [1.6850394, 0.86614174, 1.9055119, 1.2440945],
-                                        [1.4173229, 1.4094489, 1.6535434, 1.6062992]])
-def test_original_mask(boxes, norm_boxes):
-    boxes_denormalised = denorm_boxes(norm_boxes, [128, 128])
-    assert boxes_denormalised == boxes
 
 
 @pytest.mark.parametrize('boxes', [[5, 10, 20, 30]])

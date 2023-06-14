@@ -20,7 +20,7 @@ def subtract_mean_image(image, mean_pixel_values):
 
 
 def add_mean_image(normalized_image, mean_pixel_values):
-    """Takes a image normalized with mold() and returns the original.
+    """Takes a image normalized and returns the original.
 
     # Arguments:
         normalised_image: [height, width, channel] normalised RGB image of type float.
@@ -32,7 +32,7 @@ def add_mean_image(normalized_image, mean_pixel_values):
     return normalized_image + mean_pixel_values
 
 
-def generate_smaller_masks(boxes, mask, small_mask_shape):
+def crop_resize_masks(boxes, mask, small_mask_shape):
     """Resize masks to a smaller version to reduce memory load.
 
     # Arguments:
@@ -55,7 +55,7 @@ def generate_smaller_masks(boxes, mask, small_mask_shape):
     return smaller_masks
 
 
-def generate_original_masks(mask, box, image_shape, threshold=0.5):
+def resize_to_original_size(mask, box, image_shape, threshold=0.5):
     """Create masks back to original shape from smaller masks.
 
     # Arguments:
@@ -66,11 +66,11 @@ def generate_original_masks(mask, box, image_shape, threshold=0.5):
     # Returns:
         A binary mask with the same size as the original image.
     """
-    x_min, y_min, x_max, y_max = box
-    mask = resize_image(mask, (x_max - x_min, y_max - y_min))
+    y_min, x_min, y_max, x_max = box
+    mask = resize_image(mask, (int(x_max - x_min), int(y_max - y_min)))
     mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
 
     full_mask = np.zeros(image_shape[:2], dtype=np.bool)
-    full_mask[y_min:y_max, x_min:x_max] = mask
+    full_mask[int(y_min):int(y_max), int(x_min):int(x_max)] = mask
 
     return full_mask

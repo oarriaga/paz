@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 from tensorflow.python.eager import context
 
-from mask_rcnn.model.layer_utils import apply_box_delta, clip_boxes, slice_batch
+from mask_rcnn.model.layer_utils import apply_box_delta, slice_batch, clip_boxes
 
 
 def get_top_detections(scores, keep, nms_keep, detection_max_instances):
@@ -160,7 +160,7 @@ def compute_delta_specific(probs, deltas):
     return class_ids, class_scores, deltas_specific
 
 
-def compute_refined_ROIs(ROIs, deltas, windows):
+def compute_refined_ROIs(ROIs, deltas, image_shape):
     """Used by Detection Layer to apply changes to bounding box and
     clip the bounding boxes to specific window size.
 
@@ -172,7 +172,7 @@ def compute_refined_ROIs(ROIs, deltas, windows):
         rois: Normalized proposals
     """
     refined_ROIs = apply_box_delta(ROIs, deltas)
-    refined_ROIs = clip_boxes(refined_ROIs, windows)
+    refined_ROIs = clip_boxes(refined_ROIs, image_shape)
 
     return refined_ROIs
 
@@ -204,7 +204,7 @@ def compute_keep(class_ids, class_scores, refined_ROIs, detection_min_confidence
     return keep
 
 
-def refine_detections(ROIs, probs, deltas, bounding_box_std_dev, windows, detection_min_confidence,
+def refine_detections(ROIs, probs, deltas, bounding_box_std_dev, image_shape, detection_min_confidence,
                       detection_max_instances, detection_nms_threshold):
     """Used by Detection Layer to keep detections with high scores and confidence. Also remove
     the detections with low confidence and scores.
@@ -223,7 +223,7 @@ def refine_detections(ROIs, probs, deltas, bounding_box_std_dev, windows, detect
         detections: num of detections after zero padding.
     """
     class_ids, class_scores, deltas_specific = compute_delta_specific(probs, deltas)
-    refined_ROIs = compute_refined_ROIs(ROIs, deltas_specific * bounding_box_std_dev, windows)
+    refined_ROIs = compute_refined_ROIs(ROIs, deltas_specific * bounding_box_std_dev, image_shape)
     keep = compute_keep(class_ids, class_scores, refined_ROIs, detection_min_confidence,
                         detection_max_instances, detection_nms_threshold)
 
@@ -247,21 +247,21 @@ class DetectionLayer(Layer):
          class_score)] where coordinates are normalized.
     """
 
-    def __init__(self, batch_size, window, bounding_box_std_dev, images_per_gpu, detection_max_instances,
-                 detection_min_confidence, detection_nms_threshold, image_shape, **kwargs,):
+    def __init__(self, batch_size, bounding_box_std_dev, images_per_gpu, detection_max_instances,
+                 detection_min_confidence, detection_nms_threshold, image_shape, window, **kwargs,):
         super().__init__(**kwargs)
         self.batch_size = batch_size
-        self.window = window
         self.bounding_box_std_dev = bounding_box_std_dev
         self.images_per_gpu = images_per_gpu
         self.detection_max_instances = detection_max_instances
         self.detection_min_confidence = detection_min_confidence
         self.detection_nms_threshold = detection_nms_threshold
         self.image_shape = image_shape
+        self.window = window
 
     def call(self, inputs):
         rois, mrcnn_class, mrcnn_bounding_box = inputs
-        # self.window = norm_boxes_graph(self.window, self.image_shape[:2])
+
         detections_batch = slice_batch([rois, mrcnn_class, mrcnn_bounding_box],
                                        [tf.cast(self.bounding_box_std_dev, dtype=tf.float32),
                                         self.window, self.detection_min_confidence,

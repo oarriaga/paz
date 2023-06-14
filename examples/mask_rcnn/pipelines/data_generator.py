@@ -4,14 +4,14 @@ import tensorflow as tf
 
 from paz.backend.image.image import cast_image
 
-from mask_rcnn.backend.boxes import generate_pyramid_anchors, extract_boxes_from_mask
+from mask_rcnn.backend.boxes import generate_pyramid_anchors, extract_boxes_from_masks
 from mask_rcnn.backend.boxes import compute_rpn_bounding_box, compute_anchor_boxes_overlaps
 from mask_rcnn.backend.boxes import compute_rpn_match
 
-from mask_rcnn.backend.image import subtract_mean_image, generate_smaller_masks
+from mask_rcnn.backend.image import subtract_mean_image, crop_resize_masks
 
 
-def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size, num_classes,
+def DataGenerator(dataset, backbone, image_shape, anchor_scales, batch_size,
                   shuffle=True, pixel_mean=np.array([123.7, 116.8, 103.9])):
     """An iterable that returns images and corresponding target class ids,
         bounding box deltas, and masks. It inherits from keras.utils.Sequence to avoid data redundancy
@@ -144,7 +144,7 @@ def load_image_gt(dataset, image_id, use_mini_mask=False, smaller_mask_shape=(28
     _idx = np.sum(mask, axis=(0, 1)) > 0
     mask = mask[:, :, _idx]
 
-    bounding_box = extract_boxes_from_mask(mask)
+    bounding_box = extract_boxes_from_masks(mask)
 
     box_reshape = bounding_box.copy()
     box_reshape[:, 0], box_reshape[:, 1], box_reshape[:, 2], box_reshape[:, 3] = \
@@ -174,4 +174,4 @@ def build_rpn_targets(anchors, gt_class_ids, gt_boxes):
 
     rpn_bounding_box = compute_rpn_bounding_box(gt_boxes, rpn_match, anchors, anchor_iou_argmax)
 
-    return rpn_match, rpn_bounding_box.astype(np.float32)
+    return rpn_match, np.array(rpn_bounding_box).astype(np.float32)

@@ -7,9 +7,12 @@ class BoundingBoxLoss(Layer):
     """Computes loss for Mask RCNN architecture, MRCNN bounding Box loss
     Loss for Mask R-CNN bounding box refinement.
 
-    target_bounding_box: [batch, num_rois, (dy, dx, log(dh), log(dw))]
-    target_class_ids: [batch, num_rois]. Integer class IDs.
-    pred_bounding_box: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
+    # Arguments:
+    y_true = [target_bounding_box, target_class_ids]
+    y_pred: [pred_bounding_box]
+
+    # Returns:
+    loss: bounding box loss value
     """
 
     def __init__(self, loss_weight=1.0, name='mrcnn_bounding_box_loss', **kwargs):
@@ -17,28 +20,47 @@ class BoundingBoxLoss(Layer):
         self.loss_weight = loss_weight
 
     def call(self, y_true, y_pred):
-        target_boxes = y_true[0]
-        target_class_ids = y_true[1]
-        target_class_ids = K.reshape(target_class_ids, (-1,))
-        target_boxes = K.reshape(target_boxes, (-1, 4))
-        predicted_boxes = K.reshape(y_pred,
-                                    (-1, K.int_shape(y_pred)[2], 4))
-        positive_ROI_indices = tf.where(target_class_ids > 0)[:, 0]
-        positive_ROI_class_ids = tf.cast(
-            tf.gather(target_class_ids, positive_ROI_indices), tf.int64)
-        indices = tf.stack([positive_ROI_indices, positive_ROI_class_ids],
-                           axis=1)
-        target_boxes = tf.gather(target_boxes, positive_ROI_indices)
-        predicted_boxes = tf.gather_nd(predicted_boxes, indices)
-        loss = K.switch(tf.size(target_boxes) > 0,
-                        smooth_L1_loss(target_boxes, predicted_boxes),
-                        tf.constant(0.0))
-        loss = K.mean(loss)
+        target_class_ids, target_boxes, predicted_boxes = reshape_values(y_true, y_pred)
 
+        loss = smooth_L1_loss(target_boxes, predicted_boxes)
+        loss = K.switch(tf.size(target_boxes) > 0, loss,
+                        tf.constant(0.0))
+
+        loss = K.mean(loss)
         self.add_loss(loss * self.loss_weight)
         metric = (loss * self.loss_weight)
         self.add_metric(metric, name='mrcnn_bounding_box_loss', aggregation='mean')
         return loss
+
+
+def reshape_values(y_true, y_pred):
+    """Reshapes the y_true and y_pred values to compute MRCNN bounding Box loss
+    by gathering positive target values of bounding boxes and class ids .
+
+    # Arguments:
+    y_true = [target_bounding_box, target_class_ids]
+    y_pred: [pred_bounding_box]
+
+    # Returns:
+    target_bounding_box: [batch, num_rois, (dy, dx, log(dh), log(dw))]
+    target_class_ids: [batch, num_rois]. Integer class IDs.
+    pred_bounding_box: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
+    """
+    target_class_ids = K.reshape(y_true[1], (-1,))
+    target_boxes = K.reshape(y_true[0], (-1, 4))
+    positive_target_indices = tf.where(y_true[1] > 0)[:, 0]
+
+    target_boxes = tf.gather(target_boxes, positive_target_indices)
+
+    positive_target_class_ids = tf.gather(target_class_ids, positive_target_indices)
+    positive_target_class_ids = tf.cast(positive_target_class_ids, tf.int64)
+
+    indices = tf.stack([positive_target_indices, positive_target_class_ids], axis=1)
+
+    predicted_boxes = K.reshape(y_pred, (-1, K.int_shape(y_pred)[2], 4))
+    predicted_boxes = tf.gather_nd(predicted_boxes, indices)
+
+    return target_class_ids, target_boxes, predicted_boxes
 
 
 def smooth_L1_loss(y_true, y_pred):

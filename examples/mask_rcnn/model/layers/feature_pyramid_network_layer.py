@@ -4,7 +4,7 @@ from tensorflow.keras.layers import TimeDistributed, Lambda, Reshape
 from tensorflow.keras.layers import Conv2DTranspose
 
 from mask_rcnn.model.layers.pyramid_ROI_align import PyramidROIAlign
-from mask_rcnn.utils import BatchNorm
+from tensorflow.keras.layers import BatchNormalization as BatchNorm
 
 
 def fpn_classifier_graph(rois, feature_maps, num_classes, image_shape, train_bn=False,
@@ -33,13 +33,13 @@ def fpn_classifier_graph(rois, feature_maps, num_classes, image_shape, train_bn=
     x = PyramidROIAlign([pool_size, pool_size], name='roi_align_classifier')(
         [rois, (image_shape[0], image_shape[1])] + feature_maps)
 
-    conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size),
-                           padding='valid')
+    conv_2d_layer = Conv2D(fc_layers_size, (pool_size, pool_size),   # Rename fc_layers_size to fc_dim, fc check
+                           padding='valid')                          # Fit everything in a single line
 
     x = TimeDistributed(conv_2d_layer, name='mrcnn_class_conv1')(x)
     x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(
         x, training=train_bn)
-    x = Activation('relu')(x)
+    x = Activation('relu')(x)       # Check where it is applied, axis
     x = TimeDistributed(Conv2D(fc_layers_size, (1, 1)),
                         name='mrcnn_class_conv2')(x)
     x = TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(
@@ -55,7 +55,7 @@ def fpn_classifier_graph(rois, feature_maps, num_classes, image_shape, train_bn=
     # Bounding box head
     x = TimeDistributed(Dense(num_classes * 4, activation='linear'),
                         name='mrcnn_bbox_fc')(shared)
-    s = K.int_shape(x)
+    s = K.int_shape(x)        # s rename, box_shape
 
     if s[1] is None:
         mrcnn_bbox = Reshape((-1, num_classes, 4), name='mrcnn_bbox')(x)

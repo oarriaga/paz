@@ -18,7 +18,7 @@ import numpy as np
 import tensorflow.keras.backend as K
 from tensorflow.keras.models import Model
 
-from mask_rcnn.backend.boxes import norm_boxes
+from mask_rcnn.backend.boxes import normalized_boxes
 
 from mask_rcnn.model.layers.detection_target_layer import DetectionTargetLayer
 from mask_rcnn.model.layers.proposal_layer import ProposalLayer
@@ -34,7 +34,7 @@ from mask_rcnn.model.rpn_model import rpn_model
 
 from mask_rcnn.backend.boxes import generate_pyramid_anchors
 from mask_rcnn.pipelines.data_generator import compute_backbone_shapes
-from mask_rcnn.utils import log, BatchNorm
+from tensorflow.keras.layers import BatchNormalization as BatchNorm
 
 from tensorflow.python.framework.ops import enable_eager_execution, disable_eager_execution
 disable_eager_execution()
@@ -159,12 +159,13 @@ class MaskRCNN():
                                                      num_classes=self.num_classes,
                                                      image_shape=self.image_shape)
 
-        detections = DetectionLayer(batch_size=self.batch_size, window=self.window,
+        detections = DetectionLayer(batch_size=self.batch_size,
                                     bounding_box_std_dev=np.array([0.1, 0.1, 0.2, 0.2]),
                                     images_per_gpu=self.images_per_gpu,
                                     detection_max_instances=100,
                                     detection_min_confidence=0.7,
                                     detection_nms_threshold=0.3, image_shape=self.image_shape,
+                                    window=self.window,
                                     name='mrcnn_detection')(
             [rpn_rois, classes, mrcnn_box])
 
@@ -202,7 +203,7 @@ def get_anchors(image_shape, rpn_anchor_scales, image, backbone=None):
 
         # Normalize coordinates
         _anchor_cache[tuple(image_shape)] = \
-            norm_boxes(a_reshape, image_shape[:2])
+            normalized_boxes(a_reshape, image_shape[:2])
 
     return _anchor_cache[tuple(image_shape)]
 
@@ -523,10 +524,10 @@ def create_head(backbone_model, ROIs, num_classes, image_shape, train_bn=False):
 def gnd_truth_call(image):
     """Decorator function used to call the norm_all_boxes function.
 
-    # Arguments
+    # Arguments:
         image: Input image in original form [H, W, C].
         boxes: Bounding box in original form [N, (y1, x1, y2, x2)].
-    # Returns
+    # Returns:
         bounding box: Bounding box in normalised form [N, (y1, x1, y2, x2)].
     """
     shape = tf.shape(image)[1:3]
@@ -539,14 +540,31 @@ def gnd_truth_call(image):
 
 def norm_all_boxes(boxes, shape):
     """Converts boxes from pixel coordinates to normalized coordinates.
+
+    # Arguments:
     boxes: [..., (y1, x1, y2, x2)] in pixel coordinates
     shape: [..., (height, width)] in pixels
     Note: In pixel coordinates (y2, x2) is outside the box. But in normalized
     coordinates it's inside the box.
-    Returns:
+    # Returns:
         [..., (y1, x1, y2, x2)] in normalized coordinates
     """
     h, w = tf.split(tf.cast(shape, tf.float32), 2)
     scale = tf.concat([h, w, h, w], axis=-1) - tf.constant(1.0)
     shift = tf.constant([0., 0., 1., 1.])
     return tf.divide(boxes - shift, scale)
+
+
+def log(text, array=None):
+    """Prints a text message. And, optionally, if a Numpy array is provided it
+    prints it's shape, min, and max values.
+    """
+    if array is not None:
+        text = text.ljust(25)
+        text += ("shape: {:20}  ".format(str(array.shape)))
+        if array.size:
+            text += ("min: {:10.5f}  max: {:10.5f}".format(array.min(), array.max()))
+        else:
+            text += ("min: {:10}  max: {:10}".format("", ""))
+        text += "  {}".format(array.dtype)
+    print(text)
