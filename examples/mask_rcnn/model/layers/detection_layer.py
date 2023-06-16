@@ -8,21 +8,24 @@ from mask_rcnn.model.layer_utils import apply_box_delta, slice_batch, clip_boxes
 
 def get_top_detections(scores, keep, nms_keep, detection_max_instances):
     """Select the the detection with highest score values and
-    retain it. And conversion from sparse to dense(non crypted form).
+    retain it. And conversion from sparse to dense (non crypted form).
 
     # Arguments:
         scores: [N] Predicted target class values
-        keep: rois after supression
-        nms_keep: rois after nm
+        keep: [N] ROIs after supression
+        nms_keep: ROIs after non-maximal suppresion
         detection_max_instances: Max number of final detections
+
+    # Returns :
+        keep : indices of the predictions with higher score to be kept
     """
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
                                 tf.expand_dims(nms_keep, 0))
 
     keep = tf.sparse.to_dense(keep)[0]
-    roi_count = detection_max_instances
+    ROI_count = detection_max_instances
     class_scores_keep = tf.gather(scores, keep)
-    num_keep = tf.minimum(tf.shape(class_scores_keep)[0], roi_count)
+    num_keep = tf.minimum(tf.shape(class_scores_keep)[0], ROI_count)
     top_ids = tf.nn.top_k(class_scores_keep, k=num_keep, sorted=True)[1]
 
     return tf.gather(keep, top_ids)
@@ -36,11 +39,12 @@ def NMS_map(class_ids, scores, ROIs, keep, detection_max_instances,
     bounding boxes representing the selected boxes.
 
     # Arguments:
-        box_data: contains class ids, scores and rois
-        keep: rois after suppression
+        box_data: contains class ids, scores and ROIs
+        keep: ROIs after suppression
         unique_class_id : unique class ids [1x No. of classes]
         detection_max_instances: Max number of final detections
         detection_nms_threshold: Non-maximum suppression threshold for detection
+
     # Returns:
         class_keep: detected instances kept after nms
     """
@@ -49,6 +53,7 @@ def NMS_map(class_ids, scores, ROIs, keep, detection_max_instances,
     class_keep = tf.image.non_max_suppression(tf.gather(ROIs, ids), tf.gather(scores, ids),
                                               max_output_size=detection_max_instances,
                                               iou_threshold=detection_nms_threshold)
+
     class_keep = tf.gather(keep, tf.gather(ids, class_keep))
     gap = detection_max_instances - tf.shape(class_keep)[0]
     class_keep = tf.pad(class_keep, [(0, gap)], mode='CONSTANT', constant_values=-1)
@@ -75,11 +80,12 @@ def apply_NMS(class_ids, scores, refined_ROIs, keep,
     # Arguments:
         class_ids  : [1x N] array values
         scores : probability scores for all classes
-        refined_rois : rois after NMS
-        keep : rois after suppression
+        refined_ROIs : ROIs after NMS
+        keep : ROIs after suppression
         detection_max_instances: Max no. of instances the model can detect.
                                  Default value is 100
         detection_nms_threshold: Threshold value below which instances are ignored.
+
     # Return:
         nms_keep: Detected instances kept after performing nms.
     """
@@ -100,7 +106,7 @@ def merge_results(nms_keep):
     and remove negative indices if any.
 
     # Arguments:
-        nms_keep : rois after nms
+        nms_keep : ROIs after nms
     """
     nms_keep = tf.reshape(nms_keep, [-1])
 
@@ -113,10 +119,11 @@ def filter_low_confidence(class_scores, keep, detection_min_confidence):
 
     # Arguments:
         class_scores: probability scores for all classes
-        keep : rois after supression
+        keep : ROIs after supression
         detection_min_confidence: Minimum probability value to accept a detected instance
+
     # Return:
-        keep: rois after thresholding
+        keep: ROIs after thresholding
     """
     confidence = tf.where(class_scores >= detection_min_confidence)[:, 0]
     keep = tf.sets.intersection(tf.expand_dims(keep, 0),
@@ -132,6 +139,7 @@ def zero_pad_detections(detections, detection_max_instances):
     # Arguments:
         detections: num of detections
         detection_max_instances: Max number of final detections
+
     # Return:
         detections: num of detections after zero padding.
     """
@@ -147,6 +155,7 @@ def compute_delta_specific(probs, deltas):
     # Arguments:
         probs: Normalized proposed classes
         deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+
     # Returns:
         class_ids: [N] Top class ids detected
         class_scores: [N] Scores of the top detected classes
@@ -165,11 +174,12 @@ def compute_refined_ROIs(ROIs, deltas, image_shape):
     clip the bounding boxes to specific window size.
 
     # Arguments:
-        rois: Proposed regions form the  proposal layer
+        ROIs: Proposed regions form the  proposal layer
         deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
         windows: [1x4] Default None
+
     # Returns:
-        rois: Normalized proposals
+        ROIs: Normalized proposals
     """
     refined_ROIs = apply_box_delta(ROIs, deltas)
     refined_ROIs = clip_boxes(refined_ROIs, image_shape)
@@ -185,11 +195,12 @@ def compute_keep(class_ids, class_scores, refined_ROIs, detection_min_confidence
     # Arguments:
         class_ids: predicted class ids
         class_scores: probability scores for all classes
-        refined_rois: rois after NMS
+        refined_ROIs: ROIs after NMS
         detection_min_confidence: Minimum probability value
                                   to accept a detected instance
         detection_max_instances: Max number of final detections
         detection_nms_threshold: Non-maximum suppression threshold for detection
+
     # Returns:
         keep: class idds after NMS
     """
@@ -210,15 +221,17 @@ def refine_detections(ROIs, probs, deltas, bounding_box_std_dev, image_shape, de
     the detections with low confidence and scores.
 
     # Arguments:
-        rois: Proposed regions form the  proposal layer
-        probs: Normalized proposed classes
-        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        ROIs: Proposed regions form the  proposal layer
+        probs: Normalized proposed classes for the proposed regions
+        deltas: [N, num_classes, (dy, dx, log(dh), log(dw))]. Class-specific
+                bounding box deltas.
         bounding_box_std_dev : Bounding box refinement standard deviation for final detections
         windows:  [1x4] Default None
         detection_min_confidence: Minimum probability value to accept a detected instance,
                                  ROIs below this threshold are skipped
         detection_max_instances: Max number of final detections
         detection_nms_threshold: Non-maximum suppression threshold for detection
+
     # Return:
         detections: num of detections after zero padding.
     """
@@ -230,17 +243,20 @@ def refine_detections(ROIs, probs, deltas, bounding_box_std_dev, image_shape, de
     gather_refined_ROIs = tf.gather(refined_ROIs, keep)
     gather_class_ids = tf.cast(tf.gather(class_ids, keep), dtype=tf.float32)[..., tf.newaxis]
     gather_class_scores = tf.gather(class_scores, keep)[..., tf.newaxis]
-
-    detections = tf.concat([gather_refined_ROIs, gather_class_ids, gather_class_scores],
-                           axis=1)
+    detections = tf.concat([gather_refined_ROIs, gather_class_ids, gather_class_scores], axis=1)
 
     return zero_pad_detections(detections, detection_max_instances)
 
 
 class DetectionLayer(Layer):
-    """Detects final bounding boxes and masks for given proposals
+    """Detects final bounding boxes and masks for given proposals.
 
     # Arguments:
+        ROIs: Proposed regions form the  proposal layer
+              [batch, N, (y_min, x_min, y_max, x_max)]
+        mrcnn_class: [batch, train_ROIs_per_iamge]. Integer class IDs.
+        mrcnn_bounding_box: Normalized ground-truth boxes
+                            [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
 
     # Returns:
         [batch, num_detections, (y_min, x_min, y_max, x_max, class_id,
@@ -260,9 +276,8 @@ class DetectionLayer(Layer):
         self.window = window
 
     def call(self, inputs):
-        rois, mrcnn_class, mrcnn_bounding_box = inputs
-
-        detections_batch = slice_batch([rois, mrcnn_class, mrcnn_bounding_box],
+        ROIs, mrcnn_class, mrcnn_bounding_box = inputs
+        detections_batch = slice_batch([ROIs, mrcnn_class, mrcnn_bounding_box],
                                        [tf.cast(self.bounding_box_std_dev, dtype=tf.float32),
                                         self.window, self.detection_min_confidence,
                                         self.detection_max_instances,

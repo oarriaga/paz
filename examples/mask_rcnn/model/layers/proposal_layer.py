@@ -11,24 +11,22 @@ def trim_anchors_by_score(scores, deltas, anchors, images_per_gpu, pre_nms_limit
 
     # Arguments:
         scores: [N] Predicted target class values
-        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
-        anchors: [batch, num_anchors, (y_min, x_min, y_max, x_max)] anchors
+        deltas: [N, (dy, dx, log(dw), log(dh))] refinements to apply
+        anchors: [batch, num_anchors, (x_min, y_min, x_max, y_max)] anchors
                  in normalized coordinates
         images_per_gpu: Number of images to train with on each GPU
         pre_nms_limit: type int, ROIs kept to keep
                        before non-maximum suppression
     # Returns:
         scores: [pre_nms_limit] Predicted target class values
-        deltas: [pre_nms_limit, (dy, dx, log(dh), log(dw))] refinements to apply
-        anchors: [batch, pre_nms_limit, (y_min, x_min, y_max, x_max)]
+        deltas: [pre_nms_limit, (dx, dy, log(dw), log(dh))] refinements to apply
+        anchors: [batch, pre_nms_limit, (x_min, y_min, x_max, y_max)]
     """
     pre_nms_limit = tf.minimum(pre_nms_limit, tf.shape(anchors)[1])
-    indices = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
-                          name='top_anchors').indices
+    indices = tf.nn.top_k(scores, pre_nms_limit, sorted=True).indices
     scores = slice_batch([scores, indices], [], tf.gather, images_per_gpu)
     deltas = slice_batch([deltas, indices], [], tf.gather, images_per_gpu)
-    pre_nms_anchors = slice_batch([anchors, indices], [], tf.gather,
-                                  images_per_gpu, names=['pre_nms_anchors'])
+    pre_nms_anchors = slice_batch([anchors, indices], [], tf.gather, images_per_gpu)
 
     return scores, deltas, pre_nms_anchors
 
@@ -38,14 +36,14 @@ def apply_box_deltas(pre_nms_anchors, deltas, images_per_gpu):
     delta values in slices.
 
     # Arguments:
-        pre_nms_anchors: [N, (y_min, x_min, y_max, x_max)] boxes to update
-        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        pre_nms_anchors: [N, (x_min, y_min, x_max, y_max)] boxes to update
+        deltas: [N, (dx, dy, log(dw), log(dh))] refinements to apply
         images_per_gpu: Number of images to train with on each GPU
     # Returns:
-        boxes: [N, (y_min, x_min, y_max, x_max)]
+        boxes: [N, (x_min, y_min, x_max, y_max)]
     """
     boxes = slice_batch([pre_nms_anchors, deltas], [], apply_box_delta,
-                        images_per_gpu, names=['refined_anchors'])
+                        images_per_gpu)
 
     return boxes
 
@@ -55,14 +53,13 @@ def clip_image_boundaries(boxes, images_per_gpu):
     in this case the normalised image boundaries.
 
     # Arguments:
-        boxes: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        boxes: [N, (dx, dy, log(dw), log(dh))] refinements to apply
         images_per_gpu: Number of images to train with on each GPU
     # Returns:
-        boxes: [N, (dy, dx, log(dh), log(dw))]
+        boxes: [N, (dx, dy, log(dw), log(dh))]
     """
     size = np.array([0, 0, 1, 1], dtype=np.float32)
-    boxes = slice_batch(boxes, [size], clip_boxes, images_per_gpu,
-                        names=['refined_anchors_clipped'])
+    boxes = slice_batch(boxes, [size], clip_boxes, images_per_gpu)
 
     return boxes
 
@@ -72,17 +69,16 @@ def compute_NMS(boxes, scores, proposal_count, nms_threshold):
     and refining the shape of the proposals.
 
     # Arguments:
-        boxes: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+        boxes: [N, (dx, dy, log(dw), log(dh))] refinements to apply
         scores: [N] Predicted target class values
         proposal_count: Max number of proposals
         nms_threshold: Non-maximum suppression threshold for detection
     # Returns:
         proposals: Normalized proposals
-                   [batch, N, (y_min, x_min, y_max, x_max)]
+                   [batch, N, (x_min, y_min, x_max, y_max)]
     """
     indices = tf.image.non_max_suppression(
-        boxes, scores, proposal_count,
-        nms_threshold, name='rpn_non_max_suppression')
+        boxes, scores, proposal_count, nms_threshold)
     proposals = tf.gather(boxes, indices)
     proposals_shape = tf.shape(proposals)[0]
     padding = tf.maximum(proposal_count - proposals_shape, 0)
@@ -99,12 +95,12 @@ class ProposalLayer(Layer):
 
     # Arguments:
         rpn_probs: [batch, num_anchors, (bg prob, fg prob)]
-        rpn_bounding_box: [batch, num_anchors, (dy, dx, log(dh), log(dw))]
-        anchors: [batch, num_anchors, (y_min, x_min, y_max, x_max)] anchors
+        rpn_bounding_box: [batch, num_anchors, (dx, dy, log(dw), log(dh))]
+        anchors: [batch, num_anchors, (x_min, y_min, x_max, y_max)] anchors
                  in normalized coordinates
 
     # Returns:
-        Normalized proposals [batch, rois, (y_min, x_min, y_max, x_max)]
+        Normalized proposals [batch, ROIs, (x_min, y_min, x_max, y_max)]
     """
 
     def __init__(self, proposal_count, nms_threshold, rpn_bounding_box_std_dev,
@@ -130,8 +126,11 @@ class ProposalLayer(Layer):
         proposals = slice_batch([boxes, scores], [self.proposal_count, self.nms_threshold],
                                 compute_NMS, self.images_per_gpu)
 
-        # if not context.executing_eagerly():
-        #     out_shape = self.compute_output_shape(None)
-        #     proposals.set_shape(out_shape)
+        if not context.executing_eagerly():
+            out_shape = self.compute_output_shape(None)
+            proposals.set_shape(out_shape)
 
         return proposals
+
+    def compute_output_shape(self, input_shape):
+        return (None, self.proposal_count, 4)
