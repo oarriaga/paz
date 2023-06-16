@@ -1,4 +1,5 @@
 import numpy as np
+from dvg_ringbuffer import RingBuffer
 
 from ..abstract import Processor
 
@@ -560,3 +561,33 @@ class ScaledResize(Processor):
         """
         output_image, image_scale = scale_resize(image, self.image_size)
         return output_image, image_scale
+
+
+class BufferImages(Processor):
+    """Buffers an image to store and process multiple images.
+
+    # Arguments
+        image_size: Int, desired size of the model input.
+
+    # Properties
+        image_size: Int.
+
+    # Methods
+        call()
+    """
+    def __init__(self, image_size):
+        self.ring_buffer = RingBuffer(36, dtype=(np.uint8, image_size))
+        super(BufferImages, self).__init__()
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Array, raw input image.
+        """
+        self.ring_buffer.append(image)
+
+        if self.ring_buffer.is_full:
+            output = np.array([self.ring_buffer])
+            # print(self.ring_buffer.is_full)
+            return output
+        return None

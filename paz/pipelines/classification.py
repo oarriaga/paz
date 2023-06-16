@@ -1,7 +1,7 @@
 from ..abstract import SequentialProcessor
 from .. import processors as pr
 from . import PreprocessImage
-from ..models.classification import MiniXception
+from ..models.classification import MiniXception, VVAD
 from ..datasets import get_class_names
 from .keypoints import MinimalHandPoseEstimation
 
@@ -82,14 +82,17 @@ class ClassifyVVAD(SequentialProcessor):
     """
     def __init__(self):
         super(ClassifyVVAD, self).__init__()
-        self._classifier = MiniXception((48, 48, 1), 7, weights='FER')
-        self.classifier = VVAD((48, 48, 1), 7, weights='VVAD-LRS3')
+        # self._classifier = MiniXception((48, 48, 1), 7, weights='FER')
+        self.classifier = VVAD(weights='VVAD-LRS3')
         self.class_names = get_class_names('VVAD-LRS3')
+        print(self.class_names)
+        print("test")
 
-        preprocess = PreprocessImage(self.classifier.input_shape[1:3], None)
-        preprocess.insert(0, pr.ConvertColorSpace(pr.RGB2GRAY))
-        preprocess.add(pr.ExpandDims(0))
-        preprocess.add(pr.ExpandDims(-1))
+        preprocess = PreprocessImage((96, 96), None)  # TODO Crop or resize? mit oder ohne Padding? siehe VVAD cropImage
+        # preprocess.insert(0, pr.ConvertColorSpace(pr.RGB2GRAY))
+        # preprocess.add(pr.ExpandDims(0))
+        # preprocess.add(pr.ExpandDims(-1))
+        preprocess.add(pr.BufferImages((96, 96, 3)))
         self.add(pr.Predict(self.classifier, preprocess))
         self.add(pr.CopyDomain([0], [1]))
         self.add(pr.ControlMap(pr.ToClassName(self.class_names), [0], [0]))

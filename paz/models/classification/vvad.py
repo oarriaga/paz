@@ -1,6 +1,6 @@
 from vvadlrs3 import pretrained_models
 
-def MiniXception(weights=None):
+def VVAD(weights=None):
     """Build MiniXception (see references).
 
     # Arguments

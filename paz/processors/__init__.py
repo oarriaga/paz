@@ -68,6 +68,7 @@ from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
 from .image import DivideStandardDeviationImage
 from .image import ScaledResize
+from .image import BufferImages
 
 
 from .image import BGR_IMAGENET_MEAN

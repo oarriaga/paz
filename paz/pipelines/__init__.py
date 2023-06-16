@@ -35,6 +35,7 @@ from .detection import EFFICIENTDETD5COCO
 from .detection import EFFICIENTDETD6COCO
 from .detection import EFFICIENTDETD7COCO
 from .detection import EFFICIENTDETD0VOC
+from .detection import DetectVVAD
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -52,6 +53,7 @@ from .renderer import RandomizeRenderedImage
 
 from .classification import MiniXceptionFER
 from .classification import ClassifyHandClosure
+from .classification import ClassifyVVAD
 
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32

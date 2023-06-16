@@ -940,8 +940,10 @@ class DetectVVAD(Processor):
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
         for cropped_image, box2D in zip(cropped_images, boxes2D):
+            # print(cropped_image.shape)
             predictions = self.classify(cropped_image)
+            print(predictions)
             box2D.class_name = predictions['class_name']
-            box2D.score = np.amax(predictions['scores'])
+            box2D.score = np.amax(predictions['scores'] is None if -1.0 else predictions['scores'])
         image = self.draw(image, boxes2D)
         return self.wrap(image, boxes2D)
