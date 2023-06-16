@@ -8,11 +8,11 @@ class BoundingBoxLoss(Layer):
     Loss for Mask R-CNN bounding box refinement.
 
     # Arguments:
-    y_true = [target_bounding_box, target_class_ids]
-    y_pred: [pred_bounding_box]
+        y_true = [target_bounding_box, target_class_ids]
+        y_pred: [pred_bounding_box]
 
     # Returns:
-    loss: bounding box loss value
+        loss: bounding box loss value
     """
 
     def __init__(self, loss_weight=1.0, name='mrcnn_bounding_box_loss', **kwargs):
@@ -29,7 +29,7 @@ class BoundingBoxLoss(Layer):
         loss = K.mean(loss)
         self.add_loss(loss * self.loss_weight)
         metric = (loss * self.loss_weight)
-        self.add_metric(metric, name='mrcnn_bounding_box_loss', aggregation='mean')
+        self.add_metric(metric, name=name, aggregation='mean')
         return loss
 
 
@@ -38,20 +38,19 @@ def reshape_values(y_true, y_pred):
     by gathering positive target values of bounding boxes and class ids .
 
     # Arguments:
-    y_true = [target_bounding_box, target_class_ids]
-    y_pred: [pred_bounding_box]
+        y_true = [target_bounding_box, target_class_ids]
+        y_pred: [pred_bounding_box]
 
     # Returns:
-    target_bounding_box: [batch, num_rois, (dy, dx, log(dh), log(dw))]
-    target_class_ids: [batch, num_rois]. Integer class IDs.
-    pred_bounding_box: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
+        target_bounding_box: [batch, num_rois, (dx, dy, log(dx), log(dh))]
+        target_class_ids: [batch, num_rois]. Integer class IDs.
+        pred_bounding_box: [batch, num_rois, num_classes, (dx, dy, log(dw), log(dh))]
     """
     target_class_ids = K.reshape(y_true[1], (-1,))
     target_boxes = K.reshape(y_true[0], (-1, 4))
     positive_target_indices = tf.where(y_true[1] > 0)[:, 0]
 
     target_boxes = tf.gather(target_boxes, positive_target_indices)
-
     positive_target_class_ids = tf.gather(target_class_ids, positive_target_indices)
     positive_target_class_ids = tf.cast(positive_target_class_ids, tf.int64)
 
@@ -64,6 +63,15 @@ def reshape_values(y_true, y_pred):
 
 
 def smooth_L1_loss(y_true, y_pred):
+    """Returns the smooth L1 loss from the y_true and y_pred values
+
+    # Arguments:
+        y_true = [N]
+        y_pred = [N]
+
+    # Returns:
+        loss: smooth L1 loss
+    """
     diff = tf.math.abs(y_true - y_pred)
     less_than_one = K.cast(K.less(diff, 1.0), 'float32')
     loss = (less_than_one * 0.5 * diff ** 2) + \

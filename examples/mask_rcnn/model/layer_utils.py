@@ -3,14 +3,24 @@ import numpy as np
 
 
 def slice_batch(inputs, constants, function, batch_size, names=None):
-    """Splits inputs into slices and feeds each slice to a copy of the given
-       computation graph and then combines the results.
+    """Splits inputs into slices and feeds each slice to a copy of the given computation graph
+       and then combines the results.
+
+    This function takes a list of tensors `inputs` and splits them into `batch_size` slices.
+    Each slice is then passed to a copy of the provided computation graph `function`, along with
+    the corresponding slice of constants `constants`. The outputs from each slice are combined
+    and returned as a list of tensors.
 
     # Arguments:
-        inputs: list of tensors. All must have the same first dimension length
-        graph_function: Function that returns a tensor that's part of a graph.
-        batch_size: number of slices to divide the data into.
-        names: If provided, assigns names to the resulting tensors.
+        inputs: A list of tensors. All tensors must have the same first dimension length
+        constants: A list of tensors representing the constants to be passed along with each input slice
+        function: A function that takes the input slices and constants as arguments and returns a tensor
+        batch_size: The number of slices to divide the data into
+        names: Optional. If provided, assigns names to the resulting tensors
+
+    # Returns:
+        results: A list of tensors containing the outputs from each slice. The tensors are stacked
+                 along the first dimension
     """
     if not isinstance(inputs, list):
         inputs = [inputs]
@@ -45,11 +55,17 @@ def slice_batch(inputs, constants, function, batch_size, names=None):
 
 
 def apply_box_delta(boxes, deltas):
-    """Applies the given deltas to the given boxes.
+    """ Applies the given deltas to the given boxes.
 
-    # Arguments:
-        boxes: [N, (y_min, x_min, y_max, x_max)] boxes to update
-        deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
+    Arguments:
+        boxes: A tensor of shape [N, 4] representing the boxes to update.
+               Each box is represented as (y_min, x_min, y_max, x_max).
+        deltas: A tensor of shape [N, 4] representing the refinements to apply.
+                Each delta is represented as (dy, dx, log(dh), log(dw)).
+
+    Returns:
+        A tensor of shape [N, 4] representing the updated boxes.
+        Each box is represented as (y_min, x_min, y_max, x_max).
     """
     boxes = tf.cast(boxes, tf.float32)
     W = boxes[:, 2] - boxes[:, 0]
@@ -72,11 +88,17 @@ def apply_box_delta(boxes, deltas):
 
 
 def clip_boxes(boxes, window):
-    """Clips boxes for given window size.
+    """Clips the boxes to fit within a given window size.
 
-    # Arguments:
-        boxes: [N, (y_min, x_min, y_max, x_max)]
-        window: [4] in the form y_min, x_min, y_max, x_max
+    Arguments:
+        boxes: A tensor of shape [N, 4] representing the boxes to be clipped.
+               Each box is represented as (y_min, x_min, y_max, x_max).
+        window: A tensor of shape [4] representing the window size.
+                The window is defined as (y_min, x_min, y_max, x_max).
+
+    Returns:
+        A tensor of shape [N, 4] representing the clipped boxes.
+        Each box is represented as (y_min, x_min, y_max, x_max).
     """
     windows = tf.split(window, 4)
     window_y_min = windows[0]
