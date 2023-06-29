@@ -95,6 +95,8 @@ def get_class_names(dataset_name='VOC2007'):
     elif dataset_name == 'CityScapes':
         return ['void', 'flat', 'construction',
                 'object', 'nature', 'sky', 'human', 'vehicle']
+    elif dataset_name == 'VVAD_LRS3':
+        return ['speaking', 'not-speaking']
 
     else:
         raise ValueError('Invalid dataset', dataset_name)
