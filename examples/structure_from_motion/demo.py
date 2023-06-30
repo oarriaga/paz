@@ -1,23 +1,21 @@
-import argparse
 import os
-from paz.backend.image import load_image
-from pipeline_cv2 import StructureFromMotion
-# from pipeline_np import StructureFromMotion
+import argparse
 import numpy as np
-from backend import camera_intrinsics_from_dfov
+from paz.backend.image import load_image
+from paz.pipelines.stereo import StructureFromMotion
+from backend import remove_outliers
+import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
 
 
-parser = argparse.ArgumentParser(description='Minimal hand keypoint detection')
-root = os.path.expanduser('~/DFKI/paz/examples/structure_from_motion/datasets')
+parser = argparse.ArgumentParser(description='Structure from motion')
 parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 parser.add_argument('-i', '--images_path', type=str,
-                    default='datasets/SixDPose/cheezIt_textured',
-                    # default='datasets/SixDPose/cheezIt',
-                    # default='datasets/images1',
+                    default='datasets/images1',
                     help='Directory for images')
-parser.add_argument('-DFOV', '--diagonal_field_of_view', type=float,
-                    default=54, help='Diagonal field of view in degrees')
+parser.add_argument('-HFOV', '--horizontal_field_of_view', type=float,
+                    default=70, help='Horizontal field of view in degrees')
 args = parser.parse_args()
 
 
@@ -26,33 +24,32 @@ camera_intrinsics = np.array([[568.996140852, 0, 643.21055941],
                               [0, 0, 1]])
 
 images = []
-
-# image_files = os.listdir(args.images_path)
-# for filename in image_files:
-#     image = load_image(os.path.join(args.images_path, filename))
-#     images.append(image)
-
-# detect = StructureFromMotion(camera_intrinsics)
-# inferences = detect(images)
-
-
-# for custom objects
 image_files = os.listdir(args.images_path)
-image_files = sorted(image_files, key=lambda f: int(f.split('.')[0]))
 for filename in image_files:
     image = load_image(os.path.join(args.images_path, filename))
     images.append(image)
 
-H, W = images[0].shape[:2]
-camera_intrinsics = camera_intrinsics_from_dfov(
-    args.diagonal_field_of_view, H, W)
+detect = StructureFromMotion(camera_intrinsics, least_squares)
+inferences = detect(images)
 
-f = np.sqrt(H ** 2 + W ** 2)
-camera_intrinsics = np.asarray([[f, 0, W/2],
-                                [0, f, H/2],
-                                [0, 0, 1]], np.float32)
 
-print(camera_intrinsics)
-detect = StructureFromMotion(camera_intrinsics)
-# inferences = detect(images[30:40])
-inferences = detect(images[:8])
+def plot_3D_keypoints(keypoints3D, colors, discard_outliers=True):
+    ax = plt.axes(projection='3d')
+    ax.view_init(-160, -80)
+    ax.figure.canvas.set_window_title('3D resonstruction')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    for arg in range(len(keypoints3D)):
+        points3D = keypoints3D[arg]
+        color = np.array(colors[arg])
+        if discard_outliers:
+            points3D, inliers = remove_outliers(keypoints3D[arg], 80)
+            color = colors[arg]
+            color = np.array(color)[inliers]
+        xs, ys, zs = np.split(points3D, 3, axis=1)
+        ax.scatter(xs, ys, zs, s=5, c=color/255)
+    plt.show()
+
+
+plot_3D_keypoints(inferences['points3D'], inferences['colors'])
