@@ -8,7 +8,7 @@ from paz.models import SSD300
 from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
-from detection import AugmentDetection
+from paz.pipelines import AugmentDetection
 # from paz.pipelines import AugmentDetection
 
 
