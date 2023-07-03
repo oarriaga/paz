@@ -9,7 +9,6 @@ from paz.datasets import VOC
 from paz.abstract import Processor, SequentialProcessor
 from paz import processors as pr
 from paz.pipelines import AugmentDetection
-# from paz.pipelines import AugmentDetection
 
 
 class ShowBoxes(Processor):
