@@ -76,10 +76,11 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
         model_filename = '-'.join([model_name, str(base_weights),
                                    str(head_weights) + '_weights.hdf5'])
 
-    weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
-                            cache_subdir='paz/models')
-    print('Loading %s model weights' % weights_path)
-    model.load_weights(weights_path)
+    if not ((base_weights is None) and (head_weights is None)):
+        weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
+        model.load_weights(weights_path)
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(
