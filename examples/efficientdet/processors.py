@@ -56,7 +56,7 @@ class DrawBoxes2D(pr.DrawBoxes2D):
     def call(self, image, boxes2D):
         raw_image = image.copy()
         for box2D in boxes2D:
-            x_min, y_min, x_max, y_max = box2D.coordinates.astype(np.int)
+            x_min, y_min, x_max, y_max = box2D.coordinates.astype(int)
             color = self.compute_box_color(box2D)
             draw_opaque_box(image, (x_min, y_min), (x_max, y_max), color)
         image = make_box_transparent(raw_image, image)
@@ -64,7 +64,7 @@ class DrawBoxes2D(pr.DrawBoxes2D):
         offset_start, offset_end, text_box_color = text_box_parameters
         text_thickness, offset_x, offset_y, text_color = text_parameters
         for box2D in boxes2D:
-            x_min, y_min, x_max, y_max = box2D.coordinates.astype(np.int)
+            x_min, y_min, x_max, y_max = box2D.coordinates.astype(int)
             color = self.compute_box_color(box2D)
             draw_rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
             text = self.compute_text(box2D)
