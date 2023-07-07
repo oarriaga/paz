@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('-dp', '--data_path', default='',
-                    required=False, type=str, help='Directory for loading data')
+                    required=False, type=str, help='Directory to load data')
 parser.add_argument('-sp', '--save_path', default='',
                     required=False, metavar='/path/to/save',
                     help="Path to save model weights and logs")
@@ -47,14 +47,14 @@ parser.add_argument('-w', '--workers', default=1, type=int,
                     help='Number of workers used for optimization')
 parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
                     help='Select True for multiprocessing')
-parser.add_argument('-i', '--image_shape', default=np.array([128, 128, 3]), type=int,
-                    help='Input image size')
+parser.add_argument('-i', '--image_shape', default=np.array([128, 128, 3]),
+                    type=int, help='Input image size')
 parser.add_argument('-igpu', '--images_per_gpu', default=8, type=int,
                     help='Select no. of images to train per gpu')
-parser.add_argument('-as', '--anchor_scales', default=(8, 16, 32, 64, 128), type=int,
-                    help='Length of square anchor side in pixels')
+parser.add_argument('-as', '--anchor_scales', default=(8, 16, 32, 64, 128),
+                    type=int, help='Length of square anchor side in pixels')
 parser.add_argument('-rois', '--rois_per_image', default=32, type=int,
-                    help='Number of ROIs per image to feed to classifier/mask heads')
+                    help='Number of ROIs per image to classifier/mask heads')
 parser.add_argument('-nc', '--num_classes', default=4, type=int,
                     help='Number of classes')
 parser.add_argument('-vs', '--valid_steps', default=5, type=int,
@@ -73,28 +73,37 @@ optimizer = SGD(args.learning_rate, args.momentum, clipnorm=5.0)
 dataset_train = Shapes(500, (args.image_shape[0], args.image_shape[1]))
 dataset_val = Shapes(50, (args.image_shape[0], args.image_shape[1]))
 
-train_generator = DataGenerator(dataset_train, "resnet101", args.image_shape, args.anchor_scales,
-                                args.batch_size, args.num_classes, shuffle=True)
-val_generator = DataGenerator(dataset_val, "resnet101", args.image_shape, args.anchor_scales,
-                              args.batch_size, args.num_classes, shuffle=True)
+
+train_generator = DataGenerator()(dataset_train, "resnet101", args.image_shape,
+                                  args.anchor_scales, args.batch_size,
+                                  shuffle=True, mean_pixel_value=np.array(
+                                      [123.7, 116.8, 103.9]))
+val_generator = DataGenerator()(dataset_val, "resnet101", args.image_shape,
+                                args.anchor_scales, args.batch_size,
+                                shuffle=True, mean_pixel_value=np.array(
+                                      [123.7, 116.8, 103.9]))
 
 # Initial model description
-model = MaskRCNN(model_dir=args.data_path, image_shape=args.image_shape, backbone="resnet101",
-                 batch_size=args.batch_size, images_per_gpu=args.images_per_gpu,
-                 rpn_anchor_scales=args.anchor_scales, train_rois_per_image=args.rois_per_image,
+model = MaskRCNN(model_dir=args.data_path, image_shape=args.image_shape,
+                 backbone="resnet101", batch_size=args.batch_size,
+                 images_per_gpu=args.images_per_gpu,
+                 RPN_anchor_scales=args.anchor_scales,
+                 train_ROIs_per_image=args.rois_per_image,
                  num_classes=args.num_classes)
 
 # Network head creation
-model.build_train_model()
+model.build_model(train=True)
 
-model.keras_model.load_weights('mask_rcnn_coco.h5', by_name=True, skip_mismatch=True)
+model.keras_model.load_weights('mask_rcnn_coco.h5', by_name=True,
+                               skip_mismatch=True)
 
 # Set which layers to train in the backbone Default: Heads
 layer_regex = {
     # all layers but the backbone
     'heads': r'(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)',
     # From a specific Resnet stage and up
-    '3+': r'(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)',
+    '3+': r'(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|'
+          r'(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)',
     '4+': r'(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)',
     '5+': r'(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)',
     # All layers
@@ -108,15 +117,16 @@ model.set_trainable(layer_regex=layers)
 
 # Add losses and compile
 rpn_class_loss = ProposalClassLoss()
-rpn_bounding_box_loss = ProposalBoundingBoxLoss(args.anchors_per_image, args.images_per_gpu)
+rpn_bounding_box_loss = ProposalBoundingBoxLoss(args.anchors_per_image,
+                                                args.images_per_gpu)
 
 custom_losses = {
-        "rpn_class_logits": rpn_class_loss,
-        "rpn_bounding_box": rpn_bounding_box_loss
+        "RPN_class_logits": rpn_class_loss,
+        "RPN_bounding_box": rpn_bounding_box_loss
         }
 loss_weights = {
-        'rpn_class_logits': 1.,
-        'rpn_bounding_box': 1.,
+        'RPN_class_logits': 1.,
+        'RPN_bounding_box': 1.,
     }
 
 loss_names = ['mrcnn_class_loss', 'mrcnn_bounding_box_loss', 'mrcnn_mask_loss']
@@ -135,7 +145,8 @@ reg_losses = [
             if 'gamma' not in w.name and 'beta' not in w.name]
 
 model.keras_model.add_loss(tf.add_n(reg_losses))
-model.keras_model.compile(optimizer=optimizer, loss=custom_losses, loss_weights=loss_weights)
+model.keras_model.compile(optimizer=optimizer, loss=custom_losses,
+                          loss_weights=loss_weights)
 
 for name in loss_names:
     if name in model.keras_model.metrics_names:

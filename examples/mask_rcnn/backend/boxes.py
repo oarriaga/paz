@@ -12,11 +12,12 @@ def normalized_boxes(boxes, shape):
     coordinates it's inside the box.
 
     Returns:
-        [N, (x1, y1, x2, y2)] in normalized coordinates
+        [N, (x1, y1, x2, y2)] in normalized coordinates.
     """
-    W, H = shape
-    scale = np.array([W, H, W, H])
-    return np.divide(boxes, scale)
+    H, W = shape
+    scale = np.array([H-1, W-1, H-1, W-1])
+    shift = np.array([0., 0., 1., 1.])
+    return np.divide(boxes - shift, scale)
 
 
 def denormalized_boxes(boxes, shape):
@@ -28,11 +29,12 @@ def denormalized_boxes(boxes, shape):
     coordinates it's inside the box.
 
     Returns:
-        [N, (x1, y1, x2, y2)] in pixel coordinates
+        [N, (x1, y1, x2, y2)] in pixel coordinates.
     """
-    W, H = shape
-    scale = np.array([W, H, W, H])
-    return np.around(np.multiply(boxes, scale))
+    H, W = shape
+    scale = np.array([H-1, W-1, H-1, W-1])
+    shift = np.array([0., 0., 1., 1.])
+    return np.around(np.multiply(boxes, scale) + shift)
 
 
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
@@ -50,7 +52,6 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
                                                     feature_strides):
         anchors.append(generate_anchors(scale, ratios, feature_shape,
                                         feature_stride, anchor_stride))
-
     return np.concatenate(anchors, axis=0)
 
 
@@ -59,15 +60,17 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
 
     # Arguments:
         scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
-        ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
+        ratios: 1D array of anchor ratios of width/height.
+                Example: [0.5, 1, 2]
         shape: [height, width] spatial shape of the feature map over which
                 to generate anchors.
         feature_stride: feature map stride relative to the image in pixels.
         anchor_stride: anchor stride on feature map. For example, if the
-            value is 2 then generate anchors for every other feature map pixel.
+            value is 2 then generate anchors for every other feature map
+            pixel.
 
     # Returns:
-        anchor boxes: [no. of anchors, (y_min, x_min, y_max, x_max)]
+        anchor boxes: [no. of anchors, (y_min, x_min, y_max, x_max)].
     """
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
@@ -83,7 +86,8 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     box_widths, box_center_X = np.meshgrid(widths, shifts_X)
     box_heights, box_center_Y = np.meshgrid(heights, shifts_Y)
 
-    box_centers = np.stack([box_center_Y, box_center_X], axis=2).reshape([-1, 2])
+    box_centers = np.stack([box_center_Y, box_center_X],
+                           axis=2).reshape([-1, 2])
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
@@ -112,36 +116,38 @@ def extract_boxes_from_masks(masks):
             y2 += 1
         else:
             x1, x2, y1, y2 = 0, 0, 0, 0
-        boxes[instance] = np.array([x1, y1, x2, y2])
+        boxes[instance] = np.array([y1, x1, y2, x2])
     return boxes
 
 
-def compute_rpn_bounding_box(groundtruth_boxes, rpn_match, anchors,
-                             anchor_iou_argmax, std_dev=[0.1, 0.1, 0.2, 0.2]):
+def compute_RPN_bounding_box(anchors, rpn_match, groundtruth_boxes,
+                             anchor_iou_argmax,
+                             std_dev=np.array([0.1, 0.1, 0.2, 0.2])):
     """
     For positive anchors, compute shift and scale needed to transform them
     to match the corresponding groundtruth boxes.
 
     # Arguments:
-        groundtruth_boxes: [num_groundtruth_boxes, (y1, x1, y2, x2)]
-        rpn_match: [N]
-        anchors: [num_anchors, (x1, y1, x2, y2)]
-        anchor_iou_argmax: [1]
-        std_dev = [x1, y1, x2, y2]
+        groundtruth_boxes: [num_groundtruth_boxes, (y1, x1, y2, x2)].
+        RPN_match: [N].
+        anchors: [num_anchors, (x1, y1, x2, y2)].
+        anchor_iou_argmax: [1].
+        std_dev = [x1, y1, x2, y2].
 
     # Return:
-        RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh))]
+        RPN bounding boxes: [max anchors per image,
+                            (dx, dy, log(dw), log(dh))].
     """
     positive_anchors_index = np.where(rpn_match == 1)[0]
-    gt = groundtruth_boxes[anchor_iou_argmax]
+    groundtruth = groundtruth_boxes[anchor_iou_argmax]
 
-    gt = to_center_form(gt[positive_anchors_index])
+    groundtruth = to_center_form(groundtruth[positive_anchors_index])
     positive_anchors = to_center_form(anchors[positive_anchors_index])
 
-    rpn_box = encode_boxes(positive_anchors, gt)
-    rpn_box = rpn_box / std_dev
-
-    return rpn_box
+    RPN_box = encode_boxes(positive_anchors, groundtruth)
+    RPN_box = RPN_box / std_dev
+    RPN_box = np.stack(RPN_box)
+    return RPN_box
 
 
 def encode_boxes(boxes, ground_truth_boxes):
@@ -155,20 +161,18 @@ def encode_boxes(boxes, ground_truth_boxes):
     # Return:
      rpn_box = [dx, dy, log(dw), log(dh)]
     """
-    rpn_box = [
-        (ground_truth_boxes[:, 0] - boxes[:, 0]) / (boxes[:, 2]),
-        (ground_truth_boxes[:, 1] - boxes[:, 1]) / (boxes[:, 3]),
-        np.log(ground_truth_boxes[:, 2] / (boxes[:, 2])),
-        np.log(ground_truth_boxes[:, 3] / (boxes[:, 3]))
-    ]
-    return np.array(rpn_box).T
+    RPN_box = [(ground_truth_boxes[:, 0] - boxes[:, 0]) / (boxes[:, 2]),
+               (ground_truth_boxes[:, 1] - boxes[:, 1]) / (boxes[:, 3]),
+               np.log(ground_truth_boxes[:, 2] / (boxes[:, 2])),
+               np.log(ground_truth_boxes[:, 3] / (boxes[:, 3]))]
+    return np.array(RPN_box).T
 
 
-def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids, groundtruth_boxes,
-                                  crowd_threshold=0.001):
-    """Given the anchors and groundtruth boxes, compute overlaps by handling the crowds.
-    A crowd box in COCO is a bounding box around several instances. Exclude
-    them from training. A crowd box is given a negative class ID.
+def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids,
+                                  groundtruth_boxes, crowd_threshold=0.001):
+    """Given the anchors and groundtruth boxes, compute overlaps by handling
+    the crowds. A crowd box in COCO is a bounding box around several instances.
+    Exclude them from training. A crowd box is given a negative class ID.
 
     # Arguments:
     anchors: [num_anchors, (x1, y1, x2, y2)]
@@ -195,7 +199,7 @@ def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids, groundtruth_bo
     return overlaps, no_crowd_bool, groundtruth_boxes
 
 
-def compute_rpn_match(anchors, overlaps, no_crowd_bool, anchor_size=256):
+def compute_RPN_match(anchors, overlaps, no_crowd_bool, anchor_size=256):
     """
     Match anchors to groundtruth boxes
     If an anchor overlaps a groundtruth box with IoU >= 0.7 then it's positive.
@@ -220,7 +224,8 @@ def compute_rpn_match(anchors, overlaps, no_crowd_bool, anchor_size=256):
     anchor_iou_max = overlaps[np.arange(overlaps.shape[0]), anchor_iou_argmax]
 
     rpn_match[(anchor_iou_max < 0.3) & (no_crowd_bool)] = -1
-    groundtruth_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:, 0]
+    groundtruth_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0)
+                                         )[:, 0]
     rpn_match[groundtruth_iou_argmax] = 1
     rpn_match[anchor_iou_max >= 0.7] = 1
 
