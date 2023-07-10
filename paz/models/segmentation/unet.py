@@ -9,20 +9,6 @@ from tensorflow.keras.applications import VGG16, VGG19
 from tensorflow.keras.applications import ResNet50V2
 
 
-def compute_upsampling_size(first_layer, second_layer):
-    """Function to compute the upsampling size
-
-    # Arguments
-        first_layer: branch layer
-        second_layer: decoder layer
-
-    # Returns
-        upsampling size
-    """
-    size = int(first_layer.shape[1]/second_layer.shape[1])
-    return size
-
-
 def convolution_block(inputs, filters, kernel_size=3, activation='relu'):
     """UNET convolution block containing Conv2D -> BatchNorm -> Activation
 
@@ -163,7 +149,8 @@ def build_UNET(num_classes, backbone, branch_tensors,
         x = convolution_block(x, 512)
 
     for branch, filters in zip(branch_tensors, decoder_filters):
-        size = compute_upsampling_size(branch, x)
+        # size = compute_upsampling_size(branch, x)
+        size = int(branch.shape[1] / x.shape[1])
         x = decoder(x, filters, branch, size)
 
     kwargs = {'use_bias': True, 'kernel_initializer': 'glorot_uniform'}
