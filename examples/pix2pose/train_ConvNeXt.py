@@ -17,8 +17,7 @@ from paz.optimization.callbacks import DrawInferences
 from paz.backend.camera import Camera
 from paz.backend.image import write_image
 from paz.optimization.losses import WeightedReconstruction
-from paz.pipelines.pose import RGBMaskToPose6D
-from pipelines import SingleInferencePIX2POSE6D
+from paz.pipelines.pose import SingleInstancePIX2POSE6D
 
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
@@ -151,7 +150,7 @@ camera.distortion = np.zeros((4))
 camera.intrinsics_from_HFOV(image_shape=(args.image_size, args.image_size))
 object_sizes = renderer.mesh.mesh.extents * 100  # from meters to milimiters
 # camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
-draw_pipeline = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
+draw_pipeline = SingleInstancePIX2POSE6D(model, object_sizes, camera, draw=True)
 draw = DrawInferences(experiment_path, images, draw_pipeline)
 callbacks = [log, stop, save, plateau, draw]
 

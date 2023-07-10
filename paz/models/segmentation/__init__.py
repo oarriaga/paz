@@ -2,3 +2,8 @@ from .unet import UNET_VGG16
 from .unet import UNET_VGG19
 from .unet import UNET_RESNET50
 from .unet import UNET
+from .unet import UNET_ConvNeXtTiny
+from .unet import UNET_ConvNeXtSmall
+from .unet import UNET_ConvNeXtBase
+from .unet import UNET_ConvNeXtLarge
+from .unet import UNET_ConvNeXtXLarge
