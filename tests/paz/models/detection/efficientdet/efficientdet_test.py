@@ -1,7 +1,6 @@
 import pytest
 import numpy as np
 import tensorflow as tf
-from keras.utils.layer_utils import count_params
 from tensorflow.keras.layers import Input
 from tensorflow.keras.utils import get_file
 from paz.models.detection.efficientdet import (
@@ -538,3 +537,26 @@ def test_prior_boxes(model, aspect_ratios, num_boxes):
     assert prior_boxes.shape[0] == num_boxes, (
         "Incorrect number of anchor boxes")
     del model
+
+
+def count_params(weights):
+    """Count the total number of scalars composing the weights.
+    This function is taken from the repository of [Keras]
+    (https://github.com/keras-team/keras/blob/428ed9f03a0a0b2edc22d4ce29
+     001857f617227c/keras/utils/layer_utils.py#L107)
+    This is a patch and it should be removed eventually.
+
+    # Arguments:
+        weights: List, containing the weights
+            on which to compute params.
+
+    # Returns:
+        Int, the total number of scalars composing the weights.
+    """
+    unique_weights = {id(w): w for w in weights}.values()
+    unique_weights = [w for w in unique_weights if hasattr(w, "shape")]
+    weight_shapes = [w.shape.as_list() for w in unique_weights]
+    standardized_weight_shapes = [
+        [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
+    ]
+    return int(sum(np.prod(p) for p in standardized_weight_shapes))
