@@ -27,7 +27,8 @@ class PixelMaskRenderer():
         self.distance, self.roll, self.shift = distance, roll, shift
         self.light_intensity, self.top_only = light, top_only
         self._build_scene(path_OBJ, viewport_size, light, y_fov)
-        self.renderer = OffscreenRenderer(viewport_size[0], viewport_size[1])
+        # self.renderer = OffscreenRenderer(viewport_size[0], viewport_size[1])
+        self.viewport_size = viewport_size
         self.flags_RGBA = RenderFlags.RGBA
         self.flags_FLAT = RenderFlags.RGBA | RenderFlags.FLAT
         self.epsilon = 0.01
@@ -51,20 +52,25 @@ class PixelMaskRenderer():
         return camera_origin, light_intensity
 
     def render(self):
+        renderer = OffscreenRenderer(self.viewport_size[0],
+                                     self.viewport_size[1])
         camera_origin, intensity = self._sample_parameters()
         camera_to_world, world_to_camera = compute_modelview_matrices(
             camera_origin, self.world_origin, self.roll, self.shift)
         self.light.light.intensity = intensity
         self.scene.set_pose(self.camera, camera_to_world)
         self.scene.set_pose(self.light, camera_to_world)
+        # object_pose = self.scene.get_pose()
+
         self.pixel_mesh.mesh.is_visible = False
-        image, depth = self.renderer.render(self.scene, self.flags_RGBA)
+        image, depth = renderer.render(self.scene, self.flags_RGBA)
         self.pixel_mesh.mesh.is_visible = True
         image, alpha = split_alpha_channel(image)
         self.mesh.mesh.is_visible = False
-        RGB_mask, _ = self.renderer.render(self.scene, self.flags_FLAT)
+        RGB_mask, _ = renderer.render(self.scene, self.flags_FLAT)
+        renderer.delete()
         self.mesh.mesh.is_visible = True
-        return image, alpha, RGB_mask
+        return image, alpha, RGB_mask, camera_to_world
 
 
 if __name__ == "__main__":

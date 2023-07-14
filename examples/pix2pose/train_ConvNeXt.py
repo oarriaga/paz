@@ -1,26 +1,29 @@
 import os
 import glob
 import json
+import trimesh
 import argparse
-from datetime import datetime
-
 import numpy as np
 import tensorflow as tf
+from datetime import datetime
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import (
     EarlyStopping, CSVLogger, ModelCheckpoint, ReduceLROnPlateau)
 
+from paz.backend.camera import Camera
+from paz.backend.image import write_image
 from paz.abstract import GeneratingSequence
 from paz.models.segmentation import UNET_ConvNeXtBase
 from paz.optimization.callbacks import DrawInferences
-from paz.backend.camera import Camera
-from paz.backend.image import write_image
 from paz.optimization.losses import WeightedReconstruction
 from paz.pipelines.pose import SingleInstancePIX2POSE6D
-
+from pose_error import EvaluatePoseError
 from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
+
+os.environ["PYOPENGL_PLATFORM"] = "egl"
+
 
 OBJ_FILE = 'textured.obj'
 cache_subdir = 'paz/datasets/ycb_video/035_power_drill'
@@ -73,9 +76,11 @@ parser.add_argument('--num_test_images', default=100, type=int,
 parser.add_argument('--image_size', default=128, type=int,
                     help='Size of the side of a square image e.g. 64')
 parser.add_argument('--background_wildcard', type=str,
-                    help='Wildcard for backgroun images', default=os.path.join(
+                    help='Wildcard for backgroun images',
+                    default=os.path.join(
                         root_path,
-                        '.keras/paz/datasets/voc-backgrounds/*.png'))
+                        '/gluster/home/pksharma/SCRATCH/Datasets/'
+                        'voc_background/*.png'))
 args = parser.parse_args()
 
 
@@ -126,40 +131,53 @@ save_filename = os.path.join(experiment_path, 'model_weights.hdf5')
 save = ModelCheckpoint(save_filename, 'loss', verbose=1, save_best_only=True,
                        save_weights_only=True)
 
+
+# saving hyper-parameters and model summary
+if not os.path.exists(experiment_path):
+    os.makedirs(experiment_path)
+with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
+    json.dump(args.__dict__, filer, indent=4)
+with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
+    model.summary(print_fn=lambda x: filer.write(x + '\n'))
+
 image_directory = os.path.join(experiment_path, 'original_images')
 if not os.path.exists(image_directory):
     os.makedirs(image_directory)
 
 images = []
+gt_poses = []
 for image_arg in range(args.num_test_images):
-    image, alpha, masks = renderer.render()
+    image, alpha, masks, gt_pose = renderer.render()
     image = np.copy(image)  # TODO: renderer outputs unwritable numpy arrays
-    masks = np.copy(masks)  # TODO: renderer outputs unwritable numpy arrays
+    masks = np.copy(masks)
+    gt_pose = np.copy(gt_pose)
     image_filename = 'image_%03d.png' % image_arg
     masks_filename = 'masks_%03d.png' % image_arg
+    gt_pose_filename = 'gt_pose_%03d.npy' % image_arg
     image_directory = os.path.join(experiment_path, 'original_images')
     image_filename = os.path.join(image_directory, image_filename)
     masks_filename = os.path.join(image_directory, masks_filename)
+    gt_pose_filename = os.path.join(image_directory, gt_pose_filename)
     write_image(image_filename, image)
     write_image(masks_filename, masks)
+    np.save(gt_pose_filename, gt_pose)
     images.append(image)
+
+# getting mesh point cloud (np.ndarray)
+tm = trimesh.load(args.obj_path)
+mesh_points = tm.vertices.copy()
 
 # setting drawing callback
 camera = Camera()
 camera.distortion = np.zeros((4))
 camera.intrinsics_from_HFOV(image_shape=(args.image_size, args.image_size))
 object_sizes = renderer.mesh.mesh.extents * 100  # from meters to milimiters
-# camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
-draw_pipeline = SingleInstancePIX2POSE6D(model, object_sizes, camera, draw=True)
-draw = DrawInferences(experiment_path, images, draw_pipeline)
-callbacks = [log, stop, save, plateau, draw]
+inference = SingleInstancePIX2POSE6D(model, object_sizes, camera, draw=True)
+draw = DrawInferences(experiment_path, images, inference)
+pose_error = EvaluatePoseError(experiment_path, images, inference, mesh_points)
 
-# saving hyper-parameters and model summary
-with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
-    json.dump(args.__dict__, filer, indent=4)
-with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
-    model.summary(print_fn=lambda x: filer.write(x + '\n'))
 
+callbacks = [log, stop, save, plateau, draw, pose_error]
 model.fit(
     sequence,
     epochs=args.max_num_epochs,
