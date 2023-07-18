@@ -11,12 +11,13 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.models import Model
 
 from paz.models.detection.utils import create_prior_boxes
+from paz.abstract import ProcessingSequence
 
 from mask_rcnn.datasets.shapes import Shapes
 from mask_rcnn.model.model import MaskRCNN
 from mask_rcnn.losses.proposal_bounding_box_loss import ProposalBoundingBoxLoss
 from mask_rcnn.losses.proposal_class_loss import ProposalClassLoss
-from mask_rcnn.pipelines.data_generator import DataGenerator
+from mask_rcnn.pipelines.data_generator import MaskRCNN_pipeline
 
 
 # Extra arguments to be passed to model from default values
@@ -66,22 +67,7 @@ args = parser.parse_args()
 print('Path to save model: ', args.save_path)
 print('Data path: ', args.data_path)
 
-# Dataset initialisation
-
 optimizer = SGD(args.learning_rate, args.momentum, clipnorm=5.0)
-
-dataset_train = Shapes(500, (args.image_shape[0], args.image_shape[1]))
-dataset_val = Shapes(50, (args.image_shape[0], args.image_shape[1]))
-
-
-train_generator = DataGenerator()(dataset_train, "resnet101", args.image_shape,
-                                  args.anchor_scales, args.batch_size,
-                                  shuffle=True, mean_pixel_value=np.array(
-                                      [123.7, 116.8, 103.9]))
-val_generator = DataGenerator()(dataset_val, "resnet101", args.image_shape,
-                                args.anchor_scales, args.batch_size,
-                                shuffle=True, mean_pixel_value=np.array(
-                                      [123.7, 116.8, 103.9]))
 
 # Initial model description
 model = MaskRCNN(model_dir=args.data_path, image_shape=args.image_shape,
@@ -121,12 +107,12 @@ rpn_bounding_box_loss = ProposalBoundingBoxLoss(args.anchors_per_image,
                                                 args.images_per_gpu)
 
 custom_losses = {
-        "RPN_class_logits": rpn_class_loss,
-        "RPN_bounding_box": rpn_bounding_box_loss
+        "rpn_class_logits": rpn_class_loss,
+        "rpn_bounding_box": rpn_bounding_box_loss
         }
 loss_weights = {
-        'RPN_class_logits': 1.,
-        'RPN_bounding_box': 1.,
+        'rpn_class_logits': 1.,
+        'rpn_bounding_box': 1.,
     }
 
 loss_names = ['mrcnn_class_loss', 'mrcnn_bounding_box_loss', 'mrcnn_mask_loss']
@@ -155,6 +141,22 @@ for name in loss_names:
     loss = (tf.math.reduce_mean(input_tensor=layer.output, keepdims=True))
     model.keras_model.add_metric(loss, name=name, aggregation='mean')
 
+# Dataset initialisation
+datasets = []
+for split in ['train', 'val']:
+    dataset = Shapes(500, (args.image_shape[0], args.image_shape[1]),
+                     split=split)
+    datasets.append(dataset)
+
+# Sequential pipeline
+MaskRCNN_pipeline = MaskRCNN_pipeline(args.image_shape, args.anchor_scales,
+                                      "resnet101", pixel_mean=np.array(
+                                       [123.7, 116.8, 103.9]))
+sequencers = []
+for dataset in datasets:
+    sequencer = ProcessingSequence(MaskRCNN_pipeline, args.batch_size,
+                                   dataset.load_data())
+    sequencers.append(sequencer)
 
 # Checkpoints
 model_path = os.path.join(args.save_path, 'shapes')
@@ -166,12 +168,13 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 early_stop = EarlyStopping(monitor='loss', patience=3)
 
+print("model", model.keras_model.summary())
 model.keras_model.fit(
-    train_generator,
+    sequencers[0],
     epochs=args.num_epochs,
     steps_per_epoch=args.steps_per_epoch,
     callbacks=[log, checkpoint, early_stop],
-    validation_data=val_generator,
+    validation_data=sequencers[1],
     validation_steps=args.valid_steps,
     max_queue_size=100,
     workers=args.workers,
