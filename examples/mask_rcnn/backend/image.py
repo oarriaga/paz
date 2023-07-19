@@ -23,7 +23,8 @@ def add_mean_image(normalized_image, mean_pixel_values):
     """Takes a image normalized and returns the original.
 
     # Arguments:
-        normalised_image: [height, width, channel] normalised RGB image of type float.
+        normalised_image: [height, width, channel] normalised RGB image of type
+                           float.
         pixel_values: array of mean rgb pixel value.
 
     # Returns:
@@ -38,7 +39,8 @@ def crop_resize_masks(boxes, mask, small_mask_shape):
     # Arguments:
         boxes: [instances, ymin, xmin, ymax, xmax] Bounding box.
         mask: [height, width, channel] Binary mask.
-        small_mask_shape : [height, width] shape of the small mask to be converted.
+        small_mask_shape : [height, width] shape of the small mask to be
+                           converted.
 
     # Returns:
         smaller_masks: [height, width, channel]
@@ -47,11 +49,10 @@ def crop_resize_masks(boxes, mask, small_mask_shape):
     smaller_masks = np.zeros(small_mask_shape + (mask.shape[-1],), dtype=bool)
     for instance in range(mask.shape[-1]):
         small_mask = mask[:, :, instance].astype(bool)
-        x1, y1, x2, y2 = boxes[instance, :4]
+        y1, x1, y2, x2 = boxes[instance, :4]
         small_mask = small_mask[y1:y2, x1:x2]
         small_mask = resize_image(small_mask, small_mask_shape)
         smaller_masks[:, :, instance] = np.around(small_mask).astype(bool)
-
     return smaller_masks
 
 
@@ -72,5 +73,4 @@ def resize_to_original_size(mask, box, image_shape, threshold=0.5):
 
     full_mask = np.zeros(image_shape[:2], dtype=np.bool)
     full_mask[int(y_min):int(y_max), int(x_min):int(x_max)] = mask
-
     return full_mask

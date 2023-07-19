@@ -34,7 +34,7 @@ from mask_rcnn.model.layers.feature_pyramid_network import build_FPN_mask_graph
 from mask_rcnn.model.RPN_model import RPN_model
 
 from mask_rcnn.backend.boxes import generate_pyramid_anchors
-from mask_rcnn.pipelines.data_generator import compute_backbone_shapes
+from mask_rcnn.pipelines.data_generator import ComputeBackboneShapes
 from tensorflow.keras.layers import BatchNormalization as BatchNorm
 
 from tensorflow.python.framework.ops import disable_eager_execution
@@ -121,7 +121,8 @@ class MaskRCNN():
                                     backbone="resnet101")
             anchors = np.broadcast_to(anchors, (self.batch_size,) +
                                       anchors.shape)
-            anchors = tf.Variable(anchors, trainable=False)
+            # anchors = tf.Variable(anchors, trainable=False)
+            anchors = AnchorsLayer(anchors, name='anchors')(input_image)
 
         else:
             anchors = Input(shape=[None, 4], name='input_anchors')
@@ -136,9 +137,9 @@ class MaskRCNN():
 
         if train:
             # Initialise inputs for training
-            [input_groundtruth_class_ids, input_groundtruth_boxes,
-             groundtruth_boxes, groundtruth_masks] = get_ground_truth_values(
-                self.image_shape, input_image, mini_mask=False)
+            input_groundtruth_class_ids, input_groundtruth_boxes,\
+                groundtruth_boxes, groundtruth_masks = get_ground_truth_values(
+                  self.image_shape, input_image, mini_mask=False)
 
             ROIs, target_class_ids, target_boxes, target_masks = \
                 DetectionTargetLayer(
@@ -170,6 +171,8 @@ class MaskRCNN():
 
             outputs = [RPN_class_logits, RPN_box, mrcnn_class_loss,
                        mrcnn_box_loss, mrcnn_mask_loss]
+            self.keras_model = Model(inputs=inputs, outputs=outputs,
+                                     name='mask_rcnn')
 
         else:
             _, classes, mrcnn_box = FPN_classifier_graph(RPN_ROIs,
@@ -198,8 +201,8 @@ class MaskRCNN():
             outputs = [detections, classes, mrcnn_box, mrcnn_mask, RPN_ROIs,
                        RPN_class, RPN_box]
 
-        self.keras_model = Model(inputs=inputs, outputs=outputs,
-                                 name='mask_rcnn')
+            self.keras_model = Model(inputs=inputs, outputs=outputs,
+                                     name='mask_rcnn')
 
 
 def build_anchors(image_shape, RPN_anchor_scales, backbone=None):
@@ -209,7 +212,7 @@ def build_anchors(image_shape, RPN_anchor_scales, backbone=None):
         anchors : Normalized to match the shape of
         the input image [N, (y1, x1, y2, x2)]
     """
-    backbone_shapes = compute_backbone_shapes(backbone, image_shape)
+    backbone_shapes = ComputeBackboneShapes()(backbone, image_shape)
     anchor_cache = {}
     if not tuple(image_shape) in anchor_cache:
         anchors = generate_pyramid_anchors(RPN_anchor_scales,
@@ -291,19 +294,19 @@ def build_layers(C2, C3, C4, C5, FPN_size):
     # Returns:
         Model layers.
     """
-    P5 = convolution_block(C5, FPN_size, (1, 1), name='FPN_c5p5')
-    P4 = upsample_block(P5, C4, FPN_size, up_sample_name='FPN_p5upsampled',
-                        FPN_name='fpn_c4p4', FPN_add_name='FPN_p4add')
-    P3 = upsample_block(P4, C3, FPN_size, up_sample_name='FPN_p4upsampled',
-                        FPN_name='fpn_c3p3', FPN_add_name='FPN_p3add')
-    P2 = upsample_block(P3, C2, FPN_size, up_sample_name='FPN_p3upsampled',
-                        FPN_name='fpn_c2p2', FPN_add_name='FPN_p2add')
+    P5 = convolution_block(C5, FPN_size, (1, 1), name='fpn_c5p5')
+    P4 = upsample_block(P5, C4, FPN_size, up_sample_name='fpn_p5upsampled',
+                        FPN_name='fpn_c4p4', FPN_add_name='fpn_p4add')
+    P3 = upsample_block(P4, C3, FPN_size, up_sample_name='fpn_p4upsampled',
+                        FPN_name='fpn_c3p3', FPN_add_name='fpn_p3add')
+    P2 = upsample_block(P3, C2, FPN_size, up_sample_name='fpn_p3upsampled',
+                        FPN_name='fpn_c2p2', FPN_add_name='fpn_p2add')
 
-    P2 = convolution_block(P2, FPN_size, (3, 3), name='FPN_p2', padd='SAME')
-    P3 = convolution_block(P3, FPN_size, (3, 3), name='FPN_p3', padd='SAME')
-    P4 = convolution_block(P4, FPN_size, (3, 3), name='FPN_p4', padd='SAME')
-    P5 = convolution_block(P5, FPN_size, (3, 3), name='FPN_p5', padd='SAME')
-    P6 = MaxPooling2D(pool_size=(1, 1), strides=2, name='FPN_p6')(P5)
+    P2 = convolution_block(P2, FPN_size, (3, 3), name='fpn_p2', padd='SAME')
+    P3 = convolution_block(P3, FPN_size, (3, 3), name='fpn_p3', padd='SAME')
+    P4 = convolution_block(P4, FPN_size, (3, 3), name='fpn_p4', padd='SAME')
+    P5 = convolution_block(P5, FPN_size, (3, 3), name='fpn_p5', padd='SAME')
+    P6 = MaxPooling2D(pool_size=(1, 1), strides=2, name='fpn_p6')(P5)
     return P2, P3, P4, P5, P6
 
 
@@ -509,9 +512,9 @@ def get_ground_truth_values(image_shape, image, mini_mask=False,
         input bounding boxes in normalised form [N, (y1, x1, y2, x2)]
         input groundtruth masks [N, (Shape of Input image/Mini mask shape)]
     """
-    class_ids = Input(shape=[None], name='input_groundtruth_class_ids',
+    class_ids = Input(shape=[None], name='input_gt_class_ids',
                       dtype=tf.int32)
-    input_boxes = Input(shape=[None, 4], name='input_groundtruth_boxes',
+    input_boxes = Input(shape=[None, 4], name='input_gt_boxes',
                         dtype=tf.float32)
 
     boxes = gnd_truth_call(image)(input_boxes)
@@ -520,11 +523,11 @@ def get_ground_truth_values(image_shape, image, mini_mask=False,
         input_groundtruth_masks = Input(
             shape=[mini_mask_shape[0],
                    mini_mask_shape[1], None],
-            name="input_groundtruth_masks", dtype=bool)
+            name="input_gt_masks", dtype=bool)
     else:
         input_groundtruth_masks = Input(
             shape=[image_shape[0], image_shape[1], None],
-            name="input_groundtruth_masks", dtype=bool)
+            name="input_gt_masks", dtype=bool)
     return class_ids, input_boxes, boxes, input_groundtruth_masks
 
 
@@ -604,3 +607,12 @@ def log(text, array=None):
             text += ("min: {:10}  max: {:10}".format("", ""))
         text += "  {}".format(array.dtype)
     print(text)
+
+
+class AnchorsLayer(Layer):
+    def __init__(self, anchors, name="anchors", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.anchors = tf.Variable(anchors, trainable=False)
+
+    def call(self, input_image):
+        return self.anchors

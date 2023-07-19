@@ -28,7 +28,8 @@ class Shapes(Loader):
         self.name_to_arg = dict(zip(class_names, range(len(class_names))))
         self.arg_to_name = dict(zip(range(len(class_names)), class_names))
         self.num_samples, self.image_size = num_samples, image_size
-        self.labels = ['image', 'masks', 'box_data']
+        self.labels = ['input_image', 'input_gt_class_ids', 'input_gt_boxes',
+                       'input_gt_masks']
         self.iou_thresh = iou_thresh
         self.max_num_shapes = max_num_shapes
         super(Shapes, self).__init__(None, split, class_names, 'Shapes')
@@ -42,10 +43,15 @@ class Shapes(Loader):
         shapes, boxes = self._filter_shapes(boxes, shapes, self.iou_thresh)
         image = self._draw_shapes(shapes)
         masks = self._draw_masks(shapes)
-        class_args = [self.name_to_arg[name[0]] for name in shapes]
-        class_args = np.asarray(class_args).reshape(-1, 1)
-        box_data = np.concatenate([boxes, class_args], axis=1)
-        sample = dict(zip(self.labels, [image, masks, box_data]))
+
+        _idx = np.sum(masks, axis=(0, 1)) > 0
+        masks = masks[:, :, _idx]
+        boxes = self.extract_boxes_from_masks(masks)
+        boxes = np.asarray(boxes)
+
+        class_ids = [self.name_to_arg[name[0]] for name in shapes]
+        class_ids = np.asarray(class_ids)
+        sample = dict(zip(self.labels, [image, class_ids, boxes, masks]))
         return sample
 
     def _sample_shape(self, H, W, offset=20):
@@ -78,7 +84,7 @@ class Shapes(Loader):
         return np.asarray(boxes)
 
     def _filter_shapes(self, boxes, shapes, iou_thresh):
-        scores = np.ones(len(boxes))  # all shapes have the same score np.arange(N)
+        scores = np.ones(len(boxes))
         args, num_boxes = apply_non_max_suppression(boxes, scores, iou_thresh)
         box_args = args[:num_boxes]
         selected_shapes = []
@@ -118,6 +124,32 @@ class Shapes(Loader):
 
             for j in range(i + 1, masks.shape[-1]):
                 occulusions = np.logical_and(masks[:, :, i], masks[:, :, j])
-                masks[:, :, i] = np.logical_xor(masks[:, :, i], occulusions).astype(np.uint8)
+                masks[:, :, i] = np.logical_xor(masks[:, :, i],
+                                                occulusions).astype(np.uint8)
 
         return masks
+
+    def extract_boxes_from_masks(self, masks):
+        """Compute bounding boxes from masks.
+
+        # Arguments:
+            mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
+
+        # Returns:
+            box array [no. of instances, (x1, y1, x2, y2)].
+        """
+        boxes = np.zeros([masks.shape[-1], 4], dtype=np.int32)
+
+        for instance in range(masks.shape[-1]):
+            mask = masks[:, :, instance]
+            horizontal_indicies = np.where(np.any(mask, axis=0))[0]
+            vertical_indicies = np.where(np.any(mask, axis=1))[0]
+            if horizontal_indicies.shape[0]:
+                x1, x2 = horizontal_indicies[[0, -1]]
+                y1, y2 = vertical_indicies[[0, -1]]
+                x2 += 1
+                y2 += 1
+            else:
+                x1, x2, y1, y2 = 0, 0, 0, 0
+            boxes[instance] = np.array([y1, x1, y2, x2])
+        return boxes

@@ -20,18 +20,21 @@ def test(image, weights_path):
     image_shape = molded_images[0].shape
     window = norm_all_boxes(windows[0], image_shape[:2])
 
-    base_model = MaskRCNN(model_dir='../../mask_rcnn', image_shape=image_shape, backbone="resnet101",
-                          batch_size=1, images_per_gpu=1, rpn_anchor_scales=(8, 16, 32, 64, 128),
-                          train_rois_per_image=32, num_classes=4, window=window)
+    base_model = MaskRCNN(model_dir='../../mask_rcnn',
+                          image_shape=image_shape,
+                          backbone="resnet101",
+                          batch_size=1, images_per_gpu=1,
+                          RPN_anchor_scales=(8, 16, 32, 64, 128),
+                          train_ROIs_per_image=32, num_classes=4,
+                          window=window)
 
-    inference_model = base_model.build_inference_model()
-
-    base_model.keras_model = inference_model
+    base_model.build_model(train=False)
     base_model.keras_model.load_weights(weights_path, by_name=True)
     preprocess = SequentialProcessor([ResizeImages(),
                                       NormalizeImages()])
     postprocess = SequentialProcessor([PostprocessInputs()])
-    detect = Detect(base_model, (8, 16, 32, 64, 128), 1, preprocess, postprocess)
+    detect = Detect(base_model, (8, 16, 32, 64, 128), 1,
+                    preprocess, postprocess)
     result = detect([image])
     return result
 
@@ -45,4 +48,6 @@ images = data[0]['image']
 class_names = ['BG', 'Square', 'Circle', 'Triangle']
 results = test(images, path)
 r = results[0]
-display_instances(images, r['rois'], r['masks'], r['class_ids'], class_names, r['scores'])
+print(r)
+display_instances(images, r['rois'], r['masks'], r['class_ids'], class_names,
+                  r['scores'])
