@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 from tensorflow.python.data import Dataset
 import tensorflow as tf
 keras = tf.keras
@@ -7,7 +8,16 @@ from keras.optimizers import Adam
 import matplotlib.pyplot as plt
 
 from paz.datasets import VVAD_LRS3
-from paz.models.classification import CNN2Plus1D
+from paz.models.classification import CNN2Plus1D, VVAD_LRS3_LSTM
+
+parser = argparse.ArgumentParser(description='Train a model for VVAD')
+parser.add_argument('-p', '--dataset_path', type=str, default="",
+                    help='Path to the Dataset')
+parser.add_argument('-m', '--model_name', type=str, default="VVAD_LRS3", choices=["VVAD_LRS3", "CNN2Plus1D"],
+                    help='Name of the model to train')
+args = parser.parse_args()
+
+
 
 generatorTrain = VVAD_LRS3(split="train")
 generatorVal = VVAD_LRS3(split="val")
@@ -18,12 +28,26 @@ datasetVal = Dataset.from_generator(generatorVal, output_signature=(tf.TensorSpe
 datasetTrain = datasetTrain.batch(8)
 datasetVal = datasetVal.batch(8)
 
-model = CNN2Plus1D()
+model = None
 
-loss = BinaryCrossentropy(from_logits=True)  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
-optimizer = Adam(learning_rate=0.0001)
+# Python 3.8 does not support switch case statements :(
+if args.model_name == "VVAD_LRS3":
+  model = VVAD_LRS3_LSTM()
 
-model.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
+  loss = BinaryCrossentropy(
+    from_logits=True)  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
+  optimizer = Adam(learning_rate=0.0001)
+
+  model.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
+elif args.model_name == "CNN2Plus1D":
+  model = CNN2Plus1D()
+
+  loss = BinaryCrossentropy(from_logits=True)  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
+  optimizer = Adam(learning_rate=0.0001)
+
+  model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=['accuracy'])
+else:
+  raise Exception("Model name not found")
 
 history = model.fit(x = datasetTrain,
                     epochs = 2,
