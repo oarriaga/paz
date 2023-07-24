@@ -2,6 +2,7 @@ import os
 import numpy as np
 from scipy import spatial
 from tensorflow.keras.callbacks import Callback
+from paz.backend.groups import quaternion_to_rotation_matrix
 
 
 def transform_mesh_points(mesh_points, rotation, translation):
@@ -28,8 +29,9 @@ def compute_ADD(true_pose, pred_pose, mesh_points):
       # Returns
           Return ADD error
     """
-    pred_rotation = pred_pose[:3, :3]
-    pred_translation = pred_pose[:3, 3]
+    quaternion = pred_pose.quaternion
+    pred_translation = pred_pose.translation
+    pred_rotation = quaternion_to_rotation_matrix(quaternion)
     pred_mesh = transform_mesh_points(mesh_points, pred_rotation,
                                       pred_translation)
 
@@ -53,8 +55,11 @@ def compute_ADI(true_pose, pred_pose, mesh_points):
       # Returns
           Return ADI error
       """
-    pred_rotation = pred_pose[:3, :3]
-    pred_translation = pred_pose[:3, 3]
+
+    quaternion = pred_pose.quaternion
+    pred_translation = pred_pose.translation
+    pred_rotation = quaternion_to_rotation_matrix(quaternion)
+
     pred_mesh = transform_mesh_points(mesh_points, pred_rotation,
                                       pred_translation)
 
@@ -93,6 +98,9 @@ class EvaluatePoseError(Callback):
         self.verbose = verbose
 
     def on_epoch_end(self, epoch, logs=None):
+        sum_ADD = 0.0
+        sum_ADI = 0.0
+        valid_predictions = 0
         for image_arg, image in enumerate(self.images):
             inferences = self.pipeline(image.copy())
             pose6D = inferences[self.topic]
@@ -100,14 +108,24 @@ class EvaluatePoseError(Callback):
             image_directory = os.path.join(self.experiment_path,
                                            'original_images')
             gt_pose = np.load(os.path.join(image_directory, gt_file))
-            add_error = compute_ADD(gt_pose, pose6D, self.mesh_points)
-            adi_error = compute_ADI(gt_pose, pose6D, self.mesh_points)
+            if pose6D is not None:
+                add_error = compute_ADD(gt_pose, pose6D, self.mesh_points)
+                adi_error = compute_ADI(gt_pose, pose6D, self.mesh_points)
+                sum_ADD = sum_ADD + add_error
+                sum_ADI = sum_ADI + adi_error
+                valid_predictions = valid_predictions + 1
 
-            with open(os.path.join(self.experiment_path,
-                                   'error.txt'), 'w') as filer:
+        error_path = os.path.join(self.experiment_path, 'error.txt')
+        if valid_predictions > 0:
+            average_ADD = sum_ADD / valid_predictions
+            average_ADI = sum_ADI / valid_predictions
+            with open(error_path, 'a') as filer:
                 filer.write('epoch: %d\n' % epoch)
-                filer.write('Estimated ADD error: %f\n' % add_error)
-                filer.write('Estimated ADI error: %f\n\n' % adi_error)
+                filer.write('Estimated ADD error: %f\n' % average_ADD)
+                filer.write('Estimated ADI error: %f\n\n' % average_ADI)
+        else:
+            average_ADD = None
+            average_ADI = None
         if self.verbose:
-            print('Estimated ADD error:', add_error)
-            print('Estimated ADI error:', adi_error)
+            print('Estimated ADD error:', average_ADD)
+            print('Estimated ADI error:', average_ADI)

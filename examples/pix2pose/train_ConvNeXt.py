@@ -26,9 +26,15 @@ os.environ["PYOPENGL_PLATFORM"] = "egl"
 
 
 OBJ_FILE = 'textured.obj'
+MTL_FIlE = 'textured.mtl'
+PNG_FILE = 'texture_map.png'
+
 cache_subdir = 'paz/datasets/ycb_video/035_power_drill'
 URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.12/'
 OBJ_FILEPATH = get_file(OBJ_FILE, URL + OBJ_FILE, cache_subdir=cache_subdir)
+MTL_FILEPATH = get_file(MTL_FIlE, URL + MTL_FIlE, cache_subdir=cache_subdir)
+PNG_FILEPATH = get_file(PNG_FILE, URL + PNG_FILE, cache_subdir=cache_subdir)
+
 
 root_path = os.path.expanduser('~')
 
@@ -114,7 +120,7 @@ def mean_squared_error(y_true, y_pred):
 
 
 # instantiating the model and loss
-model = UNET_ConvNeXtBase(num_channels, image_shape, freeze_backbone=False)
+model = UNET_ConvNeXtBase(num_channels, image_shape, freeze_backbone=True)
 optimizer = Adam(args.learning_rate)
 loss = WeightedReconstruction(args.beta)
 model.compile(optimizer, loss, mean_squared_error)
