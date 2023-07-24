@@ -193,6 +193,7 @@ class SingleInstancePIX2POSE6D(Processor):
             colors = points3D_to_RGB(points3D, self.object_sizes)
             image = draw_points2D(image, points2D, colors)
             image = self.draw_pose6D(image, pose6D)
+        points2D = points2D.astype(int)
         inferences = self.wrap(image, points2D, points3D, pose6D)
         return inferences
 
