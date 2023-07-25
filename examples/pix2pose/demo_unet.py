@@ -87,10 +87,14 @@ class PIX2POSEPowerDrill(Processor):
 parser = argparse.ArgumentParser(description='Object pose estimation')
 parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
+parser.add_argument('-HFOV', '--horizontal_field_of_view', type=float,
+                    default=75, help='Horizontal field of view in degrees')
+
 args = parser.parse_args()
 
 camera = Camera(args.camera_id)
-pipeline = SinglePowerDrillPIX2POSE6DUNet(camera, epsilon=0.015)
+camera.intrinsics_from_HFOV(args.horizontal_field_of_view)
+pipeline = PIX2POSEPowerDrill(camera, offsets=[0.15, 0.15], epsilon=0.015)
 player = VideoPlayer((640, 480), pipeline, camera)
 player.run()
 
