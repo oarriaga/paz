@@ -124,18 +124,15 @@ class MaskRCNN():
             # anchors = tf.Variable(anchors, trainable=False)
             anchors = AnchorsLayer(anchors, name='anchors')(input_image)
 
-        else:
-            anchors = Input(shape=[None, 4], name='input_anchors')
+            RPN_ROIs = ProposalLayer(proposal_count=2000,
+                                     nms_threshold=0.7,
+                                     RPN_bounding_box_std_dev=np.array([
+                                         0.1, 0.1, 0.2, 0.2]),
+                                     pre_nms_limit=6000,
+                                     images_per_gpu=self.images_per_gpu,
+                                     batch_size=self.batch_size,
+                                     name='ROI')([RPN_class, RPN_box, anchors])
 
-        RPN_ROIs = ProposalLayer(proposal_count=2000,
-                                 nms_threshold=0.7,
-                                 RPN_bounding_box_std_dev=[0.1, 0.1, 0.2, 0.2],
-                                 pre_nms_limit=6000,
-                                 images_per_gpu=self.images_per_gpu,
-                                 batch_size=self.batch_size,
-                                 name='ROI')([RPN_class, RPN_box, anchors])
-
-        if train:
             # Initialise inputs for training
             input_groundtruth_class_ids, input_groundtruth_boxes,\
                 groundtruth_boxes, groundtruth_masks = get_ground_truth_values(
@@ -171,18 +168,27 @@ class MaskRCNN():
 
             outputs = [RPN_class_logits, RPN_box, mrcnn_class_loss,
                        mrcnn_box_loss, mrcnn_mask_loss]
-            self.keras_model = Model(inputs=inputs, outputs=outputs,
-                                     name='mask_rcnn')
 
         else:
+            anchors = Input(shape=[None, 4], name='input_anchors')
+
+            RPN_ROIs = ProposalLayer(proposal_count=1000,
+                                     nms_threshold=0.7,
+                                     RPN_bounding_box_std_dev=np.array([
+                                         0.1, 0.1, 0.2, 0.2]),
+                                     pre_nms_limit=6000,
+                                     images_per_gpu=self.images_per_gpu,
+                                     batch_size=self.batch_size,
+                                     name='ROI')([RPN_class, RPN_box, anchors])
+
             _, classes, mrcnn_box = FPN_classifier_graph(RPN_ROIs,
                                                          feature_maps[:-1],
                                                          self.num_classes,
                                                          self.image_shape)
 
             detections = DetectionLayer(batch_size=self.batch_size,
-                                        bounding_box_std_dev=np.array(
-                                            [0.1, 0.1, 0.2, 0.2]),
+                                        bounding_box_std_dev=np.array([
+                                            0.1, 0.1, 0.2, 0.2]),
                                         images_per_gpu=self.images_per_gpu,
                                         detection_max_instances=100,
                                         detection_min_confidence=0.7,
@@ -201,8 +207,8 @@ class MaskRCNN():
             outputs = [detections, classes, mrcnn_box, mrcnn_mask, RPN_ROIs,
                        RPN_class, RPN_box]
 
-            self.keras_model = Model(inputs=inputs, outputs=outputs,
-                                     name='mask_rcnn')
+        self.keras_model = Model(inputs=inputs, outputs=outputs,
+                                 name='mask_rcnn')
 
 
 def build_anchors(image_shape, RPN_anchor_scales, backbone=None):

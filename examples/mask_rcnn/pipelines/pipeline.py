@@ -15,9 +15,8 @@ class MatchRPNBoxes(Processor):
 
     def call(self, boxes):
         class_ids = boxes[:, 4]
-        matches, box_deltas = build_rpn_targets(self.image_shape,
-                                                self.anchors, class_ids,
-                                                boxes, self.config)
+        matches, box_deltas = build_rpn_targets(self.image_shape, self.anchors,
+                                                class_ids, boxes, self.config)
         return box_deltas, matches
 
 

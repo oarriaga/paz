@@ -67,10 +67,11 @@ def resize_to_original_size(mask, box, image_shape, threshold=0.5):
     # Returns:
         A binary mask with the same size as the original image.
     """
+    box = [int(x) for x in box]
     y_min, x_min, y_max, x_max = box
     mask = resize_image(mask, (int(x_max - x_min), int(y_max - y_min)))
-    mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
 
+    mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
     full_mask = np.zeros(image_shape[:2], dtype=np.bool)
     full_mask[int(y_min):int(y_max), int(x_min):int(x_max)] = mask
     return full_mask

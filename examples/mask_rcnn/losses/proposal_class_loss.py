@@ -4,12 +4,20 @@ from keras.layers import Layer
 
 
 class ProposalClassLoss(tf.keras.losses.Loss):
-    """Computes loss for Mask RCNN architecture, Region Proposal
-    Network Class loss. RPN anchor classifier loss.
+    """Computes the loss for the Mask RCNN architecture's Region Proposal
+    Network (RPN) class loss. This loss function calculates the RPN anchor
+    classifier loss.
 
-    rpn_match: [batch, anchors, 1]. Anchor match type. 1=positive,
-               -1=negative, 0=neutral anchor.
-    rpn_class_logits: [batch, anchors, 2]. RPN classifier logits for BG/FG.
+    Args:
+        loss_weight: A float specifying the loss weight (default: 1.0)
+        y_true: The ground truth tensor containing the anchor match type.
+                Shape: [batch, anchors, 1]. Anchor match type. 1=positive,
+                -1=negative, 0=neutral anchor.
+        y_pred: The predicted tensor containing the RPN classifier logits for
+                BG/FG. Shape: [batch, anchors, 2].
+
+    Returns:
+        The computed loss value
     """
 
     def __init__(self, loss_weight=1.0, name='rpn_class_loss', **kwargs):
@@ -26,5 +34,4 @@ class ProposalClassLoss(tf.keras.losses.Loss):
                                                  output=y_pred,
                                                  from_logits=True)
         loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-
         return loss

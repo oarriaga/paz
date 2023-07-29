@@ -3,24 +3,28 @@ import numpy as np
 
 
 def slice_batch(inputs, constants, function, batch_size, names=None):
-    """Splits inputs into slices and feeds each slice to a copy of the given computation graph
-       and then combines the results.
+    """Splits inputs into slices and feeds each slice to a copy of the given
+    computation graph and then combines the results.
 
-    This function takes a list of tensors `inputs` and splits them into `batch_size` slices.
-    Each slice is then passed to a copy of the provided computation graph `function`, along with
-    the corresponding slice of constants `constants`. The outputs from each slice are combined
+    This function takes a list of tensors `inputs` and splits them into
+    `batch_size` slices. Each slice is then passed to a copy of the provided
+    computation graph `function`, along with the corresponding slice of
+    constants `constants`. The outputs from each slice are combined
     and returned as a list of tensors.
 
     # Arguments:
-        inputs: A list of tensors. All tensors must have the same first dimension length
-        constants: A list of tensors representing the constants to be passed along with each input slice
-        function: A function that takes the input slices and constants as arguments and returns a tensor
-        batch_size: The number of slices to divide the data into
-        names: Optional. If provided, assigns names to the resulting tensors
+        inputs: A list of tensors. All tensors must have the same first
+                dimension length.
+        constants: A list of tensors representing the constants to be passed
+                   along with each input slice.
+        function: A function that takes the input slices and constants as
+                  arguments and returns a tensor.
+        batch_size: The number of slices to divide the data into.
+        names: Optional. If provided, assigns names to the resulting tensors.
 
     # Returns:
-        results: A list of tensors containing the outputs from each slice. The tensors are stacked
-                 along the first dimension
+        results: A list of tensors containing the outputs from each slice. The
+                 tensors are stacked along the first dimension.
     """
     if not isinstance(inputs, list):
         inputs = [inputs]
@@ -50,7 +54,6 @@ def slice_batch(inputs, constants, function, batch_size, names=None):
 
     if len(results) == 1:
         results = results[0]
-
     return results
 
 
@@ -68,22 +71,22 @@ def apply_box_delta(boxes, deltas):
         Each box is represented as (y_min, x_min, y_max, x_max).
     """
     boxes = tf.cast(boxes, tf.float32)
-    W = boxes[:, 2] - boxes[:, 0]
-    H = boxes[:, 3] - boxes[:, 1]
-    center_y = boxes[:, 0] + (0.5 * W)
-    center_x = boxes[:, 1] + (0.5 * H)
+    H = boxes[:, 2] - boxes[:, 0]
+    W = boxes[:, 3] - boxes[:, 1]
+    center_y = boxes[:, 0] + (0.5 * H)
+    center_x = boxes[:, 1] + (0.5 * W)
 
-    center_y = center_y + (deltas[:, 0] * W)
-    center_x = center_x + (deltas[:, 1] * H)
+    center_y = center_y + (deltas[:, 0] * H)
+    center_x = center_x + (deltas[:, 1] * W)
     W = W * tf.exp(deltas[:, 2])
     H = H * tf.exp(deltas[:, 3])
 
     x_min = center_x - (0.5 * W)
     y_min = center_y - (0.5 * H)
-    x_max = y_min + W
-    y_max = x_min + H
-    result = tf.stack([x_min, y_min, x_max, y_max], axis=1)
-
+    y_max = y_min + H
+    x_max = x_min + W
+    result = tf.stack([y_min, x_min, y_max, x_max], axis=1,
+                      name='apply_box_deltas_out')
     return result
 
 
@@ -115,5 +118,4 @@ def clip_boxes(boxes, window):
     clipped = tf.concat([y_min, x_min, y_max, x_max], axis=1,
                         name='clipped_boxes')
     clipped.set_shape((clipped.shape[0], 4))
-
     return clipped

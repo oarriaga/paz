@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from keras.layers import Layer
+from tensorflow.keras.layers import Layer
 
 
 class ClassLoss(Layer):
@@ -19,19 +19,20 @@ class ClassLoss(Layer):
         loss: class loss value
     """
 
-    def __init__(self, num_classes, loss_weight=1.0, name='mrcnn_class_loss', **kwargs):
+    def __init__(self, num_classes, loss_weight=1.0, name='mrcnn_class_loss',
+                 **kwargs):
         super().__init__(name=name, **kwargs)
         self.active_class_ids = tf.ones([num_classes], dtype=tf.int32)
         self.loss_weight = loss_weight
 
     def call(self, y_true, y_pred):
-        y_true = tf.cast(y_true, 'int64')
         pred_class_ids = tf.argmax(input=y_pred, axis=2)
 
         pred_active = tf.gather(self.active_class_ids, pred_class_ids)
 
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=y_true, logits=y_pred)
+        y_true = tf.cast(y_true, 'int64')
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true,
+                                                              logits=y_pred)
         loss = loss * tf.cast(pred_active, 'float32')
 
         loss = tf.math.reduce_sum(loss) / (tf.math.reduce_sum(
@@ -39,5 +40,5 @@ class ClassLoss(Layer):
         self.add_loss(loss * self.loss_weight)
 
         metric = (loss * self.loss_weight)
-        self.add_metric(metric, name=name, aggregation='mean')
+        self.add_metric(metric, name='mrcnn_class_loss', aggregation='mean')
         return loss
