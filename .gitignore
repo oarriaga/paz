@@ -19,7 +19,11 @@
 checkpoint
 *.coverage
 *.npy
-.DS_Store
+*.p
+*.zip
+*.iml
+*.jpeg
+*.tgz
 
 !.github/manifest.xml
 
