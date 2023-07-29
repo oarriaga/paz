@@ -3,6 +3,7 @@ from .. import processors as pr
 from . import PreprocessImage
 from ..models.classification import MiniXception
 from ..datasets import get_class_names
+from .keypoints import MinimalHandPoseEstimation
 
 
 # neutral, happiness, surprise, sadness, anger, disgust, fear, contempt
@@ -45,3 +46,32 @@ class MiniXceptionFER(SequentialProcessor):
         self.add(pr.CopyDomain([0], [1]))
         self.add(pr.ControlMap(pr.ToClassName(self.class_names), [0], [0]))
         self.add(pr.WrapOutput(['class_name', 'scores']))
+
+
+class ClassifyHandClosure(SequentialProcessor):
+    """Pipeline to classify minimal hand closure status.
+
+    # Example
+        ``` python
+        from paz.pipelines import ClassifyHandClosure
+
+        classify = ClassifyHandClosure()
+
+        # apply directly to an image (numpy-array)
+        inference = classify(image)
+        ```
+
+     # Returns
+        A function that takes an RGB image and outputs an image with class
+        status drawn on it.
+    """
+    def __init__(self, draw=True, right_hand=False):
+        super(ClassifyHandClosure, self).__init__()
+        self.add(MinimalHandPoseEstimation(draw, right_hand))
+        self.add(pr.UnpackDictionary(['image', 'relative_angles']))
+        self.add(pr.ControlMap(pr.IsHandOpen(), [1], [1]))
+        self.add(pr.ControlMap(pr.BooleanToTextMessage('OPEN', 'CLOSE'),
+                               [1], [1]))
+        if draw:
+            self.add(pr.ControlMap(pr.DrawText(), [0, 1], [0], {1: 1}))
+        self.add(pr.WrapOutput(['image', 'status']))

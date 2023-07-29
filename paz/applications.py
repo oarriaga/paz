@@ -7,6 +7,15 @@ from .pipelines import MiniXceptionFER
 from .pipelines import FaceKeypointNet2D32
 from .pipelines import HeadPoseKeypointNet2D32
 from .pipelines import HaarCascadeFrontalFace
+from .pipelines import EFFICIENTDETD0COCO
+from .pipelines import EFFICIENTDETD1COCO
+from .pipelines import EFFICIENTDETD2COCO
+from .pipelines import EFFICIENTDETD3COCO
+from .pipelines import EFFICIENTDETD4COCO
+from .pipelines import EFFICIENTDETD5COCO
+from .pipelines import EFFICIENTDETD6COCO
+from .pipelines import EFFICIENTDETD7COCO
+from .pipelines import EFFICIENTDETD0VOC
 
 from .pipelines import SinglePowerDrillPIX2POSE6D
 from .pipelines import MultiPowerDrillPIX2POSE6D
@@ -16,3 +25,6 @@ from .pipelines import PIX2YCBTools6D
 from .pipelines import HigherHRNetHumanPose2D
 from .pipelines import DetNetHandKeypoints
 from .pipelines import MinimalHandPoseEstimation
+from .pipelines import DetectMinimalHand
+from .pipelines import ClassifyHandClosure
+from .pipelines import SSD512MinimalHandPose
