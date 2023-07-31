@@ -27,7 +27,7 @@ parser.add_argument('-b', '--batch_size', type=int,
                     default=16,
                     help='Batch size for training and validation')
 parser.add_argument('-o', '--output_path', type=str,
-                    default="./outputs/",
+                    default="./output/",
                     help='Path to directory for saving outputs.')
 
 args = parser.parse_args()
