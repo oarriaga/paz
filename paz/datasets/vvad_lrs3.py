@@ -42,45 +42,52 @@ class VVAD_LRS3(Generator):
         self.val_split = val_split
         self.test_split = test_split
 
+        data = h5py.File(self.path, mode='r')
+        # TODO change back after testing
+        # self.total_size = data.get('x_train').shape[0]
+        self.total_size = data.get('x_test').shape[0]
+        data.close()
+
     def __call__(self):
         data = h5py.File(self.path, mode='r')
 
-        x_train = data.get("x_train")
-        y_train = data.get("y_train")
-        # x_train = data.get("x_test")
-        # y_train = data.get("y_test")
+        # TODO change back after testing
+        # x_train = data.get("x_train")
+        # y_train = data.get("y_train")
+        x_train = data.get("x_test")
+        y_train = data.get("y_test")
 
-        size_train = x_train.shape[0]
-
-        # TODO add the 200 test samples to those
-        indexes_pos = list(range(size_train // 2))
-        indexes_neg = list(range(size_train // 2, size_train))
+        # TODO add the 200 test samples to those (if so add those 200 to the self.total_size)
+        indexes_pos = list(range(self.total_size // 2))
+        indexes_neg = list(range(self.total_size // 2, self.total_size))
 
         indexes_val = []
         indexes_test = []
 
-        size_bla = len(indexes_pos)
+        old_pos_size = len(indexes_pos)
+        old_neg_size = len(indexes_neg)
 
         # val split
         if self.val_split > 0.0:
             propotional_procent = self.val_split / 2
-            indexes_val = indexes_pos[:int(propotional_procent * size_bla)] + indexes_neg[:int(propotional_procent * size_bla)]
-            indexes_pos = indexes_pos[int(propotional_procent * len(indexes_pos)):]
-            indexes_neg = indexes_neg[int(propotional_procent * len(indexes_neg)):]
+            indexes_val = indexes_pos[:int(self.val_split * old_pos_size)] + indexes_neg[:int(self.val_split * old_neg_size)]
+            indexes_pos = indexes_pos[int(self.val_split * old_pos_size):]
+            indexes_neg = indexes_neg[int(self.val_split * old_neg_size):]
 
         # test split
         if self.test_split > 0.0:
             propotional_procent = self.test_split / 2
-            indexes_test = indexes_pos[:int(propotional_procent * size_bla)] + indexes_neg[:int(propotional_procent * size_bla)]
-            indexes_pos = indexes_pos[int(propotional_procent * len(indexes_pos)):]
-            indexes_neg = indexes_neg[int(propotional_procent * len(indexes_neg)):]
+            indexes_test = indexes_pos[:int(self.test_split * old_pos_size)] + indexes_neg[:int(self.test_split * old_neg_size)]
+            indexes_pos = indexes_pos[int(self.test_split * old_pos_size):]
+            indexes_neg = indexes_neg[int(self.test_split * old_neg_size):]
 
         indexes_train = indexes_pos + indexes_neg
+        # TODO shuffle before splitting the indexes
         random.Random(445363).shuffle(indexes_train)  # Use always the same seed so every model gets the same shuffle
 
         # print("indexes_val", len(indexes_val))
         # print("indexes_test", len(indexes_test))
-        # print("indexes_train", len(indexes))
+        # print("indexes_train", len(indexes_train))
 
         if self.split == 'train':
             indexes = indexes_train
@@ -89,8 +96,20 @@ class VVAD_LRS3(Generator):
         elif self.split == 'test':
             indexes = indexes_test
 
-        print("Selected split: ", self.split)
-        print("indexes", len(indexes))
+        # print("Selected split: ", self.split)
+        # print("indexes", len(indexes))
 
         for i in range(len(indexes)):
             yield (x_train[i], y_train[i])
+        data.close()
+
+    def __len__(self):
+        if self.total_size == -1:
+            raise ValueError('You need to call __call__ first to set the total_size')
+
+        if self.split == 'train':
+            return int(self.total_size * (1 - self.val_split - self.test_split))
+        elif self.split == 'val':
+            return int(self.total_size * self.val_split)
+        elif self.split == 'test':
+            return int(self.total_size * self.test_split)
