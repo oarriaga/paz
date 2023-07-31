@@ -97,7 +97,7 @@ tb_callback = tf.keras.callbacks.TensorBoard(
 
 csv_callback = callbacks.CSVLogger(filename=os.path.join(args.output_path, args.model, 'outputs_csv.log'))
 
-tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model, country_iso_code="DEU", output_dir=".", output_file="output_file", tracking_mode="process") # gpu_ids=[0,1,2,3], on_csv_write="append/update"
+tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model, country_iso_code="DEU", output_dir=os.path.join(args.output_path, args.model), output_file="codecarbon", tracking_mode="process") # gpu_ids=[0,1,2,3], on_csv_write="append/update"
 tracker.start()
 
 model.fit(x = datasetTrain,
