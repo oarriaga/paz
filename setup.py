@@ -21,5 +21,5 @@ if __name__ == "__main__":
               'Programming Language :: Python :: 3',
               'License :: OSI Approved :: MIT License'
           ],
-          install_requires=['opencv-python==4.7.0', 'tensorflow==2.12.0', 'numpy==1.23.5'],
+          install_requires=['opencv-python==4.7.0.72', 'tensorflow==2.12.0', 'numpy==1.23.5'],
           packages=find_packages())
