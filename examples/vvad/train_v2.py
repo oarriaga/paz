@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import argparse
+import datetime
 import math
 import callbacks
 from pathlib import Path
@@ -31,6 +32,8 @@ parser.add_argument('-o', '--output_path', type=str,
                     help='Path to directory for saving outputs.')
 
 args = parser.parse_args()
+
+output_path = os.path.join(args.output_path, args.model, datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S"))
 
 generatorTrain = VVAD_LRS3(path=args.data_path, split="train")
 generatorVal = VVAD_LRS3(path=args.data_path, split="val")
@@ -82,21 +85,21 @@ else:
 
 # Checkpoint callback that saves the weights of the network every 20 epochs
 cp_callback = tf.keras.callbacks.ModelCheckpoint(
-    filepath=os.path.join(args.output_path, args.model, "checkpoints/weights-{epoch:02d}.hdf5"),
+    filepath=os.path.join(output_path, "checkpoints/weights-{epoch:02d}.hdf5"),
     verbose=1,
     save_weights_only=True,
     # TODO only for testing save_freq=10*n_batches_per_epoch
 )
 
 tb_callback = tf.keras.callbacks.TensorBoard(
-    log_dir=os.path.join(args.output_path, args.model, 'tensorboard_logs'),  # os.path.join(args.output_path, args.model, 'tensorboard_logs'),
+    log_dir=os.path.join(output_path, 'tensorboard_logs'),  # os.path.join(args.output_path, args.model, 'tensorboard_logs'),
     # don't think I need weight histogramms histogram_freq=1,
     update_freq='epoch'
 )
 
-csv_callback = callbacks.CSVLogger(filename=os.path.join(args.output_path, args.model, 'outputs_csv.log'))
+csv_callback = callbacks.CSVLogger(filename=os.path.join(output_path, 'outputs_csv.log'))
 
-tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model, country_iso_code="DEU", output_dir=os.path.join(args.output_path, args.model), output_file="codecarbon", tracking_mode="process") # gpu_ids=[0,1,2,3], on_csv_write="append/update"
+tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model, country_iso_code="DEU", output_dir=output_path, output_file="codecarbon", tracking_mode="process") # gpu_ids=[0,1,2,3], on_csv_write="append/update"
 tracker.start()
 
 model.fit(x = datasetTrain,
