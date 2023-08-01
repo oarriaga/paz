@@ -17,7 +17,7 @@ from paz.models.classification import CNN2Plus1D, VVAD_LRS3_LSTM
 
 parser = argparse.ArgumentParser(description='Paz VVAD Training')
 parser.add_argument('-p', '--data_path', type=str,
-                    default='~/.keras/paz/datasets',
+                    default='.keras/paz/datasets',
                     help='Path from your home dir to dataset directory')
 parser.add_argument('-m', '--model', type=str,
                     default='VVAD_LRS3',
@@ -32,9 +32,8 @@ parser.add_argument('-o', '--output_path', type=str,
 
 args = parser.parse_args()
 
-generatorTrain = VVAD_LRS3(split="train")
-generatorVal = VVAD_LRS3(split="val")
-
+generatorTrain = VVAD_LRS3(path=args.data_path, split="train")
+generatorVal = VVAD_LRS3(path=args.data_path, split="val")
 
 datasetTrain = Dataset.from_generator(generatorTrain, output_signature=(tf.TensorSpec(shape=(38, 96, 96, 3)), tf.TensorSpec(shape=(), dtype=tf.int8)))
 datasetVal = Dataset.from_generator(generatorVal, output_signature=(tf.TensorSpec(shape=(38, 96, 96, 3)), tf.TensorSpec(shape=(), dtype=tf.int8)))
