@@ -28,11 +28,10 @@ class VVAD_LRS3(Generator):
     # TODO to_categorical
     # TODO Data augmentation?
     def __init__(
-            self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, image_size=(96, 96)):
+            self, path="~/.keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, image_size=(96, 96)):
         if split != 'train' and split != 'val' and split != 'test':
             raise ValueError('Invalid split name')
 
-        path = os.path.join(os.path.expanduser('~'), path)
         path = os.path.join(path, 'vvadlrs3_faceImages_small.h5')
 
         class_names = get_class_names('VVAD_LRS3')

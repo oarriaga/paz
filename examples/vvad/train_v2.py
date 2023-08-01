@@ -17,7 +17,7 @@ from paz.models.classification import CNN2Plus1D, VVAD_LRS3_LSTM
 
 parser = argparse.ArgumentParser(description='Paz VVAD Training')
 parser.add_argument('-p', '--data_path', type=str,
-                    default='.keras/paz/datasets',
+                    default='~/.keras/paz/datasets',
                     help='Path from your home dir to dataset directory')
 parser.add_argument('-m', '--model', type=str,
                     default='VVAD_LRS3',
