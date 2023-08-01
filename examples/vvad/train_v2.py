@@ -85,11 +85,11 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=os.path.join(args.output_path, args.model, "checkpoints/weights-{epoch:02d}.hdf5"),
     verbose=1,
     save_weights_only=True,
-    # save_freq=10*n_batches_per_epoch
+    # TODO only for testing save_freq=10*n_batches_per_epoch
 )
 
 tb_callback = tf.keras.callbacks.TensorBoard(
-    log_dir="./outputs/VVAD_LRS3/tensorboard_logs",  # os.path.join(args.output_path, args.model, '/tensorboard_logs'),
+    log_dir=os.path.join(args.output_path, args.model, 'tensorboard_logs'),  # os.path.join(args.output_path, args.model, 'tensorboard_logs'),
     # don't think I need weight histogramms histogram_freq=1,
     update_freq='epoch'
 )
