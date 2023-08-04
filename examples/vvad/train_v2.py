@@ -34,6 +34,8 @@ parser.add_argument('-o', '--output_path', type=str,
 args = parser.parse_args()
 
 output_path = os.path.join(args.output_path, args.model, datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S"))
+os.mkdir(os.path.join(args.output_path, args.model))
+os.mkdir(os.path.join(output_path))
 os.mkdir(os.path.join(output_path, "checkpoints"))
 
 generatorTrain = VVAD_LRS3(path=args.data_path, split="train")
