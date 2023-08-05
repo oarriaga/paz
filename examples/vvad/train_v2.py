@@ -5,7 +5,7 @@ import datetime
 import math
 import callbacks
 from pathlib import Path
-# from codecarbon import OfflineEmissionsTracker
+from codecarbon import OfflineEmissionsTracker
 from tensorflow.python.data import Dataset
 import tensorflow as tf
 keras = tf.keras
@@ -111,12 +111,12 @@ tb_callback = tf.keras.callbacks.TensorBoard(
 
 csv_callback = callbacks.CSVLogger(filename=os.path.join(output_path, 'outputs_csv.log'))
 
-# tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model, country_iso_code="DEU", output_dir=output_path, output_file="codecarbon", tracking_mode="process") # gpu_ids=[0,1,2,3], on_csv_write="append/update"
-# tracker.start()
+tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model, country_iso_code="DEU", output_dir=output_path, output_file="codecarbon", tracking_mode="process") # gpu_ids=[0,1,2,3], on_csv_write="append/update"
+tracker.start()
 
 model.fit(x = datasetTrain,
                     epochs = 2,
                     callbacks=[cp_callback, tb_callback, csv_callback],
                     validation_data = datasetVal)
 
-# tracker.stop()
+tracker.stop()
