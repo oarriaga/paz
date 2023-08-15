@@ -4,6 +4,7 @@ from paz.backend.anchors import build_anchors
 from efficientdet_blocks import (
     BiFPN, build_detector_head, EfficientNet_to_BiFPN)
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
+from efficientpose_blocks import RotationNet
 
 
 def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
@@ -55,7 +56,10 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
             FPN_num_filters, box_class_repeats, survival_rate,
             momentum, epsilon, activation)
 
-    model = Model(inputs=image, outputs=outputs, name=model_name)
+        rotation_net_outputs = RotationNet(middles)
+
+    model = Model(inputs=image, outputs=[outputs, rotation_net_outputs],
+                  name=model_name)
 
     if not ((base_weights is None) and (head_weights is None)):
         weights_path = "weights/phi_0_occlusion_best_ADD(-S).h5"
