@@ -55,11 +55,10 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
             middles, num_classes, num_dims, aspect_ratios, num_scales,
             FPN_num_filters, box_class_repeats, survival_rate,
             momentum, epsilon, activation)
-
         pose_outputs = build_pose_estimator_head(middles)
+        outputs = [detection_outputs, pose_outputs]
 
-    model = Model(inputs=image, outputs=[detection_outputs, pose_outputs],
-                  name=model_name)
+    model = Model(inputs=image, outputs=outputs, name=model_name)
 
     if not ((base_weights is None) and (head_weights is None)):
         weights_path = "weights/phi_0_occlusion_best_ADD(-S).h5"
