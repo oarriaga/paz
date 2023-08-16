@@ -4,7 +4,7 @@ from paz.backend.anchors import build_anchors
 from efficientdet_blocks import (
     BiFPN, build_detector_head, EfficientNet_to_BiFPN)
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
-from efficientpose_blocks import RotationNet
+from efficientpose_blocks import build_pose_estimator_head
 
 
 def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
@@ -51,14 +51,14 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
     if return_base:
         outputs = middles
     else:
-        outputs = build_detector_head(
+        detection_outputs = build_detector_head(
             middles, num_classes, num_dims, aspect_ratios, num_scales,
             FPN_num_filters, box_class_repeats, survival_rate,
             momentum, epsilon, activation)
 
-        rotation_net_outputs = RotationNet(middles)
+        pose_outputs = build_pose_estimator_head(middles)
 
-    model = Model(inputs=image, outputs=[outputs, rotation_net_outputs],
+    model = Model(inputs=image, outputs=[detection_outputs, pose_outputs],
                   name=model_name)
 
     if not ((base_weights is None) and (head_weights is None)):

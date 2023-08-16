@@ -5,6 +5,35 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
     build_head_conv2D)
 
 
+def build_pose_estimator_head(middles, num_dims=3):
+    """Builds EfficientDet object detector's head.
+    The built head includes ClassNet and BoxNet for classification and
+    regression respectively.
+
+    # Arguments
+        middles: List, BiFPN layer output.
+        num_classes: Int, number of object classes.
+        num_dims: Int, number of output dimensions to regress.
+        aspect_ratios: List, anchor boxes aspect ratios.
+        num_scales: Int, number of anchor box scales.
+        FPN_num_filters: Int, number of FPN filters.
+        box_class_repeats: Int, Number of regression
+            and classification blocks.
+        survival_rate: Float, used in drop connect.
+
+    # Returns
+        outputs: Tensor of shape `[num_boxes, num_classes+num_dims]`
+    """
+    rotation_outputs = RotationNet(middles)
+    rotations = []
+    for level_arg in range(len(rotation_outputs)):
+        rotation_per_level = rotation_outputs[level_arg]
+        rotation_per_level = Reshape((-1, num_dims))(rotation_per_level)
+        rotations.append(rotation_per_level)
+    rotations = Concatenate(axis=1)(rotations)
+    return rotations
+
+
 def RotationNet(middles, num_iterations=1, num_anchors=9,
                 num_filters=64, num_blocks=3, num_dims=3):
 
@@ -83,6 +112,5 @@ def build_iterative_rotation_head(features, rotations, num_iterations,
                 x = tf.nn.swish(x)
             delta_rotation = final_head_conv(x)
             rotation = Add()([rotation, delta_rotation])
-        outputs = Reshape((-1, num_dims))(rotation)
-        iterative_rotation_head_outputs.append(outputs)
-    return Concatenate(axis=1)(iterative_rotation_head_outputs)
+        iterative_rotation_head_outputs.append(rotation)
+    return iterative_rotation_head_outputs
