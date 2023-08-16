@@ -43,8 +43,7 @@ def RotationNet(middles, num_iterations=1, num_anchors=9,
                                                            num_filters,
                                                            bias_initializer)
     return IterativeRotationSubNet(rotation_head_outputs, rotations,
-                                   num_iterations, num_filters,
-                                   num_blocks-1, num_dims)
+                                   num_iterations, num_filters, num_blocks-1)
 
 
 def build_rotation_head(features, num_blocks, num_filters,
@@ -77,16 +76,16 @@ def build_rotation_head(features, num_blocks, num_filters,
 
 
 def IterativeRotationSubNet(features, rotations, num_iterations,
-                            num_filters, num_blocks, num_dims):
+                            num_filters, num_blocks):
     bias_initializer = tf.zeros_initializer()
     return build_iterative_rotation_head(features, rotations, num_iterations,
-                                         num_blocks, num_filters, num_dims,
+                                         num_blocks, num_filters,
                                          bias_initializer)
 
 
 def build_iterative_rotation_head(features, rotations, num_iterations,
-                                  num_blocks, num_filters, num_dims,
-                                  bias_initializer, gn_groups=4, gn_axis=-1):
+                                  num_blocks, num_filters, bias_initializer,
+                                  gn_groups=4, gn_axis=-1):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
