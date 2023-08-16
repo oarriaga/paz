@@ -9,7 +9,7 @@ with open('input_data/input_list.pkl', 'rb') as f:
 model = EFFICIENTPOSEA()
 
 # Load EfficientNet weights
-with open('weights/4.upto_rotationnet_weights_without_iterative_rotationnet.pkl', 'rb') as f:
+with open('weights/5.upto_iterative_rotation_subnets.pkl', 'rb') as f:
     weights = pickle.load(f)
 
 # Load BiFPN + ClassNet + BoxNet weights
