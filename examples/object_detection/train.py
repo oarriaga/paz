@@ -80,7 +80,8 @@ model.compile(optimizer, loss.compute_loss, metrics)
 # setting data augmentation pipeline
 augmentators = []
 for split in [TRAIN, VAL]:
-    augmentator = AugmentDetection(model.prior_boxes, split)
+    augmentator = AugmentDetection(model.prior_boxes, split,
+                                   num_classes=num_classes)
     augmentators.append(augmentator)
 
 # setting sequencers
