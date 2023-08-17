@@ -30,7 +30,7 @@ def build_pose_estimator_head(middles, num_iterations=1, num_anchors=9,
         num_filters, num_blocks, num_pose_dims)
     rotations = Concatenate(axis=1)(rotation_outputs)
 
-    translation_outputs = TranslationNet(middles, 0.997, 0.0001)
+    translation_outputs = TranslationNet(middles)
     return rotations, translation_outputs
 
 
@@ -118,21 +118,19 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
     return rotations
 
 
-def TranslationNet(middles, momentum, epsilon, num_iterations=1, num_anchors=9,
-                   num_filters=64, num_blocks=3, num_dims=3,
-                   survival_rate=None, freeze_bn=False, use_group_norm=True,
-                   num_groups_gn=None):
+def TranslationNet(middles, num_iterations=1, num_anchors=9,
+                   num_filters=64, num_blocks=3):
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
     translation_head_outputs = build_translation_head(
-        middles, num_blocks, num_filters, survival_rate,
-        bias_initializer, momentum, epsilon)
-    return IterativeTranslationSubNet(*translation_head_outputs, num_filters)
+        middles, num_blocks, num_filters, bias_initializer)
+    return IterativeTranslationSubNet(
+        *translation_head_outputs, num_filters, num_iterations, num_blocks - 1)
 
 
 def build_translation_head(features, num_blocks, num_filters,
-                           survival_rate, bias_initializer, momentum, epsilon):
+                           bias_initializer, gn_groups=4, gn_axis=-1):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
@@ -153,30 +151,29 @@ def build_translation_head(features, num_blocks, num_filters,
     for x in features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
-            x = GroupNormalization(groups=4, axis=-1)(x)
+            x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
             x = tf.nn.swish(x)
         translation_xy = head_xy_conv(x)
         translation_z = head_z_conv(x)
         translation_features.append(x)
         translations_xy.append(translation_xy)
-        translations_z.append(translation_z)        
+        translations_z.append(translation_z)
     return translation_features, translations_xy, translations_z
 
 
 def IterativeTranslationSubNet(translation_features, translations_xy,
-                               translations_z, num_filters, num_iterations=1,
-                               num_anchors=9, num_blocks=2, num_dims=3,
-                               survival_rate=None, freeze_bn=False,
-                               use_group_norm=True, num_groups_gn=None):
+                               translations_z, num_filters, num_iterations,
+                               num_blocks):
     bias_initializer = tf.zeros_initializer()
     return build_iterative_translation_head(
         translation_features, translations_xy, translations_z,
-        num_blocks, num_filters, survival_rate, bias_initializer)
+        num_blocks, num_filters, num_iterations, bias_initializer)
 
 
 def build_iterative_translation_head(translation_features, translations_xy,
                                      translations_z, num_blocks, num_filters,
-                                     survival_rate, bias_initializer):
+                                     num_iterations, bias_initializer,
+                                     gn_groups=4, gn_axis=-1):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
@@ -197,11 +194,11 @@ def build_iterative_translation_head(translation_features, translations_xy,
     for x, translation_xy, translation_z in zip(translation_features,
                                                 translations_xy,
                                                 translations_z):
-        for k in range(1):
+        for _ in range(num_iterations):
             x = Concatenate(axis=-1)([x, translation_xy, translation_z])
             for block_arg in range(num_blocks):
-                x = conv_blocks[block_arg](x)            
-                x = GroupNormalization(groups=4, axis=-1)(x)
+                x = conv_blocks[block_arg](x)
+                x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
                 x = tf.nn.swish(x)
             delta_translation_xy = head_xy(x)
             delta_translation_z = head_z(x)
