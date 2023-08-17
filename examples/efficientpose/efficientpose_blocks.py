@@ -29,7 +29,9 @@ def build_pose_estimator_head(middles, num_iterations=1, num_anchors=9,
         middles, num_iterations, num_anchors,
         num_filters, num_blocks, num_pose_dims)
     rotations = Concatenate(axis=1)(rotation_outputs)
-    return rotations
+
+    translation_outputs = TranslationNet(middles, 0.997, 0.0001)
+    return rotations, translation_outputs
 
 
 def RotationNet(middles, num_iterations, num_anchors,
@@ -114,3 +116,101 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
         rotation = Reshape((-1, num_pose_dims))(initial_rotation)
         rotations.append(rotation)
     return rotations
+
+
+def TranslationNet(middles, momentum, epsilon, num_iterations=1, num_anchors=9,
+                   num_filters=64, num_blocks=3, num_dims=3,
+                   survival_rate=None, freeze_bn=False, use_group_norm=True,
+                   num_groups_gn=None):
+
+    bias_initializer = tf.zeros_initializer()
+    num_filters = [num_filters, num_anchors * 2, num_anchors]
+    translation_head_outputs = build_translation_head(
+        middles, num_blocks, num_filters, survival_rate,
+        bias_initializer, momentum, epsilon)
+    return IterativeTranslationSubNet(*translation_head_outputs, num_filters)
+
+
+def build_translation_head(features, num_blocks, num_filters,
+                           survival_rate, bias_initializer, momentum, epsilon):
+    """Builds ClassNet/BoxNet head.
+
+    # Arguments
+        middle_features: Tuple. input features.
+        num_blocks: Int, number of intermediate layers.
+        num_filters: Int, number of intermediate layer filters.
+        survival_rate: Float, used by drop connect.
+        bias_initializer: Callable, bias initializer.
+
+    # Returns
+        head_outputs: List, with head outputs.
+    """
+    conv_blocks = build_head_conv2D(num_blocks, num_filters[0],
+                                    tf.zeros_initializer())
+    head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    head_z_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
+    translation_features, translations_xy, translations_z = [], [], []
+    for x in features:
+        for block_arg in range(num_blocks):
+            x = conv_blocks[block_arg](x)
+            x = GroupNormalization(groups=4, axis=-1)(x)
+            x = tf.nn.swish(x)
+        translation_xy = head_xy_conv(x)
+        translation_z = head_z_conv(x)
+        translation_features.append(x)
+        translations_xy.append(translation_xy)
+        translations_z.append(translation_z)        
+    return translation_features, translations_xy, translations_z
+
+
+def IterativeTranslationSubNet(translation_features, translations_xy,
+                               translations_z, num_filters, num_iterations=1,
+                               num_anchors=9, num_blocks=2, num_dims=3,
+                               survival_rate=None, freeze_bn=False,
+                               use_group_norm=True, num_groups_gn=None):
+    bias_initializer = tf.zeros_initializer()
+    return build_iterative_translation_head(
+        translation_features, translations_xy, translations_z,
+        num_blocks, num_filters, survival_rate, bias_initializer)
+
+
+def build_iterative_translation_head(translation_features, translations_xy,
+                                     translations_z, num_blocks, num_filters,
+                                     survival_rate, bias_initializer):
+    """Builds ClassNet/BoxNet head.
+
+    # Arguments
+        middle_features: Tuple. input features.
+        num_blocks: Int, number of intermediate layers.
+        num_filters: Int, number of intermediate layer filters.
+        survival_rate: Float, used by drop connect.
+        bias_initializer: Callable, bias initializer.
+
+    # Returns
+        head_outputs: List, with head outputs.
+    """
+    conv_blocks = build_head_conv2D(num_blocks, num_filters[0],
+                                    tf.zeros_initializer())
+    head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
+    translations = []
+    for x, translation_xy, translation_z in zip(translation_features,
+                                                translations_xy,
+                                                translations_z):
+        for k in range(1):
+            x = Concatenate(axis=-1)([x, translation_xy, translation_z])
+            for block_arg in range(num_blocks):
+                x = conv_blocks[block_arg](x)            
+                x = GroupNormalization(groups=4, axis=-1)(x)
+                x = tf.nn.swish(x)
+            delta_translation_xy = head_xy(x)
+            delta_translation_z = head_z(x)
+            translation_xy = Add()([translation_xy, delta_translation_xy])
+            translation_z = Add()([translation_z, delta_translation_z])
+
+        translation_xy = Reshape((-1, 2))(translation_xy)
+        translation_z = Reshape((-1, 1))(translation_z)
+        translation = Concatenate(axis=-1)([translation_xy, translation_z])
+        translations.append(translation)
+    translations = Concatenate(axis=1)(translations)
+    return translations
