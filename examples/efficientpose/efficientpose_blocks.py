@@ -39,11 +39,10 @@ def RotationNet(middles, num_iterations=1, num_anchors=9,
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
-    rotation_head_outputs, rotations = build_rotation_head(middles, num_blocks,
-                                                           num_filters,
-                                                           bias_initializer)
-    return IterativeRotationSubNet(rotation_head_outputs, rotations,
-                                   num_iterations, num_filters, num_blocks-1)
+    rotation_features, initial_rotations = build_rotation_head(
+        middles, num_blocks, num_filters, bias_initializer)
+    return IterativeRotationSubNet(rotation_features, initial_rotations,
+                                   num_iterations, num_filters, num_blocks - 1)
 
 
 def build_rotation_head(features, num_blocks, num_filters,
@@ -60,32 +59,32 @@ def build_rotation_head(features, num_blocks, num_filters,
     # Returns
         head_outputs: List, with head outputs.
     """
-    conv_blocks = build_head_conv2D(
-        num_blocks, num_filters[0], tf.zeros_initializer())
+    conv_blocks = build_head_conv2D(num_blocks, num_filters[0],
+                                    tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    rotations, rotation_head_outputs = [], []
+    rotation_features, initial_rotations = [], []
     for x in features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
             x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
             x = tf.nn.swish(x)
-        rotation = final_head_conv(x)
-        rotations.append(rotation)
-        rotation_head_outputs.append(x)
-    return rotation_head_outputs, rotations
+        initial_rotation = final_head_conv(x)
+        rotation_features.append(x)
+        initial_rotations.append(initial_rotation)
+    return rotation_features, initial_rotations
 
 
-def IterativeRotationSubNet(features, rotations, num_iterations,
-                            num_filters, num_blocks):
+def IterativeRotationSubNet(rotation_features, initial_rotations,
+                            num_iterations, num_filters, num_blocks):
     bias_initializer = tf.zeros_initializer()
-    return build_iterative_rotation_head(features, rotations, num_iterations,
-                                         num_blocks, num_filters,
-                                         bias_initializer)
+    return build_iterative_rotation_head(rotation_features, initial_rotations,
+                                         num_iterations, num_blocks,
+                                         num_filters, bias_initializer)
 
 
-def build_iterative_rotation_head(features, rotations, num_iterations,
-                                  num_blocks, num_filters, bias_initializer,
-                                  gn_groups=4, gn_axis=-1):
+def build_iterative_rotation_head(rotation_features, initial_rotations,
+                                  num_iterations, num_blocks, num_filters,
+                                  bias_initializer, gn_groups=4, gn_axis=-1):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
@@ -98,18 +97,18 @@ def build_iterative_rotation_head(features, rotations, num_iterations,
     # Returns
         head_outputs: List, with head outputs.
     """
-    conv_blocks = build_head_conv2D(
-        num_blocks, num_filters[0], tf.zeros_initializer())
+    conv_blocks = build_head_conv2D(num_blocks, num_filters[0],
+                                    tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    iterative_rotation_head_outputs = []
-    for x, rotation in zip(features, rotations):
+    rotations = []
+    for x, initial_rotation in zip(rotation_features, initial_rotations):
         for _ in range(num_iterations):
-            x = Concatenate(axis=-1)([x, rotation])
+            x = Concatenate(axis=-1)([x, initial_rotation])
             for block_arg in range(num_blocks):
                 x = conv_blocks[block_arg](x)
                 x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
                 x = tf.nn.swish(x)
             delta_rotation = final_head_conv(x)
-            rotation = Add()([rotation, delta_rotation])
-        iterative_rotation_head_outputs.append(rotation)
-    return iterative_rotation_head_outputs
+            initial_rotation = Add()([initial_rotation, delta_rotation])
+        rotations.append(initial_rotation)
+    return rotations
