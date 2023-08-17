@@ -5,8 +5,8 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
     build_head_conv2D)
 
 
-def build_pose_estimator_head(middles, subnet_iterations, num_anchors,
-                              num_filters, subnet_repeats, num_pose_dims):
+def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
+                              num_anchors, num_filters, num_pose_dims):
     """Builds EfficientDet object detector's head.
     The built head includes ClassNet and BoxNet for classification and
     regression respectively.
@@ -25,7 +25,7 @@ def build_pose_estimator_head(middles, subnet_iterations, num_anchors,
     # Returns
         outputs: Tensor of shape `[num_boxes, num_classes+num_pose_dims]`
     """
-    args = (middles, subnet_iterations, num_anchors, num_filters, subnet_repeats)
+    args = (middles, subnet_iterations, subnet_repeats, num_anchors, num_filters)
     rotation_outputs = RotationNet(*args, num_pose_dims)
     translation_outputs = TranslationNet(*args)
     rotations = Concatenate(axis=1)(rotation_outputs)
@@ -33,8 +33,8 @@ def build_pose_estimator_head(middles, subnet_iterations, num_anchors,
     return rotations, translations
 
 
-def RotationNet(middles, subnet_iterations, num_anchors,
-                num_filters, subnet_repeats, num_pose_dims):
+def RotationNet(middles, subnet_iterations, subnet_repeats,
+                num_anchors, num_filters, num_pose_dims):
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_pose_dims * num_anchors]
@@ -42,7 +42,7 @@ def RotationNet(middles, subnet_iterations, num_anchors,
         middles, subnet_repeats, num_filters, bias_initializer)
     return IterativeRotationSubNet(
         rotation_features, initial_rotations, subnet_iterations,
-        num_filters, subnet_repeats - 1, num_pose_dims)
+        subnet_repeats - 1, num_filters, num_pose_dims)
 
 
 def build_rotation_head(features, subnet_repeats, num_filters,
@@ -75,7 +75,7 @@ def build_rotation_head(features, subnet_repeats, num_filters,
 
 
 def IterativeRotationSubNet(rotation_features, initial_rotations,
-                            subnet_iterations, num_filters, subnet_repeats,
+                            subnet_iterations, subnet_repeats, num_filters,
                             num_pose_dims):
     bias_initializer = tf.zeros_initializer()
     return build_iterative_rotation_head(
@@ -117,8 +117,8 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
     return rotations
 
 
-def TranslationNet(middles, subnet_iterations, num_anchors,
-                   num_filters, subnet_repeats):
+def TranslationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
+                   num_filters, ):
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
