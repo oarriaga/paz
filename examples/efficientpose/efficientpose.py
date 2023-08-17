@@ -10,10 +10,10 @@ from efficientpose_blocks import build_pose_estimator_head
 def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                   FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                   anchor_scale, fusion, return_base, model_name, EfficientNet,
-                  num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
-                  survival_rate=None, num_dims=4, momentum=0.997,
-                  epsilon=0.0001, activation='sigmoid', num_iterations=1,
-                  num_anchors=9, num_filters=64, num_blocks=3,
+                  subnet_iterations=1, subnet_repeats=3, num_scales=3,
+                  aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None,
+                  num_dims=4, momentum=0.997, epsilon=0.0001,
+                  activation='sigmoid', num_anchors=9, num_filters=64,
                   num_pose_dims=3):
     """Creates EfficientDet model.
 
@@ -59,8 +59,8 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
             momentum, epsilon, activation)
 
         pose_outputs = build_pose_estimator_head(
-            middles, num_iterations, num_anchors,
-            num_filters, num_blocks, num_pose_dims)
+            middles, subnet_iterations, num_anchors,
+            num_filters, subnet_repeats, num_pose_dims)
         outputs = [detection_outputs, pose_outputs]
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
@@ -108,5 +108,5 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO', head_weights='COCO',
     model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb0)
+                          EfficientNetb0, subnet_iterations, subnet_repeats)
     return model
