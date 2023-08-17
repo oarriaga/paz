@@ -25,13 +25,12 @@ def build_pose_estimator_head(middles, num_iterations=1, num_anchors=9,
     # Returns
         outputs: Tensor of shape `[num_boxes, num_classes+num_pose_dims]`
     """
-    rotation_outputs = RotationNet(
-        middles, num_iterations, num_anchors,
-        num_filters, num_blocks, num_pose_dims)
+    args = (middles, num_iterations, num_anchors, num_filters, num_blocks)
+    rotation_outputs = RotationNet(*args, num_pose_dims)
+    translation_outputs = TranslationNet(*args)
     rotations = Concatenate(axis=1)(rotation_outputs)
-
-    translation_outputs = TranslationNet(middles)
-    return rotations, translation_outputs
+    translations = Concatenate(axis=1)(translation_outputs)
+    return rotations, translations
 
 
 def RotationNet(middles, num_iterations, num_anchors,
@@ -118,8 +117,8 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
     return rotations
 
 
-def TranslationNet(middles, num_iterations=1, num_anchors=9,
-                   num_filters=64, num_blocks=3):
+def TranslationNet(middles, num_iterations, num_anchors,
+                   num_filters, num_blocks):
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
@@ -209,5 +208,4 @@ def build_iterative_translation_head(translation_features, translations_xy,
         translation_z = Reshape((-1, 1))(translation_z)
         translation = Concatenate(axis=-1)([translation_xy, translation_z])
         translations.append(translation)
-    translations = Concatenate(axis=1)(translations)
     return translations
