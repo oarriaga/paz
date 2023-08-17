@@ -193,9 +193,8 @@ def build_iterative_translation_head(translation_features, translations_xy,
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
     translations = []
-    for x, translation_xy, translation_z in zip(translation_features,
-                                                translations_xy,
-                                                translations_z):
+    for x, translation_xy, translation_z in zip(
+            translation_features, translations_xy, translations_z):
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, translation_xy, translation_z])
             for block_arg in range(subnet_repeats):
