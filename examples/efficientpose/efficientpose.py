@@ -12,7 +12,9 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                   anchor_scale, fusion, return_base, model_name, EfficientNet,
                   num_scales=3, aspect_ratios=[1.0, 2.0, 0.5],
                   survival_rate=None, num_dims=4, momentum=0.997,
-                  epsilon=0.0001, activation='sigmoid'):
+                  epsilon=0.0001, activation='sigmoid', num_iterations=1,
+                  num_anchors=9, num_filters=64, num_blocks=3,
+                  num_pose_dims=3):
     """Creates EfficientDet model.
 
     # Arguments
@@ -56,7 +58,9 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
             FPN_num_filters, box_class_repeats, survival_rate,
             momentum, epsilon, activation)
 
-        pose_outputs = build_pose_estimator_head(middles)
+        pose_outputs = build_pose_estimator_head(
+            middles, num_iterations, num_anchors,
+            num_filters, num_blocks, num_pose_dims)
         outputs = [detection_outputs, pose_outputs]
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
