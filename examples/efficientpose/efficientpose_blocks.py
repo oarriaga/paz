@@ -5,8 +5,8 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
     build_head_conv2D)
 
 
-def build_pose_estimator_head(middles, num_iterations=1, num_anchors=9,
-                              num_filters=64, num_blocks=3, num_pose_dims=3):
+def build_pose_estimator_head(middles, num_iterations, num_anchors,
+                              num_filters, num_blocks, num_pose_dims):
     """Builds EfficientDet object detector's head.
     The built head includes ClassNet and BoxNet for classification and
     regression respectively.
