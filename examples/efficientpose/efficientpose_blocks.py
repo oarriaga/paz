@@ -25,7 +25,8 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
     # Returns
         outputs: Tensor of shape `[num_boxes, num_classes+num_pose_dims]`
     """
-    args = (middles, subnet_iterations, subnet_repeats, num_anchors, num_filters)
+    args = (middles, subnet_iterations, subnet_repeats,
+            num_anchors, num_filters)
     rotation_outputs = RotationNet(*args, num_pose_dims)
     translation_outputs = TranslationNet(*args)
     rotations = Concatenate(axis=1)(rotation_outputs)
@@ -75,8 +76,8 @@ def build_rotation_head(features, subnet_repeats, num_filters,
 
 
 def IterativeRotationSubNet(rotation_features, initial_rotations,
-                            subnet_iterations, subnet_repeats, num_filters,
-                            num_pose_dims):
+                            subnet_iterations, subnet_repeats,
+                            num_filters, num_pose_dims):
     bias_initializer = tf.zeros_initializer()
     return build_iterative_rotation_head(
         rotation_features, initial_rotations, subnet_iterations,
@@ -84,9 +85,9 @@ def IterativeRotationSubNet(rotation_features, initial_rotations,
 
 
 def build_iterative_rotation_head(rotation_features, initial_rotations,
-                                  subnet_iterations, subnet_repeats, num_filters,
-                                  bias_initializer, num_pose_dims, gn_groups=4,
-                                  gn_axis=-1):
+                                  subnet_iterations, subnet_repeats,
+                                  num_filters, bias_initializer, num_pose_dims,
+                                  gn_groups=4, gn_axis=-1):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
@@ -125,7 +126,8 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
     translation_head_outputs = build_translation_head(
         middles, subnet_repeats, num_filters, bias_initializer)
     return IterativeTranslationSubNet(
-        *translation_head_outputs, num_filters, subnet_iterations, subnet_repeats - 1)
+        *translation_head_outputs, num_filters,
+        subnet_iterations, subnet_repeats - 1)
 
 
 def build_translation_head(features, subnet_repeats, num_filters,
@@ -170,9 +172,10 @@ def IterativeTranslationSubNet(translation_features, translations_xy,
 
 
 def build_iterative_translation_head(translation_features, translations_xy,
-                                     translations_z, subnet_repeats, num_filters,
-                                     subnet_iterations, bias_initializer,
-                                     gn_groups=4, gn_axis=-1):
+                                     translations_z, subnet_repeats,
+                                     num_filters, subnet_iterations,
+                                     bias_initializer, gn_groups=4,
+                                     gn_axis=-1):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
