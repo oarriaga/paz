@@ -433,17 +433,13 @@ class EstimateHumanPose(pr.Processor):
         super(EstimateHumanPose, self).__init__()
         self.filter = filter
         self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
-        self.filter_keypoints2D = SequentialProcessor(
-            [pr.MergeKeypoints2D(args_to_mean),
-             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
         self.estimate_keypoints_3D = EstimateHumanPose3D()
-        self.wrap = pr.WrapOutput(['keypoints2D', 'keypoints3D'])
+        self.wrap = pr.WrapOutput(['image2D', 'keypoints2D', 'keypoints3D'])
 
     def call(self, image):
         inferences2D = self.estimate_keypoints_2D(image)
         keypoints2D = np.array(inferences2D['keypoints'])
-        if self.filter:
-            filter_keypoints2D = self.filter_keypoints2D(keypoints2D)
-        keypoints3D = self.estimate_keypoints_3D(keypoints2D)
+        image_keypoints2D = inferences2D['image']
+        keypoints3D = self.estimate_keypoints_3D(keypoints2D.copy())
         keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
-        return self.wrap(filter_keypoints2D, keypoints3D)
+        return self.wrap(image_keypoints2D, keypoints2D, keypoints3D)
