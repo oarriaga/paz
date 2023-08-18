@@ -11,6 +11,7 @@ from keras.losses import BinaryCrossentropy
 from keras.optimizers import Adam, SGD
 
 from paz.datasets import VVAD_LRS3
+from paz.models.classification import CNN2Plus1D, VVAD_LRS3_LSTM
 
 parser = argparse.ArgumentParser(description='Paz VVAD Training')
 parser.add_argument('-p', '--data_path', type=str,
@@ -67,11 +68,21 @@ model = None
 
 # Python 3.8 does not support switch case statements :(
 if args.model == "VVAD_LRS3":
-    # model = VVAD_LRS3_LSTM()
-    raise NotImplementedError
+  model = VVAD_LRS3_LSTM()
+
+  # TODO UserWarning: "`binary_crossentropy` received `from_logits=True`, but the `output` argument was produced by a Sigmoid activation and thus does not represent logits. Was this intended?
+  #   output, from_logits = _get_logits(
+  loss = BinaryCrossentropy()
+  optimizer = SGD()
+
+  model.compile(loss=loss, optimizer=optimizer, metrics=[tf.keras.metrics.BinaryAccuracy(threshold=0.5), 'TrueNegatives', 'TruePositives', 'FalseNegatives', 'FalsePositives'])
 elif args.model == "CNN2Plus1D":
-    # model = CNN2Plus1D()
-    raise NotImplementedError
+  model = CNN2Plus1D()
+
+  loss = BinaryCrossentropy(from_logits=False)  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
+  optimizer = Adam(learning_rate=0.0001)
+
+  model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=['accuracy'])
 elif args.model == 'MoViNets':
     # model = MoViNets()
     raise NotImplementedError
