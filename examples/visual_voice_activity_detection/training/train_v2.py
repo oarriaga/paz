@@ -1,17 +1,14 @@
-import numpy as np
 import os
 import argparse
 import datetime
 import math
 import callbacks
-from pathlib import Path
 from codecarbon import OfflineEmissionsTracker
 from tensorflow.python.data import Dataset
 import tensorflow as tf
 keras = tf.keras
 from keras.losses import BinaryCrossentropy
-from keras.optimizers import Adam, SGD, RMSprop
-import matplotlib.pyplot as plt
+from keras.optimizers import Adam, SGD
 
 from paz.datasets import VVAD_LRS3
 from paz.models.classification import CNN2Plus1D, VVAD_LRS3_LSTM
