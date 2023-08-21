@@ -9,7 +9,6 @@ from paz.processors import OptimizeHumanPose3D
 from paz.datasets.human36m import args_to_joints3D
 from viz import visualize
 import numpy as np
-from paz.backend.groups import quaternion_to_rotation_matrix
 import paz.processors as pr
 from paz.backend.keypoints import project_to_image
 from paz.backend.image import draw_line
@@ -81,10 +80,10 @@ class TestHumanPose(pr.Processor):
         keypoints2D = keypoints['keypoints2D']
         keypoints3D = keypoints['keypoints3D']
         image = keypoints['image2D']
-        print(keypoints2D)
-        print(keypoints3D)
         keypoints2D, joints3D, optimized_poses3D = self.optimize(keypoints3D,
                                                                  keypoints2D)
+        print('optimized pose')
+        print(optimized_poses3D)
         R, translation = pose3D_to_pose6D(keypoints3D[0])
         formatted_translation = ["%.2f" % item for item in translation]
         image = self.draw_text(image, str(formatted_translation), (30, 30))
@@ -103,7 +102,7 @@ image = load_image("../human_pose_estimation_3D/person_standing.jpg")
 # image = cv2.resize(image, (480, 720))
 H, W = image.shape[:2]
 camera = Camera()
-camera.intrinsics_from_HFOV(HFOV=70, image_shape=[H, W])
+camera.intrinsics_from_HFOV(HFOV=70, image_shape=[600, 800])
 
 pipeline = TestHumanPose(camera.intrinsics)
 inference = pipeline(image)

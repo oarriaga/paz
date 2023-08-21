@@ -334,17 +334,66 @@ class OptimizeHumanPose3D(Processor):
              pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
         self.solver = solver
 
+    def s2d(self, poses2d):
+        """Computes sum of bone lengths in 2d
+        Args
+            poses2d: np array of poses in 2d
+        Returns
+            sum_bl: sum of length of all bones in the 2d skeleton
+        """
+        assert poses2d[0].shape == (32,), "channels should have 32 entries, it has %d instead" % poses2d[0].shape
+        sum_bl = np.zeros(poses2d.shape[0])  # sum of bone lengths, each entry is for each person
+        poses2d = np.reshape(poses2d, (poses2d.shape[0], 16, -1))
+
+        start_joints = np.array([1, 2, 3, 1, 5, 6, 1, 8, 9, 9, 11, 12, 9, 14, 15]) - 1
+        end_joints = np.array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) - 1
+
+        for idx, person in enumerate(poses2d):
+            for i in np.arange(len(start_joints)):
+                bone_length = np.linalg.norm(person[start_joints[i]] - person[end_joints[i]])
+                sum_bl[idx] += bone_length
+        return sum_bl
+
+
+    def s3d(self, poses3d):
+        """Computes sum of bone lengths in 3d
+        Args
+            poses3d: np array of predicted poses in 3d
+        Returns
+            sum_bl: sum of length of all bones in the 3d skeleton
+        """
+        sum_bl = np.zeros(poses3d.shape[0])  # sum of bone lengths, each entry is for each person
+        poses3d = np.reshape(poses3d, (poses3d.shape[0], 16, -1))
+
+        # start_joints = np.array([1, 2, 3, 1, 7, 8, 1, 13, 14, 15, 14, 18, 19, 14, 26, 27]) - 1
+        # end_joints = np.array([2, 3, 4, 7, 8, 9, 13, 14, 15, 16, 18, 19, 20, 26, 27, 28]) - 1
+        #TODO: CHECK THIS PART THE INDICES!!!!
+        start_joints = np.array([1, 2, 3, 1, 5, 6, 1, 8, 9, 9, 11, 12, 9, 14, 15]) - 1
+        end_joints = np.array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) - 1
+
+        for idx, person in enumerate(poses3d):
+            for i in np.arange(len(start_joints)):
+                bone_length = np.linalg.norm(person[start_joints[i]] - person[end_joints[i]])
+                sum_bl[idx] += bone_length
+
+        return sum_bl
+
     def call(self, keypoints3D, keypoints2D):
         joints3D = filter_keypoints3D(keypoints3D, self.args_to_joints3D)
         filtered_keypoints2D = self.filter_keypoints2D(keypoints2D)
         root2D = filtered_keypoints2D[:, :2]
-        length2D, length3D = get_bones_length(filtered_keypoints2D, joints3D)
-        ratio = length3D / length2D
+
+        l2d = self.s2d(filtered_keypoints2D)
+        l3d = self.s3d(keypoints3D)
+        ratio = l3d / l2d
         initial_joint_translation = initialize_translation(
             root2D, self.camera_intrinsics, ratio)
+
         joint_translation = solve_least_squares(
             self.solver, compute_reprojection_error, initial_joint_translation,
             joints3D, filtered_keypoints2D, self.camera_intrinsics)
         optimized_poses3D = compute_optimized_pose3D(
             keypoints3D, joint_translation, self.camera_intrinsics)
+        optimized_poses3D = np.reshape(optimized_poses3D, [-1, 3])
+
         return filtered_keypoints2D, joints3D, optimized_poses3D
