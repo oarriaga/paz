@@ -388,12 +388,12 @@ class OptimizeHumanPose3D(Processor):
         ratio = l3d / l2d
         initial_joint_translation = initialize_translation(
             root2D, self.camera_intrinsics, ratio)
-
+        print('initial_joint_translation', initial_joint_translation)
         joint_translation = solve_least_squares(
             self.solver, compute_reprojection_error, initial_joint_translation,
             joints3D, filtered_keypoints2D, self.camera_intrinsics)
         optimized_poses3D = compute_optimized_pose3D(
             keypoints3D, joint_translation, self.camera_intrinsics)
-        optimized_poses3D = np.reshape(optimized_poses3D, [-1, 3])
+        # optimized_poses3D = np.reshape(optimized_poses3D, [-1, 3])
 
         return filtered_keypoints2D, joints3D, optimized_poses3D
