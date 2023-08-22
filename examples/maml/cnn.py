@@ -151,38 +151,32 @@ def build_layer_to_weight(model):
 
 
 def MAML(meta_model, compute_loss, optimizer, learning_rate=0.01):
-    def fit(RNG, sampler, epochs):
+    def fit(RNG, sampler, num_steps):
         losses = []
-        # TODO remove epochs
-        for epoch_arg in range(epochs):
-            epoch_loss = 0
-            # for step, sampler in enumerate(shuffle(RNG, dataset)):
-            for step in range(100):
-                # x_true_support, y_true_support = to_tensor(*sampler())
-                # x_true_queries, y_true_queries = to_tensor(*sampler())
-                ((x_true_support, y_true_support),
-                 (x_true_queries, y_true_queries)) = sampler()
-                x_true_queries = tf.convert_to_tensor(x_true_queries)
-                y_true_queries = tf.convert_to_tensor(y_true_queries)
-                x_true_support = tf.convert_to_tensor(x_true_support)
-                y_true_support = tf.convert_to_tensor(y_true_support)
+        total_loss = 0
+        for step in range(num_steps):
+            ((x_true_support, y_true_support),
+             (x_true_queries, y_true_queries)) = sampler()
+            x_true_queries = tf.convert_to_tensor(x_true_queries)
+            y_true_queries = tf.convert_to_tensor(y_true_queries)
+            x_true_support = tf.convert_to_tensor(x_true_support)
+            y_true_support = tf.convert_to_tensor(y_true_support)
 
-                with tf.GradientTape() as meta_tape:
-                    with tf.GradientTape() as task_tape:
-                        y_pred = meta_model(x_true_support, training=True)
-                        support_loss = compute_loss(y_true_support, y_pred)
-                    support_gradients = task_tape.gradient(
-                        support_loss, meta_model.trainable_variables)
-                    task_model = meta_to_task2(
-                        meta_model, support_gradients, learning_rate)
-                    y_task_pred = task_model(x_true_queries, training=True)
-                    task_loss = compute_loss(y_true_queries, y_task_pred)
-                meta_weights = meta_model.trainable_variables
-                gradients = meta_tape.gradient(task_loss, meta_weights)
-                optimizer.apply_gradients(zip(gradients, meta_weights))
-                epoch_loss = epoch_loss + task_loss
-            epoch_loss = epoch_loss / 100
-            print('epoch {} | loss = {}'.format(epoch_arg, epoch_loss))
+            with tf.GradientTape() as meta_tape:
+                with tf.GradientTape() as task_tape:
+                    y_pred = meta_model(x_true_support, training=True)
+                    support_loss = compute_loss(y_true_support, y_pred)
+                support_gradients = task_tape.gradient(
+                    support_loss, meta_model.trainable_variables)
+                task_model = meta_to_task2(
+                    meta_model, support_gradients, learning_rate)
+                y_task_pred = task_model(x_true_queries, training=True)
+                task_loss = compute_loss(y_true_queries, y_task_pred)
+            meta_weights = meta_model.trainable_variables
+            gradients = meta_tape.gradient(task_loss, meta_weights)
+            optimizer.apply_gradients(zip(gradients, meta_weights))
+            total_loss = total_loss + task_loss
+            print('step {} | loss = {}'.format(step, total_loss / (step + 1)))
         return losses
     return fit
 

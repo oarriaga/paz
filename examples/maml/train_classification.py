@@ -11,7 +11,7 @@ from cnn import CONVNET, MAML, Predict
 
 seed = 777
 RNG = np.random.default_rng(seed)
-epochs = 20
+num_steps = 60_000
 batch_size = 10
 min_amplitude = 0.1
 max_amplitude = 5.0
@@ -19,7 +19,7 @@ min_x = -5.0
 max_x = 5.0
 train_episodes = 1_000
 test_episodes = 10
-weights_filename = f'MAML_CNN_epochs-{epochs}.hdf5'
+weights_filename = f'MAML_CNN_epochs-{num_steps}.hdf5'
 
 image_shape = (28, 28, 1)
 validation_split = 0.20
@@ -42,7 +42,7 @@ train_sampler = partial(sample_between_alphabet, RNG, train_data, *train_args)
 (x1, y1), (x2, y2) = train_sampler()
 
 fit = MAML(meta_model, compute_loss, optimizer, learning_rate)
-losses = fit(RNG, train_sampler, epochs)
+losses = fit(RNG, train_sampler, num_steps)
 meta_model.save_weights(weights_filename)
 
 tests_data = load('test', image_shape[:2], True)
