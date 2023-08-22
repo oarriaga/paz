@@ -48,6 +48,7 @@ def make_branch_translation_boxes(strides_y, strides_x, branch_arg,
     centers = np.concatenate((center_x_flattened, center_y_flattened), axis=1)
 
     translation_anchors = np.repeat(centers, num_scale_aspect, axis=0)
-    stride_array = np.full((translation_anchors.shape[0], 1), strides_x[0])
+    num_translation_anchors = translation_anchors.shape[0]
+    stride_array = np.full((num_translation_anchors, 1), strides_x[0])
     translation_anchors = np.concatenate((translation_anchors, stride_array), axis=-1)
     print('?j')
