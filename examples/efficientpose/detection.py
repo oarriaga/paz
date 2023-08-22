@@ -1,6 +1,7 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
+from processors import ComputeResizingShape
 
 
 def get_class_names(dataset_name='LINEMOD'):
@@ -56,7 +57,7 @@ class DetectAndEstimateSingleShot(Processor):
         return self.wrap(image, boxes2D)
 
 
-class EfficientPosePreprocess(SequentialProcessor):
+class EfficientPosePreprocess(Processor):
     """Preprocessing pipeline for SSD.
 
     # Arguments
@@ -64,14 +65,26 @@ class EfficientPosePreprocess(SequentialProcessor):
         mean: List, of three elements indicating the per channel mean.
         color_space: Int, specifying the color space to transform.
     """
-    def __init__(
-            self, model, mean=pr.BGR_IMAGENET_MEAN, color_space=pr.RGB2BGR):
+    def __init__(self, model, mean=pr.RGB_IMAGENET_MEAN,
+                 standard_deviation=pr.RGB_IMAGENET_STDEV,
+                 color_space=pr.RGB2BGR):
         super(EfficientPosePreprocess, self).__init__()
-        self.add(pr.ResizeImage(model.input_shape[1:3]))
-        self.add(pr.ConvertColorSpace(color_space))
-        self.add(pr.SubtractMeanImage(mean))
-        self.add(pr.CastImage(float))
-        self.add(pr.ExpandDims(axis=0))
+
+        self.compute_resizing_shape = ComputeResizingShape(
+            model.input_shape[1])
+        self.preprocess = pr.SequentialProcessor([
+            (pr.ConvertColorSpace(color_space)),
+            (pr.SubtractMeanImage(mean)),
+            (pr.DivideStandardDeviationImage((standard_deviation))),
+            (pr.CastImage(float)),
+            (pr.ExpandDims(axis=0))])
+
+    def call(self, image):
+        resizing_shape, scale = self.compute_resizing_shape(image)
+        resize_image = pr.ResizeImage(resizing_shape)
+        preprocessed_image = resize_image(image)
+        preprocessed_image = self.preprocess(preprocessed_image)
+        return preprocessed_image
 
 
 class EfficientPosePostprocess(SequentialProcessor):

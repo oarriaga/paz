@@ -8,8 +8,6 @@ with open('input_data/input_list.pkl', 'rb') as f:
     input_list = pickle.load(f)
 
 
-model = EFFICIENTPOSEA()
-
 # Load EfficientNet weights
 with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
     weights = pickle.load(f)
@@ -38,7 +36,7 @@ with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
 # detections = model.predict(input_list[0])
 # print("HI")
 
-detect = EFFICIENTPOSEALINEMOD(score_thresh=0.90, nms_thresh=0.25)
+detect = EFFICIENTPOSEALINEMOD(score_thresh=0.90, nms_thresh=0.1)
 detect.model.set_weights(weights)
 image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/0246.png")
 detections = detect(image)
