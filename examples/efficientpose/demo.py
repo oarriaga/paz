@@ -1,4 +1,6 @@
+from detection import EFFICIENTPOSEALINEMOD
 from efficientpose import EFFICIENTPOSEA
+from paz.backend.image import load_image, show_image
 import pickle
 
 
@@ -32,6 +34,12 @@ with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
 #         model.layers[model_layer_names.index(layer_name)
 #                      ].set_weights(layer_weight)
 
-model.set_weights(weights)
-detections = model.predict(input_list[0])
-print("HI")
+# model.set_weights(weights)
+# detections = model.predict(input_list[0])
+# print("HI")
+
+detect = EFFICIENTPOSEALINEMOD(score_thresh=0.90, nms_thresh=0.25)
+detect.model.set_weights(weights)
+image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/0246.png")
+detections = detect(image)
+show_image(detections['image'])

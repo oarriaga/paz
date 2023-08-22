@@ -12,7 +12,7 @@ def get_class_names(dataset_name='LINEMOD'):
     return class_names
 
 
-class DetectSingleShot(Processor):
+class DetectAndEstimateSingleShot(Processor):
     """Single-shot object detection prediction.
 
     # Arguments
@@ -36,26 +36,28 @@ class DetectSingleShot(Processor):
         self.variances = variances
         self.draw = draw
         if preprocess is None:
-            preprocess = SSDPreprocess(model)
+            self.preprocess = SSDPreprocess(model)
         if postprocess is None:
-            postprocess = SSDPostprocess(
+            self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh)
 
-        super(DetectSingleShot, self).__init__()
-        self.predict = pr.Predict(self.model, preprocess, postprocess)
+        super(DetectAndEstimateSingleShot, self).__init__()
         self.denormalize = pr.DenormalizeBoxes2D()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
-        boxes2D = self.predict(image)
+        preprocessed_image = self.preprocess(image)
+        outputs = self.model(preprocessed_image)
+        detections, pose = outputs
+        boxes2D = self.postprocess(detections)
         boxes2D = self.denormalize(image, boxes2D)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
 
 
-class EFFICIENTPOSEALINEMOD(DetectSingleShot):
+class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
     """Single-shot inference pipeline with EFFICIENTDETD0 trained
     on COCO.
 
@@ -77,7 +79,7 @@ class EFFICIENTPOSEALINEMOD(DetectSingleShot):
             model, names, score_thresh, nms_thresh, draw=draw)
 
 
-class SSDPostprocess(SequentialProcessor):
+class EfficientPosePostprocess(SequentialProcessor):
     """Postprocessing pipeline for SSD.
 
     # Arguments
@@ -91,7 +93,7 @@ class SSDPostprocess(SequentialProcessor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2], class_arg=0, box_method=0):
-        super(SSDPostprocess, self).__init__()
+        super(EfficientPosePostprocess, self).__init__()
         self.add(pr.Squeeze(axis=None))
         self.add(pr.DecodeBoxes(model.prior_boxes, variances))
         self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))

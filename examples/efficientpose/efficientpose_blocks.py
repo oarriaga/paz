@@ -27,10 +27,10 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
     """
     args = (middles, subnet_iterations, subnet_repeats,
             num_anchors, num_filters)
-    rotation_outputs = RotationNet(*args, num_pose_dims)
-    translation_outputs = TranslationNet(*args)
-    rotations = Concatenate(axis=1)(rotation_outputs)
-    translations = Concatenate(axis=1)(translation_outputs)
+    rotations = RotationNet(*args, num_pose_dims)
+    rotations = Concatenate(axis=1, name='rotation')(rotations)
+    translations = TranslationNet(*args)
+    translations = Concatenate(axis=1, name='translation_raw')(translations)
     return rotations, translations
 
 
