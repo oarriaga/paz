@@ -76,7 +76,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         image_shape, branches, num_scales, aspect_ratios, anchor_scale)
 
     model.translation_priors = build_translation_anchors(
-        image_shape, branches, num_scales, aspect_ratios, anchor_scale)
+        image_shape, branches, num_scales, aspect_ratios)
     return model
 
 

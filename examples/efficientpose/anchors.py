@@ -1,11 +1,9 @@
 import numpy as np
-from paz.backend.anchors import (build_octaves, build_aspect, build_scales,
-                                 build_strides, make_branch_boxes)
-from paz.backend.boxes import to_center_form
+from paz.backend.anchors import build_strides
 
 
-def build_translation_anchors(image_shape, branches, num_scales,
-                              aspect_ratios, scale):
+def build_translation_anchors(image_shape, branches,
+                              num_scales, aspect_ratios):
     """Builds anchor boxes in centre form for given model.
     Anchor boxes a.k.a prior boxes are reference boxes built with
     various scales and aspect ratio centered over every pixel in the
@@ -31,14 +29,21 @@ def build_translation_anchors(image_shape, branches, num_scales,
         stride = build_strides(branch_arg, *args)
         boxes = make_branch_translation_boxes(
             *stride, branch_arg, branches, num_scale_aspect)
-        translation_boxes.append(boxes.reshape([-1, 4]))
-    translation_boxes = np.concatenate(
-        translation_boxes, axis=0).astype('float32')
-    return to_center_form(translation_boxes)
+        translation_boxes.append(boxes)
+    translation_boxes = np.concatenate(translation_boxes, axis=0)
+    return translation_boxes.astype('float32')
 
 
 def make_branch_translation_boxes(strides_y, strides_x, branch_arg,
                                   branches, num_scale_aspect):
+    centers = compute_translation_centers(strides_y, strides_x, branch_arg,
+                                          branches, num_scale_aspect)
+    translation_anchors = append_stride_to_centre(centers, strides_x)
+    return translation_anchors
+
+
+def compute_translation_centers(strides_y, strides_x, branch_arg,
+                                branches, num_scale_aspect):
     feature_H, feature_W = branches[branch_arg].shape[1:3]
     center_x = (np.arange(0, feature_H) + 0.5) * strides_x[0]
     center_y = (np.arange(0, feature_W) + 0.5) * strides_y[0]
@@ -46,9 +51,12 @@ def make_branch_translation_boxes(strides_y, strides_x, branch_arg,
     center_x_flattened = center_x.reshape(-1, 1)
     center_y_flattened = center_y.reshape(-1, 1)
     centers = np.concatenate((center_x_flattened, center_y_flattened), axis=1)
+    centers = np.repeat(centers, num_scale_aspect, axis=0)
+    return centers
 
-    translation_anchors = np.repeat(centers, num_scale_aspect, axis=0)
-    num_translation_anchors = translation_anchors.shape[0]
+
+def append_stride_to_centre(centers, strides_x):
+    num_translation_anchors = centers.shape[0]
     stride_array = np.full((num_translation_anchors, 1), strides_x[0])
-    translation_anchors = np.concatenate((translation_anchors, stride_array), axis=-1)
-    print('?j')
+    translation_anchors = np.concatenate((centers, stride_array), axis=-1)
+    return translation_anchors
