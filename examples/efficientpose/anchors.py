@@ -43,14 +43,11 @@ def make_branch_translation_boxes(strides_y, strides_x, branch_arg,
     center_x = (np.arange(0, feature_H) + 0.5) * strides_x[0]
     center_y = (np.arange(0, feature_W) + 0.5) * strides_y[0]
     center_x, center_y = np.meshgrid(center_x, center_y)
-    center_x_flattened = center_x.ravel()[np.newaxis, :].T
-    center_y_flattened = center_y.ravel()[np.newaxis, :].T
+    center_x_flattened = center_x.reshape(-1, 1)
+    center_y_flattened = center_y.reshape(-1, 1)
     centers = np.concatenate((center_x_flattened, center_y_flattened), axis=1)
-    centers = np.expand_dims(centers, axis=1)
 
-    translation_anchors = np.zeros((1, num_scale_aspect, 2))
-    translation_anchors = translation_anchors + centers
-    translation_anchors = translation_anchors.reshape((centers.shape[0] * num_scale_aspect, 2))
+    translation_anchors = np.repeat(centers, num_scale_aspect, axis=0)
     stride_array = np.full((translation_anchors.shape[0], 1), strides_x[0])
     translation_anchors = np.concatenate((translation_anchors, stride_array), axis=-1)
     print('?j')
