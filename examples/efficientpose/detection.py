@@ -1,6 +1,5 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
-from paz.pipelines import SSDPreprocess
 import paz.processors as pr
 
 
@@ -36,7 +35,7 @@ class DetectAndEstimateSingleShot(Processor):
         self.variances = variances
         self.draw = draw
         if preprocess is None:
-            self.preprocess = SSDPreprocess(model)
+            self.preprocess = EfficientPosePreprocess(model)
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh)
@@ -57,26 +56,22 @@ class DetectAndEstimateSingleShot(Processor):
         return self.wrap(image, boxes2D)
 
 
-class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
-    """Single-shot inference pipeline with EFFICIENTDETD0 trained
-    on COCO.
+class EfficientPosePreprocess(SequentialProcessor):
+    """Preprocessing pipeline for SSD.
 
     # Arguments
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
-        draw: Boolean. If ``True`` prediction are drawn in the
-            returned image.
-
-    # References
-        [Google AutoML repository implementation of EfficientDet](
-        https://github.com/google/automl/tree/master/efficientdet)
+        model: Keras model.
+        mean: List, of three elements indicating the per channel mean.
+        color_space: Int, specifying the color space to transform.
     """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
-        names = get_class_names('LINEMOD')
-        model = EFFICIENTPOSEA(num_classes=len(names),
-                               base_weights='COCO', head_weights='COCO')
-        super(EFFICIENTPOSEALINEMOD, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+    def __init__(
+            self, model, mean=pr.BGR_IMAGENET_MEAN, color_space=pr.RGB2BGR):
+        super(EfficientPosePreprocess, self).__init__()
+        self.add(pr.ResizeImage(model.input_shape[1:3]))
+        self.add(pr.ConvertColorSpace(color_space))
+        self.add(pr.SubtractMeanImage(mean))
+        self.add(pr.CastImage(float))
+        self.add(pr.ExpandDims(axis=0))
 
 
 class EfficientPosePostprocess(SequentialProcessor):
@@ -100,3 +95,25 @@ class EfficientPosePostprocess(SequentialProcessor):
         self.add(pr.MergeNMSBoxWithClass())
         self.add(pr.FilterBoxes(class_names, score_thresh))
         self.add(pr.ToBoxes2D(class_names, box_method))
+
+
+class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
+    """Single-shot inference pipeline with EFFICIENTDETD0 trained
+    on COCO.
+
+    # Arguments
+        score_thresh: Float between [0, 1]
+        nms_thresh: Float between [0, 1].
+        draw: Boolean. If ``True`` prediction are drawn in the
+            returned image.
+
+    # References
+        [Google AutoML repository implementation of EfficientDet](
+        https://github.com/google/automl/tree/master/efficientdet)
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+        names = get_class_names('LINEMOD')
+        model = EFFICIENTPOSEA(num_classes=len(names),
+                               base_weights='COCO', head_weights='COCO')
+        super(EFFICIENTPOSEALINEMOD, self).__init__(
+            model, names, score_thresh, nms_thresh, draw=draw)
