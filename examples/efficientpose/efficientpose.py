@@ -1,6 +1,7 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from paz.backend.anchors import build_anchors
+from anchors import build_translation_anchors
 from efficientdet_blocks import (
     BiFPN, build_detector_head, EfficientNet_to_BiFPN)
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
@@ -72,6 +73,9 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(
+        image_shape, branches, num_scales, aspect_ratios, anchor_scale)
+
+    model.translation_priors = build_translation_anchors(
         image_shape, branches, num_scales, aspect_ratios, anchor_scale)
     return model
 
