@@ -4,6 +4,12 @@ import paz.processors as pr
 from processors import ComputeResizingShape
 
 
+B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
+RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
+B_LINEMOD_STDEV, G_LINEMOD_STDEV, R_LINEMOD_STDEV = 57.375, 57.12, 58.395
+RGB_LINEMOD_STDEV = (R_LINEMOD_STDEV, G_LINEMOD_STDEV, B_LINEMOD_STDEV)
+
+
 def get_class_names(dataset_name='LINEMOD'):
     if dataset_name in ['LINEMOD']:
         class_names = ['ape', 'can', 'cat', 'driller', 'duck',
@@ -65,15 +71,13 @@ class EfficientPosePreprocess(Processor):
         mean: List, of three elements indicating the per channel mean.
         color_space: Int, specifying the color space to transform.
     """
-    def __init__(self, model, mean=pr.RGB_IMAGENET_MEAN,
-                 standard_deviation=pr.RGB_IMAGENET_STDEV,
-                 color_space=pr.RGB2BGR):
+    def __init__(self, model, mean=RGB_LINEMOD_MEAN,
+                 standard_deviation=RGB_LINEMOD_STDEV):
         super(EfficientPosePreprocess, self).__init__()
 
         self.compute_resizing_shape = ComputeResizingShape(
             model.input_shape[1])
         self.preprocess = pr.SequentialProcessor([
-            (pr.ConvertColorSpace(color_space)),
             (pr.SubtractMeanImage(mean)),
             (pr.DivideStandardDeviationImage((standard_deviation))),
             (pr.CastImage(float)),

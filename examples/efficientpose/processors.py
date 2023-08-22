@@ -15,7 +15,7 @@ class ComputeResizingShape(Processor):
 def compute_resizing_shape(image, size):
     H, W = image.shape[:2]
     scale = size / max(H, W)
-    resizing_H = int(H * scale)
     resizing_W = int(W * scale)
-    resizing_shape = (resizing_H, resizing_W)
+    resizing_H = int(H * scale)    
+    resizing_shape = (resizing_W, resizing_H)
     return resizing_shape, scale
