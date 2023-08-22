@@ -150,11 +150,10 @@ def build_layer_to_weight(model):
     return layer_to_weight
 
 
-
-
 def MAML(meta_model, compute_loss, optimizer, learning_rate=0.01):
     def fit(RNG, sampler, epochs):
         losses = []
+        # TODO remove epochs
         for epoch_arg in range(epochs):
             epoch_loss = 0
             # for step, sampler in enumerate(shuffle(RNG, dataset)):
