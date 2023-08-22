@@ -24,17 +24,17 @@ def build_translation_anchors(image_shape, branches,
     """
     num_scale_aspect = num_scales * len(aspect_ratios)
     args = (branches, num_scale_aspect)
-    translation_boxes = []
+    translation_anchors = []
     for branch_arg in range(len(branches)):
         stride = build_strides(branch_arg, image_shape, *args)
-        boxes = make_branch_boxes(*stride, branch_arg, *args)
-        translation_boxes.append(boxes)
-    translation_boxes = np.concatenate(translation_boxes, axis=0)
-    return translation_boxes.astype('float32')
+        anchors = make_branch_anchors(*stride, branch_arg, *args)
+        translation_anchors.append(anchors)
+    translation_anchors = np.concatenate(translation_anchors, axis=0)
+    return translation_anchors.astype('float32')
 
 
-def make_branch_boxes(strides_y, strides_x, branch_arg,
-                      branches, num_scale_aspect):
+def make_branch_anchors(strides_y, strides_x, branch_arg,
+                        branches, num_scale_aspect):
     args_1 = (strides_y, strides_x, branch_arg, branches)
     centers = compute_translation_centers(*args_1)
     args_2 = (centers, strides_x, num_scale_aspect)
