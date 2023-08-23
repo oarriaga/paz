@@ -119,7 +119,6 @@ def MAML(meta_model, compute_loss, optimizer, learning_rate=0.01):
             y_true_queries = tf.convert_to_tensor(y_true_queries)
             x_true_support = tf.convert_to_tensor(x_true_support)
             y_true_support = tf.convert_to_tensor(y_true_support)
-
             with tf.GradientTape() as meta_tape:
                 with tf.GradientTape() as task_tape:
                     y_pred = meta_model(x_true_support, training=True)

@@ -11,7 +11,7 @@ from cnn import CONVNET, MAML, Predict, compute_accuracy
 
 seed = 777
 RNG = np.random.default_rng(seed)
-num_steps = 200
+num_steps = 10_000
 batch_size = 10
 train_episodes = 100
 test_episodes = 10
