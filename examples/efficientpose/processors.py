@@ -3,6 +3,7 @@ import numpy as np
 from paz.abstract import Processor
 from paz.backend.boxes import to_corner_form
 
+
 class ComputeResizingShape(Processor):
     def __init__(self, size):
         self.size = size
