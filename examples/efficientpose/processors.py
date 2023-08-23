@@ -19,7 +19,7 @@ def compute_resizing_shape(image, size):
     resizing_W = int(W * image_scale)
     resizing_H = int(H * image_scale)
     resizing_shape = (resizing_W, resizing_H)
-    return resizing_shape, image_scale
+    return resizing_shape, np.array(image_scale)
 
 
 class PadImage(Processor):

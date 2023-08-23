@@ -67,7 +67,7 @@ class DetectAndEstimateSingleShot(Processor):
         outputs = self.model(preprocessed_image)
         detections, (rotations, translations) = outputs
         detections = change_box_coordinates(detections)
-        boxes2D = self.postprocess(detections)
+        boxes2D = self.postprocess(detections, image_scale)
         # boxes2D = self.denormalize(image, boxes2D)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
@@ -127,16 +127,24 @@ class EfficientPosePostprocess(Processor):
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
-            ClipBoxes(model.input_shape[1:3]),
-            pr.NonMaximumSuppressionPerClass(nms_thresh),
-            pr.MergeNMSBoxWithClass(),
-            pr.FilterBoxes(class_names, score_thresh),
-            pr.ToBoxes2D(class_names, box_method)
-            ])
+            ClipBoxes(model.input_shape[1:3])])
 
-    def call(self, output):
-        postprocessed = self.postprocess(output)
-        return postprocessed
+        self.scale = pr.ScaleBox()
+        self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
+        self.merge_box_and_class = pr.MergeNMSBoxWithClass()
+        self.filter_boxes = pr.FilterBoxes(class_names, score_thresh)
+        self.to_boxes2D = pr.ToBoxes2D(class_names)
+        self.round_boxes = pr.RoundBoxes2D()
+
+    def call(self, output, image_scale):
+        box_data = self.postprocess(output)
+        box_data = self.scale(box_data, 1 / image_scale)
+        box_data, class_labels = self.nms_per_class(box_data)
+        box_data = self.merge_box_and_class(box_data, class_labels)
+        box_data = self.filter_boxes(box_data)
+        boxes2D = self.to_boxes2D(box_data)
+        boxes2D = self.round_boxes(boxes2D)
+        return boxes2D
 
 
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
