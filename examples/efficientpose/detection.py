@@ -1,7 +1,7 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
-from processors import ComputeResizingShape
+from processors import ComputeResizingShape, PadImage
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
@@ -53,7 +53,7 @@ class DetectAndEstimateSingleShot(Processor):
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
-        preprocessed_image = self.preprocess(image)
+        preprocessed_image, scale = self.preprocess(image)
         outputs = self.model(preprocessed_image)
         detections, pose = outputs
         boxes2D = self.postprocess(detections)
@@ -78,17 +78,19 @@ class EfficientPosePreprocess(Processor):
         self.compute_resizing_shape = ComputeResizingShape(
             model.input_shape[1])
         self.preprocess = pr.SequentialProcessor([
-            (pr.SubtractMeanImage(mean)),
-            (pr.DivideStandardDeviationImage((standard_deviation))),
-            (pr.CastImage(float)),
-            (pr.ExpandDims(axis=0))])
+            pr.SubtractMeanImage(mean),
+            pr.DivideStandardDeviationImage(standard_deviation),
+            PadImage(model.input_shape[1]),
+            pr.CastImage(float),
+            pr.ExpandDims(axis=0)
+            ])
 
     def call(self, image):
         resizing_shape, scale = self.compute_resizing_shape(image)
         resize_image = pr.ResizeImage(resizing_shape)
         preprocessed_image = resize_image(image)
         preprocessed_image = self.preprocess(preprocessed_image)
-        return preprocessed_image
+        return preprocessed_image, scale
 
 
 class EfficientPosePostprocess(SequentialProcessor):
