@@ -1,9 +1,9 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
-from processors import (
-    ComputeResizingShape, PadImage, ComputeCameraParameter, DecodeBoxes)
+from processors import ComputeResizingShape, PadImage, ComputeCameraParameter
 import numpy as np
+from paz.backend.boxes import change_box_coordinates
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
@@ -65,8 +65,9 @@ class DetectAndEstimateSingleShot(Processor):
         preprocessed_image, image_scale, camera_parameter = preprocessed_data
         outputs = self.model(preprocessed_image)
         detections, (rotations, translations) = outputs
+        detections = change_box_coordinates(detections)
         boxes2D = self.postprocess(detections)
-        boxes2D = self.denormalize(image, boxes2D)
+        # boxes2D = self.denormalize(image, boxes2D)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
@@ -119,12 +120,12 @@ class EfficientPosePostprocess(Processor):
         box_method: Int, type of boxes to boxes2D conversion method.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=0, box_method=0):
+                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=0, box_method=0):
         super(EfficientPosePostprocess, self).__init__()
 
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
-            DecodeBoxes(model.prior_boxes, variances),
+            pr.DecodeBoxes(model.prior_boxes*512, variances),
             pr.NonMaximumSuppressionPerClass(nms_thresh),
             pr.MergeNMSBoxWithClass(),
             pr.FilterBoxes(class_names, score_thresh),
