@@ -41,3 +41,10 @@ detect.model.set_weights(weights)
 image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/0246.png")
 detections = detect(image)
 show_image(detections['image'])
+
+model = detect.model
+model_layer_names = [layer.name for layer in model.layers]        
+from tensorflow import keras
+inter_output_model = keras.Model(model.input, model.get_layer(index = model_layer_names.index('boxes')).output)
+inter_output = inter_output_model.predict(input_list[0])
+print("")

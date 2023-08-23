@@ -1,7 +1,8 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
-from processors import ComputeResizingShape, PadImage, ComputeCameraParameter
+from processors import (
+    ComputeResizingShape, PadImage, ComputeCameraParameter, DecodeBoxes)
 import numpy as np
 
 
@@ -63,7 +64,7 @@ class DetectAndEstimateSingleShot(Processor):
         preprocessed_data = self.preprocess(image)
         preprocessed_image, image_scale, camera_parameter = preprocessed_data
         outputs = self.model(preprocessed_image)
-        detections, pose = outputs
+        detections, (rotations, translations) = outputs
         boxes2D = self.postprocess(detections)
         boxes2D = self.denormalize(image, boxes2D)
         if self.draw:
@@ -105,7 +106,7 @@ class EfficientPosePreprocess(Processor):
         return preprocessed_image, image_scale, camera_parameter
 
 
-class EfficientPosePostprocess(SequentialProcessor):
+class EfficientPosePostprocess(Processor):
     """Postprocessing pipeline for SSD.
 
     # Arguments
@@ -120,12 +121,19 @@ class EfficientPosePostprocess(SequentialProcessor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2], class_arg=0, box_method=0):
         super(EfficientPosePostprocess, self).__init__()
-        self.add(pr.Squeeze(axis=None))
-        self.add(pr.DecodeBoxes(model.prior_boxes, variances))
-        self.add(pr.NonMaximumSuppressionPerClass(nms_thresh))
-        self.add(pr.MergeNMSBoxWithClass())
-        self.add(pr.FilterBoxes(class_names, score_thresh))
-        self.add(pr.ToBoxes2D(class_names, box_method))
+
+        self.postprocess = pr.SequentialProcessor([
+            pr.Squeeze(axis=None),
+            DecodeBoxes(model.prior_boxes, variances),
+            pr.NonMaximumSuppressionPerClass(nms_thresh),
+            pr.MergeNMSBoxWithClass(),
+            pr.FilterBoxes(class_names, score_thresh),
+            pr.ToBoxes2D(class_names, box_method)
+            ])
+
+    def call(self, output):
+        postprocessed = self.postprocess(output)
+        return postprocessed
 
 
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
