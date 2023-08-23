@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.models import Model, clone_model
@@ -23,19 +24,6 @@ def CONVNET(num_classes, image_shape, num_blocks=4):
     return Model(inputs, outputs, name='CONVNET')
 
 
-def shuffle(RNG, dataset):
-    RNG.shuffle(dataset)
-    return dataset
-
-
-def layer_arg_to_gradient_arg(layer_arg):
-    if layer_arg == 0:
-        raise ValueError()
-    kernel_arg = 2 * (layer_arg - 1)
-    biases_arg = kernel_arg + 1
-    return kernel_arg, biases_arg
-
-
 def copy_model(model):
     meta_weights = model.get_weights()
     copied_model = clone_model(model)
@@ -45,36 +33,6 @@ def copy_model(model):
 
 def gradient_step(learning_rate, gradients, parameters_old):
     return tf.subtract(parameters_old, tf.multiply(learning_rate, gradients))
-
-
-def is_conv2D_or_dense(layer):
-    is_conv2D = isinstance(layer, Conv2D)
-    is_dense = isinstance(layer, Dense)
-    return is_conv2D or is_dense
-
-
-def meta_to_task(meta_model, support_gradients, learning_rate):
-    task_model = copy_model(meta_model)
-    for layer_arg in range(len(meta_model.layers)):
-        layer = meta_model.layers[layer_arg]
-        if is_conv2D_or_dense(layer):
-            kernel_arg, biases_arg = layer_arg_to_gradient_arg(layer_arg)
-            kernel_gradients = support_gradients[kernel_arg]
-            biases_gradients = support_gradients[biases_arg]
-
-            kernel_args = (learning_rate, kernel_gradients, layer.kernel)
-            biases_args = (learning_rate, biases_gradients, layer.bias)
-            task_model.layers[layer_arg].kernel = gradient_step(*kernel_args)
-            task_model.layers[layer_arg].bias = gradient_step(*biases_args)
-        else:
-            continue
-    return task_model
-
-
-def to_tensor(x, y):
-    x_tensor = tf.convert_to_tensor(x)
-    y_tensor = tf.convert_to_tensor(y)
-    return x_tensor, y_tensor
 
 
 def update_dense(meta_layer, learning_rate, gradients, weights_args):
@@ -99,7 +57,7 @@ def update_batchnorm(meta_layer, learning_rate, gradients, weights_args):
     return betta_new, gamma_new
 
 
-def meta_to_task2(meta_model, support_gradients, learning_rate):
+def meta_to_task(meta_model, support_gradients, learning_rate):
     layer_arg_to_weights_arg = build_layer_to_weight(meta_model)
     task_model = copy_model(meta_model)
     for layer_arg, layer in enumerate(meta_model.layers):
@@ -168,7 +126,7 @@ def MAML(meta_model, compute_loss, optimizer, learning_rate=0.01):
                     support_loss = compute_loss(y_true_support, y_pred)
                 support_gradients = task_tape.gradient(
                     support_loss, meta_model.trainable_variables)
-                task_model = meta_to_task2(
+                task_model = meta_to_task(
                     meta_model, support_gradients, learning_rate)
                 y_task_pred = task_model(x_true_queries, training=True)
                 task_loss = compute_loss(y_true_queries, y_task_pred)
@@ -186,7 +144,11 @@ def Predict(model, learning_rate, compute_loss):
         model_copy = copy_model(model)
         model_copy.compile(SGD(learning_rate), compute_loss)
         for step in range(num_steps):
-            model_copy.fit(x_support, y_support)
+            model_copy.fit(x_support, y_support, epochs=1, verbose=0)
         y_queries_pred = model_copy(x_queries)
         return y_queries_pred
     return call
+
+
+def compute_accuracy(y_true, y_pred):
+    return np.sum(y_true == y_pred) / len(y_true)
