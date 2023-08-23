@@ -1,3 +1,4 @@
+# TODO make train_step function
 from functools import partial
 import numpy as np
 import tensorflow as tf
@@ -6,7 +7,7 @@ from tensorflow.keras.layers import (
     Input, Dense, Flatten, BatchNormalization,
     ReLU, Conv2D, MaxPool2D, Layer, Softmax)
 
-from paz.datasets.omniglot import load, sample_between_alphabet
+from paz.datasets.omniglot import load, sample_between_alphabet, Generator
 
 
 def conv_block(x):
@@ -24,11 +25,6 @@ def CONVNET(num_classes, image_shape, num_blocks=4):
     x = Flatten()(x)
     outputs = Dense(num_classes)(x)
     return Model(inputs, outputs, name='CONVNET')
-
-
-class MAML(Model):
-    def train_step(self, data):
-        print(data)
 
 
 seed = 777
@@ -67,3 +63,20 @@ def MAML(embed, num_classes, num_support, num_queries, image_shape):
                  outputs=[y_support, y_queries], name='MAML')
 
 
+steps_per_epoch = 100
+train_data = load('train', image_shape[:2], True)
+train_sampler = partial(sample_between_alphabet, RNG, train_data, *train_args)
+(x1, y1), (x2, y2) = train_sampler()
+
+sampler = partial(sample_between_alphabet, RNG, train_data, *train_args)
+sequence = Generator(sampler, *train_args, image_shape, steps_per_epoch)
+MAML()
+
+image_shape = (args.image_H, args.image_W, 1)
+train_args = (args.train_ways, args.train_shots, args.train_queries)
+embed = ProtoEmbedding(image_shape, args.num_blocks)
+model = ProtoNet(embed, *train_args, image_shape)
+optimizer = Adam(args.learning_rate)
+metrics = [args.metric]
+meta_model.compile(Adam(args.learning_rate), loss=args.loss, metrics=metrics)
+meta_model.fit(sequence, epochs=10,
