@@ -14,11 +14,11 @@ class ComputeResizingShape(Processor):
 
 def compute_resizing_shape(image, size):
     H, W = image.shape[:2]
-    scale = size / max(H, W)
-    resizing_W = int(W * scale)
-    resizing_H = int(H * scale)    
+    image_scale = size / max(H, W)
+    resizing_W = int(W * image_scale)
+    resizing_H = int(H * image_scale)
     resizing_shape = (resizing_W, resizing_H)
-    return resizing_shape, scale
+    return resizing_shape, image_scale
 
 
 class PadImage(Processor):
@@ -37,3 +37,25 @@ def pad_image(image, size, mode):
     pad_W = size - W
     image = np.pad(image, [(0, pad_H), (0, pad_W), (0, 0)], mode=mode)
     return image
+
+
+class ComputeCameraParameter(Processor):
+    def __init__(self, camera_matrix, translation_scale_norm):
+        self.camera_matrix = camera_matrix
+        self.translation_scale_norm = translation_scale_norm
+        super(ComputeCameraParameter, self).__init__()
+
+    def call(self, image_scale):
+        return compute_camera_parameter(image_scale, self.camera_matrix,
+                                        self.translation_scale_norm)
+
+
+def compute_camera_parameter(image_scale, camera_matrix,
+                             translation_scale_norm):
+    camera_parameter = np.array([camera_matrix[0, 0],
+                                 camera_matrix[1, 1],
+                                 camera_matrix[0, 2],
+                                 camera_matrix[1, 2],
+                                 translation_scale_norm,
+                                 image_scale])
+    return camera_parameter

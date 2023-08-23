@@ -1,13 +1,20 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
-from processors import ComputeResizingShape, PadImage
+from processors import ComputeResizingShape, PadImage, ComputeCameraParameter
+import numpy as np
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
 RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
 B_LINEMOD_STDEV, G_LINEMOD_STDEV, R_LINEMOD_STDEV = 57.375, 57.12, 58.395
 RGB_LINEMOD_STDEV = (R_LINEMOD_STDEV, G_LINEMOD_STDEV, B_LINEMOD_STDEV)
+
+LINEMOD_CAMERA_MATRIX = np.array([
+    [572.4114, 0., 325.2611],
+    [0., 573.57043, 242.04899],
+    [0., 0., 1.]],
+    dtype=np.float32)
 
 
 def get_class_names(dataset_name='LINEMOD'):
@@ -53,7 +60,8 @@ class DetectAndEstimateSingleShot(Processor):
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
-        preprocessed_image, scale = self.preprocess(image)
+        preprocessed_data = self.preprocess(image)
+        preprocessed_image, image_scale, camera_parameter = preprocessed_data
         outputs = self.model(preprocessed_image)
         detections, pose = outputs
         boxes2D = self.postprocess(detections)
@@ -72,7 +80,9 @@ class EfficientPosePreprocess(Processor):
         color_space: Int, specifying the color space to transform.
     """
     def __init__(self, model, mean=RGB_LINEMOD_MEAN,
-                 standard_deviation=RGB_LINEMOD_STDEV):
+                 standard_deviation=RGB_LINEMOD_STDEV,
+                 camera_matrix=LINEMOD_CAMERA_MATRIX,
+                 translation_scale_norm=1000.0):
         super(EfficientPosePreprocess, self).__init__()
 
         self.compute_resizing_shape = ComputeResizingShape(
@@ -82,15 +92,17 @@ class EfficientPosePreprocess(Processor):
             pr.DivideStandardDeviationImage(standard_deviation),
             PadImage(model.input_shape[1]),
             pr.CastImage(float),
-            pr.ExpandDims(axis=0)
-            ])
+            pr.ExpandDims(axis=0)])
+        self.compute_camera_parameter = ComputeCameraParameter(
+            camera_matrix, translation_scale_norm)
 
     def call(self, image):
-        resizing_shape, scale = self.compute_resizing_shape(image)
+        resizing_shape, image_scale = self.compute_resizing_shape(image)
         resize_image = pr.ResizeImage(resizing_shape)
         preprocessed_image = resize_image(image)
         preprocessed_image = self.preprocess(preprocessed_image)
-        return preprocessed_image, scale
+        camera_parameter = self.compute_camera_parameter(image_scale)
+        return preprocessed_image, image_scale, camera_parameter
 
 
 class EfficientPosePostprocess(SequentialProcessor):
