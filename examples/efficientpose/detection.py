@@ -122,10 +122,10 @@ class EfficientPosePostprocess(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=0, box_method=0):
         super(EfficientPosePostprocess, self).__init__()
-
+        model.prior_boxes = model.prior_boxes * model.input_shape[1]
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
-            pr.DecodeBoxes(model.prior_boxes*512, variances),
+            pr.DecodeBoxes(model.prior_boxes, variances),
             pr.NonMaximumSuppressionPerClass(nms_thresh),
             pr.MergeNMSBoxWithClass(),
             pr.FilterBoxes(class_names, score_thresh),
