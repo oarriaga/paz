@@ -60,3 +60,22 @@ def compute_camera_parameter(image_scale, camera_matrix,
                                  translation_scale_norm,
                                  image_scale])
     return camera_parameter
+
+
+class ClipBoxes(Processor):
+    def __init__(self, shape):
+        self.shape = shape
+        super(ClipBoxes, self).__init__()
+
+    def call(self, boxes):
+        return clip_boxes(boxes, self.shape)
+
+
+def clip_boxes(boxes, shape):
+    H, W = shape
+    decoded_boxes = boxes[:, :4]
+    boxes[:, 0] = np.clip(decoded_boxes[:, 0], 0, W - 1)
+    boxes[:, 1] = np.clip(decoded_boxes[:, 1], 0, H - 1)
+    boxes[:, 2] = np.clip(decoded_boxes[:, 2], 0, W - 1)
+    boxes[:, 3] = np.clip(decoded_boxes[:, 3], 0, H - 1)
+    return boxes

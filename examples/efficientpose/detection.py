@@ -1,7 +1,8 @@
 from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
-from processors import ComputeResizingShape, PadImage, ComputeCameraParameter
+from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
+                        ClipBoxes)
 import numpy as np
 from paz.backend.boxes import change_box_coordinates
 
@@ -126,6 +127,7 @@ class EfficientPosePostprocess(Processor):
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
+            ClipBoxes(model.input_shape[1:3]),
             pr.NonMaximumSuppressionPerClass(nms_thresh),
             pr.MergeNMSBoxWithClass(),
             pr.FilterBoxes(class_names, score_thresh),
