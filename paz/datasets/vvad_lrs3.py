@@ -24,9 +24,6 @@ class VVAD_LRS3(Generator):
     # References
         -[VVAD-LRS3](https://www.kaggle.com/datasets/adrianlubitz/vvadlrs3)
     """
-    # TODO image resize
-    # TODO to_categorical
-    # TODO Data augmentation?
     def __init__(
             self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, image_size=(96, 96)):
         if split != 'train' and split != 'val' and split != 'test':
@@ -60,6 +57,9 @@ class VVAD_LRS3(Generator):
         indexes_pos = list(range(self.total_size // 2))
         indexes_neg = list(range(self.total_size // 2, self.total_size))
 
+        random.Random(445363).shuffle(indexes_pos)
+        random.Random(445363).shuffle(indexes_neg)
+
         indexes_val = []
         indexes_test = []
 
@@ -68,20 +68,17 @@ class VVAD_LRS3(Generator):
 
         # val split
         if self.val_split > 0.0:
-            propotional_procent = self.val_split / 2
             indexes_val = indexes_pos[:int(self.val_split * old_pos_size)] + indexes_neg[:int(self.val_split * old_neg_size)]
             indexes_pos = indexes_pos[int(self.val_split * old_pos_size):]
             indexes_neg = indexes_neg[int(self.val_split * old_neg_size):]
 
         # test split
         if self.test_split > 0.0:
-            propotional_procent = self.test_split / 2
             indexes_test = indexes_pos[:int(self.test_split * old_pos_size)] + indexes_neg[:int(self.test_split * old_neg_size)]
             indexes_pos = indexes_pos[int(self.test_split * old_pos_size):]
             indexes_neg = indexes_neg[int(self.test_split * old_neg_size):]
 
         indexes_train = indexes_pos + indexes_neg
-        # TODO shuffle before splitting the indexes
         random.Random(445363).shuffle(indexes_train)  # Use always the same seed so every model gets the same shuffle
 
         # print("indexes_val", len(indexes_val))
