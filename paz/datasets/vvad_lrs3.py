@@ -104,7 +104,7 @@ class VVAD_LRS3(Generator):
             raise ValueError('You need to call __call__ first to set the total_size')
 
         if self.split == 'train':
-            return int(self.total_size * (1 - self.val_split - self.test_split))
+            return self.total_size - int(self.total_size * self.val_split) - int(self.total_size * self.test_split)
         elif self.split == 'val':
             return int(self.total_size * self.val_split)
         elif self.split == 'test':
