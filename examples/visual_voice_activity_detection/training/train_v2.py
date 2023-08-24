@@ -24,6 +24,9 @@ parser.add_argument('-m', '--model', type=str,
 parser.add_argument('-b', '--batch_size', type=int,
                     default=16,
                     help='Batch size for training and validation')
+parser.add_argument('-e', '--epochs', type=int,
+                    default=2,
+                    help='Epochs for training')
 parser.add_argument('-o', '--output_path', type=str,
                     default="./output/",
                     help='Path to directory for saving outputs.')
@@ -109,7 +112,7 @@ tracker = OfflineEmissionsTracker(project_name="VVAD", experiment_id=args.model,
 tracker.start()
 
 model.fit(x = datasetTrain,
-                    epochs = 2,
+                    epochs = args.epochs,
                     callbacks=[cp_callback, tb_callback, csv_callback],
                     validation_data = datasetVal)
 
