@@ -30,11 +30,14 @@ def Sinusoid(RNG, num_points, min_amplitude=0.1, max_amplitude=5.0,
     def sample(batch_size=None, equally_spaced=False):
         batch_size = num_points if batch_size is None else batch_size
         if equally_spaced:
-            x = build_equally_spaced_points(batch_size, min_x, max_x)
+            x_support = build_equally_spaced_points(batch_size, min_x, max_x)
+            x_queries = build_equally_spaced_points(batch_size, min_x, max_x)
         else:
-            x = sample_random_points(RNG, batch_size, min_x, max_x)
-        y = compute_sinusoid(x, amplitude, phase)
-        return x, y
+            x_support = sample_random_points(RNG, batch_size, min_x, max_x)
+            x_queries = sample_random_points(RNG, batch_size, min_x, max_x)
+        y_support = compute_sinusoid(x_support, amplitude, phase)
+        y_queries = compute_sinusoid(x_queries, amplitude, phase)
+        return ((x_support, y_support), (x_queries, y_queries))
     return sample
 
 
