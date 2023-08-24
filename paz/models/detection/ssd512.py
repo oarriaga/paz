@@ -40,10 +40,10 @@ def SSD512(num_classes=81, base_weights='COCO', head_weights='COCO',
             Detector](https://arxiv.org/abs/1512.02325)
     """
 
-    if base_weights not in ['COCO', 'OIV6Hand']:
+    if base_weights not in ['COCO', 'OIV6Hand', None]:
         raise ValueError('Invalid `base_weights`:', base_weights)
 
-    if head_weights not in ['COCO', 'YCBVideo', 'OIV6Hand']:
+    if head_weights not in ['COCO', 'YCBVideo', 'OIV6Hand', None]:
         raise ValueError('Invalid `head_weights`:', head_weights)
 
     if ((base_weights == 'OIV6Hand') and (head_weights != 'OIV6Hand')):
