@@ -8,7 +8,7 @@ from tensorflow.keras.losses import SparseCategoricalCrossentropy
 from paz.utils import build_directory, write_dictionary, write_weights
 from paz.datasets.omniglot import load, sample_between_alphabet
 
-from cnn import CONVNET, MAML, Predict, compute_accuracy
+from maml import CONVNET, MAML, Predict, compute_accuracy
 
 description = 'Train and evaluation of model agnostic meta learning (MAML)'
 parser = argparse.ArgumentParser(description=description)

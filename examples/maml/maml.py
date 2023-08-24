@@ -1,22 +1,35 @@
+import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import Model, clone_model
 from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.models import Model, clone_model
 from tensorflow.keras.layers import (
-    Input, InputLayer, Dense, Flatten,
-    BatchNormalization, ReLU, Conv2D, MaxPool2D)
+    InputLayer, Input, Dense, Flatten, BatchNormalization,
+    ReLU, Conv2D, MaxPool2D)
 
 
-def shuffle(RNG, dataset):
-    RNG.shuffle(dataset)
-    return dataset
+def conv_block(x, with_pool=True):
+    x = Conv2D(filters=64, kernel_size=3, padding='same')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+    x = MaxPool2D((2, 2))(x)
+    return x
 
 
-def layer_arg_to_gradient_arg(layer_arg):
-    if layer_arg == 0:
-        raise ValueError()
-    kernel_arg = 2 * (layer_arg - 1)
-    biases_arg = kernel_arg + 1
-    return kernel_arg, biases_arg
+def CONVNET(num_classes, image_shape, num_blocks=4):
+    x = inputs = Input(image_shape)
+    for _ in range(num_blocks):
+        x = conv_block(x)
+    x = Flatten()(x)
+    outputs = Dense(num_classes, activation='softmax')(x)
+    return Model(inputs, outputs, name='CONVNET')
+
+
+def MLP(hidden_size=40):
+    inputs = Input((1,), name='inputs')
+    x = Dense(hidden_size, activation='relu')(inputs)
+    x = Dense(hidden_size, activation='relu')(x)
+    outputs = Dense(1, name='outputs')(x)
+    return Model(inputs=inputs, outputs=outputs, name='MLP')
 
 
 def copy_model(model):
@@ -28,23 +41,6 @@ def copy_model(model):
 
 def gradient_step(learning_rate, gradients, parameters_old):
     return tf.subtract(parameters_old, tf.multiply(learning_rate, gradients))
-
-
-def meta_to_task(meta_model, support_gradients, learning_rate):
-    task_model = copy_model(meta_model)
-    for layer_arg in range(len(meta_model.layers)):
-        if isinstance(meta_model.layers[layer_arg], InputLayer):
-            continue
-        kernel_arg, biases_arg = layer_arg_to_gradient_arg(layer_arg)
-        kernel_gradients = support_gradients[kernel_arg]
-        biases_gradients = support_gradients[biases_arg]
-
-        layer = meta_model.layers[layer_arg]
-        kernel_args = (learning_rate, kernel_gradients, layer.kernel)
-        biases_args = (learning_rate, biases_gradients, layer.bias)
-        task_model.layers[layer_arg].kernel = gradient_step(*kernel_args)
-        task_model.layers[layer_arg].bias = gradient_step(*biases_args)
-    return task_model
 
 
 def update_dense(meta_layer, learning_rate, gradients, weights_args):
@@ -69,7 +65,7 @@ def update_batchnorm(meta_layer, learning_rate, gradients, weights_args):
     return betta_new, gamma_new
 
 
-def meta_to_task2(meta_model, support_gradients, learning_rate):
+def meta_to_task(meta_model, support_gradients, learning_rate):
     layer_arg_to_weights_arg = build_layer_to_weight(meta_model)
     task_model = copy_model(meta_model)
     for layer_arg, layer in enumerate(meta_model.layers):
@@ -87,7 +83,7 @@ def meta_to_task2(meta_model, support_gradients, learning_rate):
             task_model.layers[layer_arg].bias = biases_new
         if isinstance(layer, BatchNormalization):
             weights_arg = layer_arg_to_weights_arg[layer_arg]
-            gamma_new, betta_new = update_dense(
+            gamma_new, betta_new = update_batchnorm(
                 layer, learning_rate, support_gradients, weights_arg)
             task_model.layers[layer_arg].gamma = gamma_new
             task_model.layers[layer_arg].beta = betta_new
@@ -112,49 +108,40 @@ def build_layer_to_weight(model):
         elif isinstance(layer, Dense):
             layer_to_weight[layer_arg] = (weights_arg, weights_arg + 1)
             weights_arg = weights_arg + 2
+        elif isinstance(layer, Conv2D):
+            layer_to_weight[layer_arg] = (weights_arg, weights_arg + 1)
+            weights_arg = weights_arg + 2
         else:
             raise ValueError(f'Layer {layer} not supported')
     return layer_to_weight
 
 
-def to_tensor(x, y):
-    x_tensor = tf.convert_to_tensor(x)
-    y_tensor = tf.convert_to_tensor(y)
-    return x_tensor, y_tensor
-
-
-def MLP(hidden_size=40):
-    inputs = Input((1,), name='inputs')
-    x = Dense(hidden_size, activation='relu')(inputs)
-    x = Dense(hidden_size, activation='relu')(x)
-    outputs = Dense(1, name='outputs')(x)
-    return Model(inputs=inputs, outputs=outputs, name='MLP')
-
-
 def MAML(meta_model, compute_loss, optimizer, learning_rate=0.01):
-    def fit(RNG, dataset, epochs):
+    def fit(RNG, sampler, num_steps):
         losses = []
-        for epoch_arg in range(epochs):
-            epoch_loss = 0
-            for step, sampler in enumerate(shuffle(RNG, dataset)):
-                x_true_support, y_true_support = to_tensor(*sampler())
-                x_true_queries, y_true_queries = to_tensor(*sampler())
-                with tf.GradientTape() as meta_tape:
-                    with tf.GradientTape() as task_tape:
-                        y_pred = meta_model(x_true_support, training=True)
-                        support_loss = compute_loss(y_true_support, y_pred)
-                    support_gradients = task_tape.gradient(
-                        support_loss, meta_model.trainable_variables)
-                    task_model = meta_to_task2(
-                        meta_model, support_gradients, learning_rate)
-                    y_task_pred = task_model(x_true_queries, training=True)
-                    task_loss = compute_loss(y_true_queries, y_task_pred)
-                meta_weights = meta_model.trainable_variables
-                gradients = meta_tape.gradient(task_loss, meta_weights)
-                optimizer.apply_gradients(zip(gradients, meta_weights))
-                epoch_loss = epoch_loss + task_loss
-            epoch_loss = epoch_loss / len(dataset)
-            print('epoch {} | loss = {}'.format(epoch_arg, epoch_loss))
+        total_loss = 0
+        for step in range(num_steps):
+            ((x_true_support, y_true_support),
+             (x_true_queries, y_true_queries)) = sampler()
+            x_true_support = tf.convert_to_tensor(x_true_support)
+            y_true_support = tf.convert_to_tensor(y_true_support)
+            x_true_queries = tf.convert_to_tensor(x_true_queries)
+            y_true_queries = tf.convert_to_tensor(y_true_queries)
+            with tf.GradientTape() as meta_tape:
+                with tf.GradientTape() as task_tape:
+                    y_pred = meta_model(x_true_support, training=True)
+                    support_loss = compute_loss(y_true_support, y_pred)
+                support_gradients = task_tape.gradient(
+                    support_loss, meta_model.trainable_variables)
+                task_model = meta_to_task(
+                    meta_model, support_gradients, learning_rate)
+                y_task_pred = task_model(x_true_queries, training=True)
+                task_loss = compute_loss(y_true_queries, y_task_pred)
+            meta_weights = meta_model.trainable_variables
+            gradients = meta_tape.gradient(task_loss, meta_weights)
+            optimizer.apply_gradients(zip(gradients, meta_weights))
+            total_loss = total_loss + task_loss
+            print('step {} | loss = {}'.format(step, total_loss / (step + 1)))
         return losses
     return fit
 
@@ -164,7 +151,11 @@ def Predict(model, learning_rate, compute_loss):
         model_copy = copy_model(model)
         model_copy.compile(SGD(learning_rate), compute_loss)
         for step in range(num_steps):
-            model_copy.fit(x_support, y_support)
+            model_copy.fit(x_support, y_support, epochs=1, verbose=0)
         y_queries_pred = model_copy(x_queries)
         return y_queries_pred
     return call
+
+
+def compute_accuracy(y_true, y_pred):
+    return np.sum(y_true == y_pred) / len(y_true)

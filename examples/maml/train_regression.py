@@ -5,7 +5,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
 from paz.utils import build_directory, write_dictionary, write_weights
 
-from cnn import MLP, MAML, Predict
+from maml import MLP, MAML, Predict
 from sinusoid import Sinusoid
 
 description = 'Train and evaluation of model agnostic meta learning (MAML)'
