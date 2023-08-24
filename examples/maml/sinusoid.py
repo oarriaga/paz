@@ -1,5 +1,4 @@
 import numpy as np
-from tensorflow.keras.utils import Sequence
 
 
 def build_equally_spaced_points(num_points, min_x, max_x):
@@ -39,15 +38,3 @@ def Sinusoid(RNG, num_points, min_amplitude=0.1, max_amplitude=5.0,
         y_queries = compute_sinusoid(x_queries, amplitude, phase)
         return ((x_support, y_support), (x_queries, y_queries))
     return sample
-
-
-class Generator(Sequence):
-    def __init__(self, samplers):
-        self.samplers = samplers
-
-    def __len__(self):
-        return len(self.samplers)
-
-    def __getitem__(self, idx):
-        x, y = self.samplers[idx]()
-        return {'inputs': x}, {'outputs': y}
