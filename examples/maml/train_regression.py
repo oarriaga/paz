@@ -1,36 +1,49 @@
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
+from paz.utils import build_directory, write_dictionary, write_weights
 
-from maml import MLP, Predict  # MAML
-from cnn import MAML
+from cnn import MLP, MAML, Predict
 from sinusoid import Sinusoid
 
+description = 'Train and evaluation of model agnostic meta learning (MAML)'
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument('--seed', default=777, type=int)
+parser.add_argument('--root', default='experiments', type=str)
+parser.add_argument('--label', default='MAML-SINUSOID', type=str)
+parser.add_argument('--meta_learning_rate', default=0.001, type=float)
+parser.add_argument('--task_learning_rate', default=0.01, type=float)
+parser.add_argument('--batch_size', default=10, type=int)
+parser.add_argument('--train_steps', default=10_000, type=int)
+parser.add_argument('--train_ways', default=5, type=int)
+parser.add_argument('--train_shots', default=5, type=int)
+parser.add_argument('--train_queries', default=5, type=int)
+parser.add_argument('--hidden_size', default=40, type=int)
 
-seed = 777
-meta_model = MLP()
+parser.add_argument('--min_amplitude', default=0.1, type=float)
+parser.add_argument('--max_amplitude', default=5.0, type=float)
+parser.add_argument('--min_x', default=-5.0, type=float)
+parser.add_argument('--max_x', default=5.0, type=float)
+args = parser.parse_args()
+
+directory = build_directory(args.root, args.label)
+write_dictionary(args.__dict__, directory, 'parameters.json')
+
+RNG = np.random.default_rng(args.seed)
+meta_model = MLP(args.hidden_size)
 compute_loss = MeanSquaredError()
-optimizer = Adam()
-learning_rate = 0.01
-RNG = np.random.default_rng(seed)
-train_steps = 10_000
-batch_size = 10
-min_amplitude = 0.1
-max_amplitude = 5.0
-min_x = -5.0
-max_x = 5.0
-weights_filename = f'MAML_MLP_epochs-{train_steps}.hdf5'
+optimizer = Adam(learning_rate=args.meta_learning_rate)
 
+sample = Sinusoid(RNG, args.batch_size, args.min_amplitude, args.max_amplitude)
+fit = MAML(meta_model, compute_loss, optimizer, args.task_learning_rate)
+losses = fit(RNG, sample, args.train_steps)
+write_weights(meta_model, directory)
 
-sampler = Sinusoid(RNG, batch_size, min_amplitude, max_amplitude)
-fit = MAML(meta_model, compute_loss, optimizer, learning_rate)
-losses = fit(RNG, sampler, train_steps)
-meta_model.save_weights(weights_filename)
-
-predict = Predict(meta_model, learning_rate, compute_loss)
-x_support, y_support = sampler(batch_size)[0]
-x_queries, y_queries = sampler(100, equally_spaced=True)[1]
+predict = Predict(meta_model, args.task_learning_rate, compute_loss)
+x_support, y_support = sample(args.batch_size)[0]
+x_queries, y_queries = sample(100, equally_spaced=True)[1]
 
 steps = [0, 3, 6, 9]
 plt.plot(x_support, y_support, '^', label='support points')

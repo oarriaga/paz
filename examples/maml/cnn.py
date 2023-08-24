@@ -24,6 +24,14 @@ def CONVNET(num_classes, image_shape, num_blocks=4):
     return Model(inputs, outputs, name='CONVNET')
 
 
+def MLP(hidden_size=40):
+    inputs = Input((1,), name='inputs')
+    x = Dense(hidden_size, activation='relu')(inputs)
+    x = Dense(hidden_size, activation='relu')(x)
+    outputs = Dense(1, name='outputs')(x)
+    return Model(inputs=inputs, outputs=outputs, name='MLP')
+
+
 def copy_model(model):
     meta_weights = model.get_weights()
     copied_model = clone_model(model)
