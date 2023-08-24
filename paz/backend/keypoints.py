@@ -718,3 +718,45 @@ def compute_optimized_pose3D(keypoints3D, joint_translation,
         optimized_pose3D.append(translated_pose)
         projected_pose2D.append(np.reshape(points, [1, 64]))
     return np.array(optimized_pose3D), np.array(projected_pose2D)
+
+
+def human_pose3D_to_pose6D(poses3D):
+    """
+    Estiate human pose 6D of the root joint from 3D pose of human joints.
+
+    # Arguments
+    poses3D: numpy array 
+             3D pose of human joint
+
+    # return
+    rotation_matrix: numpy array
+                     rotation of human root joint
+    translation: list
+                 translation of human root joint
+    """
+    right_hip = poses3D[1]
+    left_hip = poses3D[6]
+    thorax = poses3D[13]
+
+    # Calculate x, y, and z vectors
+    x_vector = right_hip - left_hip
+    projection_vector = thorax - left_hip
+
+    # Calculate projection of projection_vector onto x_vector
+    scalar_projection = np.dot(x_vector, projection_vector)
+    scalar_projection = scalar_projection / np.linalg.norm(x_vector) ** 2
+    projected_point = left_hip + scalar_projection * x_vector
+    z_vector = thorax - projected_point
+
+    # Normalize vectors
+    x_unit_vector = x_vector / np.linalg.norm(x_vector)
+    z_unit_vector = z_vector / np.linalg.norm(z_vector)
+    y_unit_vector = np.cross(z_unit_vector, x_unit_vector)
+
+    # Create rotation matrix
+    rotation_matrix = np.column_stack((x_unit_vector, y_unit_vector,
+                                       z_unit_vector))
+
+    # Convert translation units and return
+    translation = (poses3D[0] / 1e3).tolist()  # Convert mm to meters
+    return rotation_matrix, translation
