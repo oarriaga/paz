@@ -121,13 +121,15 @@ class EfficientPosePostprocess(Processor):
         box_method: Int, type of boxes to boxes2D conversion method.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=0, box_method=0):
+                 pre_filter_score_thresh=0.5, variances=[1.0, 1.0, 1.0, 1.0],
+                 class_arg=0, box_method=0):
         super(EfficientPosePostprocess, self).__init__()
         model.prior_boxes = model.prior_boxes * model.input_shape[1]
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
-            ClipBoxes(model.input_shape[1:3])])
+            ClipBoxes(model.input_shape[1:3]),
+            pr.FilterBoxes(class_names, pre_filter_score_thresh)])
 
         self.scale = pr.ScaleBox()
         self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
