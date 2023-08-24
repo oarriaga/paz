@@ -69,9 +69,6 @@ model = None
 # Python 3.8 does not support switch case statements :(
 if args.model == "VVAD_LRS3":
     model = VVAD_LRS3_LSTM()
-
-    # TODO UserWarning: "`binary_crossentropy` received `from_logits=True`, but the `output` argument was produced by a Sigmoid activation and thus does not represent logits. Was this intended?
-    #   output, from_logits = _get_logits(
     loss = BinaryCrossentropy()
     optimizer = SGD()
 
@@ -79,7 +76,7 @@ if args.model == "VVAD_LRS3":
 elif args.model == "CNN2Plus1D":
     model = CNN2Plus1D()
 
-    loss = BinaryCrossentropy(from_logits=False)  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
+    loss = BinaryCrossentropy()  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
     optimizer = Adam(learning_rate=0.0001)
 
     model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=['accuracy'])
@@ -97,7 +94,7 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=os.path.join(output_path, "checkpoints/weights-{epoch:02d}.hdf5"),
     verbose=1,
     save_weights_only=True,
-    # TODO only for testing save_freq=10*n_batches_per_epoch
+    save_freq=10*n_batches_per_epoch
 )
 
 tb_callback = tf.keras.callbacks.TensorBoard(
