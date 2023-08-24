@@ -2,12 +2,12 @@ import numpy as np
 import colorsys
 import random
 import cv2
+from paz.backend.keypoints import project_to_image
 
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
-
 
 def draw_square(image, center, color, size):
     """Draw a square in an image
@@ -444,4 +444,42 @@ def draw_RGB_masks(image, points2D, points3D, object_sizes):
     for instance_points2D, instance_points3D in zip(points2D, points3D):
         image = draw_RGB_mask(
             image, instance_points2D, instance_points3D, object_sizes)
+    return image
+
+
+def draw_human_pose6D(image, rotation, translation, camaera_intrinsics):
+    """Draw basis vectors for human pose 6D
+
+    # Arguments
+        image: numpy array
+        rotation: numpy array of size (3 x 3)
+        translations: list of length 3
+        camera_matrix: numpy array
+
+    # Returns
+        image: numpy array
+               image with basis vectors of rotaion and translation.
+    """
+    points3D = np.array([[1, 0, 0],
+                         [0, 1, 0],
+                         [0, 0, 1]])
+    points2D = project_to_image(rotation, translation,
+                                points3D, camaera_intrinsics)
+    points2D = points2D.astype(np.int)
+
+    x = points2D[0]
+    y = points2D[1]
+    z = points2D[2]
+
+    x_hat = (x / np.linalg.norm(x) * 60).astype(np.int)
+    y_hat = (y / np.linalg.norm(y) * 60).astype(np.int)
+    z_hat = (z / np.linalg.norm(z) * 60).astype(np.int)
+
+    offset = [50, 50]
+    image = draw_line(image, offset, x_hat + offset,
+                      color=[255, 0, 0], thickness=4)
+    image = draw_line(image, offset, y_hat + offset,
+                      color=[0, 255, 0], thickness=4)
+    image = draw_line(image, offset, z_hat + offset,
+                      color=[0, 0, 255], thickness=4)
     return image
