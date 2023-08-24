@@ -53,11 +53,6 @@ generatorVal = VVAD_LRS3(path=args.data_path, split="val")
 datasetTrain = Dataset.from_generator(generatorTrain, output_signature=(tf.TensorSpec(shape=(38, 96, 96, 3)), tf.TensorSpec(shape=(), dtype=tf.int8)))
 datasetVal = Dataset.from_generator(generatorVal, output_signature=(tf.TensorSpec(shape=(38, 96, 96, 3)), tf.TensorSpec(shape=(), dtype=tf.int8)))
 
-print("generatorTrainLength", len(generatorTrain))
-print("generatorValLength", len(generatorVal))
-print("generatorTrainSize", generatorTrain.total_size)
-print("generatorValSize", generatorVal.total_size)
-
 # Add length of dataset. This needs to be manually set because we use from generator.
 datasetTrain = datasetTrain.apply(
     tf.data.experimental.assert_cardinality(len(generatorTrain))
