@@ -38,7 +38,7 @@ with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
 
 detect = EFFICIENTPOSEALINEMOD(score_thresh=0.90, nms_thresh=0.45)
 detect.model.set_weights(weights)
-image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/0246.png")
+image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/1213.png")
 detections = detect(image)
 show_image(detections['image'])
 

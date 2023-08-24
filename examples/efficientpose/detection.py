@@ -2,7 +2,7 @@ from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        ClipBoxes)
+                        ClipBoxes, ComputeTopKBoxes)
 import numpy as np
 from paz.backend.boxes import change_box_coordinates
 
@@ -122,14 +122,15 @@ class EfficientPosePostprocess(Processor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  pre_filter_score_thresh=0.5, variances=[1.0, 1.0, 1.0, 1.0],
-                 class_arg=0, box_method=0):
+                 class_arg=0, box_method=0, top_k=200):
         super(EfficientPosePostprocess, self).__init__()
         model.prior_boxes = model.prior_boxes * model.input_shape[1]
         self.postprocess = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
             ClipBoxes(model.input_shape[1:3]),
-            pr.FilterBoxes(class_names, pre_filter_score_thresh)])
+            pr.FilterBoxes(class_names, pre_filter_score_thresh),
+            ComputeTopKBoxes(top_k)])
 
         self.scale = pr.ScaleBox()
         self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
@@ -140,8 +141,8 @@ class EfficientPosePostprocess(Processor):
 
     def call(self, output, image_scale):
         box_data = self.postprocess(output)
-        box_data, class_labels = self.nms_per_class(box_data)
-        box_data = self.merge_box_and_class(box_data, class_labels)
+        # box_data, class_labels = self.nms_per_class(box_data)
+        # box_data = self.merge_box_and_class(box_data, class_labels)
         box_data = self.filter_boxes(box_data)
         box_data = self.scale(box_data, 1 / image_scale)
         boxes2D = self.to_boxes2D(box_data)

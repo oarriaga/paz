@@ -79,3 +79,20 @@ def clip_boxes(boxes, shape):
     boxes[:, 2] = np.clip(decoded_boxes[:, 2], 0, W - 1)
     boxes[:, 3] = np.clip(decoded_boxes[:, 3], 0, H - 1)
     return boxes
+
+
+class ComputeTopKBoxes(Processor):
+    def __init__(self, top_k):
+        self.top_k = top_k
+        super(ComputeTopKBoxes, self).__init__()
+
+    def call(self, boxes):
+        return compute_topk_boxes(boxes, self.top_k)
+
+
+def compute_topk_boxes(boxes, top_k):
+    scores = boxes[:, 4:]
+    best_scores = np.max(scores, axis=1)
+    top_k_indices = np.argpartition(best_scores, -top_k)[-top_k:]
+    top_k_boxes = boxes[top_k_indices]
+    return top_k_boxes
