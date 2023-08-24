@@ -81,9 +81,9 @@ class VVAD_LRS3(Generator):
         indexes_train = indexes_pos + indexes_neg
         random.Random(445363).shuffle(indexes_train)  # Use always the same seed so every model gets the same shuffle
 
-        # print("indexes_val", len(indexes_val))
-        # print("indexes_test", len(indexes_test))
-        # print("indexes_train", len(indexes_train))
+        print("indexes_val", len(indexes_val))
+        print("indexes_test", len(indexes_test))
+        print("indexes_train", len(indexes_train))
 
         if self.split == 'train':
             indexes = indexes_train
@@ -92,8 +92,8 @@ class VVAD_LRS3(Generator):
         elif self.split == 'test':
             indexes = indexes_test
 
-        # print("Selected split: ", self.split)
-        # print("indexes", len(indexes))
+        print("Selected split: ", self.split)
+        print("indexes", len(indexes))
 
         for i in range(len(indexes)):
             yield (x_train[i], y_train[i])
