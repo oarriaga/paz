@@ -39,21 +39,21 @@ class VVAD_LRS3(Generator):
         self.test_split = test_split
 
         data = h5py.File(self.path, mode='r')
-        # TODO change back after testing
-        # self.total_size = data.get('x_train').shape[0]
-        self.total_size = data.get('x_test').shape[0]
+        # NotTODO change back after testing
+        self.total_size = data.get('x_train').shape[0]
+        # self.total_size = data.get('x_test').shape[0]
         data.close()
 
     def __call__(self):
         data = h5py.File(self.path, mode='r')
 
-        # TODO change back after testing
-        # x_train = data.get("x_train")
-        # y_train = data.get("y_train")
-        x_train = data.get("x_test")
-        y_train = data.get("y_test")
+        # NotTODO change back after testing
+        x_train = data.get("x_train")
+        y_train = data.get("y_train")
+        # x_train = data.get("x_test")
+        # y_train = data.get("y_test")
 
-        # TODO add the 200 test samples to those (if so add those 200 to the self.total_size)
+        # NotTODO add the 200 test samples to those (if so add those 200 to the self.total_size). It is not worth it. it is roughly 0.5% of the dataset but would add aditional commands to the dataset generator for each iteration. which could increase the training time.
         indexes_pos = list(range(self.total_size // 2))
         indexes_neg = list(range(self.total_size // 2, self.total_size))
 
