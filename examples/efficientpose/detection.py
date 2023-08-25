@@ -66,7 +66,8 @@ class DetectAndEstimateSingleShot(Processor):
         outputs = self.model(preprocessed_image)
         detections, (rotations, translations) = outputs
         detections = change_box_coordinates(detections)
-        boxes2D = self.postprocess(detections, image_scale)
+        outputs = detections, (rotations, translations)
+        boxes2D = self.postprocess(outputs, image_scale)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
@@ -134,7 +135,8 @@ class EfficientPosePostprocess(Processor):
         self.round_boxes = pr.RoundBoxes2D()
 
     def call(self, output, image_scale):
-        box_data = self.postprocess(output)
+        detections, (rotations, translations) = output
+        box_data = self.postprocess(detections)
         box_data = self.scale(box_data, 1 / image_scale)
         box_data, class_labels = self.nms_per_class(box_data)
         box_data = self.merge_box_and_class(box_data, class_labels)
