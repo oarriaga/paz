@@ -1,10 +1,10 @@
+import numpy as np
 from efficientpose import EFFICIENTPOSEA
-from paz.abstract import Processor, SequentialProcessor
+from paz.abstract import Processor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        ClipBoxes, ComputeTopKBoxes, RegressTranslation,
-                        ComputeTxTy, ComputeSelectedIndices)
-import numpy as np
+                        RegressTranslation, ComputeTxTy,
+                        ComputeSelectedIndices)
 from paz.backend.boxes import change_box_coordinates
 
 
@@ -156,7 +156,7 @@ class EfficientPosePostprocess(Processor):
         rotations = self.transform_rotations(rotations)
 
         translation_xy_Tz = self.regress_translation(translations)
-        translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)        
+        translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)
         translations = translation[selected_indices]
 
         return boxes2D, rotations, translations
