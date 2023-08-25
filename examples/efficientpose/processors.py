@@ -148,3 +148,22 @@ def compute_tx_ty(translation_xy_Tz, camera_parameter):
 
     translations = np.concatenate((tx, ty, tz), axis=0)
     return translations.T
+
+
+class ComputeSelectedIndices(Processor):
+    def __init__(self):
+        super(ComputeSelectedIndices, self).__init__()
+
+    def call(self, box_data_raw, box_data):
+        return compute_selected_indices(box_data_raw, box_data)
+
+
+def compute_selected_indices(box_data_all, box_data):
+    box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
+    box_data_tuple = [tuple(row) for row in box_data[:, :4]]
+
+    location_indices = []
+    for tuple_element in box_data_tuple:
+        location_index = box_data_all_tuple.index(tuple_element)
+        location_indices.append(location_index)
+    return np.array(location_indices)

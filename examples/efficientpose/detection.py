@@ -3,7 +3,7 @@ from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         ClipBoxes, ComputeTopKBoxes, RegressTranslation,
-                        ComputeTxTy)
+                        ComputeTxTy, ComputeSelectedIndices)
 import numpy as np
 from paz.backend.boxes import change_box_coordinates
 
@@ -136,19 +136,26 @@ class EfficientPosePostprocess(Processor):
         self.round_boxes = pr.RoundBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
         self.compute_tx_ty = ComputeTxTy()
+        self.compute_selections = ComputeSelectedIndices()
+        self.transform_rotations = pr.Scale(np.pi)
 
     def call(self, output, image_scale, camera_parameter):
         detections, (rotations, translations) = output
         box_data = self.postprocess(detections)
         box_data = self.scale(box_data, 1 / image_scale)
+        box_data_all = box_data
         box_data, class_labels = self.nms_per_class(box_data)
         box_data = self.merge_box_and_class(box_data, class_labels)
         box_data = self.filter_boxes(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
-        
+
         translation_xy_Tz = self.regress_translation(translations)
         translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)
+        selected_indices = self.compute_selections(box_data_all, box_data)
+        translations = translation[selected_indices]
+        rotations = np.array(rotations[0, :, :])[selected_indices]
+        rotations = self.transform_rotations(rotations)
         return boxes2D
 
 
