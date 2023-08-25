@@ -141,8 +141,8 @@ class EfficientPosePostprocess(Processor):
 
     def call(self, output, image_scale):
         box_data = self.postprocess(output)
-        # box_data, class_labels = self.nms_per_class(box_data)
-        # box_data = self.merge_box_and_class(box_data, class_labels)
+        box_data, class_labels = self.nms_per_class(box_data)
+        box_data = self.merge_box_and_class(box_data, class_labels)
         box_data = self.filter_boxes(box_data)
         box_data = self.scale(box_data, 1 / image_scale)
         boxes2D = self.to_boxes2D(box_data)

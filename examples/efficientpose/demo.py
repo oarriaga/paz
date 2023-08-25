@@ -9,7 +9,10 @@ with open('input_data/input_list.pkl', 'rb') as f:
 
 
 # Load EfficientNet weights
-with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
+# with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
+#     weights = pickle.load(f)
+
+with open('weights/7.until_full_iterative_translation_subnets_with_bifpn_bug.pkl', 'rb') as f:
     weights = pickle.load(f)
 
 # Load BiFPN + ClassNet + BoxNet weights
@@ -38,13 +41,13 @@ with open('weights/6.until_full_iterative_translation_subnets.pkl', 'rb') as f:
 
 detect = EFFICIENTPOSEALINEMOD(score_thresh=0.90, nms_thresh=0.45)
 detect.model.set_weights(weights)
-image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/1213.png")
+image = load_image("/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/Datasets/Linemod_preprocessed/data/02/rgb/0247.png")
 detections = detect(image)
 show_image(detections['image'])
 
-model = detect.model
-model_layer_names = [layer.name for layer in model.layers]        
-from tensorflow import keras
-inter_output_model = keras.Model(model.input, model.get_layer(index = model_layer_names.index('boxes')).output)
-inter_output = inter_output_model.predict(input_list[0])
-print("")
+# model = detect.model
+# model_layer_names = [layer.name for layer in model.layers]        
+# from tensorflow import keras
+# inter_output_model = keras.Model(model.input, model.get_layer(index = model_layer_names.index('boxes')).output)
+# inter_output = inter_output_model.predict(input_list[0])
+# print("")
