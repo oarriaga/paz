@@ -68,7 +68,8 @@ class DetectAndEstimateSingleShot(Processor):
         detections, (rotations, translations) = outputs
         detections = change_box_coordinates(detections)
         outputs = detections, (rotations, translations)
-        boxes2D = self.postprocess(outputs, image_scale, camera_parameter)
+        boxes2D, rotations, translations = self.postprocess(
+            outputs, image_scale, camera_parameter)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
@@ -150,13 +151,15 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
 
-        translation_xy_Tz = self.regress_translation(translations)
-        translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)
         selected_indices = self.compute_selections(box_data_all, box_data)
-        translations = translation[selected_indices]
         rotations = np.array(rotations[0, :, :])[selected_indices]
         rotations = self.transform_rotations(rotations)
-        return boxes2D
+
+        translation_xy_Tz = self.regress_translation(translations)
+        translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)        
+        translations = translation[selected_indices]
+
+        return boxes2D, rotations, translations
 
 
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
