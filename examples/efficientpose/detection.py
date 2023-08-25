@@ -43,7 +43,7 @@ class DetectAndEstimateSingleShot(Processor):
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  preprocess=None, postprocess=None,
-                 variances=[0.1, 0.1, 0.2, 0.2], draw=True):
+                 variances=[1.0, 1.0, 1.0, 1.0], draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -57,7 +57,6 @@ class DetectAndEstimateSingleShot(Processor):
                 model, class_names, score_thresh, nms_thresh)
 
         super(DetectAndEstimateSingleShot, self).__init__()
-        self.denormalize = pr.DenormalizeBoxes2D()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
@@ -68,7 +67,6 @@ class DetectAndEstimateSingleShot(Processor):
         detections, (rotations, translations) = outputs
         detections = change_box_coordinates(detections)
         boxes2D = self.postprocess(detections, image_scale)
-        # boxes2D = self.denormalize(image, boxes2D)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
