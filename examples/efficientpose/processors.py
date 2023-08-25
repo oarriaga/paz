@@ -96,3 +96,21 @@ def compute_topk_boxes(boxes, top_k):
     top_k_indices = np.argpartition(best_scores, -top_k)[-top_k:]
     top_k_boxes = boxes[top_k_indices]
     return top_k_boxes
+
+
+class RegressTranslation(Processor):
+    def __init__(self, translation_priors):
+        self.translation_priors = translation_priors
+        super(RegressTranslation, self).__init__()
+
+    def call(self, translation_raw):
+        return regress_translation(translation_raw, self.translation_priors)
+
+
+def regress_translation(translation_raw, translation_priors):
+    stride = translation_priors[:, -1]
+    x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
+    y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
+    Tz = translation_raw[:, :, 2]
+    translations_predicted = np.concatenate((x, y, Tz), axis=0)
+    return translations_predicted.T

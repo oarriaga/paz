@@ -2,7 +2,7 @@ from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        ClipBoxes, ComputeTopKBoxes)
+                        ClipBoxes, ComputeTopKBoxes, RegressTranslation)
 import numpy as np
 from paz.backend.boxes import change_box_coordinates
 
@@ -133,6 +133,7 @@ class EfficientPosePostprocess(Processor):
         self.filter_boxes = pr.FilterBoxes(class_names, score_thresh)
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
+        self.regress_translation = RegressTranslation(model.translation_priors)
 
     def call(self, output, image_scale):
         detections, (rotations, translations) = output
@@ -143,6 +144,8 @@ class EfficientPosePostprocess(Processor):
         box_data = self.filter_boxes(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
+        
+        translation_xy_Tz = self.regress_translation(translations)
         return boxes2D
 
 
