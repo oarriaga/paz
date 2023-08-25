@@ -114,3 +114,37 @@ def regress_translation(translation_raw, translation_priors):
     Tz = translation_raw[:, :, 2]
     translations_predicted = np.concatenate((x, y, Tz), axis=0)
     return translations_predicted.T
+
+
+class ComputeTxTy(Processor):
+    def __init__(self):
+        super(ComputeTxTy, self).__init__()
+
+    def call(self, translation_xy_Tz, camera_parameter):
+        return compute_tx_ty(translation_xy_Tz, camera_parameter)
+
+
+def compute_tx_ty(translation_xy_Tz, camera_parameter):
+    fx = camera_parameter[0],
+    fy = camera_parameter[1],
+    px = camera_parameter[2],
+    py = camera_parameter[3],
+    tz_scale = camera_parameter[4],
+    image_scale = camera_parameter[5]
+
+    x = translation_xy_Tz[:, 0] / image_scale
+    y = translation_xy_Tz[:, 1] / image_scale
+    tz = translation_xy_Tz[:, 2] * tz_scale
+
+    x = x - px
+    y = y - py
+
+    tx = np.multiply(x, tz) / fx
+    ty = np.multiply(y, tz) / fy
+
+    tx = tx[np.newaxis, :]
+    ty = ty[np.newaxis, :]
+    tz = tz[np.newaxis, :]
+
+    translations = np.concatenate((tx, ty, tz), axis=0)
+    return translations.T

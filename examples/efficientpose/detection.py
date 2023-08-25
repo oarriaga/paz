@@ -2,7 +2,8 @@ from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        ClipBoxes, ComputeTopKBoxes, RegressTranslation)
+                        ClipBoxes, ComputeTopKBoxes, RegressTranslation,
+                        ComputeTxTy)
 import numpy as np
 from paz.backend.boxes import change_box_coordinates
 
@@ -67,7 +68,7 @@ class DetectAndEstimateSingleShot(Processor):
         detections, (rotations, translations) = outputs
         detections = change_box_coordinates(detections)
         outputs = detections, (rotations, translations)
-        boxes2D = self.postprocess(outputs, image_scale)
+        boxes2D = self.postprocess(outputs, image_scale, camera_parameter)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
         return self.wrap(image, boxes2D)
@@ -134,8 +135,9 @@ class EfficientPosePostprocess(Processor):
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
+        self.compute_tx_ty = ComputeTxTy()
 
-    def call(self, output, image_scale):
+    def call(self, output, image_scale, camera_parameter):
         detections, (rotations, translations) = output
         box_data = self.postprocess(detections)
         box_data = self.scale(box_data, 1 / image_scale)
@@ -146,6 +148,7 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.round_boxes(boxes2D)
         
         translation_xy_Tz = self.regress_translation(translations)
+        translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)
         return boxes2D
 
 
