@@ -50,4 +50,8 @@ def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3)):
 
     model = Model(inputs=image, outputs=x, name='Vvad_lrs3')
 
+    if weights is not None:
+        print("loading weights")
+        model.load_weights("/home/cedric/Seafile/Uni_Seafile/Master_Thesis/docker_test_slurm/output/2023_08_24-19_00_05/checkpoints/weights-02.hdf5")
+
     return model

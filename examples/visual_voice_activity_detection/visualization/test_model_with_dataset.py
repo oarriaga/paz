@@ -1,10 +1,10 @@
 import os
 import argparse
-import numpy as np
-from vvadlrs3.sample import FeatureizedSample
-from vvadlrs3 import pretrained_models
 
-from paz.datasets import VVADLRS3
+import h5py
+import numpy as np
+
+from paz.models.classification import VVAD_LRS3_LSTM
 
 
 def predict(clip):
@@ -24,15 +24,10 @@ args = parser.parse_args()
 # model = pretrained_models.getFaceImageModel()
 # model = pretrained_models.getFaceFeatureModel()
 # model = pretrained_models.getLipImageModel()
-model = pretrained_models.getLipFeatureModel()
+# model = pretrained_models.getLipFeatureModel()
+model = VVAD_LRS3_LSTM(weights='VVAD_LRS3_LSTM')
 
-VVADLRS3 = VVADLRS3(path=args.data_path)
-dataset = VVADLRS3.load_data()
-
-sample = FeatureizedSample()
-sample.featureType = 'faceImage'
-sample.shape = (38, 96, 96, 3)
-sample.k = 38  # Number of frames per sample
+dataset = h5py.File("/home/cedric/.keras/paz/datasets/vvadlrs3_faceImages_small.h5", mode='r')
 
 x_train = dataset.get("x_test")
 y_train = dataset.get("y_test")
@@ -44,15 +39,15 @@ pos = 0
 neg = 0
 # this is not ideal - the dataset is sorted for pos and neg samples. This means at least num_samples/2 + 1 iterations
 while (not (visualized_positive and visualized_negative)):
-    sample.data = np.array(x_train[i])
-    sample.label = bool(y_train[i])
-    if not visualized_positive and sample.label:
+    data = np.array(x_train[i])
+    label = bool(y_train[i])
+    if not visualized_positive and label:
         print("positive sample")
         predict([x_train[i]])
         pos += 1
         if pos >= 5:
             visualized_positive = True
-    if not visualized_negative and not sample.label:
+    if not visualized_negative and not label:
         print("negative sample")
         predict([x_train[i]])
         neg += 1

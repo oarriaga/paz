@@ -576,7 +576,7 @@ class BufferImages(Processor):
         call()
     """
     def __init__(self, image_size):
-        self.ring_buffer = RingBuffer(36, dtype=(np.uint8, image_size))
+        self.ring_buffer = RingBuffer(38, dtype=(np.uint8, image_size))
         super(BufferImages, self).__init__()
 
     def call(self, image):

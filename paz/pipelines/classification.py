@@ -1,7 +1,7 @@
 from ..abstract import SequentialProcessor
 from .. import processors as pr
 from . import PreprocessImage
-from ..models.classification import MiniXception, VVAD
+from ..models.classification import MiniXception, VVAD_LRS3_LSTM
 from ..datasets import get_class_names
 from .keypoints import MinimalHandPoseEstimation
 
@@ -83,7 +83,7 @@ class ClassifyVVAD(SequentialProcessor):
     def __init__(self):
         super(ClassifyVVAD, self).__init__()
         # self._classifier = MiniXception((48, 48, 1), 7, weights='FER')
-        self.classifier = VVAD(weights='VVAD-LRS3')
+        self.classifier = VVAD_LRS3_LSTM(weights='VVAD-LRS3')
         self.class_names = get_class_names('VVAD-LRS3')
         print(self.class_names)
         print("test")
