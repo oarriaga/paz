@@ -25,7 +25,7 @@ class VVAD_LRS3(Generator):
         -[VVAD-LRS3](https://www.kaggle.com/datasets/adrianlubitz/vvadlrs3)
     """
     def __init__(
-            self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, image_size=(96, 96)):
+            self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, image_size=(96, 96), testing=False):
         if split != 'train' and split != 'val' and split != 'test':
             raise ValueError('Invalid split name')
 
@@ -37,21 +37,26 @@ class VVAD_LRS3(Generator):
         self.image_size = image_size
         self.val_split = val_split
         self.test_split = test_split
+        self.testing = testing
 
         data = h5py.File(self.path, mode='r')
         # NotTODO change back after testing
-        self.total_size = data.get('x_train').shape[0]
-        # self.total_size = data.get('x_test').shape[0]
+        self.total_size = 0
+        if not testing:
+            self.total_size = data.get('x_train').shape[0]
+        else:
+            self.total_size = data.get('x_test').shape[0]
         data.close()
 
     def __call__(self):
         data = h5py.File(self.path, mode='r')
 
-        # NotTODO change back after testing
-        x_train = data.get("x_train")
-        y_train = data.get("y_train")
-        # x_train = data.get("x_test")
-        # y_train = data.get("y_test")
+        if not self.testing:
+            x_train = data.get("x_train")
+            y_train = data.get("y_train")
+        else:
+            x_train = data.get("x_test")
+            y_train = data.get("y_test")
 
         # NotTODO add the 200 test samples to those (if so add those 200 to the self.total_size). It is not worth it. it is roughly 0.5% of the dataset but would add aditional commands to the dataset generator for each iteration. which could increase the training time.
         indexes_pos = list(range(self.total_size // 2))
