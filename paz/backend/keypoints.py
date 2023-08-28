@@ -640,7 +640,7 @@ def merge_into_mean(keypoints2D, args_to_mean):
     # Returns:
              keypoints2D: keypoints2D after merging
             """
-    keypoints = keypoints2D.copy()
+    keypoints = np.array(keypoints2D.copy())
     for point, joints_indices in args_to_mean.items():
         keypoints[:, point] = (keypoints[:, joints_indices[0]] +
                                keypoints[:, joints_indices[1]]) / 2

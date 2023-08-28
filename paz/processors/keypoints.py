@@ -25,7 +25,6 @@ from ..datasets.human36m import h36m_to_coco_joints2D
 from ..datasets.human36m import human_start_joints
 
 
-
 class ProjectKeypoints(Processor):
     """Projects homogenous keypoints (4D) in the camera coordinates system into
         image coordinates using a projective transformation.
@@ -337,16 +336,16 @@ class OptimizeHumanPose3D(Processor):
 
     def call(self, keypoints3D, keypoints2D):
         joints3D = filter_keypoints3D(keypoints3D, self.args_to_joints3D)
-        filtered_keypoints2D = self.filter_keypoints2D(keypoints2D)
-        root2D = filtered_keypoints2D[:, :2]
+        joints2D = self.filter_keypoints2D(keypoints2D)
+        root2D = joints2D[:, :2]
         length2D, length3D = get_bones_length(
-            filtered_keypoints2D, keypoints3D, human_start_joints)
+            joints2D, keypoints3D, human_start_joints)
         ratio = length3D / length2D
         initial_joint_translation = initialize_translation(
             root2D, self.camera_intrinsics, ratio)
         joint_translation = solve_least_squares(
             self.solver, compute_reprojection_error, initial_joint_translation,
-            joints3D, filtered_keypoints2D, self.camera_intrinsics)
-        optimized_poses3D, projected_points2D = compute_optimized_pose3D(
+            joints3D, joints2D, self.camera_intrinsics)
+        optimized_poses3D, projection2D = compute_optimized_pose3D(
             keypoints3D, joint_translation, self.camera_intrinsics)
-        return filtered_keypoints2D, joints3D, optimized_poses3D, projected_points2D
+        return joints2D, joints3D, optimized_poses3D, projection2D

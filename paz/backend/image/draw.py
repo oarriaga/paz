@@ -465,15 +465,15 @@ def draw_human_pose6D(image, rotation, translation, camaera_intrinsics):
                          [0, 0, 1]])
     points2D = project_to_image(rotation, translation,
                                 points3D, camaera_intrinsics)
-    points2D = points2D.astype(np.int)
+    points2D = points2D.astype(np.int32)
 
     x = points2D[0]
     y = points2D[1]
     z = points2D[2]
 
-    x_hat = (x / np.linalg.norm(x) * 60).astype(np.int)
-    y_hat = (y / np.linalg.norm(y) * 60).astype(np.int)
-    z_hat = (z / np.linalg.norm(z) * 60).astype(np.int)
+    x_hat = (x / np.linalg.norm(x) * 60).astype(np.int32)
+    y_hat = (y / np.linalg.norm(y) * 60).astype(np.int32)
+    z_hat = (z / np.linalg.norm(z) * 60).astype(np.int32)
 
     offset = [50, 50]
     image = draw_line(image, offset, x_hat + offset,

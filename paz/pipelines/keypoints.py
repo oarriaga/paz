@@ -434,6 +434,8 @@ class EstimateHumanPose(pr.Processor):
                  args_to_joints3D=args_to_joints3D, filter=True, draw=True,
                  draw_pose=True):
         super(EstimateHumanPose, self).__init__()
+        self.pose3D = []
+        self.pose6D = []
         self.draw = draw
         self.filter = filter
         self.draw_pose = draw_pose
@@ -448,17 +450,18 @@ class EstimateHumanPose(pr.Processor):
 
     def call(self, image):
         inferences2D = self.estimate_keypoints_2D(image)
-        keypoints2D = np.array(inferences2D['keypoints'])
+        keypoints2D = inferences2D['keypoints']
         if self.draw:
             image = inferences2D['image']
-        keypoints3D = self.estimate_keypoints_3D(keypoints2D)
-        keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
-        optimized_output = self.optimize(keypoints3D, keypoints2D)
-        joints2D, joints3D, pose3D, projection2D = optimized_output
-        pose6D = human_pose3D_to_pose6D(pose3D[0])
-        if self.draw_pose:
-            rotation, translation = pose6D
-            image = self.draw_pose6D(image, rotation, translation)
-            translation = ["%.2f" % item for item in translation]
-            image = self.draw_text(image, str(translation), (30, 30))
-        return self.wrap(image, keypoints2D, pose3D, pose6D)
+        if len(keypoints2D) > 0:
+            keypoints3D = self.estimate_keypoints_3D(keypoints2D)
+            keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
+            optimized_output = self.optimize(keypoints3D, keypoints2D)
+            joints2D, joints3D, self.pose3D, projection2D = optimized_output
+            self.pose6D = human_pose3D_to_pose6D(self.pose3D[0])
+            if self.draw_pose:
+                rotation, translation = self.pose6D
+                image = self.draw_pose6D(image, rotation, translation)
+                translation = ["%.2f" % item for item in translation]
+                image = self.draw_text(image, str(translation), (30, 30))
+        return self.wrap(image, keypoints2D, self.pose3D, self.pose6D)
