@@ -100,7 +100,7 @@ class VVAD_LRS3(Generator):
         # print("Selected split: ", self.split)
         # print("indexes", len(indexes))
 
-        for i in range(len(indexes)):
+        for i in indexes:
             yield (x_train[i], y_train[i])
         data.close()
 
