@@ -82,18 +82,14 @@ class ClassifyVVAD(SequentialProcessor):
     """
     def __init__(self):
         super(ClassifyVVAD, self).__init__()
-        # self._classifier = MiniXception((48, 48, 1), 7, weights='FER')
         self.classifier = VVAD_LRS3_LSTM(weights='VVAD-LRS3')
         self.class_names = get_class_names('VVAD-LRS3')
-        print(self.class_names)
-        print("test")
 
-        preprocess = PreprocessImage((96, 96), None)  # TODO Crop or resize? mit oder ohne Padding? siehe VVAD cropImage
-        # preprocess.insert(0, pr.ConvertColorSpace(pr.RGB2GRAY))
-        # preprocess.add(pr.ExpandDims(0))
-        # preprocess.add(pr.ExpandDims(-1))
+        preprocess = PreprocessImage((96, 96), pr.RGB_NORMAL)
         preprocess.add(pr.BufferImages((96, 96, 3)))
         self.add(pr.Predict(self.classifier, preprocess))
-        self.add(pr.CopyDomain([0], [1]))
-        self.add(pr.ControlMap(pr.ToClassName(self.class_names), [0], [0]))
+        self.add(pr.CopyDomain([0], [0]))
+        self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))
+        self.add(pr.ControlMap(pr.FloatToBoolean(), [0], [0]))
+        self.add(pr.ControlMap(pr.BooleanToTextMessage(true_message=self.class_names[0], false_message=self.class_names[1]), [0], [0]))
         self.add(pr.WrapOutput(['class_name', 'scores']))

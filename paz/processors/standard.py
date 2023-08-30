@@ -482,3 +482,41 @@ class PrintTopics(Processor):
     def call(self, dictionary):
         [print(dictionary[topic]) for topic in self.topics]
         return dictionary
+
+class FloatToBoolean(Processor):
+    """Converts a float to a boolean.
+    # Arguments
+        threshold: Float. Threshold value to convert to boolean.
+        value: Float.
+
+    # Returns
+        Boolean.
+    """
+    def __init__(self, threshold=0.5):
+        super(FloatToBoolean, self).__init__()
+        self.threshold = threshold
+
+    def call(self, value):
+        return value > self.threshold
+
+class NoneConverter(Processor):
+    """Converts a None value to the last valid or a default value.
+    # Arguments
+        default_value: Any. Default value to convert to.
+        value: Noneable value.
+
+    # Returns
+        Any.
+    """
+
+    def __init__(self, default_value=0.0):
+        super(NoneConverter, self).__init__()
+        self.default_value = default_value
+
+    def call(self, value):
+        print("value:", value)
+        if value is None:
+            return self.default_value
+        else:
+            self.default_value = value
+            return value

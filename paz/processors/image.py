@@ -34,6 +34,7 @@ BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
 RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
+RGB_NORMAL = (0.0, 0.0, 0.0)
 
 
 class CastImage(Processor):
@@ -588,6 +589,6 @@ class BufferImages(Processor):
 
         if self.ring_buffer.is_full:
             output = np.array([self.ring_buffer])
-            # print(self.ring_buffer.is_full)
+            self.ring_buffer.clear()
             return output
         return None
