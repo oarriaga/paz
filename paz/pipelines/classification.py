@@ -86,7 +86,7 @@ class ClassifyVVAD(SequentialProcessor):
         self.class_names = get_class_names('VVAD-LRS3')
 
         preprocess = PreprocessImage((96, 96), pr.RGB_NORMAL)
-        preprocess.add(pr.BufferImages((96, 96, 3)))
+        preprocess.add(pr.BufferImages(38, (96, 96, 3), play_rate=38))
         self.add(pr.Predict(self.classifier, preprocess))
         self.add(pr.CopyDomain([0], [0]))
         self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))

@@ -568,7 +568,9 @@ class BufferImages(Processor):
     """Buffers an image to store and process multiple images.
 
     # Arguments
+        buffer_size: Int, number of images to buffer.
         image_size: Int, desired size of the model input.
+        play_rate: Int, number of images to buffer before returning. Must be smaller than buffer_size.
 
     # Properties
         image_size: Int.
@@ -576,9 +578,13 @@ class BufferImages(Processor):
     # Methods
         call()
     """
-    def __init__(self, image_size):
-        self.ring_buffer = RingBuffer(38, dtype=(np.uint8, image_size))
+    def __init__(self, buffer_size, image_size, play_rate=25):
+        if buffer_size < play_rate:
+            raise ValueError('Buffer size must be equal or larger than play rate')
+        self.ring_buffer = RingBuffer(buffer_size, dtype=(np.uint8, image_size))
         super(BufferImages, self).__init__()
+        self.play_rate = play_rate
+        self.counter = 0
 
     def call(self, image):
         """
@@ -586,9 +592,9 @@ class BufferImages(Processor):
             image: Array, raw input image.
         """
         self.ring_buffer.append(image)
+        self.counter += 1
 
-        if self.ring_buffer.is_full:
-            output = np.array([self.ring_buffer])
-            self.ring_buffer.clear()
-            return output
+        if self.ring_buffer.is_full and self.counter == self.play_rate:
+            self.counter = 0
+            return np.array([self.ring_buffer])
         return None
