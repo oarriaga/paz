@@ -5,13 +5,12 @@ import json
 import numpy as np
 from tensorflow.keras.utils import Progbar
 
-from ..abstract import Loader
-from .utils import get_class_names
+from paz.abstract import Loader
+from utils import get_class_names
 
 
 class FAT(Loader):
     """ Dataset loader for the falling things dataset (FAT).
-
     # Arguments
         path: String indicating full path to dataset
             e.g. /home/user/fat/
@@ -25,16 +24,23 @@ class FAT(Loader):
             Estimation (DOPE)](https://github.com/NVlabs/Deep_Object_Pose)
     """
     # TODO: Allow selection of class_names.
-    def __init__(self, path, split='train', class_names='all'):
+    def __init__(self, path, split=(0.4, 0.4, 0.2), class_names = 'all'):
         if class_names == 'all':
-            class_names = get_class_names('FAT')
-        self.class_to_arg = dict(
-            zip(class_names, list(range(len(class_names)))))
-
-        super(FAT, self).__init__(path, split, class_names, 'FAT')
+            self.class_names = get_class_names('FAT')
+            self.class_to_arg = dict(
+                                zip(class_names, list(range(len(class_names)))))
+        else:
+            self.class_names = class_names
+            self.class_to_arg = {class_names: 0}
+        self.split = split
+        super(FAT, self).__init__(path, split, self.class_names, 'FAT')
 
     def load_data(self):
-        scene_names = glob(self.path + 'mixed/*')
+        if self.class_names == 'all':
+            scene_names = glob(self.path + 'mixed/*')
+        else:
+            object_name = self.class_names + '_16k'
+            scene_names = glob(self.path + 'single/' + object_name + '/*')
         image_paths, label_paths = [], []
         for scene_name in scene_names:
             scene_image_paths, scene_label_paths = [], []
@@ -59,7 +65,16 @@ class FAT(Loader):
                 continue
             self.data.append({'image': image_path, 'boxes': boxes})
             progress_bar.update(sample_arg + 1)
-        return self.data
+            data_dict = {}
+            train_split = int(len(self.data) * self.split[0])
+            test_split = int(len(self.data) * self.split[1])
+            validation_split = int(len(self.data) * self.split[2])
+            data_dict['train'] = self.data[:train_split]
+            data_dict['test'] = self.data[
+                                train_split:(train_split + test_split)]
+            data_dict['validation'] = self.data[(train_split + test_split):]
+        return data_dict
+
 
     def _extract_boxes(self, json_filename):
         json_data = json.load(open(json_filename, 'r'))
@@ -78,13 +93,18 @@ class FAT(Loader):
             box_data[object_arg, -1] = self.class_to_arg[class_name]
         return box_data
 
+
     def _base_number(self, filename):
         order = os.path.basename(filename)
         order = order.split('.')[0]
         order = float(order)
         return order
 
+
     def _valid_name_match(self, image_path, label_path):
         image_name = os.path.basename(image_path)
         label_name = os.path.basename(label_path)
         return image_name[:-3] == label_name[:-4]
+        
+fat = Fat('/home/ramit/git/paz')
+
