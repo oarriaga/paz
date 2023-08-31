@@ -67,7 +67,7 @@ def get_top_k_keypoints_numpy(heatmaps, k):
         indices: Numpy array. Indices of top k keypoints.
     """
     num_of_objects, num_of_keypoints = heatmaps.shape[:2]
-    indices = np.zeros((num_of_objects, num_of_keypoints, k), dtype=np.int)
+    indices = np.zeros((num_of_objects, num_of_keypoints, k), dtype=int)
     values = np.zeros((num_of_objects, num_of_keypoints, k))
     for object_arg in range(num_of_objects):
         for keypoint_arg in range(num_of_keypoints):

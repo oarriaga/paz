@@ -12,6 +12,7 @@ from ..backend.image import draw_keypoints_link
 from ..backend.image import draw_keypoints
 from ..backend.image import draw_RGB_mask
 from ..backend.image import draw_RGB_masks
+from ..backend.image import draw_human_pose6D
 from ..backend.keypoints import project_points3D
 from ..backend.keypoints import build_cube_points3D
 from ..backend.groups import quaternion_to_rotation_matrix
@@ -329,4 +330,24 @@ class DrawText(Processor):
     def call(self, image, message, location=(50, 50)):
         image = put_text(image, message, location, self.scale,
                          self.color, self.thickness)
+        return image
+
+
+class DrawHumanPose6D(Processor):
+    """Draw basis vectors for human pose 6D
+
+    # Arguments
+        image: numpy array
+        rotation: numpy array of size (3 x 3)
+        translations: list of length 3
+
+    # Returns
+        image: numpy array
+    """
+    def __init__(self, camera_intrinsics):
+        super(DrawHumanPose6D, self).__init__()
+        self.K = camera_intrinsics
+
+    def call(self, image, rotation, translation):
+        image = draw_human_pose6D(image, rotation, translation, self.K)
         return image

@@ -491,7 +491,7 @@ def uv_to_vu(keypoints):
 
 
 def standardize(data, mean, scale):
-    """it takes the data the mean and the standard deviation
+    """It takes the data the mean and the standard deviation
        and returns the standardized data
 
     # Arguments
@@ -506,7 +506,7 @@ def standardize(data, mean, scale):
 
 
 def destandardize(data, mean, scale):
-    """it takes the standardized data the mean and the standard
+    """It takes the standardized data the mean and the standard
        deviation and returns the destandardized data
 
     # Arguments
@@ -545,7 +545,7 @@ def initialize_translation(joints2D, camera_intrinsics, ratio):
 def solve_least_squares(solver, compute_joints_distance,
                         initial_joints_translation, joints3D,
                         poses2D, camera_intrinsics):
-    """ Solve the least squares
+    """Solve the least squares
 
     # Arguments
         solver: from scipy.optimize import least_squares
@@ -565,30 +565,40 @@ def solve_least_squares(solver, compute_joints_distance,
     return joints_translation
 
 
-def get_bones_length(poses2D, poses3D):
+def get_bones_length(poses2D, poses3D, start_joints,
+                     end_joints=np.arange(1, 16)):
     """Computes sum of bone lengths in 3D
 
     #Arguments
-        poses3D: array of predicted poses in 3D (Nx16x3)
-        poses2D: array of poses in 2D    (Nx32)
+        poses3D: list of predicted poses in 3D (Nx16x3)
+        poses2D: list of poses in 2D    (Nx32)
 
     #Returns
-        sum_bones2D: sum of length of all bones in the 3D skeleton
-        sum_bones3D: sum of length of all bones in the 3D skeleton
+        sum_bones2D: array of sum of length of all bones in the 2D skeleton
+        sum_bones3D: array of sum of length of all bones in the 3D skeleton
     """
-    sum_bones2D = 0
-    sum_bones3D = np.zeros(poses3D.shape[0])
-    start_joints = np.arange(0, 15)
-    end_joints = np.arange(1, 16)
+    sum_bones2D = []
+    sum_bones3D = []
+    poses3D = np.reshape(poses3D, (poses3D.shape[0], 16, -1))
+    poses2D = np.reshape(poses2D, (poses2D.shape[0], 16, -1))
+
     for person in poses2D:
-        bone_length = np.linalg.norm(person[start_joints] -
-                                     person[end_joints])
-        sum_bones2D = sum_bones2D + bone_length
+        person_sum_2D = 0
+        for arg in range(len(start_joints)):
+            bone_length = np.linalg.norm(person[start_joints[arg]] -
+                                         person[end_joints[arg]])
+            person_sum_2D = person_sum_2D + bone_length
+        sum_bones2D.append(person_sum_2D)
+
     for person in poses3D:
-        bone_length = np.linalg.norm(person[start_joints] -
-                                     person[end_joints])
-        sum_bones3D = sum_bones3D + bone_length
-    return sum_bones2D, sum_bones3D
+        person_sum_3D = 0
+        for arg in range(len(start_joints)):
+            bone_length = np.linalg.norm(person[start_joints[arg]] -
+                                         person[end_joints[arg]])
+            person_sum_3D = person_sum_3D + bone_length
+        sum_bones3D.append(person_sum_3D)
+
+    return np.array(sum_bones2D), np.array(sum_bones3D)
 
 
 def compute_reprojection_error(initial_translation, keypoints3D,
@@ -630,10 +640,11 @@ def merge_into_mean(keypoints2D, args_to_mean):
     # Returns:
              keypoints2D: keypoints2D after merging
             """
+    keypoints = np.array(keypoints2D.copy())
     for point, joints_indices in args_to_mean.items():
-        keypoints2D[:, point] = (keypoints2D[:, joints_indices[0]] +
-                                 keypoints2D[:, joints_indices[1]]) / 2
-    return keypoints2D
+        keypoints[:, point] = (keypoints[:, joints_indices[0]] +
+                               keypoints[:, joints_indices[1]]) / 2
+    return keypoints
 
 
 def filter_keypoints(keypoints, args_to_joints):
@@ -695,13 +706,57 @@ def compute_optimized_pose3D(keypoints3D, joint_translation,
     # Returns
         optimized_poses3D: np array of optimized posed3D
     """
-    optimized_poses3D = []
+    optimized_pose3D = []
+    projected_pose2D = []
     for person in range(keypoints3D.shape[0]):
-        keypoints3D[person] = keypoints3D[person] + joint_translation[person]
+        translated_pose = keypoints3D[person] + joint_translation[person]
         rotation = np.identity(3)
         translation = np.zeros((3,))
-        points = project_to_image(rotation, translation,
-                                  keypoints3D[person].reshape((-1, 3)),
+        translated_pose = translated_pose.reshape((-1, 3))
+        points = project_to_image(rotation, translation, translated_pose,
                                   camera_intrinsics)
-        optimized_poses3D.append(np.reshape(points, [1, 64]))
-    return np.array(optimized_poses3D)
+        optimized_pose3D.append(translated_pose)
+        projected_pose2D.append(np.reshape(points, [1, 64]))
+    return np.array(optimized_pose3D), np.array(projected_pose2D)
+
+
+def human_pose3D_to_pose6D(poses3D):
+    """
+    Estiate human pose 6D of the root joint from 3D pose of human joints.
+
+    # Arguments
+    poses3D: numpy array 
+             3D pose of human joint
+
+    # return
+    rotation_matrix: numpy array
+                     rotation of human root joint
+    translation: list
+                 translation of human root joint
+    """
+    right_hip = poses3D[1]
+    left_hip = poses3D[6]
+    thorax = poses3D[13]
+
+    # Calculate x, y, and z vectors
+    x_vector = right_hip - left_hip
+    projection_vector = thorax - left_hip
+
+    # Calculate projection of projection_vector onto x_vector
+    scalar_projection = np.dot(x_vector, projection_vector)
+    scalar_projection = scalar_projection / np.linalg.norm(x_vector) ** 2
+    projected_point = left_hip + scalar_projection * x_vector
+    z_vector = thorax - projected_point
+
+    # Normalize vectors
+    x_unit_vector = x_vector / np.linalg.norm(x_vector)
+    z_unit_vector = z_vector / np.linalg.norm(z_vector)
+    y_unit_vector = np.cross(z_unit_vector, x_unit_vector)
+
+    # Create rotation matrix
+    rotation_matrix = np.column_stack((x_unit_vector, y_unit_vector,
+                                       z_unit_vector))
+
+    # Convert translation units and return
+    translation = (poses3D[0] / 1e3).tolist()  # Convert mm to meters
+    return rotation_matrix, translation
