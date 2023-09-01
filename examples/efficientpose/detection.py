@@ -4,7 +4,7 @@ from paz.abstract import Processor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTy,
-                        ComputeSelectedIndices)
+                        ComputeSelectedIndices, ToPose6D)
 from paz.backend.boxes import change_box_coordinates
 
 
@@ -139,6 +139,7 @@ class EfficientPosePostprocess(Processor):
         self.compute_tx_ty = ComputeTxTy()
         self.compute_selections = ComputeSelectedIndices()
         self.transform_rotations = pr.Scale(np.pi)
+        self.to_pose_6D = ToPose6D(class_names)
 
     def call(self, output, image_scale, camera_parameter):
         detections, (rotations, translations) = output
@@ -159,6 +160,7 @@ class EfficientPosePostprocess(Processor):
         translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)
         translations = translation[selected_indices]
 
+        poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, rotations, translations
 
 
