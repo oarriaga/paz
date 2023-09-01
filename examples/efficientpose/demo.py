@@ -1,4 +1,4 @@
-from detection import EFFICIENTPOSEALINEMOD
+from pose import EFFICIENTPOSEALINEMOD
 from paz.backend.image import load_image, show_image
 
 IMAGE_PATH = ('/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/'
