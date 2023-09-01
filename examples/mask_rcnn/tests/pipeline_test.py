@@ -1,5 +1,5 @@
 import pytest
-
+import numpy as np
 from paz.abstract import ProcessingSequence
 from mask_rcnn.shapes_loader import Shapes
 
