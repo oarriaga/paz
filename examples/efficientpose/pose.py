@@ -45,19 +45,6 @@ def get_class_names(dataset_name='LINEMOD'):
 
 
 class DetectAndEstimateSingleShot(Processor):
-    """Single-shot object detection prediction.
-
-    # Arguments
-        model: Keras model.
-        class_names: List of strings indicating the class names.
-        preprocess: Callable, pre-processing pipeline.
-        postprocess: Callable, post-processing pipeline.
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
-        variances: List, of floats.
-        draw: Boolean. If ``True`` prediction are drawn in the
-            returned image.
-    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
                  postprocess=None, variances=[1.0, 1.0, 1.0, 1.0], draw=True):
@@ -105,13 +92,6 @@ class DetectAndEstimateSingleShot(Processor):
 
 
 class EfficientPosePreprocess(Processor):
-    """Preprocessing pipeline for SSD.
-
-    # Arguments
-        model: Keras model.
-        mean: List, of three elements indicating the per channel mean.
-        color_space: Int, specifying the color space to transform.
-    """
     def __init__(self, model, mean=RGB_LINEMOD_MEAN,
                  standard_deviation=RGB_LINEMOD_STDEV,
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
@@ -139,17 +119,6 @@ class EfficientPosePreprocess(Processor):
 
 
 class EfficientPosePostprocess(Processor):
-    """Postprocessing pipeline for SSD.
-
-    # Arguments
-        model: Keras model.
-        class_names: List, of strings indicating the class names.
-        score_thresh: Float, between [0, 1]
-        nms_thresh: Float, between [0, 1].
-        variances: List, of floats.
-        class_arg: Int, index of class to be removed.
-        box_method: Int, type of boxes to boxes2D conversion method.
-    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None):
         super(EfficientPosePostprocess, self).__init__()
@@ -194,19 +163,6 @@ class EfficientPosePostprocess(Processor):
 
 
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
-    """Single-shot inference pipeline with EFFICIENTDETD0 trained
-    on COCO.
-
-    # Arguments
-        score_thresh: Float between [0, 1]
-        nms_thresh: Float between [0, 1].
-        draw: Boolean. If ``True`` prediction are drawn in the
-            returned image.
-
-    # References
-        [Google AutoML repository implementation of EfficientDet](
-        https://github.com/google/automl/tree/master/efficientdet)
-    """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('LINEMOD')
         model = EFFICIENTPOSEA(num_classes=len(names),
