@@ -68,7 +68,7 @@ class DetectAndEstimateSingleShot(Processor):
         detections, (rotations, translations) = outputs
         detections = change_box_coordinates(detections)
         outputs = detections, (rotations, translations)
-        boxes2D, rotations, translations = self.postprocess(
+        boxes2D, poses6D = self.postprocess(
             outputs, image_scale, camera_parameter)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
@@ -161,7 +161,7 @@ class EfficientPosePostprocess(Processor):
         translations = translation[selected_indices]
 
         poses6D = self.to_pose_6D(box_data, rotations, translations)
-        return boxes2D, rotations, translations
+        return boxes2D, poses6D
 
 
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
