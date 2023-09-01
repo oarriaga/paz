@@ -21,34 +21,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                   num_dims=4, momentum=0.997, epsilon=0.0001,
                   activation='sigmoid', num_anchors=9, num_filters=64,
                   num_pose_dims=3):
-    """Creates EfficientDet model.
 
-    # Arguments
-        image: Tensor of shape `(batch_size, input_shape)`.
-        num_classes: Int, number of object classes.
-        base_weights: Str, base weights name.
-        head_weights: Str, head weights name.
-        FPN_num_filters: Int, number of FPN filters.
-        FPN_cell_repeats: Int, number of FPN blocks.
-        box_class_repeats: Int, Number of regression
-            and classification blocks.
-        anchor_scale: Int, number of anchor scales.
-        fusion: Str, feature fusion weighting method.
-        return_base: Bool, whether to return base or not.
-        model_name: Str, EfficientDet model name.
-        EfficientNet: List, containing branch tensors.
-        num_scales: Int, number of anchor box scales.
-        aspect_ratios: List, anchor boxes aspect ratios.
-        survival_rate: Float, specifying survival probability.
-        num_dims: Int, number of output dimensions to regress.
-
-    # Returns
-        model: EfficientDet model.
-
-    # References
-        [Google AutoML repository implementation of EfficientDet](
-        https://github.com/google/automl/tree/master/efficientdet)
-    """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
     if head_weights not in ['LINEMOD_OCCLUDED', None]:
@@ -103,26 +76,7 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientpose-a',
                    scaling_coefficients=(1.0, 1.0, 0.8)):
-    """Instantiates EfficientDet-D0 model.
 
-    # Arguments
-        num_classes: Int, number of object classes.
-        base_weights: Str, base weights name.
-        head_weights: Str, head weights name.
-        input_shape: Tuple, holding input image size.
-        FPN_num_filters: Int, number of FPN filters.
-        FPN_cell_repeats: Int, number of FPN blocks.
-        box_class_repeats: Int, Number of regression
-            and classification blocks.
-        anchor_scale: Int, number of anchor scales.
-        fusion: Str, feature fusion weighting method.
-        return_base: Bool, whether to return base or not.
-        model_name: Str, EfficientDet model name.
-        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
-
-    # Returns
-        model: EfficientDet-D0 model.
-    """
     image = Input(shape=input_shape, name='image')
     EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,

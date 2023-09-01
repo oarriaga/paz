@@ -4,24 +4,7 @@ from paz.backend.anchors import build_strides
 
 def build_translation_anchors(image_shape, branches,
                               num_scales, aspect_ratios):
-    """Builds anchor boxes in centre form for given model.
-    Anchor boxes a.k.a prior boxes are reference boxes built with
-    various scales and aspect ratio centered over every pixel in the
-    input image and branch tensors. They can be strided. Anchor boxes
-    define regions of image where objects are likely to be found. They
-    help object detector to accurately localize and classify objects at
-    the same time handling variations in object size and shape.
 
-    # Arguments
-        image_shape: List, input image shape.
-        branches: List, EfficientNet branch tensors.
-        num_scales: Int, number of anchor scales.
-        aspect_ratios: List, anchor box aspect ratios.
-        scale: Float, anchor box scale.
-
-    # Returns
-        anchor_boxes: Array of shape `(num_boxes, 4)`.
-    """
     num_scale_aspect = num_scales * len(aspect_ratios)
     args = (branches, num_scale_aspect)
     translation_anchors = []

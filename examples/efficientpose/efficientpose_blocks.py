@@ -7,24 +7,7 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
 
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
                               num_anchors, num_filters, num_pose_dims):
-    """Builds EfficientDet object detector's head.
-    The built head includes ClassNet and BoxNet for classification and
-    regression respectively.
 
-    # Arguments
-        middles: List, BiFPN layer output.
-        num_classes: Int, number of object classes.
-        num_pose_dims: Int, number of output dimensions to regress.
-        aspect_ratios: List, anchor boxes aspect ratios.
-        num_scales: Int, number of anchor box scales.
-        FPN_num_filters: Int, number of FPN filters.
-        box_class_repeats: Int, Number of regression
-            and classification blocks.
-        survival_rate: Float, used in drop connect.
-
-    # Returns
-        outputs: Tensor of shape `[num_boxes, num_classes+num_pose_dims]`
-    """
     args = (middles, subnet_iterations, subnet_repeats,
             num_anchors, num_filters)
     rotations = RotationNet(*args, num_pose_dims)
@@ -48,18 +31,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
 
 def build_rotation_head(features, subnet_repeats, num_filters,
                         bias_initializer, gn_groups=4, gn_axis=-1):
-    """Builds ClassNet/BoxNet head.
 
-    # Arguments
-        middle_features: Tuple. input features.
-        subnet_repeats: Int, number of intermediate layers.
-        num_filters: Int, number of intermediate layer filters.
-        survival_rate: Float, used by drop connect.
-        bias_initializer: Callable, bias initializer.
-
-    # Returns
-        head_outputs: List, with head outputs.
-    """
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
@@ -88,18 +60,7 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
                                   subnet_iterations, subnet_repeats,
                                   num_filters, bias_initializer, num_pose_dims,
                                   gn_groups=4, gn_axis=-1):
-    """Builds ClassNet/BoxNet head.
 
-    # Arguments
-        middle_features: Tuple. input features.
-        subnet_repeats: Int, number of intermediate layers.
-        num_filters: Int, number of intermediate layer filters.
-        survival_rate: Float, used by drop connect.
-        bias_initializer: Callable, bias initializer.
-
-    # Returns
-        head_outputs: List, with head outputs.
-    """
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
@@ -132,18 +93,7 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
 
 def build_translation_head(features, subnet_repeats, num_filters,
                            bias_initializer, gn_groups=4, gn_axis=-1):
-    """Builds ClassNet/BoxNet head.
 
-    # Arguments
-        middle_features: Tuple. input features.
-        subnet_repeats: Int, number of intermediate layers.
-        num_filters: Int, number of intermediate layer filters.
-        survival_rate: Float, used by drop connect.
-        bias_initializer: Callable, bias initializer.
-
-    # Returns
-        head_outputs: List, with head outputs.
-    """
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     tf.zeros_initializer())
     head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
@@ -176,18 +126,7 @@ def build_iterative_translation_head(translation_features, translations_xy,
                                      num_filters, subnet_iterations,
                                      bias_initializer, gn_groups=4,
                                      gn_axis=-1):
-    """Builds ClassNet/BoxNet head.
 
-    # Arguments
-        middle_features: Tuple. input features.
-        subnet_repeats: Int, number of intermediate layers.
-        num_filters: Int, number of intermediate layer filters.
-        survival_rate: Float, used by drop connect.
-        bias_initializer: Callable, bias initializer.
-
-    # Returns
-        head_outputs: List, with head outputs.
-    """
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     tf.zeros_initializer())
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
