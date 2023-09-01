@@ -55,8 +55,6 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
 
     if not ((base_weights is None) and (head_weights is None)):
         weights_path = WEIGHT_PATH + model_filename
-
-    if not ((base_weights is None) and (head_weights is None)):
         model.load_weights(weights_path)
 
     image_shape = image.shape[1:3].as_list()

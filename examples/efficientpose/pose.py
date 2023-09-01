@@ -160,8 +160,7 @@ class EfficientPosePostprocess(Processor):
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('LINEMOD')
-        model = EFFICIENTPOSEA(num_classes=len(names),
-                               base_weights='COCO',
+        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
                                head_weights='LINEMOD_OCCLUDED')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
