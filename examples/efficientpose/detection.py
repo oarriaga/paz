@@ -59,14 +59,15 @@ class DetectAndEstimateSingleShot(Processor):
             returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 LINEMOD_OBJECT_SIZES, preprocess=None, postprocess=None,
-                 variances=[1.0, 1.0, 1.0, 1.0], draw=True):
+                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
+                 postprocess=None, variances=[1.0, 1.0, 1.0, 1.0], draw=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
         self.class_to_sizes = LINEMOD_OBJECT_SIZES
+        self.camera_matrix = LINEMOD_CAMERA_MATRIX
         self.draw = draw
         if preprocess is None:
             self.preprocess = EfficientPosePreprocess(model)
@@ -97,7 +98,7 @@ class DetectAndEstimateSingleShot(Processor):
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
             self.draw_pose6D = self._build_draw_pose6D(
-                self.class_to_sizes, LINEMOD_CAMERA_MATRIX)
+                self.class_to_sizes, self.camera_matrix)
             for box2D, pose6D in zip(boxes2D, poses6D):
                 image = self.draw_pose6D[box2D.class_name](image, pose6D)
         return self.wrap(image, boxes2D, poses6D)
@@ -212,4 +213,4 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
-            LINEMOD_OBJECT_SIZES, draw=draw)
+            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, draw=draw)
