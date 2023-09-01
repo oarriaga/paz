@@ -19,6 +19,21 @@ LINEMOD_CAMERA_MATRIX = np.array([
     [0., 0., 1.]],
     dtype=np.float32)
 
+LINEMOD_OBJECT_SIZES = {
+    "ape":         np.array([75.86860000, 77.59920000, 91.76900000]) / 100,
+    "benchvise":   np.array([215.67000000, 121.85570000, 219.41000000]) / 100,
+    "cam":         np.array([136.65940000, 143.03020000, 100.49700000]) / 100,
+    "can":         np.array([100.79160000, 181.79580000, 193.73400000]) / 100,
+    "cat":         np.array([67.01070000, 127.63300000, 117.45660000]) / 100,
+    "driller":     np.array([229.47600000, 75.47140000, 208.00200000]) / 100,
+    "duck":        np.array([104.42920000, 77.40760000, 85.69700000]) / 100,
+    "eggbox":      np.array([150.18460000, 107.07500000,  69.24140000]) / 100,
+    "glue":        np.array([36.72110000, 77.86600000, 172.81580000]) / 100,
+    "holepuncher": np.array([100.88780000, 108.49700000, 90.80000000]) / 100,
+    "iron":        np.array([258.22600000, 118.48210000, 141.13240000]) / 100,
+    "lamp":        np.array([203.14600000, 117.75250000, 213.11600000]) / 100,
+    "phone":       np.array([93.91810000, 147.43340000, 184.74740000]) / 100}
+
 
 def get_class_names(dataset_name='LINEMOD'):
     if dataset_name in ['LINEMOD']:
@@ -43,7 +58,7 @@ class DetectAndEstimateSingleShot(Processor):
             returned image.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 preprocess=None, postprocess=None,
+                 LINEMOD_OBJECT_SIZES, preprocess=None, postprocess=None,
                  variances=[1.0, 1.0, 1.0, 1.0], draw=True):
         self.model = model
         self.class_names = class_names
