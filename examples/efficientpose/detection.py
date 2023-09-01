@@ -210,7 +210,8 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
         names = get_class_names('LINEMOD')
         model = EFFICIENTPOSEA(num_classes=len(names),
-                               base_weights='COCO', head_weights='COCO')
+                               base_weights='COCO',
+                               head_weights='LINEMOD_OCCLUDED')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, draw=draw)

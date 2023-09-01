@@ -1,5 +1,6 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
+from tensorflow.keras.utils import get_file
 from paz.backend.anchors import build_anchors
 from anchors import build_translation_anchors
 from efficientdet_blocks import (
@@ -7,6 +8,9 @@ from efficientdet_blocks import (
 from efficientdet_blocks_with_bug import BiFPN
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from efficientpose_blocks import build_pose_estimator_head
+
+WEIGHT_PATH = (
+    '/home/manummk95/Desktop/paz/paz/examples/efficientpose/weights/')
 
 
 def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
@@ -45,6 +49,12 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         [Google AutoML repository implementation of EfficientDet](
         https://github.com/google/automl/tree/master/efficientdet)
     """
+    if base_weights not in ['COCO', None]:
+        raise ValueError('Invalid base_weights: ', base_weights)
+    if head_weights not in ['LINEMOD_OCCLUDED', None]:
+        raise ValueError('Invalid head_weights: ', head_weights)
+    if (base_weights is None) and (head_weights == 'COCO'):
+        raise NotImplementedError('Invalid `base_weights` with head_weights')
 
     branches, middles, skips = EfficientNet_to_BiFPN(
         EfficientNet, FPN_num_filters, momentum, epsilon)
@@ -67,10 +77,15 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
+    if ((base_weights == 'COCO') and (head_weights == 'LINEMOD_OCCLUDED')):
+        model_filename = '-'.join([model_name, str(base_weights),
+                                   str(head_weights) + '_weights.hdf5'])
+
     if not ((base_weights is None) and (head_weights is None)):
-        weights_path = "weights/phi_0_occlusion_best_ADD(-S).h5"
-        print('Loading %s model weights' % weights_path)
-        model.load_weights(weights_path, by_name=True)
+        weights_path = WEIGHT_PATH + model_filename
+
+    if not ((base_weights is None) and (head_weights is None)):
+        model.load_weights(weights_path)
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(
@@ -81,10 +96,10 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
     return model
 
 
-def EFFICIENTPOSEA(num_classes=8, base_weights='COCO', head_weights='COCO',
-                   input_shape=(512, 512, 3), FPN_num_filters=64,
-                   FPN_cell_repeats=3, subnet_repeats=3, subnet_iterations=1,
-                   box_class_repeats=3, anchor_scale=4.0,
+def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
+                   head_weights='LINEMOD_OCCLUDED', input_shape=(512, 512, 3),
+                   FPN_num_filters=64, FPN_cell_repeats=3, subnet_repeats=3,
+                   subnet_iterations=1, box_class_repeats=3, anchor_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientpose-a',
                    scaling_coefficients=(1.0, 1.0, 0.8)):
