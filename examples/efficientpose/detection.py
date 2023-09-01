@@ -4,7 +4,7 @@ from paz.abstract import Processor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTy,
-                        ComputeSelectedIndices, ToPose6D)
+                        ComputeSelectedIndices, ToPose6D, DrawPoses6D)
 from paz.backend.boxes import change_box_coordinates
 
 
@@ -74,6 +74,7 @@ class DetectAndEstimateSingleShot(Processor):
 
         super(DetectAndEstimateSingleShot, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
+        self.draw_poses6D = DrawPoses6D(LINEMOD_OBJECT_SIZES)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
@@ -87,6 +88,7 @@ class DetectAndEstimateSingleShot(Processor):
             outputs, image_scale, camera_parameter)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
+            self.draw_poses6D(image, camera_parameter, poses6D)
         return self.wrap(image, boxes2D)
 
 
@@ -198,4 +200,5 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
         model = EFFICIENTPOSEA(num_classes=len(names),
                                base_weights='COCO', head_weights='COCO')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
-            model, names, score_thresh, nms_thresh, draw=draw)
+            model, names, score_thresh, nms_thresh,
+            LINEMOD_OBJECT_SIZES, draw=draw)

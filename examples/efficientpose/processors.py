@@ -1,5 +1,6 @@
 import numpy as np
 from paz.abstract import Processor, Pose6D
+from paz.processors.draw import build_cube_points3D, draw_pose6D
 
 
 class ComputeResizingShape(Processor):
@@ -288,3 +289,31 @@ class BoxesWithClassArgToPose6D(Processor):
             poses6D.append(Pose6D.from_rotation_vector(rotation, translation,
                                                        class_name))
         return poses6D
+
+
+class DrawPoses6D(Processor):
+    """Draws multiple cubes in image by projecting points3D.
+
+    # Arguments
+        object_sizes: Array (3) indicating (x, y, z) sizes of object.
+        camera_intrinsics: Array (3, 3).
+            Camera intrinsics for projecting 3D rays into 2D image.
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
+    def __init__(self, object_sizes, thickness=2):
+        self.points3D = build_cube_points3D(*object_sizes)
+        self.thickness = thickness
+
+    def call(self, image, camera_intrinsics, poses6D):
+        if poses6D is None:
+            return image
+        if not isinstance(poses6D, list):
+            raise ValueError('Poses6D must be a list of Pose6D messages')
+        for pose6D in poses6D:
+            image = draw_pose6D(
+                image, pose6D, self.points3D,
+                camera_intrinsics, self.thickness)
+        return image
