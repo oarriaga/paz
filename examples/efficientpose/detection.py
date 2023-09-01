@@ -20,19 +20,20 @@ LINEMOD_CAMERA_MATRIX = np.array([
     dtype=np.float32)
 
 LINEMOD_OBJECT_SIZES = {
-    "ape":         np.array([75.86860000, 77.59920000, 91.76900000]) / 100,
-    "benchvise":   np.array([215.67000000, 121.85570000, 219.41000000]) / 100,
-    "cam":         np.array([136.65940000, 143.03020000, 100.49700000]) / 100,
-    "can":         np.array([100.79160000, 181.79580000, 193.73400000]) / 100,
-    "cat":         np.array([67.01070000, 127.63300000, 117.45660000]) / 100,
-    "driller":     np.array([229.47600000, 75.47140000, 208.00200000]) / 100,
-    "duck":        np.array([104.42920000, 77.40760000, 85.69700000]) / 100,
-    "eggbox":      np.array([150.18460000, 107.07500000,  69.24140000]) / 100,
-    "glue":        np.array([36.72110000, 77.86600000, 172.81580000]) / 100,
-    "holepuncher": np.array([100.88780000, 108.49700000, 90.80000000]) / 100,
-    "iron":        np.array([258.22600000, 118.48210000, 141.13240000]) / 100,
-    "lamp":        np.array([203.14600000, 117.75250000, 213.11600000]) / 100,
-    "phone":       np.array([93.91810000, 147.43340000, 184.74740000]) / 100}
+    "ape":         np.array([75.86860000, 77.59920000, 91.76900000]),
+    "benchvise":   np.array([215.67000000, 121.85570000, 219.41000000]),
+    "cam":         np.array([136.65940000, 143.03020000, 100.49700000]),
+    "can":         np.array([100.79160000, 181.79580000, 193.73400000]),
+    "cat":         np.array([67.01070000, 127.63300000, 117.45660000]),
+    "driller":     np.array([229.47600000, 75.47140000, 208.00200000]),
+    "duck":        np.array([104.42920000, 77.40760000, 85.69700000]),
+    "eggbox":      np.array([150.18460000, 107.07500000,  69.24140000]),
+    "glue":        np.array([36.72110000, 77.86600000, 172.81580000]),
+    "holepuncher": np.array([100.88780000, 108.49700000, 90.80000000]),
+    "iron":        np.array([258.22600000, 118.48210000, 141.13240000]),
+    "lamp":        np.array([203.14600000, 117.75250000, 213.11600000]),
+    "phone":       np.array([93.91810000, 147.43340000, 184.74740000]),
+    }
 
 
 def get_class_names(dataset_name='LINEMOD'):
@@ -65,6 +66,7 @@ class DetectAndEstimateSingleShot(Processor):
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
+        self.class_to_sizes = LINEMOD_OBJECT_SIZES
         self.draw = draw
         if preprocess is None:
             self.preprocess = EfficientPosePreprocess(model)
@@ -74,8 +76,14 @@ class DetectAndEstimateSingleShot(Processor):
 
         super(DetectAndEstimateSingleShot, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
-        self.draw_poses6D = DrawPoses6D(LINEMOD_OBJECT_SIZES)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+
+    def _build_draw_pose6D(self, name_to_size, camera_parameter):
+        name_to_draw = {}
+        for name, object_sizes in name_to_size.items():
+            draw = pr.DrawPose6D(object_sizes, camera_parameter)
+            name_to_draw[name] = draw
+        return name_to_draw
 
     def call(self, image):
         preprocessed_data = self.preprocess(image)
@@ -88,8 +96,11 @@ class DetectAndEstimateSingleShot(Processor):
             outputs, image_scale, camera_parameter)
         if self.draw:
             image = self.draw_boxes2D(image, boxes2D)
-            self.draw_poses6D(image, camera_parameter, poses6D)
-        return self.wrap(image, boxes2D)
+            self.draw_pose6D = self._build_draw_pose6D(
+                self.class_to_sizes, LINEMOD_CAMERA_MATRIX)
+            for box2D, pose6D in zip(boxes2D, poses6D):
+                image = self.draw_pose6D[box2D.class_name](image, pose6D)
+        return self.wrap(image, boxes2D, poses6D)
 
 
 class EfficientPosePreprocess(Processor):
