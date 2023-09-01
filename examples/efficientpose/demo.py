@@ -7,5 +7,5 @@ IMAGE_PATH = ('/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/'
 
 detect = EFFICIENTPOSEALINEMOD(score_thresh=0.90, nms_thresh=0.45)
 image = load_image(IMAGE_PATH)
-detections = detect(image)
-show_image(detections['image'])
+inferences = detect(image)
+show_image(inferences['image'])
