@@ -1,5 +1,4 @@
 from detection import EFFICIENTPOSEALINEMOD
-from efficientpose import EFFICIENTPOSEA
 from paz.backend.image import load_image, show_image
 import pickle
 

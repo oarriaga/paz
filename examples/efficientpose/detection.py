@@ -4,7 +4,7 @@ from paz.abstract import Processor
 import paz.processors as pr
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTy,
-                        ComputeSelectedIndices, ToPose6D, DrawPoses6D)
+                        ComputeSelectedIndices, ToPose6D)
 from paz.backend.boxes import change_box_coordinates
 
 
