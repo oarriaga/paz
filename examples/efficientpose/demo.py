@@ -1,5 +1,5 @@
-from pose import EFFICIENTPOSEALINEMOD
 from paz.backend.image import load_image, show_image
+from pose import EFFICIENTPOSEALINEMOD
 
 IMAGE_PATH = ('/home/manummk95/Desktop/ybkscht_efficientpose/EfficientPose/'
               'Datasets/Linemod_preprocessed/data/02/rgb/0000.png')

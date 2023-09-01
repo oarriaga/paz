@@ -1,11 +1,11 @@
 import numpy as np
-from efficientpose import EFFICIENTPOSEA
 from paz.abstract import Processor
 import paz.processors as pr
+from paz.backend.boxes import change_box_coordinates
+from efficientpose import EFFICIENTPOSEA
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTy,
                         ComputeSelectedIndices, ToPose6D)
-from paz.backend.boxes import change_box_coordinates
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
