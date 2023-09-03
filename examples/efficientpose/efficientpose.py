@@ -3,8 +3,7 @@ from tensorflow.keras.models import Model
 from paz.backend.anchors import build_anchors
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from anchors import build_translation_anchors
-from efficientdet_blocks import (
-    build_detector_head, EfficientNet_to_BiFPN)
+from efficientdet_blocks import build_detector_head, EfficientNet_to_BiFPN
 from efficientdet_blocks_with_bug import BiFPN
 from efficientpose_blocks import build_pose_estimator_head
 

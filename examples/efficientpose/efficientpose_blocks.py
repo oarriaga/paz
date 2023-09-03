@@ -1,6 +1,6 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (
-    GroupNormalization, Concatenate, Add, Reshape)
+from tensorflow.keras.layers import (GroupNormalization, Concatenate,
+                                     Add, Reshape)
 from paz.models.detection.efficientdet.efficientdet_blocks import (
     build_head_conv2D)
 
