@@ -123,7 +123,6 @@ def build_iterative_translation_subnet(translation_features, translations_xy,
             delta_translation_z = head_z(x)
             translation_xy = Add()([translation_xy, delta_translation_xy])
             translation_z = Add()([translation_z, delta_translation_z])
-
         translation_xy = Reshape((-1, 2))(translation_xy)
         translation_z = Reshape((-1, 1))(translation_z)
         translation = Concatenate(axis=-1)([translation_xy, translation_z])
