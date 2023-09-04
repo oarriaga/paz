@@ -88,12 +88,9 @@ class ComputeTxTy(Processor):
 
 
 def compute_tx_ty(translation_xy_Tz, camera_parameter):
-    fx = camera_parameter[0],
-    fy = camera_parameter[1],
-    px = camera_parameter[2],
-    py = camera_parameter[3],
-    tz_scale = camera_parameter[4],
-    image_scale = camera_parameter[5]
+    fx, fy = camera_parameter[0], camera_parameter[1],
+    px, py = camera_parameter[2], camera_parameter[3],
+    tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
 
     x = translation_xy_Tz[:, 0] / image_scale
     y = translation_xy_Tz[:, 1] / image_scale
@@ -105,9 +102,7 @@ def compute_tx_ty(translation_xy_Tz, camera_parameter):
     tx = np.multiply(x, tz) / fx
     ty = np.multiply(y, tz) / fy
 
-    tx = tx[np.newaxis, :]
-    ty = ty[np.newaxis, :]
-    tz = tz[np.newaxis, :]
+    tx, ty, tz = tx[np.newaxis, :], ty[np.newaxis, :], tz[np.newaxis, :]
 
     translations = np.concatenate((tx, ty, tz), axis=0)
     return translations.T
