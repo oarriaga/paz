@@ -1,6 +1,5 @@
 import numpy as np
 from paz.abstract import Processor, Pose6D
-from paz.processors.draw import build_cube_points3D, draw_pose6D
 
 
 class ComputeResizingShape(Processor):
@@ -35,7 +34,8 @@ def pad_image(image, size, mode):
     H, W = image.shape[:2]
     pad_H = size - H
     pad_W = size - W
-    image = np.pad(image, [(0, pad_H), (0, pad_W), (0, 0)], mode=mode)
+    pad_shape = [(0, pad_H), (0, pad_W), (0, 0)]
+    image = np.pad(image, pad_shape, mode=mode)
     return image
 
 
@@ -59,25 +59,6 @@ def compute_camera_parameter(image_scale, camera_matrix,
                                  translation_scale_norm,
                                  image_scale])
     return camera_parameter
-
-
-class ClipBoxes(Processor):
-    def __init__(self, shape):
-        self.shape = shape
-        super(ClipBoxes, self).__init__()
-
-    def call(self, boxes):
-        return clip_boxes(boxes, self.shape)
-
-
-def clip_boxes(boxes, shape):
-    H, W = shape
-    decoded_boxes = boxes[:, :4]
-    boxes[:, 0] = np.clip(decoded_boxes[:, 0], 0, W - 1)
-    boxes[:, 1] = np.clip(decoded_boxes[:, 1], 0, H - 1)
-    boxes[:, 2] = np.clip(decoded_boxes[:, 2], 0, W - 1)
-    boxes[:, 3] = np.clip(decoded_boxes[:, 3], 0, H - 1)
-    return boxes
 
 
 class RegressTranslation(Processor):
