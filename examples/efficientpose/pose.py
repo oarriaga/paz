@@ -2,9 +2,10 @@ import numpy as np
 from paz.abstract import Processor
 import paz.processors as pr
 from paz.backend.boxes import change_box_coordinates
+from paz.backend.image import lincolor
 from efficientpose import EFFICIENTPOSEA
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        RegressTranslation, ComputeTxTy,
+                        RegressTranslation, ComputeTxTy, DrawPose6D,
                         ComputeSelectedIndices, ToPose6D)
 
 
@@ -50,6 +51,7 @@ class DetectAndEstimateSingleShot(Processor):
         self.variances = variances
         self.class_to_sizes = LINEMOD_OBJECT_SIZES
         self.camera_matrix = LINEMOD_CAMERA_MATRIX
+        self.colors = lincolor(len(self.class_names))
         self.draw = draw
         if preprocess is None:
             self.preprocess = EfficientPosePreprocess(model)
@@ -59,12 +61,13 @@ class DetectAndEstimateSingleShot(Processor):
 
         super(DetectAndEstimateSingleShot, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
-        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
 
     def _build_draw_pose6D(self, name_to_size, camera_parameter):
         name_to_draw = {}
-        for name, object_sizes in name_to_size.items():
-            draw = pr.DrawPose6D(object_sizes, camera_parameter)
+        iterator = zip(name_to_size.items(), self.colors)
+        for (name, object_size), box_color in iterator:
+            draw = DrawPose6D(object_size, camera_parameter, box_color)
             name_to_draw[name] = draw
         return name_to_draw
 

@@ -1,5 +1,8 @@
 import numpy as np
 from paz.abstract import Processor, Pose6D
+import paz.processors as pr
+from paz.processors.draw import (quaternion_to_rotation_matrix,
+                                 project_to_image, draw_cube)
 
 
 class ComputeResizingShape(Processor):
@@ -248,3 +251,38 @@ class BoxesWithClassArgToPose6D(Processor):
             poses6D.append(Pose6D.from_rotation_vector(rotation, translation,
                                                        class_name))
         return poses6D
+
+
+class DrawPose6D(pr.DrawPose6D):
+    def __init__(self, object_sizes, camera_intrinsics, box_color):
+        self.box_color = box_color
+        super().__init__(object_sizes, camera_intrinsics)
+
+    def call(self, image, pose6D):
+        if pose6D is None:
+            return image
+        image = draw_pose6D(image, pose6D, self.points3D, self.intrinsics,
+                            self.thickness, self.box_color)
+        return image
+
+
+def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
+    """Draws cube in image by projecting points3D with intrinsics and pose6D.
+
+    # Arguments
+        image: Array (H, W).
+        pose6D: paz.abstract.Pose6D instance.
+        intrinsics: Array (3, 3). Camera intrinsics for projecting
+            3D rays into 2D image.
+        points3D: Array (num_points, 3).
+        thickness: Positive integer indicating line thickness.
+
+    # Returns
+        Image array (H, W) with drawn inferences.
+    """
+    quaternion, translation = pose6D.quaternion, pose6D.translation
+    rotation = quaternion_to_rotation_matrix(quaternion)
+    points2D = project_to_image(rotation, translation, points3D, intrinsics)
+    image = draw_cube(image, points2D.astype(np.int32),
+                      thickness=thickness, color=color)
+    return image
