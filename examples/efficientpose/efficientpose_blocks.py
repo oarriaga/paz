@@ -33,8 +33,8 @@ def build_rotation_head(middles, subnet_repeats, num_filters,
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    rotation_features, initial_rotations = [], []
     args = (conv_blocks, subnet_repeats, gn_groups, gn_axis)
+    rotation_features, initial_rotations = [], []
     for x in middles:
         x = conv2D_norm_activation(x, *args)
         initial_rotation = head_conv(x)
@@ -59,8 +59,8 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
     conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    rotations = []
     args = (conv_blocks, subnet_repeats - 1, gn_groups, gn_axis)
+    rotations = []
     for x, initial_rotation in zip(rotation_features, initial_rotations):
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, initial_rotation])
