@@ -9,8 +9,8 @@ def build_translation_anchors(image_shape, branches,
     args = (branches, num_scale_aspect)
     translation_anchors = []
     for branch_arg in range(len(branches)):
-        stride = build_strides(branch_arg, image_shape, *args)
-        anchors = make_branch_anchors(*stride, branch_arg, *args)
+        strides = build_strides(branch_arg, image_shape, *args)
+        anchors = make_branch_anchors(*strides, branch_arg, *args)
         translation_anchors.append(anchors)
     translation_anchors = np.concatenate(translation_anchors, axis=0)
     return translation_anchors.astype('float32')
