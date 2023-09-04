@@ -20,8 +20,8 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
 def RotationNet(middles, subnet_iterations, subnet_repeats,
                 num_anchors, num_filters, num_pose_dims):
 
-    bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_pose_dims * num_anchors]
+    bias_initializer = tf.zeros_initializer()    
     args = (num_filters, bias_initializer)
     rotations = build_rotation_head(middles, subnet_repeats, *args)
     return build_iterative_rotation_subnet(*rotations, subnet_iterations,
@@ -73,8 +73,8 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
 def TranslationNet(middles, subnet_iterations, subnet_repeats,
                    num_anchors, num_filters):
 
-    bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
+    bias_initializer = tf.zeros_initializer()    
     args = (num_filters, bias_initializer)
     translations = build_translation_head(middles, subnet_repeats, *args)
     return build_iterative_translation_subnet(*translations,
