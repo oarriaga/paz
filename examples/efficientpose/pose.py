@@ -132,6 +132,7 @@ class EfficientPosePostprocess(Processor):
         self.regress_translation = RegressTranslation(model.translation_priors)
         self.compute_tx_ty = ComputeTxTy()
         self.compute_selections = ComputeSelectedIndices()
+        self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
         self.to_pose_6D = ToPose6D(class_names)
 
@@ -145,7 +146,8 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.round_boxes(boxes2D)
 
         selected_indices = self.compute_selections(box_data_all, box_data)
-        rotations = np.array(rotations[0, :, :])[selected_indices]
+        rotations = self.squeeze(rotations)
+        rotations = rotations[selected_indices]
         rotations = self.transform_rotations(rotations)
 
         translation_xy_Tz = self.regress_translation(translations)
