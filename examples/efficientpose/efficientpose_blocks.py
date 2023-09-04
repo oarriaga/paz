@@ -78,8 +78,8 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
     translation_head_outputs = build_translation_head(
         middles, subnet_repeats, num_filters, bias_initializer)
     return build_iterative_translation_subnet(
-        *translation_head_outputs,
-        subnet_repeats - 1, num_filters, subnet_iterations, bias_initializer)
+        *translation_head_outputs, subnet_repeats - 1, num_filters,
+        subnet_iterations, bias_initializer)
 
 
 def build_translation_head(features, subnet_repeats, num_filters,
