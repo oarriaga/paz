@@ -6,10 +6,10 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
 
 
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
-                              num_anchors, num_filters, num_pose_dims):
+                              num_anchors, num_filters, num_dims):
 
     args = (middles, subnet_iterations, subnet_repeats, num_anchors)
-    rotations = RotationNet(*args, num_filters, num_pose_dims)
+    rotations = RotationNet(*args, num_filters, num_dims)
     rotations = Concatenate(axis=1, name='rotation')(rotations)
     translations = TranslationNet(*args, num_filters)
     translations = Concatenate(axis=1, name='translation_raw')(translations)
@@ -17,15 +17,14 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
 
 
 def RotationNet(middles, subnet_iterations, subnet_repeats,
-                num_anchors, num_filters, num_pose_dims):
+                num_anchors, num_filters, num_dims):
 
-    num_filters = [num_filters, num_pose_dims * num_anchors]
+    num_filters = [num_filters, num_dims * num_anchors]
     bias_initializer = tf.zeros_initializer()
-    args = (num_filters, bias_initializer)
-    rotations = build_rotation_head(middles, subnet_repeats, *args)
+    args = (subnet_repeats, num_filters, bias_initializer)
+    rotations = build_rotation_head(middles, *args)
     return build_iterative_rotation_subnet(*rotations, subnet_iterations,
-                                           subnet_repeats, *args,
-                                           num_pose_dims)
+                                           *args, num_dims)
 
 
 def build_rotation_head(features, subnet_repeats, num_filters,
@@ -49,7 +48,7 @@ def build_rotation_head(features, subnet_repeats, num_filters,
 def build_iterative_rotation_subnet(rotation_features, initial_rotations,
                                     subnet_iterations, subnet_repeats,
                                     num_filters, bias_initializer,
-                                    num_pose_dims, gn_groups=4, gn_axis=-1):
+                                    num_dims, gn_groups=4, gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
@@ -64,7 +63,7 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
                 x = tf.nn.swish(x)
             delta_rotation = head_conv(x)
             initial_rotation = Add()([initial_rotation, delta_rotation])
-        rotation = Reshape((-1, num_pose_dims))(initial_rotation)
+        rotation = Reshape((-1, num_dims))(initial_rotation)
         rotations.append(rotation)
     return rotations
 
@@ -74,11 +73,10 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
 
     num_filters = [num_filters, num_anchors * 2, num_anchors]
     bias_initializer = tf.zeros_initializer()
-    args = (num_filters, bias_initializer)
-    translations = build_translation_head(middles, subnet_repeats, *args)
+    args = (subnet_repeats, num_filters, bias_initializer)
+    translations = build_translation_head(middles, *args)
     return build_iterative_translation_subnet(*translations,
-                                              subnet_repeats, *args,
-                                              subnet_iterations)
+                                              *args, subnet_iterations)
 
 
 def build_translation_head(features, subnet_repeats, num_filters,
