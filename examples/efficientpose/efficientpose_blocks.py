@@ -35,14 +35,20 @@ def build_rotation_head(middles, subnet_repeats, num_filters,
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotation_features, initial_rotations = [], []
     for x in middles:
-        for block_arg in range(subnet_repeats):
-            x = conv_blocks[block_arg](x)
-            x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
-            x = tf.nn.swish(x)
+        x = conv2D_norm_activation_layer(x, conv_blocks, subnet_repeats,
+                                         gn_groups, gn_axis)
         initial_rotation = head_conv(x)
         rotation_features.append(x)
         initial_rotations.append(initial_rotation)
     return rotation_features, initial_rotations
+
+
+def conv2D_norm_activation_layer(x, conv_blocks, repeats, gn_groups, gn_axis):
+    for block_arg in range(repeats):
+        x = conv_blocks[block_arg](x)
+        x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
+        x = tf.nn.swish(x)
+    return x
 
 
 def build_iterative_rotation_subnet(rotation_features, initial_rotations,
