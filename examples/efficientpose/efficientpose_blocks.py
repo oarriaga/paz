@@ -34,9 +34,9 @@ def build_rotation_head(middles, subnet_repeats, num_filters,
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotation_features, initial_rotations = [], []
+    args = (conv_blocks, subnet_repeats, gn_groups, gn_axis)
     for x in middles:
-        x = conv2D_norm_activation(x, conv_blocks, subnet_repeats,
-                                   gn_groups, gn_axis)
+        x = conv2D_norm_activation(x, *args)
         initial_rotation = head_conv(x)
         rotation_features.append(x)
         initial_rotations.append(initial_rotation)
@@ -60,11 +60,11 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotations = []
+    args = (conv_blocks, subnet_repeats - 1, gn_groups, gn_axis)
     for x, initial_rotation in zip(rotation_features, initial_rotations):
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, initial_rotation])
-            x = conv2D_norm_activation(x, conv_blocks, subnet_repeats - 1,
-                                       gn_groups, gn_axis)
+            x = conv2D_norm_activation(x, *args)
             delta_rotation = head_conv(x)
             initial_rotation = Add()([initial_rotation, delta_rotation])
         rotation = Reshape((-1, num_dims))(initial_rotation)
@@ -90,10 +90,10 @@ def build_translation_head(middles, subnet_repeats, num_filters,
                                     bias_initializer)
     head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
+    args = (conv_blocks, subnet_repeats, gn_groups, gn_axis)
     translation_features, translations_xy, translations_z = [], [], []
     for x in middles:
-        x = conv2D_norm_activation(x, conv_blocks, subnet_repeats,
-                                   gn_groups, gn_axis)
+        x = conv2D_norm_activation(x, *args)
         translation_xy = head_xy_conv(x)
         translation_z = head_z_conv(x)
         translation_features.append(x)
@@ -112,13 +112,13 @@ def build_iterative_translation_subnet(translation_features, translations_xy,
                                     bias_initializer)
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
+    args = (conv_blocks, subnet_repeats - 1, gn_groups, gn_axis)
     translations = []
     iterator = zip(translation_features, translations_xy, translations_z)
     for x, translation_xy, translation_z in iterator:
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, translation_xy, translation_z])
-            x = conv2D_norm_activation(x, conv_blocks, subnet_repeats - 1,
-                                       gn_groups, gn_axis)
+            x = conv2D_norm_activation(x, *args)
             delta_translation_xy = head_xy(x)
             delta_translation_z = head_z(x)
             translation_xy = Add()([translation_xy, delta_translation_xy])
