@@ -27,14 +27,14 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
                                            *args, num_dims)
 
 
-def build_rotation_head(features, subnet_repeats, num_filters,
+def build_rotation_head(middles, subnet_repeats, num_filters,
                         bias_initializer, gn_groups=4, gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotation_features, initial_rotations = [], []
-    for x in features:
+    for x in middles:
         for block_arg in range(subnet_repeats):
             x = conv_blocks[block_arg](x)
             x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
@@ -79,7 +79,7 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
                                               subnet_iterations)
 
 
-def build_translation_head(features, subnet_repeats, num_filters,
+def build_translation_head(middles, subnet_repeats, num_filters,
                            bias_initializer, gn_groups=4, gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
@@ -87,7 +87,7 @@ def build_translation_head(features, subnet_repeats, num_filters,
     head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
     translation_features, translations_xy, translations_z = [], [], []
-    for x in features:
+    for x in middles:
         for block_arg in range(subnet_repeats):
             x = conv_blocks[block_arg](x)
             x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
