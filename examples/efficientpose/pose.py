@@ -152,14 +152,17 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
 
-        selected_indices = self.compute_selections(box_data_all, box_data)
-        rotations = self.squeeze(rotations)
-        rotations = rotations[selected_indices]
-        rotations = self.transform_rotations(rotations)
+        poses6D = []
+        if len(boxes2D) > 0:
+            selected_indices = self.compute_selections(box_data_all, box_data)
+            rotations = self.squeeze(rotations)
+            rotations = rotations[selected_indices]
+            rotations = self.transform_rotations(rotations)
 
-        translation_xy_Tz = self.regress_translation(translations)
-        translation = self.compute_tx_ty(translation_xy_Tz, camera_parameter)
-        translations = translation[selected_indices]
+            translation_xy_Tz = self.regress_translation(translations)
+            translation = self.compute_tx_ty(translation_xy_Tz,
+                                             camera_parameter)
+            translations = translation[selected_indices]
 
         poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, poses6D
