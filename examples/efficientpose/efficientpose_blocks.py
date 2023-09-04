@@ -8,11 +8,10 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
                               num_anchors, num_filters, num_pose_dims):
 
-    args = (middles, subnet_iterations, subnet_repeats,
-            num_anchors, num_filters)
-    rotations = RotationNet(*args, num_pose_dims)
+    args = (middles, subnet_iterations, subnet_repeats, num_anchors)
+    rotations = RotationNet(*args, num_filters, num_pose_dims)
     rotations = Concatenate(axis=1, name='rotation')(rotations)
-    translations = TranslationNet(*args)
+    translations = TranslationNet(*args, num_filters)
     translations = Concatenate(axis=1, name='translation_raw')(translations)
     return rotations, translations
 
@@ -21,7 +20,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
                 num_anchors, num_filters, num_pose_dims):
 
     num_filters = [num_filters, num_pose_dims * num_anchors]
-    bias_initializer = tf.zeros_initializer()    
+    bias_initializer = tf.zeros_initializer()
     args = (num_filters, bias_initializer)
     rotations = build_rotation_head(middles, subnet_repeats, *args)
     return build_iterative_rotation_subnet(*rotations, subnet_iterations,
