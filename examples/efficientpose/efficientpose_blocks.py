@@ -75,8 +75,8 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
     bias_initializer = tf.zeros_initializer()
     args = (subnet_repeats, num_filters, bias_initializer)
     translations = build_translation_head(middles, *args)
-    return build_iterative_translation_subnet(*translations,
-                                              *args, subnet_iterations)
+    return build_iterative_translation_subnet(*translations, *args,
+                                              subnet_iterations)
 
 
 def build_translation_head(features, subnet_repeats, num_filters,
