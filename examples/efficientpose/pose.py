@@ -43,7 +43,8 @@ def get_class_names(dataset_name='LINEMOD'):
 class DetectAndEstimateSingleShot(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
-                 postprocess=None, variances=[1.0, 1.0, 1.0, 1.0], draw=True):
+                 postprocess=None, variances=[1.0, 1.0, 1.0, 1.0],
+                 show_boxes2D=False, show_poses6D=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -52,7 +53,8 @@ class DetectAndEstimateSingleShot(Processor):
         self.class_to_sizes = LINEMOD_OBJECT_SIZES
         self.camera_matrix = LINEMOD_CAMERA_MATRIX
         self.colors = lincolor(len(self.class_names))
-        self.draw = draw
+        self.show_boxes2D = show_boxes2D
+        self.show_poses6D = show_poses6D
         if preprocess is None:
             self.preprocess = EfficientPosePreprocess(model)
         if postprocess is None:
@@ -80,8 +82,10 @@ class DetectAndEstimateSingleShot(Processor):
         outputs = detections, (rotations, translations)
         boxes2D, poses6D = self.postprocess(
             outputs, image_scale, camera_parameter)
-        if self.draw:
+        if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
+
+        if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(
                 self.class_to_sizes, self.camera_matrix)
             for box2D, pose6D in zip(boxes2D, poses6D):
@@ -162,10 +166,12 @@ class EfficientPosePostprocess(Processor):
 
 
 class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45, draw=True):
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45,
+                 show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
                                head_weights='LINEMOD_OCCLUDED')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
-            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, draw=draw)
+            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+            show_boxes2D=False, show_poses6D=True)
