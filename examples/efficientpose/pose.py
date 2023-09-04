@@ -118,14 +118,15 @@ class EfficientPosePostprocess(Processor):
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None):
         super(EfficientPosePostprocess, self).__init__()
         model.prior_boxes = model.prior_boxes * model.input_shape[1]
-        self.postprocess = pr.SequentialProcessor([
+        self.postprocess_1 = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
             pr.RemoveClass(class_names, class_arg)])
         self.scale = pr.ScaleBox()
-        self.nms_per_class = pr.NonMaximumSuppressionPerClass(nms_thresh)
-        self.merge_box_and_class = pr.MergeNMSBoxWithClass()
-        self.filter_boxes = pr.FilterBoxes(class_names, score_thresh)
+        self.postprocess_2 = pr.SequentialProcessor([
+            pr.NonMaximumSuppressionPerClass(nms_thresh),
+            pr.MergeNMSBoxWithClass(),
+            pr.FilterBoxes(class_names, score_thresh)])
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
@@ -136,12 +137,10 @@ class EfficientPosePostprocess(Processor):
 
     def call(self, model_output, image_scale, camera_parameter):
         detections, (rotations, translations) = model_output
-        box_data = self.postprocess(detections)
+        box_data = self.postprocess_1(detections)
         box_data = self.scale(box_data, 1 / image_scale)
         box_data_all = box_data
-        box_data, class_labels = self.nms_per_class(box_data)
-        box_data = self.merge_box_and_class(box_data, class_labels)
-        box_data = self.filter_boxes(box_data)
+        box_data = self.postprocess_2(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
 
