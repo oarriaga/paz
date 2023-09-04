@@ -22,11 +22,11 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_pose_dims * num_anchors]
-    rotation_features, initial_rotations = build_rotation_head(
-        middles, subnet_repeats, num_filters, bias_initializer)
+    rotations = build_rotation_head(middles, subnet_repeats,
+                                    num_filters, bias_initializer)
     return build_iterative_rotation_subnet(
-        rotation_features, initial_rotations, subnet_iterations,
-        subnet_repeats - 1, num_filters, bias_initializer, num_pose_dims)
+        *rotations, subnet_iterations, subnet_repeats - 1,
+        num_filters, bias_initializer, num_pose_dims)
 
 
 def build_rotation_head(features, subnet_repeats, num_filters,
@@ -75,10 +75,10 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
-    translation_head_outputs = build_translation_head(
-        middles, subnet_repeats, num_filters, bias_initializer)
+    translations = build_translation_head(middles, subnet_repeats,
+                                          num_filters, bias_initializer)
     return build_iterative_translation_subnet(
-        *translation_head_outputs, subnet_repeats - 1, num_filters,
+        *translations, subnet_repeats - 1, num_filters,
         subnet_iterations, bias_initializer)
 
 
