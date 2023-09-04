@@ -22,11 +22,11 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_pose_dims * num_anchors]
-    rotations = build_rotation_head(middles, subnet_repeats,
-                                    num_filters, bias_initializer)
-    return build_iterative_rotation_subnet(
-        *rotations, subnet_iterations, subnet_repeats - 1,
-        num_filters, bias_initializer, num_pose_dims)
+    args = (num_filters, bias_initializer)
+    rotations = build_rotation_head(middles, subnet_repeats, *args)
+    return build_iterative_rotation_subnet(*rotations, subnet_iterations,
+                                           subnet_repeats - 1, *args,
+                                           num_pose_dims)
 
 
 def build_rotation_head(features, subnet_repeats, num_filters,
@@ -75,11 +75,11 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
-    translations = build_translation_head(middles, subnet_repeats,
-                                          num_filters, bias_initializer)
-    return build_iterative_translation_subnet(
-        *translations, subnet_repeats - 1, num_filters,
-        subnet_iterations, bias_initializer)
+    args = (num_filters, bias_initializer)
+    translations = build_translation_head(middles, subnet_repeats, *args)
+    return build_iterative_translation_subnet(*translations,
+                                              subnet_repeats - 1, *args,
+                                              subnet_iterations)
 
 
 def build_translation_head(features, subnet_repeats, num_filters,
@@ -105,8 +105,8 @@ def build_translation_head(features, subnet_repeats, num_filters,
 
 def build_iterative_translation_subnet(translation_features, translations_xy,
                                        translations_z, subnet_repeats,
-                                       num_filters, subnet_iterations,
-                                       bias_initializer, gn_groups=4,
+                                       num_filters, bias_initializer,
+                                       subnet_iterations, gn_groups=4,
                                        gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
