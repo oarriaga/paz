@@ -44,6 +44,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         pose_outputs = build_pose_estimator_head(
             middles, subnet_iterations, subnet_repeats,
             num_anchors, num_filters, num_pose_dims)
+
         outputs = [detection_outputs, pose_outputs]
 
     model = Model(inputs=image, outputs=outputs, name=model_name)

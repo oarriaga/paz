@@ -34,14 +34,14 @@ def build_rotation_head(features, subnet_repeats, num_filters,
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     tf.zeros_initializer())
-    final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotation_features, initial_rotations = [], []
     for x in features:
         for block_arg in range(subnet_repeats):
             x = conv_blocks[block_arg](x)
             x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
             x = tf.nn.swish(x)
-        initial_rotation = final_head_conv(x)
+        initial_rotation = head_conv(x)
         rotation_features.append(x)
         initial_rotations.append(initial_rotation)
     return rotation_features, initial_rotations
@@ -63,7 +63,7 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     tf.zeros_initializer())
-    final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotations = []
     for x, initial_rotation in zip(rotation_features, initial_rotations):
         for _ in range(subnet_iterations):
@@ -72,15 +72,15 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
                 x = conv_blocks[block_arg](x)
                 x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
                 x = tf.nn.swish(x)
-            delta_rotation = final_head_conv(x)
+            delta_rotation = head_conv(x)
             initial_rotation = Add()([initial_rotation, delta_rotation])
         rotation = Reshape((-1, num_pose_dims))(initial_rotation)
         rotations.append(rotation)
     return rotations
 
 
-def TranslationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
-                   num_filters, ):
+def TranslationNet(middles, subnet_iterations, subnet_repeats,
+                   num_anchors, num_filters):
 
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_anchors * 2, num_anchors]
@@ -132,8 +132,8 @@ def build_iterative_translation_head(translation_features, translations_xy,
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
     translations = []
-    for x, translation_xy, translation_z in zip(
-            translation_features, translations_xy, translations_z):
+    iterator = zip(translation_features, translations_xy, translations_z)
+    for x, translation_xy, translation_z in iterator:
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, translation_xy, translation_z])
             for block_arg in range(subnet_repeats):
