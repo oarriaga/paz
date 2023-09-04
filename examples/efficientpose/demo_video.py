@@ -10,6 +10,6 @@ parser.add_argument('-c', '--camera_id', type=int, default=0,
 args = parser.parse_args()
 
 camera = Camera(args.camera_id)
-pipeline = EFFICIENTPOSEALINEMOD()
+pipeline = EFFICIENTPOSEALINEMOD(show_boxes2D=True, show_poses6D=True)
 player = VideoPlayer((640, 480), pipeline, camera)
 player.run()
