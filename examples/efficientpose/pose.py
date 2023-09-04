@@ -174,4 +174,4 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
-            show_boxes2D=False, show_poses6D=True)
+            show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
