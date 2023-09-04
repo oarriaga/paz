@@ -24,7 +24,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
     args = (num_filters, bias_initializer)
     rotations = build_rotation_head(middles, subnet_repeats, *args)
     return build_iterative_rotation_subnet(*rotations, subnet_iterations,
-                                           subnet_repeats - 1, *args,
+                                           subnet_repeats, *args,
                                            num_pose_dims)
 
 
@@ -51,14 +51,14 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
                                     num_filters, bias_initializer,
                                     num_pose_dims, gn_groups=4, gn_axis=-1):
 
-    conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
+    conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotations = []
     for x, initial_rotation in zip(rotation_features, initial_rotations):
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, initial_rotation])
-            for block_arg in range(subnet_repeats):
+            for block_arg in range(subnet_repeats - 1):
                 x = conv_blocks[block_arg](x)
                 x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
                 x = tf.nn.swish(x)
@@ -77,7 +77,7 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
     args = (num_filters, bias_initializer)
     translations = build_translation_head(middles, subnet_repeats, *args)
     return build_iterative_translation_subnet(*translations,
-                                              subnet_repeats - 1, *args,
+                                              subnet_repeats, *args,
                                               subnet_iterations)
 
 
@@ -108,7 +108,7 @@ def build_iterative_translation_subnet(translation_features, translations_xy,
                                        subnet_iterations, gn_groups=4,
                                        gn_axis=-1):
 
-    conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
+    conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
@@ -117,7 +117,7 @@ def build_iterative_translation_subnet(translation_features, translations_xy,
     for x, translation_xy, translation_z in iterator:
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, translation_xy, translation_z])
-            for block_arg in range(subnet_repeats):
+            for block_arg in range(subnet_repeats - 1):
                 x = conv_blocks[block_arg](x)
                 x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
                 x = tf.nn.swish(x)
