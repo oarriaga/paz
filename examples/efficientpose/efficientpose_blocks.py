@@ -33,7 +33,7 @@ def build_rotation_head(features, subnet_repeats, num_filters,
                         bias_initializer, gn_groups=4, gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
-                                    tf.zeros_initializer())
+                                    bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotation_features, initial_rotations = [], []
     for x in features:
@@ -62,7 +62,7 @@ def build_iterative_rotation_head(rotation_features, initial_rotations,
                                   gn_groups=4, gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
-                                    tf.zeros_initializer())
+                                    bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     rotations = []
     for x, initial_rotation in zip(rotation_features, initial_rotations):
@@ -95,7 +95,7 @@ def build_translation_head(features, subnet_repeats, num_filters,
                            bias_initializer, gn_groups=4, gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
-                                    tf.zeros_initializer())
+                                    bias_initializer)
     head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
     translation_features, translations_xy, translations_z = [], [], []
@@ -128,7 +128,7 @@ def build_iterative_translation_head(translation_features, translations_xy,
                                      gn_axis=-1):
 
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
-                                    tf.zeros_initializer())
+                                    bias_initializer)
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
     translations = []
