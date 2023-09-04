@@ -134,8 +134,8 @@ class EfficientPosePostprocess(Processor):
         self.transform_rotations = pr.Scale(np.pi)
         self.to_pose_6D = ToPose6D(class_names)
 
-    def call(self, output, image_scale, camera_parameter):
-        detections, (rotations, translations) = output
+    def call(self, model_output, image_scale, camera_parameter):
+        detections, (rotations, translations) = model_output
         box_data = self.postprocess(detections)
         box_data = self.scale(box_data, 1 / image_scale)
         box_data_all = box_data
