@@ -7,18 +7,50 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
 
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
                               num_anchors, num_filters, num_dims):
+    """Builds EfficientPose pose estimator's head.
+    The built head includes RotationNet and TranslationNet
+    for estimating rotation and translation respectively.
 
+    # Arguments
+        middles: List, BiFPN layer output.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_anchors: List, number of combinations of
+            anchor box's scale and aspect ratios.
+        num_filters: Int, number of subnet filters.
+        num_dims: Int, number of pose dimensions.
+
+    # Returns
+        List: Containing estimated rotations and translations of shape
+        `[None, num_boxes + num_dims]` and
+        `[None, num_boxes + num_dims]` respectively.
+    """
     args = (middles, subnet_iterations, subnet_repeats, num_anchors)
     rotations = RotationNet(*args, num_filters, num_dims)
     rotations = Concatenate(axis=1, name='rotation')(rotations)
     translations = TranslationNet(*args, num_filters)
     translations = Concatenate(axis=1, name='translation_raw')(translations)
-    return rotations, translations
+    return [rotations, translations]
 
 
 def RotationNet(middles, subnet_iterations, subnet_repeats,
                 num_anchors, num_filters, num_dims):
+    """Initializes RotationNet.
 
+    # Arguments
+        middles: List, BiFPN layer output.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_anchors: List, number of combinations of
+            anchor box's scale and aspect ratios.
+        num_filters: Int, number of subnet filters.
+        num_dims: Int, number of pose dimensions.
+
+    # Returns
+        List: containing rotation estimates for every feature level.
+    """
     num_filters = [num_filters, num_dims * num_anchors]
     bias_initializer = tf.zeros_initializer()
     args = (subnet_repeats, num_filters, bias_initializer)
@@ -29,7 +61,19 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
 
 def build_rotation_head(middles, subnet_repeats, num_filters,
                         bias_initializer, gn_groups=4, gn_axis=-1):
+    """Builds RotationNet head.
 
+    # Arguments
+        middles: List, BiFPN layer output.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_filters: Int, number of subnet filters.
+        bias_initializer: Callable, bias initializer.
+        gn_groups: Int, number of groups in group normalization.
+        gn_axis: Int, group normalization axis.
+
+    # Returns
+        List: Containing rotation_features and initial_rotations.
+    """
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
@@ -40,7 +84,7 @@ def build_rotation_head(middles, subnet_repeats, num_filters,
         initial_rotation = head_conv(x)
         rotation_features.append(x)
         initial_rotations.append(initial_rotation)
-    return rotation_features, initial_rotations
+    return [rotation_features, initial_rotations]
 
 
 def conv2D_norm_activation(x, conv_blocks, repeats, gn_groups, gn_axis):
