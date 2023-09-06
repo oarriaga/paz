@@ -23,8 +23,8 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
 
     # Returns
         List: Containing estimated rotations and translations of shape
-        `[None, num_boxes, num_dims]` and
-        `[None, num_boxes, num_dims]` respectively.
+        `(None, num_boxes, num_dims)` and
+        `(None, num_boxes, num_dims)` respectively.
     """
     args = (middles, subnet_iterations, subnet_repeats, num_anchors)
     rotations = RotationNet(*args, num_filters, num_dims)
