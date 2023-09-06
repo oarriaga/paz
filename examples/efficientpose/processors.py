@@ -87,6 +87,13 @@ def compute_camera_parameter(image_scale, camera_matrix,
 
 
 class RegressTranslation(Processor):
+    """Applies regression offset values to translation
+    anchors to get the 2D translation center-point and Tz.
+
+    # Arguments
+        translation_priors: Array of shape `(num_boxes, 3)`,
+            translation anchors.
+    """
     def __init__(self, translation_priors):
         self.translation_priors = translation_priors
         super(RegressTranslation, self).__init__()
@@ -105,6 +112,9 @@ def regress_translation(translation_raw, translation_priors):
 
 
 class ComputeTxTy(Processor):
+    """Computes the Tx and Ty components of the translation vector
+    with a given 2D-point and the intrinsic camera parameters.
+    """
     def __init__(self):
         super(ComputeTxTy, self).__init__()
 
@@ -134,6 +144,9 @@ def compute_tx_ty(translation_xy_Tz, camera_parameter):
 
 
 class ComputeSelectedIndices(Processor):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+    """
     def __init__(self):
         super(ComputeSelectedIndices, self).__init__()
 
@@ -153,7 +166,8 @@ def compute_selected_indices(box_data_all, box_data):
 
 
 class ToPose6D(Processor):
-    """Transforms boxes from dataset into `Boxes2D` messages.
+    """Transforms poses i.e rotations and
+    translations into `Pose6D` messages.
 
     # Arguments
         class_names: List of class names ordered with respect to the
@@ -188,8 +202,8 @@ class ToPose6D(Processor):
 
 
 class BoxesWithOneHotVectorsToPose6D(Processor):
-    """Transforms boxes from dataset into `Boxes2D` messages given boxes
-    with scores as one hot vectors.
+    """Transforms poses into `Pose6D` messages
+    given boxes with scores as one hot vectors.
 
     # Arguments
         arg_to_class: List, of classes.
@@ -217,8 +231,8 @@ class BoxesWithOneHotVectorsToPose6D(Processor):
 
 
 class BoxesToPose6D(Processor):
-    """Transforms boxes from dataset into `Boxes2D` messages given no
-    class names and score.
+    """Transforms poses into `Pose6D` messages
+    given no class names and score.
 
     # Arguments
         default_score: Float, score to set.
@@ -246,8 +260,8 @@ class BoxesToPose6D(Processor):
 
 
 class BoxesWithClassArgToPose6D(Processor):
-    """Transforms boxes from dataset into `Boxes2D` messages given boxes
-    with class argument.
+    """Transforms poses into `Pose6D` messages
+    given boxes with class argument.
 
     # Arguments
         default_score: Float, score to set.
@@ -276,6 +290,14 @@ class BoxesWithClassArgToPose6D(Processor):
 
 
 class DrawPose6D(pr.DrawPose6D):
+    """Draws 3D bounding boxes from Pose6D messages.
+
+    # Arguments
+        object_sizes:  Array, of shape `(3,)` size of the object.
+        camera_intrinsics: Array of shape `(3, 3)`,
+            inrtrinsic camera parameter.
+        box_color: List, the color to draw 3D bounding boxes.
+    """
     def __init__(self, object_sizes, camera_intrinsics, box_color):
         self.box_color = box_color
         super().__init__(object_sizes, camera_intrinsics)
@@ -298,6 +320,7 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
             3D rays into 2D image.
         points3D: Array (num_points, 3).
         thickness: Positive integer indicating line thickness.
+        color: List, the color to draw 3D bounding boxes.
 
     # Returns
         Image array (H, W) with drawn inferences.
