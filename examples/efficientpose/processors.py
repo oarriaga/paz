@@ -6,6 +6,12 @@ from paz.processors.draw import (quaternion_to_rotation_matrix,
 
 
 class ComputeResizingShape(Processor):
+    """Computes the final size of the image to be scaled by `size`
+    such that the maximum dimension of the image is equal to `size`.
+
+    # Arguments
+        size: Int, final size of maximum dimension of the image.
+    """
     def __init__(self, size):
         self.size = size
         super(ComputeResizingShape, self).__init__()
@@ -24,6 +30,12 @@ def compute_resizing_shape(image, size):
 
 
 class PadImage(Processor):
+    """Pads the image to the final size `size`.
+
+    # Arguments
+        size: Int, final size of maximum dimension of the image.
+        mode: Str, specifying the type of padding.
+    """
     def __init__(self, size, mode='constant'):
         self.size = size
         self.mode = mode
@@ -43,6 +55,16 @@ def pad_image(image, size, mode):
 
 
 class ComputeCameraParameter(Processor):
+    """Computes camera parameter given camera matrix
+    and scale normalization factor of translation.
+
+    # Arguments
+        camera_matrix: Array of shape `(3, 3)` camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+    """
     def __init__(self, camera_matrix, translation_scale_norm):
         self.camera_matrix = camera_matrix
         self.translation_scale_norm = translation_scale_norm
