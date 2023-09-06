@@ -19,7 +19,45 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                   num_dims=4, momentum=0.997, epsilon=0.0001,
                   activation='sigmoid', num_anchors=9, num_filters=64,
                   num_pose_dims=3):
+    """Creates EfficientPose model.
 
+    # Arguments
+        image: Tensor of shape `(batch_size, input_shape)`.
+        num_classes: Int, number of object classes.
+        base_weights: Str, base weights name.
+        head_weights: Str, head weights name.
+        FPN_num_filters: Int, number of FPN filters.
+        FPN_cell_repeats: Int, number of FPN blocks.
+        box_class_repeats: Int, Number of regression
+            and classification blocks.
+        anchor_scale: Int, number of anchor scales.
+        fusion: Str, feature fusion weighting method.
+        return_base: Bool, whether to return base or not.
+        model_name: Str, EfficientDet model name.
+        EfficientNet: List, containing branch tensors.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_scales: Int, number of anchor box scales.
+        aspect_ratios: List, anchor boxes aspect ratios.
+        survival_rate: Float, specifying survival probability.
+        num_dims: Int, number of output dimensions to regress.
+        momentum: Float, batch normalization moving average momentum.
+        epsilon: Float, small float added to
+            variance to avoid division by zero.
+        activation: Str, activation function for classes.
+        num_anchors: List, number of combinations of
+            anchor box's scale and aspect ratios.
+        num_filters: Int, number of subnet filters.
+        num_pose_dims: Int, number of pose dimensions.
+
+    # Returns
+        model: EfficientPose model.
+
+    # References
+        [ybkscht repository implementation of EfficientPose](
+        https://github.com/ybkscht/EfficientPose)
+    """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
     if head_weights not in ['LINEMOD_OCCLUDED', None]:
