@@ -40,7 +40,45 @@ def get_class_names(dataset_name='LINEMOD'):
     return class_names
 
 
-class DetectAndEstimateSingleShot(Processor):
+class DetectAndEstimatePose(Processor):
+    """Object detection and pose estimation for EfficientPose models.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        LINEMOD_CAMERA_MATRIX: Array of shape `(3, 3)`
+            LINEMOD camera matrix.
+        LINEMOD_OBJECT_SIZES: Dict, LINEMOD dataset object sizes.
+        preprocess: Callable, preprocessing pipeline.
+        postprocess: Callable, postprocessing pipeline.
+        variances: List of float values.
+        show_boxes2D: Boolean. If ``True`` prediction
+            are drawn in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses
+            are drawn in the returned image.
+
+    # Properties
+        model: Keras model.
+        class_names: List.
+        score_thresh: Float.
+        nms_thresh: Float.
+        variances: List.
+        class_to_sizes: Dict.
+        camera_matrix: numpy array.
+        colors: List.
+        show_boxes2D: Bool.
+        show_poses6D: Bool.
+        preprocess: Callable.
+        postprocess: Callable.
+        draw_boxes2D: Callable.
+        wrap: Callable.
+
+    # Methods
+        _build_draw_pose6D()
+        call()
+    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
                  postprocess=None, variances=[1.0, 1.0, 1.0, 1.0],
@@ -61,7 +99,7 @@ class DetectAndEstimateSingleShot(Processor):
             self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh)
 
-        super(DetectAndEstimateSingleShot, self).__init__()
+        super(DetectAndEstimatePose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
 
@@ -94,6 +132,19 @@ class DetectAndEstimateSingleShot(Processor):
 
 
 class EfficientPosePreprocess(Processor):
+    """Preprocessing pipeline for EfficientPose.
+
+    # Arguments
+        model: Keras model.
+        mean: Tuple, containing mean per channel on ImageNet.
+        standard_deviation: Tuple, containing standard deviations
+            per channel on ImageNet.
+        camera_matrix:  Array of shape `(3, 3)` camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+    """
     def __init__(self, model, mean=RGB_LINEMOD_MEAN,
                  standard_deviation=RGB_LINEMOD_STDEV,
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
@@ -121,6 +172,16 @@ class EfficientPosePreprocess(Processor):
 
 
 class EfficientPosePostprocess(Processor):
+    """Postprocessing pipeline for EfficientPose.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        variances: List of float values.
+        class_arg: Int, index of the class to be removed.
+    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None):
         super(EfficientPosePostprocess, self).__init__()
@@ -168,7 +229,21 @@ class EfficientPosePostprocess(Processor):
         return boxes2D, poses6D
 
 
-class EFFICIENTPOSEALINEMOD(DetectAndEstimateSingleShot):
+class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
+    """Inference pipeline with EFFICIENTPOSEA trained on LINEMOD.
+
+    # Arguments
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        show_boxes2D: Boolean. If ``True`` prediction
+            are drawn in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses
+            are drawn in the returned image.
+
+    # References
+        [ybkscht repository implementation of EfficientPose](
+        https://github.com/ybkscht/EfficientPose)
+    """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD')
