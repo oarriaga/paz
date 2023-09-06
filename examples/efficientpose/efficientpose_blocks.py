@@ -49,7 +49,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
         num_dims: Int, number of pose dimensions.
 
     # Returns
-        List: containing rotation estimates for every feature level.
+        List: containing rotation estimates from every feature level.
     """
     num_filters = [num_filters, num_dims * num_anchors]
     bias_initializer = tf.zeros_initializer()
@@ -147,7 +147,20 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
 
 def TranslationNet(middles, subnet_iterations, subnet_repeats,
                    num_anchors, num_filters):
+    """Initializes TranslationNet.
 
+    # Arguments
+        middles: List, BiFPN layer output.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_anchors: List, number of combinations of
+            anchor box's scale and aspect ratios.
+        num_filters: Int, number of subnet filters.
+
+    # Returns
+        List: containing translation estimates from every feature level.
+    """
     num_filters = [num_filters, num_anchors * 2, num_anchors]
     bias_initializer = tf.zeros_initializer()
     args = (subnet_repeats, num_filters, bias_initializer)
@@ -158,7 +171,20 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
 
 def build_translation_head(middles, subnet_repeats, num_filters,
                            bias_initializer, gn_groups=4, gn_axis=-1):
+    """Builds TranslationNet head.
 
+    # Arguments
+        middles: List, BiFPN layer output.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_filters: Int, number of subnet filters.
+        bias_initializer: Callable, bias initializer.
+        gn_groups: Int, number of groups in group normalization.
+        gn_axis: Int, group normalization axis.
+
+    # Returns
+        List: Containing translation_features,
+            translations_xy and translations_z.
+    """
     conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
                                     bias_initializer)
     head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
@@ -172,7 +198,7 @@ def build_translation_head(middles, subnet_repeats, num_filters,
         translation_features.append(x)
         translations_xy.append(translation_xy)
         translations_z.append(translation_z)
-    return translation_features, translations_xy, translations_z
+    return [translation_features, translations_xy, translations_z]
 
 
 def build_iterative_translation_subnet(translation_features, translations_xy,
@@ -180,7 +206,26 @@ def build_iterative_translation_subnet(translation_features, translations_xy,
                                        num_filters, bias_initializer,
                                        subnet_iterations, gn_groups=4,
                                        gn_axis=-1):
+    """Builds iterative translation subnets.
 
+    # Arguments
+        translation_features: List, containing
+            features from translation head.
+        translations_xy: List, containing translations
+            in XY directions from translation head.
+        translations_z: List, containing translations
+            in Z directions from translation head.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_filters: Int, number of subnet filters.
+        bias_initializer: Callable, bias initializer.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        gn_groups: Int, number of groups in group normalization.
+        gn_axis: Int, group normalization axis.
+
+    # Returns
+        translations: List, containing final translation values.
+    """
     conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
