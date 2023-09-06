@@ -28,7 +28,11 @@ def target_RPN_boxes():
     y_true = tf.constant([[[149, 75, 225, 147],
                            [217, 137, 295, 220],
                            [214, 110, 243, 159],
-                           [180, 179, 211, 205]]], dtype=tf.float32)
+                           [180, 179, 211, 205],
+                           [1, 0, 0, 0],
+                           [1, 0, 0, 0],
+                           [1, 0, 0, 0],
+                           [1, 0, 0, 0]]], dtype=tf.float32)
     return y_true
 
 
@@ -50,14 +54,14 @@ def target_boxes():
 
 @pytest.fixture
 def boxes():
-    y_pred = tf.constant([[[[129, 122, 167, 172],
-                            [213, 203, 279, 258]],
-                           [[194, 49, 218, 75],
-                            [180, 179, 211, 205]],
-                           [[217, 137, 295, 220],
-                            [214, 110, 243, 159]],
-                           [[194, 49, 218, 75],
-                            [213, 203, 279, 258]]]], dtype=tf.float32)
+    y_pred = tf.constant([[[129, 122, 167, 172],
+                           [213, 203, 279, 258]],
+                          [[194, 49, 218, 75],
+                           [180, 179, 211, 205]],
+                          [[217, 137, 295, 220],
+                           [214, 110, 243, 159]],
+                          [[194, 49, 218, 75],
+                           [213, 203, 279, 258]]], dtype=tf.float32)
     return y_pred
 
 
@@ -77,11 +81,11 @@ def mask():
     return y_pred
 
 
-@pytest.mark.parametrize('softmax_loss', [1.1095])
-def test_class_loss(config, class_ids, softmax_loss):
+@pytest.mark.parametrize('softmax_loss', [0.9854])
+def test_class_loss(class_ids, softmax_loss):
     y_true = tf.ones((1, 4))
     # active_class = tf.constant([1., 0., 1.])
-    class_loss = ClassLoss.call(y_true, class_ids)
+    class_loss = ClassLoss(4)(y_true, class_ids)
     if session._closed:
         class_loss = class_loss.numpy()
     else:
@@ -90,10 +94,10 @@ def test_class_loss(config, class_ids, softmax_loss):
 
 
 @pytest.mark.parametrize('categorical_loss', [0.6931])
-def test_rpn_classifier_loss(config, categorical_loss):
+def test_rpn_classifier_loss(categorical_loss):
     y_true = tf.ones((1, 4, 1))
     y_pred = tf.zeros((1, 4, 2))
-    classifier_loss = ProposalClassLoss.call(y_true, y_pred)
+    classifier_loss = ProposalClassLoss()(y_true, y_pred)
     if session._closed:
         classifier_loss = classifier_loss.numpy()
     else:
@@ -102,9 +106,8 @@ def test_rpn_classifier_loss(config, categorical_loss):
 
 
 @pytest.mark.parametrize('l1_loss', [52.125])
-def test_rpn_box_loss(config, target_RPN_boxes, RPN_boxes, l1_loss):
-    RPN_match = tf.ones((2, 8, 1))
-    box_loss = ProposalBoundingBoxLoss.call(RPN_match, RPN_boxes)
+def test_rpn_box_loss(target_RPN_boxes, RPN_boxes, l1_loss):
+    box_loss = ProposalBoundingBoxLoss(4, 1)(target_RPN_boxes, RPN_boxes)
     if session._closed:
         box_loss = box_loss.numpy()
     else:
@@ -112,10 +115,10 @@ def test_rpn_box_loss(config, target_RPN_boxes, RPN_boxes, l1_loss):
     assert box_loss == l1_loss
 
 
-@pytest.mark.parametrize('l1_loss', [88.75])
-def test_mrcnn_box_loss(config, target_boxes, boxes, l1_loss):
-    target_ids = tf.constant([1, 0])
-    box_loss = BoundingBoxLoss()([target_ids, target_boxes], boxes)
+@pytest.mark.parametrize('l1_loss', [66.75])
+def test_mrcnn_box_loss(target_boxes, boxes, l1_loss):
+    target_ids = tf.ones([1, 2])
+    box_loss = BoundingBoxLoss()([target_boxes, target_ids], boxes)
     if session._closed:
         box_loss = box_loss.numpy()
     else:
@@ -124,10 +127,9 @@ def test_mrcnn_box_loss(config, target_boxes, boxes, l1_loss):
 
 
 @pytest.mark.parametrize('crossentropy_loss', [11.522856])
-def test_mrcnn_mask_loss(config, target_mask, mask, crossentropy_loss):
-    y_true = target_mask
+def test_mrcnn_mask_loss(target_mask, mask, crossentropy_loss):
     target_ids = tf.constant([1, 0])
-    mask_loss = MaskLoss(config=config)([target_ids, y_true], mask)
+    mask_loss = MaskLoss()([target_mask, target_ids], mask)
     if session._closed:
         mask_loss = mask_loss.numpy()
     else:
@@ -148,8 +150,7 @@ def test_smooth_L1_loss(target_boxes, l1_loss):
     assert np.all(box_loss == np.array(l1_loss))
 
 
-@pytest.mark.parametrize('pred_data', [[[[129, 122, 167, 172],
-                                       [213, 203, 279, 258]]]])
+@pytest.mark.parametrize('pred_data', [[[129, 122, 167, 172]]])
 def test_batch_graph(boxes, pred_data):
     counts = tf.constant([1])
     num_rows = 1

@@ -128,4 +128,8 @@ class ProposalLayer(Layer):
         proposals = slice_batch([boxes, scores],
                                 [self.proposal_count, self.nms_threshold],
                                 compute_NMS, self.images_per_gpu)
+        if not context.executing_eagerly():
+            # Infer the static output shape:
+            out_shape = (None, self.proposal_count, 4)
+            proposals.set_shape(out_shape)
         return proposals

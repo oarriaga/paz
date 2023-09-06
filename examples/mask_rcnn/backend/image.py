@@ -48,10 +48,11 @@ def crop_resize_masks(boxes, mask, small_mask_shape):
     """
     smaller_masks = np.zeros(small_mask_shape + (mask.shape[-1],), dtype=bool)
     for instance in range(mask.shape[-1]):
-        small_mask = mask[:, :, instance].astype(bool)
+        small_mask = mask[:, :, instance]
         y1, x1, y2, x2 = boxes[instance, :4]
         small_mask = small_mask[y1:y2, x1:x2]
-        small_mask = resize_image(small_mask, small_mask_shape)
+
+        small_mask = resize_image(np.array(small_mask), small_mask_shape)
         smaller_masks[:, :, instance] = np.around(small_mask).astype(bool)
     return smaller_masks
 

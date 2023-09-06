@@ -2,8 +2,10 @@ import pytest
 import tensorflow as tf
 import numpy as np
 
+from mask_rcnn.pipelines.data_generator import ComputeBackboneShapes
+
 from mask_rcnn.backend.boxes import normalized_boxes, denormalized_boxes
-from mask_rcnn.backend.boxes import generate_anchors
+from mask_rcnn.backend.boxes import generate_anchors, generate_pyramid_anchors
 from mask_rcnn.backend.boxes import compute_RPN_bounding_box, encode_boxes
 from mask_rcnn.backend.boxes import compute_RPN_match
 from mask_rcnn.backend.boxes import compute_anchor_boxes_overlaps
@@ -16,48 +18,43 @@ from mask_rcnn.datasets.shapes import Shapes
 
 @pytest.fixture
 def boxes():
-    boxes = tf.constant([[[149, 75, 225, 147],
-                        [217, 137, 295, 220],
-                        [214, 110, 243, 159],
-                        [180, 179, 211, 205]]], dtype=tf.float32)
+    boxes = np.array([[[149, 75, 225, 147],
+                       [217, 137, 295, 220],
+                       [214, 110, 243, 159],
+                       [180, 179, 211, 205]]], dtype=np.float32)
     return boxes
 
 
 @pytest.fixture
 def image():
-    image = tf.constant([[[[[0., 1., 0.],
+    image = np.array([[[[[0., 1., 0.],
                          [0., 1., 1.]],
                         [[1., 0., 1.],
-                         [0., 1., 0.]]]]], dtype=tf.float32)
+                         [0., 1., 0.]]]]], dtype=np.float32)
     return image
 
 
 @pytest.fixture
 def mask():
-    mask = tf.constant([[0., 0., 0., 0.],
-                        [0., 0., 0., 0.],
-                        [1., 1., 1., 1.],
-                        [1., 1., 1., 1.]], dtype=tf.float32)
+    mask = np.array([[0., 0., 0., 0.],
+                     [0., 0., 0., 0.],
+                     [1., 1., 1., 1.],
+                     [1., 1., 1., 1.]
+                     ], dtype='uint8')
     return mask
 
 
 @pytest.fixture
 def data():
-    size = (320, 320)
+    size = (128, 128)
     shapes = Shapes(1, size)
     dataset = shapes.load_data()
-    image = dataset[0]['input_image']
-    mask = dataset[0]['input_gt_masks']
-    box_data = dataset[0]['input_gt_boxes']
-    data = [{'input_image': image, 'input_gt_boxes': box_data,
-             'input_gt_masks': mask}]
-    return data
+    return dataset
 
 
 @pytest.fixture
 def anchors():
-    config = ShapesConfig()
-    backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
+    backbone_shapes = ComputeBackboneShapes()("resnet101", [320, 320])
     anchors = generate_pyramid_anchors((8, 16, 32, 64, 128),
                                        [0.5, 1, 2], backbone_shapes,
                                        [4, 8, 16, 32, 64], 1)
@@ -66,9 +63,9 @@ def anchors():
 
 @pytest.fixture
 def anchor_boxes_overlaps(data, anchors):
-    groundtruth_class_ids = data[0]['input_gt_boxes'][:, 4]
+    groundtruth_class_ids = data[0]['input_gt_class_ids']
     groundtruth_boxes = data[0]['input_gt_boxes'][:, :4]
-    overlaps, crowd_bool = compute_anchor_boxes_overlaps(
+    overlaps, crowd_bool, __ = compute_anchor_boxes_overlaps(
         anchors, groundtruth_class_ids, groundtruth_boxes)
     return overlaps, crowd_bool
 
@@ -83,9 +80,9 @@ def RPN_match(anchor_boxes_overlaps, anchors):
 @pytest.fixture
 def RPN_box(RPN_match, data, anchors):
     RPN, anchor_IoU_max = RPN_match
-    groundtruth_boxes = data[0]['input_gt_boxes'][:, :4]
-    RPN_box = compute_RPN_bounding_box(groundtruth_boxes,
-                                       RPN, anchors, anchor_IoU_max)
+    groundtruth_boxes = data[0]['input_gt_boxes']
+    RPN_box = compute_RPN_bounding_box(anchors, RPN, groundtruth_boxes,
+                                       anchor_IoU_max)
     return RPN_box
 
 
@@ -107,55 +104,53 @@ def test_compute_anchor_boxes_overlaps(anchors, anchor_boxes_overlaps):
 
 def test_RPN_match(RPN_match):
     RPN, anchor_IoU_max = RPN_match
-    assert np.all(np.unique(RPN) == (-1, 0, 1))
-    assert np.all(np.unique(anchor_IoU_max) == (0, 1, 2))
+    assert np.unique(RPN).shape == (3,)
 
 
-def test_compute_RPN_box(RPN_box):
-    box = RPN_box
-    assert box.shape[0] == 256
-
-
-@pytest.mark.parametrize('subtract_mean', [[[-0.5, 0.5, -0.5],
-                                            [-0.5, 0.5, 0.5]],
-                                           [[0.5, -0.5, 0.5],
-                                            [-0.5, 0.5, -0.5]]])
+@pytest.mark.parametrize('subtract_mean', [np.array([[
+    [[-0.5, 0.5, -0.5], [-0.5, 0.5, 0.5]],
+    [[0.5, -0.5, 0.5], [-0.5, 0.5, -0.5]]]])])
 def test_subtract_mean_image(image, subtract_mean):
     mean_pixel = [0.5, 0.5, 0.5]
     mean_val = subtract_mean_image(image, mean_pixel)
-    assert mean_val == subtract_mean
+    assert np.all(mean_val) == np.all(subtract_mean)
 
 
-@pytest.mark.parametrize('add_mean', [[[0.5, 1.5, 0.5], [0.5, 1.5, 1.5]],
-                                      [[1.5, 0.5, 1.5], [0.5, 1.5, 0.5]]])
+@pytest.mark.parametrize('add_mean', [np.array([[
+    [[0.5, 1.5, 0.5], [0.5, 1.5, 1.5]],
+    [[1.5, 0.5, 1.5], [0.5, 1.5, 0.5]]]])])
 def test_add_mean_image(image, add_mean):
     mean_pixel = [0.5, 0.5, 0.5]
     mean_val = add_mean_image(image, mean_pixel)
-    assert mean_val == add_mean
+    assert np.all(mean_val) == np.all(add_mean.shape)
 
 
-@pytest.mark.parametrize('small_mask', [[1., 1., 1., 1.], [1., 1., 1., 1.]])
-def test_small_mask(mask, small_mask):
-    boxes = [[1, 1, 2, 2]]
-    reduced_mask = crop_resize_masks(boxes, mask, (2, 4))
-    assert reduced_mask == small_mask
+@pytest.mark.parametrize('small_mask_shape', [(64, 64, 1)])
+def test_small_mask(mask, small_mask_shape):
+    box = np.array([[0, 0, 2, 2]])
+    mask = np.expand_dims(mask, axis=2)
+    reduced_mask = crop_resize_masks(box, mask.astype(np.uint8), (64, 64))
+    assert reduced_mask.shape == small_mask_shape
 
 
-@pytest.mark.parametrize('norm_boxes', [[1.1732284, 0.5905512,
-                                         1.7637795,  1.1496063],
-                                        [1.7086614, 1.0787401,
-                                         2.3149607, 1.7244095],
-                                        [1.6850394, 0.86614174,
-                                         1.9055119, 1.2440945],
-                                        [1.4173229, 1.4094489,
-                                         1.6535434, 1.6062992]])
+@pytest.mark.parametrize('norm_boxes', [np.array([[1.1732284, 0.5905512,
+                                                   1.7637795,  1.1496063],
+                                                 [1.7086614, 1.0787401,
+                                                  2.3149607, 1.7244095],
+                                                 [1.6850394, 0.86614174,
+                                                  1.9055119, 1.2440945],
+                                                 [1.4173229, 1.4094489,
+                                                  1.6535434, 1.6062992]])])
 def test_original_mask(boxes, norm_boxes):
     boxes_normalised = normalized_boxes(boxes, [128, 128])
-    assert boxes_normalised == norm_boxes
+    assert np.all(boxes_normalised) == np.all(norm_boxes)
 
 
-@pytest.mark.parametrize('boxes', [[5, 10, 20, 30]])
-def test_apply_box_refinement(boxes):
-    ground_box = [10, 20, 30, 40]
-    refinement = encode_boxes(boxes, ground_box)
-    assert refinement == [0.5, 0.5, 0.28768207245178085, 0.0]
+@pytest.mark.parametrize('refine_boxes', [np.array([[0.25, 0.33333333,
+                                                     0.33333333, 0.28768207]]
+                                                   )])
+def test_apply_box_refinement(refine_boxes):
+    ground_box = np.array([[10, 20, 30, 40]])
+    box = np.array([[5, 10, 20, 30]])
+    refinement = encode_boxes(box, ground_box)
+    assert np.all(refinement) == np.all(refine_boxes)

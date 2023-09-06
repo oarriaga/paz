@@ -30,7 +30,7 @@ class MaskRCNNPipeline(SequentialProcessor):
         self.add(ControlMap(self.make_rpn_labels, [1, 2], [1, 2, 4, 5]))
         self.add(ControlMap(self.preprocess_data, [0, 1, 2, 3], [0, 1, 2, 3]))
 
-        rpn_size = np.sum(strides) * ROI_positive_ratio * max_instances
+        rpn_size = int(np.sum(strides) * ROI_positive_ratio * max_instances)
 
         self.add(SequenceWrapper(
             {0: {'input_image': [image_shape[0], image_shape[1],
