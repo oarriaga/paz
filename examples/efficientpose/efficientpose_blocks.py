@@ -23,8 +23,8 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
 
     # Returns
         List: Containing estimated rotations and translations of shape
-        `[None, num_boxes + num_dims]` and
-        `[None, num_boxes + num_dims]` respectively.
+        `[None, num_boxes, num_dims]` and
+        `[None, num_boxes, num_dims]` respectively.
     """
     args = (middles, subnet_iterations, subnet_repeats, num_anchors)
     rotations = RotationNet(*args, num_filters, num_dims)
@@ -88,6 +88,19 @@ def build_rotation_head(middles, subnet_repeats, num_filters,
 
 
 def conv2D_norm_activation(x, conv_blocks, repeats, gn_groups, gn_axis):
+    """Builds group normalization blocks followed by activation.
+
+    # Arguments
+        x: Tensor, BiFPN layer output.
+        conv_blocks: List, containing convolutional blocks.
+        repeats: Int, number of layers used in subnetworks.
+        gn_groups: Int, number of groups in group normalization.
+        gn_axis: Int, group normalization axis.
+
+    # Returns
+        x: Tensor, after repeated convolution,
+            group normalization and activation.
+    """
     for block_arg in range(repeats):
         x = conv_blocks[block_arg](x)
         x = GroupNormalization(groups=gn_groups, axis=gn_axis)(x)
@@ -99,7 +112,23 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
                                     subnet_iterations, subnet_repeats,
                                     num_filters, bias_initializer,
                                     num_dims, gn_groups=4, gn_axis=-1):
+    """Builds iterative rotation subnets.
 
+    # Arguments
+        rotation_features: List, containing features from rotation head.
+        initial_rotations: List, containing initial rotation values.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        num_filters: Int, number of subnet filters.
+        bias_initializer: Callable, bias initializer.
+        num_dims: Int, number of pose dimensions.
+        gn_groups: Int, number of groups in group normalization.
+        gn_axis: Int, group normalization axis.
+
+    # Returns
+        rotations: List, containing final rotation values.
+    """
     conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
