@@ -111,7 +111,29 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientpose-a',
                    scaling_coefficients=(1.0, 1.0, 0.8)):
+    """Instantiates EfficientPose-A model.
 
+    # Arguments
+        num_classes: Int, number of object classes.
+        base_weights: Str, base weights name.
+        head_weights: Str, head weights name.
+        input_shape: Tuple, holding input image size.
+        FPN_num_filters: Int, number of FPN filters.
+        FPN_cell_repeats: Int, number of FPN blocks.
+        subnet_repeats: Int, number of layers used in subnetworks.
+        subnet_iterations: Int, number of iterative refinement
+            steps used in rotation and translation subnets.
+        box_class_repeats: Int, Number of regression
+            and classification blocks.
+        anchor_scale: Int, number of anchor scales.
+        fusion: Str, feature fusion weighting method.
+        return_base: Bool, whether to return base or not.
+        model_name: Str, EfficientDet model name.
+        scaling_coefficients: Tuple, EfficientNet scaling coefficients.
+
+    # Returns
+        model: EfficientPose-A model.
+    """
     image = Input(shape=input_shape, name='image')
     EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients)
     model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
