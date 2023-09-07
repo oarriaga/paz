@@ -14,6 +14,13 @@ from .detection import NonMaximumSuppressionPerClass
 from .detection import FilterBoxes
 from .detection import OffsetBoxes2D
 from .detection import CropImage
+from .detection import RemoveClass
+from .detection import ScaleBox
+from .detection import BoxesToBoxes2D
+from .detection import BoxesWithOneHotVectorsToBoxes2D
+from .detection import BoxesWithClassArgToBoxes2D
+from .detection import RoundBoxes
+from .detection import MergeNMSBoxWithClass
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
@@ -26,6 +33,7 @@ from .draw import DrawHandSkeleton
 from .draw import DrawRGBMask
 from .draw import DrawRGBMasks
 from .draw import DrawText
+from .draw import DrawHumanPose6D
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -57,11 +65,15 @@ from .image import NormalizedDeviceCoordinatesToImage
 from .image import ReplaceLowerThanThreshold
 from .image import GetNonZeroArguments
 from .image import GetNonZeroValues
+from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
+from .image import DivideStandardDeviationImage
+from .image import ScaledResize
 
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
+from .image import RGB_IMAGENET_STDEV
 
 from .renderer import Render
 
@@ -95,6 +107,12 @@ from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
 from .keypoints import ComputeOrientationVector
+from .keypoints import MergeKeypoints2D
+from .keypoints import FilterKeypoints2D
+from .keypoints import StandardizeKeypoints2D
+from .keypoints import DestandardizeKeypoints2D
+from .keypoints import OptimizeHumanPose3D
+
 
 from .standard import ControlMap
 from .standard import ExpandDomain
@@ -118,9 +136,11 @@ from .standard import UnwrapDictionary
 from .standard import Scale
 from .standard import AppendValues
 from .standard import BooleanToTextMessage
+from .standard import PrintTopics
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
+from .pose import Translation3DFromBoxWidth
 
 from .groups import ToAffineMatrix
 from .groups import RotationVectorToQuaternion

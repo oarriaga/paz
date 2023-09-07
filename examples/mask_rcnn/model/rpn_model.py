@@ -26,7 +26,7 @@ def RPN_model(RPN_anchor_stride, RPN_anchor_ratios, FPN_size,
     """
     RPN = build_RPN(RPN_anchor_stride, len(RPN_anchor_ratios), FPN_size)
     layer_outputs = [RPN([feature]) for feature in RPN_feature_maps]
-    names = ['RPN_class_logits', 'RPN_class', 'RPN_bounding_box']
+    names = ['rpn_class_logits', 'rpn_class', 'rpn_bounding_box']
     outputs = list(zip(*layer_outputs))
     outputs = [Concatenate(axis=1, name=name)(list(output))
                for output, name in zip(outputs, names)]
@@ -51,18 +51,18 @@ def build_RPN(anchor_stride, anchors_per_location, depth):
                   (dy, dx, log(dh), log(dw))] Deltas to be applied to anchors.
     """
     feature_map = Input(shape=[None, None, depth],
-                        name='input_RPN_feature_map')
+                        name='input_rpn_feature_map')
 
     shared = Conv2D(512, (3, 3), padding='same', activation='relu',
-                    strides=anchor_stride, name='RPN_conv_shared')(feature_map)
+                    strides=anchor_stride, name='rpn_conv_shared')(feature_map)
 
     RPN_class_logits = build_head(shared, 2, anchors_per_location, (1, 1),
-                                  name='RPN_class_raw')
+                                  name='rpn_class_raw')
     RPN_probs = Activation('softmax', name='RPN_class_xxx')(RPN_class_logits)
     RPN_bbox = build_head(shared, 4, anchors_per_location, (1, 1),
-                          name='RPN_bbox_pred')
+                          name='rpn_bbox_pred')
     return Model([feature_map], [RPN_class_logits, RPN_probs, RPN_bbox],
-                 name='RPN_model')
+                 name='rpn_model')
 
 
 def build_head(x, num_dim, anchors_per_location, shape, name=''):

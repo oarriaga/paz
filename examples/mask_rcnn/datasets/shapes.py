@@ -22,7 +22,7 @@ class Shapes(Loader):
             containing
     """
     def __init__(self, num_samples, image_size, split='train',
-                 class_names='all', iou_thresh=0.3, max_num_shapes=4):
+                 class_names='all', IoU_thresh=0.3, max_num_shapes=4):
         if class_names == 'all':
             class_names = ['BG', 'square', 'circle', 'triangle']
         self.name_to_arg = dict(zip(class_names, range(len(class_names))))
@@ -30,7 +30,7 @@ class Shapes(Loader):
         self.num_samples, self.image_size = num_samples, image_size
         self.labels = ['input_image', 'input_gt_class_ids', 'input_gt_boxes',
                        'input_gt_masks']
-        self.iou_thresh = iou_thresh
+        self.IoU_thresh = IoU_thresh
         self.max_num_shapes = max_num_shapes
         super(Shapes, self).__init__(None, split, class_names, 'Shapes')
 
@@ -40,7 +40,7 @@ class Shapes(Loader):
     def load_sample(self):
         shapes = self._sample_shapes(self.max_num_shapes, *self.image_size)
         boxes = self._compute_bounding_boxes(shapes)
-        shapes, boxes = self._filter_shapes(boxes, shapes, self.iou_thresh)
+        shapes, boxes = self._filter_shapes(boxes, shapes, self.IoU_thresh)
         image = self._draw_shapes(shapes)
         masks = self._draw_masks(shapes)
 
@@ -83,9 +83,9 @@ class Shapes(Loader):
             boxes.append(box)
         return np.asarray(boxes)
 
-    def _filter_shapes(self, boxes, shapes, iou_thresh):
+    def _filter_shapes(self, boxes, shapes, IoU_thresh):
         scores = np.ones(len(boxes))
-        args, num_boxes = apply_non_max_suppression(boxes, scores, iou_thresh)
+        args, num_boxes = apply_non_max_suppression(boxes, scores, IoU_thresh)
         box_args = args[:num_boxes]
         selected_shapes = []
         for box_arg in box_args:
@@ -133,7 +133,8 @@ class Shapes(Loader):
         """Compute bounding boxes from masks.
 
         # Arguments:
-            mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
+            mask: [height, width, num_instances]. Mask pixels are either 1 or
+                   0.
 
         # Returns:
             box array [no. of instances, (x1, y1, x2, y2)].

@@ -2,12 +2,12 @@ import numpy as np
 import colorsys
 import random
 import cv2
+from paz.backend.keypoints import project_to_image
 
 GREEN = (0, 255, 0)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 LINE = cv2.LINE_AA
 FILLED = cv2.FILLED
-
 
 def draw_square(image, center, color, size):
     """Draw a square in an image
@@ -289,29 +289,32 @@ def make_mosaic(images, shape, border=0):
     # Arguments
         images: Numpy array of shape (num_images, height, width, num_channels)
         shape: List of two integers indicating the mosaic shape.
-            Shape must satisfy: shape[0] * shape[1] == len(images).
         border: Integer indicating the border per image.
 
     # Returns
         A numpy array containing all images.
+
+    # Exceptions
+        Shape must satisfy `len(images) > shape[0] * shape[1]`
     """
-    num_images = len(images)
+    num_images, H, W, num_channels = images.shape
     num_rows, num_cols = shape
-    H, W, num_channels = images.shape[1:]
-    mosaic = np.ma.masked_all(
-        (num_rows * H + (num_rows - 1) * border,
-         num_cols * W + (num_cols - 1) * border, num_channels),
-        dtype=np.float32)
+    if num_images > (num_rows * num_cols):
+        raise ValueError('Number of images is bigger than shape')
+
+    total_rows = (num_rows * H) + ((num_rows - 1) * border)
+    total_cols = (num_cols * W) + ((num_cols - 1) * border)
+    mosaic = np.ones((total_rows, total_cols, num_channels))
+
     padded_H = H + border
     padded_W = W + border
-    for image_arg in range(num_images):
+
+    for image_arg, image in enumerate(images):
         row = int(np.floor(image_arg / num_cols))
         col = image_arg % num_cols
-        image = images[image_arg]
-        image_shape = image.shape
-        mosaic[row * padded_H:row * padded_H + image_shape[0],
-               col * padded_W:col * padded_W + image_shape[1], :] = image
-    return mosaic.astype('uint8')
+        mosaic[row * padded_H:row * padded_H + H,
+               col * padded_W:col * padded_W + W, :] = image
+    return mosaic
 
 
 def draw_points2D(image, points2D, colors):
@@ -441,4 +444,42 @@ def draw_RGB_masks(image, points2D, points3D, object_sizes):
     for instance_points2D, instance_points3D in zip(points2D, points3D):
         image = draw_RGB_mask(
             image, instance_points2D, instance_points3D, object_sizes)
+    return image
+
+
+def draw_human_pose6D(image, rotation, translation, camaera_intrinsics):
+    """Draw basis vectors for human pose 6D
+
+    # Arguments
+        image: numpy array
+        rotation: numpy array of size (3 x 3)
+        translations: list of length 3
+        camera_matrix: numpy array
+
+    # Returns
+        image: numpy array
+               image with basis vectors of rotaion and translation.
+    """
+    points3D = np.array([[1, 0, 0],
+                         [0, 1, 0],
+                         [0, 0, 1]])
+    points2D = project_to_image(rotation, translation,
+                                points3D, camaera_intrinsics)
+    points2D = points2D.astype(np.int32)
+
+    x = points2D[0]
+    y = points2D[1]
+    z = points2D[2]
+
+    x_hat = (x / np.linalg.norm(x) * 60).astype(np.int32)
+    y_hat = (y / np.linalg.norm(y) * 60).astype(np.int32)
+    z_hat = (z / np.linalg.norm(z) * 60).astype(np.int32)
+
+    offset = [50, 50]
+    image = draw_line(image, offset, x_hat + offset,
+                      color=[255, 0, 0], thickness=4)
+    image = draw_line(image, offset, y_hat + offset,
+                      color=[0, 255, 0], thickness=4)
+    image = draw_line(image, offset, z_hat + offset,
+                      color=[0, 0, 255], thickness=4)
     return image

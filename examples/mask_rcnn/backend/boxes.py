@@ -94,32 +94,6 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     return boxes
 
 
-def extract_boxes_from_masks(masks):
-    """Compute bounding boxes from masks.
-
-    # Arguments:
-        mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
-
-    # Returns:
-        box array [no. of instances, (x1, y1, x2, y2)].
-    """
-    boxes = np.zeros([masks.shape[-1], 4], dtype=np.int32)
-
-    for instance in range(masks.shape[-1]):
-        mask = masks[:, :, instance]
-        horizontal_indicies = np.where(np.any(mask, axis=0))[0]
-        vertical_indicies = np.where(np.any(mask, axis=1))[0]
-        if horizontal_indicies.shape[0]:
-            x1, x2 = horizontal_indicies[[0, -1]]
-            y1, y2 = vertical_indicies[[0, -1]]
-            x2 += 1
-            y2 += 1
-        else:
-            x1, x2, y1, y2 = 0, 0, 0, 0
-        boxes[instance] = np.array([y1, x1, y2, x2])
-    return boxes
-
-
 def compute_RPN_bounding_box(anchors, rpn_match, groundtruth_boxes,
                              anchor_iou_argmax,
                              std_dev=np.array([0.1, 0.1, 0.2, 0.2])):
@@ -189,7 +163,7 @@ def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids,
         non_crowd_ix = np.where(groundtruth_class_ids > 0)[0]
         crowd_boxes = groundtruth_boxes[crowd_instances]
 
-        groundtruth_boxes = groundtruth_boxes[non_crowd_instances]
+        groundtruth_boxes = groundtruth_boxes[non_crowd_ix]
         crowd_overlaps = compute_ious(anchors, crowd_boxes)
         crowd_iou_max = np.amax(crowd_overlaps, axis=1)
         no_crowd_bool = (crowd_iou_max < crowd_threshold)
@@ -241,3 +215,27 @@ def compute_RPN_match(anchors, overlaps, no_crowd_bool, anchor_size=256):
         ids = np.random.choice(ids, extra, replace=False)
         rpn_match[ids] = 0
     return rpn_match, anchor_iou_argmax
+
+
+def concatenate_RPN_values(RPN_bounding_box, RPN_match, anchors_shape,
+                           RPN_box_shape=256):
+    """
+    Concatenate RPN match and RPN bounding box values to handle RPN losses
+    directly to the model.
+
+    # Arguments:
+    RPN_bounding_box: [N, (x1, y1, x2, y2)]
+    RPN_match: [anchor_shape, num_groundtruth_boxes]
+    anchors_shape: [N, 4]
+
+    # Return:
+    RPN_values: [N]
+    """
+    zeros_array = np.zeros((anchors_shape, 3))
+    RPN_bounding_box_padded = np.zeros((RPN_box_shape, 4))
+    RPN_match = np.reshape(RPN_match, (-1, 1))
+    RPN_match_padded = np.concatenate((RPN_match, zeros_array), axis=1)
+    RPN_bounding_box_padded[:len(RPN_bounding_box)] = RPN_bounding_box
+    RPN_values = np.concatenate((RPN_bounding_box_padded,
+                                 RPN_match_padded))
+    return RPN_values

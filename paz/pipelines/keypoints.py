@@ -1,3 +1,5 @@
+import numpy as np
+
 from tensorflow.keras.utils import get_file
 
 from .renderer import RenderTwoViews
@@ -6,13 +8,17 @@ from .heatmaps import GetHeatmapsAndTags
 
 from .. import processors as pr
 from ..abstract import SequentialProcessor, Processor
-from ..models import KeypointNet2D, HigherHRNet, DetNet
+from ..models import KeypointNet2D, HigherHRNet, DetNet, SimpleBaseline
 from .angles import IKNetHandJointAngles
 
-
-from ..backend.image import get_affine_transform, flip_left_right
+from ..backend.image import get_affine_transform, lincolor
+from ..backend.keypoints import human_pose3D_to_pose6D
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
+
+from ..datasets.human36m import data_mean2D, data_stdev2D, args_to_mean
+from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
+from ..datasets.human36m import h36m_to_coco_joints2D, args_to_joints3D
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -276,24 +282,26 @@ class DetNetHandKeypoints(pr.Processor):
         super(DetNetHandKeypoints).__init__()
         self.draw = draw
         self.right_hand = right_hand
-        self.preprocess = pr.SequentialProcessor(
-            [pr.ResizeImage(shape), pr.ExpandDims(axis=0)])
-        self.hand_estimator = DetNet()
+        self.preprocess = pr.SequentialProcessor()
+        self.preprocess.add(pr.ResizeImage(shape))
+        self.preprocess.add(pr.ExpandDims(axis=0))
+        if self.right_hand:
+            self.preprocess.add(pr.FlipLeftRightImage())
+        self.predict = pr.Predict(model=DetNet(), preprocess=self.preprocess)
         self.scale_keypoints = pr.ScaleKeypoints(scale=4, shape=shape)
         self.draw_skeleton = pr.DrawHandSkeleton()
         self.wrap = pr.WrapOutput(['image', 'keypoints3D', 'keypoints2D'])
 
-    def call(self, input_image):
-        image = self.preprocess(input_image)
-        if self.right_hand:
-            image = flip_left_right(image)
-        keypoints3D, keypoints2D = self.hand_estimator.predict(image)
+    def call(self, image):
+        keypoints3D, keypoints2D = self.predict(image)
+        keypoints3D = keypoints3D.numpy()
+        keypoints2D = keypoints2D.numpy()
         if self.right_hand:
             keypoints2D = flip_keypoints_left_right(keypoints2D)
         keypoints2D = uv_to_vu(keypoints2D)
-        keypoints2D = self.scale_keypoints(keypoints2D, input_image)
+        keypoints2D = self.scale_keypoints(keypoints2D, image)
         if self.draw:
-            image = self.draw_skeleton(input_image, keypoints2D)
+            image = self.draw_skeleton(image, keypoints2D)
         return self.wrap(image, keypoints3D, keypoints2D)
 
 
@@ -328,3 +336,132 @@ class MinimalHandPoseEstimation(pr.Processor):
         return self.wrap(keypoints['image'], keypoints['keypoints3D'],
                          keypoints['keypoints2D'], angles['absolute_angles'],
                          angles['relative_angles'])
+
+
+class DetectMinimalHand(pr.Processor):
+    def __init__(self, detect, estimate_keypoints, offsets=[0, 0], radius=3):
+        """Minimal hand detection and keypoint estimator pipeline.
+
+        # Arguments
+            detect: Function for detecting objects. The output should be a
+                dictionary with key ``Boxes2D`` containing a list
+                of ``Boxes2D`` messages.
+            estimate_keypoints: Function for estimating keypoints. The output
+                should be a dictionary with key ``keypoints`` containing
+                a numpy array of keypoints.
+            offsets: List of two elements. Each element must be between [0, 1].
+            radius: Int indicating the radius of the keypoints to be drawn.
+        """
+        super(DetectMinimalHand, self).__init__()
+        self.class_names = ['OPEN', 'CLOSE']
+        self.colors = lincolor(len(self.class_names))
+        self.detect = detect
+        self.estimate_keypoints = estimate_keypoints
+        self.classify_hand_closure = pr.SequentialProcessor(
+            [pr.IsHandOpen(), pr.BooleanToTextMessage('OPEN', 'CLOSE')])
+        self.square = pr.SequentialProcessor()
+        self.square.add(pr.SquareBoxes2D())
+        self.square.add(pr.OffsetBoxes2D(offsets))
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
+        self.change_coordinates = pr.ChangeKeypointsCoordinateSystem()
+        self.draw = pr.DrawHandSkeleton(keypoint_radius=radius)
+        self.draw_boxes = pr.DrawBoxes2D(self.class_names, self.colors,
+                                         with_score=False)
+        self.wrap = pr.WrapOutput(
+            ['image', 'boxes2D', 'keypoints2D', 'keypoints3D'])
+
+    def call(self, image):
+        boxes2D = self.detect(image.copy())['boxes2D']
+        boxes2D = self.square(boxes2D)
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        keypoints2D = []
+        keypoints3D = []
+        for cropped_image, box2D in zip(cropped_images, boxes2D):
+            inference = self.estimate_keypoints(cropped_image)
+            keypoints = self.change_coordinates(
+                inference['keypoints2D'], box2D)
+            hand_closure_status = self.classify_hand_closure(
+                inference['relative_angles'])
+            box2D.class_name = hand_closure_status
+            keypoints2D.append(keypoints)
+            keypoints3D.append(inference['keypoints3D'])
+            image = self.draw(image, keypoints)
+        image = self.draw_boxes(image, boxes2D)
+        return self.wrap(image, boxes2D, keypoints2D, keypoints3D)
+
+
+class EstimateHumanPose3D(Processor):
+    """ Estimate human pose 3D from 2D human pose.
+
+    # Arguments
+    input_shape: tuple
+    num_keypoints: Int. Number of keypoints.
+
+    # Return
+        keypoints3D: human pose 3D
+    """
+    def __init__(self, input_shape=(32,), num_keypoints=16):
+        super(EstimateHumanPose3D, self).__init__()
+        self.model = SimpleBaseline(input_shape, num_keypoints)
+        self.preprocessing = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D),
+             pr.StandardizeKeypoints2D(data_mean2D, data_stdev2D)])
+        self.postprocess = pr.DestandardizeKeypoints2D(
+            data_mean3D, data_stdev3D, dim_to_use3D)
+        self.predict = pr.Predict(self.model, self.preprocessing,
+                                  self.postprocess)
+
+    def call(self, keypoints2D):
+        keypoints3D = self.predict(keypoints2D)
+        return keypoints3D
+
+
+class EstimateHumanPose(pr.Processor):
+    """ Estimates 2D and 3D keypoints of human from an image
+
+    # Arguments
+        estimate_keypoints_3D: 3D simple baseline model
+        args_to_mean: keypoints indices
+        h36m_to_coco_joints2D: h36m joints indices
+
+    # Returns
+        keypoints2D, keypoints3D
+    """
+    def __init__(self, solver, camera_intrinsics,
+                 args_to_joints3D=args_to_joints3D, filter=True, draw=True,
+                 draw_pose=True):
+        super(EstimateHumanPose, self).__init__()
+        self.pose3D = []
+        self.pose6D = []
+        self.draw = draw
+        self.filter = filter
+        self.draw_pose = draw_pose
+        self.estimate_keypoints_2D = HigherHRNetHumanPose2D(draw=draw)
+        self.estimate_keypoints_3D = EstimateHumanPose3D()
+        self.optimize = pr.OptimizeHumanPose3D(
+            args_to_joints3D, solver, camera_intrinsics)
+        self.draw_text = pr.DrawText(scale=0.5, thickness=1)
+        self.draw_pose6D = pr.DrawHumanPose6D(camera_intrinsics)
+        self.wrap = pr.WrapOutput(['image', 'keypoints2D', 'keypoints3D',
+                                   'pose6D'])
+
+    def call(self, image):
+        inferences2D = self.estimate_keypoints_2D(image)
+        keypoints2D = inferences2D['keypoints']
+        if self.draw:
+            image = inferences2D['image']
+        if len(keypoints2D) > 0:
+            keypoints3D = self.estimate_keypoints_3D(keypoints2D)
+            keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
+            optimized_output = self.optimize(keypoints3D, keypoints2D)
+            joints2D, joints3D, self.pose3D, projection2D = optimized_output
+            self.pose6D = human_pose3D_to_pose6D(self.pose3D[0])
+            if self.draw_pose:
+                rotation, translation = self.pose6D
+                image = self.draw_pose6D(image, rotation, translation)
+                translation = ["%.2f" % item for item in translation]
+                image = self.draw_text(image, str(translation), (30, 30))
+        return self.wrap(image, keypoints2D, self.pose3D, self.pose6D)

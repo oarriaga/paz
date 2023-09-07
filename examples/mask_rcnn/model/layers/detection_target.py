@@ -11,12 +11,12 @@ def trim_zeros(boxes):
 
     # Arguments:
         boxes: [N, 4] matrix of boxes.
-        non_zeros: [N] a 1D boolean mask identifying the rows to keep
+        non_zeros: [N] a 1D boolean mask identifying the rows to keep.
 
     # Returns:
-        boxes: [N, 4] matrix of boxes after removing zeros values
+        boxes: [N, 4] matrix of boxes after removing zeros values.
         non_zeros: [N] a 1D boolean mask identifying the rows to keep after
-        removing zero values
+        removing zero values.
     """
     non_zeros = tf.cast(tf.reduce_sum(tf.abs(boxes), axis=1), tf.bool)
     boxes = tf.boolean_mask(boxes, non_zeros)
@@ -27,8 +27,8 @@ def refine_bounding_box(box, prior_box):
     """Compute refinement needed to transform box to groundtruth_box.
 
     # Arguments:
-        box: [N, (y_min, x_min, y_max, x_max)]
-        prior_box: Ground-truth box [N, (y_min, x_min, y_max, x_max)]
+        box: [N, (y_min, x_min, y_max, x_max)].
+        prior_box: Ground-truth box [N, (y_min, x_min, y_max, x_max)].
     """
     box = tf.cast(box, tf.float32)
     prior_box = tf.cast(prior_box, tf.float32)
@@ -57,21 +57,21 @@ def refine_bounding_box(box, prior_box):
 def pad_ROIs_value(positive_ROIs, negative_ROIs, ROI_class_ids, deltas,
                    masks, train_ROIs_per_image):
     """Used by Detection target layer in detection_target_graph.
-    Zero pad prior deltas and masks to image size.
+    Zero pads prior deltas and masks to image size.
 
     # Arguments:
-        num_positives: no of positive ROIs
-        num_negatives: no of negative ROIs
-        roi_priors : ROIs from ground truth
-        deltas : refinements to apply to priors
-        masks: proposal masks [batch, train_ROIs_per_image, height, width]
+        num_positives: no of positive ROIs.
+        num_negatives: no of negative ROIs.
+        roi_priors : ROIs from ground truth.
+        deltas : refinements to apply to priors.
+        masks: proposal masks [batch, train_ROIs_per_image, height, width].
 
     # Return:
         ROIs: Normalized ground-truth boxes
-                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
-        ROI_class_ids: [batch, train_ROIs_per_image]. Integer class IDs
-        ROI_deltas: [batch, train_ROIs_per_image, (dy, dx, log(dh), log(dw)]
-        ROI_masks: [batch, train_ROIs_per_image, height, width]
+                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)].
+        ROI_class_ids: [batch, train_ROIs_per_image]. Integer class IDs.
+        ROI_deltas: [batch, train_ROIs_per_image, (dy, dx, log(dh), log(dw)].
+        ROI_masks: [batch, train_ROIs_per_image, height, width].
     """
     ROIs, num_negatives, num_positives = pad_ROIs(positive_ROIs, negative_ROIs,
                                                   train_ROIs_per_image)
@@ -79,22 +79,25 @@ def pad_ROIs_value(positive_ROIs, negative_ROIs, ROI_class_ids, deltas,
     ROI_class_ids = tf.pad(ROI_class_ids, [(0, num_samples)])
     deltas = tf.pad(deltas, [(0, num_samples), (0, 0)])
     masks = tf.pad(masks, [[0, num_samples], (0, 0), (0, 0)])
+    # masks_zero = tf.Variable(tf.zeros((128, 128, 4)))
+    # for i in range(masks.shape[2]):
+    #     masks_zero[:, :, i].assign(masks[:, :, i])
     return ROIs, ROI_class_ids, deltas, masks
 
 
 def pad_ROIs(positive_ROIs, negative_ROIs, train_ROIs_per_image):
-    """Zero pad ROIs deltas and masks to image size.
+    """Zero pads ROIs deltas and masks to image size.
 
     # Arguments:
-        positive_rois:  ROIs with IoU >= 0.5
-        negative_rois: ROIs with IoU <= 0.5
-        train_rois_per_image: Number of ROIs per image to
-                              feed to classifier/mask heads
+        positive_rois:  ROIs with IoU >= 0.5.
+        negative_rois: ROIs with IoU <= 0.5.
+        train_ROIs_per_image: Number of ROIs per image to
+                              feed to classifier/mask heads.
     # Return:
         ROIs: Normalized ground-truth boxes
-                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
-        num_positives: [N] no. of positive ROIs
-        num_negatives: [N] no. of negative ROIs
+                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)].
+        num_positives: [N] no. of positive ROIs.
+        num_negatives: [N] no. of negative ROIs.
     """
     ROIs = tf.concat([positive_ROIs, negative_ROIs], axis=0)
     num_negatives = tf.shape(negative_ROIs)[0]
@@ -105,12 +108,11 @@ def pad_ROIs(positive_ROIs, negative_ROIs, train_ROIs_per_image):
 
 
 def compute_largest_overlap(positive_overlaps):
-    """Decorator function used to call an maximum positive overlap along axis 1.
+    """Decorator function used to call an maximum positive overlap along
+    axis 1.
      """
-
     def _compute_largest_overlap():
         return tf.argmax(positive_overlaps, axis=1)
-
     return _compute_largest_overlap
 
 
@@ -122,13 +124,14 @@ def get_empty_list():
 
 def compute_target_boxes(positive_overlaps, positive_ROIs, boxes,
                          bounding_box_standard_deviation):
-    """Final computation of each target bounding boxes based on positive overlaps.
+    """Final computation of each target bounding boxes based on positive
+    overlaps.
 
     # Arguments:
-        positive_overlaps: [batch, N] value of overlaps containing instances
-        positive_rois: ROIs with IoU >=0.5
+        positive_overlaps: [batch, N] value of overlaps containing instances.
+        positive_ROIs: ROIs with IoU >=0.5.
         boxes: Normalized ground-truth boxes
-                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
+                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)].
 
     # Returns:
         ROI_boxes: Normalized ground-truth boxes
@@ -136,12 +139,12 @@ def compute_target_boxes(positive_overlaps, positive_ROIs, boxes,
     """
     ROI_true_box_assignment = tf.cond(
         tf.greater(tf.shape(positive_overlaps)[1], 0),
-        true_fn=compute_largest_overlap(positive_overlaps), false_fn=get_empty_list)
+        true_fn=compute_largest_overlap(positive_overlaps),
+        false_fn=get_empty_list)
 
     ROI_boxes = tf.gather(boxes, ROI_true_box_assignment)
     deltas = refine_bounding_box(positive_ROIs, ROI_boxes)
     deltas /= bounding_box_standard_deviation
-
     return deltas, ROI_boxes
 
 
@@ -149,76 +152,78 @@ def compute_target_class_ids(groundtruth_class_ids, positive_overlaps):
     """Final computation of each target class ids based on positive overlaps.
 
     # Arguments:
-        groundtruth_class_ids: [batch, train_ROIs_per_image]. Integer class IDs
-        positive_overlaps: [batch, N] value of overlaps containing instances
+        groundtruth_class_ids: [batch, train_ROIs_per_image]. Integer
+                               class IDs.
+        positive_overlaps: [batch, N] value of overlaps containing instances.
 
     # Returns:
-        ROI_class_ids: [batch, train_ROIs_per_image]. Integer class IDs
+        ROI_class_ids: [batch, train_ROIs_per_image]. Integer class IDs.
     """
     ROI_true_box_assignment = tf.cond(
         tf.greater(tf.shape(positive_overlaps)[1], 0),
-        true_fn=compute_largest_overlap(positive_overlaps), false_fn=get_empty_list)
+        true_fn=compute_largest_overlap(positive_overlaps),
+        false_fn=get_empty_list)
     ROI_class_ids = tf.gather(groundtruth_class_ids, ROI_true_box_assignment)
-
     return ROI_class_ids
 
 
-def compute_target_masks(positive_ROIs, ROI_boxes, masks, positive_overlaps, mask_shape,
-                         mini_mask):
+def compute_target_masks(positive_ROIs, ROI_boxes, masks, positive_overlaps,
+                         mask_shape, mini_mask):
     """Final computation of each target masks based on positive overlaps.
 
     # Arguments:
-        positive_ROIs: ROIs with IoU >=0.5
-        ROI_priors: ROI from ground  truth
-        mask_shape : Shape of output mask
-        use_mini_mask: Resizes instance masks to a smaller size to reduce
-        positive_overlaps: [batch, N] value of overlaps containing instances
+        positive_ROIs: ROIs with IoU >=0.5.
+        ROI_priors: ROI from ground  truth.
+        mask_shape : Shape of output mask.
+        use_mini_mask: Resizes instance masks to a smaller size to reduce.
+        positive_overlaps: [batch, N] value of overlaps containing instances.
 
     # Returns:
-        masks: [batch, train_ROIs_per_image, height, width]
+        masks: [batch, train_ROIs_per_image, height, width].
     """
     ROI_true_box_assignment = tf.cond(
         tf.greater(tf.shape(positive_overlaps)[1], 0),
-        true_fn=compute_largest_overlap(positive_overlaps), false_fn=get_empty_list)
+        true_fn=compute_largest_overlap(positive_overlaps),
+        false_fn=get_empty_list)
 
     transposed_masks = tf.expand_dims(tf.transpose(masks, [2, 0, 1]), -1)
     ROI_masks = tf.gather(transposed_masks, ROI_true_box_assignment)
-    boxes = transform_ROI_coordinates(positive_ROIs, ROI_boxes) if \
-        mini_mask else positive_ROIs
+
+    if mini_mask:
+        boxes = transform_ROI_coordinates(positive_ROIs, ROI_boxes)
+    else:
+        boxes = positive_ROIs
 
     box_ids = tf.range(0, tf.shape(ROI_masks)[0])
     ROI_masks_cast = tf.cast(ROI_masks, tf.float32)
-    masks = tf.image.crop_and_resize(ROI_masks_cast, boxes, box_ids, mask_shape)
+    masks = tf.image.crop_and_resize(ROI_masks_cast, boxes, box_ids,
+                                     mask_shape)
     masks = tf.squeeze(masks, axis=3)
-
     return tf.round(masks)
 
 
 def transform_ROI_coordinates(boxes, ROI_boxes):
-    """Function used to convert ROI boxes to boxes values of
-    same coordinates by retaining the shape. Applied when mini
-    mask is set to true.
+    """Converts ROI boxes to boxes values of same coordinates by retaining
+    the shape. Applied when mini mask is set to true.
 
     # Arguments:
         boxes: Normalized ground-truth boxes
-                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
+                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)].
         ROI_boxes: Normalized ROI boxes
-                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
+                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)].
 
     # Return:
         boxes: Normalized boxes
-                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
+                     [batch, max_ground_truth_instances, (x1, y1, x2, y2)].
     """
     y_min, x_min, y_max, x_max = tf.split(boxes, 4, axis=1)
-    ROI_y_min, ROI_x_min, ROI_y_max, ROI_x_max = tf.split(ROI_boxes, 4,
-                                                          axis=1)
+    ROI_y_min, ROI_x_min, ROI_y_max, ROI_x_max = tf.split(ROI_boxes, 4, axis=1)
     H = ROI_y_max - ROI_y_min
     W = ROI_x_max - ROI_x_min
     y_min = (y_min - ROI_y_min) / H
     x_min = (x_min - ROI_x_min) / W
     y_max = (y_max - ROI_y_min) / H
     x_max = (x_max - ROI_x_min) / W
-
     return tf.concat([y_min, x_min, y_max, x_max], 1)
 
 
@@ -227,37 +232,37 @@ def remove_zero_padding(proposals, class_ids, boxes, masks):
 
     # Arguments:
         proposals: Normalized proposals
-                   [batch, N, (y_min, x_min, y_max, x_max)]
-        ground_truth : class_ids, boxes and masks
+                   [batch, N, (y_min, x_min, y_max, x_max)].
+        ground_truth : class_ids, boxes and masks.
 
     # Return:
         proposals:Normalized proposals
-                   [batch, N, (y_min, x_min, y_max, x_max)]
-        ground_truth: class_ids, boxes and masks
+                   [batch, N, (y_min, x_min, y_max, x_max)].
+        ground_truth: class_ids, boxes and masks.
     """
     proposals, _ = trim_zeros(proposals)
     boxes, non_zeros = trim_zeros(boxes)
     class_ids = tf.boolean_mask(class_ids, non_zeros)
     masks = tf.gather(masks, tf.where(non_zeros)[:, 0], axis=2)
-
     return proposals, class_ids, boxes, masks
 
 
 def check_if_crowded(proposals, class_ids, boxes, masks):
-    """Function to separate crowd instances from non crowd ones
-    and remove the zero padding from groundtruth values.
+    """Separates crowd instances from non crowd ones and removes the
+    zero padding from groundtruth values.
 
     # Arguments:
         proposals: Normalized proposals
-                   [batch, N, (y_min, x_min, y_max, x_max)]
-        ground_truth: class_ids, boxes and masks
+                   [batch, N, (y_min, x_min, y_max, x_max)].
+        ground_truth: class_ids, boxes and masks.
 
     # Return:
         proposals:Normalized proposals
-                   [batch, N, (y_min, x_min, y_max, x_max)]
-        ground_truth: class_ids, boxes and masks
+                   [batch, N, (y_min, x_min, y_max, x_max)].
+        ground_truth: class_ids, boxes and masks.
     """
-    proposals, class_ids, boxes, masks = remove_zero_padding(proposals, class_ids,
+    proposals, class_ids, boxes, masks = remove_zero_padding(proposals,
+                                                             class_ids,
                                                              boxes, masks)
     is_crowded = tf.where(class_ids < 0)[:, 0]
     non_crowd_ix = tf.where(class_ids > 0)[:, 0]
@@ -265,98 +270,105 @@ def check_if_crowded(proposals, class_ids, boxes, masks):
     class_ids = tf.gather(class_ids, non_crowd_ix)
     boxes = tf.gather(boxes, non_crowd_ix)
     masks = tf.gather(masks, non_crowd_ix, axis=2)
-
     return proposals, class_ids, boxes, masks, crowd_boxes
 
 
 def compute_ROI_overlaps(proposals, boxes, crowd_boxes,
                          train_ROIs_per_image, ROI_positive_ratio):
-    """Compute IOU over the proposals and groundtruth values and segregate proposals
-    as positive and negative.
+    """Computes IOU over the proposals and groundtruth values and segregates
+    proposals as positive and negative.
 
     # Arguments:
         proposals: Normalized proposals
-                   [batch, N, (y_min, x_min, y_max, x_max)]
-        boxes: refined bounding boxes
-        crowd_boxes : bounding boxes of ground truth
-        overlaps: instances of overlaps
-        train_ROIs_per_image: Number of ROIs per image to feed to classifier/mask heads
-        ROI_positive_ratio: Percent of positive ROIs used to train classifier/mask heads
+                   [batch, N, (y_min, x_min, y_max, x_max)].
+        boxes: refined bounding boxes.
+        crowd_boxes : bounding boxes of ground truth.
+        overlaps: instances of overlaps.
+        train_ROIs_per_image: Number of ROIs per image to feed to
+                              classifier/mask heads
+        ROI_positive_ratio: Percent of positive ROIs used to train
+                            classifier/mask heads
 
     # Returns:
         positive_overlaps: [batch, N] value of overlaps containing instances
-        positive_ROIs: [batch, N, (y_min, x_min, y_max, x_max)] contain instances
-        negative_ROIs: [batch, N, (y_min, x_min, y_max, x_max)] don't contain instances
+        positive_ROIs: [batch, N, (y_min, x_min, y_max, x_max)]
+                       contain instances.
+        negative_ROIs: [batch, N, (y_min, x_min, y_max, x_max)] don't
+                       contain instances.
     """
     overlaps = compute_IOU(proposals, boxes)
     crowd_overlaps = compute_IOU(proposals, crowd_boxes)
     crowd_iou_max = tf.reduce_max(crowd_overlaps, axis=1)
     no_crowd_bool = (crowd_iou_max < 0.001)
 
-    positive_indices, negative_indices = compute_indices(overlaps, no_crowd_bool)
-
+    positive_indices, negative_indices = compute_indices(overlaps,
+                                                         no_crowd_bool)
     return gather_ROIs(proposals, positive_indices, negative_indices,
                        train_ROIs_per_image, ROI_positive_ratio, overlaps)
 
 
 def compute_indices(overlaps, no_crowd_bool):
-    """Function used to segregate the ROIs with iou >=0.5 as positive and
-    rest as negative.
+    """Segregates the ROIs with iou >=0.5 as positive and rest as negative.
 
     # Arguments:
-        overlaps: instances of overlaps
-        no_crowd_bool: overlaps which have less IOU values
+        overlaps: instances of overlaps.
+        no_crowd_bool: overlaps which have less IOU values.
 
     # Returns:
-        positive_indices: indices of positive overlaps
-        negative_indices: indices of negative overlaps
+        positive_indices: indices of positive overlaps.
+        negative_indices: indices of negative overlaps.
     """
     ROI_iou_max = tf.reduce_max(overlaps, axis=1)
     positive_ROI_bool = (ROI_iou_max >= 0.5)
     positive_indices = tf.where(positive_ROI_bool)[:, 0]
     negative_indices = tf.where(tf.logical_and(
         ROI_iou_max < 0.5, no_crowd_bool))[:, 0]
-
     return positive_indices, negative_indices
 
 
 def gather_ROIs(proposals, positive_indices, negative_indices,
                 train_ROIs_per_image, ROI_positive_ratio, overlaps):
-    """Compute positive, negative rois and positive_overlaps
-    from the given proposals.
+    """Computes positive, negative rois and positive_overlaps from the given
+    proposals.
 
     # Arguments:
-        proposals: rois
-        positive_indices: Indices of positive ROIs
-        negative_indices: Indices of negative ROIs
-        train_rois_per_image: Number of ROIs per image to feed to classifier/mask heads
-        roi_positive_ratio: Percent of positive ROIs used to train classifier/mask heads
+        proposals: ROIs.
+        positive_indices: Indices of positive ROIs.
+        negative_indices: Indices of negative ROIs.
+        train_rois_per_image: Number of ROIs per image to feed to
+                              classifier/mask heads.
+        roi_positive_ratio: Percent of positive ROIs used to train
+                            classifier/mask heads.
 
     # Returns:
-        positive_overlaps: [batch, N] value of overlaps containing instances
-        positive_ROIs: [batch, N, (y_min, x_min, y_max, x_max)] contain instances
-        negative_ROIs: [batch, N, (y_min, x_min, y_max, x_max)] don't contain instances
+        positive_overlaps: [batch, N] value of overlaps containing instances.
+        positive_ROIs: [batch, N, (y_min, x_min, y_max, x_max)]
+                       contain instances.
+        negative_ROIs: [batch, N, (y_min, x_min, y_max, x_max)]
+                       don't contain instances.
     """
     positive_count = int(train_ROIs_per_image * ROI_positive_ratio)
     positive_indices = tf.random.shuffle(positive_indices)[:positive_count]
-    negative_indices = get_negative_indices(positive_indices, ROI_positive_ratio,
+    negative_indices = get_negative_indices(positive_indices,
+                                            ROI_positive_ratio,
                                             negative_indices)
 
     positive_ROIs = tf.gather(proposals, positive_indices)
     negative_ROIs = tf.gather(proposals, negative_indices)
     positive_overlaps = tf.gather(overlaps, positive_indices)
-
     return positive_overlaps, positive_ROIs, negative_ROIs
 
 
-def get_negative_indices(positive_indices, ROI_positive_ratio, negative_indices):
-    """Compute negative indices of the proposals (ROIs) which do
+def get_negative_indices(positive_indices, ROI_positive_ratio,
+                         negative_indices):
+    """Computes negative indices of the proposals (ROIs) which do
     not contain any instances by maintaining the necessary ROI positive ratio,
     default is 0.33.
 
     # Arguments:
         positive_indices: Indices of positive ROIs
-        ROI_positive_ratio: Percent of positive ROIs used to train classifier/mask heads
+        ROI_positive_ratio: Percent of positive ROIs used to train
+                            classifier/mask heads
         negative_indices: Indices of negative ROIs
 
     # Returns:
@@ -372,16 +384,19 @@ def get_negative_indices(positive_indices, ROI_positive_ratio, negative_indices)
 
 
 def compute_IOU(boxes_a, boxes_b):
-    """Function used to calculate intersection over union for given two inputs.
+    """Calculates intersection over union for given two inputs.
 
     # Arguments:
         boxes_a: Normalised proposals [batch, N, (y_min, x_min, y_max, x_max)]
-        boxes_b: Refined bounding boxes [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
+        boxes_b: Refined bounding boxes [batch, max_ground_truth_instances,
+                 (x1, y1, x2, y2)]
 
     # Returns:
         Overlaps: List of overlaps between the boxes_a wrt to boxes_b
     """
-    box_a = tf.reshape(tf.tile(tf.expand_dims(boxes_a, 1), [1, 1, tf.shape(boxes_b)[0]]),
+    box_a = tf.reshape(tf.tile(tf.expand_dims(boxes_a, 1), [1, 1,
+                                                            tf.shape(boxes_b)
+                                                            [0]]),
                        [-1, 4])
     box_b = tf.tile(boxes_b, [tf.shape(boxes_a)[0], 1])
     overlap, union = compute_overlap_union(box_a, box_b)
@@ -392,11 +407,12 @@ def compute_IOU(boxes_a, boxes_b):
 
 
 def compute_overlap_union(box_a, box_b):
-    """Function used to compute overlaps and unions for given two inputs.
+    """Computes overlaps and unions for given two inputs.
 
     # Arguments:
         boxes_a : Normalised proposals [batch, N, (y_min, x_min, y_max, x_max)]
-        boxes_b : Refined bounding boxes [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
+        boxes_b : Refined bounding boxes [batch, max_ground_truth_instances,
+                  (x1, y1, x2, y2)]
 
     # Returns:
         Overlaps: List of overlaps between the boxes_a wrt to boxes_b
@@ -416,10 +432,13 @@ def compute_overlap_union(box_a, box_b):
     return overlap, union
 
 
-def compute_targets_from_groundtruth_values(proposals, groundtruth_class_ids, groundtruth_boxes,
-                                            groundtruth_masks, train_ROIs_per_image,
+def compute_targets_from_groundtruth_values(proposals, groundtruth_class_ids,
+                                            groundtruth_boxes,
+                                            groundtruth_masks,
+                                            train_ROIs_per_image,
                                             ROI_positive_ratio, mask_shape,
-                                            use_mini_mask, bounding_box_std_dev):
+                                            use_mini_mask,
+                                            bounding_box_std_dev):
     """Used by Detection Target Layer and apply it in batches. Generates
     target box refinement, class_ids, and masks for proposals.
 
@@ -429,13 +448,17 @@ def compute_targets_from_groundtruth_values(proposals, groundtruth_class_ids, gr
         prior_class_ids: [batch, max_ground_truth_instances] Integer class IDs
         prior_boxes: Normalized ground-truth boxes
                      [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
-        prior_masks: [batch, height, width, max_ground_truth_instances] of Boolean type
-        train_ROIs_per_image : Number of ROIs per image to feed to classifier/mask heads
-        ROI_positive_ratio : Percent of positive ROIs used to train classifier/mask heads
+        prior_masks: [batch, height, width, max_ground_truth_instances] of
+                     Boolean type
+        train_ROIs_per_image : Number of ROIs per image to feed to
+                               classifier/mask heads
+        ROI_positive_ratio : Percent of positive ROIs used to train
+                             classifier/mask heads
         mask_shape : Shape of output mask
         use_mini_mask : Resizes instance masks to a smaller size to reduce
                         memory load.
-        bounding_box_std_dev : Bounding box refinement standard deviation for final detections
+        bounding_box_std_dev : Bounding box refinement standard deviation for
+                               final detections
 
     # Returns:
         ROIs: [batch, train_ROIs_per_image, (y_min, x_min, y_max, x_max)]
@@ -447,6 +470,7 @@ def compute_targets_from_groundtruth_values(proposals, groundtruth_class_ids, gr
     # Removes the padded zeros from the groundtruth
     # values and also separates the crowd from non crowd instances.
 
+    # Check of assert is necessary
     asserts = [
         tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
                   name="ROI_assertion"),
@@ -458,20 +482,27 @@ def compute_targets_from_groundtruth_values(proposals, groundtruth_class_ids, gr
         crowd_boxes = check_if_crowded(proposals, groundtruth_class_ids,
                                        groundtruth_boxes, groundtruth_masks)
 
-    # Computes positive indices of proposals and positive, negative rois based on the generated proposals
+    # Computes positive indices of proposals and positive, negative rois based
+    # on the generated proposals
     positive_overlaps, positive_ROIs, negative_ROIs = \
         compute_ROI_overlaps(proposals, refined_boxes, crowd_boxes,
                              train_ROIs_per_image, ROI_positive_ratio)
 
-    # Calculates the largest positive overlaps with the proposal and positive ROI, then picks that
+    # Calculates the largest positive overlaps with the proposal and positive
+    # ROI, then picks that
     # instances from groundtruth images for training alone
-    # Calculates the top boxes, class_ids and masks based on largest positive overlaps
-    ROI_deltas, ROI_boxes = compute_target_boxes(positive_overlaps, positive_ROIs,
-                                                 refined_boxes, bounding_box_std_dev)
-    ROI_class_ids = compute_target_class_ids(refined_class_ids, positive_overlaps)
+    # Calculates the top boxes, class_ids and masks based on largest
+    # positive overlaps
+    ROI_deltas, ROI_boxes = compute_target_boxes(positive_overlaps,
+                                                 positive_ROIs,
+                                                 refined_boxes,
+                                                 bounding_box_std_dev)
+    ROI_class_ids = compute_target_class_ids(refined_class_ids,
+                                             positive_overlaps)
 
-    ROI_masks = compute_target_masks(positive_ROIs, ROI_boxes, refined_masks, positive_overlaps,
-                                     mask_shape, use_mini_mask)
+    ROI_masks = compute_target_masks(positive_ROIs, ROI_boxes, refined_masks,
+                                     positive_overlaps, mask_shape,
+                                     use_mini_mask)
 
     # Padding operation on the modified groundtruth values
     ROIs, ROI_class_ids, ROI_deltas, ROI_masks = \
@@ -491,7 +522,8 @@ class DetectionTargetLayer(Layer):
         prior_class_ids: [batch, max_ground_truth_instances] Integer class IDs.
         prior_boxes: Normalized ground-truth boxes
                      [batch, max_ground_truth_instances, (x1, y1, x2, y2)]
-        prior_masks: [batch, height, width, max_ground_truth_instances] of Boolean type
+        prior_masks: [batch, height, width, max_ground_truth_instances] of
+                     Boolean type
 
     # Returns:
         ROIs: [batch, TRAIN_ROIS_PER_IMAGE, (y_min, x_min, y_max, x_max)]
@@ -502,8 +534,9 @@ class DetectionTargetLayer(Layer):
     # Note: Returned arrays might be zero padded if not enough target ROIs.
     """
 
-    def __init__(self, images_per_gpu, mask_shape, train_rois_per_image, roi_positive_ratio,
-                 bounding_box_std_dev, use_mini_mask, batch_size, **kwargs):
+    def __init__(self, images_per_gpu, mask_shape, train_ROIs_per_image,
+                 ROI_positive_ratio, bounding_box_std_dev, use_mini_mask,
+                 batch_size, **kwargs):
         super().__init__(**kwargs)
         self.images_per_gpu = images_per_gpu
         self.mask_shape = mask_shape
@@ -515,10 +548,15 @@ class DetectionTargetLayer(Layer):
 
     def call(self, inputs):
         proposals, prior_class_ids, prior_boxes, prior_masks = inputs
-        names = ['ROIs', 'target_class_ids', 'target_bounding_box', 'target_mask']
-        outputs = slice_batch([proposals, prior_class_ids, prior_boxes, prior_masks],
-                              [self.train_ROIs_per_image, self.ROI_positive_ratio,
+        names = ['ROIs', 'target_class_ids', 'target_bounding_box',
+                 'target_mask']
+        outputs = slice_batch([proposals, prior_class_ids, prior_boxes,
+                               prior_masks],
+                              [self.train_ROIs_per_image,
+                               self.ROI_positive_ratio,
                                self.mask_shape, self.use_mini_mask,
-                               tf.cast(self.bounding_box_std_dev, dtype=tf.float32)],
-                              compute_targets_from_groundtruth_values, self.images_per_gpu, names=names)
+                               tf.cast(self.bounding_box_std_dev,
+                                       dtype=tf.float32)],
+                              compute_targets_from_groundtruth_values,
+                              self.images_per_gpu, names=names)
         return outputs
