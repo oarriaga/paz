@@ -66,7 +66,7 @@ class DetectAndEstimatePose(Processor):
         nms_thresh: Float.
         variances: List.
         class_to_sizes: Dict.
-        camera_matrix: numpy array.
+        camera_matrix: Numpy array.
         colors: List.
         show_boxes2D: Bool.
         show_poses6D: Bool.
