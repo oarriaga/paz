@@ -11,7 +11,6 @@ from ..backend.image import translate_image
 from ..backend.image import sample_scaled_translation
 from ..backend.image import get_rotation_matrix
 from ..backend.image import calculate_image_center
-from ..backend.image import get_affine_transform
 from ..backend.keypoints import translate_keypoints
 from ..backend.keypoints import rotate_point2D
 from ..backend.standard import resize_with_same_aspect_ratio
@@ -54,108 +53,79 @@ class ToNormalizedBoxCoordinates(Processor):
 
 
 class RandomSampleCrop(Processor):
-    """Crops and image while adjusting the bounding boxes.
-    Boxes should be in point form.
+    """Crops image while adjusting the normalized corner form
+    bounding boxes.
+
     # Arguments
         probability: Float between ''[0, 1]''.
     """
-    def __init__(self, probability=0.5):
+    def __init__(self, probability=0.50, max_trials=50):
         self.probability = probability
-        self.sample_options = (
-            # using entire original input image
+        self.max_trials = max_trials
+        self.jaccard_min_max = (
             None,
-            # sample a patch s.t. MIN jaccard w/ obj in .1,.3,.4,.7,.9
-            (0.1, None),
-            (0.3, None),
-            (0.7, None),
-            (0.9, None),
-            # randomly sample a patch
-            (None, None),
-        )
-        super(RandomSampleCrop, self).__init__()
+            (0.1, np.inf),
+            (0.3, np.inf),
+            (0.7, np.inf),
+            (0.9, np.inf),
+            (-np.inf, np.inf))
 
     def call(self, image, boxes):
+
         if self.probability < np.random.rand():
             return image, boxes
+
         labels = boxes[:, -1:]
         boxes = boxes[:, :4]
-        height, width, _ = image.shape
-        while True:
-            # randomly choose a mode
-            mode = np.random.choice(self.sample_options)
-            if mode is None:
-                boxes = np.hstack([boxes, labels])
-                return image, boxes
+        H_original, W_original = image.shape[:2]
 
-            min_iou, max_iou = mode
-            if min_iou is None:
-                min_iou = float('-inf')
-            if max_iou is None:
-                max_iou = float('inf')
+        mode = np.random.randint(0, len(self.jaccard_min_max), 1)[0]
+        if self.jaccard_min_max[mode] is not None:
+            min_iou, max_iou = self.jaccard_min_max[mode]
+            for trial_arg in range(self.max_trials):
+                W = np.random.uniform(0.3 * W_original, W_original)
+                H = np.random.uniform(0.3 * H_original, H_original)
+                aspect_ratio = H / W
+                if (aspect_ratio < 0.5) or (aspect_ratio > 2):
+                    continue
+                x_min = np.random.uniform(W_original - W)
+                y_min = np.random.uniform(H_original - H)
+                x_max = int(x_min + W)
+                y_max = int(y_min + H)
+                x_min = int(x_min)
+                y_min = int(y_min)
 
-            # max trails (50)
-            for _ in range(50):
-                current_image = image
-
-                w = np.random.uniform(0.3 * width, width)
-                h = np.random.uniform(0.3 * height, height)
-
-                # aspect ratio constraint b/t .5 & 2
-                if h / w < 0.5 or h / w > 2:
+                image_crop_box = np.array([x_min, y_min, x_max, y_max])
+                overlap = compute_iou(image_crop_box, boxes)
+                if ((overlap.max() < min_iou) or (overlap.min() > max_iou)):
                     continue
 
-                left = np.random.uniform(width - w)
-                top = np.random.uniform(height - h)
-
-                # convert to integer rect x1,y1,x2,y2
-                rect = np.array(
-                    [int(left), int(top), int(left + w), int(top + h)])
-
-                # calculate IoU (jaccard overlap) b/t the cropped and gt boxes
-                overlap = compute_iou(rect, boxes)
-
-                # is min and max overlap constraint satisfied? if not try again
-                if overlap.max() < min_iou or overlap.min() > max_iou:
-                    continue
-
-                # cut the crop from the image
-                current_image = current_image[rect[1]:rect[3], rect[0]:rect[2],
-                                              :]
-
-                # keep overlap with gt box IF center in sampled patch
                 centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
-
-                # mask in all gt boxes that above and to the left of centers
-                m1 = (rect[0] < centers[:, 0]) * (rect[1] < centers[:, 1])
-
-                # mask in all gt boxes that under and to the right of centers
-                m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
-
-                # mask in that both m1 and m2 are true
-                mask = m1 * m2
-
-                # have any valid boxes? try again if not
+                centers_above_x_min = x_min < centers[:, 0]
+                centers_above_y_min = y_min < centers[:, 1]
+                centers_below_x_max = x_max > centers[:, 0]
+                centers_below_y_max = y_max > centers[:, 1]
+                mask = (centers_above_x_min * centers_above_y_min *
+                        centers_below_x_max * centers_below_y_max)
                 if not mask.any():
                     continue
 
-                # take only matching gt boxes
-                current_boxes = boxes[mask, :].copy()
-
-                # take only matching gt labels
-                current_labels = labels[mask]
-
+                cropped_image = image[y_min:y_max, x_min:x_max, :].copy()
+                masked_boxes = boxes[mask, :].copy()
+                masked_labels = labels[mask].copy()
                 # should we use the box left and top corner or the crop's
-                current_boxes[:, :2] = np.maximum(current_boxes[:, :2],
-                                                  rect[:2])
+                masked_boxes[:, :2] = np.maximum(masked_boxes[:, :2],
+                                                 image_crop_box[:2])
                 # adjust to crop (by substracting crop's left,top)
-                current_boxes[:, :2] -= rect[:2]
+                masked_boxes[:, :2] -= image_crop_box[:2]
+                masked_boxes[:, 2:] = np.minimum(masked_boxes[:, 2:],
+                                                 image_crop_box[2:])
+                # adjust to crop (by substracting crop's left,top)
+                masked_boxes[:, 2:] -= image_crop_box[:2]
+                return cropped_image, np.hstack([masked_boxes, masked_labels])
 
-                current_boxes[:, 2:] = np.minimum(current_boxes[:, 2:],
-                                                  rect[2:])
-                # adjust to crop (by substracting crop's left,top)
-                current_boxes[:, 2:] -= rect[:2]
-                return current_image, np.hstack(
-                    [current_boxes, current_labels])
+        boxes = np.hstack([boxes, labels])
+        return image, boxes
 
 
 class Expand(Processor):

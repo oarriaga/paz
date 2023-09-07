@@ -19,6 +19,22 @@ from .detection import HaarCascadeFrontalFace
 from .detection import DetectMiniXceptionFER
 from .detection import DetectKeypoints2D
 from .detection import DetectFaceKeypointNet2D32
+from .detection import SSD512HandDetection
+from .detection import SSD512MinimalHandPose
+from .detection import SSDPreprocess
+from .detection import SSDPostprocess
+from .detection import DetectSingleShotEfficientDet
+from .detection import EfficientDetPreprocess
+from .detection import EfficientDetPostprocess
+from .detection import EFFICIENTDETD0COCO
+from .detection import EFFICIENTDETD1COCO
+from .detection import EFFICIENTDETD2COCO
+from .detection import EFFICIENTDETD3COCO
+from .detection import EFFICIENTDETD4COCO
+from .detection import EFFICIENTDETD5COCO
+from .detection import EFFICIENTDETD6COCO
+from .detection import EFFICIENTDETD7COCO
+from .detection import EFFICIENTDETD0VOC
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -29,11 +45,15 @@ from .keypoints import TransformKeypoints
 from .keypoints import HigherHRNetHumanPose2D
 from .keypoints import DetNetHandKeypoints
 from .keypoints import MinimalHandPoseEstimation
+from .keypoints import DetectMinimalHand
+from .keypoints import EstimateHumanPose3D
+from .keypoints import EstimateHumanPose
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage
 
 from .classification import MiniXceptionFER
+from .classification import ClassifyHandClosure
 
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32
