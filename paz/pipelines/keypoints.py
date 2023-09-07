@@ -12,12 +12,13 @@ from ..models import KeypointNet2D, HigherHRNet, DetNet, SimpleBaseline
 from .angles import IKNetHandJointAngles
 
 from ..backend.image import get_affine_transform, lincolor
+from ..backend.keypoints import human_pose3D_to_pose6D
 from ..backend.keypoints import flip_keypoints_left_right, uv_to_vu
 from ..datasets import JOINT_CONFIG, FLIP_CONFIG
 
 from ..datasets.human36m import data_mean2D, data_stdev2D, args_to_mean
 from ..datasets.human36m import data_mean3D, data_stdev3D, dim_to_use3D
-from ..datasets.human36m import h36m_to_coco_joints2D
+from ..datasets.human36m import h36m_to_coco_joints2D, args_to_joints3D
 
 
 class KeypointNetSharedAugmentation(SequentialProcessor):
@@ -429,21 +430,38 @@ class EstimateHumanPose(pr.Processor):
     # Returns
         keypoints2D, keypoints3D
     """
-    def __init__(self, filter=True):
+    def __init__(self, solver, camera_intrinsics,
+                 args_to_joints3D=args_to_joints3D, filter=True, draw=True,
+                 draw_pose=True):
         super(EstimateHumanPose, self).__init__()
+        self.pose3D = []
+        self.pose6D = []
+        self.draw = draw
         self.filter = filter
-        self.estimate_keypoints_2D = HigherHRNetHumanPose2D()
-        self.filter_keypoints2D = SequentialProcessor(
-            [pr.MergeKeypoints2D(args_to_mean),
-             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
+        self.draw_pose = draw_pose
+        self.estimate_keypoints_2D = HigherHRNetHumanPose2D(draw=draw)
         self.estimate_keypoints_3D = EstimateHumanPose3D()
-        self.wrap = pr.WrapOutput(['keypoints2D', 'keypoints3D'])
+        self.optimize = pr.OptimizeHumanPose3D(
+            args_to_joints3D, solver, camera_intrinsics)
+        self.draw_text = pr.DrawText(scale=0.5, thickness=1)
+        self.draw_pose6D = pr.DrawHumanPose6D(camera_intrinsics)
+        self.wrap = pr.WrapOutput(['image', 'keypoints2D', 'keypoints3D',
+                                   'pose6D'])
 
     def call(self, image):
         inferences2D = self.estimate_keypoints_2D(image)
-        keypoints2D = np.array(inferences2D['keypoints'])
-        if self.filter:
-            filter_keypoints2D = self.filter_keypoints2D(keypoints2D)
-        keypoints3D = self.estimate_keypoints_3D(keypoints2D)
-        keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
-        return self.wrap(filter_keypoints2D, keypoints3D)
+        keypoints2D = inferences2D['keypoints']
+        if self.draw:
+            image = inferences2D['image']
+        if len(keypoints2D) > 0:
+            keypoints3D = self.estimate_keypoints_3D(keypoints2D)
+            keypoints3D = np.reshape(keypoints3D, (-1, 32, 3))
+            optimized_output = self.optimize(keypoints3D, keypoints2D)
+            joints2D, joints3D, self.pose3D, projection2D = optimized_output
+            self.pose6D = human_pose3D_to_pose6D(self.pose3D[0])
+            if self.draw_pose:
+                rotation, translation = self.pose6D
+                image = self.draw_pose6D(image, rotation, translation)
+                translation = ["%.2f" % item for item in translation]
+                image = self.draw_text(image, str(translation), (30, 30))
+        return self.wrap(image, keypoints2D, self.pose3D, self.pose6D)
