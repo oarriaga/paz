@@ -1,37 +1,33 @@
 from paz.abstract import SequentialProcessor
 
-from mask_rcnn.model.model import MaskRCNN
-from mask_rcnn.evaluation.inference_graph import InferenceGraph
+from mask_rcnn.model.model import MaskRCNN, norm_all_boxes
 from mask_rcnn.pipelines.detection import ResizeImages, NormalizeImages
 from mask_rcnn.pipelines.detection import Detect, PostprocessInputs
 
-from mask_rcnn.utils import norm_boxes_graph
 
-image_min_dim = 128
-image_max_dim = 128
-image_scale = 0
-image_shape = [128, 128, 3]
-anchor_ratios = (8, 16, 32, 64, 128)
-images_per_gpu = 1
-
-
-def test(images, weights_path):
-    config = TestConfig()
-    resize = SequentialProcessor([ResizeImages(image_min_dim, image_scale, image_max_dim)])
-    molded_images, windows = resize(images)
+def test(images, weights_path, ROIs_per_image, num_classes, batch_size,
+         images_per_gpu, anchor_ratios, image_shape, min_image_scale):
+    resize = SequentialProcessor([ResizeImages(image_shape[0], min_image_scale,
+                                               image_shape[1])])
+    molded_images, windows = resize([images])
     image_shape = molded_images[0].shape
-    window = norm_boxes_graph(windows[0], image_shape[:2])
+    window = norm_all_boxes(windows[0], image_shape[:2])
 
-    base_model = MaskRCNN(model_dir='../../mask_rcnn', image_shape=image_shape, backbone="resnet101",
-                          batch_size=1, images_per_gpu=1, rpn_anchor_scales=(8, 16, 32, 64, 128),
-                          train_rois_per_image=32, num_classes=4, window=window)
-    inference_model = base_model.build_inference_model()
+    base_model = MaskRCNN(model_dir='../../mask_rcnn',
+                          image_shape=image_shape,
+                          backbone="resnet101",
+                          batch_size=batch_size, images_per_gpu=images_per_gpu,
+                          RPN_anchor_scales=anchor_ratios,
+                          train_ROIs_per_image=ROIs_per_image,
+                          num_classes=num_classes,
+                          window=window)
 
-    base_model.keras_model = inference_model
+    base_model.build_model(train=False)
     base_model.keras_model.load_weights(weights_path, by_name=True)
-    preprocess = SequentialProcessor([ResizeImages(image_min_dim, image_scale, image_max_dim),
-                                      NormalizeImages()])
+    preprocess = SequentialProcessor([ResizeImages(), NormalizeImages()])
     postprocess = SequentialProcessor([PostprocessInputs()])
-    detect = Detect(base_model, anchor_ratios, images_per_gpu, preprocess, postprocess)
-    results = detect(images)
+
+    detect = Detect(base_model, anchor_ratios, images_per_gpu, preprocess,
+                    postprocess)
+    results = detect([images])
     return results

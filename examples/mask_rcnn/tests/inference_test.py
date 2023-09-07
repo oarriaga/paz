@@ -7,17 +7,27 @@ from mask_rcnn import inference
 
 @pytest.fixture
 def test_results():
-    file_path = 'test_images/television.jpeg'
+    file_path = 'television.jpeg'
     image = cv2.imread(file_path)
-    weights_path = 'weights/mask_rcnn_coco.h5'
-    return inference.test([image], weights_path)[0]
+    weights_path = 'mask_rcnn_coco.h5'
+    return inference.test(image, weights_path, 128, 81, 1,
+                          1, (32, 64, 128, 256, 512), [1024, 1024], 1)[0]
 
 
-@pytest.mark.parametrize('box', [np.array([[337,  661,  585,  969], [274,  894,  381,  974],
-                                           [334,  232,  565,  488], [368,    1,  563,  252],
-                                           [290,   84,  375,  149], [69,  268,  316,  708],
-                                           [364,  399,  577,  744], [333,  911,  380,  960],
-                                           [546,  703,  682, 1023], [384,  147,  546,  302]])])
+@pytest.mark.parametrize('box', [np.array([[295., 871., 361., 996.],
+                                           [265., 716., 659., 915.],
+                                           [224., 916., 432., 954.],
+                                           [335.,  36., 593., 212.],
+                                           [304., 255., 584., 467.],
+                                           [305.,  67., 358., 167.],
+                                           [250., 101., 414., 132.],
+                                           [91., 217., 295., 753.],
+                                           [399., 349., 544., 810.],
+                                           [277., 501., 670., 667.],
+                                           [330., 915., 384., 957.],
+                                           [380.,   4., 526., 553.],
+                                           [190.,  89., 682., 161.],
+                                           [534., 714., 682., 1002.]])])
 def test_bounding_box(test_results, box):
     boxes = np.array(test_results['rois'])
     np.testing.assert_array_equal(box, boxes)
@@ -32,7 +42,9 @@ def test_mask_shape(test_results, mask_shape):
         assert (mask_shape == masks.shape)
 
 
-@pytest.mark.parametrize('ones', [(37370, 5109, 29785, 22668, 3827, 103587, 28364, 1817, 28940, 14946, 1100, 28544)])
+@pytest.mark.parametrize('ones', [(3739, 33163, 3609, 20467, 29334, 2884, 2437,
+                                   89748, 22181, 22762, 1796, 33690, 8159,
+                                   27570)])
 def test_mask(test_results, ones):
     num_obj = (test_results['masks'].shape)[2]
     masks = test_results['masks']
@@ -42,7 +54,8 @@ def test_mask(test_results, ones):
         assert(ones[i] == np.sum(mask))
 
 
-@pytest.mark.parametrize('classes', [(1,  59, 1,  1,  59, 63,  1,  76, 58,  1, 76, 58)])
+@pytest.mark.parametrize('classes', [(59, 1,  59, 1,  1,  59, 59, 63,  1, 1,
+                                      76, 1, 1, 58)])
 def test_class_id(test_results, classes):
     ids = test_results['class_ids']
     ids = np.array(ids)
