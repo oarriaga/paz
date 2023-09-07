@@ -71,12 +71,12 @@ if args.model == "VVAD_LRS3":
     # model = VVAD_LRS3_LSTM()
     raise NotImplementedError
 elif args.model == "CNN2Plus1D":
-  model = CNN2Plus1D()
+    model = CNN2Plus1D()
 
-  loss = BinaryCrossentropy(from_logits=False)  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
-  optimizer = Adam(learning_rate=0.0001)
+    loss = BinaryCrossentropy()  # Alternative for two label Classifications: Hinge Loss or Squared Hinge Loss
+    optimizer = Adam(learning_rate=0.001)
 
-  model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=['accuracy'])
+    model.compile(loss=loss, optimizer=optimizer, metrics=['accuracy'])
 elif args.model == 'MoViNets':
     # model = MoViNets()
     raise NotImplementedError
@@ -91,7 +91,7 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=os.path.join(output_path, "checkpoints/weights-{epoch:02d}.hdf5"),
     verbose=1,
     save_weights_only=True,
-    # TODO only for testing save_freq=10*n_batches_per_epoch
+    save_freq=10*n_batches_per_epoch
 )
 
 tb_callback = tf.keras.callbacks.TensorBoard(

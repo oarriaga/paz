@@ -170,7 +170,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3)):
 
     x = GlobalAveragePooling3D()(x)
     x = Flatten()(x)
-    x = Dense(1)(x)
+    x = Dense(1, activation="sigmoid")(x)
 
     model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
