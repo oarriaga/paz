@@ -171,7 +171,7 @@ class ComputeBackboneShapes(Processor):
     def call(self, backbone, image_shape):
 
         if callable(backbone):
-            return compute_backbone_shapes(backbone, image_shape)
+            return ComputeBackboneShapes()(backbone, image_shape)
 
         # Supports ResNet only
         assert backbone in ["resnet50", "resnet101"]

@@ -163,7 +163,7 @@ def compute_anchor_boxes_overlaps(anchors, groundtruth_class_ids,
         non_crowd_ix = np.where(groundtruth_class_ids > 0)[0]
         crowd_boxes = groundtruth_boxes[crowd_instances]
 
-        groundtruth_boxes = groundtruth_boxes[non_crowd_instances]
+        groundtruth_boxes = groundtruth_boxes[non_crowd_ix]
         crowd_overlaps = compute_ious(anchors, crowd_boxes)
         crowd_iou_max = np.amax(crowd_overlaps, axis=1)
         no_crowd_bool = (crowd_iou_max < crowd_threshold)
