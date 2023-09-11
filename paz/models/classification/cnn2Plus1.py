@@ -6,6 +6,7 @@ from keras.models import Model
 from keras.layers import (Conv3D, Input, BatchNormalization, Layer, GlobalAveragePooling3D, ReLU, Flatten,
                           LayerNormalization, Dense, add)
 import einops
+import random
 
 from ..layers import Conv2DNormalization
 
@@ -23,15 +24,21 @@ class Conv2Plus1D(Layer):
       spatial dimensions, and then the temporal dimension.
     """
         super().__init__()
+        print(random.randint(0, 1000000))
+        initializer_glorot_spatial = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
+        initializer_glorot_temporal = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
+
         self.seq = Sequential([
             # Spatial decomposition
             Conv3D(filters=filters,
                    kernel_size=(1, kernel_size[1], kernel_size[2]),
-                   padding=padding),
+                   padding=padding,
+                   kernel_initializer=initializer_glorot_spatial),
             # Temporal decomposition
             Conv3D(filters=filters,
                    kernel_size=(kernel_size[0], 1, 1),
-                   padding=padding)
+                   padding=padding,
+                   kernel_initializer=initializer_glorot_temporal)
         ])
 
     def call(self, x):
@@ -70,8 +77,11 @@ class Project(Layer):
 
     def __init__(self, units):
         super().__init__()
+        print(random.randint(0, 1000000))
+        initializer_glorot = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
+
         self.seq = Sequential([
-            Dense(units),
+            Dense(units, kernel_initializer=initializer_glorot),
             LayerNormalization()
         ])
 
@@ -124,7 +134,7 @@ class ResizeVideo(Layer):
         return videos
 
 
-def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3)):
+def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
@@ -140,6 +150,9 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3)):
         raise ValueError(
             '`input_shape` must be a tuple of 4 integers. '
             'Received: %s' % (input_shape,))
+
+    random.seed(seed)
+    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
 
     HEIGHT = input_shape[1]
     WIDTH = input_shape[2]
@@ -170,7 +183,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3)):
 
     x = GlobalAveragePooling3D()(x)
     x = Flatten()(x)
-    x = Dense(1, activation="sigmoid")(x)
+    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
     model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
