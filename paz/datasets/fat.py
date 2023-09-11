@@ -61,6 +61,22 @@ class FAT(Loader):
             progress_bar.update(sample_arg + 1)
         return self.data
 
+    def split_data(self, train_ratio=0.6, val_ratio=0.2, test_ratio=0.2):
+        total_ratio = train_ratio + val_ratio + test_ratio
+
+        if total_ratio != 1.0:
+            raise ValueError("Split ratio proportion is not correct")
+
+        data_length = len(self.data)
+        train_split = int(data_length * train_ratio)
+        val_split = int(data_length * val_ratio)
+        test_split = int(data_length * test_ratio)
+
+        train_data = self.data[:train_split]
+        val_data = self.data[train_split:train_split + val_split]
+        test_data = self.data[-test_split:]
+        return [train_data, val_data, test_data]
+
     def _extract_boxes(self, json_filename):
         json_data = json.load(open(json_filename, 'r'))
         num_objects = len(json_data['objects'])
