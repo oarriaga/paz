@@ -33,6 +33,7 @@ from .draw import DrawHandSkeleton
 from .draw import DrawRGBMask
 from .draw import DrawRGBMasks
 from .draw import DrawText
+from .draw import DrawHumanPose6D
 
 from .image import CastImage
 from .image import SubtractMeanImage

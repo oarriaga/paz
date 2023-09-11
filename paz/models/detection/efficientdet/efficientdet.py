@@ -80,7 +80,16 @@ def EFFICIENTDET(image, num_classes, base_weights, head_weights,
         weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
                                 cache_subdir='paz/models')
         print('Loading %s model weights' % weights_path)
-        model.load_weights(weights_path)
+        finetunning_model_names = ['efficientdet-d0-COCO-None_weights.hdf5',
+                                   'efficientdet-d1-COCO-None_weights.hdf5',
+                                   'efficientdet-d2-COCO-None_weights.hdf5',
+                                   'efficientdet-d3-COCO-None_weights.hdf5',
+                                   'efficientdet-d4-COCO-None_weights.hdf5',
+                                   'efficientdet-d5-COCO-None_weights.hdf5',
+                                   'efficientdet-d6-COCO-None_weights.hdf5',
+                                   'efficientdet-d7-COCO-None_weights.hdf5']
+        by_name = True if model_filename in finetunning_model_names else False
+        model.load_weights(weights_path, by_name=by_name)
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(

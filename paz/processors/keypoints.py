@@ -20,6 +20,9 @@ from ..backend.keypoints import filter_keypoints3D
 from ..backend.keypoints import initialize_translation, solve_least_squares
 from ..backend.keypoints import get_bones_length, compute_reprojection_error
 from ..backend.keypoints import compute_optimized_pose3D
+from ..datasets.human36m import args_to_mean
+from ..datasets.human36m import h36m_to_coco_joints2D
+from ..datasets.human36m import human_start_joints
 
 
 class ProjectKeypoints(Processor):
@@ -326,18 +329,23 @@ class OptimizeHumanPose3D(Processor):
         super(OptimizeHumanPose3D, self).__init__()
         self.args_to_joints3D = args_to_joints3D
         self.camera_intrinsics = camera_intrinsics
+        self.filter_keypoints2D = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
         self.solver = solver
 
     def call(self, keypoints3D, keypoints2D):
         joints3D = filter_keypoints3D(keypoints3D, self.args_to_joints3D)
-        root2D = keypoints2D[:, :2]
-        length2D, length3D = get_bones_length(keypoints2D, joints3D)
+        joints2D = self.filter_keypoints2D(keypoints2D)
+        root2D = joints2D[:, :2]
+        length2D, length3D = get_bones_length(
+            joints2D, keypoints3D, human_start_joints)
         ratio = length3D / length2D
         initial_joint_translation = initialize_translation(
             root2D, self.camera_intrinsics, ratio)
         joint_translation = solve_least_squares(
             self.solver, compute_reprojection_error, initial_joint_translation,
-            joints3D, keypoints2D, self.camera_intrinsics)
-        optimized_poses3D = compute_optimized_pose3D(
+            joints3D, joints2D, self.camera_intrinsics)
+        optimized_poses3D, projection2D = compute_optimized_pose3D(
             keypoints3D, joint_translation, self.camera_intrinsics)
-        return joints3D, optimized_poses3D
+        return joints2D, joints3D, optimized_poses3D, projection2D
