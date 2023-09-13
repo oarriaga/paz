@@ -24,7 +24,6 @@ class Conv2Plus1D(Layer):
       spatial dimensions, and then the temporal dimension.
     """
         super().__init__()
-        print(random.randint(0, 1000000))
         initializer_glorot_spatial = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
         initializer_glorot_temporal = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
 
@@ -77,7 +76,6 @@ class Project(Layer):
 
     def __init__(self, units):
         super().__init__()
-        print(random.randint(0, 1000000))
         initializer_glorot = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
 
         self.seq = Sequential([
