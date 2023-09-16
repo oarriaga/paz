@@ -76,7 +76,7 @@ class LINEMODParser(object):
     def __init__(self, dataset_name='LINEMOD', split='train',
                  class_names='all', dataset_path='/Linemod_preprocessed/',
                  evaluate=False, ignore_objects=['02', '04', '13', '14', '15'],
-                 ground_truth_file='gt', info_file='info'):
+                 input_size=512.0, ground_truth_file='gt', info_file='info'):
 
         if dataset_name != 'LINEMOD':
             raise Exception('Invalid dataset name.')
@@ -88,6 +88,7 @@ class LINEMODParser(object):
         self.split_prefix = os.path.join(self.dataset_path, 'data/')
         self.evaluate = evaluate
         self.ignore_objects = ignore_objects
+        self.input_size = input_size
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
 
@@ -149,7 +150,7 @@ class LINEMODParser(object):
                 bounding_box = ground_truth_data[int(datum_file)][0]['obj_bb']
                 x_min, y_min, W, H = bounding_box
                 box_data = x_min, y_min, x_min + W, y_min + H
-                box_data = np.asarray(box_data)
+                box_data = np.asarray([box_data]) / self.input_size
 
                 # Get rotation vector
                 rotation = ground_truth_data[int(datum_file)][0]['cam_R_m2c']
@@ -164,6 +165,9 @@ class LINEMODParser(object):
                 obj_id = ground_truth_data[int(datum_file)][0]['obj_id']
                 class_arg = self.object_id_to_class_arg[obj_id]
 
+                # Append class to box data
+                box_data = np.concatenate(
+                    (box_data, np.array([[class_arg]])), axis=-1)
                 self.data.append({'image': image_path, 'boxes': box_data,
                                   'rotation': rotation,
                                   'translation_raw': translation_raw,
