@@ -115,9 +115,9 @@ class DetectAndEstimatePose(Processor):
         preprocessed_data = self.preprocess(image)
         preprocessed_image, image_scale, camera_parameter = preprocessed_data
         outputs = self.model(preprocessed_image)
-        detections, (rotations, translations) = outputs
+        detections, transformations = outputs
         detections = change_box_coordinates(detections)
-        outputs = detections, (rotations, translations)
+        outputs = detections, transformations
         boxes2D, poses6D = self.postprocess(
             outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
@@ -205,7 +205,9 @@ class EfficientPosePostprocess(Processor):
         self.to_pose_6D = ToPose6D(class_names)
 
     def call(self, model_output, image_scale, camera_parameter):
-        detections, (rotations, translations) = model_output
+        detections, transformations = model_output
+        rotations = transformations[:, :, :3]
+        translations = transformations[:, :, 3:]
         box_data = self.postprocess_1(detections)
         box_data = self.scale(box_data, 1 / image_scale)
         box_data_all = box_data
