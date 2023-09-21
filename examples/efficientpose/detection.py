@@ -92,8 +92,8 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {3: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
-             4: {'rotation': [len(model.prior_boxes), 5]},
-             6: {'translation_raw': [len(model.prior_boxes), 3]}}))
+             4: {'rotation': [len(model.prior_boxes), 6]},
+             6: {'translation_raw': [len(model.prior_boxes), 4]}}))
 
 
 class PostprocessBoxes2D(SequentialProcessor):

@@ -345,18 +345,21 @@ class MatchTransformations(Processor):
             different than `background`.
         variance: List of two floats.
     """
-    def __init__(self, prior_boxes, num_pose_dims):
+    def __init__(self, prior_boxes, num_pose_dims, iou=.5):
         self.prior_boxes = prior_boxes
         self.num_pose_dims = num_pose_dims
+        self.iou = iou
         super(MatchTransformations, self).__init__()
 
     def call(self, boxes, transformation):
         transformation_matches = match_transformation(
-            boxes, transformation, self.prior_boxes, self.num_pose_dims)
+            boxes, transformation, self.prior_boxes,
+            self.num_pose_dims, self.iou)
         return transformation_matches
 
 
-def match_transformation(boxes, transformation, prior_boxes, num_pose_dims):
+def match_transformation(boxes, transformation, prior_boxes,
+                         num_pose_dims, iou_threshold):
     """Matches each prior box with a ground truth box (box from `boxes`).
     It then selects which matched box will be considered positive e.g. iou > .5
     and returns for each prior box a ground truth box that is either positive
@@ -378,6 +381,8 @@ def match_transformation(boxes, transformation, prior_boxes, num_pose_dims):
             form box coordinates and the last coordinates is the class
             argument.
     """
+    transformation_matches = np.zeros((prior_boxes.shape[0],
+                                       transformation.shape[0] + 1))
     ious = compute_ious(boxes, to_corner_form(np.float32(prior_boxes)))
     per_prior_which_box_iou = np.max(ious, axis=0)
     per_prior_which_box_arg = np.argmax(ious, 0)
@@ -389,8 +394,9 @@ def match_transformation(boxes, transformation, prior_boxes, num_pose_dims):
         best_prior_box_arg = per_box_which_prior_arg[box_arg]
         per_prior_which_box_arg[best_prior_box_arg] = box_arg
 
-    transformation_matches = transformation[np.newaxis, :][
+    transformation_matches[:, :-1] = transformation[np.newaxis, :][
         per_prior_which_box_arg]
+    transformation_matches[per_prior_which_box_iou > iou_threshold, -1] = 1
     return transformation_matches
 
 
