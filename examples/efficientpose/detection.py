@@ -12,7 +12,8 @@ from paz.pipelines.keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from paz.pipelines.keypoints import MinimalHandPoseEstimation
 from paz.backend.boxes import change_box_coordinates
 from pose import EfficientPosePreprocess
-from processors import MatchTransformations, TransformRotation
+from processors import (MatchTransformations, TransformRotation,
+                        ConcatenateTransformation)
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -78,6 +79,8 @@ class AugmentPose(SequentialProcessor):
         self.preprocess_transformation = MatchTransformations(
             model.prior_boxes, num_pose_dims)
 
+        self.concat_transformation = ConcatenateTransformation()
+
         # pipeline
         self.add(pr.UnpackDictionary(['image', 'boxes', 'rotation',
                                       'translation_raw', 'class']))
@@ -89,11 +92,12 @@ class AugmentPose(SequentialProcessor):
                                [3, 4], [5], keep={3: 3}))
         self.add(pr.ControlMap(self.preprocess_transformation,
                                [3, 5], [7]))
+        self.add(pr.ControlMap(self.concat_transformation,
+                               [4, 6], [7]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {3: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
-             4: {'rotation': [len(model.prior_boxes), 6]},
-             6: {'translation_raw': [len(model.prior_boxes), 4]}}))
+             5: {'transformation': [len(model.prior_boxes), 10]}}))
 
 
 class PostprocessBoxes2D(SequentialProcessor):
