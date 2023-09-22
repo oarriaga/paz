@@ -206,8 +206,6 @@ class EfficientPosePostprocess(Processor):
 
     def call(self, model_output, image_scale, camera_parameter):
         detections, transformations = model_output
-        rotations = transformations[:, :, :3]
-        translations = transformations[:, :, 3:]
         box_data = self.postprocess_1(detections)
         box_data = self.scale(box_data, 1 / image_scale)
         box_data_all = box_data
@@ -215,6 +213,8 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
 
+        rotations = transformations[:, :, :3]
+        translations = transformations[:, :, 3:]
         poses6D = []
         if len(boxes2D) > 0:
             selected_indices = self.compute_selections(box_data_all, box_data)
