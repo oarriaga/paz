@@ -67,7 +67,7 @@ class AugmentPose(SequentialProcessor):
     """
     def __init__(self, model, split=pr.TRAIN, num_classes=21, size=300,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
-                 variances=[0.1, 0.1, 0.2, 0.2], num_pose_dims=3):
+                 variances=[1.0, 1.0, 1.0, 1.0], num_pose_dims=3):
         super(AugmentPose, self).__init__()
         self.preprocess_image = EfficientPosePreprocess(model)
 

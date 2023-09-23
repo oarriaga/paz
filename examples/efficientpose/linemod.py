@@ -29,9 +29,9 @@ class LINEMOD(Loader):
         to the amount of boxes in the image.
 
     """
-    def __init__(self, path=None, split='train', class_names='all',
-                 name='Linemod_preprocessed', evaluate=False,
-                 ignore_objects=['02', '04', '13', '14', '15']):
+    def __init__(self, path=None, object_id='08', split='train',
+                 class_names='all', name='Linemod_preprocessed',
+                 evaluate=False):
 
         super(LINEMOD, self).__init__(path, split, class_names, name)
 
@@ -41,7 +41,7 @@ class LINEMOD(Loader):
             self._class_names = get_class_names('LINEMOD')
         self.images_path = None
         self.arg_to_class = None
-        self.ignore_objects = ignore_objects
+        self.object_id = object_id
 
     def load_data(self):
         if self.name == 'LINEMOD':
@@ -52,8 +52,7 @@ class LINEMOD(Loader):
 
     def _load_LINEMOD(self, dataset_name, split):
         self.parser = LINEMODParser(dataset_name, split, self._class_names,
-                                    self.path, self.evaluate,
-                                    self.ignore_objects)
+                                    self.path, self.evaluate, self.object_id)
         self.arg_to_class = self.parser.arg_to_class
         ground_truth_data = self.parser.load_data()
         return ground_truth_data
@@ -75,8 +74,8 @@ class LINEMODParser(object):
 
     def __init__(self, dataset_name='LINEMOD', split='train',
                  class_names='all', dataset_path='/Linemod_preprocessed/',
-                 evaluate=False, ignore_objects=['02', '04', '13', '14', '15'],
-                 input_size=512.0, ground_truth_file='gt', info_file='info'):
+                 evaluate=False, object_id='08', input_size=512.0,
+                 ground_truth_file='gt', info_file='info'):
 
         if dataset_name != 'LINEMOD':
             raise Exception('Invalid dataset name.')
@@ -87,7 +86,7 @@ class LINEMODParser(object):
         self.split = split
         self.split_prefix = os.path.join(self.dataset_path, 'data/')
         self.evaluate = evaluate
-        self.ignore_objects = ignore_objects
+        self.object_id = object_id
         self.input_size = input_size
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
@@ -109,69 +108,60 @@ class LINEMODParser(object):
                                        9: 4, 10: 5, 11: 6, 12: 7}
 
     def _load_filenames(self):
-        _, all_class_dir, _ = list(os.walk(self.split_prefix))[0]
-        class_dirs = list(set(all_class_dir) - set(self.ignore_objects))
-        self.class_dirs = sorted(class_dirs)
-        splitted_filenames = []
-
-        for class_dir in self.class_dirs:
-            split_file = (self.split_prefix + class_dir
-                          + '/' + self.split + '.txt')
-            ground_truth_files = (self.split_prefix + class_dir
-                                  + '/' + self.ground_truth_file + '.yml')
-            info_file = (self.split_prefix + class_dir
-                         + '/' + self.info_file + '.yml')
-            splitted_filenames.append(
-                [split_file, ground_truth_files, info_file])
-        return splitted_filenames
+        split_file = (self.split_prefix + self.object_id
+                      + '/' + self.split + '.txt')
+        ground_truth_files = (self.split_prefix + self.object_id
+                              + '/' + self.ground_truth_file + '.yml')
+        info_file = (self.split_prefix + self.object_id
+                     + '/' + self.info_file + '.yml')
+        return [split_file, ground_truth_files, info_file]
 
     def _preprocess_files(self):
-        filenames = self._load_filenames()
-        for (data_file, ground_truth_file, info_file), class_dir in zip(
-                filenames, self.class_dirs):
-            with open(data_file, 'r') as file:
-                data_file = [line.strip() for line in file.readlines()]
-                file.close()
+        data_file, ground_truth_file, info_file = self._load_filenames()
 
-            with open(ground_truth_file, 'r') as file:
-                ground_truth_data = yaml.safe_load(file)
-                file.close()
+        with open(data_file, 'r') as file:
+            data_file = [line.strip() for line in file.readlines()]
+            file.close()
 
-            with open(info_file, 'r') as file:
-                info_data = yaml.safe_load(file)
-                file.close()
+        with open(ground_truth_file, 'r') as file:
+            ground_truth_data = yaml.safe_load(file)
+            file.close()
 
-            for datum_file in data_file:
-                # Get image path
-                image_path = (self.split_prefix + class_dir
-                              + '/' + 'rgb' + '/' + datum_file + '.png')
+        with open(info_file, 'r') as file:
+            info_data = yaml.safe_load(file)
+            file.close()
 
-                # Compute bounding box
-                bounding_box = ground_truth_data[int(datum_file)][0]['obj_bb']
-                x_min, y_min, W, H = bounding_box
-                box_data = x_min, y_min, x_min + W, y_min + H
-                box_data = np.asarray([box_data]) / self.input_size
+        for datum_file in data_file:
+            # Get image path
+            image_path = (self.split_prefix + self.object_id
+                          + '/' + 'rgb' + '/' + datum_file + '.png')
 
-                # Get rotation vector
-                rotation = ground_truth_data[int(datum_file)][0]['cam_R_m2c']
-                rotation = np.asarray(rotation)
+            # Compute bounding box
+            bounding_box = ground_truth_data[int(datum_file)][0]['obj_bb']
+            x_min, y_min, W, H = bounding_box
+            box_data = x_min, y_min, x_min + W, y_min + H
+            box_data = np.asarray([box_data]) / self.input_size
 
-                # Get translation vector
-                translation_raw = ground_truth_data[int(datum_file)][0][
-                    'cam_t_m2c']
-                translation_raw = np.asarray(translation_raw)
+            # Get rotation vector
+            rotation = ground_truth_data[int(datum_file)][0]['cam_R_m2c']
+            rotation = np.asarray(rotation)
 
-                # Compute object class
-                obj_id = ground_truth_data[int(datum_file)][0]['obj_id']
-                class_arg = self.object_id_to_class_arg[obj_id]
+            # Get translation vector
+            translation_raw = ground_truth_data[int(datum_file)][0][
+                'cam_t_m2c']
+            translation_raw = np.asarray(translation_raw)
 
-                # Append class to box data
-                box_data = np.concatenate(
-                    (box_data, np.array([[class_arg]])), axis=-1)
-                self.data.append({'image': image_path, 'boxes': box_data,
-                                  'rotation': rotation,
-                                  'translation_raw': translation_raw,
-                                  'class': class_arg})
+            # Compute object class
+            obj_id = ground_truth_data[int(datum_file)][0]['obj_id']
+            class_arg = self.object_id_to_class_arg[obj_id]
+
+            # Append class to box data
+            box_data = np.concatenate(
+                (box_data, np.array([[class_arg]])), axis=-1)
+            self.data.append({'image': image_path, 'boxes': box_data,
+                              'rotation': rotation,
+                              'translation_raw': translation_raw,
+                              'class': class_arg})
 
     def load_data(self):
         return self.data
