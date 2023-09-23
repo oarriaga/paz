@@ -10,6 +10,7 @@ from paz.optimization.callbacks import LearningRateScheduler
 from detection import AugmentPose
 from paz.processors import TRAIN, VAL
 from pose import EFFICIENTPOSEA
+from losses import MultiTransformationLoss
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 
@@ -31,6 +32,8 @@ parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-id', '--object_id', default='08',
+                    type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
                     default=[200, 250], help='Epoch learning rate reduction')
 parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
@@ -47,7 +50,8 @@ data_names = ['LINEMOD', 'LINEMOD']
 # loading datasets
 data_managers, datasets, evaluation_data_managers = [], [], []
 for data_name, data_split in zip(data_names, data_splits):
-    data_manager = LINEMOD(args.data_path, data_split, name=data_name)
+    data_manager = LINEMOD(args.data_path, args.object_id,
+                           data_split, name=data_name)
     data_managers.append(data_manager)
     datasets.append(data_manager.load_data())
     if data_split == 'test':
@@ -62,11 +66,14 @@ model = EFFICIENTPOSEA(num_classes, base_weights='COCO',
 model.summary()
 
 # Instantiating loss and metrics
-loss = MultiBoxLoss()
-metrics = {'boxes': [loss.localization,
-                     loss.positive_classification,
-                     loss.negative_classification]}
-model.compile(optimizer, loss.compute_loss, metrics)
+box_loss = MultiBoxLoss()
+transformation_loss = MultiTransformationLoss()
+loss = {'boxes': box_loss.compute_loss,
+        'transformation': transformation_loss.compute_loss}
+metrics = {'boxes': [box_loss.localization,
+                     box_loss.positive_classification,
+                     box_loss.negative_classification]}
+model.compile(optimizer, loss, metrics)
 
 # setting data augmentation pipeline
 augmentators = []
@@ -89,6 +96,13 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
+
+# To be removed (only for debugging purpose)
+s = sequencers[0][0]
+output = model.predict(s[0]['image'])
+y_pred = output[1]
+y_true = s[1]['transformation']
+transformation_loss.compute_loss(y_true, y_pred)
 
 # training
 model.fit(
