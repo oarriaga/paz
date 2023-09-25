@@ -16,7 +16,7 @@ gpus = tf.config.experimental.list_physical_devices('GPU')
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-bs', '--batch_size', default=128, type=int,
+parser.add_argument('-bs', '--batch_size', default=1, type=int,
                     help='Batch size for training')
 parser.add_argument('-lr', '--learning_rate', default=0.08, type=float,
                     help='Initial learning rate for SGD')
@@ -30,7 +30,7 @@ parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
 parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
-parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
+parser.add_argument('-dp', '--data_path', default='dataset_less/Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')

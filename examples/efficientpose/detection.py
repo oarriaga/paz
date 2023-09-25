@@ -72,6 +72,7 @@ class AugmentPose(SequentialProcessor):
         self.preprocess_image = EfficientPosePreprocess(model)
 
         # box processors
+        self.scale_boxes = pr.ScaleBox()
         args = (num_classes, model.prior_boxes, IOU, variances)
         self.preprocess_boxes = PreprocessBoxes(*args)
 
@@ -86,18 +87,19 @@ class AugmentPose(SequentialProcessor):
                                       'translation_raw', 'class']))
         self.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
+        self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3]))
         self.add(pr.ControlMap(self.preprocess_boxes, [3], [4], keep={3: 3}))
-        self.add(pr.ControlMap(TransformRotation(num_pose_dims), [4], [4]))
+        self.add(pr.ControlMap(TransformRotation(num_pose_dims), [2], [2]))
         self.add(pr.ControlMap(self.preprocess_transformation,
-                               [3, 4], [5], keep={3: 3}))
+                               [3, 2], [2], keep={3: 3}))
         self.add(pr.ControlMap(self.preprocess_transformation,
-                               [3, 5], [7]))
+                               [3, 4], [7]))
         self.add(pr.ControlMap(self.concat_transformation,
-                               [4, 6], [7]))
+                               [2, 5], [7]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
-            {3: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
-             5: {'transformation': [len(model.prior_boxes), 10]}}))
+            {2: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
+             4: {'transformation': [len(model.prior_boxes), 10]}}))
 
 
 class PostprocessBoxes2D(SequentialProcessor):
