@@ -102,18 +102,19 @@ class MultiTransformationLoss(object):
             Tensor with loss per sample in batch.
         """
         regression_rotation = y_pred[:, :, :3]
-        regression_translation = y_pred[:, :, 3:]
-        print(regression_translation.shape)
+        # regression_rotation = tf.expand_dims(regression_rotation, axis = 0)
+        regression_translation = y_pred[:, :, 3:]        
         regression_translation = self.regress_translation(regression_translation)
         camera_parameter = self.compute_camera_parameter(y_true[0, 0, -1])
         regression_translation = self.compute_tx_ty(regression_translation, camera_parameter)
+        regression_translation = tf.expand_dims(regression_translation, axis = 0)
         print(regression_translation.shape)
-        
+
         regression_target_rotation = y_true[:, :, :3]
-        regression_target_translation = y_true[:, :, 6:-1]
+        regression_target_translation = y_true[:, :, 6:-2]
         is_symmetric = y_true[:, :, 3]
         class_indices = y_true[:, :, 4]
-        anchor_state = tf.cast(tf.math.round(y_true[:, :, -1]), tf.int32)
+        anchor_state = tf.cast(tf.math.round(y_true[:, :, -2]), tf.int32)
         indices = tf.where(tf.equal(anchor_state, 1))
         regression_rotation = tf.gather_nd(regression_rotation, indices) * math.pi
         regression_translation = tf.gather_nd(regression_translation, indices)
