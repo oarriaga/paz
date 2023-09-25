@@ -492,3 +492,99 @@ def concatenate_transformation(rotations, translations):
             argument.
     """
     return np.concatenate((rotations, translations), axis=-1)
+
+class TransformRotation(Processor):
+    """Match prior boxes with ground truth boxes.
+
+    # Arguments
+        prior_boxes: Numpy array of shape (num_boxes, 4).
+        iou: Float in [0, 1]. Intersection over union in which prior boxes
+            will be considered positive. A positive box is box with a class
+            different than `background`.
+        variance: List of two floats.
+    """
+    def __init__(self, num_pose_dims):
+        self.num_pose_dims = num_pose_dims
+        super(TransformRotation, self).__init__()
+
+    def call(self, rotations):
+        transformation_matches = transform_rotation(rotations,
+                                                    self.num_pose_dims)
+        return transformation_matches
+
+
+def transform_rotation(rotations, num_pose_dims):
+    """Matches each prior box with a ground truth box (box from `boxes`).
+    It then selects which matched box will be considered positive e.g. iou > .5
+    and returns for each prior box a ground truth box that is either positive
+    (with a class argument different than 0) or negative.
+
+    # Arguments
+        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
+            argument. This boxes should be the ground truth boxes.
+        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
+            where the four coordinates are in center form coordinates.
+        iou_threshold: Float between [0, 1]. Intersection over union
+            used to determine which box is considered a positive box.
+
+    # Returns
+        numpy array of shape `(num_prior_boxes, 4 + 1)`.
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument.
+    """
+    final_axis_angle = np.zeros((5))
+    rotation_matrix = np.reshape(rotations, (num_pose_dims, num_pose_dims))
+    axis_angle, jacobian = cv2.Rodrigues(rotation_matrix)
+    axis_angle = np.squeeze(axis_angle) / np.pi
+    final_axis_angle[:3] = axis_angle
+    return final_axis_angle
+
+
+class ConcatenateScale(Processor):
+    """Match prior boxes with ground truth boxes.
+
+    # Arguments
+        prior_boxes: Numpy array of shape (num_boxes, 4).
+        iou: Float in [0, 1]. Intersection over union in which prior boxes
+            will be considered positive. A positive box is box with a class
+            different than `background`.
+        variance: List of two floats.
+    """
+    def __init__(self):
+        super(ConcatenateScale, self).__init__()
+
+    def call(self, transformations, scale):
+        transformation_combined = concatenate_scale(
+            transformations, scale)
+        return transformation_combined
+
+
+def concatenate_scale(transformations, scale):
+    """Matches each prior box with a ground truth box (box from `boxes`).
+    It then selects which matched box will be considered positive e.g. iou > .5
+    and returns for each prior box a ground truth box that is either positive
+    (with a class argument different than 0) or negative.
+
+    # Arguments
+        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
+            argument. This boxes should be the ground truth boxes.
+        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
+            where the four coordinates are in center form coordinates.
+        iou_threshold: Float between [0, 1]. Intersection over union
+            used to determine which box is considered a positive box.
+
+    # Returns
+        numpy array of shape `(num_prior_boxes, 4 + 1)`.
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument.
+    """
+    scale = np.repeat(scale, transformations.shape[0])
+    scale = scale[np.newaxis, :]
+    transformations = np.concatenate((transformations, scale.T), axis=1)
+    return transformations

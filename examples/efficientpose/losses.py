@@ -5,6 +5,8 @@ from plyfile import PlyData
 import natsort
 import math
 import os
+from processors import RegressTranslation, ComputeTxTy, ComputeCameraParameter
+from pose import LINEMOD_CAMERA_MATRIX
 
 
 class MultiTransformationLoss(object):
@@ -19,7 +21,9 @@ class MultiTransformationLoss(object):
         - [SSD: Single Shot MultiBox
             Detector](https://arxiv.org/abs/1512.02325)
     """
-    def __init__(self, neg_pos_ratio=3, alpha=1.0, max_num_negatives=300):
+    def __init__(self, translation_priors, neg_pos_ratio=3,
+                 alpha=1.0, max_num_negatives=300):
+        self.translation_priors = translation_priors
         self.alpha = alpha
         self.neg_pos_ratio = neg_pos_ratio
         self.max_num_negatives = max_num_negatives
@@ -29,6 +33,9 @@ class MultiTransformationLoss(object):
         self.object_models = self.load_model_points()
         self.model_3d_points = self.get_model_3d_points()
         self.model_3d_points_for_loss = self.get_model_3d_points_for_loss(500)
+        self.regress_translation = RegressTranslation(self.translation_priors)
+        self.compute_tx_ty = ComputeTxTy()
+        self.compute_camera_parameter = ComputeCameraParameter(LINEMOD_CAMERA_MATRIX, 1000)
 
     def list_model_files(self):
         all_files = os.listdir(self.model_path)
@@ -96,6 +103,12 @@ class MultiTransformationLoss(object):
         """
         regression_rotation = y_pred[:, :, :3]
         regression_translation = y_pred[:, :, 3:]
+        print(regression_translation.shape)
+        regression_translation = self.regress_translation(regression_translation)
+        camera_parameter = self.compute_camera_parameter(y_true[0, 0, -1])
+        regression_translation = self.compute_tx_ty(regression_translation, camera_parameter)
+        print(regression_translation.shape)
+        
         regression_target_rotation = y_true[:, :, :3]
         regression_target_translation = y_true[:, :, 6:-1]
         is_symmetric = y_true[:, :, 3]

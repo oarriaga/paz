@@ -13,7 +13,7 @@ from paz.pipelines.keypoints import MinimalHandPoseEstimation
 from paz.backend.boxes import change_box_coordinates
 from pose import EfficientPosePreprocess
 from processors import (MatchTransformations, TransformRotation,
-                        ConcatenateTransformation)
+                        ConcatenateTransformation, ConcatenateScale)
 
 
 class AugmentBoxes(SequentialProcessor):
@@ -81,25 +81,28 @@ class AugmentPose(SequentialProcessor):
             model.prior_boxes, num_pose_dims)
 
         self.concat_transformation = ConcatenateTransformation()
+        self.concat_scale = ConcatenateScale()
 
         # pipeline
         self.add(pr.UnpackDictionary(['image', 'boxes', 'rotation',
                                       'translation_raw', 'class']))
         self.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
-        self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3]))
-        self.add(pr.ControlMap(self.preprocess_boxes, [3], [4], keep={3: 3}))
-        self.add(pr.ControlMap(TransformRotation(num_pose_dims), [2], [2]))
+        self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
+        self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
+        self.add(pr.ControlMap(TransformRotation(num_pose_dims), [3], [3]))
         self.add(pr.ControlMap(self.preprocess_transformation,
-                               [3, 2], [2], keep={3: 3}))
+                               [4, 3], [3], keep={4: 4}))
         self.add(pr.ControlMap(self.preprocess_transformation,
-                               [3, 4], [7]))
+                               [4, 5], [8]))
         self.add(pr.ControlMap(self.concat_transformation,
-                               [2, 5], [7]))
+                               [3, 6], [8]))
+        self.add(pr.ControlMap(self.concat_scale,
+                               [5, 1], [8]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {2: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
-             4: {'transformation': [len(model.prior_boxes), 10]}}))
+             4: {'transformation': [len(model.prior_boxes), 11]}}))
 
 
 class PostprocessBoxes2D(SequentialProcessor):
