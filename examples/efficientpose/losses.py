@@ -33,9 +33,9 @@ class MultiTransformationLoss(object):
         self.object_models = self.load_model_points()
         self.model_3d_points = self.get_model_3d_points()
         self.model_3d_points_for_loss = self.get_model_3d_points_for_loss(500)
-        self.regress_translation = RegressTranslation(self.translation_priors)
-        self.compute_tx_ty = ComputeTxTy()
-        self.compute_camera_parameter = ComputeCameraParameter(LINEMOD_CAMERA_MATRIX, 1000)
+        # self.regress_translation = RegressTranslation(self.translation_priors)
+        # self.compute_tx_ty = ComputeTxTy()
+        # self.compute_camera_parameter = ComputeCameraParameter(LINEMOD_CAMERA_MATRIX, 1000)
 
     def list_model_files(self):
         all_files = os.listdir(self.model_path)
@@ -103,10 +103,12 @@ class MultiTransformationLoss(object):
         """
         regression_rotation = y_pred[:, :, :3]
         # regression_rotation = tf.expand_dims(regression_rotation, axis = 0)
-        regression_translation = y_pred[:, :, 3:]        
-        regression_translation = self.regress_translation(regression_translation)
-        camera_parameter = self.compute_camera_parameter(y_true[0, 0, -1])
+        regression_translation = y_pred[:, :, 3:] 
+        regression_translation = self.regress_translation(regression_translation, self.translation_priors)
+        regression_translation = tf.convert_to_tensor(regression_translation)
+        camera_parameter = self.compute_camera_parameter(y_true[0, 0, -1], LINEMOD_CAMERA_MATRIX, 1000)
         regression_translation = self.compute_tx_ty(regression_translation, camera_parameter)
+        regression_translation = tf.convert_to_tensor(regression_translation)
         regression_translation = tf.expand_dims(regression_translation, axis = 0)
         print(regression_translation.shape)
 
@@ -153,19 +155,59 @@ class MultiTransformationLoss(object):
         sym_distances = self.calc_sym_distances(sym_points_pred, sym_points_target)
         asym_distances = self.calc_asym_distances(asym_points_pred, asym_points_target)
 
-        if (sym_distances is None) and (asym_distances is not None):
-            to_concatenate = [asym_distances]
+        # if (sym_distances is None) and (asym_distances is not None):
+        #     to_concatenate = [asym_distances]
 
-        if (sym_distances is not None) and (asym_distances is None):
-            to_concatenate = [sym_distances]
+        # if (sym_distances is not None) and (asym_distances is None):
+        #     to_concatenate = [sym_distances]
 
-        if (sym_distances is not None) and (asym_distances is not None):
-            to_concatenate = [sym_distances, asym_distances]
+        # if (sym_distances is not None) and (asym_distances is not None):
+        #     to_concatenate = [sym_distances, asym_distances]
 
-        distances = tf.concat(to_concatenate, axis = 0)
+        distances = tf.concat(asym_distances, axis = 0)
         loss = tf.math.reduce_mean(distances)
         loss = tf.where(tf.math.is_nan(loss), tf.zeros_like(loss), loss)
         return loss
+
+    def compute_tx_ty(self, translation_xy_Tz, camera_parameter):
+        fx, fy = camera_parameter[0], camera_parameter[1],
+        px, py = camera_parameter[2], camera_parameter[3],
+        tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
+
+        x = translation_xy_Tz[:, 0] / tf.cast(image_scale, tf.float32)
+        y = translation_xy_Tz[:, 1] / tf.cast(image_scale, tf.float32)
+        tz = tf.cast(translation_xy_Tz[:, 2], tf.float32) * tf.cast(tz_scale, tf.float32)
+
+        x = tf.cast(x, tf.float32) - tf.cast(px, tf.float32)
+        y = tf.cast(y, tf.float32) - tf.cast(py, tf.float32)
+
+        tx = np.multiply(x, tz) / fx
+        ty = np.multiply(y, tz) / fy
+
+        tx = tf.expand_dims(tx, axis=0)
+        ty = tf.expand_dims(ty, axis=0)
+        tz = tf.expand_dims(tz, axis=0)
+
+        translations = tf.keras.layers.Concatenate(axis=0)([tx, ty, tz])
+        return tf.transpose(translations)
+
+    def regress_translation(self, translation_raw, translation_priors):
+        stride = translation_priors[:, -1]
+        x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
+        y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
+        Tz = translation_raw[:, :, 2]
+        translations_predicted = tf.keras.layers.Concatenate(axis=0)([x, y, Tz])
+        return tf.transpose(translations_predicted)
+    
+    def compute_camera_parameter(self, image_scale, camera_matrix,
+                                 translation_scale_norm):
+        camera_parameter = tf.convert_to_tensor([camera_matrix[0, 0],
+                                                 camera_matrix[1, 1],
+                                                 camera_matrix[0, 2],
+                                                 camera_matrix[1, 2],
+                                                 translation_scale_norm,
+                                                 image_scale])
+        return camera_parameter
 
     def separate_axis_from_angle(self, axis_angle_tensor):
         squared = tf.math.square(axis_angle_tensor)

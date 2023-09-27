@@ -92,8 +92,8 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                                    str(head_weights) + '_weights.hdf5'])
 
     if not ((base_weights is None) and (head_weights is None)):
-        weights_path = WEIGHT_PATH + model_filename
-        model.load_weights(weights_path)
+        weights_path = model_filename
+        model.load_weights("weights_for_training.hdf5")
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(

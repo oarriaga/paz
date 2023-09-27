@@ -34,9 +34,9 @@ LINEMOD_OBJECT_SIZES = {
 
 def get_class_names(dataset_name='LINEMOD'):
     if dataset_name in ['LINEMOD']:
-        class_names = ['ape', 'can', 'cat', 'driller', 'duck',
-                       'eggbox', 'glue', 'holepuncher']
-
+        # class_names = ['ape', 'can', 'cat', 'driller', 'duck',
+        #                'eggbox', 'glue', 'holepuncher']
+        class_names = ['background', 'driller']
     return class_names
 
 

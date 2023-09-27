@@ -104,8 +104,7 @@ class LINEMODParser(object):
         self._preprocess_files()
 
     def _object_id_to_class_arg(self):
-        self.object_id_to_class_arg = {1: 0, 5: 1, 6: 2, 8: 3,
-                                       9: 4, 10: 5, 11: 6, 12: 7}
+        self.object_id_to_class_arg = {0: 0, 8: 1}
 
     def _load_filenames(self):
         split_file = (self.split_prefix + self.object_id

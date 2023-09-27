@@ -2,7 +2,7 @@ import argparse
 import os
 import tensorflow as tf
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.optimizers import Adam
 from paz.abstract import ProcessingSequence
 from linemod import LINEMOD
 from paz.optimization import MultiBoxLoss
@@ -12,19 +12,22 @@ from paz.processors import TRAIN, VAL
 from pose import EFFICIENTPOSEA
 from losses import MultiTransformationLoss
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 gpus = tf.config.experimental.list_physical_devices('GPU')
+
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=1, type=int,
                     help='Batch size for training')
-parser.add_argument('-lr', '--learning_rate', default=0.08, type=float,
+parser.add_argument('-lr', '--learning_rate', default=1e-4, type=float,
                     help='Initial learning rate for SGD')
 parser.add_argument('-m', '--momentum', default=0.9, type=float,
                     help='Momentum for SGD')
 parser.add_argument('-g', '--gamma_decay', default=0.1, type=float,
                     help='Gamma decay for learning rate scheduler')
-parser.add_argument('-e', '--num_epochs', default=300, type=int,
+parser.add_argument('-e', '--num_epochs', default=1000, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
@@ -42,7 +45,7 @@ parser.add_argument('-w', '--workers', default=1, type=int,
                     help='Number of workers used for optimization')
 args = parser.parse_args()
 
-optimizer = SGD(args.learning_rate, args.momentum)
+optimizer = Adam(learning_rate=args.learning_rate, clipnorm=0.001)
 
 data_splits = ['train', 'test']
 data_names = ['LINEMOD', 'LINEMOD']
@@ -61,7 +64,7 @@ for data_name, data_split in zip(data_names, data_splits):
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = EFFICIENTPOSEA(num_classes, base_weights='COCO',
+model = EFFICIENTPOSEA(num_classes-1, base_weights='COCO',
                        head_weights='LINEMOD_OCCLUDED')
 model.summary()
 
@@ -70,10 +73,13 @@ box_loss = MultiBoxLoss()
 transformation_loss = MultiTransformationLoss(model.translation_priors)
 loss = {'boxes': box_loss.compute_loss,
         'transformation': transformation_loss.compute_loss}
+loss_weights = {'boxes' : 1.0,
+                'transformation': 0.02}
 metrics = {'boxes': [box_loss.localization,
                      box_loss.positive_classification,
                      box_loss.negative_classification]}
-model.compile(optimizer, loss, metrics)
+model.compile(optimizer=optimizer, loss=loss,
+              metrics=metrics, loss_weights=loss_weights, run_eagerly=True)
 
 # setting data augmentation pipeline
 augmentators = []
@@ -102,14 +108,20 @@ s = sequencers[0][0]
 output = model.predict(s[0]['image'])
 y_pred = output[1]
 y_true = s[1]['transformation']
-transformation_loss.compute_loss(y_true, y_pred)
+print("LOSSSS", transformation_loss.compute_loss(tf.convert_to_tensor(y_true), tf.convert_to_tensor(y_pred)))
 
+import copy
+x = copy.deepcopy(sequencers[0][0][0])
+y = copy.deepcopy(sequencers[0][0][1])
 # training
 model.fit(
-    sequencers[0],
+    x=x,
+    y=y,
     epochs=args.num_epochs,
+    initial_epoch = 0,
+    steps_per_epoch=1790,
     verbose=1,
     callbacks=[checkpoint, log, schedule],
-    validation_data=sequencers[1],
+    validation_data=(x, y),
     use_multiprocessing=args.multiprocessing,
     workers=args.workers)
