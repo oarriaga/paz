@@ -5,7 +5,6 @@ from plyfile import PlyData
 import natsort
 import math
 import os
-from processors import RegressTranslation, ComputeTxTy, ComputeCameraParameter
 from pose import LINEMOD_CAMERA_MATRIX
 
 
@@ -33,9 +32,6 @@ class MultiTransformationLoss(object):
         self.object_models = self.load_model_points()
         self.model_3d_points = self.get_model_3d_points()
         self.model_3d_points_for_loss = self.get_model_3d_points_for_loss(500)
-        # self.regress_translation = RegressTranslation(self.translation_priors)
-        # self.compute_tx_ty = ComputeTxTy()
-        # self.compute_camera_parameter = ComputeCameraParameter(LINEMOD_CAMERA_MATRIX, 1000)
 
     def list_model_files(self):
         all_files = os.listdir(self.model_path)
@@ -102,7 +98,6 @@ class MultiTransformationLoss(object):
             Tensor with loss per sample in batch.
         """
         regression_rotation = y_pred[:, :, :3]
-        # regression_rotation = tf.expand_dims(regression_rotation, axis = 0)
         regression_translation = y_pred[:, :, 3:] 
         regression_translation = self.regress_translation(regression_translation, self.translation_priors)
         regression_translation = tf.convert_to_tensor(regression_translation)
@@ -110,7 +105,6 @@ class MultiTransformationLoss(object):
         regression_translation = self.compute_tx_ty(regression_translation, camera_parameter)
         regression_translation = tf.convert_to_tensor(regression_translation)
         regression_translation = tf.expand_dims(regression_translation, axis = 0)
-        print(regression_translation.shape)
 
         regression_target_rotation = y_true[:, :, :3]
         regression_target_translation = y_true[:, :, 6:-2]
@@ -198,7 +192,7 @@ class MultiTransformationLoss(object):
         Tz = translation_raw[:, :, 2]
         translations_predicted = tf.keras.layers.Concatenate(axis=0)([x, y, Tz])
         return tf.transpose(translations_predicted)
-    
+
     def compute_camera_parameter(self, image_scale, camera_matrix,
                                  translation_scale_norm):
         camera_parameter = tf.convert_to_tensor([camera_matrix[0, 0],
