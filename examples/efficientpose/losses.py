@@ -182,7 +182,7 @@ class MultiTransformationLoss(object):
         ty = tf.expand_dims(ty, axis=0)
         tz = tf.expand_dims(tz, axis=0)
 
-        translations = tf.keras.layers.Concatenate(axis=0)([tx, ty, tz])
+        translations = tf.concat([tx, ty, tz], axis=0)
         return tf.transpose(translations)
 
     def regress_translation(self, translation_raw, translation_priors):
@@ -190,7 +190,7 @@ class MultiTransformationLoss(object):
         x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
         y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
         Tz = translation_raw[:, :, 2]
-        translations_predicted = tf.keras.layers.Concatenate(axis=0)([x, y, Tz])
+        translations_predicted = tf.concat([x, y, Tz], axis=0)
         return tf.transpose(translations_predicted)
 
     def compute_camera_parameter(self, image_scale, camera_matrix,

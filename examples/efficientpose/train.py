@@ -12,7 +12,6 @@ from paz.processors import TRAIN, VAL
 from pose import EFFICIENTPOSEA
 from losses import MultiTransformationLoss
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 
@@ -73,7 +72,7 @@ box_loss = MultiBoxLoss()
 transformation_loss = MultiTransformationLoss(model.translation_priors)
 loss = {'boxes': box_loss.compute_loss,
         'transformation': transformation_loss.compute_loss}
-loss_weights = {'boxes' : 1.0,
+loss_weights = {'boxes': 1.0,
                 'transformation': 0.02}
 metrics = {'boxes': [box_loss.localization,
                      box_loss.positive_classification,
@@ -104,24 +103,22 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
 # To be removed (only for debugging purpose)
-s = sequencers[0][0]
-output = model.predict(s[0]['image'])
-y_pred = output[1]
-y_true = s[1]['transformation']
-print("LOSSSS", transformation_loss.compute_loss(tf.convert_to_tensor(y_true), tf.convert_to_tensor(y_pred)))
+# s = sequencers[0][0]
+# output = model.predict(s[0]['image'])
+# y_pred = output[1]
+# y_true = s[1]['transformation']
+# print("LOSSSS", transformation_loss.compute_loss(tf.convert_to_tensor(y_true), tf.convert_to_tensor(y_pred)))
 
-import copy
-x = copy.deepcopy(sequencers[0][0][0])
-y = copy.deepcopy(sequencers[0][0][1])
+# import copy
+# x = copy.deepcopy(sequencers[0][0][0])
+# y = copy.deepcopy(sequencers[0][0][1])
 # training
 model.fit(
-    x=x,
-    y=y,
+    sequencers[0],
     epochs=args.num_epochs,
-    initial_epoch = 0,
-    steps_per_epoch=1790,
+    initial_epoch=0,
     verbose=1,
     callbacks=[checkpoint, log, schedule],
-    validation_data=(x, y),
+    validation_data=sequencers[1],
     use_multiprocessing=args.multiprocessing,
     workers=args.workers)
