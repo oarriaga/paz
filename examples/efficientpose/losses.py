@@ -168,15 +168,15 @@ class MultiTransformationLoss(object):
         px, py = camera_parameter[2], camera_parameter[3],
         tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
 
-        x = translation_xy_Tz[:, 0] / tf.cast(image_scale, tf.float32)
-        y = translation_xy_Tz[:, 1] / tf.cast(image_scale, tf.float32)
+        x = translation_xy_Tz[:, 0] / image_scale
+        y = translation_xy_Tz[:, 1] / image_scale
         tz = translation_xy_Tz[:, 2] * tz_scale
 
         x = x - px
         y = y - py
 
-        tx = np.multiply(x, tz) / fx
-        ty = np.multiply(y, tz) / fy
+        tx = tf.math.multiply(x, tz) / fx
+        ty = tf.math.multiply(y, tz) / fy
 
         tx = tf.expand_dims(tx, axis=0)
         ty = tf.expand_dims(ty, axis=0)
