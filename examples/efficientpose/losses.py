@@ -132,8 +132,8 @@ class MultiTransformationLoss(object):
         regression_translation = tf.expand_dims(regression_translation, axis = 1)
         regression_target_translation = tf.expand_dims(regression_target_translation, axis = 1)
 
-        transformed_points_pred = self.rotate(selected_model_points, axis_pred, angle_pred) + tf.cast(regression_translation, tf.double)
-        transformed_points_target = self.rotate(selected_model_points, axis_target, angle_target) + tf.cast(regression_target_translation, tf.double)
+        transformed_points_pred = self.rotate(selected_model_points, axis_pred, angle_pred) + regression_translation
+        transformed_points_target = self.rotate(selected_model_points, axis_target, angle_target) + regression_target_translation
 
         #distinct between symmetric and asymmetric objects
         sym_indices = tf.where(keras.backend.equal(is_symmetric, 1))
@@ -170,10 +170,10 @@ class MultiTransformationLoss(object):
 
         x = translation_xy_Tz[:, 0] / tf.cast(image_scale, tf.float32)
         y = translation_xy_Tz[:, 1] / tf.cast(image_scale, tf.float32)
-        tz = tf.cast(translation_xy_Tz[:, 2], tf.float32) * tf.cast(tz_scale, tf.float32)
+        tz = translation_xy_Tz[:, 2] * tz_scale
 
-        x = tf.cast(x, tf.float32) - tf.cast(px, tf.float32)
-        y = tf.cast(y, tf.float32) - tf.cast(py, tf.float32)
+        x = x - px
+        y = y - py
 
         tx = np.multiply(x, tz) / fx
         ty = np.multiply(y, tz) / fy
@@ -214,12 +214,12 @@ class MultiTransformationLoss(object):
         with tf.compat.v1.name_scope(name, "axis_angle_rotate", [point, axis, angle]):
             cos_angle = tf.cos(angle)
             axis_dot_point = self.dot(axis, point)
-            return tf.cast(point, tf.double) * tf.cast(cos_angle, tf.double) + self.cross(
-                axis, point) * tf.cast(tf.sin(angle), tf.double) + tf.cast(axis, tf.double) * tf.cast(axis_dot_point, tf.double) * tf.cast(1.0 - cos_angle, tf.double)
+            return point * cos_angle + self.cross(
+                axis, point) * tf.sin(angle) + axis * axis_dot_point * (1.0 - cos_angle)
 
     def dot(self, vector1, vector2, axis=-1, keepdims=True, name=None):
         with tf.compat.v1.name_scope(name, "vector_dot", [vector1, vector2]):
-            return tf.reduce_sum(input_tensor=tf.cast(vector1, tf.double) * tf.cast(vector2, tf.double), axis=axis, keepdims=keepdims)
+            return tf.reduce_sum(input_tensor=vector1 * vector2, axis=axis, keepdims=keepdims)
 
     def cross(self, vector1, vector2, name=None):
         with tf.compat.v1.name_scope(name, "vector_cross", [vector1, vector2]):
@@ -229,10 +229,10 @@ class MultiTransformationLoss(object):
             vector2_x = vector2[:, :, 0]
             vector2_y = vector2[:, :, 1]
             vector2_z = vector2[:, :, 2]
-            n_x = tf.cast(vector1_y, tf.double) * tf.cast(vector2_z, tf.double) - tf.cast(vector1_z, tf.double) * tf.cast(vector2_y, tf.double)
-            n_y = tf.cast(vector1_z, tf.double) * tf.cast(vector2_x, tf.double) - tf.cast(vector1_x, tf.double) * tf.cast(vector2_z, tf.double)
-            n_z = tf.cast(vector1_x, tf.double) * tf.cast(vector2_y, tf.double) - tf.cast(vector1_y, tf.double) * tf.cast(vector2_x, tf.double)
-        return tf.stack((n_x, n_y, n_z), axis = -1)
+            n_x = vector1_y * vector2_z - vector1_z * vector2_y
+            n_y = vector1_z * vector2_x - vector1_x * vector2_z
+            n_z = vector1_x * vector2_y - vector1_y * vector2_x
+            return tf.stack((n_x, n_y, n_z), axis = -1)
 
     def calc_sym_distances(self, sym_points_pred, sym_points_target):
         sym_points_pred = tf.expand_dims(sym_points_pred, axis = 2)
