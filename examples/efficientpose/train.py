@@ -58,7 +58,8 @@ for data_name, data_split in zip(data_names, data_splits):
     datasets.append(data_manager.load_data())
     if data_split == 'test':
         eval_data_manager = LINEMOD(
-            args.data_path, data_split, name=data_name, evaluate=True)
+            args.data_path, args.object_id, data_split,
+            name=data_name, evaluate=True)
         evaluation_data_managers.append(eval_data_manager)
 
 # instantiating model
