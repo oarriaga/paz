@@ -35,12 +35,9 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.ControlMap(TransformRotation(num_pose_dims), [3], [3]))
         self.add(pr.ControlMap(self.preprocess_transformation,
                                [4, 3], [3], keep={4: 4}))
-        self.add(pr.ControlMap(self.preprocess_transformation,
-                               [4, 5], [8]))
-        self.add(pr.ControlMap(self.concat_transformation,
-                               [3, 6], [8]))
-        self.add(pr.ControlMap(self.concat_scale,
-                               [5, 1], [8]))
+        self.add(pr.ControlMap(self.preprocess_transformation, [4, 5], [8]))
+        self.add(pr.ControlMap(self.concat_transformation, [3, 6], [8]))
+        self.add(pr.ControlMap(self.concat_scale, [5, 1], [8]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {2: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
