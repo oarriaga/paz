@@ -63,8 +63,7 @@ for data_name, data_split in zip(data_names, data_splits):
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = EFFICIENTPOSEA(num_classes-1, base_weights='COCO',
-                       head_weights='LINEMOD_OCCLUDED')
+model = EFFICIENTPOSEA(num_classes-1, base_weights='COCO', head_weights=None)
 model.summary()
 
 # Instantiating loss and metrics
@@ -103,11 +102,11 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
 # To be removed (only for debugging purpose)
-# s = sequencers[0][0]
-# output = model.predict(s[0]['image'])
-# y_pred = output[1]
-# y_true = s[1]['transformation']
-# print("LOSSSS", transformation_loss.compute_loss(tf.convert_to_tensor(y_true), tf.convert_to_tensor(y_pred)))
+s = sequencers[0][0]
+output = model.predict(s[0]['image'])
+y_pred = output[1]
+y_true = s[1]['transformation']
+print("LOSSSS", transformation_loss.compute_loss(tf.convert_to_tensor(y_true, dtype=tf.float32), tf.convert_to_tensor(y_pred, dtype=tf.float32)))
 
 # import copy
 # x = copy.deepcopy(sequencers[0][0][0])
