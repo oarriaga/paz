@@ -186,8 +186,10 @@ class EfficientPosePostprocess(Processor):
         class_arg: Int, index of the class to be removed.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=None):
+                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
+                 num_pose_dims=3):
         super(EfficientPosePostprocess, self).__init__()
+        self.num_pose_dims = num_pose_dims
         model.prior_boxes = model.prior_boxes * model.input_shape[1]
         self.postprocess_1 = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
@@ -216,8 +218,8 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
 
-        rotations = transformations[:, :, :3]
-        translations = transformations[:, :, 3:]
+        rotations = transformations[:, :, :self.num_pose_dims]
+        translations = transformations[:, :, self.num_pose_dims:]
         poses6D = []
         if len(boxes2D) > 0:
             selected_indices = self.compute_selections(box_data_all, box_data)
