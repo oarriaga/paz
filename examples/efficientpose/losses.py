@@ -98,12 +98,11 @@ class MultiTransformationLoss(object):
             Tensor with loss per sample in batch.
         """
         regression_rotation = y_pred[:, :, :3]
-        regression_translation = y_pred[:, :, 3:] 
+        regression_translation = y_pred[:, :, 3:]
         regression_translation = self.regress_translation(regression_translation, self.translation_priors)
         regression_translation = tf.convert_to_tensor(regression_translation)
         camera_parameter = self.compute_camera_parameter(y_true[0, 0, -1], LINEMOD_CAMERA_MATRIX, 1000)
         regression_translation = self.compute_tx_ty(regression_translation, camera_parameter)
-        regression_translation = tf.convert_to_tensor(regression_translation)
         regression_translation = tf.expand_dims(regression_translation, axis = 0)
 
         regression_target_rotation = y_true[:, :, :3]
@@ -149,16 +148,7 @@ class MultiTransformationLoss(object):
         sym_distances = self.calc_sym_distances(sym_points_pred, sym_points_target)
         asym_distances = self.calc_asym_distances(asym_points_pred, asym_points_target)
 
-        # if (sym_distances is None) and (asym_distances is not None):
-        #     to_concatenate = [asym_distances]
-
-        # if (sym_distances is not None) and (asym_distances is None):
-        #     to_concatenate = [sym_distances]
-
-        # if (sym_distances is not None) and (asym_distances is not None):
-        #     to_concatenate = [sym_distances, asym_distances]
-
-        distances = tf.concat(asym_distances, axis = 0)
+        distances = tf.concat([sym_distances, asym_distances], axis = 0)
         loss = tf.math.reduce_mean(distances)
         loss = tf.where(tf.math.is_nan(loss), tf.zeros_like(loss), loss)
         return loss
@@ -238,6 +228,7 @@ class MultiTransformationLoss(object):
         sym_points_pred = tf.expand_dims(sym_points_pred, axis = 2)
         sym_points_target = tf.expand_dims(sym_points_target, axis = 1)
         distances = tf.reduce_min(tf.norm(sym_points_pred - sym_points_target, axis = -1), axis = -1)
+        return tf.reduce_mean(distances, axis = -1)
 
     def calc_asym_distances(self, asym_points_pred, asym_points_target):
         distances = tf.norm(asym_points_pred - asym_points_target, axis = -1)
