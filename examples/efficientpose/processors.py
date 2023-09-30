@@ -335,35 +335,31 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
     return image
 
 
-class MatchTransformations(Processor):
+class MatchPoses(Processor):
     def __init__(self, prior_boxes, iou=.5):
         self.prior_boxes = prior_boxes
         self.iou = iou
-        super(MatchTransformations, self).__init__()
+        super(MatchPoses, self).__init__()
 
-    def call(self, boxes, transformation):
-        transformation_matches = match_transformation(
-            boxes, transformation, self.prior_boxes, self.iou)
-        return transformation_matches
+    def call(self, boxes, poses):
+        matched_poses = match_poses(boxes, poses, self.prior_boxes, self.iou)
+        return matched_poses
 
 
-def match_transformation(boxes, transformation, prior_boxes, iou_threshold):
-    transformation_matches = np.zeros((prior_boxes.shape[0],
-                                       transformation.shape[0] + 1))
+def match_poses(boxes, poses, prior_boxes, iou_threshold):
+    matched_poses = np.zeros((prior_boxes.shape[0], poses.shape[0] + 1))
     ious = compute_ious(boxes, to_corner_form(np.float32(prior_boxes)))
     per_prior_which_box_iou = np.max(ious, axis=0)
     per_prior_which_box_arg = np.argmax(ious, 0)
-
     per_box_which_prior_arg = np.argmax(ious, 1)
     per_prior_which_box_iou[per_box_which_prior_arg] = 2
     for box_arg in range(len(per_box_which_prior_arg)):
         best_prior_box_arg = per_box_which_prior_arg[box_arg]
         per_prior_which_box_arg[best_prior_box_arg] = box_arg
 
-    transformation_matches[:, :-1] = transformation[np.newaxis, :][
-        per_prior_which_box_arg]
-    transformation_matches[per_prior_which_box_iou > iou_threshold, -1] = 1
-    return transformation_matches
+    matched_poses[:, :-1] = poses[np.newaxis, :][per_prior_which_box_arg]
+    matched_poses[per_prior_which_box_iou > iou_threshold, -1] = 1
+    return matched_poses
 
 
 class TransformRotation(Processor):
@@ -372,9 +368,9 @@ class TransformRotation(Processor):
         super(TransformRotation, self).__init__()
 
     def call(self, rotations):
-        rotations_transformed = transform_rotation(rotations,
+        transformed_rotations = transform_rotation(rotations,
                                                    self.num_pose_dims)
-        return rotations_transformed
+        return transformed_rotations
 
 
 def transform_rotation(rotations, num_pose_dims):
@@ -386,17 +382,16 @@ def transform_rotation(rotations, num_pose_dims):
     return final_axis_angle
 
 
-class ConcatenateTransformation(Processor):
+class ConcatenatePoses(Processor):
     def __init__(self):
-        super(ConcatenateTransformation, self).__init__()
+        super(ConcatenatePoses, self).__init__()
 
     def call(self, rotations, translations):
-        transformation_combined = concatenate_transformation(
-            rotations, translations)
-        return transformation_combined
+        poses_combined = concatenate_poses(rotations, translations)
+        return poses_combined
 
 
-def concatenate_transformation(rotations, translations):
+def concatenate_poses(rotations, translations):
     return np.concatenate((rotations, translations), axis=-1)
 
 
@@ -404,14 +399,13 @@ class ConcatenateScale(Processor):
     def __init__(self):
         super(ConcatenateScale, self).__init__()
 
-    def call(self, transformations, scale):
-        transformation_combined = concatenate_scale(
-            transformations, scale)
-        return transformation_combined
+    def call(self, poses, scale):
+        poses_combined = concatenate_scale(poses, scale)
+        return poses_combined
 
 
-def concatenate_scale(transformations, scale):
-    scale = np.repeat(scale, transformations.shape[0])
+def concatenate_scale(poses, scale):
+    scale = np.repeat(scale, poses.shape[0])
     scale = scale[np.newaxis, :]
-    transformations = np.concatenate((transformations, scale.T), axis=1)
-    return transformations
+    poses = np.concatenate((poses, scale.T), axis=1)
+    return poses

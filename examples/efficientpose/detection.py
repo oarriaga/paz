@@ -2,8 +2,8 @@ import paz.processors as pr
 from paz.abstract import SequentialProcessor
 from paz.pipelines.detection import PreprocessBoxes
 from pose import EfficientPosePreprocess
-from processors import (MatchTransformations, TransformRotation,
-                        ConcatenateTransformation, ConcatenateScale)
+from processors import (MatchPoses, TransformRotation,
+                        ConcatenatePoses, ConcatenateScale)
 
 
 class AugmentPose(SequentialProcessor):
@@ -18,12 +18,10 @@ class AugmentPose(SequentialProcessor):
         args = (num_classes, model.prior_boxes, IOU, variances)
         self.preprocess_boxes = PreprocessBoxes(*args)
 
-        # transformation processor
-        self.preprocess_transformation = MatchTransformations(
-            model.prior_boxes)
-
-        self.concat_transformation = ConcatenateTransformation()
-        self.concat_scale = ConcatenateScale()
+        # pose processors
+        self.match_poses = MatchPoses(model.prior_boxes)
+        self.concatenate_poses = ConcatenatePoses()
+        self.concatenate_scale = ConcatenateScale()
 
         # pipeline
         self.add(pr.UnpackDictionary(['image', 'boxes', 'rotation',
@@ -33,11 +31,10 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
         self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
         self.add(pr.ControlMap(TransformRotation(num_pose_dims), [3], [3]))
-        self.add(pr.ControlMap(self.preprocess_transformation,
-                               [4, 3], [3], keep={4: 4}))
-        self.add(pr.ControlMap(self.preprocess_transformation, [4, 5], [8]))
-        self.add(pr.ControlMap(self.concat_transformation, [3, 6], [8]))
-        self.add(pr.ControlMap(self.concat_scale, [5, 1], [8]))
+        self.add(pr.ControlMap(self.match_poses, [4, 3], [3], keep={4: 4}))
+        self.add(pr.ControlMap(self.match_poses, [4, 5], [8]))
+        self.add(pr.ControlMap(self.concatenate_poses, [3, 6], [8]))
+        self.add(pr.ControlMap(self.concatenate_scale, [5, 1], [8]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
             {2: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
