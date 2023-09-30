@@ -4,13 +4,13 @@ import tensorflow as tf
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
 from paz.abstract import ProcessingSequence
-from linemod import LINEMOD
 from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
-from detection import AugmentPose
 from paz.processors import TRAIN, VAL
+from detection import AugmentPose
+from linemod import LINEMOD
 from pose import EFFICIENTPOSEA
-from losses import MultiTransformationLoss
+from losses import MultiPoseLoss
 
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -69,7 +69,8 @@ model.summary()
 
 # Instantiating loss and metrics
 box_loss = MultiBoxLoss()
-transformation_loss = MultiTransformationLoss(model.translation_priors)
+transformation_loss = MultiPoseLoss(args.object_id, model.translation_priors,
+                                    args.data_path)
 loss = {'boxes': box_loss.compute_loss,
         'transformation': transformation_loss.compute_loss}
 loss_weights = {'boxes': 1.0,

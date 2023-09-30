@@ -8,65 +8,33 @@ import os
 from pose import LINEMOD_CAMERA_MATRIX
 
 
-class MultiTransformationLoss(object):
-    """Multi-box loss for a single-shot detection architecture.
-
-    # Arguments
-        neg_pos_ratio: Int. Number of negatives used per positive box.
-        alpha: Float. Weight parameter for localization loss.
-        max_num_negatives: Int. Maximum number of negatives per batch.
-
-    # References
-        - [SSD: Single Shot MultiBox
-            Detector](https://arxiv.org/abs/1512.02325)
-    """
-    def __init__(self, translation_priors, neg_pos_ratio=3,
-                 alpha=1.0, max_num_negatives=300):
+class MultiPoseLoss(object):
+    def __init__(self, object_id, translation_priors, data_path,
+                 num_points=500, model_path='models/'):
+        self.object_id = object_id
         self.translation_priors = translation_priors
-        self.alpha = alpha
-        self.neg_pos_ratio = neg_pos_ratio
-        self.max_num_negatives = max_num_negatives
-        self.object_id = '08'
-        self.model_path = 'Linemod_preprocessed/models/'
-        self.model_files = self.list_model_files()
-        self.object_models = self.load_model_points()
-        self.model_3d_points = self.get_model_3d_points()
-        self.model_3d_points_for_loss = self.get_model_3d_points_for_loss(500)
+        self.model_path = data_path + model_path + 'obj_' + object_id + '.ply'
+        self.model_points = self.load_model_file()
+        self.model_points_filtered = self.filter_model_points(num_points)
 
-    def list_model_files(self):
-        all_files = os.listdir(self.model_path)
-        model_files = [file for file in all_files if file.endswith('.ply')]
-        model_files = natsort.natsorted(model_files)        
-        return model_files
+    def load_model_file(self):
+        model_data = PlyData.read(self.model_path)
+        vertex = model_data['vertex'][:]
+        points_3d = np.stack([vertex['x'], vertex['y'], vertex['z']], axis=-1)
+        return points_3d
 
-    def load_model_points(self):
-        object_id_to_points = {}
-        for model_file in self.model_files:
-            full_model_file = self.model_path + model_file
-            model_data = PlyData.read(full_model_file)
-            vertex = model_data['vertex']
-            points_3d = np.stack(
-                [vertex[:]['x'], vertex[:]['y'], vertex[:]['z']], axis=-1)
-            object_id = model_file.split('.')[0][-2:]
-            object_id_to_points[object_id] = points_3d
-        return object_id_to_points
-
-    def get_model_3d_points(self):
-        return self.object_models[self.object_id]
-
-    def get_model_3d_points_for_loss(self, points_for_shape_match_loss,
-                                     flatten=False):
-        num_points = self.model_3d_points.shape[0]
+    def filter_model_points(self, points_for_shape_match_loss, flatten=False):
+        num_points = self.model_points.shape[0]
 
         if num_points == points_for_shape_match_loss:
             if flatten:
-                to_return = np.reshape(self.model_3d_points, (-1,))
+                to_return = np.reshape(self.model_points, (-1,))
                 return to_return
             else:
-                return self.model_3d_points
+                return self.model_points
         elif num_points < points_for_shape_match_loss:
             points = np.zeros((points_for_shape_match_loss, 3))
-            points[:num_points, :] = self.model_3d_points
+            points[:num_points, :] = self.model_points
             if flatten:
                 to_return = np.reshape(points, (-1,))
                 return to_return
@@ -76,7 +44,7 @@ class MultiTransformationLoss(object):
             step_size = (num_points // points_for_shape_match_loss) - 1
             if step_size < 1:
                 step_size = 1
-            points = self.model_3d_points[::step_size, :]
+            points = self.model_points[::step_size, :]
             if flatten:
                 to_return = np.reshape(points[:points_for_shape_match_loss, :], (-1, ))
                 return to_return
@@ -122,7 +90,7 @@ class MultiTransformationLoss(object):
         class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
         axis_pred, angle_pred = self.separate_axis_from_angle(regression_rotation)
         axis_target, angle_target = self.separate_axis_from_angle(regression_target_rotation)
-        selected_model_points = tf.gather(self.model_3d_points_for_loss, class_indices, axis = 0)
+        selected_model_points = tf.gather(self.model_points_filtered, class_indices, axis = 0)
         axis_pred = tf.expand_dims(axis_pred, axis = 1)
         angle_pred = tf.expand_dims(angle_pred, axis = 1)
         axis_target = tf.expand_dims(axis_target, axis = 1)
