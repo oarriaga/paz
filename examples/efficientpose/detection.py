@@ -7,7 +7,7 @@ from processors import (MatchTransformations, TransformRotation,
 
 
 class AugmentPose(SequentialProcessor):
-    def __init__(self, model, split=pr.TRAIN, num_classes=21, size=300,
+    def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
                  variances=[1.0, 1.0, 1.0, 1.0], num_pose_dims=3):
         super(AugmentPose, self).__init__()
