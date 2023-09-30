@@ -20,7 +20,7 @@ class AugmentPose(SequentialProcessor):
 
         # transformation processor
         self.preprocess_transformation = MatchTransformations(
-            model.prior_boxes, num_pose_dims)
+            model.prior_boxes)
 
         self.concat_transformation = ConcatenateTransformation()
         self.concat_scale = ConcatenateScale()

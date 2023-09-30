@@ -336,58 +336,24 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
 
 
 class MatchTransformations(Processor):
-    """Match prior boxes with ground truth boxes.
-
-    # Arguments
-        prior_boxes: Numpy array of shape (num_boxes, 4).
-        iou: Float in [0, 1]. Intersection over union in which prior boxes
-            will be considered positive. A positive box is box with a class
-            different than `background`.
-        variance: List of two floats.
-    """
-    def __init__(self, prior_boxes, num_pose_dims, iou=.5):
+    def __init__(self, prior_boxes, iou=.5):
         self.prior_boxes = prior_boxes
-        self.num_pose_dims = num_pose_dims
         self.iou = iou
         super(MatchTransformations, self).__init__()
 
     def call(self, boxes, transformation):
         transformation_matches = match_transformation(
-            boxes, transformation, self.prior_boxes,
-            self.num_pose_dims, self.iou)
+            boxes, transformation, self.prior_boxes, self.iou)
         return transformation_matches
 
 
-def match_transformation(boxes, transformation, prior_boxes,
-                         num_pose_dims, iou_threshold):
-    """Matches each prior box with a ground truth box (box from `boxes`).
-    It then selects which matched box will be considered positive e.g. iou > .5
-    and returns for each prior box a ground truth box that is either positive
-    (with a class argument different than 0) or negative.
-
-    # Arguments
-        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
-            where the first the first four coordinates correspond to
-            box coordinates and the last coordinates is the class
-            argument. This boxes should be the ground truth boxes.
-        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
-            where the four coordinates are in center form coordinates.
-        iou_threshold: Float between [0, 1]. Intersection over union
-            used to determine which box is considered a positive box.
-
-    # Returns
-        numpy array of shape `(num_prior_boxes, 4 + 1)`.
-            where the first the first four coordinates correspond to point
-            form box coordinates and the last coordinates is the class
-            argument.
-    """
+def match_transformation(boxes, transformation, prior_boxes, iou_threshold):
     transformation_matches = np.zeros((prior_boxes.shape[0],
                                        transformation.shape[0] + 1))
     ious = compute_ious(boxes, to_corner_form(np.float32(prior_boxes)))
     per_prior_which_box_iou = np.max(ious, axis=0)
     per_prior_which_box_arg = np.argmax(ious, 0)
 
-    #  overwriting per_prior_which_box_arg if they are the best prior box
     per_box_which_prior_arg = np.argmax(ious, 1)
     per_prior_which_box_iou[per_box_which_prior_arg] = 2
     for box_arg in range(len(per_box_which_prior_arg)):
@@ -401,48 +367,18 @@ def match_transformation(boxes, transformation, prior_boxes,
 
 
 class TransformRotation(Processor):
-    """Match prior boxes with ground truth boxes.
-
-    # Arguments
-        prior_boxes: Numpy array of shape (num_boxes, 4).
-        iou: Float in [0, 1]. Intersection over union in which prior boxes
-            will be considered positive. A positive box is box with a class
-            different than `background`.
-        variance: List of two floats.
-    """
     def __init__(self, num_pose_dims):
         self.num_pose_dims = num_pose_dims
         super(TransformRotation, self).__init__()
 
     def call(self, rotations):
-        transformation_matches = transform_rotation(rotations,
-                                                    self.num_pose_dims)
-        return transformation_matches
+        rotations_transformed = transform_rotation(rotations,
+                                                   self.num_pose_dims)
+        return rotations_transformed
 
 
 def transform_rotation(rotations, num_pose_dims):
-    """Matches each prior box with a ground truth box (box from `boxes`).
-    It then selects which matched box will be considered positive e.g. iou > .5
-    and returns for each prior box a ground truth box that is either positive
-    (with a class argument different than 0) or negative.
-
-    # Arguments
-        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
-            where the first the first four coordinates correspond to
-            box coordinates and the last coordinates is the class
-            argument. This boxes should be the ground truth boxes.
-        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
-            where the four coordinates are in center form coordinates.
-        iou_threshold: Float between [0, 1]. Intersection over union
-            used to determine which box is considered a positive box.
-
-    # Returns
-        numpy array of shape `(num_prior_boxes, 4 + 1)`.
-            where the first the first four coordinates correspond to point
-            form box coordinates and the last coordinates is the class
-            argument.
-    """
-    final_axis_angle = np.zeros((5))
+    final_axis_angle = np.zeros((num_pose_dims + 2))
     rotation_matrix = np.reshape(rotations, (num_pose_dims, num_pose_dims))
     axis_angle, jacobian = cv2.Rodrigues(rotation_matrix)
     axis_angle = np.squeeze(axis_angle) / np.pi
@@ -451,15 +387,6 @@ def transform_rotation(rotations, num_pose_dims):
 
 
 class ConcatenateTransformation(Processor):
-    """Match prior boxes with ground truth boxes.
-
-    # Arguments
-        prior_boxes: Numpy array of shape (num_boxes, 4).
-        iou: Float in [0, 1]. Intersection over union in which prior boxes
-            will be considered positive. A positive box is box with a class
-            different than `background`.
-        variance: List of two floats.
-    """
     def __init__(self):
         super(ConcatenateTransformation, self).__init__()
 
@@ -470,40 +397,10 @@ class ConcatenateTransformation(Processor):
 
 
 def concatenate_transformation(rotations, translations):
-    """Matches each prior box with a ground truth box (box from `boxes`).
-    It then selects which matched box will be considered positive e.g. iou > .5
-    and returns for each prior box a ground truth box that is either positive
-    (with a class argument different than 0) or negative.
-
-    # Arguments
-        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
-            where the first the first four coordinates correspond to
-            box coordinates and the last coordinates is the class
-            argument. This boxes should be the ground truth boxes.
-        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
-            where the four coordinates are in center form coordinates.
-        iou_threshold: Float between [0, 1]. Intersection over union
-            used to determine which box is considered a positive box.
-
-    # Returns
-        numpy array of shape `(num_prior_boxes, 4 + 1)`.
-            where the first the first four coordinates correspond to point
-            form box coordinates and the last coordinates is the class
-            argument.
-    """
     return np.concatenate((rotations, translations), axis=-1)
 
 
 class ConcatenateScale(Processor):
-    """Match prior boxes with ground truth boxes.
-
-    # Arguments
-        prior_boxes: Numpy array of shape (num_boxes, 4).
-        iou: Float in [0, 1]. Intersection over union in which prior boxes
-            will be considered positive. A positive box is box with a class
-            different than `background`.
-        variance: List of two floats.
-    """
     def __init__(self):
         super(ConcatenateScale, self).__init__()
 
@@ -514,27 +411,6 @@ class ConcatenateScale(Processor):
 
 
 def concatenate_scale(transformations, scale):
-    """Matches each prior box with a ground truth box (box from `boxes`).
-    It then selects which matched box will be considered positive e.g. iou > .5
-    and returns for each prior box a ground truth box that is either positive
-    (with a class argument different than 0) or negative.
-
-    # Arguments
-        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
-            where the first the first four coordinates correspond to
-            box coordinates and the last coordinates is the class
-            argument. This boxes should be the ground truth boxes.
-        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
-            where the four coordinates are in center form coordinates.
-        iou_threshold: Float between [0, 1]. Intersection over union
-            used to determine which box is considered a positive box.
-
-    # Returns
-        numpy array of shape `(num_prior_boxes, 4 + 1)`.
-            where the first the first four coordinates correspond to point
-            form box coordinates and the last coordinates is the class
-            argument.
-    """
     scale = np.repeat(scale, transformations.shape[0])
     scale = scale[np.newaxis, :]
     transformations = np.concatenate((transformations, scale.T), axis=1)
