@@ -8,14 +8,13 @@ from pose import get_class_names
 class LINEMOD(Loader):
     def __init__(self, path=None, object_id='08', split='train',
                  name='LINEMOD', evaluate=False,
-                 input_size={'width': 640.0, 'height': 480.0}):
-
+                 image_size={'width': 640.0, 'height': 480.0}):
         self.path = path
         self.object_id = object_id
         self.split = split
         self.class_names_all = get_class_names('LINEMOD')
         self.evaluate = evaluate
-        self.input_size = input_size
+        self.image_size = image_size
         self.arg_to_class = None
         self.object_id_to_class_arg = self._object_id_to_class_arg()
         self.class_name = self.class_names_all[
@@ -34,7 +33,7 @@ class LINEMOD(Loader):
         self.parser = LINEMODParser(self.object_id_to_class_arg, dataset_name,
                                     split, self.path, self.evaluate,
                                     self.object_id, self.class_names,
-                                    self.input_size)
+                                    self.image_size)
         self.arg_to_class = self.parser.arg_to_class
         ground_truth_data = self.parser.load_data()
         return ground_truth_data
@@ -48,7 +47,7 @@ class LINEMODParser(object):
                  split='train', dataset_path='/Linemod_preprocessed/',
                  evaluate=False, object_id='08',
                  class_names=['background', 'driller'],
-                 input_size={'width': 640.0, 'height': 480.0},
+                 image_size={'width': 640.0, 'height': 480.0},
                  ground_truth_file='gt', info_file='info', data='data/'):
 
         if dataset_name != 'LINEMOD':
@@ -60,7 +59,7 @@ class LINEMODParser(object):
         self.evaluate = evaluate
         self.object_id = object_id
         self.class_names = class_names
-        self.input_size = input_size
+        self.image_size = image_size
         self.object_id_to_class_arg = object_id_to_class_arg
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
@@ -105,10 +104,10 @@ class LINEMODParser(object):
             x_min, y_min, W, H = bounding_box
             x_max = x_min + W
             y_max = y_min + H
-            x_min = x_min / self.input_size['width']
-            x_max = x_max / self.input_size['width']
-            y_min = y_min / self.input_size['height']
-            y_max = y_max / self.input_size['height']
+            x_min = x_min / self.image_size['width']
+            x_max = x_max / self.image_size['width']
+            y_min = y_min / self.image_size['height']
+            y_max = y_max / self.image_size['height']
             box_data = [x_min, y_min, x_max, y_max]
             box_data = np.asarray([box_data])
 
