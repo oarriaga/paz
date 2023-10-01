@@ -37,7 +37,7 @@ parser.add_argument('-dp', '--data_path', default='dataset_less/Linemod_preproce
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
-                    default=[200, 250], help='Epoch learning rate reduction')
+                    default=[1000, 1250], help='Epoch learning rate reduction')
 parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
                     help='Select True for multiprocessing')
 parser.add_argument('-w', '--workers', default=1, type=int,
@@ -78,8 +78,8 @@ loss_weights = {'boxes': 1.0,
 metrics = {'boxes': [box_loss.localization,
                      box_loss.positive_classification,
                      box_loss.negative_classification]}
-model.compile(optimizer=optimizer, loss=loss,
-              metrics=metrics, loss_weights=loss_weights, run_eagerly=True)
+model.compile(optimizer=optimizer, loss=loss, metrics=metrics,
+              loss_weights=loss_weights, run_eagerly=True)
 
 # setting data augmentation pipeline
 augmentators = []
@@ -103,16 +103,6 @@ checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
-# To be removed (only for debugging purpose)
-s = sequencers[0][0]
-output = model.predict(s[0]['image'])
-y_pred = output[1]
-y_true = s[1]['transformation']
-print("LOSSSS", transformation_loss.compute_loss(tf.convert_to_tensor(y_true, dtype=tf.float32), tf.convert_to_tensor(y_pred, dtype=tf.float32)))
-
-# import copy
-# x = copy.deepcopy(sequencers[0][0][0])
-# y = copy.deepcopy(sequencers[0][0][1])
 # training
 model.fit(
     sequencers[0],
