@@ -87,31 +87,27 @@ class MultiPoseLoss(object):
                                                  image_scale])
         return camera_parameter
 
-    def _rotate(self, point, axis, angle, name=None):
-        with tf.compat.v1.name_scope(name, "axis_angle_rotate",
-                                     [point, axis, angle]):
-            cos_angle = tf.cos(angle)
-            axis_dot_point = self._dot(axis, point)
-            return (point * cos_angle + self._cross(axis, point) *
-                    tf.sin(angle) + axis * axis_dot_point * (1.0 - cos_angle))
+    def _rotate(self, point, axis, angle):
+        cos_angle = tf.cos(angle)
+        axis_dot_point = self._dot(axis, point)
+        return (point * cos_angle + self._cross(axis, point) *
+                tf.sin(angle) + axis * axis_dot_point * (1.0 - cos_angle))
 
-    def _dot(self, vector1, vector2, axis=-1, keepdims=True, name=None):
-        with tf.compat.v1.name_scope(name, "vector_dot", [vector1, vector2]):
-            return tf.reduce_sum(input_tensor=vector1 * vector2,
-                                 axis=axis, keepdims=keepdims)
+    def _dot(self, vector1, vector2, axis=-1, keepdims=True):
+        return tf.reduce_sum(input_tensor=vector1 * vector2,
+                             axis=axis, keepdims=keepdims)
 
-    def _cross(self, vector1, vector2, name=None):
-        with tf.compat.v1.name_scope(name, "vector_cross", [vector1, vector2]):
-            vector1_x = vector1[:, :, 0]
-            vector1_y = vector1[:, :, 1]
-            vector1_z = vector1[:, :, 2]
-            vector2_x = vector2[:, :, 0]
-            vector2_y = vector2[:, :, 1]
-            vector2_z = vector2[:, :, 2]
-            n_x = vector1_y * vector2_z - vector1_z * vector2_y
-            n_y = vector1_z * vector2_x - vector1_x * vector2_z
-            n_z = vector1_x * vector2_y - vector1_y * vector2_x
-            return tf.stack((n_x, n_y, n_z), axis=-1)
+    def _cross(self, vector1, vector2):
+        vector1_x = vector1[:, :, 0]
+        vector1_y = vector1[:, :, 1]
+        vector1_z = vector1[:, :, 2]
+        vector2_x = vector2[:, :, 0]
+        vector2_y = vector2[:, :, 1]
+        vector2_z = vector2[:, :, 2]
+        n_x = vector1_y * vector2_z - vector1_z * vector2_y
+        n_y = vector1_z * vector2_x - vector1_x * vector2_z
+        n_z = vector1_x * vector2_y - vector1_y * vector2_x
+        return tf.stack((n_x, n_y, n_z), axis=-1)
 
     def _calc_sym_distances(self, sym_points_pred, sym_points_target):
         sym_points_pred = tf.expand_dims(sym_points_pred, axis=2)
