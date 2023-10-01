@@ -2,105 +2,91 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 from plyfile import PlyData
-import natsort
 import math
-import os
 from pose import LINEMOD_CAMERA_MATRIX
 
 
 class MultiPoseLoss(object):
     def __init__(self, object_id, translation_priors, data_path,
-                 num_points=500, model_path='models/'):
+                 target_num_points=500, num_pose_dims=3, model_path='models/',
+                 translation_scale_norm=1000):
         self.object_id = object_id
         self.translation_priors = translation_priors
+        self.num_pose_dims = num_pose_dims
+        self.translation_scale_norm = translation_scale_norm
         self.model_path = data_path + model_path + 'obj_' + object_id + '.ply'
-        self.model_points = self.load_model_file()
-        self.model_points_filtered = self.filter_model_points(num_points)
+        self.model_points = self._load_model_file()
+        self.model_points = self._filter_model_points(target_num_points)
 
-    def load_model_file(self):
+    def _load_model_file(self):
         model_data = PlyData.read(self.model_path)
         vertex = model_data['vertex'][:]
-        points_3d = np.stack([vertex['x'], vertex['y'], vertex['z']], axis=-1)
-        return points_3d
+        vertices = [vertex['x'], vertex['y'], vertex['z']]
+        model_points = np.stack(vertices, axis=-1)
+        return model_points
 
-    def filter_model_points(self, points_for_shape_match_loss, flatten=False):
+    def _filter_model_points(self, target_num_points):
         num_points = self.model_points.shape[0]
 
-        if num_points == points_for_shape_match_loss:
-            if flatten:
-                to_return = np.reshape(self.model_points, (-1,))
-                return to_return
-            else:
-                return self.model_points
-        elif num_points < points_for_shape_match_loss:
-            points = np.zeros((points_for_shape_match_loss, 3))
+        if num_points == target_num_points:
+            points = self.model_points
+
+        elif num_points < target_num_points:
+            points = np.zeros((target_num_points, 3))
             points[:num_points, :] = self.model_points
-            if flatten:
-                to_return = np.reshape(points, (-1,))
-                return to_return
-            else:
-                return points
+
         else:
-            step_size = (num_points // points_for_shape_match_loss) - 1
-            if step_size < 1:
-                step_size = 1
+            step_size = (num_points // target_num_points) - 1
+            step_size = max(1, step_size)
             points = self.model_points[::step_size, :]
-            if flatten:
-                to_return = np.reshape(points[:points_for_shape_match_loss, :], (-1, ))
-                return to_return
-            else:
-                to_return = points[np.newaxis, :points_for_shape_match_loss, :]
-                to_return = tf.convert_to_tensor(value=to_return)
-                return to_return
+            points = points[np.newaxis, :target_num_points, :]
+
+        return tf.convert_to_tensor(points)
 
     def compute_loss(self, y_true, y_pred):
-        """Computes localization and classification losses in a batch.
+        rotation_pred = y_pred[:, :, :self.num_pose_dims]
+        translation_pred = y_pred[:, :, self.num_pose_dims:]
+        translation_pred = self.regress_translation(translation_pred)
+        scale = y_true[0, 0, -1]
+        camera_parameter = self.compute_camera_parameter(scale,
+                                                         LINEMOD_CAMERA_MATRIX)
+        translation_pred = self.compute_tx_ty(translation_pred,
+                                              camera_parameter)
+        translation_pred = tf.expand_dims(translation_pred, axis=0)
 
-        # Arguments
-            y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
-                with correct labels.
-            y_pred: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
-                with predicted inferences.
+        rotation_true = y_true[:, :, :self.num_pose_dims]
+        translation_true = y_true[:, :, 2 * self.num_pose_dims:2 *
+                                  self.num_pose_dims + self.num_pose_dims]
+        is_symmetric = y_true[:, :, self.num_pose_dims]
+        class_indices = y_true[:, :, self.num_pose_dims + 1]
+        anchor_flags = y_true[:, :, -2]
+        anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
 
-        # Returns
-            Tensor with loss per sample in batch.
-        """
-        regression_rotation = y_pred[:, :, :3]
-        regression_translation = y_pred[:, :, 3:]
-        regression_translation = self.regress_translation(regression_translation, self.translation_priors)
-        regression_translation = tf.convert_to_tensor(regression_translation)
-        camera_parameter = self.compute_camera_parameter(y_true[0, 0, -1], LINEMOD_CAMERA_MATRIX, 1000)
-        regression_translation = self.compute_tx_ty(regression_translation, camera_parameter)
-        regression_translation = tf.expand_dims(regression_translation, axis = 0)
-
-        regression_target_rotation = y_true[:, :, :3]
-        regression_target_translation = y_true[:, :, 6:-2]
-        is_symmetric = y_true[:, :, 3]
-        class_indices = y_true[:, :, 4]
-        anchor_state = tf.cast(tf.math.round(y_true[:, :, -2]), tf.int32)
         indices = tf.where(tf.equal(anchor_state, 1))
-        regression_rotation = tf.gather_nd(regression_rotation, indices) * math.pi
-        regression_translation = tf.gather_nd(regression_translation, indices)
+        rotation_pred = tf.gather_nd(rotation_pred, indices) * math.pi
+        translation_pred = tf.gather_nd(translation_pred, indices)
 
-        regression_target_rotation = tf.gather_nd(regression_target_rotation, indices) * math.pi
-        regression_target_translation = tf.gather_nd(regression_target_translation, indices)
+        rotation_true = tf.gather_nd(rotation_true, indices) * math.pi
+        translation_true = tf.gather_nd(translation_true, indices)
+
         is_symmetric = tf.gather_nd(is_symmetric, indices)
         is_symmetric = tf.cast(tf.math.round(is_symmetric), tf.int32)
         class_indices = tf.gather_nd(class_indices, indices)
         class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
-        axis_pred, angle_pred = self.separate_axis_from_angle(regression_rotation)
-        axis_target, angle_target = self.separate_axis_from_angle(regression_target_rotation)
-        selected_model_points = tf.gather(self.model_points_filtered, class_indices, axis = 0)
+
+        axis_pred, angle_pred = self.separate_axis_from_angle(rotation_pred)
+        axis_target, angle_target = self.separate_axis_from_angle(rotation_true)
+        selected_model_points = tf.gather(self.model_points, class_indices, axis = 0)
         axis_pred = tf.expand_dims(axis_pred, axis = 1)
         angle_pred = tf.expand_dims(angle_pred, axis = 1)
         axis_target = tf.expand_dims(axis_target, axis = 1)
         angle_target = tf.expand_dims(angle_target, axis = 1)
 
-        regression_translation = tf.expand_dims(regression_translation, axis = 1)
-        regression_target_translation = tf.expand_dims(regression_target_translation, axis = 1)
+        translation_pred = tf.expand_dims(translation_pred, axis = 1)
+        translation_true = tf.expand_dims(translation_true, axis = 1)
 
-        transformed_points_pred = self.rotate(selected_model_points, axis_pred, angle_pred) + regression_translation
-        transformed_points_target = self.rotate(selected_model_points, axis_target, angle_target) + regression_target_translation
+        transformed_points_pred = self.rotate(selected_model_points, axis_pred, angle_pred) + translation_pred
+        transformed_points_target = self.rotate(selected_model_points, axis_target, angle_target) + translation_true
 
         #distinct between symmetric and asymmetric objects
         sym_indices = tf.where(keras.backend.equal(is_symmetric, 1))
@@ -143,21 +129,20 @@ class MultiPoseLoss(object):
         translations = tf.concat([tx, ty, tz], axis=0)
         return tf.transpose(translations)
 
-    def regress_translation(self, translation_raw, translation_priors):
-        stride = translation_priors[:, -1]
-        x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
-        y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
+    def regress_translation(self, translation_raw):
+        stride = self.translation_priors[:, -1]
+        x = self.translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
+        y = self.translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
         Tz = translation_raw[:, :, 2]
         translations_predicted = tf.concat([x, y, Tz], axis=0)
         return tf.transpose(translations_predicted)
 
-    def compute_camera_parameter(self, image_scale, camera_matrix,
-                                 translation_scale_norm):
+    def compute_camera_parameter(self, image_scale, camera_matrix):
         camera_parameter = tf.convert_to_tensor([camera_matrix[0, 0],
                                                  camera_matrix[1, 1],
                                                  camera_matrix[0, 2],
                                                  camera_matrix[1, 2],
-                                                 translation_scale_norm,
+                                                 self.translation_scale_norm,
                                                  image_scale])
         return camera_parameter
 
