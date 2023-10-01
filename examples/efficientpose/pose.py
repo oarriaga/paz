@@ -96,7 +96,7 @@ class DetectAndEstimatePose(Processor):
         self.variances = variances
         self.class_to_sizes = LINEMOD_OBJECT_SIZES
         self.camera_matrix = LINEMOD_CAMERA_MATRIX
-        self.colors = lincolor(len(self.class_names))
+        self.colors = lincolor(len(self.class_to_sizes.keys()))
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         if preprocess is None:

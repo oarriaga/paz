@@ -98,7 +98,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
     if not ((base_weights is None) and (head_weights is None)):
         weights_path = WEIGHT_PATH + model_filename
         print('Loading %s model weights' % weights_path)
-        model.load_weights(weights_path, by_name=True)
+        model.load_weights(weights_path)
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(
