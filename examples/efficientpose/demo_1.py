@@ -5,8 +5,8 @@ IMAGE_PATH = ('/home/manummk95/Desktop/paz/paz/examples/efficientpose/'
               'dataset_less/Linemod_preprocessed/data/08/rgb/0002.png')
 
 
-detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.85, nms_thresh=0.10,
-                                      show_boxes2D=False, show_poses6D=True)
+detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.85, nms_thresh=0.010,
+                                      show_boxes2D=True, show_poses6D=False)
 detect.model.load_weights('weights.3498-22.03.hdf5')
 image = load_image(IMAGE_PATH)
 inferences = detect(image)

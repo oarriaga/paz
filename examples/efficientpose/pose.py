@@ -303,7 +303,6 @@ class DetectAndEstimateEfficientPose(Processor):
         preprocessed_image, image_scale, camera_parameter = preprocessed_data
         outputs = self.model(preprocessed_image)
         detections, transformations = outputs
-        detections = change_box_coordinates(detections)
         outputs = detections, transformations
         boxes2D, poses6D = self.postprocess(
             outputs, image_scale, camera_parameter)
