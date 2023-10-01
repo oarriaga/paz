@@ -260,7 +260,7 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
-<<<<<<< HEAD
+
 
 
 class DetectAndEstimateEfficientPose(Processor):
@@ -282,7 +282,7 @@ class DetectAndEstimateEfficientPose(Processor):
             self.preprocess = EfficientPosePreprocess(model)
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess(
-                model, class_names, score_thresh, nms_thresh, class_arg=0)
+                model, class_names, score_thresh, nms_thresh)
 
         super(DetectAndEstimateEfficientPose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
@@ -340,5 +340,3 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
-=======
->>>>>>> parent of a92b034... Inference pipeline for custom training added
