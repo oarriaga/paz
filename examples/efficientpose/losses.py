@@ -120,20 +120,26 @@ class MultiPoseLoss(object):
         distances = tf.norm(asym_points_pred - asym_points_target, axis=-1)
         return tf.reduce_mean(distances, axis=-1)
 
-    def compute_loss(self, y_true, y_pred):
-        rotation_pred = y_pred[:, :, :self.num_pose_dims]
-        translation_pred = y_pred[:, :, self.num_pose_dims:]
-        translation_pred = self._regress_translation(translation_pred)
-        scale = y_true[0, 0, -1]
+    def _compute_translation(self, translation_raw_pred, scale):
+        translation_pred = self._regress_translation(translation_raw_pred)
         camera_parameter = self._compute_camera_parameter(
             scale, LINEMOD_CAMERA_MATRIX)
         translation_pred = self._compute_tx_ty(translation_pred,
                                                camera_parameter)
         translation_pred = tf.expand_dims(translation_pred, axis=0)
+        return translation_pred
 
+    def compute_loss(self, y_true, y_pred):
         rotation_true = y_true[:, :, :self.num_pose_dims]
         translation_true = y_true[:, :, 2 * self.num_pose_dims:2 *
                                   self.num_pose_dims + self.num_pose_dims]
+
+        rotation_pred = y_pred[:, :, :self.num_pose_dims]
+        scale = y_true[0, 0, -1]
+        translation_raw_pred = y_pred[:, :, self.num_pose_dims:]        
+        translation_pred = self._compute_translation(translation_raw_pred,
+                                                     scale)
+
         is_symmetric = y_true[:, :, self.num_pose_dims]
         class_indices = y_true[:, :, self.num_pose_dims + 1]
         anchor_flags = y_true[:, :, -2]
@@ -155,8 +161,6 @@ class MultiPoseLoss(object):
         axis_target, angle_target = self._separate_axis_from_angle(
             rotation_true)
 
-        selected_model_points = tf.gather(self.model_points,
-                                          class_indices, axis=0)
         axis_pred = tf.expand_dims(axis_pred, axis=1)
         angle_pred = tf.expand_dims(angle_pred, axis=1)
         axis_target = tf.expand_dims(axis_target, axis=1)
@@ -165,6 +169,8 @@ class MultiPoseLoss(object):
         translation_pred = tf.expand_dims(translation_pred, axis=1)
         translation_true = tf.expand_dims(translation_true, axis=1)
 
+        selected_model_points = tf.gather(self.model_points,
+                                          class_indices, axis=0)
         transformed_points_pred = self._rotate(
             selected_model_points, axis_pred, angle_pred) + translation_pred
         transformed_points_target = (self._rotate(
