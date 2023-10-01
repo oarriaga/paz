@@ -40,6 +40,9 @@ def get_class_names(dataset_name='LINEMOD'):
     elif dataset_name in ['LINEMOD_EFFICIENTPOSE']:
         class_names = ['ape', 'can', 'cat', 'driller', 'duck',
                        'eggbox', 'glue', 'holepuncher']
+
+    elif dataset_name in ['LINEMOD_EFFICIENTPOSE_DRILLER']:
+        class_names = ['driller']
     return class_names
 
 
@@ -257,6 +260,85 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
                                head_weights='LINEMOD_OCCLUDED')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
+            model, names, score_thresh, nms_thresh,
+            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+            show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
+
+
+class DetectAndEstimateEfficientPose(Processor):
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
+                 postprocess=None, variances=[1.0, 1.0, 1.0, 1.0],
+                 show_boxes2D=False, show_poses6D=True):
+        self.model = model
+        self.class_names = class_names
+        self.score_thresh = score_thresh
+        self.nms_thresh = nms_thresh
+        self.variances = variances
+        self.class_to_sizes = LINEMOD_OBJECT_SIZES
+        self.camera_matrix = LINEMOD_CAMERA_MATRIX
+        self.colors = lincolor(len(self.class_to_sizes.keys()))
+        self.show_boxes2D = show_boxes2D
+        self.show_poses6D = show_poses6D
+        if preprocess is None:
+            self.preprocess = EfficientPosePreprocess(model)
+        if postprocess is None:
+            self.postprocess = EfficientPosePostprocess(
+                model, class_names, score_thresh, nms_thresh)
+
+        super(DetectAndEstimateEfficientPose, self).__init__()
+        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
+
+    def _build_draw_pose6D(self, name_to_size, camera_parameter):
+        name_to_draw = {}
+        iterator = zip(name_to_size.items(), self.colors)
+        for (name, object_size), box_color in iterator:
+            draw = DrawPose6D(object_size, camera_parameter, box_color)
+            name_to_draw[name] = draw
+        return name_to_draw
+
+    def call(self, image):
+        preprocessed_data = self.preprocess(image)
+        preprocessed_image, image_scale, camera_parameter = preprocessed_data
+        outputs = self.model(preprocessed_image)
+        detections, transformations = outputs
+        detections = change_box_coordinates(detections)
+        outputs = detections, transformations
+        boxes2D, poses6D = self.postprocess(
+            outputs, image_scale, camera_parameter)
+        if self.show_boxes2D:
+            image = self.draw_boxes2D(image, boxes2D)
+
+        if self.show_poses6D:
+            self.draw_pose6D = self._build_draw_pose6D(
+                self.class_to_sizes, self.camera_matrix)
+            for box2D, pose6D in zip(boxes2D, poses6D):
+                image = self.draw_pose6D[box2D.class_name](image, pose6D)
+        return self.wrap(image, boxes2D, poses6D)
+
+
+class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
+    """Inference pipeline with EFFICIENTPOSEA trained on LINEMOD.
+
+    # Arguments
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        show_boxes2D: Boolean. If ``True`` prediction
+            are drawn in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses
+            are drawn in the returned image.
+
+    # References
+        [ybkscht repository implementation of EfficientPose](
+        https://github.com/ybkscht/EfficientPose)
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45,
+                 show_boxes2D=False, show_poses6D=True):
+        names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
+        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
+                               head_weights=None)
+        super(EFFICIENTPOSEALINEMODDRILLER, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
