@@ -78,8 +78,8 @@ loss_weights = {'boxes': 1.0,
 metrics = {'boxes': [box_loss.localization,
                      box_loss.positive_classification,
                      box_loss.negative_classification]}
-model.compile(optimizer=optimizer, loss=loss, metrics=metrics,
-              loss_weights=loss_weights, run_eagerly=True)
+model.compile(optimizer=optimizer, loss=loss,
+              metrics=metrics, loss_weights=loss_weights)
 
 # setting data augmentation pipeline
 augmentators = []
