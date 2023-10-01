@@ -41,6 +41,15 @@ class MultiPoseLoss(object):
 
         return tf.convert_to_tensor(points)
 
+    def _compute_translation(self, translation_raw_pred, scale):
+        translation_pred = self._regress_translation(translation_raw_pred)
+        camera_parameter = self._compute_camera_parameter(
+            scale, LINEMOD_CAMERA_MATRIX)
+        translation_pred = self._compute_tx_ty(translation_pred,
+                                               camera_parameter)
+        translation_pred = tf.expand_dims(translation_pred, axis=0)
+        return translation_pred
+
     def _regress_translation(self, translation_raw):
         stride = self.translation_priors[:, -1]
         x = self.translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
@@ -119,15 +128,6 @@ class MultiPoseLoss(object):
     def _calc_asym_distances(self, asym_points_pred, asym_points_target):
         distances = tf.norm(asym_points_pred - asym_points_target, axis=-1)
         return tf.reduce_mean(distances, axis=-1)
-
-    def _compute_translation(self, translation_raw_pred, scale):
-        translation_pred = self._regress_translation(translation_raw_pred)
-        camera_parameter = self._compute_camera_parameter(
-            scale, LINEMOD_CAMERA_MATRIX)
-        translation_pred = self._compute_tx_ty(translation_pred,
-                                               camera_parameter)
-        translation_pred = tf.expand_dims(translation_pred, axis=0)
-        return translation_pred
 
     def compute_loss(self, y_true, y_pred):
         rotation_true = y_true[:, :, :self.num_pose_dims]
