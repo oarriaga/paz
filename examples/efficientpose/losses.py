@@ -43,6 +43,13 @@ class MultiPoseLoss(object):
 
         return tf.convert_to_tensor(points)
 
+    def _separate_axis_from_angle(self, axis_angle):
+        squared = tf.math.square(axis_angle)
+        sum = tf.math.reduce_sum(squared, axis=-1)
+        angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
+        axis = tf.math.divide_no_nan(axis_angle, angle)
+        return axis, angle
+
     def compute_loss(self, y_true, y_pred):
         rotation_pred = y_pred[:, :, :self.num_pose_dims]
         translation_pred = y_pred[:, :, self.num_pose_dims:]
@@ -74,16 +81,18 @@ class MultiPoseLoss(object):
         class_indices = tf.gather_nd(class_indices, indices)
         class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
 
-        axis_pred, angle_pred = self.separate_axis_from_angle(rotation_pred)
-        axis_target, angle_target = self.separate_axis_from_angle(rotation_true)
-        selected_model_points = tf.gather(self.model_points, class_indices, axis = 0)
-        axis_pred = tf.expand_dims(axis_pred, axis = 1)
-        angle_pred = tf.expand_dims(angle_pred, axis = 1)
-        axis_target = tf.expand_dims(axis_target, axis = 1)
-        angle_target = tf.expand_dims(angle_target, axis = 1)
+        axis_pred, angle_pred = self._separate_axis_from_angle(rotation_pred)
+        axis_target, angle_target = self._separate_axis_from_angle(
+            rotation_true)
+        selected_model_points = tf.gather(self.model_points,
+                                          class_indices, axis=0)
+        axis_pred = tf.expand_dims(axis_pred, axis=1)
+        angle_pred = tf.expand_dims(angle_pred, axis=1)
+        axis_target = tf.expand_dims(axis_target, axis=1)
+        angle_target = tf.expand_dims(angle_target, axis=1)
 
-        translation_pred = tf.expand_dims(translation_pred, axis = 1)
-        translation_true = tf.expand_dims(translation_true, axis = 1)
+        translation_pred = tf.expand_dims(translation_pred, axis=1)
+        translation_true = tf.expand_dims(translation_true, axis=1)
 
         transformed_points_pred = self.rotate(selected_model_points, axis_pred, angle_pred) + translation_pred
         transformed_points_target = self.rotate(selected_model_points, axis_target, angle_target) + translation_true
@@ -146,25 +155,20 @@ class MultiPoseLoss(object):
                                                  image_scale])
         return camera_parameter
 
-    def separate_axis_from_angle(self, axis_angle_tensor):
-        squared = tf.math.square(axis_angle_tensor)
-        summed = tf.math.reduce_sum(squared, axis = -1)
-        angle = tf.expand_dims(tf.math.sqrt(summed), axis = -1)
-        axis = tf.math.divide_no_nan(axis_angle_tensor, angle)
-        return axis, angle
-
     def rotate(self, point, axis, angle, name=None):
-        with tf.compat.v1.name_scope(name, "axis_angle_rotate", [point, axis, angle]):
+        with tf.compat.v1.name_scope(name, "axis_angle_rotate",
+                                     [point, axis, angle]):
             cos_angle = tf.cos(angle)
-            axis_dot_point = self.dot(axis, point)
-            return point * cos_angle + self.cross(
-                axis, point) * tf.sin(angle) + axis * axis_dot_point * (1.0 - cos_angle)
+            axis_dot_point = self._dot(axis, point)
+            return (point * cos_angle + self._cross(axis, point) *
+                    tf.sin(angle) + axis * axis_dot_point * (1.0 - cos_angle))
 
-    def dot(self, vector1, vector2, axis=-1, keepdims=True, name=None):
+    def _dot(self, vector1, vector2, axis=-1, keepdims=True, name=None):
         with tf.compat.v1.name_scope(name, "vector_dot", [vector1, vector2]):
-            return tf.reduce_sum(input_tensor=vector1 * vector2, axis=axis, keepdims=keepdims)
+            return tf.reduce_sum(input_tensor=vector1 * vector2,
+                                 axis=axis, keepdims=keepdims)
 
-    def cross(self, vector1, vector2, name=None):
+    def _cross(self, vector1, vector2, name=None):
         with tf.compat.v1.name_scope(name, "vector_cross", [vector1, vector2]):
             vector1_x = vector1[:, :, 0]
             vector1_y = vector1[:, :, 1]
@@ -175,7 +179,7 @@ class MultiPoseLoss(object):
             n_x = vector1_y * vector2_z - vector1_z * vector2_y
             n_y = vector1_z * vector2_x - vector1_x * vector2_z
             n_z = vector1_x * vector2_y - vector1_y * vector2_x
-            return tf.stack((n_x, n_y, n_z), axis = -1)
+            return tf.stack((n_x, n_y, n_z), axis=-1)
 
     def calc_sym_distances(self, sym_points_pred, sym_points_target):
         sym_points_pred = tf.expand_dims(sym_points_pred, axis = 2)
