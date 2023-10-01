@@ -284,7 +284,7 @@ class DetectAndEstimateEfficientPose(Processor):
             self.preprocess = EfficientPosePreprocess(model)
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess(
-                model, class_names, score_thresh, nms_thresh)
+                model, class_names, score_thresh, nms_thresh, class_arg=0)
 
         super(DetectAndEstimateEfficientPose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
