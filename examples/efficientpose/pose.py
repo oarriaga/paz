@@ -40,9 +40,6 @@ def get_class_names(dataset_name='LINEMOD'):
     elif dataset_name in ['LINEMOD_EFFICIENTPOSE']:
         class_names = ['ape', 'can', 'cat', 'driller', 'duck',
                        'eggbox', 'glue', 'holepuncher']
-
-    elif dataset_name in ['LINEMOD_EFFICIENTPOSE_DRILLER']:
-        class_names = ['driller']
     return class_names
 
 
@@ -263,6 +260,7 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
+<<<<<<< HEAD
 
 
 class DetectAndEstimateEfficientPose(Processor):
@@ -342,3 +340,5 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
+=======
+>>>>>>> parent of a92b034... Inference pipeline for custom training added
