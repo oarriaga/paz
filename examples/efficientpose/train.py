@@ -64,7 +64,7 @@ for data_name, data_split in zip(data_names, data_splits):
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = EFFICIENTPOSEA(num_classes - 1, base_weights='COCO', head_weights=None)
+model = EFFICIENTPOSEA(num_classes, base_weights='COCO', head_weights=None)
 model.summary()
 
 # Instantiating loss and metrics

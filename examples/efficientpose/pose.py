@@ -42,7 +42,7 @@ def get_class_names(dataset_name='LINEMOD'):
                        'eggbox', 'glue', 'holepuncher']
 
     elif dataset_name in ['LINEMOD_EFFICIENTPOSE_DRILLER']:
-        class_names = ['driller']
+        class_names = ['background', 'driller']
     return class_names
 
 
