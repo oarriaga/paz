@@ -41,12 +41,22 @@ class MultiPoseLoss(object):
 
         return tf.convert_to_tensor(points)
 
-    def _separate_axis_from_angle(self, axis_angle):
-        squared = tf.math.square(axis_angle)
-        sum = tf.math.reduce_sum(squared, axis=-1)
-        angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
-        axis = tf.math.divide_no_nan(axis_angle, angle)
-        return axis, angle
+    def _regress_translation(self, translation_raw):
+        stride = self.translation_priors[:, -1]
+        x = self.translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
+        y = self.translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
+        Tz = translation_raw[:, :, 2]
+        translations_predicted = tf.concat([x, y, Tz], axis=0)
+        return tf.transpose(translations_predicted)
+
+    def _compute_camera_parameter(self, image_scale, camera_matrix):
+        camera_parameter = tf.convert_to_tensor([camera_matrix[0, 0],
+                                                 camera_matrix[1, 1],
+                                                 camera_matrix[0, 2],
+                                                 camera_matrix[1, 2],
+                                                 self.translation_scale_norm,
+                                                 image_scale])
+        return camera_parameter
 
     def _compute_tx_ty(self, translation_xy_Tz, camera_parameter):
         fx, fy = camera_parameter[0], camera_parameter[1],
@@ -70,22 +80,12 @@ class MultiPoseLoss(object):
         translations = tf.concat([tx, ty, tz], axis=0)
         return tf.transpose(translations)
 
-    def _regress_translation(self, translation_raw):
-        stride = self.translation_priors[:, -1]
-        x = self.translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
-        y = self.translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
-        Tz = translation_raw[:, :, 2]
-        translations_predicted = tf.concat([x, y, Tz], axis=0)
-        return tf.transpose(translations_predicted)
-
-    def _compute_camera_parameter(self, image_scale, camera_matrix):
-        camera_parameter = tf.convert_to_tensor([camera_matrix[0, 0],
-                                                 camera_matrix[1, 1],
-                                                 camera_matrix[0, 2],
-                                                 camera_matrix[1, 2],
-                                                 self.translation_scale_norm,
-                                                 image_scale])
-        return camera_parameter
+    def _separate_axis_from_angle(self, axis_angle):
+        squared = tf.math.square(axis_angle)
+        sum = tf.math.reduce_sum(squared, axis=-1)
+        angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
+        axis = tf.math.divide_no_nan(axis_angle, angle)
+        return axis, angle
 
     def _rotate(self, point, axis, angle):
         cos_angle = tf.cos(angle)
