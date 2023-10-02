@@ -265,6 +265,69 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
+class EfficientPosePostprocess1(Processor):
+    """Postprocessing pipeline for EfficientPose.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        variances: List of float values.
+        class_arg: Int, index of the class to be removed.
+    """
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
+                 num_pose_dims=3):
+        super(EfficientPosePostprocess1, self).__init__()
+        self.num_pose_dims = num_pose_dims
+        self.postprocess_1 = pr.SequentialProcessor([
+            pr.Squeeze(axis=None),
+            pr.DecodeBoxes(model.prior_boxes, variances),
+            pr.RemoveClass(class_names, class_arg)])
+        self.scale = pr.ScaleBox()
+        self.postprocess_2 = pr.SequentialProcessor([
+            pr.NonMaximumSuppressionPerClass(nms_thresh),
+            pr.MergeNMSBoxWithClass(),
+            pr.FilterBoxes(class_names, score_thresh)])
+        self.to_boxes2D = pr.ToBoxes2D(class_names)
+        self.round_boxes = pr.RoundBoxes2D()
+        self.denormalize = pr.DenormalizeBoxes2D()
+        self.regress_translation = RegressTranslation(model.translation_priors)
+        self.compute_tx_ty = ComputeTxTy()
+        self.compute_selections = ComputeSelectedIndices()
+        self.squeeze = pr.Squeeze(axis=0)
+        self.transform_rotations = pr.Scale(np.pi)
+        self.to_pose_6D = ToPose6D(class_names)
+
+    def call(self, image, model_output, image_scale, camera_parameter):
+        detections, transformations = model_output
+        box_data = self.postprocess_1(detections)
+        box_data_all = box_data
+        box_data = self.postprocess_2(box_data)
+        box_data_scaled = self.scale(box_data, 1 / image_scale)
+        boxes2D = self.to_boxes2D(box_data_scaled)
+        boxes2D = self.denormalize(image, boxes2D)
+        boxes2D = self.round_boxes(boxes2D)
+
+        rotations = transformations[:, :, :self.num_pose_dims]
+        translations = transformations[:, :, self.num_pose_dims:]
+        poses6D = []
+        if len(boxes2D) > 0:
+            selected_indices = self.compute_selections(box_data_all, box_data)
+            rotations = self.squeeze(rotations)
+            rotations = rotations[selected_indices]
+            rotations = self.transform_rotations(rotations)
+
+            translation_xy_Tz = self.regress_translation(translations)
+            translation = self.compute_tx_ty(translation_xy_Tz,
+                                             camera_parameter)
+            translations = translation[selected_indices]
+
+        poses6D = self.to_pose_6D(box_data, rotations, translations)
+        return boxes2D, poses6D
+
+
 class DetectAndEstimateEfficientPose(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
@@ -283,7 +346,7 @@ class DetectAndEstimateEfficientPose(Processor):
         if preprocess is None:
             self.preprocess = EfficientPosePreprocess(model)
         if postprocess is None:
-            self.postprocess = EfficientPosePostprocess(
+            self.postprocess = EfficientPosePostprocess1(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 
         super(DetectAndEstimateEfficientPose, self).__init__()
@@ -305,7 +368,7 @@ class DetectAndEstimateEfficientPose(Processor):
         detections, transformations = outputs
         outputs = detections, transformations
         boxes2D, poses6D = self.postprocess(
-            outputs, image_scale, camera_parameter)
+            image, outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
 
