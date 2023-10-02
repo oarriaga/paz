@@ -174,4 +174,8 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3)):
 
     model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
+    if weights is not None:
+        print("loading weights")
+        model.load_weights("./CLUSTER_OUTPUTS/CNN2Plus1D/2023_09_07-16_13_48/checkpoints/weights-15.hdf5")  # TODO Add download link
+
     return model
