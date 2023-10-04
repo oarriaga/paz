@@ -185,4 +185,8 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
+    if weights is not None:
+        print("loading weights")
+        model.load_weights("/media/cedric/SpeedData/Uni_Seafile/Master_Thesis/CLUSTER_OUTPUTS/CNN2Plus1D/2023_09_07-16_13_48/checkpoints/weights-15.hdf5")  # TODO Add download link
+
     return model
