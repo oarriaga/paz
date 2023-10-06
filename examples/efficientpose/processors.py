@@ -358,7 +358,7 @@ def match_poses(boxes, poses, prior_boxes, iou_threshold):
         per_prior_which_box_arg[best_prior_box_arg] = box_arg
 
     matched_poses[:, :-1] = poses[np.newaxis, :][per_prior_which_box_arg]
-    matched_poses[per_prior_which_box_iou > iou_threshold, -1] = 1
+    matched_poses[per_prior_which_box_iou >= iou_threshold, -1] = 1
     return matched_poses
 
 
