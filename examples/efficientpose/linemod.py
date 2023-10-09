@@ -8,7 +8,7 @@ from pose import get_class_names
 class LINEMOD(Loader):
     def __init__(self, path=None, object_id='08', split='train',
                  name='LINEMOD', evaluate=False,
-                 image_size={'width': 640.0, 'height': 480.0}):
+                 image_size={'width': 512.0, 'height': 512.0}):
         self.path = path
         self.object_id = object_id
         self.split = split
