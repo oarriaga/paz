@@ -6,7 +6,7 @@ from paz.backend.image import lincolor
 from efficientpose import EFFICIENTPOSEA
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTy, DrawPose6D,
-                        ComputeSelectedIndices, ToPose6D)
+                        ComputeSelectedIndices, ScaleBoxes2D, ToPose6D)
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
@@ -285,7 +285,7 @@ class EfficientPosePostprocess1(Processor):
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
             pr.RemoveClass(class_names, class_arg)])
-        self.scale = pr.ScaleBox()
+        self.scale_boxes2D = ScaleBoxes2D()
         self.postprocess_2 = pr.SequentialProcessor([
             pr.NonMaximumSuppressionPerClass(nms_thresh),
             pr.MergeNMSBoxWithClass(),
@@ -305,9 +305,9 @@ class EfficientPosePostprocess1(Processor):
         box_data = self.postprocess_1(detections)
         box_data_all = box_data
         box_data = self.postprocess_2(box_data)
-        # box_data_scaled = self.scale(box_data, 1 / image_scale)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.denormalize(image, boxes2D)
+        boxes2D = self.scale_boxes2D(boxes2D, 1 / image_scale)
         boxes2D = self.round_boxes(boxes2D)
 
         rotations = transformations[:, :, :self.num_pose_dims]
@@ -367,16 +367,10 @@ class DetectAndEstimateEfficientPose(Processor):
         outputs = self.model(preprocessed_image)
         detections, transformations = outputs
         outputs = detections, transformations
-
-        ############################
-        normalized_image = 255 * (preprocessed_image - preprocessed_image.min()) / (preprocessed_image.max() -  preprocessed_image.min())
-        normalized_image = np.clip(normalized_image, 0, 255)
-        int8_image = np.uint8(normalized_image)[0, :, :, :]
-        ############################
         boxes2D, poses6D = self.postprocess(
-            int8_image, outputs, image_scale, camera_parameter)
+            preprocessed_image[0], outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
-            image = self.draw_boxes2D(int8_image, boxes2D)
+            image = self.draw_boxes2D(image, boxes2D)
 
         if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(

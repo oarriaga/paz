@@ -409,3 +409,18 @@ def concatenate_scale(poses, scale):
     scale = scale[np.newaxis, :]
     poses = np.concatenate((poses, scale.T), axis=1)
     return poses
+
+
+class ScaleBoxes2D(Processor):
+    def __init__(self):
+        super(ScaleBoxes2D, self).__init__()
+
+    def call(self, boxes2D, scale):
+        boxes2D = scale_boxes2D(boxes2D, scale)
+        return boxes2D
+
+
+def scale_boxes2D(boxes2D, scale):
+    for box2D in boxes2D:
+        box2D.coordinates = tuple(np.array(box2D.coordinates) * scale)
+    return boxes2D
