@@ -305,8 +305,8 @@ class EfficientPosePostprocess1(Processor):
         box_data = self.postprocess_1(detections)
         box_data_all = box_data
         box_data = self.postprocess_2(box_data)
-        box_data_scaled = self.scale(box_data, 1 / image_scale)
-        boxes2D = self.to_boxes2D(box_data_scaled)
+        # box_data_scaled = self.scale(box_data, 1 / image_scale)
+        boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.denormalize(image, boxes2D)
         boxes2D = self.round_boxes(boxes2D)
 
@@ -367,10 +367,16 @@ class DetectAndEstimateEfficientPose(Processor):
         outputs = self.model(preprocessed_image)
         detections, transformations = outputs
         outputs = detections, transformations
+
+        ############################
+        normalized_image = 255 * (preprocessed_image - preprocessed_image.min()) / (preprocessed_image.max() -  preprocessed_image.min())
+        normalized_image = np.clip(normalized_image, 0, 255)
+        int8_image = np.uint8(normalized_image)[0, :, :, :]
+        ############################
         boxes2D, poses6D = self.postprocess(
-            image, outputs, image_scale, camera_parameter)
+            int8_image, outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
-            image = self.draw_boxes2D(image, boxes2D)
+            image = self.draw_boxes2D(int8_image, boxes2D)
 
         if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(
