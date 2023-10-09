@@ -277,7 +277,7 @@ class EfficientPosePostprocess1(Processor):
         class_arg: Int, index of the class to be removed.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
+                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
                  num_pose_dims=3):
         super(EfficientPosePostprocess1, self).__init__()
         self.num_pose_dims = num_pose_dims
@@ -331,7 +331,7 @@ class EfficientPosePostprocess1(Processor):
 class DetectAndEstimateEfficientPose(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
-                 postprocess=None, variances=[1.0, 1.0, 1.0, 1.0],
+                 postprocess=None, variances=[0.1, 0.1, 0.2, 0.2],
                  show_boxes2D=False, show_poses6D=True):
         self.model = model
         self.class_names = class_names
