@@ -17,7 +17,6 @@ class MultiPoseLoss(object):
         self.model_path = data_path + model_path + 'obj_' + object_id + '.ply'
         self.model_points = self._load_model_file()
         self.model_points = self._filter_model_points(target_num_points)
-        self.model_points = tf.tile(self.model_points, [32, 1, 1])
 
     def _load_model_file(self):
         model_data = PlyData.read(self.model_path)
@@ -52,9 +51,13 @@ class MultiPoseLoss(object):
 
     def _regress_translation(self, translation_raw):
         stride = self.translation_priors[:, -1]
-        x = self.translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
-        y = self.translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
-        Tz = translation_raw[:, :, 2]
+        x = self.translation_priors[:, 0] + (translation_raw[:, 0] * stride)
+        y = self.translation_priors[:, 1] + (translation_raw[:, 1] * stride)
+        Tz = translation_raw[:, 2]
+
+        x = tf.expand_dims(x, axis=0)
+        y = tf.expand_dims(y, axis=0)
+        Tz = tf.expand_dims(Tz, axis=0)
         translations_predicted = tf.concat([x, y, Tz], axis=0)
         return tf.transpose(translations_predicted)
 
@@ -72,10 +75,9 @@ class MultiPoseLoss(object):
         px, py = camera_parameter[2], camera_parameter[3],
         tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
 
-        batch_size = 32
-        x = translation_xy_Tz[:, :batch_size] / image_scale
-        y = translation_xy_Tz[:, batch_size:2*batch_size] / image_scale
-        tz = translation_xy_Tz[:, 2*batch_size:3*batch_size] * tz_scale
+        x = translation_xy_Tz[:, 0] / image_scale
+        y = translation_xy_Tz[:, 1] / image_scale
+        tz = translation_xy_Tz[:, 2] * tz_scale
 
         x = x - px
         y = y - py
@@ -130,32 +132,32 @@ class MultiPoseLoss(object):
         distances = tf.norm(asym_points_pred - asym_points_target, axis=-1)
         return tf.reduce_mean(distances, axis=-1)
 
-    def compute_loss(self, y_true, y_pred):
-        rotation_true = y_true[:, :, :self.num_pose_dims]
-        translation_true = y_true[:, :, 2 * self.num_pose_dims:2 *
+    def _compute_loss(self, y_true, y_pred):
+        rotation_true = y_true[:, :self.num_pose_dims]
+        translation_true = y_true[:, 2 * self.num_pose_dims:2 *
                                   self.num_pose_dims + self.num_pose_dims]
 
-        rotation_pred = y_pred[:, :, :self.num_pose_dims]
-        scale = y_true[0, 0, -1]
-        translation_raw_pred = y_pred[:, :, self.num_pose_dims:]        
+        rotation_pred = y_pred[:, :self.num_pose_dims]
+        scale = y_true[0, -1]
+        translation_raw_pred = y_pred[:, self.num_pose_dims:]
         translation_pred = self._compute_translation(translation_raw_pred,
                                                      scale)
 
-        is_symmetric = y_true[:, :, self.num_pose_dims]
-        class_indices = y_true[:, :, self.num_pose_dims + 1]
-        anchor_flags = y_true[:, :, -2]
+        is_symmetric = y_true[:, self.num_pose_dims]
+        class_indices = y_true[:, self.num_pose_dims + 1]
+        anchor_flags = y_true[:, -2]
         anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
 
-        anchor_mask = tf.equal(anchor_state, 1)
-        rotation_pred = rotation_pred[anchor_mask] * math.pi
-        translation_pred = translation_pred[anchor_mask]
+        indices = tf.where(tf.equal(anchor_state, 1))
+        rotation_pred = tf.gather_nd(rotation_pred, indices) * math.pi
+        translation_pred = tf.gather_nd(translation_pred, indices)
 
-        rotation_true = rotation_true[anchor_mask] * math.pi
-        translation_true = translation_true[anchor_mask]
+        rotation_true = tf.gather_nd(rotation_true, indices) * math.pi
+        translation_true = tf.gather_nd(translation_true, indices)
 
-        is_symmetric = is_symmetric[anchor_mask]
+        is_symmetric = tf.gather_nd(is_symmetric, indices)
         is_symmetric = tf.cast(tf.math.round(is_symmetric), tf.int32)
-        class_indices = class_indices[anchor_mask]
+        class_indices = tf.gather_nd(class_indices, indices)
         class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
 
         axis_pred, angle_pred = self._separate_axis_from_angle(rotation_pred)
@@ -201,3 +203,12 @@ class MultiPoseLoss(object):
         loss = tf.math.reduce_mean(distances)
         loss = tf.where(tf.math.is_nan(loss), tf.zeros_like(loss), loss)
         return loss
+
+    def compute_loss(self, y_true, y_pred):
+        def compute_batch_loss(batch):
+            return self._compute_loss(batch[0], batch[1])
+
+        batch_loss = tf.map_fn(compute_batch_loss, elems=(y_true, y_pred),
+                               dtype=(tf.float32, tf.float32),
+                               fn_output_signature=tf.float32)
+        return tf.reduce_mean(batch_loss)
