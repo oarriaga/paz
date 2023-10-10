@@ -17,6 +17,7 @@ class MultiPoseLoss(object):
         self.model_path = data_path + model_path + 'obj_' + object_id + '.ply'
         self.model_points = self._load_model_file()
         self.model_points = self._filter_model_points(target_num_points)
+        self.model_points = tf.tile(self.model_points, [32, 1, 1])
 
     def _load_model_file(self):
         model_data = PlyData.read(self.model_path)
@@ -47,7 +48,6 @@ class MultiPoseLoss(object):
             scale, LINEMOD_CAMERA_MATRIX)
         translation_pred = self._compute_tx_ty(translation_pred,
                                                camera_parameter)
-        translation_pred = tf.expand_dims(translation_pred, axis=0)
         return translation_pred
 
     def _regress_translation(self, translation_raw):
@@ -72,9 +72,10 @@ class MultiPoseLoss(object):
         px, py = camera_parameter[2], camera_parameter[3],
         tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
 
-        x = translation_xy_Tz[:, 0] / image_scale
-        y = translation_xy_Tz[:, 1] / image_scale
-        tz = translation_xy_Tz[:, 2] * tz_scale
+        batch_size = 32
+        x = translation_xy_Tz[:, :batch_size] / image_scale
+        y = translation_xy_Tz[:, batch_size:2*batch_size] / image_scale
+        tz = translation_xy_Tz[:, 2*batch_size:3*batch_size] * tz_scale
 
         x = x - px
         y = y - py
@@ -145,16 +146,16 @@ class MultiPoseLoss(object):
         anchor_flags = y_true[:, :, -2]
         anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
 
-        indices = tf.where(tf.equal(anchor_state, 1))
-        rotation_pred = tf.gather_nd(rotation_pred, indices) * math.pi
-        translation_pred = tf.gather_nd(translation_pred, indices)
+        anchor_mask = tf.equal(anchor_state, 1)
+        rotation_pred = rotation_pred[anchor_mask] * math.pi
+        translation_pred = translation_pred[anchor_mask]
 
-        rotation_true = tf.gather_nd(rotation_true, indices) * math.pi
-        translation_true = tf.gather_nd(translation_true, indices)
+        rotation_true = rotation_true[anchor_mask] * math.pi
+        translation_true = translation_true[anchor_mask]
 
-        is_symmetric = tf.gather_nd(is_symmetric, indices)
+        is_symmetric = is_symmetric[anchor_mask]
         is_symmetric = tf.cast(tf.math.round(is_symmetric), tf.int32)
-        class_indices = tf.gather_nd(class_indices, indices)
+        class_indices = class_indices[anchor_mask]
         class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
 
         axis_pred, angle_pred = self._separate_axis_from_angle(rotation_pred)
