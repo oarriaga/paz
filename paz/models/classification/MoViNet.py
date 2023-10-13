@@ -44,6 +44,10 @@ def MoViNet(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
     backbone = movinet.Movinet(model_id=model_id)
     model = movinet_model.MovinetClassifier(backbone=backbone, num_classes=2)
 
+    if weights is not None:
+        print("loading weights")
+        model.load_weights("./paz/examples/visual_voice_activity_detection/training/output/MoViNets/2023_10_12-14_37_58/checkpoints/weights-02.hdf5")  # TODO Add download link
+
     return model
 
 def MoViNetManuall(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
@@ -134,7 +138,7 @@ def MoViNetTut(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     model = movinet_model.MovinetClassifier(
         backbone,
-        num_classes=2,
-        output_states=True)
+        num_classes=1,
+        output_states=False)
 
     return model

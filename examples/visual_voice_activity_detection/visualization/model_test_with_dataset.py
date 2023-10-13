@@ -4,7 +4,7 @@ import argparse
 import h5py
 import numpy as np
 
-from paz.models.classification import VVAD_LRS3_LSTM
+from paz.models.classification import VVAD_LRS3_LSTM, MoViNet
 
 
 def predict(clip):
@@ -25,9 +25,10 @@ args = parser.parse_args()
 # model = pretrained_models.getFaceFeatureModel()
 # model = pretrained_models.getLipImageModel()
 # model = pretrained_models.getLipFeatureModel()
-model = VVAD_LRS3_LSTM(weights='VVAD_LRS3_LSTM')
+# model = VVAD_LRS3_LSTM(weights='VVAD_LRS3_LSTM')
+model = MoViNet(weights='MoViNets')
 
-dataset = h5py.File("/home/cedric/.keras/paz/datasets/vvadlrs3_faceImages_small.h5", mode='r')
+dataset = h5py.File("/media/cedric/SpeedData/Datasets/VVAD/vvadlrs3_faceImages_small.h5", mode='r')
 
 x_train = dataset.get("x_test")
 y_train = dataset.get("y_test")
