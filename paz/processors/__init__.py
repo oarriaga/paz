@@ -134,6 +134,7 @@ from .standard import BooleanToTextMessage
 from .standard import PrintTopics
 from .standard import FloatToBoolean
 from .standard import NoneConverter
+from .standard import AveragePredictions
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
