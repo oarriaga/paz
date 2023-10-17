@@ -514,7 +514,6 @@ class NoneConverter(Processor):
         self.default_value = default_value
 
     def call(self, value):
-        print("value:", value)
         if value is None:
             return self.default_value
         else:
