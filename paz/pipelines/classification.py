@@ -79,16 +79,23 @@ class ClassifyHandClosure(SequentialProcessor):
 
 class ClassifyVVAD(SequentialProcessor):
     """Visual Voice Activity Detection pipeline for classifying speaking and not speaking from RGB faces.
+    # Arguments
+        input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
+            e.g. (38, 96, 96, 3).
+        update_rate: Integer. How many frames are between the prediction (computational expansive (low update rate) vs
+            high latency (high update rate))
+        average: Integer. How many predictions are averaged
     """
-    def __init__(self):
+    def __init__(self, input_size=(38, 96, 96, 3), update_rate=38, average=2):
         super(ClassifyVVAD, self).__init__()
         # self.classifier = VVAD_LRS3_LSTM(weights='VVAD-LRS3')
         self.classifier = CNN2Plus1D(weights='CNN2Plus1D')
         self.class_names = get_class_names('VVAD-LRS3')
 
-        preprocess = PreprocessImage((96, 96), pr.RGB_NORMAL)
-        preprocess.add(pr.BufferImages(38, (96, 96, 3), play_rate=38))
+        preprocess = PreprocessImage(input_size[1:3], pr.RGB_NORMAL)
+        preprocess.add(pr.BufferImages( input_size, play_rate=update_rate))
         self.add(pr.Predict(self.classifier, preprocess))
+        self.add(pr.AveragePredictions(average))
         self.add(pr.CopyDomain([0], [0]))
         self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))
         self.add(pr.ControlMap(pr.FloatToBoolean(), [0], [0]))

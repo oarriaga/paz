@@ -519,3 +519,28 @@ class NoneConverter(Processor):
         else:
             self.default_value = value
             return value
+
+class AveragePredictions(Processor):
+    """Averages the last n predictions
+    # Arguments
+        averages: Int. Number of predictions to average over.
+        value: Noneable value.
+    # Returns
+        Any.
+    """
+
+    def __init__(self, averages=1):
+        super(AveragePredictions, self).__init__()
+        self.averages = averages
+        self.predictions = []
+
+    def call(self, value):
+        if self.averages <= 1:
+            return value
+        elif value is None:
+            return value
+
+        self.predictions.append(value)
+        if len(self.predictions) > self.averages:
+            self.predictions.pop(0)
+        return np.mean(self.predictions, axis=0)
