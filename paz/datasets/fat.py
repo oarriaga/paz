@@ -1,17 +1,15 @@
 import os
-from glob import glob
 import json
-
 import numpy as np
-from tensorflow.keras.utils import Progbar
-
+from glob import glob
 from ..abstract import Loader
 from .utils import get_class_names
+from tensorflow.keras.utils import Progbar
+from paz.backend.groups import quaternion_to_rotation_matrix
 
 
 class FAT(Loader):
     """ Dataset loader for the falling things dataset (FAT).
-
     # Arguments
         path: String indicating full path to dataset
             e.g. /home/user/fat/
@@ -24,16 +22,31 @@ class FAT(Loader):
         - [Deep Object Pose
             Estimation (DOPE)](https://github.com/NVlabs/Deep_Object_Pose)
     """
-    # TODO: Allow selection of class_names.
-    def __init__(self, path, split='train', class_names='all'):
+    def __init__(self, path, class_names='all'):
+        self.class_names = class_names
+        self.class_list = get_class_names('FAT')
+        self.data = []
         if class_names == 'all':
-            class_names = get_class_names('FAT')
-        self.class_to_arg = dict(
-            zip(class_names, list(range(len(class_names)))))
-
-        super(FAT, self).__init__(path, split, class_names, 'FAT')
+            self.class_to_arg = dict(
+                zip(self.class_list, list(range(len(self.class_list)))))
+        else:
+            self.class_names = class_names
+            mask = np.isin(self.class_list, self.class_names)
+            indices = np.where(mask)[0].tolist()
+            self.class_to_arg = dict(zip(self.class_names, indices))
+        super(FAT, self).__init__(path, 'None', self.class_names, 'FAT')
 
     def load_data(self):
+        if self.class_names == 'all':
+            self.data = self.load_data_mixed()
+            for single_class in self.class_list:
+                self.data = self.data + self.load_data_single(single_class)
+        else:
+            for single_class in self.class_names:
+                self.data = self.data + self.load_data_single(single_class)
+        return self.data
+
+    def load_data_mixed(self):
         scene_names = glob(self.path + 'mixed/*')
         image_paths, label_paths = [], []
         for scene_name in scene_names:
@@ -48,7 +61,7 @@ class FAT(Loader):
             image_paths = image_paths + scene_image_paths
             label_paths = label_paths + scene_label_paths
 
-        self.data = []
+        data = []
         progress_bar = Progbar(len(image_paths))
         for sample_arg, sample in enumerate(zip(image_paths, label_paths)):
             image_path, label_path = sample
@@ -57,9 +70,53 @@ class FAT(Loader):
             boxes = self._extract_boxes(label_path)
             if boxes is None:
                 continue
-            self.data.append({'image': image_path, 'boxes': boxes})
+            data.append({'image': image_path, 'boxes': boxes})
             progress_bar.update(sample_arg + 1)
-        return self.data
+        return data
+
+    def load_data_single(self, class_names):
+        object_name = class_names + '_16k'
+        scene_names = glob(self.path + 'single/' + object_name + '/*/')
+        image_paths, label_paths = [], []
+        for scene_name in scene_names:
+            scene_image_paths, scene_label_paths = [], []
+            for image_side in ['left', 'right']:
+                image_names = glob(scene_name + '/*%s.jpg' % image_side)
+                side_image_paths = sorted(image_names, key=self._base_number)
+                label_names = glob(scene_name + '/0*%s.json' % image_side)
+                side_label_paths = sorted(label_names, key=self._base_number)
+                scene_image_paths = scene_image_paths + side_image_paths
+                scene_label_paths = scene_label_paths + side_label_paths
+            image_paths = image_paths + scene_image_paths
+            label_paths = label_paths + scene_label_paths
+        progress_bar = Progbar(len(image_paths))
+        data = []
+        for sample_arg, sample in enumerate(zip(image_paths, label_paths)):
+            image_path, label_path = sample
+            if not self._valid_name_match(image_path, label_path):
+                raise ValueError('Invalid name match:', image_path, label_path)
+            boxes = self._extract_boxes(label_path)
+            if boxes is None:
+                continue
+            data.append({'image': image_path, 'boxes': boxes})
+            progress_bar.update(sample_arg + 1)
+        return data
+
+    def split_data(self, data, train_ratio=0.6, val_ratio=0.2, test_ratio=0.2):
+        total_ratio = train_ratio + val_ratio + test_ratio
+
+        if total_ratio != 1.0:
+            raise ValueError("Split ratio proportion is not correct")
+
+        data_length = len(data)
+        train_split = int(data_length * train_ratio)
+        val_split = int(data_length * val_ratio)
+        test_split = int(data_length * test_ratio)
+
+        train_data = data[:train_split]
+        val_data = data[train_split:train_split + val_split]
+        test_data = data[-test_split:]
+        return [train_data, val_data, test_data]
 
     def _extract_boxes(self, json_filename):
         json_data = json.load(open(json_filename, 'r'))
