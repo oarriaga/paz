@@ -6,7 +6,6 @@ from glob import glob
 from ..abstract import Loader
 from .utils import get_class_names
 from tensorflow.keras.utils import Progbar
-from paz.backend.groups import quaternion_to_rotation_matrix
 
 
 class FAT(Loader):
@@ -116,6 +115,7 @@ class FAT(Loader):
         val_split = int(data_length * val_ratio)
         test_split = int(data_length * test_ratio)
 
+        np.random.shuffle(data)
         train_data = data[:train_split]
         val_data = data[train_split:train_split + val_split]
         test_data = data[-test_split:]
