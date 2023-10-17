@@ -1,3 +1,4 @@
+
 import os
 import json
 import numpy as np
@@ -68,9 +69,10 @@ class FAT(Loader):
             if not self._valid_name_match(image_path, label_path):
                 raise ValueError('Invalid name match:', image_path, label_path)
             boxes = self._extract_boxes(label_path)
+            poses = self._extract_poses(label_path)
             if boxes is None:
                 continue
-            data.append({'image': image_path, 'boxes': boxes})
+            data.append({'image': image_path, 'boxes': boxes, 'poses': poses})
             progress_bar.update(sample_arg + 1)
         return data
 
@@ -96,9 +98,10 @@ class FAT(Loader):
             if not self._valid_name_match(image_path, label_path):
                 raise ValueError('Invalid name match:', image_path, label_path)
             boxes = self._extract_boxes(label_path)
+            poses = self._extract_poses(label_path)
             if boxes is None:
                 continue
-            data.append({'image': image_path, 'boxes': boxes})
+            data.append({'image': image_path, 'boxes': boxes, 'poses': poses})
             progress_bar.update(sample_arg + 1)
         return data
 
@@ -134,6 +137,21 @@ class FAT(Loader):
             class_name = object_data['class'][:-4]
             box_data[object_arg, -1] = self.class_to_arg[class_name]
         return box_data
+
+    def _extract_poses(self, json_filename):
+        json_data = json.load(open(json_filename, 'r'))
+        num_objects = len(json_data['objects'])
+        if num_objects == 0:
+            return None
+        pose_data = np.zeros((num_objects, 8))
+        for object_arg, object_data in enumerate(json_data['objects']):
+            translation = object_data['location']
+            quaternion = object_data['quaternion_xyzw']
+            pose_data[object_arg, :3] = translation
+            pose_data[object_arg, 3:7] = quaternion
+            class_name = object_data['class'][:-4]
+            pose_data[object_arg, -1] = self.class_to_arg[class_name]
+        return pose_data
 
     def _base_number(self, filename):
         order = os.path.basename(filename)
