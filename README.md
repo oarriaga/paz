@@ -33,10 +33,8 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="250"> |
 
-
-| | | |
 |---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330"> |
+|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/maml.png" width="325"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330"> |
 
 
 All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
@@ -208,11 +206,12 @@ The following models are implemented in PAZ and they can be trained with your ow
 |[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
 |[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)  |
 |[2D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/pose_estimation/higher_hrnet.py)            |[HigherHRNet](https://arxiv.org/abs/1908.10357)  |
-|[3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/simplebaselines.py) | [Simple Baseline](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/simplebaselines.py) |
+|[3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/simplebaselines.py) | [Simple Baseline](https://arxiv.org/abs/1705.03098) |
 |[Hand pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/detnet.py)            |[DetNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
 |[Hand closure classification](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/iknet.py)            |[IKNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
 |[Hand detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)            |[SSD512](https://arxiv.org/abs/1512.02325)|
 |[Few-shot classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/protonet.py)| [Prototypical Networks](https://arxiv.org/abs/1703.05175)|
+|[Few-shot classification](https://github.com/oarriaga/paz/blob/master/examples/maml/maml.py)| [Model Agnostic Meta Learning (MAML)](https://arxiv.org/abs/1703.03400)|
 
 
 ## Motivation
