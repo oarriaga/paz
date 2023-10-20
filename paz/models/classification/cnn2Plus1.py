@@ -132,7 +132,7 @@ class ResizeVideo(Layer):
         return videos
 
 
-def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
+def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_09_07-16_13_48/checkpoints/weights-15.hdf5"):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
@@ -187,7 +187,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     if weights is not None:
         print("loading weights")
-        model.load_weights("/media/cedric/SpeedData/Uni_Seafile/Master_Thesis/CLUSTER_OUTPUTS/CNN2Plus1D/2023_09_07-16_13_48/checkpoints/weights-15.hdf5")  # TODO Add download link
+        model.load_weights(tmp_weights_path)  # TODO Add download link
 
     return model
 
@@ -305,7 +305,7 @@ def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     return model
 
-def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
+def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/checkpoints/weights-54.hdf5"):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
@@ -356,6 +356,6 @@ def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     if weights is not None:
         print("loading weights")
-        model.load_weights("/media/cedric/SpeedData/Uni_Seafile/Master_Thesis/CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/checkpoints/weights-54.hdf5")  # TODO Add download link
+        model.load_weights(tmp_weights_path)  # TODO Add download link
 
     return model
