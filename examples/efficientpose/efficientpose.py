@@ -16,8 +16,8 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                   anchor_scale, fusion, return_base, model_name, EfficientNet,
                   subnet_iterations=1, subnet_repeats=3, num_scales=3,
                   aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None,
-                  num_dims=4, momentum=0.997, epsilon=0.0001,
-                  activation='sigmoid', num_anchors=9, num_filters=64,
+                  num_dims=4,  momentum=0.99, epsilon=0.001,
+                  activation='softmax', num_anchors=9, num_filters=64,
                   num_pose_dims=3):
     """Creates EfficientPose model.
 
@@ -97,8 +97,10 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
 
     if not ((base_weights is None) and (head_weights is None)):
         weights_path = WEIGHT_PATH + model_filename
+        finetunning_model_names = ['efficientpose-a-COCO-None_weights.hdf5']
+        by_name = True if model_filename in finetunning_model_names else False
         print('Loading %s model weights' % weights_path)
-        model.load_weights(weights_path, by_name=True)
+        model.load_weights(weights_path, by_name=by_name)
 
     image_shape = image.shape[1:3].as_list()
     model.prior_boxes = build_anchors(
@@ -114,8 +116,8 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
                    FPN_num_filters=64, FPN_cell_repeats=3, subnet_repeats=3,
                    subnet_iterations=1, box_class_repeats=3, anchor_scale=4.0,
                    fusion='fast', return_base=False,
-                   model_name='efficientpose-a',
-                   scaling_coefficients=(1.0, 1.0, 0.8)):
+                   model_name='efficientpose-a',  momentum=0.99, epsilon=0.001,
+                   activation='softmax', scaling_coefficients=(1.0, 1.0, 0.8)):
     """Instantiates EfficientPose-A model.
 
     # Arguments
@@ -144,5 +146,7 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
     model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb0, subnet_iterations, subnet_repeats)
+                          EfficientNetb0, subnet_iterations, subnet_repeats,
+                          momentum=momentum, epsilon=epsilon,
+                          activation=activation)
     return model

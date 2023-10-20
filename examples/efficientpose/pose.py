@@ -177,6 +177,45 @@ class EfficientPosePreprocess(Processor):
         return preprocessed_image, image_scale, camera_parameter
 
 
+class EfficientPosePreprocess1(Processor):
+    """Preprocessing pipeline for EfficientPose.
+
+    # Arguments
+        model: Keras model.
+        mean: Tuple, containing mean per channel on ImageNet.
+        standard_deviation: Tuple, containing standard deviations
+            per channel on ImageNet.
+        camera_matrix:  Array of shape `(3, 3)` camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+    """
+    def __init__(self, model, mean=RGB_LINEMOD_MEAN,
+                 standard_deviation=RGB_LINEMOD_STDEV,
+                 camera_matrix=LINEMOD_CAMERA_MATRIX,
+                 translation_scale_norm=1000.0):
+        super(EfficientPosePreprocess1, self).__init__()
+
+        self.compute_resizing_shape = ComputeResizingShape(
+            model.input_shape[1])
+        self.preprocess = pr.SequentialProcessor([
+            pr.SubtractMeanImage(mean),
+            PadImage(model.input_shape[1]),
+            pr.CastImage(float),
+            pr.ExpandDims(axis=0)])
+        self.compute_camera_parameter = ComputeCameraParameter(
+            camera_matrix, translation_scale_norm)
+
+    def call(self, image):
+        resizing_shape, image_scale = self.compute_resizing_shape(image)
+        resize_image = pr.ResizeImage(resizing_shape)
+        preprocessed_image = resize_image(image)
+        preprocessed_image = self.preprocess(preprocessed_image)
+        camera_parameter = self.compute_camera_parameter(image_scale)
+        return preprocessed_image, image_scale, camera_parameter
+
+
 class EfficientPosePostprocess(Processor):
     """Postprocessing pipeline for EfficientPose.
 
@@ -258,7 +297,8 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights='LINEMOD_OCCLUDED')
+                               head_weights='LINEMOD_OCCLUDED', momentum=0.997,
+                               epsilon=0.0001, activation='sigmoid')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
@@ -344,7 +384,7 @@ class DetectAndEstimateEfficientPose(Processor):
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         if preprocess is None:
-            self.preprocess = EfficientPosePreprocess(model)
+            self.preprocess = EfficientPosePreprocess1(model)
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess1(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
@@ -399,7 +439,8 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights=None)
+                               head_weights=None,  momentum=0.99,
+                               epsilon=0.001, activation='softmax')
         super(EFFICIENTPOSEALINEMODDRILLER, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,

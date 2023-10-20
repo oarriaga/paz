@@ -1,7 +1,7 @@
 import paz.processors as pr
 from paz.abstract import SequentialProcessor
 from paz.pipelines.detection import PreprocessBoxes
-from pose import EfficientPosePreprocess
+from pose import EfficientPosePreprocess1
 from processors import (MatchPoses, TransformRotation,
                         ConcatenatePoses, ConcatenateScale)
 
@@ -11,7 +11,7 @@ class AugmentPose(SequentialProcessor):
                  mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
                  variances=[0.1, 0.1, 0.2, 0.2], num_pose_dims=3):
         super(AugmentPose, self).__init__()
-        self.preprocess_image = EfficientPosePreprocess(model)
+        self.preprocess_image = EfficientPosePreprocess1(model)
 
         # box processors
         self.scale_boxes = pr.ScaleBox()
