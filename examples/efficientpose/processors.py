@@ -313,7 +313,8 @@ class DrawPose6D(pr.DrawPose6D):
 
 
 def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
-    """Draws cube in image by projecting points3D with intrinsics and pose6D.
+    """Draws cube in image by projecting points3D with intrinsics
+    and pose6D.
 
     # Arguments
         image: Array (H, W).
@@ -340,9 +341,9 @@ class MatchPoses(Processor):
 
     # Arguments
         prior_boxes: Numpy array of shape (num_boxes, 4).
-        iou: Float in [0, 1]. Intersection over union in which prior boxes
-            will be considered positive. A positive box is box with a class
-            different than `background`.
+        iou: Float in [0, 1]. Intersection over union in which prior
+            boxes will be considered positive. A positive box is box
+            with a class different than `background`.
     """
     def __init__(self, prior_boxes, iou=.5):
         self.prior_boxes = prior_boxes
@@ -371,6 +372,15 @@ def match_poses(boxes, poses, prior_boxes, iou_threshold):
 
 
 class TransformRotation(Processor):
+    """Computes axis angle rotation vector from a rotation matrix.
+
+    # Arguments:
+        num_pose_dims: Int, number of dimensions of pose.
+
+    # Returns:
+        transformed_rotations: Array of shape (5,) containing the
+            transformed rotation.
+    """
     def __init__(self, num_pose_dims):
         self.num_pose_dims = num_pose_dims
         super(TransformRotation, self).__init__()
@@ -391,6 +401,12 @@ def transform_rotation(rotations, num_pose_dims):
 
 
 class ConcatenatePoses(Processor):
+    """Concatenates rotations and translations into a single array.
+
+    # Returns:
+        poses_combined: Array of shape `(num_prior_boxes, 10)`
+            containing the transformed rotation.
+    """
     def __init__(self):
         super(ConcatenatePoses, self).__init__()
 
@@ -404,6 +420,12 @@ def concatenate_poses(rotations, translations):
 
 
 class ConcatenateScale(Processor):
+    """Concatenates poses with image scale into a single array.
+
+    # Returns:
+        poses_combined: Array of shape `(num_prior_boxes, 11)`
+            containing the transformed rotation.
+    """
     def __init__(self):
         super(ConcatenateScale, self).__init__()
 
@@ -420,6 +442,11 @@ def concatenate_scale(poses, scale):
 
 
 class ScaleBoxes2D(Processor):
+    """Scales coordinates of Boxes2D.
+
+    # Returns:
+        boxes2D: List, containg Boxes2D with scaled coordinates.
+    """
     def __init__(self):
         super(ScaleBoxes2D, self).__init__()
 
