@@ -1,17 +1,19 @@
 import paz.processors as pr
 from paz.abstract import SequentialProcessor
 from paz.pipelines.detection import PreprocessBoxes
-from pose import EfficientPosePreprocess1
+from pose import (EfficientPosePreprocess, RGB_LINEMOD_MEAN,
+                  LINEMOD_CAMERA_MATRIX)
 from processors import (MatchPoses, TransformRotation,
                         ConcatenatePoses, ConcatenateScale)
 
 
 class AugmentPose(SequentialProcessor):
-    def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
-                 mean=pr.BGR_IMAGENET_MEAN, IOU=.5,
+    def __init__(self, model, num_classes=8, size=512, mean=RGB_LINEMOD_MEAN,
+                 camera_matrix=LINEMOD_CAMERA_MATRIX, IOU=.5,
                  variances=[0.1, 0.1, 0.2, 0.2], num_pose_dims=3):
         super(AugmentPose, self).__init__()
-        self.preprocess_image = EfficientPosePreprocess1(model)
+        self.preprocess_image = EfficientPosePreprocess(model, mean,
+                                                        camera_matrix)
 
         # box processors
         self.scale_boxes = pr.ScaleBox()
