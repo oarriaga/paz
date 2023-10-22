@@ -50,6 +50,22 @@ def get_class_names(dataset_name='LINEMOD'):
 
 
 class AugmentPose(SequentialProcessor):
+    """Augment images, boxes and poses for pose estimation.
+
+    # Arguments
+        model: Keras model.
+        split: Flag from `paz.processors.TRAIN`, ``paz.processors.VAL``
+            or ``paz.processors.TEST``. Certain transformations would take
+            place depending on the flag.
+        num_classes: Int, specifying the number of classes to train.
+        size: Int. Image size.
+        mean: List of three elements indicating the per channel mean.
+        camera_matrix: Array with camera matrix of shape `(3, 3)`.
+        IOU: Float. Intersection over union used to match boxes.
+        variances: List of two floats indicating variances to be encoded
+            for encoding bounding boxes.
+        num_pose_dims: Int, number of dimensions for pose.
+    """
     def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
                  mean=RGB_LINEMOD_MEAN, camera_matrix=LINEMOD_CAMERA_MATRIX,
                  IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], num_pose_dims=3):
@@ -112,7 +128,7 @@ class DetectAndEstimatePose(Processor):
         nms_thresh: Float.
         variances: List.
         class_to_sizes: Dict.
-        camera_matrix: Numpy array.
+        camera_matrix: Array.
         colors: List.
         show_boxes2D: Bool.
         show_poses6D: Bool.
@@ -266,6 +282,7 @@ class EfficientPoseLinemodPostprocess(Processor):
         nms_thresh: Float between [0, 1].
         variances: List of float values.
         class_arg: Int, index of the class to be removed.
+        num_pose_dims: Int, number of dimensions for pose.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
@@ -328,6 +345,7 @@ class EfficientPosePostprocess(Processor):
         nms_thresh: Float between [0, 1].
         variances: List of float values.
         class_arg: Int, index of the class to be removed.
+        num_pose_dims: Int, number of dimensions for pose.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
@@ -382,6 +400,44 @@ class EfficientPosePostprocess(Processor):
 
 
 class DetectAndEstimateEfficientPose(Processor):
+    """Object detection and pose estimation for EfficientPose models.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        LINEMOD_CAMERA_MATRIX: Array of shape `(3, 3)`
+            LINEMOD camera matrix.
+        LINEMOD_OBJECT_SIZES: Dict, LINEMOD dataset object sizes.
+        preprocess: Callable, preprocessing pipeline.
+        postprocess: Callable, postprocessing pipeline.
+        variances: List of float values.
+        show_boxes2D: Boolean. If ``True`` prediction
+            are drawn in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses
+            are drawn in the returned image.
+
+    # Properties
+        model: Keras model.
+        class_names: List.
+        score_thresh: Float.
+        nms_thresh: Float.
+        camera_matrix: Array.
+        variances: List.
+        class_to_sizes: Dict.
+        colors: List.
+        show_boxes2D: Bool.
+        show_poses6D: Bool.
+        preprocess: Callable.
+        postprocess: Callable.
+        draw_boxes2D: Callable.
+        wrap: Callable.
+
+    # Methods
+        _build_draw_pose6D()
+        call()
+    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
                  postprocess=None, variances=[0.1, 0.1, 0.2, 0.2],
