@@ -6,6 +6,28 @@ from pose import get_class_names
 
 
 class LINEMOD(Loader):
+    """ Dataset loader for the LINEMOD dataset.
+
+    # Arguments
+        path: Str, data path to LINEMOD annotations.
+        object_id: Str, ID of the object to train.
+        split: Str, determining the data split to load.
+            e.g. `train`, `val` or `test`
+        name: Str, or list indicating with dataset or datasets to
+            load. e.g. ``VOC2007`` or ``[''VOC2007'', VOC2012]``.
+        evaluate: Bool, If ``True`` returned data will be loaded without
+            normalization for a direct evaluation.
+        image_size: Dict, containing keys 'width' and 'height' with
+            values equal to the input size of the model.
+
+    # Return
+        data: List of dictionaries with keys corresponding to the image
+            paths and values numpy arrays of shape
+            ``[num_objects, 4 + 1]`` where the ``+ 1`` contains the
+            ``class_arg`` and ``num_objects`` refers to the amount of
+            boxes in the image.
+
+    """
     def __init__(self, path=None, object_id='08', split='train',
                  name='LINEMOD', evaluate=False,
                  image_size={'width': 512.0, 'height': 512.0}):
@@ -43,6 +65,32 @@ class LINEMOD(Loader):
 
 
 class LINEMODParser(object):
+    """ Preprocess the LINEMOD yaml annotations data.
+
+    # Arguments
+        object_id_to_class_arg: Dict, containing a mappning from objet
+            ID to class arg.
+        dataset_name: Str, or list indicating with dataset or datasets
+            to load. e.g. ``VOC2007`` or ``[''VOC2007'', VOC2012]``.
+        split: Str, determining the data split to load.
+            e.g. `train`, `val` or `test`
+        dataset_path: Str, data path to LINEMOD annotations.
+        evaluate: Bool, If ``True`` returned data will be loaded without
+            normalization for a direct evaluation.
+        object_id: Str, ID of the object to train.
+        class_names: List of strings indicating class names.
+        image_size: Dict, containing keys 'width' and 'height' with
+            values equal to the input size of the model.
+        ground_truth_file: Str, name of the file containing
+            ground truths.
+        info_file: Str, name of the file containing info.
+        data: Str, name of the directory containing object data.
+
+    # Return
+        data: Dict, with keys correspond to the image names and values
+            are numpy arrays for boxes, rotation, translation and
+            integer for class.
+    """
     def __init__(self, object_id_to_class_arg, dataset_name='LINEMOD',
                  split='train', dataset_path='/Linemod_preprocessed/',
                  evaluate=False, object_id='08',
