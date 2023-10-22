@@ -93,16 +93,17 @@ class DetectAndEstimatePose(Processor):
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
-        self.variances = variances
-        self.class_to_sizes = LINEMOD_OBJECT_SIZES
         self.camera_matrix = LINEMOD_CAMERA_MATRIX
-        self.colors = lincolor(len(self.class_to_sizes.keys()))
+        self.class_to_sizes = LINEMOD_OBJECT_SIZES
+        self.variances = variances
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
+        self.colors = lincolor(len(self.class_to_sizes.keys()))
+
         if preprocess is None:
-            self.preprocess = EfficientPosePreprocess(model)
+            self.preprocess = EfficientPoseLinemodPreprocess(model)
         if postprocess is None:
-            self.postprocess = EfficientPosePostprocess(
+            self.postprocess = EfficientPoseLinemodPostprocess(
                 model, class_names, score_thresh, nms_thresh)
 
         super(DetectAndEstimatePose, self).__init__()
@@ -137,7 +138,7 @@ class DetectAndEstimatePose(Processor):
         return self.wrap(image, boxes2D, poses6D)
 
 
-class EfficientPosePreprocess(Processor):
+class EfficientPoseLinemodPreprocess(Processor):
     """Preprocessing pipeline for EfficientPose.
 
     # Arguments
@@ -155,7 +156,7 @@ class EfficientPosePreprocess(Processor):
                  standard_deviation=RGB_LINEMOD_STDEV,
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
                  translation_scale_norm=1000.0):
-        super(EfficientPosePreprocess, self).__init__()
+        super(EfficientPoseLinemodPreprocess, self).__init__()
 
         self.compute_resizing_shape = ComputeResizingShape(
             model.input_shape[1])
@@ -177,7 +178,7 @@ class EfficientPosePreprocess(Processor):
         return preprocessed_image, image_scale, camera_parameter
 
 
-class EfficientPosePreprocess1(Processor):
+class EfficientPosePreprocess(Processor):
     """Preprocessing pipeline for EfficientPose.
 
     # Arguments
@@ -192,10 +193,9 @@ class EfficientPosePreprocess1(Processor):
             should be set to 1000.
     """
     def __init__(self, model, mean=RGB_LINEMOD_MEAN,
-                 standard_deviation=RGB_LINEMOD_STDEV,
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
                  translation_scale_norm=1000.0):
-        super(EfficientPosePreprocess1, self).__init__()
+        super(EfficientPosePreprocess, self).__init__()
 
         self.compute_resizing_shape = ComputeResizingShape(
             model.input_shape[1])
@@ -216,7 +216,7 @@ class EfficientPosePreprocess1(Processor):
         return preprocessed_image, image_scale, camera_parameter
 
 
-class EfficientPosePostprocess(Processor):
+class EfficientPoseLinemodPostprocess(Processor):
     """Postprocessing pipeline for EfficientPose.
 
     # Arguments
@@ -230,7 +230,7 @@ class EfficientPosePostprocess(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[1.0, 1.0, 1.0, 1.0], class_arg=None,
                  num_pose_dims=3):
-        super(EfficientPosePostprocess, self).__init__()
+        super(EfficientPoseLinemodPostprocess, self).__init__()
         self.num_pose_dims = num_pose_dims
         model.prior_boxes = model.prior_boxes * model.input_shape[1]
         self.postprocess_1 = pr.SequentialProcessor([
@@ -305,7 +305,7 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
-class EfficientPosePostprocess1(Processor):
+class EfficientPosePostprocess(Processor):
     """Postprocessing pipeline for EfficientPose.
 
     # Arguments
@@ -319,7 +319,7 @@ class EfficientPosePostprocess1(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
                  num_pose_dims=3):
-        super(EfficientPosePostprocess1, self).__init__()
+        super(EfficientPosePostprocess, self).__init__()
         self.num_pose_dims = num_pose_dims
         self.postprocess_1 = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
@@ -384,9 +384,9 @@ class DetectAndEstimateEfficientPose(Processor):
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         if preprocess is None:
-            self.preprocess = EfficientPosePreprocess1(model)
+            self.preprocess = EfficientPosePreprocess(model)
         if postprocess is None:
-            self.postprocess = EfficientPosePostprocess1(
+            self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 
         super(DetectAndEstimateEfficientPose, self).__init__()
