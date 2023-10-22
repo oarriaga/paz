@@ -7,9 +7,8 @@ from paz.abstract import ProcessingSequence
 from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
-from detection import AugmentPose
 from linemod import LINEMOD
-from pose import EFFICIENTPOSEA
+from pose import AugmentPose, EFFICIENTPOSEA
 from losses import MultiPoseLoss
 
 
