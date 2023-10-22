@@ -136,6 +136,10 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
+        momentum: Float, batch normalization moving average momentum.
+        epsilon: Float, small float added to
+            variance to avoid division by zero.
+        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
