@@ -278,33 +278,6 @@ class EfficientPoseLinemodPostprocess(Processor):
         return boxes2D, poses6D
 
 
-class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
-    """Inference pipeline with EFFICIENTPOSEA trained on LINEMOD.
-
-    # Arguments
-        score_thresh: Float between [0, 1].
-        nms_thresh: Float between [0, 1].
-        show_boxes2D: Boolean. If ``True`` prediction
-            are drawn in the returned image.
-        show_poses6D: Boolean. If ``True`` estimated poses
-            are drawn in the returned image.
-
-    # References
-        [ybkscht repository implementation of EfficientPose](
-        https://github.com/ybkscht/EfficientPose)
-    """
-    def __init__(self, score_thresh=0.60, nms_thresh=0.45,
-                 show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('LINEMOD_EFFICIENTPOSE')
-        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights='LINEMOD_OCCLUDED', momentum=0.997,
-                               epsilon=0.0001, activation='sigmoid')
-        super(EFFICIENTPOSEALINEMOD, self).__init__(
-            model, names, score_thresh, nms_thresh,
-            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
-            show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
-
-
 class EfficientPosePostprocess(Processor):
     """Postprocessing pipeline for EfficientPose.
 
@@ -418,6 +391,33 @@ class DetectAndEstimateEfficientPose(Processor):
             for box2D, pose6D in zip(boxes2D, poses6D):
                 image = self.draw_pose6D[box2D.class_name](image, pose6D)
         return self.wrap(image, boxes2D, poses6D)
+
+
+class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
+    """Inference pipeline with EFFICIENTPOSEA trained on LINEMOD.
+
+    # Arguments
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        show_boxes2D: Boolean. If ``True`` prediction
+            are drawn in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses
+            are drawn in the returned image.
+
+    # References
+        [ybkscht repository implementation of EfficientPose](
+        https://github.com/ybkscht/EfficientPose)
+    """
+    def __init__(self, score_thresh=0.60, nms_thresh=0.45,
+                 show_boxes2D=False, show_poses6D=True):
+        names = get_class_names('LINEMOD_EFFICIENTPOSE')
+        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
+                               head_weights='LINEMOD_OCCLUDED', momentum=0.997,
+                               epsilon=0.0001, activation='sigmoid')
+        super(EFFICIENTPOSEALINEMOD, self).__init__(
+            model, names, score_thresh, nms_thresh,
+            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+            show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
 class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
