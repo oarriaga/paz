@@ -132,7 +132,7 @@ class ResizeVideo(Layer):
         return videos
 
 
-def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_09_07-16_13_48/checkpoints/weights-15.hdf5"):
+def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-29.hdf5"):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
