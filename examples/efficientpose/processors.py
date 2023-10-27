@@ -356,7 +356,7 @@ class MatchPoses(Processor):
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
-    matched_poses = np.zeros((prior_boxes.shape[0], poses.shape[0] + 1))
+    matched_poses = np.zeros((prior_boxes.shape[0], poses.shape[1] + 1))
     ious = compute_ious(boxes, to_corner_form(np.float32(prior_boxes)))
     per_prior_which_box_iou = np.max(ious, axis=0)
     per_prior_which_box_arg = np.argmax(ious, 0)
@@ -366,7 +366,7 @@ def match_poses(boxes, poses, prior_boxes, iou_threshold):
         best_prior_box_arg = per_box_which_prior_arg[box_arg]
         per_prior_which_box_arg[best_prior_box_arg] = box_arg
 
-    matched_poses[:, :-1] = poses[np.newaxis, :][per_prior_which_box_arg]
+    matched_poses[:, :-1] = poses[per_prior_which_box_arg]
     matched_poses[per_prior_which_box_iou >= iou_threshold, -1] = 1
     return matched_poses
 
@@ -392,12 +392,17 @@ class TransformRotation(Processor):
 
 
 def transform_rotation(rotations, num_pose_dims):
-    final_axis_angle = np.zeros((num_pose_dims + 2))
-    rotation_matrix = np.reshape(rotations, (num_pose_dims, num_pose_dims))
-    axis_angle, jacobian = cv2.Rodrigues(rotation_matrix)
-    axis_angle = np.squeeze(axis_angle) / np.pi
-    final_axis_angle[:3] = axis_angle
-    return final_axis_angle
+    final_axis_angles = []
+    for rotation in rotations:
+        final_axis_angle = np.zeros((num_pose_dims + 2))
+        rotation_matrix = np.reshape(rotation, (num_pose_dims, num_pose_dims))
+        axis_angle, jacobian = cv2.Rodrigues(rotation_matrix)
+        axis_angle = np.squeeze(axis_angle) / np.pi
+        final_axis_angle[:3] = axis_angle
+        final_axis_angle = np.expand_dims(final_axis_angle, axis=0)
+        final_axis_angles.append(final_axis_angle)
+    final_axis_angles = np.concatenate(final_axis_angles, axis=0)
+    return final_axis_angles
 
 
 class ConcatenatePoses(Processor):

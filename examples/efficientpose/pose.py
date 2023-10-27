@@ -89,7 +89,8 @@ class AugmentPose(SequentialProcessor):
                                       'translation_raw', 'class']))
         self.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
         if split == pr.TRAIN:
-            self.add(pr.ControlMap(self.augment_image_and_pose, [0, 1, 2, 3], [0, 1, 2, 3]))
+            self.add(pr.ControlMap(self.augment_image_and_pose,
+                                   [0, 1, 2, 3], [0, 1, 2, 3]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
         self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))

@@ -163,10 +163,12 @@ class LINEMODParser(object):
             # Get rotation vector
             rotation = annotations['cam_R_m2c']
             rotation = np.asarray(rotation)
+            rotation = np.expand_dims(rotation, axis=0)
 
             # Get translation vector
             translation_raw = annotations['cam_t_m2c']
             translation_raw = np.asarray(translation_raw)
+            translation_raw = np.expand_dims(translation_raw, axis=0)
 
             # Compute object class
             class_arg = 1
