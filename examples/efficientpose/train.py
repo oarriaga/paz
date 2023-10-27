@@ -31,7 +31,7 @@ parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
 parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
-parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
+parser.add_argument('-dp', '--data_path', default='dataset_less/Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')

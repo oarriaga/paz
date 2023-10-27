@@ -459,3 +459,23 @@ def scale_boxes2D(boxes2D, scale):
     for box2D in boxes2D:
         box2D.coordinates = tuple(np.array(box2D.coordinates) * scale)
     return boxes2D
+
+
+class AugmentImageAndPose(Processor):
+    """Scales coordinates of Boxes2D.
+
+    # Returns:
+        boxes2D: List, containg Boxes2D with scaled coordinates.
+    """
+    def __init__(self):
+        super(AugmentImageAndPose, self).__init__()
+
+    def call(self, image, boxes, rotation, translation_raw):
+        boxes2D = augment_image_and_pose(image, boxes, rotation,
+                                         translation_raw)
+        return boxes2D
+
+
+def augment_image_and_pose(image, boxes, rotation, translation_raw):
+    print("j")
+    return image, boxes, rotation, translation_raw
