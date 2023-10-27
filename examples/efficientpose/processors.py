@@ -6,6 +6,12 @@ from paz.processors.draw import (quaternion_to_rotation_matrix,
                                  project_to_image, draw_cube)
 from paz.backend.boxes import compute_ious, to_corner_form
 
+LINEMOD_CAMERA_MATRIX = np.array([
+    [572.41140, 000.00000, 325.26110],
+    [000.00000, 573.57043, 242.04899],
+    [000.00000, 000.00000, 001.00000]],
+    dtype=np.float32)
+
 
 class ComputeResizingShape(Processor):
     """Computes the final size of the image to be scaled by `size`
@@ -472,15 +478,58 @@ class AugmentImageAndPose(Processor):
     # Returns:
         boxes2D: List, containg Boxes2D with scaled coordinates.
     """
-    def __init__(self):
+    def __init__(self, scale_min=0.7, scale_max=1.3, input_size=512):
+        self.scale_min = scale_min
+        self.scale_max = scale_max
+        self.input_size = input_size
         super(AugmentImageAndPose, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw):
         boxes2D = augment_image_and_pose(image, boxes, rotation,
-                                         translation_raw)
+                                         translation_raw, self.scale_min,
+                                         self.scale_max, self.input_size)
         return boxes2D
 
 
-def augment_image_and_pose(image, boxes, rotation, translation_raw):
-    print("j")
+def augment_image_and_pose(image, boxes, rotation, translation_raw,
+                           scale_min, scale_max, input_size):
+    boxes = np.concatenate((boxes, boxes), axis=0)
+    num_annotations = boxes.shape[0]
+    # rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
+    scale = np.random.uniform(0, scale_max)
+    angle = np.random.uniform(0, 360)
+
+    cx = LINEMOD_CAMERA_MATRIX[0, 2]
+    cy = LINEMOD_CAMERA_MATRIX[1, 2]
+    H, W, _ = image.shape
+
+    rotation_matrix = cv2.getRotationMatrix2D((cx, cy), -angle, scale)
+    scaled_boxes = (boxes[:, :4] * input_size).astype(np.uint64)
+    x_min = scaled_boxes[:, 0][np.newaxis, :].T
+    y_min = scaled_boxes[:, 1][np.newaxis, :].T
+    x_max = scaled_boxes[:, 2][np.newaxis, :].T
+    y_max = scaled_boxes[:, 3][np.newaxis, :].T
+
+    corner_1 = np.concatenate((x_min, y_min), axis=1)[np.newaxis, :]
+    corner_2 = np.concatenate((x_min, y_max), axis=1)[np.newaxis, :]
+    corner_3 = np.concatenate((x_max, y_max), axis=1)[np.newaxis, :]
+    corner_4 = np.concatenate((x_max, y_min), axis=1)[np.newaxis, :]
+
+    box_points = np.concatenate((corner_1, corner_2,
+                                 corner_3, corner_4), axis=0)
+    box_points = np.swapaxes(box_points, 0, 1)
+    warped_box_points = cv2.transform(box_points, rotation_matrix)
+    x_min_warped = np.min(warped_box_points[:, :, 0], axis=1)
+    x_max_warped = np.max(warped_box_points[:, :, 0], axis=1)
+    y_min_warped = np.min(warped_box_points[:, :, 1], axis=1)
+    y_max_warped = np.max(warped_box_points[:, :, 1], axis=1)
+
+    min_x = np.maximum(0, x_min_warped)
+    max_x = np.minimum(W, x_max_warped)
+    min_y = np.maximum(0, y_min_warped)
+    max_y = np.minimum(H, y_max_warped)
+    intersection_area = (np.maximum(0, max_x - min_x) *
+                         np.maximum(0, max_y - min_y))
+
+    augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
     return image, boxes, rotation, translation_raw
