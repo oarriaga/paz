@@ -37,7 +37,7 @@ def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
     x = image
 
     base_model = MobileNet(
-        weights="imagenet", include_top=False, input_shape=input_shape[1:])
+        weights=None, include_top=False, input_shape=input_shape[1:])
 
     flatten = Flatten()(base_model.output)
     base_model = Model(base_model.input, flatten)
