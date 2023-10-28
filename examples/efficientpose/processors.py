@@ -516,15 +516,11 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
                                  corner_3, corner_4), axis=0)
     box_points = np.swapaxes(box_points, 0, 1)
     warped_box_points = cv2.transform(box_points, rotation_matrix)
-    x_min_warped = np.min(warped_box_points[:, :, 0], axis=1)
-    y_min_warped = np.min(warped_box_points[:, :, 1], axis=1)
-    x_max_warped = np.max(warped_box_points[:, :, 0], axis=1)
-    y_max_warped = np.max(warped_box_points[:, :, 1], axis=1)
 
-    x_min_warped = np.maximum(0, x_min_warped)[np.newaxis, :].T
-    y_min_warped = np.maximum(0, y_min_warped)[np.newaxis, :].T
-    x_max_warped = np.minimum(W, x_max_warped)[np.newaxis, :].T
-    y_max_warped = np.minimum(H, y_max_warped)[np.newaxis, :].T
+    x_min_warped = np.min(warped_box_points[:, :, 0], axis=1)[np.newaxis, :].T
+    y_min_warped = np.min(warped_box_points[:, :, 1], axis=1)[np.newaxis, :].T
+    x_max_warped = np.max(warped_box_points[:, :, 0], axis=1)[np.newaxis, :].T
+    y_max_warped = np.max(warped_box_points[:, :, 1], axis=1)[np.newaxis, :].T
     boxes_warped = np.concatenate((x_min_warped, y_min_warped,
                                    x_max_warped, y_max_warped), axis=1)
     intersection_area = (np.maximum(0, x_max_warped - x_min_warped) *
@@ -539,24 +535,24 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
         augmented_boxes = boxes_warped_selected / input_size
         augmented_boxes = np.concatenate((
-            augmented_boxes, boxes[:, -1][np.newaxis, :]), axis=1)
+            augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
 
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
-        augmented_rotation = np.empty_like(rotation_matrices)
+        augmented_rotation_matrix = np.empty_like(rotation_matrices)
         augmented_translation = np.empty_like(translation_raw)
         for num_annotation in range(num_annotations):
             rotation_vector = np.zeros((3, ))
             rotation_vector[2] = angle / 180 * np.pi
             rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
-            augmented_rotation[num_annotation] = np.dot(
+            augmented_rotation_matrix[num_annotation] = np.dot(
                 rotation_matrix, rotation_matrices[num_annotation])
-            augmented_rotation = np.reshape(augmented_rotation,
-                                            (num_annotations, 9))
             augmented_translation[num_annotation] = np.dot(
                 translation_raw[num_annotation], rotation_matrix.T)
             augmented_translation[num_annotation][2] = augmented_translation[
                 num_annotation][2] / scale
+        augmented_rotation = np.reshape(augmented_rotation_matrix,
+                                        (num_annotations, 9))
         return (augmented_img, augmented_boxes,
                 augmented_rotation, augmented_translation)
 
