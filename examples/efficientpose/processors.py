@@ -537,7 +537,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
         return image, boxes, rotation, translation_raw
     else:
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
-        augmented_boxes = boxes_warped_selected
+        augmented_boxes = boxes_warped_selected / input_size
 
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
@@ -557,3 +557,5 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
                 num_annotation][2] / scale
         return (augmented_img, augmented_boxes,
                 augmented_rotation, augmented_translation)
+
+    #TODO Delete invalid annotations
