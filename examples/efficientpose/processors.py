@@ -538,6 +538,8 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
     else:
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
         augmented_boxes = boxes_warped_selected / input_size
+        augmented_boxes = np.concatenate((
+            augmented_boxes, boxes[:, -1][np.newaxis, :]), axis=1)
 
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
