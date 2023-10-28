@@ -526,7 +526,8 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
     intersection_area = (np.maximum(0, x_max_warped - x_min_warped) *
                          np.maximum(0, y_max_warped - y_min_warped))
     valid_augmentation = intersection_area > 0
-    boxes_warped_selected = boxes_warped * valid_augmentation
+    valid_augmentation = np.reshape(valid_augmentation, (-1))
+    boxes_warped_selected = boxes_warped[valid_augmentation]
 
     # Invalid augmentation
     if not np.any(valid_augmentation):
@@ -553,7 +554,9 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
                 num_annotation][2] / scale
         augmented_rotation = np.reshape(augmented_rotation_matrix,
                                         (num_annotations, 9))
+
+        augmented_boxes = augmented_boxes[valid_augmentation]
+        augmented_rotation = augmented_rotation[valid_augmentation]
+        augmented_translation = augmented_translation[valid_augmentation]
         return (augmented_img, augmented_boxes,
                 augmented_rotation, augmented_translation)
-
-    #TODO Delete invalid annotations
