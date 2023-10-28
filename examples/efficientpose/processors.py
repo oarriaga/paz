@@ -531,7 +531,10 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
 
     # Invalid augmentation
     if not np.any(valid_augmentation):
-        return image, boxes, rotation, translation_raw
+        augmented_img = image
+        augmented_boxes = boxes
+        augmented_rotation = rotation
+        augmented_translation = translation_raw
     else:
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
         augmented_boxes = boxes_warped_selected / input_size
@@ -558,5 +561,5 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
         augmented_boxes = augmented_boxes[valid_augmentation]
         augmented_rotation = augmented_rotation[valid_augmentation]
         augmented_translation = augmented_translation[valid_augmentation]
-        return (augmented_img, augmented_boxes,
-                augmented_rotation, augmented_translation)
+    return (augmented_img, augmented_boxes,
+            augmented_rotation, augmented_translation)
