@@ -91,19 +91,19 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.ControlMap(pr.LoadImage(), [5], [5]))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_image_and_pose,
-                                   [0, 1, 2, 3, 5], [0, 1, 2, 3], keep={0: 0}))
+                                   [0, 1, 2, 3, 5], [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
-        self.add(pr.ControlMap(self.scale_boxes, [4, 1], [4], keep={1: 1}))
-        self.add(pr.ControlMap(self.preprocess_boxes, [5], [6], keep={5: 5}))
-        self.add(pr.ControlMap(TransformRotation(num_pose_dims), [4], [4]))
-        self.add(pr.ControlMap(self.match_poses, [5, 4], [4], keep={5: 5}))
-        self.add(pr.ControlMap(self.match_poses, [5, 6], [8], keep={5: 5}))
+        self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
+        self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
+        self.add(pr.ControlMap(TransformRotation(num_pose_dims), [3], [3]))
+        self.add(pr.ControlMap(self.match_poses, [4, 3], [3], keep={4: 4}))
+        self.add(pr.ControlMap(self.match_poses, [4, 5], [7], keep={4: 4}))
         self.add(pr.ControlMap(self.concatenate_poses,
-                               [4, 8], [8], keep={4: 4}))
+                               [3, 8], [8], keep={3: 3}))
         self.add(pr.ControlMap(self.concatenate_scale, [8, 1], [8]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
-            {5: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
+            {4: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
              7: {'transformation': [len(model.prior_boxes),
                                     3 * num_pose_dims + 2]}}))
 
