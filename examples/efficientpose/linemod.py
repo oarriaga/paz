@@ -173,6 +173,9 @@ class LINEMODParser(object):
             # Compute object class
             class_arg = 1
 
+            # Get mask path
+            mask_path = (self.split_prefix + self.object_id
+                         + '/' + 'mask' + '/' + datum_file + '.png')
             # Append class to box data
             box_data = np.concatenate(
                 (box_data, np.array([[class_arg]])), axis=-1)
@@ -180,7 +183,8 @@ class LINEMODParser(object):
             self.data.append({'image': image_path, 'boxes': box_data,
                               'rotation': rotation,
                               'translation_raw': translation_raw,
-                              'class': class_arg})
+                              'class': class_arg,
+                              'mask': mask_path})
 
     def load_data(self):
         return self.data
