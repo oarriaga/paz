@@ -484,17 +484,17 @@ class AugmentImageAndPose(Processor):
         self.input_size = input_size
         super(AugmentImageAndPose, self).__init__()
 
-    def call(self, image, boxes, rotation, translation_raw):
+    def call(self, image, boxes, rotation, translation_raw, mask):
         boxes2D = augment_image_and_pose(image, boxes, rotation,
-                                         translation_raw, self.scale_min,
+                                         translation_raw, mask, self.scale_min,
                                          self.scale_max, self.input_size)
         return boxes2D
 
 
-def augment_image_and_pose(image, boxes, rotation, translation_raw,
+def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, input_size):
-    scale = np.random.uniform(scale_min, scale_max)
-    angle = np.random.uniform(0, 360)
+    scale = 0.95
+    angle = 2
 
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
