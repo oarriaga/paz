@@ -537,15 +537,24 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
         augmented_mask = mask
     else:
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
-        augmented_boxes = boxes_warped / input_size
-        augmented_boxes = np.concatenate((
-            augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
 
+        # augmented_boxes = boxes_warped / input_size
+        # augmented_boxes = np.concatenate((
+        #     augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
+        augmented_mask = cv2.warpAffine(mask, rotation_matrix, (W, H),
+                                        flags=cv2.INTER_NEAREST)
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
         augmented_rotation_matrix = np.empty_like(rotation_matrices)
         augmented_translation = np.empty_like(translation_raw)
+        augmented_boxes = []
         for num_annotation in range(num_annotations):
+            mask_segmented = np.where(augmented_mask == 255)
+            x_min = np.min(mask_segmented[1])
+            y_min = np.min(mask_segmented[0])
+            x_max = np.max(mask_segmented[1])
+            y_max = np.max(mask_segmented[0])
+            augmented_boxes.append([x_min, y_min, x_max, y_max])
             rotation_vector = np.zeros((3, ))
             rotation_vector[2] = angle / 180 * np.pi
             rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
@@ -557,10 +566,11 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                 num_annotation][2] / scale
         augmented_rotation = np.reshape(augmented_rotation_matrix,
                                         (num_annotations, 9))
-
+        augmented_boxes= np.array(augmented_boxes) / input_size
+        augmented_boxes = np.concatenate((
+            augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
         augmented_boxes = augmented_boxes[valid_augmentation]
         augmented_rotation = augmented_rotation[valid_augmentation]
         augmented_translation = augmented_translation[valid_augmentation]
-        augmented_mask = mask
     return (augmented_img, augmented_boxes, augmented_rotation,
             augmented_translation, augmented_mask)
