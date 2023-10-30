@@ -527,7 +527,6 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
                          np.maximum(0, y_max_warped - y_min_warped))
     valid_augmentation = intersection_area > 0
     valid_augmentation = np.reshape(valid_augmentation, (-1))
-    boxes_warped_selected = boxes_warped[valid_augmentation]
 
     # Invalid augmentation
     if not np.any(valid_augmentation):
@@ -537,7 +536,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw,
         augmented_translation = translation_raw
     else:
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
-        augmented_boxes = boxes_warped_selected / input_size
+        augmented_boxes = boxes_warped / input_size
         augmented_boxes = np.concatenate((
             augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
 
