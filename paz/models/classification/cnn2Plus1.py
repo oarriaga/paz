@@ -191,7 +191,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weigh
 
     return model
 
-def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
+def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DFilters/2023_10_20-14_11_13/cnn-2plus1d-filters_weights-22.hdf5"):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
@@ -244,9 +244,13 @@ def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
+    if weights is not None:
+        print("loading weights")
+        model.load_weights(tmp_weights_path)  # TODO Add download link
+
     return model
 
-def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
+def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLayers/2023_10_16-10_14_48/cnn-2plus1d-layers_weights-16.hdf5"):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
@@ -303,9 +307,13 @@ def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
 
     model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
+    if weights is not None:
+        print("loading weights")
+        model.load_weights(tmp_weights_path)  # TODO Add download link
+
     return model
 
-def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/checkpoints/weights-54.hdf5"):
+def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/cnn-2plus1d-light_weights-54.hdf5"):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
