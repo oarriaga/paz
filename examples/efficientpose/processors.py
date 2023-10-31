@@ -495,8 +495,6 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, input_size):
     scale = np.random.uniform(scale_min, scale_max)
     angle = np.random.uniform(0, 360)
-    scale = 1
-    angle = 180
 
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
