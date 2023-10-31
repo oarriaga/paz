@@ -506,7 +506,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                                     flags=cv2.INTER_NEAREST)
     _, is_valid = compute_box_from_mask(augmented_mask)
 
-    if is_valid:
+    if is_valid and np.random.rand() > 0.5:
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
         augmented_rotation_matrix = np.empty_like(rotation_matrices)
