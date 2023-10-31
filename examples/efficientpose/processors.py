@@ -503,54 +503,22 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     H, W, _ = image.shape
 
     rotation_matrix = cv2.getRotationMatrix2D((cx, cy), -angle, scale)
-    scaled_boxes = (boxes[:, :4] * input_size).astype(np.uint64)
-    x_min = scaled_boxes[:, 0][np.newaxis, :].T
-    y_min = scaled_boxes[:, 1][np.newaxis, :].T
-    x_max = scaled_boxes[:, 2][np.newaxis, :].T
-    y_max = scaled_boxes[:, 3][np.newaxis, :].T
+    augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
+    augmented_mask = cv2.warpAffine(mask, rotation_matrix, (W, H),
+                                    flags=cv2.INTER_NEAREST)
+    _, is_valid = compute_box_from_mask(augmented_mask)
 
-    corner_1 = np.concatenate((x_min, y_min), axis=1)[np.newaxis, :]
-    corner_2 = np.concatenate((x_min, y_max), axis=1)[np.newaxis, :]
-    corner_3 = np.concatenate((x_max, y_max), axis=1)[np.newaxis, :]
-    corner_4 = np.concatenate((x_max, y_min), axis=1)[np.newaxis, :]
-
-    box_points = np.concatenate((corner_1, corner_2,
-                                 corner_3, corner_4), axis=0)
-    box_points = np.swapaxes(box_points, 0, 1)
-    warped_box_points = cv2.transform(box_points, rotation_matrix)
-
-    x_min_warped = np.min(warped_box_points[:, :, 0], axis=1)[np.newaxis, :].T
-    y_min_warped = np.min(warped_box_points[:, :, 1], axis=1)[np.newaxis, :].T
-    x_max_warped = np.max(warped_box_points[:, :, 0], axis=1)[np.newaxis, :].T
-    y_max_warped = np.max(warped_box_points[:, :, 1], axis=1)[np.newaxis, :].T
-    intersection_area = (np.maximum(0, x_max_warped - x_min_warped) *
-                         np.maximum(0, y_max_warped - y_min_warped))
-    valid_augmentation = intersection_area > 0
-    valid_augmentation = np.reshape(valid_augmentation, (-1))
-
-    # Invalid augmentation
-    if not np.any(valid_augmentation):
-        augmented_img = image
-        augmented_boxes = boxes
-        augmented_rotation = rotation
-        augmented_translation = translation_raw
-        augmented_mask = mask
-    else:
-        augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
-        augmented_mask = cv2.warpAffine(mask, rotation_matrix, (W, H),
-                                        flags=cv2.INTER_NEAREST)
+    if is_valid:
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
         augmented_rotation_matrix = np.empty_like(rotation_matrices)
         augmented_translation = np.empty_like(translation_raw)
         augmented_boxes = []
+        are_valid = []
         for num_annotation in range(num_annotations):
-            mask_segmented = np.where(augmented_mask == 255)
-            x_min = np.min(mask_segmented[1])
-            y_min = np.min(mask_segmented[0])
-            x_max = np.max(mask_segmented[1])
-            y_max = np.max(mask_segmented[0])
-            augmented_boxes.append([x_min, y_min, x_max, y_max])
+            augmented_box, is_valid_1 = compute_box_from_mask(augmented_mask)
+            are_valid.append(is_valid_1)
+            augmented_boxes.append(augmented_box)
             rotation_vector = np.zeros((3, ))
             rotation_vector[2] = angle / 180 * np.pi
             rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
@@ -564,9 +532,29 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                                         (num_annotations, 9))
         augmented_boxes = np.array(augmented_boxes) / input_size
         augmented_boxes = np.concatenate((
-            augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
-        augmented_boxes = augmented_boxes[valid_augmentation]
-        augmented_rotation = augmented_rotation[valid_augmentation]
-        augmented_translation = augmented_translation[valid_augmentation]
+            augmented_boxes, boxes[are_valid][:, -1][np.newaxis, :].T), axis=1)
+    else:
+        augmented_img = image
+        augmented_boxes = boxes
+        augmented_rotation = rotation
+        augmented_translation = translation_raw
+        augmented_mask = mask
+
     return (augmented_img, augmented_boxes, augmented_rotation,
             augmented_translation, augmented_mask)
+
+
+def compute_box_from_mask(mask, mask_value=255):
+    seg = np.where(mask == mask_value)
+    x_min = np.min(seg[1])
+    y_min = np.min(seg[0])
+    x_max = np.max(seg[1])
+    y_max = np.max(seg[0])
+    is_valid = True
+
+    if seg[0].size <= 0 or seg[1].size <= 0:
+        x_min, y_min, x_max, y_max = 0, 0, 0, 0
+        is_valid = False
+
+    box = [x_min, y_min, x_max, y_max]
+    return box, is_valid
