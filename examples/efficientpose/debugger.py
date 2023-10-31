@@ -1,4 +1,10 @@
-
+import numpy as np
+from paz.abstract import Processor
+import paz.processors as pr
+from paz.backend.image import lincolor
+from efficientpose import EFFICIENTPOSEA
+from processors import (RegressTranslation, ComputeTxTy, DrawPose6D,
+                        ComputeSelectedIndices, ScaleBoxes2D, ToPose6D)
 import argparse
 import numpy as np
 import cv2
@@ -7,8 +13,7 @@ from pose import get_class_names
 from paz.abstract import ProcessingSequence
 from paz.processors import TRAIN, VAL
 from pose import (AugmentPose, EFFICIENTPOSEA, LINEMOD_CAMERA_MATRIX,
-                  LINEMOD_OBJECT_SIZES, EfficientPosePreprocess,
-                  EfficientPosePostprocess)
+                  LINEMOD_OBJECT_SIZES, EfficientPosePreprocess)
 from linemod import LINEMOD
 import numpy as np
 from paz.abstract import Processor
@@ -24,7 +29,7 @@ parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
-parser.add_argument('-bs', '--batch_size', default=1, type=int,
+parser.add_argument('-bs', '--batch_size', default=16, type=int,
                     help='Batch size for training')
 args = parser.parse_args()
 
@@ -59,6 +64,65 @@ sequencers = []
 for data, augmentator in zip(datasets, augmentators):
     sequencer = ProcessingSequence(augmentator, args.batch_size, data)
     sequencers.append(sequencer)
+
+
+class EfficientPosePostprocess(Processor):
+    """Postprocessing pipeline for EfficientPose.
+
+    # Arguments
+        model: Keras model.
+        class_names: List of strings indicating class names.
+        score_thresh: Float between [0, 1].
+        nms_thresh: Float between [0, 1].
+        variances: List of float values.
+        class_arg: Int, index of the class to be removed.
+        num_pose_dims: Int, number of dimensions for pose.
+    """
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
+                 num_pose_dims=3):
+        super(EfficientPosePostprocess, self).__init__()
+        self.num_pose_dims = num_pose_dims
+        self.postprocess_1 = pr.SequentialProcessor([
+            pr.Squeeze(axis=None),
+            pr.DecodeBoxes(model.prior_boxes, variances),
+            pr.RemoveClass(class_names, class_arg)])
+        self.scale_boxes2D = ScaleBoxes2D()
+        self.postprocess_2 = pr.SequentialProcessor([
+            pr.NonMaximumSuppressionPerClass(nms_thresh),
+            pr.MergeNMSBoxWithClass(),
+            pr.FilterBoxes(class_names, score_thresh)])
+        self.to_boxes2D = pr.ToBoxes2D(class_names)
+        self.round_boxes = pr.RoundBoxes2D()
+        self.denormalize = pr.DenormalizeBoxes2D()
+        self.compute_selections = ComputeSelectedIndices()
+        self.squeeze = pr.Squeeze(axis=0)
+        self.transform_rotations = pr.Scale(np.pi)
+        self.to_pose_6D = ToPose6D(class_names)
+
+    def call(self, image, model_output, image_scale, camera_parameter):
+        detections, transformations = model_output
+        box_data = self.postprocess_1(detections)
+        box_data_all = box_data
+        box_data = self.postprocess_2(box_data)
+        boxes2D = self.to_boxes2D(box_data)
+        boxes2D = self.denormalize(image, boxes2D)
+        boxes2D = self.scale_boxes2D(boxes2D, 1 / image_scale)
+        boxes2D = self.round_boxes(boxes2D)
+
+        rotations = transformations[:, :, :self.num_pose_dims]
+        translations = transformations[:, :, self.num_pose_dims:]
+        poses6D = []
+        if len(boxes2D) > 0:
+            selected_indices = self.compute_selections(box_data_all, box_data)
+            rotations = self.squeeze(rotations)
+            rotations = rotations[selected_indices]
+            rotations = self.transform_rotations(rotations)
+            translations = self.squeeze(translations)
+            translations = translations[selected_indices]
+
+        poses6D = self.to_pose_6D(box_data, rotations, translations)
+        return boxes2D, poses6D
 
 
 class DetectAndEstimateEfficientPose(Processor):
@@ -124,28 +188,29 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
-                                      show_boxes2D=True, show_poses6D=False)
+                                      show_boxes2D=True, show_poses6D=True)
 
 # Display input image
 for i in range(len(sequencers[0])):
     seq = sequencers[0][i]
-    image = seq[0]['image']
-    normalized_image = 255 * (image - image.min()) / (image.max() - image.min())
-    normalized_image = normalized_image.astype(np.uint8)[0]
-    # cv2.imshow('Input Image', normalized_image)
+    for batch_id in range(args.batch_size):
+        image = seq[0]['image'][batch_id]
+        normalized_image = 255 * (image - image.min()) / (image.max() - image.min())
+        normalized_image = normalized_image.astype(np.uint8)
+        # cv2.imshow('Input Image', normalized_image)
 
-    # Display 2D bounding box image
-    boxes = seq[1]['boxes']
+        # Display 2D bounding box image
+        boxes = seq[1]['boxes'][batch_id]
 
-    # Display matched
-    rotations = seq[1]['transformation'][0, :, :3]
-    translations = seq[1]['transformation'][0, :, 6:9]
-    transformation = np.concatenate((rotations, translations), axis=1)
-    transformation = np.expand_dims(transformation, axis=0)
-    inferences = detect(normalized_image, boxes, transformation)
+        # Display matched
+        rotations = seq[1]['transformation'][batch_id][:, :3]
+        translations = seq[1]['transformation'][batch_id][:, 6:9]
+        transformation = np.concatenate((rotations, translations), axis=1)
+        transformation = np.expand_dims(transformation, axis=0)
+        inferences = detect(normalized_image, boxes, transformation)
 
 
-    show_image(inferences['image'])
+        show_image(inferences['image'])
     # cv2.waitKey(10)
 # sequencers[0][0][1]['boxes']
 print("k")
