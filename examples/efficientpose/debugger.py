@@ -188,11 +188,12 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
-                                      show_boxes2D=True, show_poses6D=True)
+                                      show_boxes2D=True, show_poses6D=False)
 
 # Display input image
-for i in range(len(sequencers[0])):
-    seq = sequencers[0][i]
+seq_id = 0
+for i in range(len(sequencers[seq_id])):
+    seq = sequencers[seq_id][i]
     for batch_id in range(args.batch_size):
         image = seq[0]['image'][batch_id]
         normalized_image = 255 * (image - image.min()) / (image.max() - image.min())

@@ -495,6 +495,8 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, input_size):
     scale = np.random.uniform(scale_min, scale_max)
     angle = np.random.uniform(0, 360)
+    scale = 1
+    angle = 180
 
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
@@ -537,10 +539,6 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
         augmented_mask = mask
     else:
         augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
-
-        # augmented_boxes = boxes_warped / input_size
-        # augmented_boxes = np.concatenate((
-        #     augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
         augmented_mask = cv2.warpAffine(mask, rotation_matrix, (W, H),
                                         flags=cv2.INTER_NEAREST)
         num_annotations = boxes.shape[0]
@@ -566,7 +564,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                 num_annotation][2] / scale
         augmented_rotation = np.reshape(augmented_rotation_matrix,
                                         (num_annotations, 9))
-        augmented_boxes= np.array(augmented_boxes) / input_size
+        augmented_boxes = np.array(augmented_boxes) / input_size
         augmented_boxes = np.concatenate((
             augmented_boxes, boxes[:, -1][np.newaxis, :].T), axis=1)
         augmented_boxes = augmented_boxes[valid_augmentation]
