@@ -523,8 +523,6 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     y_min_warped = np.min(warped_box_points[:, :, 1], axis=1)[np.newaxis, :].T
     x_max_warped = np.max(warped_box_points[:, :, 0], axis=1)[np.newaxis, :].T
     y_max_warped = np.max(warped_box_points[:, :, 1], axis=1)[np.newaxis, :].T
-    boxes_warped = np.concatenate((x_min_warped, y_min_warped,
-                                   x_max_warped, y_max_warped), axis=1)
     intersection_area = (np.maximum(0, x_max_warped - x_min_warped) *
                          np.maximum(0, y_max_warped - y_min_warped))
     valid_augmentation = intersection_area > 0
