@@ -25,7 +25,7 @@ parser.add_argument('-m', '--momentum', default=0.9, type=float,
                     help='Momentum for SGD')
 parser.add_argument('-g', '--gamma_decay', default=0.1, type=float,
                     help='Gamma decay for learning rate scheduler')
-parser.add_argument('-e', '--num_epochs', default=1000, type=int,
+parser.add_argument('-e', '--num_epochs', default=15000, type=int,
                     help='Maximum number of epochs before finishing')
 parser.add_argument('-iou', '--AP_IOU', default=0.5, type=float,
                     help='Average precision IOU used for evaluation')
@@ -36,7 +36,8 @@ parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
-                    default=[1000, 1250], help='Epoch learning rate reduction')
+                    default=[15000, 15500], help=('Epoch learning rate'
+                                                  ' reduction'))
 parser.add_argument('-mp', '--multiprocessing', default=False, type=bool,
                     help='Select True for multiprocessing')
 parser.add_argument('-w', '--workers', default=1, type=int,
