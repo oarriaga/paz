@@ -3,8 +3,7 @@ from paz.abstract import Processor
 import paz.processors as pr
 from paz.backend.image import lincolor
 from efficientpose import EFFICIENTPOSEA
-from processors import (RegressTranslation, ComputeTxTy, DrawPose6D,
-                        ComputeSelectedIndices, ScaleBoxes2D, ToPose6D)
+from processors import (DrawPose6D, ComputeSelectedIndices, ScaleBoxes2D, ToPose6D)
 import argparse
 import numpy as np
 import cv2
@@ -192,7 +191,7 @@ class DetectAndEstimateEfficientPose(Processor):
         return name_to_draw
 
     def call(self, image, detections, transformations):
-        preprocessed_data = self.preprocess(normalized_image)
+        preprocessed_data = self.preprocess(image)
         _, _, camera_parameter = preprocessed_data
         outputs = detections, transformations
         boxes2D, poses6D = self.postprocess(
@@ -223,22 +222,24 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
                                       show_boxes2D=True, show_poses6D=True)
 
-def uncrop_image(image):
-    image = image[:384, :, :]
-    resized_image = cv2.resize(image, (640, 480))
-    return resized_image
 
-seq_id = 1
+def de_process_image(image):
+    image = image[:384, :, :]
+    image = cv2.resize(image, (640, 480))
+    image = 255 * (image - image.min()) / (image.max() - image.min())
+    image = image.astype(np.uint8)
+    return image
+
+
+seq_id = pr.TRAIN
 for i in range(len(sequencers[seq_id])):
     seq = sequencers[seq_id][i]
-    image_raw = seq[0]['image'][0]
-    image = uncrop_image(image_raw)
-    normalized_image = 255 * (image - image.min()) / (image.max() - image.min())
-    normalized_image = normalized_image.astype(np.uint8)
+    image = seq[0]['image'][0]
+    image = de_process_image(image)
     boxes = seq[1]['boxes'][0]
     rotations = seq[1]['transformation'][0][:, :3]
     translations = seq[1]['transformation'][0][:, 6:9]
     transformation = np.concatenate((rotations, translations), axis=1)
     transformation = np.expand_dims(transformation, axis=0)
-    inferences = detect(normalized_image, boxes, transformation)
+    inferences = detect(image, boxes, transformation)
     show_image(inferences['image'])
