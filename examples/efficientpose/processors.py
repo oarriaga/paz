@@ -524,11 +524,11 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_translation[num_annotation] = scale_translation_vector(
                 augmented_translation[num_annotation], scale)
 
-        augmented_rotation = np.reshape(augmented_rotation,
-                                        (num_annotations, 9))
         augmented_boxes = np.array(augmented_boxes) / input_size
         augmented_boxes = np.concatenate((
             augmented_boxes, boxes[is_valid][:, -1][np.newaxis, :].T), axis=1)
+        augmented_rotation = np.reshape(augmented_rotation,
+                                        (num_annotations, 9))
     else:
         augmented_image = image
         augmented_boxes = boxes
