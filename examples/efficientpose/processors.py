@@ -497,10 +497,10 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            probability, mask_value, input_size):
     transformation, angle, scale = generate_random_transformations(
         scale_min, scale_max, angle_min, angle_max)
-    augmented_image = apply_transformation(image, transformation,
-                                           cv2.INTER_CUBIC)
-    augmented_mask = apply_transformation(mask, transformation,
-                                          cv2.INTER_NEAREST)
+    augmented_image = apply_transformation(
+        image, transformation, cv2.INTER_CUBIC)
+    augmented_mask = apply_transformation(
+        mask, transformation, cv2.INTER_NEAREST)
     box = compute_box_from_mask(augmented_mask, mask_value)
 
     num_annotations = boxes.shape[0]
