@@ -474,33 +474,35 @@ def scale_boxes2D(boxes2D, scale):
 
 class AugmentImageAndPose(Processor):
     def __init__(self, scale_min=0.7, scale_max=1.3, angle_min=0,
-                 angle_max=360, probability=0.5, input_size=512):
+                 angle_max=360, probability=0.5, mask_value=255,
+                 input_size=512):
         self.scale_min = scale_min
         self.scale_max = scale_max
         self.angle_min = angle_min
         self.angle_max = angle_max
         self.probability = probability
+        self.mask_value = mask_value
         self.input_size = input_size
         super(AugmentImageAndPose, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
         return augment_image_and_pose(
-            image, boxes, rotation, translation_raw, mask,
-            self.scale_min, self.scale_max, self.angle_min,
-            self.angle_max, self.probability, self.input_size)
+            image, boxes, rotation, translation_raw, mask, self.scale_min,
+            self.scale_max, self.angle_min, self.angle_max, self.probability,
+            self.mask_value, self.input_size)
 
 
 def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, angle_min, angle_max,
-                           probability, input_size):
+                           probability, mask_value, input_size):
 
-    transformation, angle, scale = generate_random_transformations(scale_min,
-                                                                   scale_max)
+    transformation, angle, scale = generate_random_transformations(
+        scale_min, scale_max, angle_min, angle_max)
     H, W, _ = image.shape
     augmented_img = cv2.warpAffine(image, transformation, (W, H))
     augmented_mask = cv2.warpAffine(mask, transformation, (W, H),
                                     flags=cv2.INTER_NEAREST)
-    _, is_valid = compute_box_from_mask(augmented_mask)
+    _, is_valid = compute_box_from_mask(augmented_mask, mask_value)
 
     if is_valid and np.random.rand() > probability:
         num_annotations = boxes.shape[0]
@@ -538,15 +540,16 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_translation, augmented_mask)
 
 
-def generate_random_transformations(scale_min, scale_max):
+def generate_random_transformations(scale_min, scale_max,
+                                    angle_min, angle_max):
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
-    angle = np.random.uniform(0, 360)
+    angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
 
 
-def compute_box_from_mask(mask, mask_value=255):
+def compute_box_from_mask(mask, mask_value):
     seg = np.where(mask == mask_value)
     x_min = np.min(seg[1])
     y_min = np.min(seg[0])
