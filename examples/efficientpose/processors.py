@@ -501,11 +501,11 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                                            cv2.INTER_CUBIC)
     augmented_mask = apply_transformation(mask, transformation,
                                           cv2.INTER_NEAREST)
-    _, is_valid = compute_box_from_mask(augmented_mask, mask_value)
+    box = compute_box_from_mask(augmented_mask, mask_value)
 
-    if is_valid and np.random.rand() > probability:
-        num_annotations = boxes.shape[0]
-        rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
+    num_annotations = boxes.shape[0]
+    rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
+    if sum(box) and np.random.rand() > probability:
         augmented_rotation_matrix = np.empty_like(rotation_matrices)
         augmented_translation = np.empty_like(translation_raw)
         augmented_boxes = []
@@ -554,16 +554,12 @@ def apply_transformation(image, transformation, interpolation):
 
 
 def compute_box_from_mask(mask, mask_value):
-    seg = np.where(mask == mask_value)
-    x_min = np.min(seg[1])
-    y_min = np.min(seg[0])
-    x_max = np.max(seg[1])
-    y_max = np.max(seg[0])
-    is_valid = True
-
-    if seg[0].size <= 0 or seg[1].size <= 0:
-        x_min, y_min, x_max, y_max = 0, 0, 0, 0
-        is_valid = False
-
-    box = [x_min, y_min, x_max, y_max]
-    return box, is_valid
+    segmentation = np.where(mask == mask_value)
+    segmentation_x, segmentation_y = segmentation[1], segmentation[0]
+    if segmentation_x.size <= 0 or segmentation_y.size <= 0:
+        box = [0, 0, 0, 0]
+    else:
+        x_min, y_min = np.min(segmentation_x), np.min(segmentation_y)
+        x_max, y_max = np.max(segmentation_x), np.max(segmentation_y)
+        box = [x_min, y_min, x_max, y_max]
+    return box
