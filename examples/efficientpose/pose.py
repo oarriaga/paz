@@ -68,11 +68,13 @@ class AugmentPose(SequentialProcessor):
     """
     def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
                  mean=RGB_LINEMOD_MEAN, camera_matrix=LINEMOD_CAMERA_MATRIX,
-                 IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], num_pose_dims=3):
+                 IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], probability=0.5,
+                 num_pose_dims=3):
         super(AugmentPose, self).__init__()
-        self.augment_image_and_pose = AugmentImageAndPose()
-        self.preprocess_image = EfficientPosePreprocess(model, mean,
-                                                        camera_matrix)
+        self.augment_image_and_pose = AugmentImageAndPose(
+            probability=probability, input_size=size)
+        self.preprocess_image = EfficientPosePreprocess(
+            model, mean, camera_matrix)
 
         # box processors
         self.scale_boxes = pr.ScaleBox()
