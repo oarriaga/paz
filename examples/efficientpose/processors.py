@@ -487,16 +487,20 @@ class AugmentImageAndPose(Processor):
             self.scale_min, self.scale_max, self.probability, self.input_size)
 
 
-def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
-                           scale_min, scale_max, probability, input_size):
+def generate_random_transformations(scale_min, scale_max):
     scale = np.random.uniform(scale_min, scale_max)
     angle = np.random.uniform(0, 360)
 
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
-    H, W, _ = image.shape
+    return cv2.getRotationMatrix2D((cx, cy), -angle, scale)
 
-    rotation_matrix = cv2.getRotationMatrix2D((cx, cy), -angle, scale)
+
+def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
+                           scale_min, scale_max, probability, input_size):
+
+    rotation_matrix = generate_random_transformations(scale_min, scale_max)
+    H, W, _ = image.shape
     augmented_img = cv2.warpAffine(image, rotation_matrix, (W, H))
     augmented_mask = cv2.warpAffine(mask, rotation_matrix, (W, H),
                                     flags=cv2.INTER_NEAREST)
