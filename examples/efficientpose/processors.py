@@ -495,13 +495,12 @@ class AugmentImageAndPose(Processor):
 def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, angle_min, angle_max,
                            probability, mask_value, input_size):
-
     transformation, angle, scale = generate_random_transformations(
         scale_min, scale_max, angle_min, angle_max)
-    H, W, _ = image.shape
-    augmented_img = cv2.warpAffine(image, transformation, (W, H))
-    augmented_mask = cv2.warpAffine(mask, transformation, (W, H),
-                                    flags=cv2.INTER_NEAREST)
+    augmented_image = apply_transformation(image, transformation,
+                                           cv2.INTER_CUBIC)
+    augmented_mask = apply_transformation(mask, transformation,
+                                          cv2.INTER_NEAREST)
     _, is_valid = compute_box_from_mask(augmented_mask, mask_value)
 
     if is_valid and np.random.rand() > probability:
@@ -530,13 +529,13 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
         augmented_boxes = np.concatenate((
             augmented_boxes, boxes[are_valid][:, -1][np.newaxis, :].T), axis=1)
     else:
-        augmented_img = image
+        augmented_image = image
         augmented_boxes = boxes
         augmented_rotation = rotation
         augmented_translation = translation_raw
         augmented_mask = mask
 
-    return (augmented_img, augmented_boxes, augmented_rotation,
+    return (augmented_image, augmented_boxes, augmented_rotation,
             augmented_translation, augmented_mask)
 
 
@@ -547,6 +546,11 @@ def generate_random_transformations(scale_min, scale_max,
     angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
+
+
+def apply_transformation(image, transformation, interpolation):
+    H, W, _ = image.shape
+    return cv2.warpAffine(image, transformation, (W, H), flags=interpolation)
 
 
 def compute_box_from_mask(mask, mask_value):
