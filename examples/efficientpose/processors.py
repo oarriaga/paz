@@ -506,7 +506,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
     rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
-    augmented_rotation_matrix = np.empty_like(rotation_matrices)
+    augmented_rotation = np.empty_like(rotation_matrices)
     augmented_translation = np.empty_like(translation_raw)
     rotation_vector = compute_rotation_vector(angle)
     transformation, _ = cv2.Rodrigues(rotation_vector)
@@ -515,14 +515,16 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_box = compute_box_from_mask(augmented_mask, mask_value)
             augmented_boxes.append(augmented_box)
             is_valid.append(bool(sum(augmented_box)))
-            augmented_rotation_matrix[num_annotation] = transform_rotation_matrix(
+            rotation_matrix = transform_rotation_matrix(
                 rotation_matrices[num_annotation], transformation)
-            augmented_translation[num_annotation] = transform_translation_vector(
+            translation_vector = transform_translation_vector(
                 translation_raw[num_annotation], transformation)
+            augmented_rotation[num_annotation] = rotation_matrix
+            augmented_translation[num_annotation] = translation_vector
             augmented_translation[num_annotation] = scale_translation_vector(
                 augmented_translation[num_annotation], scale)
 
-        augmented_rotation = np.reshape(augmented_rotation_matrix,
+        augmented_rotation = np.reshape(augmented_rotation,
                                         (num_annotations, 9))
         augmented_boxes = np.array(augmented_boxes) / input_size
         augmented_boxes = np.concatenate((
