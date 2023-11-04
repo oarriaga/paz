@@ -508,19 +508,20 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     augmented_rotation_matrix = np.empty_like(rotation_matrices)
     augmented_translation = np.empty_like(translation_raw)
     augmented_boxes, is_valid = [], []
+    rotation_vector = generate_random_rotation_vector(angle)
+    transformation, _ = cv2.Rodrigues(rotation_vector)
     if np.random.rand() > probability and sum(box):
         for num_annotation in range(num_annotations):
             augmented_box = compute_box_from_mask(augmented_mask, mask_value)
-            rotation_vector = generate_random_rotation_vector(angle)
-            transformation, _ = cv2.Rodrigues(rotation_vector)
+            augmented_boxes.append(augmented_box)
+            is_valid.append(bool(sum(augmented_box)))
             augmented_rotation_matrix[num_annotation] = np.dot(
                 transformation, rotation_matrices[num_annotation])
             augmented_translation[num_annotation] = np.dot(
                 translation_raw[num_annotation], transformation.T)
             augmented_translation[num_annotation][2] = augmented_translation[
                 num_annotation][2] / scale
-            augmented_boxes.append(augmented_box)
-            is_valid.append(bool(sum(augmented_box)))
+
         augmented_rotation = np.reshape(augmented_rotation_matrix,
                                         (num_annotations, 9))
         augmented_boxes = np.array(augmented_boxes) / input_size
@@ -543,8 +544,6 @@ def generate_random_transformations(scale_min, scale_max,
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
-    angle = 180
-    scale = 1
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
 
 
