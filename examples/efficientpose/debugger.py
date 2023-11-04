@@ -1,26 +1,19 @@
-import numpy as np
-from paz.abstract import Processor
-import paz.processors as pr
-from paz.backend.image import lincolor
-from efficientpose import EFFICIENTPOSEA
-from processors import (DrawPose6D, ComputeSelectedIndices, ScaleBoxes2D, ToPose6D)
-import argparse
-import numpy as np
 import cv2
-from paz.backend.image import show_image
-from pose import get_class_names
-from paz.abstract import ProcessingSequence
-from paz.processors import TRAIN, VAL
-from pose import (AugmentPose, EFFICIENTPOSEA, LINEMOD_CAMERA_MATRIX,
-                  LINEMOD_OBJECT_SIZES, EfficientPosePreprocess)
-from linemod import LINEMOD
 import numpy as np
-from paz.abstract import Processor
+import argparse
 import paz.processors as pr
+from paz.abstract import Processor
 from paz.backend.image import lincolor
+from paz.backend.image import show_image
+from paz.processors import TRAIN, VAL
+from paz.abstract import ProcessingSequence
+from linemod import LINEMOD
+from pose import get_class_names
 from efficientpose import EFFICIENTPOSEA
-from processors import DrawPose6D
-
+from processors import (DrawPose6D, ComputeSelectedIndices, ScaleBoxes2D,
+                        ToPose6D)
+from pose import (AugmentPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                  EfficientPosePreprocess)
 
 description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
@@ -30,6 +23,8 @@ parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 args = parser.parse_args()
 
+raw_image_shape = (640, 480)
+input_shape = 512
 data_splits = ['train', 'test']
 data_names = ['LINEMOD', 'LINEMOD']
 
@@ -62,35 +57,20 @@ for data, augmentator in zip(datasets, augmentators):
     sequencer = ProcessingSequence(augmentator, 1, data)
     sequencers.append(sequencer)
 
-class DenormalizeBoxes2D(Processor):
-    """Denormalizes boxes shapes to be in accordance to the original
-    image size.
 
-    # Arguments:
-        image_size: List containing height and width of an image.
-    """
+class DenormalizeBoxes2D(Processor):
     def __init__(self):
         super(DenormalizeBoxes2D, self).__init__()
 
     def call(self, image, boxes2D):
-        shape = image.shape[:2]
         for box2D in boxes2D:
-            box2D.coordinates = denormalize_box(box2D.coordinates, shape)
+            box2D.coordinates = denormalize_box(box2D.coordinates)
         return boxes2D
 
 
-def denormalize_box(box, image_shape):
-    """Scales corner box coordinates from normalized values to image dimensions
-
-    # Arguments
-        box: Numpy array containing corner box coordinates.
-        image_shape: List of integers with (height, width).
-
-    # Returns
-        returns: box corner coordinates in image dimensions
-    """
+def denormalize_box(box):
     x_min, y_min, x_max, y_max = box[:4]
-    height, width = 512*1.25, 640
+    height, width = 512*1.25, raw_image_shape[0]
     x_min = int(x_min * width)
     y_min = int(y_min * height)
     x_max = int(x_max * width)
@@ -219,8 +199,8 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
-detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
-                                      show_boxes2D=True, show_poses6D=True)
+
+detect = EFFICIENTPOSEALINEMODDRILLER(show_boxes2D=True, show_poses6D=True)
 
 
 def de_process_image(image):
