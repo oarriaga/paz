@@ -70,26 +70,14 @@ class DenormalizeBoxes2D(Processor):
 
 def denormalize_box(box):
     x_min, y_min, x_max, y_max = box[:4]
-    height, width = raw_image_shape[0], raw_image_shape[0]
-    x_min = int(x_min * width)
-    y_min = int(y_min * height)
-    x_max = int(x_max * width)
-    y_max = int(y_max * height)
+    x_min = int(x_min * raw_image_shape[0])
+    y_min = int(y_min * raw_image_shape[0])
+    x_max = int(x_max * raw_image_shape[0])
+    y_max = int(y_max * raw_image_shape[0])
     return (x_min, y_min, x_max, y_max)
 
 
 class EfficientPosePostprocess(Processor):
-    """Postprocessing pipeline for EfficientPose.
-
-    # Arguments
-        model: Keras model.
-        class_names: List of strings indicating class names.
-        score_thresh: Float between [0, 1].
-        nms_thresh: Float between [0, 1].
-        variances: List of float values.
-        class_arg: Int, index of the class to be removed.
-        num_pose_dims: Int, number of dimensions for pose.
-    """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
                  num_pose_dims=3):
