@@ -70,7 +70,7 @@ class DenormalizeBoxes2D(Processor):
 
 def denormalize_box(box):
     x_min, y_min, x_max, y_max = box[:4]
-    height, width = 512*1.25, raw_image_shape[0]
+    height, width = raw_image_shape[0], raw_image_shape[0]
     x_min = int(x_min * width)
     y_min = int(y_min * height)
     x_max = int(x_max * width)
