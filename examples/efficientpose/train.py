@@ -69,10 +69,10 @@ model.summary()
 
 # Instantiating loss and metrics
 box_loss = MultiBoxLoss()
-transformation_loss = MultiPoseLoss(args.object_id, model.translation_priors,
-                                    args.data_path)
+pose_loss = MultiPoseLoss(args.object_id, model.translation_priors,
+                          args.data_path)
 loss = {'boxes': box_loss.compute_loss,
-        'transformation': transformation_loss.compute_loss}
+        'transformation': pose_loss.compute_loss}
 loss_weights = {'boxes': 1.0,
                 'transformation': 0.02}
 metrics = {'boxes': [box_loss.localization,
