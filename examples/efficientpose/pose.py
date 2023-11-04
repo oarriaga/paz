@@ -55,8 +55,8 @@ class AugmentPose(SequentialProcessor):
     # Arguments
         model: Keras model.
         split: Flag from `paz.processors.TRAIN`, ``paz.processors.VAL``
-            or ``paz.processors.TEST``. Certain transformations would take
-            place depending on the flag.
+            or ``paz.processors.TEST``. Certain transformations would
+            take place depending on the flag.
         num_classes: Int, specifying the number of classes to train.
         size: Int. Image size.
         mean: List of three elements indicating the per channel mean.

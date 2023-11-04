@@ -473,6 +473,18 @@ def scale_boxes2D(boxes2D, scale):
 
 
 class AugmentImageAndPose(Processor):
+    """Augment images, boxes, rotation and translation vector
+    for pose estimation.
+
+    # Arguments
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+        probability: Float, probability of data transformation.
+        mask_value: Int, pixel gray value of foreground in mask image.
+        input_size: Int, input image size of the model.
+    """
     def __init__(self, scale_min=0.7, scale_max=1.3, angle_min=0,
                  angle_max=360, probability=0.5, mask_value=255,
                  input_size=512):
