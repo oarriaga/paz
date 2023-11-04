@@ -488,9 +488,9 @@ class AugmentImageAndPose(Processor):
     def call(self, image, boxes, rotation, translation_raw, mask):
         if np.random.rand() > self.probability:
             augmented_data = augment_image_and_pose(
-                image, boxes, rotation, translation_raw, mask, self.scale_min,
-                self.scale_max, self.angle_min, self.angle_max,
-                self.probability, self.mask_value, self.input_size)
+                image, boxes, rotation, translation_raw, mask,
+                self.scale_min, self.scale_max, self.angle_min,
+                self.angle_max, self.mask_value, self.input_size)
         else:
             augmented_data = image, boxes, rotation, translation_raw, mask
         return augmented_data
@@ -498,7 +498,7 @@ class AugmentImageAndPose(Processor):
 
 def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, angle_min, angle_max,
-                           probability, mask_value, input_size):
+                           mask_value, input_size):
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max)
     augmented_image = apply_transformation(

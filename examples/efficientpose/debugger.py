@@ -188,7 +188,7 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
-                                      show_boxes2D=True, show_poses6D=False)
+                                      show_boxes2D=True, show_poses6D=True)
 
 # Display input image
 seq_id = 0
