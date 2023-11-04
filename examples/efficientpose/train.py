@@ -107,6 +107,7 @@ model.fit(
     sequencers[0],
     epochs=args.num_epochs,
     initial_epoch=0,
+    steps_per_epoch=-1,
     verbose=1,
     callbacks=[checkpoint, log, schedule],
     validation_data=sequencers[1],
