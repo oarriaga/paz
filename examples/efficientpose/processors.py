@@ -473,26 +473,22 @@ def scale_boxes2D(boxes2D, scale):
 
 
 class AugmentImageAndPose(Processor):
-    """Scales coordinates of Boxes2D.
-
-    # Returns:
-        boxes2D: List, containg Boxes2D with scaled coordinates.
-    """
-    def __init__(self, scale_min=0.7, scale_max=1.3, input_size=512):
+    def __init__(self, scale_min=0.7, scale_max=1.3,
+                 probability=0.5, input_size=512):
         self.scale_min = scale_min
         self.scale_max = scale_max
+        self.probability = probability
         self.input_size = input_size
         super(AugmentImageAndPose, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
-        boxes2D = augment_image_and_pose(image, boxes, rotation,
-                                         translation_raw, mask, self.scale_min,
-                                         self.scale_max, self.input_size)
-        return boxes2D
+        return augment_image_and_pose(
+            image, boxes, rotation, translation_raw, mask,
+            self.scale_min, self.scale_max, self.probability, self.input_size)
 
 
 def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
-                           scale_min, scale_max, input_size):
+                           scale_min, scale_max, probability, input_size):
     scale = np.random.uniform(scale_min, scale_max)
     angle = np.random.uniform(0, 360)
 
@@ -506,7 +502,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                                     flags=cv2.INTER_NEAREST)
     _, is_valid = compute_box_from_mask(augmented_mask)
 
-    if is_valid and np.random.rand() > 0.5:
+    if is_valid and np.random.rand() > probability:
         num_annotations = boxes.shape[0]
         rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
         augmented_rotation_matrix = np.empty_like(rotation_matrices)
