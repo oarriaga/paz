@@ -486,10 +486,14 @@ class AugmentImageAndPose(Processor):
         super(AugmentImageAndPose, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
-        return augment_image_and_pose(
-            image, boxes, rotation, translation_raw, mask, self.scale_min,
-            self.scale_max, self.angle_min, self.angle_max, self.probability,
-            self.mask_value, self.input_size)
+        if np.random.rand() > self.probability:
+            augmented_data = augment_image_and_pose(
+                image, boxes, rotation, translation_raw, mask, self.scale_min,
+                self.scale_max, self.angle_min, self.angle_max,
+                self.probability, self.mask_value, self.input_size)
+        else:
+            augmented_data = image, boxes, rotation, translation_raw, mask
+        return augmented_data
 
 
 def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
@@ -510,7 +514,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     augmented_translation = np.empty_like(translation_raw)
     rotation_vector = compute_rotation_vector(angle)
     transformation, _ = cv2.Rodrigues(rotation_vector)
-    if np.random.rand() > probability and sum(box):
+    if sum(box):
         for num_annotation in range(num_annotations):
             augmented_box = compute_box_from_mask(augmented_mask, mask_value)
             augmented_boxes.append(augmented_box)
@@ -529,13 +533,6 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_boxes, boxes[is_valid][:, -1][np.newaxis, :].T), axis=1)
         augmented_rotation = np.reshape(augmented_rotation,
                                         (num_annotations, 9))
-    else:
-        augmented_image = image
-        augmented_boxes = boxes
-        augmented_rotation = rotation
-        augmented_translation = translation_raw
-        augmented_mask = mask
-
     return (augmented_image, augmented_boxes, augmented_rotation,
             augmented_translation, augmented_mask)
 
