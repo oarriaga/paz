@@ -508,7 +508,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     augmented_rotation_matrix = np.empty_like(rotation_matrices)
     augmented_translation = np.empty_like(translation_raw)
     augmented_boxes, is_valid = [], []
-    rotation_vector = generate_random_rotation_vector(angle)
+    rotation_vector = compute_rotation_vector(angle)
     transformation, _ = cv2.Rodrigues(rotation_vector)
     if np.random.rand() > probability and sum(box):
         for num_annotation in range(num_annotations):
@@ -564,7 +564,7 @@ def compute_box_from_mask(mask, mask_value):
     return box
 
 
-def generate_random_rotation_vector(angle):
+def compute_rotation_vector(angle):
     rotation_vector = np.zeros((3, ))
     rotation_vector[2] = angle / 180 * np.pi
     return rotation_vector
