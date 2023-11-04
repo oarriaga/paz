@@ -507,19 +507,17 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
         mask, transformation, cv2.INTER_NEAREST)
 
     num_annotations = boxes.shape[0]
-    rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
-    augmented_rotation = np.empty_like(rotation_matrices)
-    augmented_translation = np.empty_like(translation_raw)
+    augmented_boxes, is_valid = [], []
     rotation_vector = compute_rotation_vector(angle)
     transformation, _ = cv2.Rodrigues(rotation_vector)
+    augmented_translation = np.empty_like(translation_raw)
     box = compute_box_from_mask(augmented_mask, mask_value)
-    augmented_boxes, is_valid = [], []
+    rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
+    augmented_rotation = np.empty_like(rotation_matrices)
     is_valid_augmentation = sum(box)
     if is_valid_augmentation:
         for num_annotation in range(num_annotations):
             augmented_box = compute_box_from_mask(augmented_mask, mask_value)
-            augmented_boxes.append(augmented_box)
-            is_valid.append(bool(sum(augmented_box)))
             rotation_matrix = transform_rotation_matrix(
                 rotation_matrices[num_annotation], transformation)
             translation_vector = transform_translation_vector(
@@ -528,10 +526,11 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_translation[num_annotation] = translation_vector
             augmented_translation[num_annotation] = scale_translation_vector(
                 augmented_translation[num_annotation], scale)
-
+            augmented_boxes.append(augmented_box)
+            is_valid.append(bool(sum(augmented_box)))
         augmented_boxes = np.array(augmented_boxes) / input_size
-        augmented_boxes = np.concatenate((
-            augmented_boxes, boxes[is_valid][:, -1][np.newaxis, :].T), axis=1)
+        augmented_boxes = np.concatenate((augmented_boxes, boxes[
+            is_valid][:, -1][np.newaxis, :].T), axis=1)
         augmented_rotation = np.reshape(augmented_rotation,
                                         (num_annotations, 9))
     else:
