@@ -510,7 +510,7 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     augmented_boxes, is_valid = [], []
     if sum(box) and np.random.rand() > probability:
         for num_annotation in range(num_annotations):
-            augmented_box = compute_box_from_mask(augmented_mask)
+            augmented_box = compute_box_from_mask(augmented_mask, mask_value)
             augmented_boxes.append(augmented_box)
             is_valid.append(bool(sum(augmented_box)))
             rotation_vector = np.zeros((3, ))
@@ -544,6 +544,8 @@ def generate_random_transformations(scale_min, scale_max,
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
+    angle = 180
+    scale = 1
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
 
 
