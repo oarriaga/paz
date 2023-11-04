@@ -495,7 +495,7 @@ class AugmentImageAndPose(Processor):
 def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
                            scale_min, scale_max, angle_min, angle_max,
                            probability, mask_value, input_size):
-    transformation, angle, scale = generate_random_transformations(
+    transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max)
     augmented_image = apply_transformation(
         image, transformation, cv2.INTER_CUBIC)
@@ -504,10 +504,10 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
     box = compute_box_from_mask(augmented_mask, mask_value)
 
     num_annotations = boxes.shape[0]
+    augmented_boxes, is_valid = [], []
     rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
     augmented_rotation_matrix = np.empty_like(rotation_matrices)
     augmented_translation = np.empty_like(translation_raw)
-    augmented_boxes, is_valid = [], []
     rotation_vector = compute_rotation_vector(angle)
     transformation, _ = cv2.Rodrigues(rotation_vector)
     if np.random.rand() > probability and sum(box):
@@ -515,12 +515,12 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_box = compute_box_from_mask(augmented_mask, mask_value)
             augmented_boxes.append(augmented_box)
             is_valid.append(bool(sum(augmented_box)))
-            augmented_rotation_matrix[num_annotation] = np.dot(
-                transformation, rotation_matrices[num_annotation])
-            augmented_translation[num_annotation] = np.dot(
-                translation_raw[num_annotation], transformation.T)
-            augmented_translation[num_annotation][2] = augmented_translation[
-                num_annotation][2] / scale
+            augmented_rotation_matrix[num_annotation] = transform_rotation_matrix(
+                rotation_matrices[num_annotation], transformation)
+            augmented_translation[num_annotation] = transform_translation_vector(
+                translation_raw[num_annotation], transformation)
+            augmented_translation[num_annotation] = scale_translation_vector(
+                augmented_translation[num_annotation], scale)
 
         augmented_rotation = np.reshape(augmented_rotation_matrix,
                                         (num_annotations, 9))
@@ -538,8 +538,8 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
             augmented_translation, augmented_mask)
 
 
-def generate_random_transformations(scale_min, scale_max,
-                                    angle_min, angle_max):
+def generate_random_transformation(scale_min, scale_max,
+                                   angle_min, angle_max):
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
@@ -568,3 +568,16 @@ def compute_rotation_vector(angle):
     rotation_vector = np.zeros((3, ))
     rotation_vector[2] = angle / 180 * np.pi
     return rotation_vector
+
+
+def transform_rotation_matrix(rotation_matrix, transformation):
+    return np.dot(transformation, rotation_matrix)
+
+
+def transform_translation_vector(translation, transformation):
+    return np.dot(translation, transformation.T)
+
+
+def scale_translation_vector(translation, scale):
+    translation[2] = translation[2] / scale
+    return translation
