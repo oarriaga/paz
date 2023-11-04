@@ -486,7 +486,7 @@ class AugmentImageAndPose(Processor):
         super(AugmentImageAndPose, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
-        if np.random.rand() > self.probability:
+        if np.random.rand() < self.probability:
             augmented_data = augment_image_and_pose(
                 image, boxes, rotation, translation_raw, mask,
                 self.scale_min, self.scale_max, self.angle_min,
