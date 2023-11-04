@@ -63,6 +63,41 @@ for data, augmentator in zip(datasets, augmentators):
     sequencer = ProcessingSequence(augmentator, 1, data)
     sequencers.append(sequencer)
 
+class DenormalizeBoxes2D(Processor):
+    """Denormalizes boxes shapes to be in accordance to the original
+    image size.
+
+    # Arguments:
+        image_size: List containing height and width of an image.
+    """
+    def __init__(self):
+        super(DenormalizeBoxes2D, self).__init__()
+
+    def call(self, image, boxes2D):
+        shape = image.shape[:2]
+        for box2D in boxes2D:
+            box2D.coordinates = denormalize_box(box2D.coordinates, shape)
+        return boxes2D
+
+
+def denormalize_box(box, image_shape):
+    """Scales corner box coordinates from normalized values to image dimensions
+
+    # Arguments
+        box: Numpy array containing corner box coordinates.
+        image_shape: List of integers with (height, width).
+
+    # Returns
+        returns: box corner coordinates in image dimensions
+    """
+    x_min, y_min, x_max, y_max = box[:4]
+    height, width = 512*1.25, 640
+    x_min = int(x_min * width)
+    y_min = int(y_min * height)
+    x_max = int(x_max * width)
+    y_max = int(y_max * height)
+    return (x_min, y_min, x_max, y_max)
+
 
 class EfficientPosePostprocess(Processor):
     """Postprocessing pipeline for EfficientPose.
@@ -92,7 +127,7 @@ class EfficientPosePostprocess(Processor):
             pr.FilterBoxes(class_names, score_thresh)])
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
-        self.denormalize = pr.DenormalizeBoxes2D()
+        self.denormalize = DenormalizeBoxes2D()
         self.compute_selections = ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
@@ -188,10 +223,16 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
                                       show_boxes2D=True, show_poses6D=True)
 
-seq_id = 0
+def uncrop_image(image):
+    image = image[:384, :, :]
+    resized_image = cv2.resize(image, (640, 480))
+    return resized_image
+
+seq_id = 1
 for i in range(len(sequencers[seq_id])):
     seq = sequencers[seq_id][i]
-    image = seq[0]['image'][0]
+    image_raw = seq[0]['image'][0]
+    image = uncrop_image(image_raw)
     normalized_image = 255 * (image - image.min()) / (image.max() - image.min())
     normalized_image = normalized_image.astype(np.uint8)
     boxes = seq[1]['boxes'][0]
