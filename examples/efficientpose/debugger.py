@@ -29,8 +29,6 @@ parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
-parser.add_argument('-bs', '--batch_size', default=16, type=int,
-                    help='Batch size for training')
 args = parser.parse_args()
 
 data_splits = ['train', 'test']
@@ -62,7 +60,7 @@ for split in [TRAIN, VAL]:
 
 sequencers = []
 for data, augmentator in zip(datasets, augmentators):
-    sequencer = ProcessingSequence(augmentator, args.batch_size, data)
+    sequencer = ProcessingSequence(augmentator, 1, data)
     sequencers.append(sequencer)
 
 
@@ -190,28 +188,16 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.5, nms_thresh=0.45,
                                       show_boxes2D=True, show_poses6D=True)
 
-# Display input image
 seq_id = 0
 for i in range(len(sequencers[seq_id])):
     seq = sequencers[seq_id][i]
-    for batch_id in range(args.batch_size):
-        image = seq[0]['image'][batch_id]
-        normalized_image = 255 * (image - image.min()) / (image.max() - image.min())
-        normalized_image = normalized_image.astype(np.uint8)
-        # cv2.imshow('Input Image', normalized_image)
-
-        # Display 2D bounding box image
-        boxes = seq[1]['boxes'][batch_id]
-
-        # Display matched
-        rotations = seq[1]['transformation'][batch_id][:, :3]
-        translations = seq[1]['transformation'][batch_id][:, 6:9]
-        transformation = np.concatenate((rotations, translations), axis=1)
-        transformation = np.expand_dims(transformation, axis=0)
-        inferences = detect(normalized_image, boxes, transformation)
-
-
-        show_image(inferences['image'])
-    # cv2.waitKey(10)
-# sequencers[0][0][1]['boxes']
-print("k")
+    image = seq[0]['image'][0]
+    normalized_image = 255 * (image - image.min()) / (image.max() - image.min())
+    normalized_image = normalized_image.astype(np.uint8)
+    boxes = seq[1]['boxes'][0]
+    rotations = seq[1]['transformation'][0][:, :3]
+    translations = seq[1]['transformation'][0][:, 6:9]
+    transformation = np.concatenate((rotations, translations), axis=1)
+    transformation = np.expand_dims(transformation, axis=0)
+    inferences = detect(normalized_image, boxes, transformation)
+    show_image(inferences['image'])
