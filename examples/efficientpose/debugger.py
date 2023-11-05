@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import argparse
 import paz.processors as pr
 from paz.abstract import Processor
 from paz.backend.image import lincolor
