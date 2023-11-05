@@ -4,7 +4,6 @@ import paz.processors as pr
 from paz.abstract import Processor
 from paz.backend.image import lincolor
 from paz.backend.image import show_image
-from paz.processors import TRAIN, VAL
 from paz.abstract import ProcessingSequence
 from linemod import LINEMOD
 from pose import get_class_names
@@ -151,7 +150,7 @@ def deprocess_image(image):
 if __name__ == '__main__':
     data_path = 'Linemod_preprocessed/'
     object_id = '08'
-    split = TRAIN
+    split = pr.TRAIN
     data_split = 'train'
     data_name = 'LINEMOD'
 
