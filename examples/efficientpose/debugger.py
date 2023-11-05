@@ -152,49 +152,30 @@ def deprocess_image(image):
 if __name__ == '__main__':
     data_path = 'Linemod_preprocessed/'
     object_id = '08'
-
-    data_splits = ['train', 'test']
-    data_names = ['LINEMOD', 'LINEMOD']
+    split = TRAIN
+    data_split = 'train'
+    data_name = 'LINEMOD'
 
     # loading datasets
-    data_managers, datasets, evaluation_data_managers = [], [], []
-    for data_name, data_split in zip(data_names, data_splits):
-        data_manager = LINEMOD(data_path, object_id,
-                               data_split, name=data_name)
-        data_managers.append(data_manager)
-        datasets.append(data_manager.load_data())
-        if data_split == 'test':
-            eval_data_manager = LINEMOD(
-                data_path, object_id, data_split,
-                name=data_name, evaluate=True)
-            evaluation_data_managers.append(eval_data_manager)
-
-    num_classes = data_managers[0].num_classes
+    data_manager = LINEMOD(data_path, object_id, data_split, name=data_name)
+    dataset = data_manager.load_data()
+    num_classes = data_manager.num_classes
 
     # instantiating model
     model = EFFICIENTPOSEA(num_classes, base_weights='COCO', head_weights=None)
 
     # setting data augmentation pipeline
-    augmentators = []
-    for split in [TRAIN, VAL]:
-        augmentator = AugmentPose(model, split, size=input_shape,
-                                  num_classes=num_classes)
-        augmentators.append(augmentator)
+    augmentator = AugmentPose(model, split, size=input_shape,
+                              num_classes=num_classes)
+    sequencer = ProcessingSequence(augmentator, 1, dataset)
 
-    sequencers = []
-    for data, augmentator in zip(datasets, augmentators):
-        sequencer = ProcessingSequence(augmentator, 1, data)
-        sequencers.append(sequencer)
-
-    sequence_id = TRAIN
     detect = EFFICIENTPOSEALINEMODDEBUG(show_boxes2D=True, show_poses6D=True)
-    for i in range(len(sequencers[sequence_id])):
-        sequencer = sequencers[sequence_id][i]
-        image = sequencer[0]['image'][0]
+    for sequence in sequencer:
+        image = sequence[0]['image'][0]
         image = deprocess_image(image)
-        boxes = sequencer[1]['boxes'][0]
-        rotations = sequencer[1]['transformation'][0][:, :3]
-        translations = sequencer[1]['transformation'][0][:, 6:9]
+        boxes = sequence[1]['boxes'][0]
+        rotations = sequence[1]['transformation'][0][:, :3]
+        translations = sequence[1]['transformation'][0][:, 6:9]
         transformation = np.concatenate((rotations, translations), axis=1)
         transformation = np.expand_dims(transformation, axis=0)
         inferences = detect(image, boxes, transformation)
