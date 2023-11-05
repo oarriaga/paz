@@ -100,14 +100,13 @@ class EfficientPosePostprocess(Processor):
         self.transform_rotations = pr.Scale(np.pi)
         self.to_pose_6D = ToPose6D(class_names)
 
-    def call(self, model_output, image_scale):
+    def call(self, model_output):
         detections, transformations = model_output
         box_data = self.postprocess_1(detections)
         box_data_all = box_data
         box_data = self.postprocess_2(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.denormalize(boxes2D)
-        boxes2D = self.scale_boxes2D(boxes2D, 1 / image_scale)
         boxes2D = self.round_boxes(boxes2D)
 
         rotations = transformations[:, :, :self.num_pose_dims]
@@ -159,9 +158,8 @@ class DetectAndEstimateEfficientPose(Processor):
         return name_to_draw
 
     def call(self, image, detections, transformations):
-        preprocessed_data = self.preprocess(image)
         outputs = detections, transformations
-        boxes2D, poses6D = self.postprocess(outputs, 1.0)
+        boxes2D, poses6D = self.postprocess(outputs)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
 
