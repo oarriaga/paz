@@ -10,8 +10,7 @@ from paz.abstract import ProcessingSequence
 from linemod import LINEMOD
 from pose import get_class_names
 from efficientpose import EFFICIENTPOSEA
-from processors import (DrawPose6D, ComputeSelectedIndices, ScaleBoxes2D,
-                        ToPose6D)
+from processors import DrawPose6D, ComputeSelectedIndices, ToPose6D
 from pose import (AugmentPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                   EfficientPosePreprocess)
 
@@ -87,7 +86,6 @@ class EfficientPosePostprocess(Processor):
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
             pr.RemoveClass(class_names, class_arg)])
-        self.scale_boxes2D = ScaleBoxes2D()
         self.postprocess_2 = pr.SequentialProcessor([
             pr.NonMaximumSuppressionPerClass(nms_thresh),
             pr.MergeNMSBoxWithClass(),
@@ -169,20 +167,20 @@ class DetectAndEstimateEfficientPose(Processor):
         return self.wrap(image, boxes2D, poses6D)
 
 
-class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
+class EFFICIENTPOSEALINEMODDEBUG(DetectAndEstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
                                head_weights=None,  momentum=0.99,
                                epsilon=0.001, activation='softmax')
-        super(EFFICIENTPOSEALINEMODDRILLER, self).__init__(
+        super(EFFICIENTPOSEALINEMODDEBUG, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
-detect = EFFICIENTPOSEALINEMODDRILLER(show_boxes2D=True, show_poses6D=True)
+detect = EFFICIENTPOSEALINEMODDEBUG(show_boxes2D=True, show_poses6D=True)
 
 
 def deprocess_image(image):
@@ -193,15 +191,16 @@ def deprocess_image(image):
     return image
 
 
-sequence_id = pr.TRAIN
-for i in range(len(sequencers[sequence_id])):
-    sequencer = sequencers[sequence_id][i]
-    image = sequencer[0]['image'][0]
-    image = deprocess_image(image)
-    boxes = sequencer[1]['boxes'][0]
-    rotations = sequencer[1]['transformation'][0][:, :3]
-    translations = sequencer[1]['transformation'][0][:, 6:9]
-    transformation = np.concatenate((rotations, translations), axis=1)
-    transformation = np.expand_dims(transformation, axis=0)
-    inferences = detect(image, boxes, transformation)
-    show_image(inferences['image'])
+if __name__ == '__main__':
+    sequence_id = pr.TRAIN
+    for i in range(len(sequencers[sequence_id])):
+        sequencer = sequencers[sequence_id][i]
+        image = sequencer[0]['image'][0]
+        image = deprocess_image(image)
+        boxes = sequencer[1]['boxes'][0]
+        rotations = sequencer[1]['transformation'][0][:, :3]
+        translations = sequencer[1]['transformation'][0][:, 6:9]
+        transformation = np.concatenate((rotations, translations), axis=1)
+        transformation = np.expand_dims(transformation, axis=0)
+        inferences = detect(image, boxes, transformation)
+        show_image(inferences['image'])
