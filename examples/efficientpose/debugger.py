@@ -57,23 +57,49 @@ for data, augmentator in zip(datasets, augmentators):
     sequencers.append(sequencer)
 
 
-class DenormalizeBoxes2D(Processor):
-    def __init__(self):
-        super(DenormalizeBoxes2D, self).__init__()
+class DetectAndEstimateEfficientPose(Processor):
+    def __init__(self, model, class_names, score_thresh, nms_thresh,
+                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                 variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
+                 show_poses6D=True):
+        self.model = model
+        self.class_names = class_names
+        self.score_thresh = score_thresh
+        self.nms_thresh = nms_thresh
+        self.variances = variances
+        self.class_to_sizes = LINEMOD_OBJECT_SIZES
+        self.camera_matrix = LINEMOD_CAMERA_MATRIX
+        self.colors = lincolor(len(self.class_to_sizes.keys()))
+        self.show_boxes2D = show_boxes2D
+        self.show_poses6D = show_poses6D
+        self.preprocess = EfficientPosePreprocess(model)
+        self.postprocess = EfficientPosePostprocess(
+                model, class_names, score_thresh, nms_thresh, class_arg=0)
 
-    def call(self, boxes2D):
-        for box2D in boxes2D:
-            box2D.coordinates = denormalize_box(box2D.coordinates)
-        return boxes2D
+        super(DetectAndEstimateEfficientPose, self).__init__()
+        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
 
+    def _build_draw_pose6D(self, name_to_size, camera_parameter):
+        name_to_draw = {}
+        iterator = zip(name_to_size.items(), self.colors)
+        for (name, object_size), box_color in iterator:
+            draw = DrawPose6D(object_size, camera_parameter, box_color)
+            name_to_draw[name] = draw
+        return name_to_draw
 
-def denormalize_box(box):
-    x_min, y_min, x_max, y_max = box[:4]
-    x_min = int(x_min * raw_image_shape[0])
-    y_min = int(y_min * raw_image_shape[0])
-    x_max = int(x_max * raw_image_shape[0])
-    y_max = int(y_max * raw_image_shape[0])
-    return (x_min, y_min, x_max, y_max)
+    def call(self, image, detections, transformations):
+        outputs = detections, transformations
+        boxes2D, poses6D = self.postprocess(outputs)
+        if self.show_boxes2D:
+            image = self.draw_boxes2D(image, boxes2D)
+
+        if self.show_poses6D:
+            self.draw_pose6D = self._build_draw_pose6D(
+                self.class_to_sizes, self.camera_matrix)
+            for box2D, pose6D in zip(boxes2D, poses6D):
+                image = self.draw_pose6D[box2D.class_name](image, pose6D)
+        return self.wrap(image, boxes2D, poses6D)
 
 
 class EfficientPosePostprocess(Processor):
@@ -122,49 +148,23 @@ class EfficientPosePostprocess(Processor):
         return boxes2D, poses6D
 
 
-class DetectAndEstimateEfficientPose(Processor):
-    def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
-                 variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
-                 show_poses6D=True):
-        self.model = model
-        self.class_names = class_names
-        self.score_thresh = score_thresh
-        self.nms_thresh = nms_thresh
-        self.variances = variances
-        self.class_to_sizes = LINEMOD_OBJECT_SIZES
-        self.camera_matrix = LINEMOD_CAMERA_MATRIX
-        self.colors = lincolor(len(self.class_to_sizes.keys()))
-        self.show_boxes2D = show_boxes2D
-        self.show_poses6D = show_poses6D
-        self.preprocess = EfficientPosePreprocess(model)
-        self.postprocess = EfficientPosePostprocess(
-                model, class_names, score_thresh, nms_thresh, class_arg=0)
+class DenormalizeBoxes2D(Processor):
+    def __init__(self):
+        super(DenormalizeBoxes2D, self).__init__()
 
-        super(DetectAndEstimateEfficientPose, self).__init__()
-        self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
-        self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
+    def call(self, boxes2D):
+        for box2D in boxes2D:
+            box2D.coordinates = denormalize_box(box2D.coordinates)
+        return boxes2D
 
-    def _build_draw_pose6D(self, name_to_size, camera_parameter):
-        name_to_draw = {}
-        iterator = zip(name_to_size.items(), self.colors)
-        for (name, object_size), box_color in iterator:
-            draw = DrawPose6D(object_size, camera_parameter, box_color)
-            name_to_draw[name] = draw
-        return name_to_draw
 
-    def call(self, image, detections, transformations):
-        outputs = detections, transformations
-        boxes2D, poses6D = self.postprocess(outputs)
-        if self.show_boxes2D:
-            image = self.draw_boxes2D(image, boxes2D)
-
-        if self.show_poses6D:
-            self.draw_pose6D = self._build_draw_pose6D(
-                self.class_to_sizes, self.camera_matrix)
-            for box2D, pose6D in zip(boxes2D, poses6D):
-                image = self.draw_pose6D[box2D.class_name](image, pose6D)
-        return self.wrap(image, boxes2D, poses6D)
+def denormalize_box(box):
+    x_min, y_min, x_max, y_max = box[:4]
+    x_min = int(x_min * raw_image_shape[0])
+    y_min = int(y_min * raw_image_shape[0])
+    x_max = int(x_max * raw_image_shape[0])
+    y_max = int(y_max * raw_image_shape[0])
+    return (x_min, y_min, x_max, y_max)
 
 
 class EFFICIENTPOSEALINEMODDEBUG(DetectAndEstimateEfficientPose):
@@ -180,9 +180,6 @@ class EFFICIENTPOSEALINEMODDEBUG(DetectAndEstimateEfficientPose):
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
-detect = EFFICIENTPOSEALINEMODDEBUG(show_boxes2D=True, show_poses6D=True)
-
-
 def deprocess_image(image):
     image = image[:384, :, :]
     image = cv2.resize(image, (640, 480))
@@ -192,7 +189,8 @@ def deprocess_image(image):
 
 
 if __name__ == '__main__':
-    sequence_id = pr.TRAIN
+    sequence_id = TRAIN
+    detect = EFFICIENTPOSEALINEMODDEBUG(show_boxes2D=True, show_poses6D=True)
     for i in range(len(sequencers[sequence_id])):
         sequencer = sequencers[sequence_id][i]
         image = sequencer[0]['image'][0]
