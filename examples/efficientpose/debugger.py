@@ -150,14 +150,8 @@ def deprocess_image(image):
 
 
 if __name__ == '__main__':
-    description = 'Training script for single-shot object detection models'
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
-                        type=str, help=('Path for writing model weights'
-                                        ' and logs'))
-    parser.add_argument('-id', '--object_id', default='08',
-                        type=str, help='ID of the object to train')
-    args = parser.parse_args()
+    data_path = 'Linemod_preprocessed/'
+    object_id = '08'
 
     data_splits = ['train', 'test']
     data_names = ['LINEMOD', 'LINEMOD']
@@ -165,13 +159,13 @@ if __name__ == '__main__':
     # loading datasets
     data_managers, datasets, evaluation_data_managers = [], [], []
     for data_name, data_split in zip(data_names, data_splits):
-        data_manager = LINEMOD(args.data_path, args.object_id,
+        data_manager = LINEMOD(data_path, object_id,
                                data_split, name=data_name)
         data_managers.append(data_manager)
         datasets.append(data_manager.load_data())
         if data_split == 'test':
             eval_data_manager = LINEMOD(
-                args.data_path, args.object_id, data_split,
+                data_path, object_id, data_split,
                 name=data_name, evaluate=True)
             evaluation_data_managers.append(eval_data_manager)
 
