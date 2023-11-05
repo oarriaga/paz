@@ -14,47 +14,8 @@ from processors import DrawPose6D, ComputeSelectedIndices, ToPose6D
 from pose import (AugmentPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                   EfficientPosePreprocess)
 
-description = 'Training script for single-shot object detection models'
-parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
-                    type=str, help='Path for writing model weights and logs')
-parser.add_argument('-id', '--object_id', default='08',
-                    type=str, help='ID of the object to train')
-args = parser.parse_args()
-
 raw_image_shape = (640, 480)
 input_shape = 512
-data_splits = ['train', 'test']
-data_names = ['LINEMOD', 'LINEMOD']
-
-# loading datasets
-data_managers, datasets, evaluation_data_managers = [], [], []
-for data_name, data_split in zip(data_names, data_splits):
-    data_manager = LINEMOD(args.data_path, args.object_id,
-                           data_split, name=data_name)
-    data_managers.append(data_manager)
-    datasets.append(data_manager.load_data())
-    if data_split == 'test':
-        eval_data_manager = LINEMOD(
-            args.data_path, args.object_id, data_split,
-            name=data_name, evaluate=True)
-        evaluation_data_managers.append(eval_data_manager)
-
-num_classes = data_managers[0].num_classes
-
-# instantiating model
-model = EFFICIENTPOSEA(num_classes, base_weights='COCO', head_weights=None)
-
-# setting data augmentation pipeline
-augmentators = []
-for split in [TRAIN, VAL]:
-    augmentator = AugmentPose(model, split, size=512, num_classes=num_classes)
-    augmentators.append(augmentator)
-
-sequencers = []
-for data, augmentator in zip(datasets, augmentators):
-    sequencer = ProcessingSequence(augmentator, 1, data)
-    sequencers.append(sequencer)
 
 
 class DetectAndEstimateEfficientPose(Processor):
@@ -189,6 +150,48 @@ def deprocess_image(image):
 
 
 if __name__ == '__main__':
+    description = 'Training script for single-shot object detection models'
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
+                        type=str, help=('Path for writing model weights'
+                                        ' and logs'))
+    parser.add_argument('-id', '--object_id', default='08',
+                        type=str, help='ID of the object to train')
+    args = parser.parse_args()
+
+    data_splits = ['train', 'test']
+    data_names = ['LINEMOD', 'LINEMOD']
+
+    # loading datasets
+    data_managers, datasets, evaluation_data_managers = [], [], []
+    for data_name, data_split in zip(data_names, data_splits):
+        data_manager = LINEMOD(args.data_path, args.object_id,
+                               data_split, name=data_name)
+        data_managers.append(data_manager)
+        datasets.append(data_manager.load_data())
+        if data_split == 'test':
+            eval_data_manager = LINEMOD(
+                args.data_path, args.object_id, data_split,
+                name=data_name, evaluate=True)
+            evaluation_data_managers.append(eval_data_manager)
+
+    num_classes = data_managers[0].num_classes
+
+    # instantiating model
+    model = EFFICIENTPOSEA(num_classes, base_weights='COCO', head_weights=None)
+
+    # setting data augmentation pipeline
+    augmentators = []
+    for split in [TRAIN, VAL]:
+        augmentator = AugmentPose(model, split, size=input_shape,
+                                  num_classes=num_classes)
+        augmentators.append(augmentator)
+
+    sequencers = []
+    for data, augmentator in zip(datasets, augmentators):
+        sequencer = ProcessingSequence(augmentator, 1, data)
+        sequencers.append(sequencer)
+
     sequence_id = TRAIN
     detect = EFFICIENTPOSEALINEMODDEBUG(show_boxes2D=True, show_poses6D=True)
     for i in range(len(sequencers[sequence_id])):
