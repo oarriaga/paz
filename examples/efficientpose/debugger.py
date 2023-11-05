@@ -126,9 +126,9 @@ class EfficientPosePostprocess(Processor):
 
 class DetectAndEstimateEfficientPose(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
-                 postprocess=None, variances=[0.1, 0.1, 0.2, 0.2],
-                 show_boxes2D=False, show_poses6D=True):
+                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                 variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
+                 show_poses6D=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -139,10 +139,8 @@ class DetectAndEstimateEfficientPose(Processor):
         self.colors = lincolor(len(self.class_to_sizes.keys()))
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
-        if preprocess is None:
-            self.preprocess = EfficientPosePreprocess(model)
-        if postprocess is None:
-            self.postprocess = EfficientPosePostprocess(
+        self.preprocess = EfficientPosePreprocess(model)
+        self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 
         super(DetectAndEstimateEfficientPose, self).__init__()
@@ -187,7 +185,7 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
 detect = EFFICIENTPOSEALINEMODDRILLER(show_boxes2D=True, show_poses6D=True)
 
 
-def de_process_image(image):
+def deprocess_image(image):
     image = image[:384, :, :]
     image = cv2.resize(image, (640, 480))
     image = 255 * (image - image.min()) / (image.max() - image.min())
@@ -195,14 +193,14 @@ def de_process_image(image):
     return image
 
 
-seq_id = pr.TRAIN
-for i in range(len(sequencers[seq_id])):
-    seq = sequencers[seq_id][i]
-    image = seq[0]['image'][0]
-    image = de_process_image(image)
-    boxes = seq[1]['boxes'][0]
-    rotations = seq[1]['transformation'][0][:, :3]
-    translations = seq[1]['transformation'][0][:, 6:9]
+sequence_id = pr.TRAIN
+for i in range(len(sequencers[sequence_id])):
+    sequencer = sequencers[sequence_id][i]
+    image = sequencer[0]['image'][0]
+    image = deprocess_image(image)
+    boxes = sequencer[1]['boxes'][0]
+    rotations = sequencer[1]['transformation'][0][:, :3]
+    translations = sequencer[1]['transformation'][0][:, 6:9]
     transformation = np.concatenate((rotations, translations), axis=1)
     transformation = np.expand_dims(transformation, axis=0)
     inferences = detect(image, boxes, transformation)
