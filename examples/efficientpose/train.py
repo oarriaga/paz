@@ -1,5 +1,6 @@
 import argparse
 import os
+import trimesh
 import tensorflow as tf
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
@@ -8,8 +9,9 @@ from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
 from linemod import LINEMOD
-from pose import AugmentPose, EFFICIENTPOSEA
+from pose import AugmentPose, EFFICIENTPOSEA, EFFICIENTPOSEALINEMODDRILLER
 from losses import MultiPoseLoss
+from pose_error import EvaluatePoseError
 
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -103,6 +105,19 @@ checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
+# Pose estimation pipeline
+inference = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.60, nms_thresh=0.45,
+                                         show_boxes2D=False, show_poses6D=True)
+
+# Load object mesh
+mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
+mesh = trimesh.load(mesh_path)
+mesh_points = mesh.vertices.copy()
+
+# Pose accuracy calculation pipeline
+pose_error = EvaluatePoseError(args.save_path,  evaluation_data_managers[0],
+                               inference, mesh_points)
+
 # training
 model.fit(
     sequencers[0],
@@ -110,7 +125,7 @@ model.fit(
     initial_epoch=0,
     steps_per_epoch=-1,
     verbose=1,
-    callbacks=[checkpoint, log, schedule],
+    callbacks=[checkpoint, log, schedule, pose_error],
     validation_data=sequencers[1],
     use_multiprocessing=args.multiprocessing,
     workers=args.workers)

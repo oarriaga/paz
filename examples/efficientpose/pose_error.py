@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from paz.backend.image import load_image
 from scipy import spatial
 from tensorflow.keras.callbacks import Callback
 from paz.backend.groups import quaternion_to_rotation_matrix
@@ -87,15 +88,24 @@ class EvaluatePoseError(Callback):
             drawn inferences.
         verbose: Integer. If is bigger than 1 messages would be displayed.
     """
-    def __init__(self, experiment_path, images, pipeline, mesh_points,
-                 topic='pose6D', verbose=1):
+    def __init__(self, experiment_path, evaluation_data_manager, pipeline,
+                 mesh_points, topic='pose6D', verbose=1):
         super(EvaluatePoseError, self).__init__()
         self.experiment_path = experiment_path
-        self.images = images
+        self.evaluation_data_manager = evaluation_data_manager
+        self.images = self._load_test_images()
         self.pipeline = pipeline
         self.mesh_points = mesh_points
         self.topic = topic
         self.verbose = verbose
+
+    def _load_test_images(self):
+        evaluation_data = self.evaluation_data_manager.load_data()
+        evaluation_images = []
+        for evaluation_datum in evaluation_data:
+            evaluation_image = load_image(evaluation_datum['image'])
+            evaluation_images.append(evaluation_image)
+        return evaluation_images
 
     def on_epoch_end(self, epoch, logs=None):
         sum_ADD = 0.0
