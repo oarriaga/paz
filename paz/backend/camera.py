@@ -1,8 +1,10 @@
+import os
 import cv2
+import time
 import numpy as np
 
 from ..backend.image import resize_image, convert_color_space, show_image
-from ..backend.image import BGR2RGB
+from ..backend.image import BGR2RGB, write_image
 
 
 class Camera(object):
@@ -290,4 +292,66 @@ class VideoPlayer(object):
                     break
 
         writer.release()
+        cv2.destroyAllWindows()
+
+    def record_frames(self, name='video.avi', fps=20, fourCC='XVID'):
+        """Opens camera and records continuous inference frames.
+
+        # Arguments
+            name: String. Video name. Must include the postfix .avi.
+            fps: Int. Frames per second.
+            fourCC: String. Indicates the four character code of the video.
+            e.g. XVID, MJPG, X264.
+        """
+        self.camera.start()
+        fourCC = cv2.VideoWriter_fourcc(*fourCC)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+
+        while True:
+            frame = self.camera.read()
+            if frame is None:
+                print('Frame: None')
+                return None
+            frame = convert_color_space(frame, BGR2RGB)
+            image = resize_image(frame, tuple(self.image_size))
+            show_image(image, 'frame', wait=False)
+            image = convert_color_space(image, BGR2RGB)
+            writer.write(image)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        self.camera.stop()
+        writer.release()
+        cv2.destroyAllWindows()
+
+    def extract_frames_from_video(self, video_file_path, frame_arg=20):
+        """Load video and split into frames.
+
+        # Arguments
+            video_file_path: String. Path to the video file.
+            frame_arg: Int. Number of frames to be skipped.
+        """
+
+        video = cv2.VideoCapture(video_file_path)
+        if (video.isOpened() is False):
+            print("Error opening video  file")
+
+        frame_count = 0
+        while video.isOpened():
+            is_frame_received, frame = video.read()
+            if not is_frame_received:
+                print("Frame not received. Exiting ...")
+                break
+            if is_frame_received is True:
+                print("Frame received")
+                print(frame_count)
+                image = resize_image(frame, tuple(self.image_size))
+                image_path = os.path.join('./images', str(frame_count) + '.jpg')
+                image = convert_color_space(image, BGR2RGB)
+                if frame_count % frame_arg == 0:
+                    write_image(image_path, image)
+                frame_count += 1
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
         cv2.destroyAllWindows()
