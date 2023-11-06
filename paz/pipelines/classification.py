@@ -89,7 +89,8 @@ class ClassifyVVAD(SequentialProcessor):
     def __init__(self, input_size=(38, 96, 96, 3), update_rate=38, average=2):
         super(ClassifyVVAD, self).__init__()
         # self.classifier = VVAD_LRS3_LSTM(weights='VVAD-LRS3')
-        self.classifier = CNN2Plus1D(weights='CNN2Plus1D')
+        # self.classifier = CNN2Plus1D(weights='CNN2Plus1D')
+        self.classifier = CNN2Plus1DFilters
         self.class_names = get_class_names('VVAD-LRS3')
 
         preprocess = PreprocessImage(input_size[1:3], pr.RGB_NORMAL)
