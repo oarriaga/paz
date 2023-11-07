@@ -1,6 +1,7 @@
 import argparse
 import os
 import trimesh
+import yaml
 import tensorflow as tf
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
@@ -108,15 +109,25 @@ schedule = LearningRateScheduler(
 # Pose estimation pipeline
 inference = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.60, nms_thresh=0.45,
                                          show_boxes2D=False, show_poses6D=True)
+inference.model = model
 
 # Load object mesh
 mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
 mesh = trimesh.load(mesh_path)
 mesh_points = mesh.vertices.copy()
 
+mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
+mesh = trimesh.load(mesh_path)
+mesh_points = mesh.vertices.copy()
+gt_file = args.data_path + 'models/' + 'models_info.yml'
+with open(gt_file, 'r') as file:
+    model_data = yaml.safe_load(file)
+    file.close()
+object_diameter = model_data[int(args.object_id)]['diameter']
+
 # Pose accuracy calculation pipeline
 pose_error = EvaluatePoseError(args.save_path,  evaluation_data_managers[0],
-                               inference, mesh_points)
+                               inference, mesh_points, object_diameter)
 
 # training
 model.fit(
