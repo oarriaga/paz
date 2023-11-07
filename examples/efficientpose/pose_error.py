@@ -2,6 +2,7 @@ import os
 import numpy as np
 from paz.backend.image import load_image
 from scipy import spatial
+from tensorflow.keras.callbacks import Callback
 from paz.backend.groups import quaternion_to_rotation_matrix
 
 
@@ -82,7 +83,7 @@ def compute_ADI(true_pose, pred_pose, mesh_points):
     return error
 
 
-class EvaluatePoseError:
+class EvaluatePoseError(Callback):
     """Callback for evaluating the pose error on ADD and ADI metric.
 
     # Arguments
