@@ -1,9 +1,11 @@
 import os
+import trimesh
 import numpy as np
 from paz.backend.image import load_image
 from scipy import spatial
-from tensorflow.keras.callbacks import Callback
+from linemod import LINEMOD
 from paz.backend.groups import quaternion_to_rotation_matrix
+from pose import EFFICIENTPOSEALINEMODDRILLER
 
 
 def transform_mesh_points(mesh_points, rotation, translation):
@@ -75,7 +77,7 @@ def compute_ADI(true_pose, pred_pose, mesh_points):
     return error
 
 
-class EvaluatePoseError(Callback):
+class EvaluatePoseError:
     """Callback for evaluating the pose error on ADD and ADI metric.
 
     # Arguments
@@ -90,7 +92,6 @@ class EvaluatePoseError(Callback):
     """
     def __init__(self, experiment_path, evaluation_data_manager, pipeline,
                  mesh_points, topic='poses6D', verbose=1):
-        super(EvaluatePoseError, self).__init__()
         self.experiment_path = experiment_path
         self.evaluation_data_manager = evaluation_data_manager
         self.images = self._load_test_images()
@@ -107,7 +108,7 @@ class EvaluatePoseError(Callback):
             evaluation_image = load_image(evaluation_datum['image'])
             evaluation_images.append(evaluation_image)
         return evaluation_images
-    
+
     def _load_gt_poses(self):
         evaluation_data = self.evaluation_data_manager.load_data()
         gt_poses = []
@@ -147,3 +148,27 @@ class EvaluatePoseError(Callback):
         if self.verbose:
             print('Estimated ADD error:', average_ADD)
             print('Estimated ADI error:', average_ADI)
+
+
+if __name__ == '__main__':
+    save_path = 'trained_models/'
+    data_path = 'Linemod_preprocessed/'
+    object_id = '08'
+    data_split = 'test'
+    data_name = 'LINEMOD'
+    data_managers, datasets, evaluation_data_managers = [], [], []
+    eval_data_manager = LINEMOD(
+        data_path, object_id, data_split,
+        name=data_name, evaluate=True)
+    evaluation_data_managers.append(eval_data_manager)
+
+    inference = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.60,
+                                             nms_thresh=0.45)
+    inference.model.load_weights('weights.6394-0.25.hdf5')
+
+    mesh_path = data_path + 'models/' + 'obj_' + object_id + '.ply'
+    mesh = trimesh.load(mesh_path)
+    mesh_points = mesh.vertices.copy()
+    pose_error = EvaluatePoseError(save_path, eval_data_manager,
+                                   inference, mesh_points)
+    pose_error.on_epoch_end(1)
