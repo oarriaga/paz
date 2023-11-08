@@ -1,23 +1,30 @@
 import os
 import argparse
 import numpy as np
-from paz.backend.image import load_image
-from paz.pipelines.stereo import StructureFromMotion
-from backend import remove_outliers
 import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
-
+from paz.backend.image import load_image
+from paz.backend.stereo import remove_outliers
+from paz.pipelines.stereo import StructureFromMotion
 
 parser = argparse.ArgumentParser(description='Structure from motion')
 parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 parser.add_argument('-i', '--images_path', type=str,
-                    default='datasets/images1',
+                    default='datasets/images',
                     help='Directory for images')
 parser.add_argument('-HFOV', '--horizontal_field_of_view', type=float,
                     default=70, help='Horizontal field of view in degrees')
+parser.add_argument('-rt', '--residual_thresh', type=float,
+                    default=0.1, help='Residual threshold for RANSAC')
+parser.add_argument('-ct', '--correspondence_thresh', type=float,
+                    default=0.5, help='Residual threshold for RANSAC for'
+                    'correspondence matching')
+parser.add_argument('-r', '--match_ratio', type=float,
+                    default=0.75, help='Matching ratio for best selection')
+parser.add_argument('-b', '--bundle_adjustment', type=bool,
+                    default=False, help='Condition to use bundle adjustment')
 args = parser.parse_args()
-
 
 camera_intrinsics = np.array([[568.996140852, 0, 643.21055941],
                               [0, 568.988362396, 477.982801038],
@@ -29,14 +36,16 @@ for filename in image_files:
     image = load_image(os.path.join(args.images_path, filename))
     images.append(image)
 
-detect = StructureFromMotion(camera_intrinsics, least_squares)
+detect = StructureFromMotion(camera_intrinsics, least_squares,
+                             args.bundle_adjustment, args.match_ratio,
+                             args.residual_thresh, args.correspondence_thresh)
 inferences = detect(images)
 
 
 def plot_3D_keypoints(keypoints3D, colors, discard_outliers=True):
     ax = plt.axes(projection='3d')
     ax.view_init(-160, -80)
-    ax.figure.canvas.set_window_title('3D resonstruction')
+    ax.figure.canvas.manager.set_window_title('3D resonstruction')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
