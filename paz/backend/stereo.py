@@ -49,7 +49,7 @@ def detect_SIFT_features(image):
         descriptors -- numpy array of shape (n_keypoints, 128)
                     containing the descriptors of the image
     """
-    sift = cv2.xfeatures2d.SIFT_create()
+    sift = cv2.SIFT_create()
     keypoints, descriptors = sift.detectAndCompute(image, None)
     return np.array(keypoints), np.array(descriptors)
 
@@ -92,7 +92,8 @@ def FLANN_matcher(descriptor1, descriptor2, k):
                 containing the matches between the descriptor of two images
     """
     flann = cv2.FlannBasedMatcher()
-    matches = flann.knnMatch(descriptor1, descriptor2, k)
+    matches = flann.knnMatch(np.asarray(descriptor1, np.float32),
+                             np.asarray(descriptor2, np.float32), int(k))
     return matches
 
 
@@ -367,9 +368,9 @@ def compute_fundamental_matrix_np(points1, points2):
     T2, points2 = center_and_normalize_points(points2)
 
     values = []
-    for i in range(len(points1)):
-        x1, y1 = points1[i]
-        x2, y2 = points2[i]
+    for arg in range(len(points1)):
+        x1, y1 = points1[arg]
+        x2, y2 = points2[arg]
         values.append([x1 * x2, x2 * y1, x2, y2 * x1, y1 * y2, y2, x1, y1, 1])
     A = np.vstack(values)
 

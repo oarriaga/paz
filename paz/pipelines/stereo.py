@@ -7,11 +7,12 @@ from paz.backend.stereo import extract_keypoints_RGB
 
 
 class FindCorrespondances(pr.Processor):
-    def __init__(self):
+    def __init__(self, match_ratio, residual_thresh):
         super(FindCorrespondances, self).__init__()
         self.detector = pr.DetectSIFTFeatures()
-        self.match_features = pr.MatchFeatures()
-        self.get_inliers = pr.ExtractMatchInliersPoints()
+        self.match_features = pr.MatchFeatures(match_ratio=match_ratio)
+        self.get_inliers = pr.ExtractMatchInliersPoints(
+            residual_thresh=residual_thresh)
 
     def call(self, base_feature, image):
         base_keypoints, base_descriptors = base_feature
@@ -25,17 +26,19 @@ class FindCorrespondances(pr.Processor):
 
 
 class EstimateDepthFromTwoView(pr.Processor):
-    def __init__(self, camera_intrinsics, optimizer=None, draw=True,
-                 bundle_adjustment=False):
+    def __init__(self, camera_intrinsics, optimizer=None,
+                 bundle_adjustment=False, residual_thresh=0.5,
+                 match_ratio=0.75):
         super(EstimateDepthFromTwoView, self).__init__()
         self.K = camera_intrinsics
-        self.draw = draw
         self.optimizer = optimizer
         self.bundle_adjustment = bundle_adjustment
         self.detector = pr.DetectSIFTFeatures()
-        self.match_features = pr.MatchFeatures()
-        self.get_fundamental_matrix = pr.ComputeFundamentalMatrixRANSAC()
-        self.get_inliers = pr.ExtractMatchInliersPoints()
+        self.match_features = pr.MatchFeatures(match_ratio=match_ratio)
+        self.get_fundamental_matrix = pr.ComputeFundamentalMatrixRANSAC(
+            residual_thresh=residual_thresh)
+        self.get_inliers = pr.ExtractMatchInliersPoints(
+            residual_thresh=residual_thresh)
         self.local_bundal_adjustment = pr.LocalBundleAdjustment(self.optimizer,
                                                                 self.K)
         self.compute_essential_matrix = pr.ComputeEssentialMatrix(self.K)
@@ -71,17 +74,21 @@ class EstimateDepthFromTwoView(pr.Processor):
 
 class StructureFromMotion(pr.Processor):
     def __init__(self, camera_intrinsics, optimizer=None,
-                 bundle_adjustment=False):
+                 bundle_adjustment=False, match_ratio=0.75,
+                 residual_thresh=0.5, correspondence_thresh=0.5):
         super(StructureFromMotion, self).__init__()
         self.K = camera_intrinsics
         self.optimizer = optimizer
         self.bundle_adjustment = bundle_adjustment
         self.initialize_sfm = EstimateDepthFromTwoView(
-            camera_intrinsics, optimizer, bundle_adjustment=bundle_adjustment)
+            camera_intrinsics, optimizer, bundle_adjustment, residual_thresh,
+            match_ratio)
         self.detector = pr.DetectSIFTFeatures()
-        self.match_features = pr.MatchFeatures()
-        self.get_inliers = pr.ExtractMatchInliersPoints()
-        self.find_correspondences = FindCorrespondances()
+        self.match_features = pr.MatchFeatures(match_ratio=match_ratio)
+        self.get_inliers = pr.ExtractMatchInliersPoints(
+            residual_thresh=residual_thresh)
+        self.find_correspondences = FindCorrespondances(match_ratio,
+                                                        correspondence_thresh)
         self.solve_pnp = pr.SolvePnP(camera_intrinsics)
         self.rotation_vector_to_matrix = pr.RotationVectorToRotationMatrix()
         self.local_bundle_adjustment = pr.LocalBundleAdjustment(self.optimizer,

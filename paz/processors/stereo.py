@@ -296,9 +296,10 @@ class ExtractMatchInliersPoints(pr.Processor):
         inliers: numpy array of shape (num_inliers,)
                  containing the inlier indices
     """
-    def __init__(self):
+    def __init__(self, residual_thresh):
         super(ExtractMatchInliersPoints, self).__init__()
-        self.ransac_filter = ComputeFundamentalMatrixRANSAC()
+        self.ransac_filter = ComputeFundamentalMatrixRANSAC(
+            residual_thresh=residual_thresh)
 
     def call(self, matches, keypoints1, keypoints2):
         points1, points2 = get_match_points(keypoints1, keypoints2, matches)
@@ -360,13 +361,15 @@ class MatchFeatures(pr.Processor):
         matches: numpy array of shape (num_matches, 2)
                  containing the matches
     """
-    def __init__(self, matcher=FLANNMatcher(k=2), ratio_test=True):
+    def __init__(self, matcher=FLANNMatcher(k=2), ratio_test=True,
+                 match_ratio=0.75,):
         super(MatchFeatures, self).__init__()
         self.matcher = matcher
         self.ratio_test = ratio_test
+        self.ratio = match_ratio
 
-    def call(self,  descriptors1, descriptors2, ratio=0.75):
+    def call(self, descriptors1, descriptors2):
         matches = self.matcher(descriptors1, descriptors2)
         if self.ratio_test:
-            matches = match_ratio_test(matches, ratio)
+            matches = match_ratio_test(matches, self.ratio)
         return matches
