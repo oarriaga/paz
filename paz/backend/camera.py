@@ -249,6 +249,7 @@ class VideoPlayer(object):
                 continue
             image = resize_image(output['image'], tuple(self.image_size))
             show_image(image, 'inference', wait=False)
+            image = convert_color_space(image, BGR2RGB)
             writer.write(image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -287,6 +288,7 @@ class VideoPlayer(object):
                     continue
                 image = resize_image(output['image'], tuple(self.image_size))
                 show_image(image, 'inference', wait=False)
+                image = convert_color_space(image, BGR2RGB)
                 writer.write(image)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -306,7 +308,6 @@ class VideoPlayer(object):
         self.camera.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
         writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
-
         while True:
             frame = self.camera.read()
             if frame is None:
@@ -336,21 +337,19 @@ class VideoPlayer(object):
         if (video.isOpened() is False):
             print("Error opening video  file")
 
-        frame_count = 0
+        frame_arg = 0
         while video.isOpened():
             is_frame_received, frame = video.read()
             if not is_frame_received:
                 print("Frame not received. Exiting ...")
                 break
             if is_frame_received is True:
-                print("Frame received")
-                print(frame_count)
                 image = resize_image(frame, tuple(self.image_size))
-                image_path = os.path.join('./images', str(frame_count) + '.jpg')
+                image_path = os.path.join('./images', str(frame_arg) + '.jpg')
                 image = convert_color_space(image, BGR2RGB)
-                if frame_count % frame_arg == 0:
+                if frame_arg % frame_arg == 0:
                     write_image(image_path, image)
-                frame_count += 1
+                frame_arg += 1
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
