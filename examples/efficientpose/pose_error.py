@@ -130,7 +130,7 @@ class EvaluatePoseError(Callback):
     def on_epoch_end(self, epoch, logs=None):
         sum_ADD = 0.0
         sum_ADI = 0.0
-        sum_ADD_accuracy = 0
+        sum_ADD_accuracy = 0.0
         valid_predictions = 0
         for image, gt_pose in zip(self.images, self.gt_poses):
             inferences = self.pipeline(image.copy())
@@ -138,7 +138,7 @@ class EvaluatePoseError(Callback):
             if pose6D:
                 add_error = compute_ADD(gt_pose, pose6D[0], self.mesh_points)
                 is_correct = check_ADD(add_error, self.object_diameter)
-                sum_ADD_accuracy = sum_ADD_accuracy + int(is_correct)
+                sum_ADD_accuracy = sum_ADD_accuracy + float(is_correct)
                 adi_error = compute_ADI(gt_pose, pose6D[0], self.mesh_points)
                 sum_ADD = sum_ADD + add_error
                 sum_ADI = sum_ADI + adi_error
