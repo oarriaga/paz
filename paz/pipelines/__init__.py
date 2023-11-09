@@ -46,6 +46,8 @@ from .keypoints import HigherHRNetHumanPose2D
 from .keypoints import DetNetHandKeypoints
 from .keypoints import MinimalHandPoseEstimation
 from .keypoints import DetectMinimalHand
+from .keypoints import EstimateHumanPose3D
+from .keypoints import EstimateHumanPose
 
 from .renderer import RenderTwoViews
 from .renderer import RandomizeRenderedImage

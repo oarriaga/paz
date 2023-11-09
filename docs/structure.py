@@ -109,7 +109,19 @@ PAGES = [
             keypoints.compute_orientation_vector,
             keypoints.rotate_keypoints3D,
             keypoints.flip_along_x_axis,
-            keypoints.uv_to_vu
+            keypoints.uv_to_vu,
+            keypoints.standardize,
+            keypoints.destandardize,
+            keypoints.initialize_translation,
+            keypoints.solve_least_squares,
+            keypoints.get_bones_length,
+            keypoints.compute_reprojection_error,
+            keypoints.merge_into_mean,
+            keypoints.filter_keypoints,
+            keypoints.filter_keypoints3D,
+            keypoints.filter_keypoints2D,
+            keypoints.compute_optimized_pose3D,
+            keypoints.human_pose3D_to_pose6D
         ],
     },
 
@@ -174,7 +186,8 @@ PAGES = [
             draw.draw_keypoints,
             draw.points3D_to_RGB,
             draw.draw_RGB_mask,
-            draw.draw_RGB_masks
+            draw.draw_RGB_masks,
+            draw.draw_human_pose6D
         ],
     },
 
@@ -309,6 +322,7 @@ PAGES = [
             models.Projector,
             models.DetNet,
             models.IKNet,
+            models.SimpleBaseline
 
         ],
     },
@@ -449,7 +463,8 @@ PAGES = [
             processors.DrawHandSkeleton,
             processors.DrawRGBMask,
             processors.DrawRGBMasks,
-            processors.DrawText
+            processors.DrawText,
+            processors.DrawHumanPose6D
         ]
     },
 
@@ -517,6 +532,11 @@ PAGES = [
             processors.ArgumentsToImageKeypoints2D,
             processors.ScaleKeypoints,
             processors.ComputeOrientationVector,
+            processors.MergeKeypoints2D,
+            processors.FilterKeypoints2D,
+            processors.StandardizeKeypoints2D,
+            processors.DestandardizeKeypoints2D,
+            processors.OptimizeHumanPose3D
         ]
     },
 
@@ -684,7 +704,9 @@ PAGES = [
             pipelines.HigherHRNetHumanPose2D,
             pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation,
-            pipelines.DetectMinimalHand
+            pipelines.DetectMinimalHand,
+            pipelines.EstimateHumanPose3D,
+            pipelines.EstimateHumanPose
         ]
     },
 

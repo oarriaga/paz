@@ -341,7 +341,7 @@ def nms_per_class(box_data, nms_thresh=.45, epsilon=0.01, top_k=200):
     class_predictions = box_data[:, 4:]
     num_classes = class_predictions.shape[1]
     nms_boxes = np.array([], dtype=float).reshape(0, box_data.shape[1])
-    class_labels = np.array([], dtype=np.int)
+    class_labels = np.array([], dtype=int)
     args = (decoded_boxes, class_predictions, epsilon, nms_thresh, top_k)
     for class_arg in range(num_classes):
         nms_boxes, class_labels = _nms_per_class(

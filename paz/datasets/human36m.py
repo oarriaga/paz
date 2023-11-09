@@ -1,6 +1,5 @@
-"""Utility functions for dealing with human3.6m data."""
 import numpy as np
-import backend
+
 
 data_mean3D = np.array(
     [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, -2.55652587e-01,
@@ -80,87 +79,10 @@ data_mean2D = np.array(
      532.50804963, 374.19047901, 532.72786933, 380.61615716])
 
 
-def merge_into_mean(keypoints2D, args_to_mean):
-    """Rearrange keypoints2D
+args_to_joints3D = [0, 1, 2, 3, 6, 7, 8, 12, 13, 15, 17, 18, 19, 25, 26, 27]
 
-            # Arguments
-                    keypoints2D: keypoints2D (Nx17x2)
-                    args_to_mean: list of joint indices
+h36m_to_coco_joints2D = [4, 12, 14, 16, 11, 13, 15, 2, 1, 0, 5, 7, 9, 6, 8, 10]
+args_to_mean = {1: [5, 6], 4: [11, 12], 2: [1, 4]}
 
-            # Returns
-                    keypoints2D: keypoints2D after merging
-            """
-    for point, arrangment in args_to_mean.items():
-        keypoints2D[:, point] = (keypoints2D[:, arrangment[0]] + keypoints2D[:,
-                                 arrangment[1]]) / 2
-    return keypoints2D
-
-
-def filter_keypoints(keypoints, args_to_joints):
-    """filter keypoints.
-
-    # Arguments
-            keypoints: points in camera coordinates
-            args_to_joints: Array of joints indices
-
-    # Returns
-            filtered keypoints
-    # """
-    return keypoints[:, args_to_joints, :]
-
-
-def filter_keypoints3D(keypoints3D, args_to_joints3D):
-    """Selects 16 moving joints (Neck/Nose excluded) from 32 predicted
-    joints in 3D
-
-    # Arguments
-            keypoints3D: Nx96 points in camera coordinates
-            args_to_joints3D: list of indices
-
-    # Returns
-            filtered_joints_3D: Nx48 points (moving joints)
-    """
-    N = len(keypoints3D)
-    keypoints3D = np.reshape(keypoints3D, [N, 32, 3])
-    joints3D = filter_keypoints(keypoints3D, args_to_joints3D)
-    return joints3D
-
-
-def filter_keypoints2D(keypoints2D, args_to_mean, h36m_to_coco_joints2D):
-    """Selects 16 moving joints (Neck/Nose excluded) from 17 predicted
-            joints in 2D
-
-            # Arguments
-                    keypoints3D: Nx17x2 points in camera coordinates
-                    args_to_mean: keypoints indices
-                    h36m_to_coco_joints2D: human36m dataset list of joints
-                    indices
-
-            # Returns
-                    joints2D: Nx32 points (moving joints)
-            """
-    keypoints2D = merge_into_mean(keypoints2D, args_to_mean)
-    joints2D = filter_keypoints(keypoints2D, h36m_to_coco_joints2D)
-    joints2D = np.reshape(joints2D, [joints2D.shape[0], -1])
-    return joints2D
-
-
-def unnormalize_data(data, mean, stdev, valid):
-    """Un-normalizes a matrix whose mean has been substracted and
-    that has been divided by standard deviation. Some dimensions
-    might also be missing
-
-    # Arguments
-            data: nxd matrix to unnormalize
-            mean: array with the mean of the data
-            std: array with the standard deviation of the data
-            valid: list of dimensions to keep in the data
-
-    # Returns
-            unnormalized_data: the input normalized_data, but unnormalized
-    """
-    data = data.reshape(-1, 48)
-    rearanged_data = np.zeros((len(data), len(mean)), dtype=np.float32)
-    rearanged_data[:, valid] = data
-    unnormalized_data = backend.destandardize(rearanged_data, mean, stdev)
-    return unnormalized_data
+human_start_joints = np.array([0, 1, 2, 0, 4, 5, 0, 7,
+                               8, 8, 10, 11, 8, 13, 14])

@@ -1,4 +1,5 @@
 import os
+import copy
 import argparse
 import tensorflow as tf
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -11,7 +12,7 @@ tf.config.experimental.set_memory_growth(gpus[0], True)
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 from paz.optimization.callbacks import LearningRateScheduler
-from detection import AugmentDetection
+from paz.pipelines import AugmentDetection
 from paz.models import SSD300
 from paz.datasets import VOC
 from paz.optimization import MultiBoxLoss
@@ -79,7 +80,8 @@ model.compile(optimizer, loss.compute_loss, metrics)
 # setting data augmentation pipeline
 augmentators = []
 for split in [TRAIN, VAL]:
-    augmentator = AugmentDetection(model.prior_boxes, split)
+    augmentator = AugmentDetection(model.prior_boxes, split,
+                                   num_classes=num_classes)
     augmentators.append(augmentator)
 
 # setting sequencers
@@ -97,9 +99,19 @@ save_path = os.path.join(model_path, 'weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 checkpoint = ModelCheckpoint(save_path, verbose=1, save_weights_only=True)
 schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
-evaluate = EvaluateMAP(
+evaluate_test = EvaluateMAP(
     evaluation_data_managers[0],
     DetectSingleShot(model, data_managers[0].class_names, 0.01, 0.45),
+    args.evaluation_period,
+    args.save_path,
+    args.AP_IOU)
+
+data_manager = VOC(args.data_path, ['trainval', 'trainval'],
+                   name=['VOC2007', 'VOC2012'], evaluate=True)
+class_names = copy.deepcopy(data_manager.class_names)
+evaluate_trainval = EvaluateMAP(
+    data_manager,
+    DetectSingleShot(model, class_names, 0.01, 0.45),
     args.evaluation_period,
     args.save_path,
     args.AP_IOU)
@@ -109,7 +121,7 @@ model.fit(
     sequencers[0],
     epochs=args.num_epochs,
     verbose=1,
-    callbacks=[checkpoint, log, schedule, evaluate],
+    callbacks=[checkpoint, log, schedule, evaluate_trainval, evaluate_test],
     validation_data=sequencers[1],
     use_multiprocessing=args.multiprocessing,
     workers=args.workers)
