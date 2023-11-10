@@ -544,3 +544,42 @@ class AveragePredictions(Processor):
         if len(self.predictions) > self.averages:
             self.predictions.pop(0)
         return np.mean(self.predictions, axis=0)
+
+
+class WeightedAveragePredictions(Processor):
+    """Weighted averages the last n predictions
+    # Arguments
+        averages: Int. Number of predictions to average over.
+        value: Noneable value.
+    # Returns
+        Any.
+    """
+
+    def __init__(self, averages=1):
+        super(WeightedAveragePredictions, self).__init__()
+        self.averages = averages
+        self.predictions = []
+
+    def call(self, value):
+        if self.averages <= 1:
+            return value
+        elif value is None:
+            return value
+
+        size = len(self.predictions)
+
+        self.predictions.append(value)
+        if size > self.averages:
+            self.predictions.pop(0)
+
+        if len(self.predictions) <= 1:
+            return value
+
+        result = 0
+        total_weights = 0
+        for i in range(0, size):
+            weight = (i + 1) / size
+            result += self.predictions[i] * weight
+            total_weights += weight
+
+        return result / total_weights

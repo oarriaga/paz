@@ -927,7 +927,7 @@ class DetectVVAD(Processor):
         self.crop = pr.CropBoxes2D()
 
         # classification
-        self.classify = ClassifyVVAD()
+        self.classify = ClassifyVVAD(update_rate=10, average=6, average_type='weighted')
 
         # drawing and wrapping
         self.class_names = self.classify.class_names

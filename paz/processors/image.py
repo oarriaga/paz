@@ -591,7 +591,7 @@ class BufferImages(Processor):
         self.ring_buffer.append(image)
         self.counter += 1
 
-        if self.ring_buffer.is_full and self.counter == self.play_rate:
+        if self.ring_buffer.is_full and self.counter >= self.play_rate:
             self.counter = 0
             return np.array([self.ring_buffer])
         return None
