@@ -1,3 +1,5 @@
+import einops
+import random
 import tensorflow as tf
 
 keras = tf.keras
@@ -5,10 +7,7 @@ from keras import Sequential
 from keras.models import Model
 from keras.layers import (Conv3D, Input, BatchNormalization, Layer, GlobalAveragePooling3D, ReLU, Flatten,
                           LayerNormalization, Dense, add)
-import einops
-import random
 
-from ..layers import Conv2DNormalization
 
 """
 References:
@@ -133,7 +132,7 @@ class ResizeVideo(Layer):
 
 
 def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-30.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is based on the tensorflow implementation
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -192,7 +191,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weigh
     return model
 
 def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DFilters/2023_10_20-14_11_13/cnn-2plus1d-filters_weights-23.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with increased filter sizes
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -251,7 +250,7 @@ def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865, t
     return model
 
 def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLayers/2023_10_16-10_14_48/cnn-2plus1d-layers_weights-17.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with doubled layers
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -314,7 +313,7 @@ def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tm
     return model
 
 def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/cnn-2plus1d-light_weights-55.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with one layer less
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
