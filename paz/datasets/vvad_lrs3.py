@@ -9,6 +9,9 @@ from keras.utils import to_categorical
 from .utils import get_class_names
 from ..abstract import Generator
 from ..backend.image import resize_image
+from typing import Literal, get_args
+
+Reduction_Method = Literal["cut", "reduce"]
 
 
 class VVAD_LRS3(Generator):
@@ -18,14 +21,20 @@ class VVAD_LRS3(Generator):
         split: String. Valid option contain 'train', 'val' or 'test'.
         val_split: Float. Percentage of the dataset to be used for validation (valid options between 0.0 to 1.0). Set to 0.0 to disable.
         test_split: Float. Percentage of the dataset to be used for testing (valid options between 0.0 to 1.0). Set to 0.0 to disable.
-        image_size: List of length two. Indicates the shape in which
-            the image will be resized.
+        testing: Boolean. If True, the test split is used instead of the train split.
+        evaluating: Boolean. If True, the dataset is used for evaluation. This means that the dataset is not shuffled
+            and the indexes will be stored.
+        reduction_method: String. Valid options are 'cut' or 'reduce'. If 'cut' is selected, the video is cut to the
+            reduction_length. If 'reduce' is selected, reduction_length many single frames of the video is removed form
+            the clip.
+        reduction_length: Integer. The length of the video after the reduction_method is applied. 38 is the default
 
     # References
         -[VVAD-LRS3](https://www.kaggle.com/datasets/adrianlubitz/vvadlrs3)
     """
     def __init__(
-            self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, image_size=(96, 96), testing=False, evaluating=False):
+            self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, testing=False,
+            evaluating=False, reduction_method: Reduction_Method = "cut", reduction_length=38):
         if split != 'train' and split != 'val' and split != 'test':
             raise ValueError('Invalid split name')
         if val_split < 0.0 or val_split > 1.0:
@@ -34,13 +43,14 @@ class VVAD_LRS3(Generator):
             raise ValueError('Invalid test split')
         if val_split + test_split > 1.0:
             raise ValueError('The sum of val_split and test_split must be less than 1.0')
+        options = get_args(Reduction_Method)
+        assert reduction_method in options, f"'{reduction_method}' is not in {options}"
 
         path = os.path.join(path, 'vvadlrs3_faceImages_small.h5')
 
         class_names = get_class_names('VVAD_LRS3')
 
         super(VVAD_LRS3, self).__init__(path, split, class_names, 'VVAD_LRS3')
-        self.image_size = image_size
         self.val_split = val_split
         self.test_split = test_split
         self.testing = testing
@@ -52,8 +62,10 @@ class VVAD_LRS3(Generator):
         self.total_size = 0
         if not testing:
             self.total_size = data.get('x_train').shape[0]
+            self.length = data.get('x_test').shape[1]
         else:
             self.total_size = data.get('x_test').shape[0]
+            self.length = data.get('x_test').shape[1]
         data.close()
 
         # NotTODO add the 200 test samples to those (if so add those 200 to the self.total_size). It is not worth it. it is roughly 0.5% of the dataset but would add aditional commands to the dataset generator for each iteration. which could increase the training time.
@@ -81,6 +93,17 @@ class VVAD_LRS3(Generator):
             indexes_neg = indexes_neg[test_split_size:]
 
         self.indexes_train = indexes_pos + indexes_neg
+
+        # Reduction init
+        self.reduction_length = reduction_length
+        self.reduction_method = reduction_method
+
+        if "reduce" in self.reduction_method:
+            count_dropouts = self.length - self.reduction_length
+
+            cal_drop_every = self.reduction_length / count_dropouts
+
+            self.dropout_ids = [int(i * cal_drop_every - (cal_drop_every / 2)) for i in range(1, count_dropouts + 1)]
 
         random.seed(445363)
 
@@ -112,7 +135,17 @@ class VVAD_LRS3(Generator):
         if self.evaluating:
             for i in indexes:
                 self.index.append(i)
-                yield x_train[i], y_train[i]
+
+                x_out = []
+
+                if "reduce" in self.reduction_method:
+                    for frame in range(self.length):
+                        if frame in self.dropout_ids:
+                            continue
+                        x_out.append(x_train[i][frame])
+                elif "cut" in self.reduction_method:
+                    x_out = x_train[i][:self.reduction_length]
+                yield x_out, y_train[i]
         else:
             for i in indexes:
                 yield x_train[i], y_train[i]
