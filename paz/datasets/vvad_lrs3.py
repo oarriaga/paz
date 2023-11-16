@@ -2,6 +2,7 @@ import os
 import h5py
 import random
 import tensorflow as tf
+import numpy as np
 keras = tf.keras
 from keras.utils import to_categorical
 
@@ -98,12 +99,18 @@ class VVAD_LRS3(Generator):
         self.reduction_length = reduction_length
         self.reduction_method = reduction_method
 
+        if self.reduction_length > self.length:
+            raise ValueError('reduction_length must be smaller than the length of the video')
+
         if "reduce" in self.reduction_method:
-            count_dropouts = self.length - self.reduction_length
+            if self.reduction_length == self.length:
+                self.reduction_method = "cut"
+            else:
+                count_dropouts = self.length - self.reduction_length
 
-            cal_drop_every = self.reduction_length / count_dropouts
+                cal_drop_every = self.reduction_length / count_dropouts
 
-            self.dropout_ids = [int(i * cal_drop_every - (cal_drop_every / 2)) for i in range(1, count_dropouts + 1)]
+                self.dropout_ids = [int(i * cal_drop_every - (cal_drop_every / 2)) for i in range(1, count_dropouts + 1)]
 
         random.seed(445363)
 
@@ -136,14 +143,11 @@ class VVAD_LRS3(Generator):
             for i in indexes:
                 self.index.append(i)
 
-                x_out = []
-
-                if "reduce" in self.reduction_method:
-                    for frame in range(self.length):
-                        if frame in self.dropout_ids:
-                            continue
-                        x_out.append(x_train[i][frame])
-                elif "cut" in self.reduction_method:
+                if "reduce" in self.reduction_method:  # First tested using appending all wanted frames but it is
+                    # more efficient to remove the unwanted frames
+                    x_out = x_train[i]
+                    x_out = np.delete(x_out, self.dropout_ids, 0)
+                else:
                     x_out = x_train[i][:self.reduction_length]
                 yield x_out, y_train[i]
         else:
