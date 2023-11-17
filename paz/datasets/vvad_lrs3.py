@@ -20,22 +20,25 @@ class VVAD_LRS3(Generator):
     # Arguments
         path: String. Full path to vvadlrs3_faceImages_small.h5 file.
         split: String. Valid option contain 'train', 'val' or 'test'.
-        val_split: Float. Percentage of the dataset to be used for validation (valid options between 0.0 to 1.0). Set to 0.0 to disable.
-        test_split: Float. Percentage of the dataset to be used for testing (valid options between 0.0 to 1.0). Set to 0.0 to disable.
+        val_split: Float. Percentage of the dataset to be used for validation (valid options between 0.0 to 1.0). Set
+            to 0.0 to disable.
+        test_split: Float. Percentage of the dataset to be used for testing (valid options between 0.0 to 1.0). Set
+            to 0.0 to disable.
         testing: Boolean. If True, the test split is used instead of the train split.
         evaluating: Boolean. If True, the dataset is used for evaluation. This means that the dataset is not shuffled
             and the indexes will be stored.
         reduction_method: String. Valid options are 'cut' or 'reduce'. If 'cut' is selected, the video is cut to the
             reduction_length. If 'reduce' is selected, reduction_length many single frames of the video is removed form
             the clip.
-        reduction_length: Integer. The length of the video after the reduction_method is applied. 38 is the default
+        reduction_length: Integer. The length of the video after the reduction_method is applied. Choose None if you
+            want to keep the original size. None is the default
 
     # References
         -[VVAD-LRS3](https://www.kaggle.com/datasets/adrianlubitz/vvadlrs3)
     """
     def __init__(
             self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, testing=False,
-            evaluating=False, reduction_method: Reduction_Method = "cut", reduction_length=38):
+            evaluating=False, reduction_method: Reduction_Method = "cut", reduction_length=None):
         if split != 'train' and split != 'val' and split != 'test':
             raise ValueError('Invalid split name')
         if val_split < 0.0 or val_split > 1.0:
@@ -96,11 +99,13 @@ class VVAD_LRS3(Generator):
         self.indexes_train = indexes_pos + indexes_neg
 
         # Reduction init
+        if reduction_length is None:
+            reduction_length = self.length
+        elif reduction_length > self.length:
+            raise ValueError('reduction_length must be smaller than the length of the video')
+
         self.reduction_length = reduction_length
         self.reduction_method = reduction_method
-
-        if self.reduction_length > self.length:
-            raise ValueError('reduction_length must be smaller than the length of the video')
 
         if "reduce" in self.reduction_method:
             if self.reduction_length == self.length:
