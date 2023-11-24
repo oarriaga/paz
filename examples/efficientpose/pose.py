@@ -9,7 +9,8 @@ from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTy, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
                         MatchPoses, TransformRotation, ConcatenatePoses,
-                        ConcatenateScale, AugmentImageAndPose)
+                        ConcatenateScale, AugmentImageAndPose,
+                        AugmentColorspace)
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
@@ -71,7 +72,8 @@ class AugmentPose(SequentialProcessor):
                  IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], probability=0.5,
                  num_pose_dims=3):
         super(AugmentPose, self).__init__()
-        self.augment_image_and_pose = AugmentImageAndPose(
+        self.augment_colorspace = AugmentColorspace()
+        self.augment_6DOF = AugmentImageAndPose(
             probability=probability, input_size=size)
         self.preprocess_image = EfficientPosePreprocess(
             model, mean, camera_matrix)
@@ -92,7 +94,8 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
         self.add(pr.ControlMap(pr.LoadImage(), [5], [5]))
         if split == pr.TRAIN:
-            self.add(pr.ControlMap(self.augment_image_and_pose,
+            self.add(pr.ControlMap(self.augment_colorspace, [0], [0]))
+            self.add(pr.ControlMap(self.augment_6DOF,
                                    [0, 1, 2, 3, 5], [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))

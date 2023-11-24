@@ -599,3 +599,11 @@ def transform_translation_vector(translation, transformation):
 def scale_translation_vector(translation, scale):
     translation[2] = translation[2] / scale
     return translation
+
+
+class AugmentColorspace(Processor):
+    def __init__(self):
+        super(AugmentColorspace, self).__init__()
+
+    def call(self, image):
+        return image
