@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from paz.abstract import Processor, Pose6D
+from paz.abstract import Processor, SequentialProcessor, Pose6D
 import paz.processors as pr
 from paz.processors.draw import (quaternion_to_rotation_matrix,
                                  project_to_image, draw_cube)
@@ -601,9 +601,19 @@ def scale_translation_vector(translation, scale):
     return translation
 
 
-class AugmentColorspace(Processor):
+class AugmentColorspace(SequentialProcessor):
     def __init__(self):
         super(AugmentColorspace, self).__init__()
+        self.add(AutoContrast())
+
+
+class AutoContrast(Processor):
+    def __init__(self):
+        super(AutoContrast, self).__init__()
 
     def call(self, image):
-        return image
+        return auto_contrast(image)
+
+
+def auto_contrast(image):
+    return image
