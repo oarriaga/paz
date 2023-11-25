@@ -608,16 +608,15 @@ class AugmentColorspace(SequentialProcessor):
 
 
 class AutoContrast(Processor):
-    def __init__(self, cutoff=0):
-        self.cutoff = cutoff
+    def __init__(self):
         super(AutoContrast, self).__init__()
 
     def call(self, image):
-        return auto_contrast(image, self.cutoff)
+        return auto_contrast(image)
 
 
-def auto_contrast(image, cutoff):
-    image_autocontrast = np.empty_like(image)
+def auto_contrast(image):
+    image_contrasted = np.empty_like(image)
     num_channels = image.shape[2]
 
     for channel_arg in range(num_channels):
@@ -625,28 +624,29 @@ def auto_contrast(image, cutoff):
         histogram = cv2.calcHist(image_per_channel, [0], None, [256], [0, 256])
         histogram[0] = -histogram[0]
 
-        # remove cutoff% samples from the hi end
         CDF_reversed = np.cumsum(histogram[::-1])
-        hi_cut_nz = np.nonzero(CDF_reversed > 0.0)[0]
-        if len(hi_cut_nz) == 0:
-            hi = -1
+        upper_cutoff_nonzero = np.nonzero(CDF_reversed > 0.0)[0]
+        if len(upper_cutoff_nonzero) == 0:
+            upper_cutoff = -1
         else:
-            hi = 255 - hi_cut_nz[0]
-        histogram[hi+1:] = 0
-        if hi > -1:
-            histogram[hi] = CDF_reversed[255-hi]
+            upper_cutoff = 255 - upper_cutoff_nonzero[0]
 
-        for lo, lo_val in enumerate(histogram):
-            if lo_val:
+        histogram[upper_cutoff+1:] = 0
+        if upper_cutoff > -1:
+            histogram[upper_cutoff] = CDF_reversed[255-upper_cutoff]
+
+        for lower_cutoff, lower_value in enumerate(histogram):
+            if lower_value:
                 break
-        if hi <= lo:
+
+        if upper_cutoff <= lower_cutoff:
             lut = np.arange(256)
         else:
-            scale = 255.0 / (hi - lo)
-            offset = -lo * scale
+            scale = 255.0 / (upper_cutoff - lower_cutoff)
+            offset = -lower_cutoff * scale
             lut = np.arange(256).astype(np.float64) * scale + offset
             lut = np.clip(lut, 0, 255).astype(np.uint8)
         lut = np.array(lut, dtype=np.uint8)
         contrast_adjusted = cv2.LUT(image_per_channel, lut)
-        image_autocontrast[:, :, channel_arg] = contrast_adjusted
-    return image_autocontrast
+        image_contrasted[:, :, channel_arg] = contrast_adjusted
+    return image_contrasted
