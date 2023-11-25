@@ -639,18 +639,14 @@ def auto_contrast(image, cutoff):
         for lo, lo_val in enumerate(histogram):
             if lo_val:
                 break
-        for hi in range(255, -1, -1):
-            if histogram[hi]:
-                break
         if hi <= lo:
             lut = np.arange(256)
         else:
             scale = 255.0 / (hi - lo)
             offset = -lo * scale
-            ix = np.arange(256).astype(np.float64) * scale + offset
-            ix = np.clip(ix, 0, 255).astype(np.uint8)
-            lut = ix
+            lut = np.arange(256).astype(np.float64) * scale + offset
+            lut = np.clip(lut, 0, 255).astype(np.uint8)
         lut = np.array(lut, dtype=np.uint8)
-        dstImage = cv2.LUT(image_per_channel, lut)
-        image_autocontrast[:, :, channel_arg] = dstImage
+        contrast_adjusted = cv2.LUT(image_per_channel, lut)
+        image_autocontrast[:, :, channel_arg] = contrast_adjusted
     return image_autocontrast
