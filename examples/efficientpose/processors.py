@@ -613,6 +613,7 @@ class AugmentColorspace(SequentialProcessor):
         self.add(pr.RandomContrast(1.0))
         self.add(pr.RandomBrightness(1.0))
         self.add(SharpenImage())
+        self.add(Cutout())
 
 
 class AutoContrast(Processor):
@@ -743,3 +744,21 @@ class SharpenImage(Processor):
 def sharpen_image(image, kernel):
     sharpened = cv2.filter2D(image, -1, kernel)
     return sharpened
+
+
+class Cutout(Processor):
+    def __init__(self, size=16, fill=128):
+        self.size = size
+        self.fill = fill
+        super(Cutout, self).__init__()
+
+    def call(self, image):
+        return cutout(image, self.size, self.fill)
+
+
+def cutout(image, size, fill):
+    H, W, _ = image.shape
+    y = np.random.randint(0, H - size)
+    x = np.random.randint(0, W - size)
+    image[y:y+size, x:x+size, :] = fill
+    return image
