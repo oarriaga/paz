@@ -620,7 +620,7 @@ class AutoContrast(Processor):
 
 
 def auto_contrast(image):
-    image_contrasted = np.empty_like(image)
+    contrasted = np.empty_like(image)
     num_channels = image.shape[2]
 
     for channel_arg in range(num_channels):
@@ -652,8 +652,8 @@ def auto_contrast(image):
             lut = np.clip(lut, 0, 255).astype(np.uint8)
         lut = np.array(lut, dtype=np.uint8)
         contrast_adjusted = cv2.LUT(image_per_channel, lut)
-        image_contrasted[:, :, channel_arg] = contrast_adjusted
-    return image_contrasted
+        contrasted[:, :, channel_arg] = contrast_adjusted
+    return contrasted
 
 
 class EqualizeHistogram(Processor):
@@ -669,14 +669,14 @@ class EqualizeHistogram(Processor):
 
 
 def equalize_histogram(image):
-    image_equalized = np.empty_like(image)
+    equalized = np.empty_like(image)
     num_channels = image.shape[2]
 
     for channel_arg in range(num_channels):
         image_per_channel = image[:, :, channel_arg]
         equalized_per_channel = cv2.equalizeHist(image_per_channel)
-        image_equalized[:, :, channel_arg] = equalized_per_channel
-    return image_equalized
+        equalized[:, :, channel_arg] = equalized_per_channel
+    return equalized
 
 
 class InvertColors(Processor):
@@ -693,23 +693,23 @@ def invert_colors(image):
 
 
 class Posterize(Processor):
-    def __init__(self, k=8):
-        self.k = 8
+    def __init__(self, num_bits=4):
+        self.num_bits = num_bits
         super(Posterize, self).__init__()
 
     def call(self, image):
-        return posterize(image, self.k)
+        return posterize(image, self.num_bits)
 
 
-def posterize(image, k):
-    gray_values = image.reshape(-1, 3)
-    gray_values = np.float32(gray_values)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    _, label, centers = cv2.kmeans(gray_values, k, None, criteria,
-                                   10, cv2.KMEANS_RANDOM_CENTERS)
-    centers = np.uint8(centers)
-    posterized = centers[label.flatten()]
-    posterized = posterized.reshape((image.shape))
+def posterize(image, num_bits):
+    posterized = np.empty_like(image)
+    num_channels = image.shape[2]
+    for channel_arg in range(num_channels):
+        image_per_channel = image[:, :, channel_arg]
+        scale_factor = 2 ** (8 - num_bits)
+        posterized_per_channel = np.round(image_per_channel /
+                                          scale_factor) * scale_factor
+        posterized[:, :, channel_arg] = posterized_per_channel.astype(np.uint8)
     return posterized
 
 
