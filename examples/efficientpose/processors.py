@@ -607,6 +607,7 @@ class AugmentColorspace(SequentialProcessor):
         self.add(AutoContrast())
         self.add(EqualizeHistogram())
         self.add(InvertColors())
+        self.add(Posterize())
 
 
 class AutoContrast(Processor):
@@ -688,3 +689,24 @@ class InvertColors(Processor):
 def invert_colors(image):
     image_inverted = 255 - image
     return image_inverted
+
+
+class Posterize(Processor):
+    def __init__(self, k=8):
+        self.k = 8
+        super(Posterize, self).__init__()
+
+    def call(self, image):
+        return posterize(image, self.k)
+
+
+def posterize(image, k):
+    gray_values = image.reshape(-1, 3)
+    gray_values = np.float32(gray_values)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, label, centers = cv2.kmeans(gray_values, k, None, criteria,
+                                   10, cv2.KMEANS_RANDOM_CENTERS)
+    centers = np.uint8(centers)
+    posterized = centers[label.flatten()]
+    posterized = posterized.reshape((image.shape))
+    return posterized
