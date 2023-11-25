@@ -610,6 +610,8 @@ class AugmentColorspace(SequentialProcessor):
         self.add(Posterize())
         self.add(Solarize())
         self.add(pr.RandomSaturation(1.0))
+        self.add(pr.RandomContrast(1.0))
+        self.add(pr.RandomBrightness(1.0))
 
 
 class AutoContrast(Processor):
