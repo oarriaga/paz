@@ -606,6 +606,7 @@ class AugmentColorspace(SequentialProcessor):
         super(AugmentColorspace, self).__init__()
         self.add(AutoContrast())
         self.add(EqualizeHistogram())
+        self.add(InvertColors())
 
 
 class AutoContrast(Processor):
@@ -674,3 +675,16 @@ def equalize_histogram(image):
         equalized_per_channel = cv2.equalizeHist(image_per_channel)
         image_equalized[:, :, channel_arg] = equalized_per_channel
     return image_equalized
+
+
+class InvertColors(Processor):
+    def __init__(self):
+        super(InvertColors, self).__init__()
+
+    def call(self, image):
+        return invert_colors(image)
+
+
+def invert_colors(image):
+    image_inverted = 255 - image
+    return image_inverted
