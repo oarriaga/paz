@@ -605,6 +605,7 @@ class AugmentColorspace(SequentialProcessor):
     def __init__(self):
         super(AugmentColorspace, self).__init__()
         self.add(AutoContrast())
+        self.add(EqualizeHistogram())
 
 
 class AutoContrast(Processor):
@@ -650,3 +651,22 @@ def auto_contrast(image):
         contrast_adjusted = cv2.LUT(image_per_channel, lut)
         image_contrasted[:, :, channel_arg] = contrast_adjusted
     return image_contrasted
+
+
+class EqualizeHistogram(Processor):
+    def __init__(self):
+        super(EqualizeHistogram, self).__init__()
+
+    def call(self, image):
+        return equalize_histogram(image)
+
+
+def equalize_histogram(image):
+    image_equalized = np.empty_like(image)
+    num_channels = image.shape[2]
+
+    for channel_arg in range(num_channels):
+        image_per_channel = image[:, :, channel_arg]
+        equalized_per_channel = cv2.equalizeHist(image_per_channel)
+        image_equalized[:, :, channel_arg] = equalized_per_channel
+    return image_equalized
