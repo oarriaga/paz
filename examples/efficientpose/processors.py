@@ -604,14 +604,14 @@ def scale_translation_vector(translation, scale):
 class AugmentColorspace(SequentialProcessor):
     def __init__(self):
         super(AugmentColorspace, self).__init__()
-        # self.add(AutoContrast())
-        # self.add(EqualizeHistogram())
-        # self.add(InvertColors())
-        # self.add(Posterize())
-        # self.add(Solarize())
-        # self.add(pr.RandomSaturation(1.0))
-        # self.add(pr.RandomContrast(1.0))
-        # self.add(pr.RandomBrightness(1.0))
+        self.add(AutoContrast())
+        self.add(EqualizeHistogram())
+        self.add(InvertColors())
+        self.add(Posterize())
+        self.add(Solarize())
+        self.add(pr.RandomSaturation(1.0))
+        self.add(pr.RandomContrast(1.0))
+        self.add(pr.RandomBrightness(1.0))
         self.add(SharpenImage())
 
 
