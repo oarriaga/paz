@@ -604,14 +604,15 @@ def scale_translation_vector(translation, scale):
 class AugmentColorspace(SequentialProcessor):
     def __init__(self):
         super(AugmentColorspace, self).__init__()
-        self.add(AutoContrast())
-        self.add(EqualizeHistogram())
-        self.add(InvertColors())
-        self.add(Posterize())
-        self.add(Solarize())
-        self.add(pr.RandomSaturation(1.0))
-        self.add(pr.RandomContrast(1.0))
-        self.add(pr.RandomBrightness(1.0))
+        # self.add(AutoContrast())
+        # self.add(EqualizeHistogram())
+        # self.add(InvertColors())
+        # self.add(Posterize())
+        # self.add(Solarize())
+        # self.add(pr.RandomSaturation(1.0))
+        # self.add(pr.RandomContrast(1.0))
+        # self.add(pr.RandomBrightness(1.0))
+        self.add(SharpenImage())
 
 
 class AutoContrast(Processor):
@@ -728,3 +729,17 @@ class Solarize(Processor):
 def solarize(image, threshold):
     solarized = np.where(image < threshold, image, 255 - image)
     return solarized
+
+
+class SharpenImage(Processor):
+    def __init__(self):
+        self.kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+        super(SharpenImage, self).__init__()
+
+    def call(self, image):
+        return sharpen_image(image, self.kernel)
+
+
+def sharpen_image(image, kernel):
+    sharpened = cv2.filter2D(image, -1, kernel)
+    return sharpened
