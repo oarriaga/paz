@@ -608,6 +608,7 @@ class AugmentColorspace(SequentialProcessor):
         self.add(EqualizeHistogram())
         self.add(InvertColors())
         self.add(Posterize())
+        self.add(Solarize())
 
 
 class AutoContrast(Processor):
@@ -710,3 +711,17 @@ def posterize(image, k):
     posterized = centers[label.flatten()]
     posterized = posterized.reshape((image.shape))
     return posterized
+
+
+class Solarize(Processor):
+    def __init__(self, threshold=225):
+        self.threshold = threshold
+        super(Solarize, self).__init__()
+
+    def call(self, image):
+        return solarize(image, self.threshold)
+
+
+def solarize(image, threshold):
+    solarized = np.where(image < threshold, image, 255 - image)
+    return solarized
