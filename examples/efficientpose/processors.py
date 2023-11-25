@@ -654,6 +654,10 @@ def auto_contrast(image):
 
 
 class EqualizeHistogram(Processor):
+    """The paper uses Histogram euqlaization algorithm from PIL.
+    This version of Histogram equalization produces slightly different
+    results from that in the paper.
+    """
     def __init__(self):
         super(EqualizeHistogram, self).__init__()
 
