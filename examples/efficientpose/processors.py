@@ -614,6 +614,8 @@ class AugmentColorspace(SequentialProcessor):
         self.add(pr.RandomBrightness(1.0))
         self.add(SharpenImage())
         self.add(Cutout())
+        self.add(pr.RandomImageBlur())
+        self.add(pr.RandomGaussianBlur())
 
 
 class AutoContrast(Processor):
