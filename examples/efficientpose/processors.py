@@ -616,6 +616,7 @@ class AugmentColorspace(SequentialProcessor):
         self.add(Cutout())
         self.add(pr.RandomImageBlur())
         self.add(pr.RandomGaussianBlur())
+        self.add(AddGaussianNoise())
 
 
 class AutoContrast(Processor):
@@ -764,3 +765,22 @@ def cutout(image, size, fill):
     x = np.random.randint(0, W - size)
     image[y:y+size, x:x+size, :] = fill
     return image
+
+
+class AddGaussianNoise(Processor):
+    def __init__(self, mean=0, scale=20):
+        self.mean = mean
+        self.variance = (scale / 100.0) * 255
+        self.sigma = self.variance ** 0.5
+        super(AddGaussianNoise, self).__init__()
+
+    def call(self, image):
+        return add_gaussian_noise(image, self.mean, self.sigma)
+
+
+def add_gaussian_noise(image, mean, sigma):
+    H, W, num_channels = image.shape
+    noise = np.random.normal(mean, sigma, (H, W, num_channels))
+    noisy_image = image + noise
+    noisy_image = np.clip(noisy_image, 0, 255)
+    return noisy_image.astype(np.uint8)
