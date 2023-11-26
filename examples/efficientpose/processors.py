@@ -620,11 +620,14 @@ class AugmentColorspace(SequentialProcessor):
 
 
 class AutoContrast(Processor):
-    def __init__(self):
+    def __init__(self, probability=0.50):
+        self.probability = probability
         super(AutoContrast, self).__init__()
 
     def call(self, image):
-        return auto_contrast(image)
+        if self.probability > np.random.rand():
+            image = auto_contrast(image)
+        return image
 
 
 def auto_contrast(image):
@@ -669,11 +672,14 @@ class EqualizeHistogram(Processor):
     This version of Histogram equalization produces slightly different
     results from that in the paper.
     """
-    def __init__(self):
+    def __init__(self, probability=0.50):
+        self.probability = probability
         super(EqualizeHistogram, self).__init__()
 
     def call(self, image):
-        return equalize_histogram(image)
+        if self.probability > np.random.rand():
+            image = equalize_histogram(image)
+        return image
 
 
 def equalize_histogram(image):
@@ -688,11 +694,14 @@ def equalize_histogram(image):
 
 
 class InvertColors(Processor):
-    def __init__(self):
+    def __init__(self, probability=0.50):
+        self.probability = probability
         super(InvertColors, self).__init__()
 
     def call(self, image):
-        return invert_colors(image)
+        if self.probability > np.random.rand():
+            image = invert_colors(image)
+        return image
 
 
 def invert_colors(image):
@@ -701,12 +710,15 @@ def invert_colors(image):
 
 
 class Posterize(Processor):
-    def __init__(self, num_bits=4):
+    def __init__(self, probability=0.50, num_bits=4):
+        self.probability = probability
         self.num_bits = num_bits
         super(Posterize, self).__init__()
 
     def call(self, image):
-        return posterize(image, self.num_bits)
+        if self.probability > np.random.rand():
+            image = posterize(image, self.num_bits)
+        return image
 
 
 def posterize(image, num_bits):
@@ -722,12 +734,15 @@ def posterize(image, num_bits):
 
 
 class Solarize(Processor):
-    def __init__(self, threshold=225):
+    def __init__(self, probability=0.50, threshold=225):
+        self.probability = probability
         self.threshold = threshold
         super(Solarize, self).__init__()
 
     def call(self, image):
-        return solarize(image, self.threshold)
+        if self.probability > np.random.rand():
+            image = solarize(image, self.threshold)
+        return image
 
 
 def solarize(image, threshold):
@@ -736,12 +751,15 @@ def solarize(image, threshold):
 
 
 class SharpenImage(Processor):
-    def __init__(self):
+    def __init__(self, probability=0.50):
+        self.probability = probability
         self.kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
         super(SharpenImage, self).__init__()
 
     def call(self, image):
-        return sharpen_image(image, self.kernel)
+        if self.probability > np.random.rand():
+            image = sharpen_image(image, self.kernel)
+        return image
 
 
 def sharpen_image(image, kernel):
@@ -750,13 +768,16 @@ def sharpen_image(image, kernel):
 
 
 class Cutout(Processor):
-    def __init__(self, size=16, fill=128):
+    def __init__(self, probability=0.50, size=16, fill=128):
+        self.probability = probability
         self.size = size
         self.fill = fill
         super(Cutout, self).__init__()
 
     def call(self, image):
-        return cutout(image, self.size, self.fill)
+        if self.probability > np.random.rand():
+            image = cutout(image, self.size, self.fill)
+        return image
 
 
 def cutout(image, size, fill):
@@ -768,14 +789,17 @@ def cutout(image, size, fill):
 
 
 class AddGaussianNoise(Processor):
-    def __init__(self, mean=0, scale=20):
+    def __init__(self, probability=0.50, mean=0, scale=20):
+        self.probability = probability
         self.mean = mean
         self.variance = (scale / 100.0) * 255
         self.sigma = self.variance ** 0.5
         super(AddGaussianNoise, self).__init__()
 
     def call(self, image):
-        return add_gaussian_noise(image, self.mean, self.sigma)
+        if self.probability > np.random.rand():
+            image = add_gaussian_noise(image, self.mean, self.sigma)
+        return image
 
 
 def add_gaussian_noise(image, mean, sigma):
