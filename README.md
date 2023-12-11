@@ -33,7 +33,7 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="250"> |
 
-|[MAML](https://github.com/oarriaga/paz/tree/maml_branch/examples/maml)| | |
+|[MAML](https://github.com/oarriaga/paz/blob/master/examples/maml)| | |
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/maml.png" width="325"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330"> |
 
