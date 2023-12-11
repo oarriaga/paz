@@ -1,11 +1,38 @@
 import numpy as np
+
+from paz.backend.boxes import extract_bounding_box_corners
+from paz.backend.image import normalize_min_max
 from paz.backend.render import sample_uniformly, split_alpha_channel
 from paz.backend.render import (
     sample_point_in_sphere, random_perturbation, compute_modelview_matrices)
 from pyrender import (PerspectiveCamera, OffscreenRenderer, DirectionalLight,
                       RenderFlags, Mesh, Scene)
 import trimesh
-from .utils import color_object
+# from .utils import color_object
+
+
+def load_obj(path):
+    mesh = trimesh.load(path)
+    return mesh
+
+
+def compute_vertices_colors(vertices):
+    corner3D_min, corner3D_max = extract_bounding_box_corners(vertices)
+    normalized_colors = normalize_min_max(vertices, corner3D_min, corner3D_max)
+    colors = (255 * normalized_colors).astype('uint8')
+    return colors
+
+
+def color_object(path):
+    mesh = load_obj(path)
+    colors = compute_vertices_colors(mesh.vertices)
+    mesh.visual = mesh.visual.to_color()
+    mesh.visual.vertex_colors = colors
+    mesh = Mesh.from_trimesh(mesh, smooth=False)
+    mesh.primitives[0].material.metallicFactor = 0.0
+    mesh.primitives[0].material.roughnessFactor = 1.0
+    mesh.primitives[0].material.alphaMode = 'OPAQUE'
+    return mesh
 
 
 class PixelMaskRenderer():
@@ -97,7 +124,7 @@ if __name__ == "__main__":
 
     renderer = PixelMaskRenderer(path_OBJ, viewport_size, y_fov, distance,
                                  light, top_only, roll, shift)
-    for arg in range(100):
+    for arg in range(10):
         image, alpha, RGBA_mask = renderer.render()
         image = np.concatenate([image, RGBA_mask[..., 0:3]], axis=1)
         H, W = image.shape[:2]
