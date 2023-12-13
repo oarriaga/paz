@@ -4,6 +4,7 @@ import json
 import argparse
 from datetime import datetime
 
+from scenes import PixelMaskRenderer
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import get_file
@@ -17,10 +18,10 @@ from paz.optimization.callbacks import DrawInferences
 from paz.backend.camera import Camera
 from paz.backend.image import write_image
 from paz.optimization.losses import WeightedReconstruction
-from paz.pipelines.pose import RGBMaskToPose6D
-from pipelines import SingleInferencePIX2POSE6D
+# from paz.pipelines.pose import RGBMaskToPose6D
+from paz.pipelines.pose import SingleInstancePIX2POSE6D
+# from pipelines import SingleInferencePIX2POSE6D
 
-from scenes import PixelMaskRenderer
 from pipelines import DomainRandomization
 
 OBJ_FILE = 'textured.obj'
@@ -46,7 +47,7 @@ parser.add_argument('--beta', default=3.0, type=float,
                     help='Loss Weight for pixels in object')
 parser.add_argument('--max_num_epochs', default=100, type=int,
                     help='Number of epochs before finishing')
-parser.add_argument('--steps_per_epoch', default=250, type=int,
+parser.add_argument('--steps_per_epoch', default=150, type=int,
                     help='Steps per epoch')
 parser.add_argument('--stop_patience', default=5, type=int,
                     help='Early stop patience')
@@ -151,7 +152,7 @@ camera.distortion = np.zeros((4))
 camera.intrinsics_from_HFOV(image_shape=(args.image_size, args.image_size))
 object_sizes = renderer.mesh.mesh.extents * 100  # from meters to milimiters
 # camera.intrinsics = renderer.camera.camera.get_projection_matrix()[:3, :3]
-draw_pipeline = RGBMaskToPose6D(model, object_sizes, camera, draw=True)
+draw_pipeline = SingleInstancePIX2POSE6D(model, object_sizes, camera, draw=True)
 draw = DrawInferences(experiment_path, images, draw_pipeline)
 callbacks = [log, stop, save, plateau, draw]
 
@@ -160,7 +161,6 @@ with open(os.path.join(experiment_path, 'hyperparameters.json'), 'w') as filer:
     json.dump(args.__dict__, filer, indent=4)
 with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
     model.summary(print_fn=lambda x: filer.write(x + '\n'))
-
 model.fit(
     sequence,
     epochs=args.max_num_epochs,
