@@ -1,16 +1,13 @@
 import os
-import yaml
-import trimesh
 import numpy as np
 from paz.backend.image import load_image
 from scipy import spatial
-from linemod import LINEMOD
 from paz.backend.groups import quaternion_to_rotation_matrix
-from pose import EFFICIENTPOSEALINEMODDRILLER
 
 
 def transform_mesh_points(mesh_points, rotation, translation):
     """Transforms the object points
+
       # Arguments
           mesh_points: nx3 ndarray with 3D model points.
           rotaion: Rotation matrix
@@ -26,10 +23,12 @@ def transform_mesh_points(mesh_points, rotation, translation):
 
 def compute_ADD(true_pose, pred_pose, mesh_points):
     """Calculate The ADD error.
+
       # Arguments
           true_pose: Real pose
           pred_pose: Predicted pose
           mesh_pts: nx3 ndarray with 3D model points.
+
       # Returns
           Return ADD error
     """
@@ -49,6 +48,16 @@ def compute_ADD(true_pose, pred_pose, mesh_points):
 
 
 def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
+    """Check if ADD error is within the diameter's tolerance.
+
+      # Arguments
+          ADD_error: Float, ADD error value.
+          diameter: Float, diameter of the object.
+          diameter_threshold: Float, thhreshold for diameter tolerance.
+
+      # Returns
+          is_correct: Bool flag indicating if pose is correct.
+    """
     if ADD_error <= (diameter * diameter_threshold):
         is_correct = True
     else:
@@ -58,12 +67,15 @@ def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
 
 def compute_ADI(true_pose, pred_pose, mesh_points):
     """Calculate The ADI error.
+
        Calculate distances to the nearest neighbors from vertices in the
        ground-truth pose to vertices in the estimated pose.
+
       # Arguments
           true_pose: Real pose
           pred_pose: Predicted pose
           mesh_pts: nx3 ndarray with 3D model points.
+
       # Returns
           Return ADI error
       """
@@ -166,32 +178,3 @@ class EvaluatePoseError:
             print('Estimated ADD error:', average_ADD)
             print('Estimated ADD accuracy:', average_ADD_accuracy)
             print('Estimated ADI error:', average_ADI)
-
-
-if __name__ == '__main__':
-    save_path = 'trained_models/'
-    data_path = 'Linemod_preprocessed/'
-    object_id = '08'
-    data_split = 'test'
-    data_name = 'LINEMOD'
-    data_managers, datasets, evaluation_data_managers = [], [], []
-    eval_data_manager = LINEMOD(
-        data_path, object_id, data_split,
-        name=data_name, evaluate=True)
-    evaluation_data_managers.append(eval_data_manager)
-
-    inference = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.60,
-                                             nms_thresh=0.45)
-    inference.model.load_weights('weights.6394-0.25.hdf5')
-
-    mesh_path = data_path + 'models/' + 'obj_' + object_id + '.ply'
-    mesh = trimesh.load(mesh_path)
-    mesh_points = mesh.vertices.copy()
-    gt_file = data_path + 'models/' + 'models_info.yml'
-    with open(gt_file, 'r') as file:
-        model_data = yaml.safe_load(file)
-        file.close()
-    object_diameter = model_data[int(object_id)]['diameter']
-    pose_error = EvaluatePoseError(save_path, eval_data_manager,
-                                   inference, mesh_points, object_diameter)
-    pose_error.on_epoch_end(1)
