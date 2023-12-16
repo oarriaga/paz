@@ -3,6 +3,8 @@ import h5py
 import random
 import tensorflow as tf
 import numpy as np
+import math
+
 keras = tf.keras
 from keras.utils import to_categorical
 
@@ -30,15 +32,15 @@ class VVAD_LRS3(Generator):
         reduction_method: String. Valid options are 'cut' or 'reduce'. If 'cut' is selected, the video is cut to the
             reduction_length. If 'reduce' is selected, reduction_length many single frames of the video is removed form
             the clip.
-        reduction_length: Integer. The length of the video after the reduction_method is applied. Choose None if you
-            want to keep the original size. None is the default
+        reduced_length: Integer. The length of the video after the reduction_method is applied. Choose None if you
+            want to keep the original size. None is the default TODO Redo such that it is relative to the video length of the dataset.
 
     # References
         -[VVAD-LRS3](https://www.kaggle.com/datasets/adrianlubitz/vvadlrs3)
     """
     def __init__(
             self, path=".keras/paz/datasets", split='train', val_split=0.2, test_split=0.1, testing=False,
-            evaluating=False, reduction_method: Reduction_Method = "cut", reduction_length=None):
+            evaluating=False, reduction_method: Reduction_Method = "cut", reduced_length=None):
         if split != 'train' and split != 'val' and split != 'test':
             raise ValueError('Invalid split name')
         if val_split < 0.0 or val_split > 1.0:
@@ -99,21 +101,23 @@ class VVAD_LRS3(Generator):
         self.indexes_train = indexes_pos + indexes_neg
 
         # Reduction init
-        if reduction_length is None:
-            reduction_length = self.length
-        elif reduction_length > self.length:
+        if reduced_length is None:
+            reduced_length = self.length
+        elif reduced_length > self.length:
             raise ValueError('reduction_length must be smaller than the length of the video')
+        else:
+            reduced_length = math.ceil(reduced_length / 25 * self.length)
 
-        self.reduction_length = reduction_length
+        self.reduced_length = reduced_length
         self.reduction_method = reduction_method
 
         if "reduce" in self.reduction_method:
-            if self.reduction_length == self.length:
+            if self.reduced_length == self.length:
                 self.reduction_method = "cut"
             else:
-                count_dropouts = self.length - self.reduction_length
+                count_dropouts = self.length - self.reduced_length
 
-                cal_drop_every = self.reduction_length / count_dropouts
+                cal_drop_every = self.reduced_length / count_dropouts
 
                 self.dropout_ids = [int(i * cal_drop_every - (cal_drop_every / 2)) for i in range(1, count_dropouts + 1)]
 
@@ -153,7 +157,7 @@ class VVAD_LRS3(Generator):
                     x_out = x_train[i]
                     x_out = np.delete(x_out, self.dropout_ids, 0)
                 else:
-                    x_out = x_train[i][:self.reduction_length]
+                    x_out = x_train[i][:self.reduced_length]
                 yield x_out, y_train[i]
         else:
             for i in indexes:
