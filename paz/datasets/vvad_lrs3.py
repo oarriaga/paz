@@ -32,7 +32,7 @@ class VVAD_LRS3(Generator):
         reduction_method: String. Valid options are 'cut' or 'reduce'. If 'cut' is selected, the video is cut to the
             reduction_length. If 'reduce' is selected, reduction_length many single frames of the video is removed form
             the clip.
-        reduced_length: Integer. The length of the video after the reduction_method is applied. Choose None if you
+        reduced_length: Float. The length of the video after the reduction_method is applied. Choose None if you
             want to keep the original size. None is the default TODO Redo such that it is relative to the video length of the dataset.
 
     # References
