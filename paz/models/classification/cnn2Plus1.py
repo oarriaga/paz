@@ -1,3 +1,5 @@
+import einops
+import random
 import tensorflow as tf
 
 keras = tf.keras
@@ -5,10 +7,7 @@ from keras import Sequential
 from keras.models import Model
 from keras.layers import (Conv3D, Input, BatchNormalization, Layer, GlobalAveragePooling3D, ReLU, Flatten,
                           LayerNormalization, Dense, add)
-import einops
-import random
 
-from ..layers import Conv2DNormalization
 
 """
 References:
@@ -133,7 +132,7 @@ class ResizeVideo(Layer):
 
 
 def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-30.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is based on the tensorflow implementation
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -192,7 +191,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weigh
     return model
 
 def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DFilters/2023_10_20-14_11_13/cnn-2plus1d-filters_weights-23.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with increased filter sizes
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -251,7 +250,7 @@ def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865, t
     return model
 
 def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLayers/2023_10_16-10_14_48/cnn-2plus1d-layers_weights-17.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with doubled layers
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -314,7 +313,7 @@ def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tm
     return model
 
 def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/cnn-2plus1d-light_weights-55.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with one layer less
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
@@ -365,5 +364,61 @@ def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp
     if weights is not None:
         print("loading weights")
         model.load_weights(tmp_weights_path)  # TODO Add download link
+
+    return model
+
+
+def CNN2Plus1D_18(input_shape=(38, 96, 96, 3)):
+    """Binary Classification for videos with 2+1D CNNs. Only a dummy not ment for usage
+    # Arguments
+        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
+        e.g. (38, 96, 96, 3).
+
+    # Reference
+        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
+        - [Video classification with a 3D convolutional neural network]
+        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
+    """
+    if len(input_shape) != 4:
+        raise ValueError(
+            '`input_shape` must be a tuple of 4 integers. '
+            'Received: %s' % (input_shape,))
+
+    HEIGHT = input_shape[1]
+    WIDTH = input_shape[2]
+
+    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
+    image = Input(shape=input_shape, name='image')
+    x = image
+
+    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+    x = ResizeVideo(HEIGHT // 2, WIDTH // 2)(x)
+
+    # Block 1
+    x = add_residual_block(x, 64, (3, 3, 3))
+    x = add_residual_block(x, 64, (3, 3, 3))
+    x = ResizeVideo(HEIGHT // 4, WIDTH // 4)(x)
+
+    # Block 2
+    x = add_residual_block(x, 128, (3, 3, 3))
+    x = add_residual_block(x, 128, (3, 3, 3))
+    x = ResizeVideo(HEIGHT // 8, WIDTH // 8)(x)
+
+    # Block 3
+    x = add_residual_block(x, 256, (3, 3, 3))
+    x = add_residual_block(x, 256, (3, 3, 3))
+    x = ResizeVideo(HEIGHT // 16, WIDTH // 16)(x)
+
+    # Block 4
+    x = add_residual_block(x, 512, (3, 3, 3))
+    x = add_residual_block(x, 512, (3, 3, 3))
+
+    x = GlobalAveragePooling3D()(x)
+    x = Flatten()(x)
+    x = Dense(1, activation="sigmoid")(x)
+
+    model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
 
     return model
