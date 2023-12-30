@@ -4,7 +4,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Activation, Concatenate, Reshape
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
                                      MaxPooling2D, SeparableConv2D,
-                                     UpSampling2D)
+                                     UpSampling2D, GroupNormalization)
 from .layers import FuseFeature, GetDropConnect
 
 
@@ -89,7 +89,7 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
 
 
 def build_head(middle_features, num_blocks, num_filters,
-               survival_rate, bias_initializer):
+               survival_rate, bias_initializer, normalization='batch'):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
@@ -106,10 +106,19 @@ def build_head(middle_features, num_blocks, num_filters,
         num_blocks, num_filters[0], tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     pre_head_outputs, head_outputs = [], []
+
+    if normalization == 'batch':
+        normalizer = BatchNormalization
+        args = ()
+
+    elif normalization == 'group':
+        normalizer = GroupNormalization
+        args = (int(num_filters[0] / 16))
+
     for x in middle_features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
-            x = BatchNormalization()(x)
+            x = normalizer(*args)(x)
             x = tf.nn.swish(x)
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
