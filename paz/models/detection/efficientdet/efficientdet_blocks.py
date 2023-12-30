@@ -33,7 +33,9 @@ def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
     class_outputs = ClassNet(*args, num_classes)
+    class_outputs = [Flatten()(class_output) for class_output in class_outputs]
     boxes_outputs = BoxesNet(*args, num_dims)
+    boxes_outputs = [Flatten()(boxes_output) for boxes_output in boxes_outputs]
     classes = Concatenate(axis=1)(class_outputs)
     regressions = Concatenate(axis=1)(boxes_outputs)
     num_boxes = K.int_shape(regressions)[-1] // num_dims
@@ -112,7 +114,6 @@ def build_head(middle_features, num_blocks, num_filters,
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
         x = final_head_conv(x)
-        x = Flatten()(x)
         head_outputs.append(x)
     return head_outputs
 
