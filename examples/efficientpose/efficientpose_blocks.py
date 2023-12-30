@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import (GroupNormalization, Concatenate,
                                      Add, Reshape)
 from paz.models.detection.efficientdet.efficientdet_blocks import (
-    build_head_conv2D)
+    build_head_conv2D, build_head)
 
 
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
@@ -37,7 +37,7 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
 
 
 def RotationNet(middles, subnet_iterations, subnet_repeats,
-                num_anchors, num_filters, num_dims):
+                num_anchors, num_filters, num_dims, survival_rate=None):
     """Initializes RotationNet.
 
     # Arguments
@@ -56,37 +56,10 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
     num_filters = [num_filters, num_dims * num_anchors]
     bias_initializer = tf.zeros_initializer()
     args = (subnet_repeats, num_filters, bias_initializer)
-    rotations = build_rotation_head(middles, *args)
+    rotations = build_head(middles, subnet_repeats, num_filters,
+                           survival_rate, bias_initializer)
     return build_iterative_rotation_subnet(*rotations, subnet_iterations,
                                            *args, num_dims)
-
-
-def build_rotation_head(middles, subnet_repeats, num_filters,
-                        bias_initializer, gn_groups=4, gn_axis=-1):
-    """Builds RotationNet head.
-
-    # Arguments
-        middles: List, BiFPN layer output.
-        subnet_repeats: Int, number of layers used in subnetworks.
-        num_filters: Int, number of subnet filters.
-        bias_initializer: Callable, bias initializer.
-        gn_groups: Int, number of groups in group normalization.
-        gn_axis: Int, group normalization axis.
-
-    # Returns
-        List: Containing rotation_features and initial_rotations.
-    """
-    conv_blocks = build_head_conv2D(subnet_repeats, num_filters[0],
-                                    bias_initializer)
-    head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    args = (conv_blocks, subnet_repeats, gn_groups, gn_axis)
-    rotation_features, initial_rotations = [], []
-    for x in middles:
-        x = conv2D_norm_activation(x, *args)
-        initial_rotation = head_conv(x)
-        rotation_features.append(x)
-        initial_rotations.append(initial_rotation)
-    return [rotation_features, initial_rotations]
 
 
 def conv2D_norm_activation(x, conv_blocks, repeats, gn_groups, gn_axis):
@@ -148,7 +121,7 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
 
 
 def TranslationNet(middles, subnet_iterations, subnet_repeats,
-                   num_anchors, num_filters):
+                   num_anchors, num_filters, survival_rate=None):
     """Initializes TranslationNet.
 
     # Arguments

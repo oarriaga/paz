@@ -7,7 +7,7 @@ IMAGE_PATH = ('/home/manummk95/Desktop/paz/paz/examples/efficientpose/'
 
 detect = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.60, nms_thresh=0.45,
                                       show_boxes2D=True, show_poses6D=True)
-detect.model.load_weights('weights.6394-0.25.hdf5')
+# detect.model.load_weights('weights.6394-0.25.hdf5')
 image = load_image(IMAGE_PATH)
 inferences = detect(image)
 show_image(inferences['image'])
