@@ -64,7 +64,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
 
 
 def build_head(middle_features, num_blocks, num_filters,
-               survival_rate, bias_initializer, groups=4):
+               survival_rate, bias_initializer):
     """Builds ClassNet/BoxNet head with batch normalization
     replaced with group normalization. Group normalization benefits
     training by enabling the model to train with a reduced batch size
@@ -83,11 +83,12 @@ def build_head(middle_features, num_blocks, num_filters,
     conv_blocks = build_head_conv2D(
         num_blocks, num_filters[0], tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    num_groups = int(num_filters[0] / 16)
     pre_head_outputs, head_outputs = [], []
     for x in middle_features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
-            x = GroupNormalization(groups=groups)(x)
+            x = GroupNormalization(groups=num_groups)(x)
             x = tf.nn.swish(x)
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
@@ -120,7 +121,7 @@ def refine_rotation_iteratively(rotation_features, initial_rotations,
     conv_blocks = build_head_conv2D(subnet_repeats - 1, num_filters[0],
                                     bias_initializer)
     head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    args = (conv_blocks, subnet_repeats - 1)
+    args = (conv_blocks, subnet_repeats - 1, num_filters[0])
     rotations = []
     for x, initial_rotation in zip(rotation_features, initial_rotations):
         for _ in range(subnet_iterations):
@@ -134,7 +135,7 @@ def refine_rotation_iteratively(rotation_features, initial_rotations,
     return rotations
 
 
-def refine_rotation(x, conv_blocks, repeats):
+def refine_rotation(x, conv_blocks, repeats, num_filters):
     """Rotation refinement module. Builds group normalization blocks
     followed by activation.
 
@@ -149,9 +150,10 @@ def refine_rotation(x, conv_blocks, repeats):
         x: Tensor, after repeated convolution,
             group normalization and activation.
     """
+    num_groups = int(num_filters / 16)
     for block_arg in range(repeats):
         x = conv_blocks[block_arg](x)
-        x = GroupNormalization()(x)
+        x = GroupNormalization(groups=num_groups)(x)
         x = tf.nn.swish(x)
     return x
 
@@ -200,7 +202,7 @@ def build_translation_head(middles, subnet_repeats, num_filters,
                                     bias_initializer)
     head_xy_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
-    args = (conv_blocks, subnet_repeats)
+    args = (conv_blocks, subnet_repeats, num_filters[0])
     translation_features, translations_xy, translations_z = [], [], []
     for x in middles:
         x = refine_rotation(x, *args)
@@ -240,7 +242,7 @@ def build_iterative_translation_subnet(translation_features, translations_xy,
                                     bias_initializer)
     head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
     head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
-    args = (conv_blocks, subnet_repeats - 1)
+    args = (conv_blocks, subnet_repeats - 1, num_filters[0])
     translations = []
     iterator = zip(translation_features, translations_xy, translations_z)
     for x, translation_xy, translation_z in iterator:
