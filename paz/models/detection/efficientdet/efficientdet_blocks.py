@@ -32,9 +32,9 @@ def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
-    class_outputs = ClassNet(*args, num_classes)
+    _, class_outputs = ClassNet(*args, num_classes)
     class_outputs = [Flatten()(class_output) for class_output in class_outputs]
-    boxes_outputs = BoxesNet(*args, num_dims)
+    _, boxes_outputs = BoxesNet(*args, num_dims)
     boxes_outputs = [Flatten()(boxes_output) for boxes_output in boxes_outputs]
     classes = Concatenate(axis=1)(class_outputs)
     regressions = Concatenate(axis=1)(boxes_outputs)
@@ -105,7 +105,7 @@ def build_head(middle_features, num_blocks, num_filters,
     conv_blocks = build_head_conv2D(
         num_blocks, num_filters[0], tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    head_outputs = []
+    pre_head_outputs, head_outputs = [], []
     for x in middle_features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
@@ -113,9 +113,10 @@ def build_head(middle_features, num_blocks, num_filters,
             x = tf.nn.swish(x)
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
+        pre_head_outputs.append(x)
         x = final_head_conv(x)
         head_outputs.append(x)
-    return head_outputs
+    return [pre_head_outputs, head_outputs]
 
 
 def build_head_conv2D(num_blocks, num_filters, bias_initializer):
