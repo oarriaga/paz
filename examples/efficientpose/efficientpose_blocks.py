@@ -1,8 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (GroupNormalization, Concatenate,
-                                     Add, Reshape)
+                                     Add, Reshape, Activation)
 from paz.models.detection.efficientdet.efficientdet_blocks import (
-    build_head_conv2D, build_head)
+    build_head_conv2D)
+from paz.models.detection.efficientdet.layers import GetDropConnect
 
 
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
@@ -58,13 +59,47 @@ def RotationNet(middles, subnet_iterations, subnet_repeats,
     args = (subnet_repeats, num_filters, bias_initializer)
     rotations = build_head(middles, subnet_repeats, num_filters,
                            survival_rate, bias_initializer)
-    return build_iterative_rotation_subnet(*rotations, subnet_iterations,
-                                           *args, num_dims)
+    return refine_rotation_iteratively(*rotations, subnet_iterations,
+                                       *args, num_dims)
 
 
-def build_iterative_rotation_subnet(rotation_features, initial_rotations,
-                                    subnet_iterations, subnet_repeats,
-                                    num_filters, bias_initializer, num_dims):
+def build_head(middle_features, num_blocks, num_filters,
+               survival_rate, bias_initializer, groups=4):
+    """Builds ClassNet/BoxNet head with batch normalization
+    replaced with group normalization. Group normalization benefits
+    training by enabling the model to train with a reduced batch size
+    at the same time heavily reducing memory consumption.
+
+    # Arguments
+        middle_features: Tuple. input features.
+        num_blocks: Int, number of intermediate layers.
+        num_filters: Int, number of intermediate layer filters.
+        survival_rate: Float, used by drop connect.
+        bias_initializer: Callable, bias initializer.
+
+    # Returns
+        head_outputs: List, with head outputs.
+    """
+    conv_blocks = build_head_conv2D(
+        num_blocks, num_filters[0], tf.zeros_initializer())
+    final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    pre_head_outputs, head_outputs = [], []
+    for x in middle_features:
+        for block_arg in range(num_blocks):
+            x = conv_blocks[block_arg](x)
+            x = GroupNormalization(groups=groups)(x)
+            x = tf.nn.swish(x)
+            if block_arg > 0 and survival_rate:
+                x = x + GetDropConnect(survival_rate=survival_rate)(x)
+        pre_head_outputs.append(x)
+        x = final_head_conv(x)
+        head_outputs.append(x)
+    return [pre_head_outputs, head_outputs]
+
+
+def refine_rotation_iteratively(rotation_features, initial_rotations,
+                                subnet_iterations, subnet_repeats,
+                                num_filters, bias_initializer, num_dims):
     """Builds iterative rotation subnets.
 
     # Arguments
@@ -91,7 +126,8 @@ def build_iterative_rotation_subnet(rotation_features, initial_rotations,
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([x, initial_rotation])
             x = refine_rotation(x, *args)
-            delta_rotation = head_conv(x)
+            x = head_conv(x)
+            delta_rotation = Activation('linear')(x)
             initial_rotation = Add()([initial_rotation, delta_rotation])
         rotation = Reshape((-1, num_dims))(initial_rotation)
         rotations.append(rotation)
