@@ -157,8 +157,7 @@ def regress_initial_translations(middles, subnet_repeats, num_filters,
         bias_initializer: Callable, bias initializer.
 
     # Returns
-        List: Containing translation_features,
-            translations_xy and translations_z.
+        List: Containing initial_features, initial_xy and initial_z.
     """
     args = (subnet_repeats, num_filters, bias_initializer)
     initial_features, initial_xy, initial_z = [], [], []
@@ -182,8 +181,7 @@ def build_translation_subnets(x, repeats, num_filters, bias_initializer):
         bias_initializer: Callable, bias initializer.
 
     # Returns
-        x: Tensor, after repeated convolution,
-            group normalization and activation.
+        List: Containing x, initial_xy and initial_z.
     """
     conv_blocks = build_head_conv2D(repeats, num_filters[0], bias_initializer)
     xy_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
@@ -248,8 +246,7 @@ def refine_translation(x, repeats, num_filters, bias_initializer):
         bias_initializer: Callable, bias initializer.
 
     # Returns
-        x: Tensor, after repeated convolution,
-            group normalization and activation.
+        List: Containing delta_xy, and delta_z.
     """
     conv_blocks = build_head_conv2D(repeats, num_filters[0], bias_initializer)
     xy_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
