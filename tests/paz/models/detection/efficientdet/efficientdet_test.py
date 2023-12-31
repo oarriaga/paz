@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Input, Flatten
 from tensorflow.keras.utils import get_file
 from paz.models.detection.efficientdet import (
     EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2, EFFICIENTDETD3,
@@ -355,6 +355,7 @@ def test_EfficientDet_ClassNet(input_shape, scaling_coefficients,
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
     _, class_outputs = ClassNet(*args, num_classes)
+    class_outputs = [Flatten()(class_output) for class_output in class_outputs]
     assert len(class_outputs) == 5, 'Class outputs length fail'
     for class_output, output_shape in zip(class_outputs, output_shapes):
         assert class_output.shape == (None, output_shape), (
@@ -401,6 +402,7 @@ def test_EfficientDet_BoxesNet(input_shape, scaling_coefficients,
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
     _, boxes_outputs = BoxesNet(*args, num_dims)
+    boxes_outputs = [Flatten()(boxes_output) for boxes_output in boxes_outputs]
     assert len(boxes_outputs) == 5
     for boxes_output, output_shape in zip(boxes_outputs, output_shapes):
         assert boxes_output.shape == (None, output_shape), (
