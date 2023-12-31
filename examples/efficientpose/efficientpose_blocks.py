@@ -59,7 +59,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
     args = (subnet_repeats, num_filters, bias_initializer)
     initial_regressions = build_head(
         middles, subnet_repeats, num_filters, survival_rate,
-        bias_initializer, normalization='batch')
+        bias_initializer, normalization='group')
     return refine_rotation_iteratively(*initial_regressions, subnet_iterations,
                                        *args, num_dims)
 
@@ -67,7 +67,7 @@ def RotationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
 def refine_rotation_iteratively(rotation_features, initial_rotations,
                                 subnet_iterations, subnet_repeats,
                                 num_filters, bias_initializer, num_dims):
-    """Builds iterative rotation subnets.
+    """Iteratively refines rotation.
 
     # Arguments
         rotation_features: List, containing features from rotation head.
@@ -170,8 +170,7 @@ def regress_initial_translations(middles, subnet_repeats, num_filters,
 
 
 def build_translation_subnets(x, repeats, num_filters, bias_initializer):
-    """Rotation refinement module. Builds group normalization blocks
-    followed by activation.
+    """Builds TranslationNet head.
 
     # Arguments
         x: Tensor, BiFPN layer output.
@@ -198,7 +197,7 @@ def build_translation_subnets(x, repeats, num_filters, bias_initializer):
 def refine_translation_iteratively(translation_features, translations_xy,
                                    translations_z, subnet_repeats, num_filters,
                                    bias_initializer, subnet_iterations):
-    """Builds iterative translation subnets.
+    """Refines translation iteratively.
 
     # Arguments
         translation_features: List, containing
@@ -235,7 +234,7 @@ def refine_translation_iteratively(translation_features, translations_xy,
 
 
 def refine_translation(x, repeats, num_filters, bias_initializer):
-    """Rotation refinement module. Builds group normalization blocks
+    """Translation refinement module. Builds group normalization blocks
     followed by activation.
 
     # Arguments

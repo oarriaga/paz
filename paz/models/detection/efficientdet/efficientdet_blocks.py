@@ -113,7 +113,7 @@ def build_head(middle_features, num_blocks, num_filters,
 
     elif normalization == 'group':
         normalizer = GroupNormalization
-        args = (int(num_filters[0] / 16))
+        args = (int(num_filters[0] / 16), )
 
     for x in middle_features:
         for block_arg in range(num_blocks):
