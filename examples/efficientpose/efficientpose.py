@@ -3,8 +3,8 @@ from tensorflow.keras.models import Model
 from paz.backend.anchors import build_anchors
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from anchors import build_translation_anchors
-from efficientdet_blocks import build_detector_head, EfficientNet_to_BiFPN
-from efficientdet_blocks import BiFPN
+from paz.models.detection.efficientdet.efficientdet_blocks import (
+    build_detector_head, EfficientNet_to_BiFPN, BiFPN)
 from efficientpose_blocks import build_pose_estimator_head
 
 WEIGHT_PATH = (
@@ -66,18 +66,16 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         raise NotImplementedError('Invalid `base_weights` with head_weights')
 
     branches, middles, skips = EfficientNet_to_BiFPN(
-        EfficientNet, FPN_num_filters, momentum, epsilon)
+        EfficientNet, FPN_num_filters)
     for _ in range(FPN_cell_repeats):
-        middles, skips = BiFPN(middles, skips, FPN_num_filters,
-                               fusion, momentum, epsilon)
+        middles, skips = BiFPN(middles, skips, FPN_num_filters, fusion)
 
     if return_base:
         outputs = middles
     else:
         detection_outputs = build_detector_head(
             middles, num_classes, num_dims, aspect_ratios, num_scales,
-            FPN_num_filters, box_class_repeats, survival_rate,
-            momentum, epsilon, activation)
+            FPN_num_filters, box_class_repeats, survival_rate)
 
         pose_outputs = build_pose_estimator_head(
             middles, subnet_iterations, subnet_repeats,
