@@ -109,7 +109,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
 
 def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
                    head_weights='LINEMOD_OCCLUDED', input_shape=(512, 512, 3),
-                   FPN_num_filters=64, FPN_cell_repeats=3, subnet_repeats=3,
+                   FPN_num_filters=64, FPN_cell_repeats=3, subnet_repeats=2,
                    subnet_iterations=1, box_class_repeats=3, anchor_scale=4.0,
                    fusion='fast', return_base=False,
                    model_name='efficientpose-a',
