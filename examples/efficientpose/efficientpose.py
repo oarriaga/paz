@@ -7,8 +7,7 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
     build_detector_head, EfficientNet_to_BiFPN, BiFPN)
 from efficientpose_blocks import build_pose_estimator_head
 
-WEIGHT_PATH = (
-    '/home/manummk95/Desktop/paz/paz/examples/efficientpose/weights/')
+WEIGHT_PATH = 'weights/'
 
 
 def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,

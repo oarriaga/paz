@@ -22,6 +22,8 @@ description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=1, type=int,
                     help='Batch size for training')
+parser.add_argument('-et', '--evaluation_period', default=10, type=int,
+                    help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=1e-4, type=float,
                     help='Initial learning rate for SGD')
 parser.add_argument('-m', '--momentum', default=0.9, type=float,
@@ -127,7 +129,8 @@ object_diameter = model_data[int(args.object_id)]['diameter']
 
 # Pose accuracy calculation pipeline
 pose_error = EvaluatePoseError(args.save_path,  evaluation_data_managers[0],
-                               inference, mesh_points, object_diameter)
+                               inference, mesh_points, object_diameter,
+                               args.evaluation_period)
 
 # training
 model.fit(

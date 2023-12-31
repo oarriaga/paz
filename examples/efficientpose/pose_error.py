@@ -97,7 +97,8 @@ class EvaluatePoseError(Callback):
         verbose: Integer. If is bigger than 1 messages would be displayed.
     """
     def __init__(self, experiment_path, evaluation_data_manager, pipeline,
-                 mesh_points, object_diameter, topic='poses6D', verbose=1):
+                 mesh_points, object_diameter, evaluation_period,
+                 topic='poses6D', verbose=1):
         self.experiment_path = experiment_path
         self.evaluation_data_manager = evaluation_data_manager
         self.images = self._load_test_images()
@@ -105,6 +106,7 @@ class EvaluatePoseError(Callback):
         self.pipeline = pipeline
         self.mesh_points = mesh_points
         self.object_diameter = object_diameter
+        self.evaluation_period = evaluation_period
         self.topic = topic
         self.verbose = verbose
 
@@ -128,38 +130,41 @@ class EvaluatePoseError(Callback):
         return gt_poses
 
     def on_epoch_end(self, epoch, logs=None):
-        sum_ADD = 0.0
-        sum_ADI = 0.0
-        sum_ADD_accuracy = 0.0
-        valid_predictions = 0
-        for image, gt_pose in zip(self.images, self.gt_poses):
-            inferences = self.pipeline(image.copy())
-            pose6D = inferences[self.topic]
-            if pose6D:
-                add_error = compute_ADD(gt_pose, pose6D[0], self.mesh_points)
-                is_correct = check_ADD(add_error, self.object_diameter)
-                sum_ADD_accuracy = sum_ADD_accuracy + float(is_correct)
-                adi_error = compute_ADI(gt_pose, pose6D[0], self.mesh_points)
-                sum_ADD = sum_ADD + add_error
-                sum_ADI = sum_ADI + adi_error
-                valid_predictions = valid_predictions + 1
+        if (epoch + 1) % self.evaluation_period == 0:
+            sum_ADD = 0.0
+            sum_ADI = 0.0
+            sum_ADD_accuracy = 0.0
+            valid_predictions = 0
+            for image, gt_pose in zip(self.images, self.gt_poses):
+                inferences = self.pipeline(image.copy())
+                pose6D = inferences[self.topic]
+                if pose6D:
+                    add_error = compute_ADD(gt_pose, pose6D[0],
+                                            self.mesh_points)
+                    is_correct = check_ADD(add_error, self.object_diameter)
+                    sum_ADD_accuracy = sum_ADD_accuracy + float(is_correct)
+                    adi_error = compute_ADI(gt_pose, pose6D[0],
+                                            self.mesh_points)
+                    sum_ADD = sum_ADD + add_error
+                    sum_ADI = sum_ADI + adi_error
+                    valid_predictions = valid_predictions + 1
 
-        error_path = os.path.join(self.experiment_path, 'error.txt')
-        if valid_predictions > 0:
-            average_ADD = sum_ADD / valid_predictions
-            average_ADD_accuracy = sum_ADD_accuracy / len(self.gt_poses)
-            average_ADI = sum_ADI / valid_predictions
-            with open(error_path, 'a') as filer:
-                filer.write('epoch: %d\n' % epoch)
-                filer.write('Estimated ADD error: %f\n' % average_ADD)
-                filer.write(
-                    'Estimated ADD accuracy: %f\n\n' % average_ADD_accuracy)
-                filer.write('Estimated ADI error: %f\n\n' % average_ADI)
-        else:
-            average_ADD = None
-            average_ADI = None
-            average_ADD_accuracy = None
-        if self.verbose:
-            print('Estimated ADD error:', average_ADD)
-            print('Estimated ADD accuracy:', average_ADD_accuracy)
-            print('Estimated ADI error:', average_ADI)
+            error_path = os.path.join(self.experiment_path, 'error.txt')
+            if valid_predictions > 0:
+                average_ADD = sum_ADD / valid_predictions
+                average_ADD_accuracy = sum_ADD_accuracy / len(self.gt_poses)
+                average_ADI = sum_ADI / valid_predictions
+                with open(error_path, 'a') as filer:
+                    filer.write('epoch: %d\n' % epoch)
+                    filer.write('Estimated ADD error: %f\n' % average_ADD)
+                    filer.write(('Estimated ADD accuracy: %f\n\n' %
+                                 average_ADD_accuracy))
+                    filer.write('Estimated ADI error: %f\n\n' % average_ADI)
+            else:
+                average_ADD = None
+                average_ADI = None
+                average_ADD_accuracy = None
+            if self.verbose:
+                print('Estimated ADD error:', average_ADD)
+                print('Estimated ADD accuracy:', average_ADD_accuracy)
+                print('Estimated ADI error:', average_ADI)
