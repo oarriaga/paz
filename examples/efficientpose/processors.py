@@ -119,12 +119,12 @@ def regress_translation(translation_raw, translation_priors):
     return translations_predicted.T
 
 
-class ComputeTxTy(Processor):
+class ComputeTxTyTz(Processor):
     """Computes the Tx and Ty components of the translation vector
     with a given 2D-point and the intrinsic camera parameters.
     """
     def __init__(self):
-        super(ComputeTxTy, self).__init__()
+        super(ComputeTxTyTz, self).__init__()
 
     def call(self, translation_xy_Tz, camera_parameter):
         return compute_tx_ty(translation_xy_Tz, camera_parameter)

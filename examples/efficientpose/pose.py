@@ -6,7 +6,7 @@ from paz.backend.image import lincolor
 from paz.pipelines.detection import PreprocessBoxes
 from efficientpose import EFFICIENTPOSEA
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        RegressTranslation, ComputeTxTy, DrawPose6D,
+                        RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
                         MatchPoses, TransformRotation, ConcatenatePoses,
                         ConcatenateScale, AugmentImageAndPose,
@@ -313,7 +313,7 @@ class EfficientPoseLinemodPostprocess(Processor):
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
-        self.compute_tx_ty = ComputeTxTy()
+        self.compute_tx_ty_tz = ComputeTxTyTz()
         self.compute_selections = ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
@@ -338,8 +338,8 @@ class EfficientPoseLinemodPostprocess(Processor):
             rotations = self.transform_rotations(rotations)
 
             translation_xy_Tz = self.regress_translation(translations)
-            translation = self.compute_tx_ty(translation_xy_Tz,
-                                             camera_parameter)
+            translation = self.compute_tx_ty_tz(translation_xy_Tz,
+                                                camera_parameter)
             translations = translation[selected_indices]
 
         poses6D = self.to_pose_6D(box_data, rotations, translations)
@@ -376,7 +376,7 @@ class EfficientPosePostprocess(Processor):
         self.round_boxes = pr.RoundBoxes2D()
         self.denormalize = pr.DenormalizeBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
-        self.compute_tx_ty = ComputeTxTy()
+        self.compute_tx_ty_tz = ComputeTxTyTz()
         self.compute_selections = ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
@@ -402,8 +402,8 @@ class EfficientPosePostprocess(Processor):
             rotations = self.transform_rotations(rotations)
 
             translation_xy_Tz = self.regress_translation(translations)
-            translation = self.compute_tx_ty(translation_xy_Tz,
-                                             camera_parameter)
+            translation = self.compute_tx_ty_tz(translation_xy_Tz,
+                                                camera_parameter)
             translations = translation[selected_indices]
 
         poses6D = self.to_pose_6D(box_data, rotations, translations)
