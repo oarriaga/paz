@@ -354,7 +354,7 @@ def test_EfficientDet_ClassNet(input_shape, scaling_coefficients,
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
-    class_outputs = ClassNet(*args, num_classes)
+    _, class_outputs = ClassNet(*args, num_classes)
     assert len(class_outputs) == 5, 'Class outputs length fail'
     for class_output, output_shape in zip(class_outputs, output_shapes):
         assert class_output.shape == (None, output_shape), (
@@ -400,7 +400,7 @@ def test_EfficientDet_BoxesNet(input_shape, scaling_coefficients,
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
-    boxes_outputs = BoxesNet(*args, num_dims)
+    _, boxes_outputs = BoxesNet(*args, num_dims)
     assert len(boxes_outputs) == 5
     for boxes_output, output_shape in zip(boxes_outputs, output_shapes):
         assert boxes_output.shape == (None, output_shape), (
