@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (GroupNormalization, Concatenate,
-                                     Add, Reshape, Activation)
+                                     Add, Reshape)
 from paz.models.detection.efficientdet.efficientdet_blocks import (
     build_head_conv2D, build_head)
 
@@ -117,8 +117,7 @@ def refine_rotation(x, repeats, num_filters, bias_initializer):
         x = conv_blocks[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
         x = tf.nn.swish(x)
-    x = head_conv(x)
-    delta_rotation = Activation('linear')(x)
+    delta_rotation = head_conv(x)
     return delta_rotation
 
 
@@ -257,7 +256,5 @@ def refine_translation(x, repeats, num_filters, bias_initializer):
         x = GroupNormalization(groups=num_groups)(x)
         x = tf.nn.swish(x)
     delta_xy = xy_head_conv(x)
-    delta_xy = Activation('linear')(delta_xy)
     delta_z = z_head_conv(x)
-    delta_z = Activation('linear')(delta_z)
     return [delta_xy, delta_z]
