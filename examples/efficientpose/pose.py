@@ -546,8 +546,7 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights=None,  momentum=0.99,
-                               epsilon=0.001, activation='softmax')
+                               head_weights=None)
         super(EFFICIENTPOSEALINEMODDRILLER, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
