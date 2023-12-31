@@ -593,7 +593,7 @@ def transform_rotation_matrix(rotation_matrix, transformation):
 
 
 def transform_translation_vector(translation, transformation):
-    return np.dot(translation, transformation.T)
+    return np.dot(transformation, translation.T)
 
 
 def scale_translation_vector(translation, scale):
