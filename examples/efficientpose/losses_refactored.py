@@ -200,4 +200,3 @@ if __name__ == "__main__":
     pose_loss = MultiPoseLoss('08', model.translation_priors,
                               'Linemod_preprocessed/')
     loss = pose_loss.compute_loss(y_true, y_pred)         # should be 1038.3807
-    print('nj')
