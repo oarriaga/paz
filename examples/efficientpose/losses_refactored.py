@@ -64,15 +64,12 @@ class MultiPoseLoss(object):
         x = translation_xy_Tz[:, :, 0] / scale
         y = translation_xy_Tz[:, :, 1] / scale
         tz = translation_xy_Tz[:, :, 2] * self.tz_scale
-
         x = x - px
         y = y - py
 
         tx = tf.math.multiply(x, tz) / fx
         ty = tf.math.multiply(y, tz) / fy
-
-        tx = tx[:, :, tf.newaxis]
-        ty = ty[:, :, tf.newaxis]
+        tx, ty = tx[:, :, tf.newaxis], ty[:, :, tf.newaxis]
         tz = tz[:, :, tf.newaxis]
         translations = tf.concat([tx, ty, tz], axis=-1)
         return translations
@@ -87,9 +84,9 @@ class MultiPoseLoss(object):
     def _rotate(self, point, axis, angle):
         cos_angle = tf.cos(angle)
         axis_dot_point = self._dot(axis, point)
-        points_rotated = (
-            point * cos_angle + self._cross(axis, point) * tf.sin(angle) +
-            axis * axis_dot_point * (1.0 - cos_angle))
+        points_rotated = (point * cos_angle + self._cross(axis, point) *
+                          tf.sin(angle) + axis * axis_dot_point *
+                          (1.0 - cos_angle))
         return points_rotated
 
     def _dot(self, vector1, vector2, axis=-1, keepdims=True):
