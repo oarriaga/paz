@@ -336,12 +336,10 @@ class EfficientPoseLinemodPostprocess(Processor):
             rotations = self.squeeze(rotations)
             rotations = rotations[selected_indices]
             rotations = self.transform_rotations(rotations)
-
             translation_xy_Tz = self.regress_translation(translations)
             translation = self.compute_tx_ty_tz(translation_xy_Tz,
                                                 camera_parameter)
             translations = translation[selected_indices]
-
         poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, poses6D
 
@@ -400,12 +398,10 @@ class EfficientPosePostprocess(Processor):
             rotations = self.squeeze(rotations)
             rotations = rotations[selected_indices]
             rotations = self.transform_rotations(rotations)
-
             translation_xy_Tz = self.regress_translation(translations)
             translation = self.compute_tx_ty_tz(translation_xy_Tz,
                                                 camera_parameter)
             translations = translation[selected_indices]
-
         poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, poses6D
 
@@ -519,8 +515,7 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights='LINEMOD_OCCLUDED', momentum=0.997,
-                               epsilon=0.0001, activation='sigmoid')
+                               head_weights='LINEMOD_OCCLUDED')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
