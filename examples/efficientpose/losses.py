@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 from plyfile import PlyData
-import math
 from pose import LINEMOD_CAMERA_MATRIX
 
 
@@ -12,7 +11,8 @@ class MultiPoseLoss(object):
         self.object_id = object_id
         self.translation_priors = translation_priors
         self.num_pose_dims = num_pose_dims
-        self.translation_scale_norm = translation_scale_norm
+        self.tz_scale = tf.convert_to_tensor(translation_scale_norm,
+                                             dtype=tf.float32)
         self.model_path = data_path + model_path + 'obj_' + object_id + '.ply'
         self.model_points = self._load_model_file()
         self.model_points = self._filter_model_points(target_num_points)
@@ -41,11 +41,10 @@ class MultiPoseLoss(object):
         return tf.convert_to_tensor(points)
 
     def _compute_translation(self, translation_raw_pred, scale):
-        camera_parameter = self._compute_camera_parameter(
-            scale, LINEMOD_CAMERA_MATRIX)
+        camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
         translation_pred = self._regress_translation(translation_raw_pred)
-        translation_pred = self._compute_tx_ty(translation_pred,
-                                               camera_parameter)
+        translation_pred = self._compute_tx_ty(translation_pred, camera_matrix,
+                                               scale)
         return translation_pred
 
     def _regress_translation(self, translation_raw):
@@ -58,29 +57,19 @@ class MultiPoseLoss(object):
         translations_predicted = tf.concat([x, y, Tz], axis=-1)
         return translations_predicted
 
-    def _compute_camera_parameter(self, image_scale, camera_matrix):
-        camera_parameter = tf.convert_to_tensor(
-            [camera_matrix[0, 0], camera_matrix[1, 1], camera_matrix[0, 2],
-             camera_matrix[1, 2], self.translation_scale_norm, image_scale])
-        return camera_parameter
+    def _compute_tx_ty(self, translation_xy_Tz, camera_matrix, scale):
+        fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+        px, py = camera_matrix[0, 2], camera_matrix[1, 2]
 
-    def _compute_tx_ty(self, translation_xy_Tz, camera_parameter):
-        fx, fy = camera_parameter[0], camera_parameter[1],
-        px, py = camera_parameter[2], camera_parameter[3],
-        tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
-
-        x = translation_xy_Tz[:, :, 0] / image_scale
-        y = translation_xy_Tz[:, :, 1] / image_scale
-        tz = translation_xy_Tz[:, :, 2] * tz_scale
-
+        x = translation_xy_Tz[:, :, 0] / scale
+        y = translation_xy_Tz[:, :, 1] / scale
+        tz = translation_xy_Tz[:, :, 2] * self.tz_scale
         x = x - px
         y = y - py
 
         tx = tf.math.multiply(x, tz) / fx
         ty = tf.math.multiply(y, tz) / fy
-
-        tx = tx[:, :, tf.newaxis]
-        ty = ty[:, :, tf.newaxis]
+        tx, ty = tx[:, :, tf.newaxis], ty[:, :, tf.newaxis]
         tz = tz[:, :, tf.newaxis]
         translations = tf.concat([tx, ty, tz], axis=-1)
         return translations
@@ -95,8 +84,10 @@ class MultiPoseLoss(object):
     def _rotate(self, point, axis, angle):
         cos_angle = tf.cos(angle)
         axis_dot_point = self._dot(axis, point)
-        return (point * cos_angle + self._cross(axis, point) *
-                tf.sin(angle) + axis * axis_dot_point * (1.0 - cos_angle))
+        points_rotated = (point * cos_angle + self._cross(axis, point) *
+                          tf.sin(angle) + axis * axis_dot_point *
+                          (1.0 - cos_angle))
+        return points_rotated
 
     def _dot(self, vector1, vector2, axis=-1, keepdims=True):
         return tf.reduce_sum(input_tensor=vector1 * vector2,
@@ -138,9 +129,9 @@ class MultiPoseLoss(object):
         indices = tf.where(tf.equal(anchor_state, 1))
 
         rotation_pred = tf.gather_nd(rotation_pred, indices)
-        rotation_pred = rotation_pred * math.pi
+        rotation_pred = rotation_pred * np.pi
         rotation_true = tf.gather_nd(rotation_true, indices)
-        rotation_true = rotation_true * math.pi
+        rotation_true = rotation_true * np.pi
         translation_pred = tf.gather_nd(translation_pred, indices)
         translation_true = tf.gather_nd(translation_true, indices)
 
