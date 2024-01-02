@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 from plyfile import PlyData
-import math
 from pose import LINEMOD_CAMERA_MATRIX
 
 
@@ -133,9 +132,9 @@ class MultiPoseLoss(object):
         indices = tf.where(tf.equal(anchor_state, 1))
 
         rotation_pred = tf.gather_nd(rotation_pred, indices)
-        rotation_pred = rotation_pred * math.pi
+        rotation_pred = rotation_pred * np.pi
         rotation_true = tf.gather_nd(rotation_true, indices)
-        rotation_true = rotation_true * math.pi
+        rotation_true = rotation_true * np.pi
         translation_pred = tf.gather_nd(translation_pred, indices)
         translation_true = tf.gather_nd(translation_true, indices)
 
