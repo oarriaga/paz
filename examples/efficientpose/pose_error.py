@@ -7,7 +7,8 @@ from paz.backend.groups import quaternion_to_rotation_matrix
 
 
 def transform_mesh_points(mesh_points, rotation, translation):
-    """Transforms the object points
+    """Transforms object points
+
       # Arguments
           mesh_points: nx3 ndarray with 3D model points.
           rotaion: Rotation matrix
@@ -22,11 +23,13 @@ def transform_mesh_points(mesh_points, rotation, translation):
 
 
 def compute_ADD(true_pose, pred_pose, mesh_points):
-    """Calculate The ADD error.
+    """Calculates ADD error.
+
       # Arguments
           true_pose: Real pose
           pred_pose: Predicted pose
           mesh_pts: nx3 ndarray with 3D model points.
+
       # Returns
           Return ADD error
     """
@@ -35,7 +38,6 @@ def compute_ADD(true_pose, pred_pose, mesh_points):
     pred_rotation = quaternion_to_rotation_matrix(quaternion)
     pred_mesh = transform_mesh_points(mesh_points, pred_rotation,
                                       pred_translation)
-
     true_rotation = true_pose[:3, :3]
     true_translation = true_pose[:3, 3]
     true_mesh = transform_mesh_points(mesh_points, true_rotation,
@@ -68,17 +70,14 @@ def compute_ADI(true_pose, pred_pose, mesh_points):
     quaternion = pred_pose.quaternion
     pred_translation = pred_pose.translation
     pred_rotation = quaternion_to_rotation_matrix(quaternion)
-
     pred_mesh = transform_mesh_points(mesh_points, pred_rotation,
                                       pred_translation)
-
     true_rotation = true_pose[:3, :3]
     true_translation = true_pose[:3, 3]
     true_mesh = transform_mesh_points(mesh_points, true_rotation,
                                       true_translation)
     nn_index = spatial.cKDTree(pred_mesh)
     nn_dists, _ = nn_index.query(true_mesh, k=1)
-
     error = nn_dists.mean()
     return error
 
@@ -92,9 +91,10 @@ class EvaluatePoseError(Callback):
         pipeline: Function that takes as input an element of ''images''
             and outputs a ''Dict'' with inferences.
         mesh_points: nx3 ndarray with 3D model points.
-        topic: Key to the ''inferences'' dictionary containing as value the
-            drawn inferences.
-        verbose: Integer. If is bigger than 1 messages would be displayed.
+        topic: Key to the ''inferences'' dictionary containing as value
+            the drawn inferences.
+        verbose: Integer. If is bigger than 1
+            messages would be displayed.
     """
     def __init__(self, experiment_path, evaluation_data_manager, pipeline,
                  mesh_points, object_diameter, evaluation_period,
