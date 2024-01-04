@@ -17,7 +17,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
                   aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None,
                   num_dims=4, num_anchors=9, num_filters=64,
                   num_pose_dims=3):
-    """Creates EfficientPose model.
+    """Builds EfficientPose model.
 
     # Arguments
         image: Tensor of shape `(batch_size, input_shape)`.
@@ -40,10 +40,6 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         aspect_ratios: List, anchor boxes aspect ratios.
         survival_rate: Float, specifying survival probability.
         num_dims: Int, number of output dimensions to regress.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         num_anchors: List, number of combinations of
             anchor box's scale and aspect ratios.
         num_filters: Int, number of subnet filters.
@@ -53,8 +49,9 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         model: EfficientPose model.
 
     # References
-        [ybkscht repository implementation of EfficientPose](
-        https://github.com/ybkscht/EfficientPose)
+        [EfficientPose: An efficient, accurate and scalable end-to-end
+        6D multi object pose estimation approach](
+            https://arxiv.org/pdf/2011.04307.pdf)
     """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
@@ -139,10 +136,6 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
@@ -164,7 +157,7 @@ def EFFICIENTPOSEB(num_classes=8, base_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientpose-b',
                    scaling_coefficients=(1.0, 1.0, 0.8)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-B model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -182,14 +175,10 @@ def EFFICIENTPOSEB(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-B model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb1 = EFFICIENTNET(image, scaling_coefficients)
@@ -207,7 +196,7 @@ def EFFICIENTPOSEC(num_classes=8, base_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientpose-c',
                    scaling_coefficients=(1.1, 1.2, 0.7)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-C model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -225,14 +214,10 @@ def EFFICIENTPOSEC(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-C model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb2 = EFFICIENTNET(image, scaling_coefficients)
@@ -250,7 +235,7 @@ def EFFICIENTPOSED(num_classes=8, base_weights='COCO',
                    fusion='fast', return_base=False,
                    model_name='efficientpose-d',
                    scaling_coefficients=(1.2, 1.4, 0.7)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-D model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -268,14 +253,10 @@ def EFFICIENTPOSED(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-D model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb3 = EFFICIENTNET(image, scaling_coefficients)
@@ -293,7 +274,7 @@ def EFFICIENTPOSEE(num_classes=8, base_weights='COCO',
                    box_class_repeats=4, anchor_scale=4.0, fusion='fast',
                    return_base=False, model_name='efficientpose-e',
                    scaling_coefficients=(1.2, 1.4, 0.7)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-E model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -311,14 +292,10 @@ def EFFICIENTPOSEE(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-E model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb4 = EFFICIENTNET(image, scaling_coefficients)
@@ -336,7 +313,7 @@ def EFFICIENTPOSEF(num_classes=8, base_weights='COCO',
                    box_class_repeats=4, anchor_scale=4.0, fusion='fast',
                    return_base=False, model_name='efficientpose-f',
                    scaling_coefficients=(1.6, 2.2, 0.6)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-F model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -354,14 +331,10 @@ def EFFICIENTPOSEF(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-F model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb5 = EFFICIENTNET(image, scaling_coefficients)
@@ -379,7 +352,7 @@ def EFFICIENTPOSEG(num_classes=8, base_weights='COCO',
                    box_class_repeats=5, anchor_scale=5.0, fusion='sum',
                    return_base=False, model_name='efficientpose-g',
                    scaling_coefficients=(1.8, 2.6, 0.5)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-G model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -397,14 +370,10 @@ def EFFICIENTPOSEG(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-G model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
@@ -422,7 +391,7 @@ def EFFICIENTPOSEH(num_classes=8, base_weights='COCO',
                    box_class_repeats=5, anchor_scale=5.0, fusion='sum',
                    return_base=False, model_name='efficientpose-h',
                    scaling_coefficients=(1.8, 2.6, 0.5)):
-    """Instantiates EfficientPose-A model.
+    """Instantiates EfficientPose-H model.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -440,14 +409,10 @@ def EFFICIENTPOSEH(num_classes=8, base_weights='COCO',
         fusion: Str, feature fusion weighting method.
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
-        momentum: Float, batch normalization moving average momentum.
-        epsilon: Float, small float added to
-            variance to avoid division by zero.
-        activation: Str, activation function for classes.
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose-H model.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
