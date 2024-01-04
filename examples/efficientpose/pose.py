@@ -64,6 +64,8 @@ class AugmentPose(SequentialProcessor):
         IOU: Float. Intersection over union used to match boxes.
         variances: List of two floats indicating variances to be encoded
             for encoding bounding boxes.
+        probability: Float indicating the probability
+            of data augmentation.
         num_pose_dims: Int, number of dimensions for pose.
     """
     def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
@@ -126,10 +128,10 @@ class DetectAndEstimatePose(Processor):
         preprocess: Callable, preprocessing pipeline.
         postprocess: Callable, postprocessing pipeline.
         variances: List of float values.
-        show_boxes2D: Boolean. If ``True`` prediction
-            are drawn in the returned image.
-        show_poses6D: Boolean. If ``True`` estimated poses
-            are drawn in the returned image.
+        show_boxes2D: Boolean. If ``True`` prediction are drawn
+            in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses are drawn
+            in the returned image.
 
     # Properties
         model: Keras model.
@@ -249,8 +251,6 @@ class EfficientPosePreprocess(Processor):
     # Arguments
         model: Keras model.
         mean: Tuple, containing mean per channel on ImageNet.
-        standard_deviation: Tuple, containing standard deviations
-            per channel on ImageNet.
         camera_matrix:  Array of shape `(3, 3)` camera matrix.
         translation_scale_norm: Float, factor to change units.
             EfficientPose internally works with meter and if the
@@ -502,9 +502,10 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
         show_poses6D: Boolean. If ``True`` estimated poses
             are drawn in the returned image.
 
-    # References
-        [ybkscht repository implementation of EfficientPose](
-        https://github.com/ybkscht/EfficientPose)
+     # References
+        [EfficientPose: An efficient, accurate and scalable end-to-end
+        6D multi object pose estimation approach](
+            https://arxiv.org/pdf/2011.04307.pdf)
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
@@ -528,9 +529,10 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
         show_poses6D: Boolean. If ``True`` estimated poses
             are drawn in the returned image.
 
-    # References
-        [ybkscht repository implementation of EfficientPose](
-        https://github.com/ybkscht/EfficientPose)
+     # References
+        [EfficientPose: An efficient, accurate and scalable end-to-end
+        6D multi object pose estimation approach](
+            https://arxiv.org/pdf/2011.04307.pdf)
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
