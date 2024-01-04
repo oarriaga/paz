@@ -15,7 +15,7 @@ LINEMOD_CAMERA_MATRIX = np.array([
 
 class ComputeResizingShape(Processor):
     """Computes the final size of the image to be scaled by `size`
-    such that the maximum dimension of the image is equal to `size`.
+    such that the largest dimension of the image is equal to `size`.
 
     # Arguments
         size: Int, final size of maximum dimension of the image.
@@ -29,12 +29,22 @@ class ComputeResizingShape(Processor):
 
 
 def compute_resizing_shape(image, size):
+    """Computes the final size of the image to be scaled by `size`
+    such that the largest dimension of the image is equal to `size`.
+
+    # Arguments
+        image: Array, raw image to be scaled.
+        size: Int, final size of the image.
+
+    # Returns
+        List: Containing final shape of image and scale.
+    """
     H, W = image.shape[:2]
     image_scale = size / max(H, W)
     resizing_W = int(W * image_scale)
     resizing_H = int(H * image_scale)
     resizing_shape = (resizing_W, resizing_H)
-    return resizing_shape, np.array(image_scale)
+    return [resizing_shape, np.array(image_scale)]
 
 
 class PadImage(Processor):
@@ -54,6 +64,16 @@ class PadImage(Processor):
 
 
 def pad_image(image, size, mode):
+    """Pads the image to the final size `size`.
+
+    # Arguments
+        image: Array, image to be padded.
+        size: Int, final size of the image.
+        mode: Str, specifying the type of padding.
+
+    # Returns
+        Array: Padded image.
+    """
     H, W = image.shape[:2]
     pad_H = size - H
     pad_W = size - W
@@ -84,14 +104,28 @@ class ComputeCameraParameter(Processor):
 
 def compute_camera_parameter(image_scale, camera_matrix,
                              translation_scale_norm):
+    """Computes camera parameter given camera matrix
+    and scale normalization factor of translation.
+
+    # Arguments
+        image_scale: Array, scale of image.
+        camera_matrix: Array, Camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+
+    # Returns
+        Array: of shape `(6,)` Camera parameter.
+    """
     return np.array([camera_matrix[0, 0], camera_matrix[1, 1],
                      camera_matrix[0, 2], camera_matrix[1, 2],
                      translation_scale_norm, image_scale])
 
 
 class RegressTranslation(Processor):
-    """Applies regression offset values to translation
-    anchors to get the 2D translation center-point and Tz.
+    """Applies regression offset values to translation anchors
+    to get the 2D translation center-point and Tz.
 
     # Arguments
         translation_priors: Array of shape `(num_boxes, 3)`,
@@ -106,6 +140,17 @@ class RegressTranslation(Processor):
 
 
 def regress_translation(translation_raw, translation_priors):
+    """Applies regression offset values to translation anchors
+    to get the 2D translation center-point and Tz.
+
+    # Arguments
+        translation_raw: Array of shape `(1, num_boxes, 3)`,
+        translation_priors: Array of shape `(num_boxes, 3)`,
+            translation anchors.
+
+    # Returns
+        Array: of shape `(num_boxes, 3)`.
+    """
     stride = translation_priors[:, -1]
     x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
     y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
@@ -125,6 +170,16 @@ class ComputeTxTyTz(Processor):
 
 
 def compute_tx_ty(translation_xy_Tz, camera_parameter):
+    """Computes the Tx and Ty components of the translation vector
+    with a given 2D-point and the intrinsic camera parameters.
+
+    # Arguments
+        translation_xy_Tz: Array of shape `(num_boxes, 3)`,
+        camera_parameter: Array: of shape `(6,)` camera parameter.
+
+    # Returns
+        Array: of shape `(num_boxes, 3)`.
+    """
     fx, fy = camera_parameter[0], camera_parameter[1],
     px, py = camera_parameter[2], camera_parameter[3],
     tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
@@ -153,6 +208,16 @@ class ComputeSelectedIndices(Processor):
 
 
 def compute_selected_indices(box_data_all, box_data):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+
+    # Arguments
+        box_data_all: Array of shape `(num_boxes, 5)`,
+        box_data: Array: of shape `(n, 5)` box data.
+
+    # Returns
+        Array: of shape `(n, 3)`.
+    """
     box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
     box_data_tuple = [tuple(row) for row in box_data[:, :4]]
     location_indices = []
@@ -167,8 +232,8 @@ class ToPose6D(Processor):
     translations into `Pose6D` messages.
 
     # Arguments
-        class_names: List of class names ordered with respect to the
-            class indices from the dataset ``boxes``.
+        class_names: List of class names ordered with respect
+            to the class indices from the dataset ``boxes``.
         one_hot_encoded: Bool, indicating if scores are one hot vectors.
         default_score: Float, score to set.
         default_class: Str, class to set.
@@ -350,6 +415,17 @@ class MatchPoses(Processor):
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
+    """Match prior boxes with poses with ground truth boxes and poses.
+
+    # Arguments
+        boxes: Array of shape `(n, 5)`.
+        poses: Array of shape `(n, 5)`.
+        prior_boxes: Array of shape `(num_boxes, 4)`.
+        iou_threshold: Floats, IOU threshold value.
+
+    # Returns
+        matched_poses: Array of shape `(num_boxes, 6)`.
+    """
     matched_poses = np.zeros((prior_boxes.shape[0], poses.shape[1] + 1))
     ious = compute_ious(boxes, to_corner_form(np.float32(prior_boxes)))
     per_prior_which_box_iou = np.max(ious, axis=0)
@@ -383,6 +459,15 @@ class TransformRotation(Processor):
 
 
 def transform_rotation(rotations, num_pose_dims):
+    """Computes axis angle rotation vector from a rotation matrix.
+
+    # Arguments:
+        rotation: Array, of shape `(n, 9)`.
+        num_pose_dims: Int, number of pose dimensions.
+
+    # Returns:
+        Array: of shape (n, 5) containing axis angle vector.
+    """
     final_axis_angles = []
     for rotation in rotations:
         final_axis_angle = np.zeros((num_pose_dims + 2))
