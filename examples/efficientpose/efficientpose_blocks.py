@@ -7,24 +7,23 @@ from paz.models.detection.efficientdet.efficientdet_blocks import (
 
 def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
                               num_anchors, num_filters, num_dims):
-    """Builds EfficientPose pose estimator's head.
-    The built head includes RotationNet and TranslationNet
-    for estimating rotation and translation respectively.
+    """Builds EfficientPose pose estimator head
+    containing RotationNet and TranslationNet for
+    estimation of rotation and translation of the object respectively.
 
     # Arguments
         middles: List, BiFPN layer output.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         subnet_repeats: Int, number of layers used in subnetworks.
-        num_anchors: List, number of combinations of
-            anchor box's scale and aspect ratios.
+        num_anchors: List, number of combinations of anchor box's scale
+            and aspect ratios.
         num_filters: Int, number of subnet filters.
         num_dims: Int, number of pose dimensions.
 
     # Returns
-        List: Containing estimated rotations and translations of shape
-        `(None, num_boxes, num_dims)` and
-        `(None, num_boxes, num_dims)` respectively.
+        Tensor: Concatenation of estimated rotations and translations
+            of shape `(None, num_boxes, num_dims + num_dims)`
     """
     args = (middles, subnet_iterations, subnet_repeats, num_anchors)
     rotations = RotationNet(*args, num_filters, num_dims)
@@ -41,8 +40,8 @@ def RotationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
 
     # Arguments
         middles: List, BiFPN layer output.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         subnet_repeats: Int, number of layers used in subnetworks.
         num_anchors: List, number of combinations of
             anchor box's scale and aspect ratios.
@@ -70,15 +69,16 @@ def refine_rotation_iteratively(rotation_features, initial_rotations,
     # Arguments
         rotation_features: List, containing features from rotation head.
         initial_rotations: List, containing initial rotation values.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         subnet_repeats: Int, number of layers used in subnetworks.
         num_filters: Int, number of subnet filters.
         bias_initializer: Callable, bias initializer.
         num_dims: Int, number of pose dimensions.
 
     # Returns
-        rotations: List, containing final rotation values.
+        rotations: List, containing final rotation values from every
+        feature level.
     """
     rotations = []
     iterator = zip(rotation_features, initial_rotations)
@@ -95,15 +95,15 @@ def refine_rotation_iteratively(rotation_features, initial_rotations,
 
 def refine_rotation(x, repeats, num_filters, bias_initializer,
                     channels_per_group=16):
-    """Rotation refinement module. Builds group normalization blocks
-    followed by activation.
+    """Builds rotation refinement module.
 
     # Arguments
         x: Tensor, BiFPN layer output.
-        conv_blocks: List, containing convolutional blocks.
         repeats: Int, number of layers used in subnetworks.
-        gn_groups: Int, number of groups in group normalization.
-        gn_axis: Int, group normalization axis.
+        num_filters: Int, number of subnet filters.
+        bias_initializer: Callable, bias initializer.
+        channels_per_group: Int, number of channels per group
+            of Batchnormalization.
 
     # Returns
         delta_rotation: Tensor, after repeated convolution,
@@ -125,11 +125,11 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
 
     # Arguments
         middles: List, BiFPN layer output.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         subnet_repeats: Int, number of layers used in subnetworks.
-        num_anchors: List, number of combinations of
-            anchor box's scale and aspect ratios.
+        num_anchors: List, number of combinations of anchor box's scale
+            and aspect ratios.
         num_filters: Int, number of subnet filters.
 
     # Returns
@@ -176,6 +176,8 @@ def build_translation_subnets(x, repeats, num_filters, bias_initializer,
         repeats: Int, number of layers used in subnetworks.
         num_filters: Int, number of subnet filters.
         bias_initializer: Callable, bias initializer.
+        channels_per_group: Int, number of channels per group
+            of Batchnormalization.
 
     # Returns
         List: Containing x, initial_xy and initial_z.
@@ -197,20 +199,21 @@ def refine_translation_iteratively(translation_features, translations_xy,
     """Refines translation iteratively.
 
     # Arguments
-        translation_features: List, containing
-            features from translation head.
-        translations_xy: List, containing translations
-            in XY directions from translation head.
-        translations_z: List, containing translations
-            in Z directions from translation head.
+        translation_features: List, containing features
+            from translation head.
+        translations_xy: List, containing translations in XY directions
+            from translation head.
+        translations_z: List, containing translations in Z directions
+            from translation head.
         subnet_repeats: Int, number of layers used in subnetworks.
         num_filters: Int, number of subnet filters.
         bias_initializer: Callable, bias initializer.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
 
     # Returns
-        translations: List, containing final translation values.
+        translations: List, containing final translation values
+            from every feature level.
     """
     translations = []
     args = (subnet_repeats, num_filters, bias_initializer)
@@ -232,14 +235,15 @@ def refine_translation_iteratively(translation_features, translations_xy,
 
 def refine_translation(x, repeats, num_filters, bias_initializer,
                        channels_per_group=16):
-    """Translation refinement module. Builds group normalization blocks
-    followed by activation.
+    """Translation refinement module.
 
     # Arguments
         x: Tensor, BiFPN layer output.
         repeats: Int, number of layers used in subnetworks.
         num_filters: Int, number of subnet filters.
         bias_initializer: Callable, bias initializer.
+        channels_per_group: Int, number of channels per group
+            of Batchnormalization.
 
     # Returns
         List: Containing delta_xy, and delta_z.

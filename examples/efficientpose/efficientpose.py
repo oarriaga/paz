@@ -33,15 +33,15 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
         return_base: Bool, whether to return base or not.
         model_name: Str, EfficientDet model name.
         EfficientNet: List, containing branch tensors.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         subnet_repeats: Int, number of layers used in subnetworks.
         num_scales: Int, number of anchor box scales.
         aspect_ratios: List, anchor boxes aspect ratios.
         survival_rate: Float, specifying survival probability.
         num_dims: Int, number of output dimensions to regress.
-        num_anchors: List, number of combinations of
-            anchor box's scale and aspect ratios.
+        num_anchors: List, number of combinations of anchor box's scale
+            and aspect ratios.
         num_filters: Int, number of subnet filters.
         num_pose_dims: Int, number of pose dimensions.
 
@@ -128,8 +128,8 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -167,8 +167,8 @@ def EFFICIENTPOSEB(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -206,8 +206,8 @@ def EFFICIENTPOSEC(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -245,8 +245,8 @@ def EFFICIENTPOSED(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -284,8 +284,8 @@ def EFFICIENTPOSEE(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -323,8 +323,8 @@ def EFFICIENTPOSEF(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -362,8 +362,8 @@ def EFFICIENTPOSEG(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
@@ -401,8 +401,8 @@ def EFFICIENTPOSEH(num_classes=8, base_weights='COCO',
         FPN_num_filters: Int, number of FPN filters.
         FPN_cell_repeats: Int, number of FPN blocks.
         subnet_repeats: Int, number of layers used in subnetworks.
-        subnet_iterations: Int, number of iterative refinement
-            steps used in rotation and translation subnets.
+        subnet_iterations: Int, number of iterative refinement steps
+            used in rotation and translation subnets.
         box_class_repeats: Int, Number of regression
             and classification blocks.
         anchor_scale: Int, number of anchor scales.
