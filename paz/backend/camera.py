@@ -325,7 +325,7 @@ class VideoPlayer(object):
         writer.release()
         cv2.destroyAllWindows()
 
-    def extract_frames_from_video(self, video_file_path, frame_arg=20):
+    def extract_frames_from_video(self, video_file_path, frame_diff=20):
         """Load video and split into frames.
 
         # Arguments
@@ -347,7 +347,7 @@ class VideoPlayer(object):
                 image = resize_image(frame, tuple(self.image_size))
                 image_path = os.path.join('./images', str(frame_arg) + '.jpg')
                 image = convert_color_space(image, BGR2RGB)
-                if frame_arg % frame_arg == 0:
+                if frame_arg % frame_diff == 0:
                     write_image(image_path, image)
                 frame_arg += 1
                 if cv2.waitKey(1) & 0xFF == ord('q'):
