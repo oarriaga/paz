@@ -5,7 +5,12 @@ import paz.processors as pr
 from paz.processors.draw import (quaternion_to_rotation_matrix,
                                  project_to_image, draw_cube)
 from paz.backend.boxes import compute_ious, to_corner_form
-from pose import LINEMOD_CAMERA_MATRIX
+
+LINEMOD_CAMERA_MATRIX = np.array([
+    [572.41140, 000.00000, 325.26110],
+    [000.00000, 573.57043, 242.04899],
+    [000.00000, 000.00000, 001.00000]],
+    dtype=np.float32)
 
 
 class ComputeResizingShape(Processor):
