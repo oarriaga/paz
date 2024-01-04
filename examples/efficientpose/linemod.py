@@ -176,6 +176,7 @@ class LINEMODParser(object):
             # Get mask path
             mask_path = (self.split_prefix + self.object_id
                          + '/' + 'mask' + '/' + datum_file + '.png')
+
             # Append class to box data
             box_data = np.concatenate(
                 (box_data, np.array([[class_arg]])), axis=-1)
