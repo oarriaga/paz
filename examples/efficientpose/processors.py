@@ -58,8 +58,7 @@ def pad_image(image, size, mode):
     pad_H = size - H
     pad_W = size - W
     pad_shape = [(0, pad_H), (0, pad_W), (0, 0)]
-    image = np.pad(image, pad_shape, mode=mode)
-    return image
+    return np.pad(image, pad_shape, mode=mode)
 
 
 class ComputeCameraParameter(Processor):
@@ -85,13 +84,9 @@ class ComputeCameraParameter(Processor):
 
 def compute_camera_parameter(image_scale, camera_matrix,
                              translation_scale_norm):
-    camera_parameter = np.array([camera_matrix[0, 0],
-                                 camera_matrix[1, 1],
-                                 camera_matrix[0, 2],
-                                 camera_matrix[1, 2],
-                                 translation_scale_norm,
-                                 image_scale])
-    return camera_parameter
+    return np.array([camera_matrix[0, 0], camera_matrix[1, 1],
+                     camera_matrix[0, 2], camera_matrix[1, 2],
+                     translation_scale_norm, image_scale])
 
 
 class RegressTranslation(Processor):
@@ -115,8 +110,7 @@ def regress_translation(translation_raw, translation_priors):
     x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
     y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
     Tz = translation_raw[:, :, 2]
-    translations_predicted = np.concatenate((x, y, Tz), axis=0)
-    return translations_predicted.T
+    return np.concatenate((x, y, Tz), axis=0).T
 
 
 class ComputeTxTyTz(Processor):
@@ -147,8 +141,7 @@ def compute_tx_ty(translation_xy_Tz, camera_parameter):
 
     tx, ty, tz = tx[np.newaxis, :], ty[np.newaxis, :], tz[np.newaxis, :]
 
-    translations = np.concatenate((tx, ty, tz), axis=0)
-    return translations.T
+    return np.concatenate((tx, ty, tz), axis=0).T
 
 
 class ComputeSelectedIndices(Processor):
@@ -357,8 +350,7 @@ class MatchPoses(Processor):
         super(MatchPoses, self).__init__()
 
     def call(self, boxes, poses):
-        matched_poses = match_poses(boxes, poses, self.prior_boxes, self.iou)
-        return matched_poses
+        return match_poses(boxes, poses, self.prior_boxes, self.iou)
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
@@ -392,9 +384,7 @@ class TransformRotation(Processor):
         super(TransformRotation, self).__init__()
 
     def call(self, rotations):
-        transformed_rotations = transform_rotation(rotations,
-                                                   self.num_pose_dims)
-        return transformed_rotations
+        return transform_rotation(rotations, self.num_pose_dims)
 
 
 def transform_rotation(rotations, num_pose_dims):
@@ -407,8 +397,7 @@ def transform_rotation(rotations, num_pose_dims):
         final_axis_angle[:3] = axis_angle
         final_axis_angle = np.expand_dims(final_axis_angle, axis=0)
         final_axis_angles.append(final_axis_angle)
-    final_axis_angles = np.concatenate(final_axis_angles, axis=0)
-    return final_axis_angles
+    return np.concatenate(final_axis_angles, axis=0)
 
 
 class ConcatenatePoses(Processor):
@@ -422,8 +411,7 @@ class ConcatenatePoses(Processor):
         super(ConcatenatePoses, self).__init__()
 
     def call(self, rotations, translations):
-        poses_combined = concatenate_poses(rotations, translations)
-        return poses_combined
+        return concatenate_poses(rotations, translations)
 
 
 def concatenate_poses(rotations, translations):
@@ -441,15 +429,13 @@ class ConcatenateScale(Processor):
         super(ConcatenateScale, self).__init__()
 
     def call(self, poses, scale):
-        poses_combined = concatenate_scale(poses, scale)
-        return poses_combined
+        return concatenate_scale(poses, scale)
 
 
 def concatenate_scale(poses, scale):
     scale = np.repeat(scale, poses.shape[0])
     scale = scale[np.newaxis, :]
-    poses = np.concatenate((poses, scale.T), axis=1)
-    return poses
+    return np.concatenate((poses, scale.T), axis=1)
 
 
 class ScaleBoxes2D(Processor):
@@ -462,8 +448,7 @@ class ScaleBoxes2D(Processor):
         super(ScaleBoxes2D, self).__init__()
 
     def call(self, boxes2D, scale):
-        boxes2D = scale_boxes2D(boxes2D, scale)
-        return boxes2D
+        return scale_boxes2D(boxes2D, scale)
 
 
 def scale_boxes2D(boxes2D, scale):
@@ -746,8 +731,7 @@ class Solarize(Processor):
 
 
 def solarize(image, threshold):
-    solarized = np.where(image < threshold, image, 255 - image)
-    return solarized
+    return np.where(image < threshold, image, 255 - image)
 
 
 class SharpenImage(Processor):
@@ -763,8 +747,7 @@ class SharpenImage(Processor):
 
 
 def sharpen_image(image, kernel):
-    sharpened = cv2.filter2D(image, -1, kernel)
-    return sharpened
+    return cv2.filter2D(image, -1, kernel)
 
 
 class Cutout(Processor):
