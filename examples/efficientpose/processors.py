@@ -150,7 +150,6 @@ class ComputeSelectedIndices(Processor):
 def compute_selected_indices(box_data_all, box_data):
     box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
     box_data_tuple = [tuple(row) for row in box_data[:, :4]]
-
     location_indices = []
     for tuple_element in box_data_tuple:
         location_index = box_data_all_tuple.index(tuple_element)
