@@ -32,8 +32,7 @@ def build_pose_estimator_head(middles, subnet_iterations, subnet_repeats,
     translations = TranslationNet(*args, num_filters)
     translations = Concatenate(axis=1)(translations)
     concatenate_transformation = Concatenate(axis=-1, name='transformation')
-    transformations = concatenate_transformation([rotations, translations])
-    return transformations
+    return concatenate_transformation([rotations, translations])
 
 
 def RotationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
@@ -54,12 +53,11 @@ def RotationNet(middles, subnet_iterations, subnet_repeats, num_anchors,
     # Returns
         List: containing rotation estimates from every feature level.
     """
-    num_filters = [num_filters, num_dims * num_anchors]
     bias_initializer = tf.zeros_initializer()
+    num_filters = [num_filters, num_dims * num_anchors]
     args = (subnet_repeats, num_filters, bias_initializer)
-    initial_regressions = build_head(
-        middles, subnet_repeats, num_filters, survival_rate,
-        bias_initializer, normalization='group')
+    initial_regressions = build_head(middles, *args, survival_rate,
+                                     normalization='group')
     return refine_rotation_iteratively(*initial_regressions, subnet_iterations,
                                        *args, num_dims)
 
@@ -82,9 +80,9 @@ def refine_rotation_iteratively(rotation_features, initial_rotations,
     # Returns
         rotations: List, containing final rotation values.
     """
-    args = (subnet_repeats, num_filters, bias_initializer)
     rotations = []
     iterator = zip(rotation_features, initial_rotations)
+    args = (subnet_repeats, num_filters, bias_initializer)
     for rotation_feature, initial_rotation in iterator:
         for _ in range(subnet_iterations):
             x = Concatenate(axis=-1)([rotation_feature, initial_rotation])
@@ -95,7 +93,8 @@ def refine_rotation_iteratively(rotation_features, initial_rotations,
     return rotations
 
 
-def refine_rotation(x, repeats, num_filters, bias_initializer):
+def refine_rotation(x, repeats, num_filters, bias_initializer,
+                    channels_per_group=16):
     """Rotation refinement module. Builds group normalization blocks
     followed by activation.
 
@@ -110,15 +109,14 @@ def refine_rotation(x, repeats, num_filters, bias_initializer):
         delta_rotation: Tensor, after repeated convolution,
             group normalization and activation.
     """
-    conv_blocks = build_head_conv2D(repeats, num_filters[0], bias_initializer)
-    head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    num_groups = int(num_filters[0] / 16)
+    conv_body = build_head_conv2D(repeats, num_filters[0], bias_initializer)
+    conv_head = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    num_groups = int(num_filters[0] / channels_per_group)
     for block_arg in range(repeats):
-        x = conv_blocks[block_arg](x)
+        x = conv_body[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
         x = tf.nn.swish(x)
-    delta_rotation = head_conv(x)
-    return delta_rotation
+    return conv_head(x)
 
 
 def TranslationNet(middles, subnet_iterations, subnet_repeats,
@@ -137,8 +135,8 @@ def TranslationNet(middles, subnet_iterations, subnet_repeats,
     # Returns
         List: containing translation estimates from every feature level.
     """
-    num_filters = [num_filters, num_anchors * 2, num_anchors]
     bias_initializer = tf.zeros_initializer()
+    num_filters = [num_filters, num_anchors * 2, num_anchors]
     args = (subnet_repeats, num_filters, bias_initializer)
     initial_regressions = regress_initial_translations(middles, *args)
     return refine_translation_iteratively(*initial_regressions,
@@ -158,8 +156,8 @@ def regress_initial_translations(middles, subnet_repeats, num_filters,
     # Returns
         List: Containing initial_features, initial_xy and initial_z.
     """
-    args = (subnet_repeats, num_filters, bias_initializer)
     initial_features, initial_xy, initial_z = [], [], []
+    args = (subnet_repeats, num_filters, bias_initializer)
     for x in middles:
         initial_translations = build_translation_subnets(x, *args)
         x, initial_translation_xy, initial_translation_z = initial_translations
@@ -169,7 +167,8 @@ def regress_initial_translations(middles, subnet_repeats, num_filters,
     return [initial_features, initial_xy, initial_z]
 
 
-def build_translation_subnets(x, repeats, num_filters, bias_initializer):
+def build_translation_subnets(x, repeats, num_filters, bias_initializer,
+                              channels_per_group=16):
     """Builds TranslationNet head.
 
     # Arguments
@@ -181,17 +180,15 @@ def build_translation_subnets(x, repeats, num_filters, bias_initializer):
     # Returns
         List: Containing x, initial_xy and initial_z.
     """
-    conv_blocks = build_head_conv2D(repeats, num_filters[0], bias_initializer)
-    xy_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    z_head_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
-    num_groups = int(num_filters[0] / 16)
+    conv_body = build_head_conv2D(repeats, num_filters[0], bias_initializer)
+    conv_head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    conv_head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
+    num_groups = int(num_filters[0] / channels_per_group)
     for block_arg in range(repeats):
-        x = conv_blocks[block_arg](x)
+        x = conv_body[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
         x = tf.nn.swish(x)
-    initial_xy = xy_head_conv(x)
-    initial_z = z_head_conv(x)
-    return [x, initial_xy, initial_z]
+    return [x, conv_head_xy(x), conv_head_z(x)]
 
 
 def refine_translation_iteratively(translation_features, translations_xy,
@@ -215,8 +212,8 @@ def refine_translation_iteratively(translation_features, translations_xy,
     # Returns
         translations: List, containing final translation values.
     """
-    args = (subnet_repeats, num_filters, bias_initializer)
     translations = []
+    args = (subnet_repeats, num_filters, bias_initializer)
     iterator = zip(translation_features, translations_xy, translations_z)
     for translation_feature, translation_xy, translation_z in iterator:
         for _ in range(subnet_iterations):
@@ -233,7 +230,8 @@ def refine_translation_iteratively(translation_features, translations_xy,
     return translations
 
 
-def refine_translation(x, repeats, num_filters, bias_initializer):
+def refine_translation(x, repeats, num_filters, bias_initializer,
+                       channels_per_group=16):
     """Translation refinement module. Builds group normalization blocks
     followed by activation.
 
@@ -246,14 +244,12 @@ def refine_translation(x, repeats, num_filters, bias_initializer):
     # Returns
         List: Containing delta_xy, and delta_z.
     """
-    conv_blocks = build_head_conv2D(repeats, num_filters[0], bias_initializer)
-    xy_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    z_head_conv = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
-    num_groups = int(num_filters[0] / 16)
+    conv_body = build_head_conv2D(repeats, num_filters[0], bias_initializer)
+    conv_head_xy = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
+    conv_head_z = build_head_conv2D(1, num_filters[2], bias_initializer)[0]
+    num_groups = int(num_filters[0] / channels_per_group)
     for block_arg in range(repeats):
-        x = conv_blocks[block_arg](x)
+        x = conv_body[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
         x = tf.nn.swish(x)
-    delta_xy = xy_head_conv(x)
-    delta_z = z_head_conv(x)
-    return [delta_xy, delta_z]
+    return [conv_head_xy(x), conv_head_z(x)]

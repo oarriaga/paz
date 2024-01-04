@@ -10,7 +10,8 @@ from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
 from linemod import LINEMOD
-from pose import AugmentPose, EFFICIENTPOSEA, EFFICIENTPOSEALINEMODDRILLER
+from efficientpose import EFFICIENTPOSEA
+from pose import AugmentPose, EFFICIENTPOSEALINEMODDRILLER
 from losses import MultiPoseLoss
 from pose_error import EvaluatePoseError
 

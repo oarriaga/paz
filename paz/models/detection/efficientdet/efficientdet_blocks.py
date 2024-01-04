@@ -63,8 +63,8 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     """
     bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
     num_filters = [num_filters, num_classes * num_anchors]
-    return build_head(features, num_blocks, num_filters, survival_rate,
-                      bias_initializer)
+    return build_head(features, num_blocks, num_filters,
+                      bias_initializer, survival_rate)
 
 
 def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
@@ -84,20 +84,20 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     """
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
-    return build_head(features, num_blocks, num_filters, survival_rate,
-                      bias_initializer)
+    return build_head(features, num_blocks, num_filters,
+                      bias_initializer, survival_rate)
 
 
 def build_head(middle_features, num_blocks, num_filters,
-               survival_rate, bias_initializer, normalization='batch'):
+               bias_initializer, survival_rate, normalization='batch'):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
         middle_features: Tuple. input features.
         num_blocks: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
-        survival_rate: Float, used by drop connect.
         bias_initializer: Callable, bias initializer.
+        survival_rate: Float, used by drop connect.
 
     # Returns
         head_outputs: List, with head outputs.
