@@ -130,12 +130,9 @@ def compute_tx_ty(translation_xy_Tz, camera_parameter):
 
     x = x - px
     y = y - py
-
     tx = np.multiply(x, tz) / fx
     ty = np.multiply(y, tz) / fy
-
     tx, ty, tz = tx[np.newaxis, :], ty[np.newaxis, :], tz[np.newaxis, :]
-
     return np.concatenate((tx, ty, tz), axis=0).T
 
 
@@ -358,7 +355,6 @@ def match_poses(boxes, poses, prior_boxes, iou_threshold):
     for box_arg in range(len(per_box_which_prior_arg)):
         best_prior_box_arg = per_box_which_prior_arg[box_arg]
         per_prior_which_box_arg[best_prior_box_arg] = box_arg
-
     matched_poses[:, :-1] = poses[per_prior_which_box_arg]
     matched_poses[per_prior_which_box_iou >= iou_threshold, -1] = 1
     return matched_poses
@@ -497,7 +493,6 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
         image, transformation, cv2.INTER_CUBIC)
     augmented_mask = apply_transformation(
         mask, transformation, cv2.INTER_NEAREST)
-
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
     rotation_vector = compute_rotation_vector(angle)
@@ -665,7 +660,6 @@ class EqualizeHistogram(Processor):
 def equalize_histogram(image):
     equalized = np.empty_like(image)
     num_channels = image.shape[2]
-
     for channel_arg in range(num_channels):
         image_per_channel = image[:, :, channel_arg]
         equalized_per_channel = cv2.equalizeHist(image_per_channel)
