@@ -9,8 +9,7 @@ from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
                         MatchPoses, TransformRotation, ConcatenatePoses,
-                        ConcatenateScale, Augment6DOF,
-                        AugmentColorspace)
+                        ConcatenateScale, Augment6DOF, AugmentColorspace)
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
