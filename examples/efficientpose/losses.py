@@ -21,8 +21,7 @@ class MultiPoseLoss(object):
         model_data = PlyData.read(self.model_path)
         vertex = model_data['vertex'][:]
         vertices = [vertex['x'], vertex['y'], vertex['z']]
-        model_points = np.stack(vertices, axis=-1)
-        return model_points
+        return np.stack(vertices, axis=-1)
 
     def _filter_model_points(self, target_num_points):
         num_points = self.model_points.shape[0]
@@ -43,9 +42,7 @@ class MultiPoseLoss(object):
     def _compute_translation(self, translation_raw_pred, scale):
         camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
         translation_pred = self._regress_translation(translation_raw_pred)
-        translation_pred = self._compute_tx_ty(translation_pred, camera_matrix,
-                                               scale)
-        return translation_pred
+        return self._compute_tx_ty_tz(translation_pred, camera_matrix, scale)
 
     def _regress_translation(self, translation_raw):
         stride = self.translation_priors[:, -1]
@@ -54,10 +51,9 @@ class MultiPoseLoss(object):
         x, y = x[:, :, tf.newaxis], y[:, :, tf.newaxis]
         Tz = translation_raw[:, :, 2]
         Tz = Tz[:, :, tf.newaxis]
-        translations_predicted = tf.concat([x, y, Tz], axis=-1)
-        return translations_predicted
+        return tf.concat([x, y, Tz], axis=-1)
 
-    def _compute_tx_ty(self, translation_xy_Tz, camera_matrix, scale):
+    def _compute_tx_ty_tz(self, translation_xy_Tz, camera_matrix, scale):
         fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
         px, py = camera_matrix[0, 2], camera_matrix[1, 2]
 
@@ -71,23 +67,20 @@ class MultiPoseLoss(object):
         ty = tf.math.multiply(y, tz) / fy
         tx, ty = tx[:, :, tf.newaxis], ty[:, :, tf.newaxis]
         tz = tz[:, :, tf.newaxis]
-        translations = tf.concat([tx, ty, tz], axis=-1)
-        return translations
+        return tf.concat([tx, ty, tz], axis=-1)
 
     def _separate_axis_from_angle(self, axis_angle):
         squared = tf.math.square(axis_angle)
         sum = tf.math.reduce_sum(squared, axis=-1)
         angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
         axis = tf.math.divide_no_nan(axis_angle, angle)
-        return axis, angle
+        return [axis, angle]
 
     def _rotate(self, point, axis, angle):
         cos_angle = tf.cos(angle)
         axis_dot_point = self._dot(axis, point)
-        points_rotated = (point * cos_angle + self._cross(axis, point) *
-                          tf.sin(angle) + axis * axis_dot_point *
-                          (1.0 - cos_angle))
-        return points_rotated
+        return (point * cos_angle + self._cross(axis, point) * tf.sin(angle)
+                + axis * axis_dot_point * (1.0 - cos_angle))
 
     def _dot(self, vector1, vector2, axis=-1, keepdims=True):
         return tf.reduce_sum(input_tensor=vector1 * vector2,
