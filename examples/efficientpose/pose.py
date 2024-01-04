@@ -9,7 +9,7 @@ from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
                         MatchPoses, TransformRotation, ConcatenatePoses,
-                        ConcatenateScale, AugmentImageAndPose,
+                        ConcatenateScale, Augment6DOF,
                         AugmentColorspace)
 
 
@@ -73,10 +73,10 @@ class AugmentPose(SequentialProcessor):
                  num_pose_dims=3):
         super(AugmentPose, self).__init__()
         self.augment_colorspace = AugmentColorspace()
-        self.augment_6DOF = AugmentImageAndPose(
-            probability=probability, input_size=size)
-        self.preprocess_image = EfficientPosePreprocess(
-            model, mean, camera_matrix)
+        self.augment_6DOF = Augment6DOF(probability=probability,
+                                        input_size=size)
+        self.preprocess_image = EfficientPosePreprocess(model, mean,
+                                                        camera_matrix)
 
         # box processors
         self.scale_boxes = pr.ScaleBox()
@@ -95,16 +95,16 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.ControlMap(pr.LoadImage(), [5], [5]))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_colorspace, [0], [0]))
-            self.add(pr.ControlMap(self.augment_6DOF,
-                                   [0, 1, 2, 3, 5], [0, 1, 2, 3, 5]))
+            self.add(pr.ControlMap(self.augment_6DOF, [0, 1, 2, 3, 5],
+                                   [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
         self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
         self.add(pr.ControlMap(TransformRotation(num_pose_dims), [3], [3]))
         self.add(pr.ControlMap(self.match_poses, [4, 3], [3], keep={4: 4}))
         self.add(pr.ControlMap(self.match_poses, [4, 5], [7], keep={4: 4}))
-        self.add(pr.ControlMap(self.concatenate_poses,
-                               [3, 8], [8], keep={3: 3}))
+        self.add(pr.ControlMap(self.concatenate_poses, [3, 8], [8],
+                               keep={3: 3}))
         self.add(pr.ControlMap(self.concatenate_scale, [8, 1], [8]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
@@ -196,7 +196,6 @@ class DetectAndEstimatePose(Processor):
             outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
-
         if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(
                 self.class_to_sizes, self.camera_matrix)
@@ -327,7 +326,6 @@ class EfficientPoseLinemodPostprocess(Processor):
         box_data = self.postprocess_2(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
-
         rotations = transformations[:, :, :self.num_pose_dims]
         translations = transformations[:, :, self.num_pose_dims:]
         poses6D = []
@@ -389,7 +387,6 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.denormalize(image, boxes2D)
         boxes2D = self.scale_boxes2D(boxes2D, 1 / image_scale)
         boxes2D = self.round_boxes(boxes2D)
-
         rotations = transformations[:, :, :self.num_pose_dims]
         translations = transformations[:, :, self.num_pose_dims:]
         poses6D = []
@@ -487,7 +484,6 @@ class DetectAndEstimateEfficientPose(Processor):
             preprocessed_image[0], outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
-
         if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(
                 self.class_to_sizes, self.camera_matrix)

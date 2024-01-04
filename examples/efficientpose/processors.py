@@ -472,7 +472,7 @@ def scale_boxes2D(boxes2D, scale):
     return boxes2D
 
 
-class AugmentImageAndPose(Processor):
+class Augment6DOF(Processor):
     """Augment images, boxes, rotation and translation vector
     for pose estimation.
 
@@ -495,11 +495,11 @@ class AugmentImageAndPose(Processor):
         self.probability = probability
         self.mask_value = mask_value
         self.input_size = input_size
-        super(AugmentImageAndPose, self).__init__()
+        super(Augment6DOF, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
         if np.random.rand() < self.probability:
-            augmented_data = augment_image_and_pose(
+            augmented_data = augment_6DOF(
                 image, boxes, rotation, translation_raw, mask,
                 self.scale_min, self.scale_max, self.angle_min,
                 self.angle_max, self.mask_value, self.input_size)
@@ -508,9 +508,9 @@ class AugmentImageAndPose(Processor):
         return augmented_data
 
 
-def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
-                           scale_min, scale_max, angle_min, angle_max,
-                           mask_value, input_size):
+def augment_6DOF(image, boxes, rotation, translation_raw, mask,
+                 scale_min, scale_max, angle_min, angle_max,
+                 mask_value, input_size):
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max)
     augmented_image = apply_transformation(
