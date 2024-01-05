@@ -170,7 +170,7 @@ class ComputeTxTyTz(Processor):
 
 
 def compute_tx_ty_tz(translation_xy_Tz, camera_parameter):
-    """Computes the Tx and Ty components of the translation vector
+    """Computes Tx, Ty and Tz components of the translation vector
     with a given 2D-point and the intrinsic camera parameters.
 
     # Arguments
