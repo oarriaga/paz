@@ -1010,6 +1010,12 @@ def solarize(image, threshold):
 
 
 class SharpenImage(Processor):
+    """Performs image sharpening by applying a high pass filter.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        kernel: Array, the high pass filter.
+    """
     def __init__(self, probability=0.50):
         self.probability = probability
         self.kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
@@ -1017,15 +1023,32 @@ class SharpenImage(Processor):
 
     def call(self, image):
         if self.probability > np.random.rand():
-            image = sharpen_image(image, self.kernel)
+            image = convolve_image(image, self.kernel)
         return image
 
 
-def sharpen_image(image, kernel):
+def convolve_image(image, kernel):
+    """Convolves image by applying a `kernel`.
+
+    # Arguments
+        image: Array, raw image.
+        kernel: Array, the convolution kernel.
+
+    # Returns:
+        Array: Solarized image.
+    """
     return cv2.filter2D(image, -1, kernel)
 
 
 class Cutout(Processor):
+    """Cuts out a square of size `size` x `size` at a random location
+    in the image and fills it with `fill` value.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        size: Int, size of cutout square.
+        fill: Int, value to fill cutout with.
+    """
     def __init__(self, probability=0.50, size=16, fill=128):
         self.probability = probability
         self.size = size
@@ -1039,6 +1062,17 @@ class Cutout(Processor):
 
 
 def cutout(image, size, fill):
+    """Cuts out a square of size `size` x `size` at a random location
+    in the `image` and fills it with `fill` value.
+
+    # Arguments
+        image: Array, raw image.
+        size: Int, size of cutout square.
+        fill: Int, value to fill cutout with.
+
+    # Returns:
+        image: Array, cutout image.
+    """
     H, W, _ = image.shape
     y = np.random.randint(0, H - size)
     x = np.random.randint(0, W - size)
@@ -1047,10 +1081,18 @@ def cutout(image, size, fill):
 
 
 class AddGaussianNoise(Processor):
-    def __init__(self, probability=0.50, mean=0, scale=20):
+    """Adds Gaussian noise defined by `mean` and `scale` to the image.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        mean: Int, mean of Gaussian noise.
+        scale: Int, percent of variance relative to 255
+            (max gray value of 8 bit image).
+    """
+    def __init__(self, probability=0.50, mean=0, scale=0.20):
         self.probability = probability
         self.mean = mean
-        self.variance = (scale / 100.0) * 255
+        self.variance = scale * 255
         self.sigma = self.variance ** 0.5
         super(AddGaussianNoise, self).__init__()
 
@@ -1061,6 +1103,16 @@ class AddGaussianNoise(Processor):
 
 
 def add_gaussian_noise(image, mean, sigma):
+    """Adds Gaussian noise defined by `mean` and `scale` to the `image`.
+
+    # Arguments
+        image: Array, raw image.
+        mean: Int, mean of Gaussian noise.
+        sigma: Float, standard deviation of Gaussian noise.
+
+    # Returns:
+        Array: Image added with Gaussian noise.
+    """
     H, W, num_channels = image.shape
     noise = np.random.normal(mean, sigma, (H, W, num_channels))
     noisy_image = image + noise
