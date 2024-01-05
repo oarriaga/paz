@@ -797,6 +797,21 @@ class AugmentColorspace(SequentialProcessor):
 
 
 class AutoContrast(Processor):
+    """Performs autocontrast or automatic contrast enhancement in a
+    given image. This method achieves this by computing the image
+    histogram and removing a certain `cutoff` percent from the lighter
+    and darker part of the histogram and then stretching the histogram
+    such that the lightest pixel gray value becomes 255 and the darkest
+    ones become 0.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+
+    # References:
+        [Python Pillow autocontrast](
+            https://github.com/python-pillow/Pillow/blob/main'
+            '/src/PIL/ImageOps.py)
+    """
     def __init__(self, probability=0.50):
         self.probability = probability
         super(AutoContrast, self).__init__()
@@ -808,6 +823,24 @@ class AutoContrast(Processor):
 
 
 def auto_contrast(image):
+    """Performs autocontrast or automatic contrast enhancement in a
+    given image. This method achieves this by computing the image
+    histogram and removing a certain `cutoff` percent from the lighter
+    and darker part of the histogram and then stretching the histogram
+    such that the lightest pixel gray value becomes 255 and the darkest
+    ones become 0.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        contrasted: Array, contrast enhanced image.
+
+    # References:
+        [Python Pillow autocontrast](
+            https://github.com/python-pillow/Pillow/blob/main'
+            '/src/PIL/ImageOps.py)
+    """
     contrasted = np.empty_like(image)
     num_channels = image.shape[2]
 
@@ -845,9 +878,10 @@ def auto_contrast(image):
 
 
 class EqualizeHistogram(Processor):
-    """The paper uses Histogram euqlaization algorithm from PIL.
-    This version of Histogram equalization produces slightly different
-    results from that in the paper.
+    """The Efficientpose implementation uses Histogram equalization
+    algorithm from python Pillow library. This version of Histogram
+    equalization produces slightly different results from that used in
+    the paper.
     """
     def __init__(self, probability=0.50):
         self.probability = probability
@@ -860,6 +894,14 @@ class EqualizeHistogram(Processor):
 
 
 def equalize_histogram(image):
+    """Performs histogram equalization on a given image.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        equalized: Array, histogram equalized image.
+    """
     equalized = np.empty_like(image)
     num_channels = image.shape[2]
     for channel_arg in range(num_channels):
@@ -870,6 +912,11 @@ def equalize_histogram(image):
 
 
 class InvertColors(Processor):
+    """Performs color / gray value inversion on a given image.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+    """
     def __init__(self, probability=0.50):
         self.probability = probability
         super(InvertColors, self).__init__()
@@ -881,11 +928,25 @@ class InvertColors(Processor):
 
 
 def invert_colors(image):
-    image_inverted = 255 - image
-    return image_inverted
+    """Performs color / gray value inversion on a given image.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        Array: Color inverted image.
+    """
+    return 255 - image
 
 
 class Posterize(Processor):
+    """Performs posterization on a given image. This is achieved
+    by reducing the bit depth of the gray value.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        num_bits: Int, final bit depth after posterization.
+    """
     def __init__(self, probability=0.50, num_bits=4):
         self.probability = probability
         self.num_bits = num_bits
@@ -898,18 +959,30 @@ class Posterize(Processor):
 
 
 def posterize(image, num_bits):
-    posterized = np.empty_like(image)
-    num_channels = image.shape[2]
-    for channel_arg in range(num_channels):
-        image_per_channel = image[:, :, channel_arg]
-        scale_factor = 2 ** (8 - num_bits)
-        posterized_per_channel = np.round(image_per_channel /
-                                          scale_factor) * scale_factor
-        posterized[:, :, channel_arg] = posterized_per_channel.astype(np.uint8)
-    return posterized
+    """Performs posterization on a given image. This is achieved
+    by reducing the bit depth of the gray value.
+
+    # Arguments
+        image: Array, raw image.
+        num_bits: Int, final bit depth after posterization.
+
+    # Returns:
+        Array: Posterized image.
+    """
+    scale_factor = 2 ** (8 - num_bits)
+    posterized = np.round(image / scale_factor) * scale_factor
+    return posterized.astype(np.uint8)
 
 
 class Solarize(Processor):
+    """Performs solarization on a given image. This is achieved
+    by inverting those pixels whose gray values lie above
+    a certain `threshold`.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        threshold: Int, threshold value.
+    """
     def __init__(self, probability=0.50, threshold=225):
         self.probability = probability
         self.threshold = threshold
@@ -922,6 +995,17 @@ class Solarize(Processor):
 
 
 def solarize(image, threshold):
+    """Performs solarization on a given image. This is achieved
+    by inverting those pixels whose gray values lie above
+    a certain `threshold`.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        threshold: Int, threshold value.
+
+    # Returns:
+        Array: Solarized image.
+    """
     return np.where(image < threshold, image, 255 - image)
 
 
