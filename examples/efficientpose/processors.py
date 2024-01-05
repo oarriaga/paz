@@ -379,8 +379,8 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
     # Arguments
         image: Array (H, W).
         pose6D: paz.abstract.Pose6D instance.
-        intrinsics: Array (3, 3). Camera intrinsics for projecting
-            3D rays into 2D image.
+        intrinsics: Array (3, 3). Camera intrinsics
+            for projecting 3D rays into 2D image.
         points3D: Array (num_points, 3).
         thickness: Positive integer indicating line thickness.
         color: List, the color to draw 3D bounding boxes.
@@ -447,8 +447,8 @@ class TransformRotation(Processor):
         num_pose_dims: Int, number of dimensions of pose.
 
     # Returns:
-        transformed_rotations: Array of shape (5,) containing the
-            transformed rotation.
+        transformed_rotations: Array of shape (5,)
+            containing transformed rotation.
     """
     def __init__(self, num_pose_dims):
         self.num_pose_dims = num_pose_dims
@@ -484,7 +484,7 @@ class ConcatenatePoses(Processor):
     """Concatenates rotations and translations into a single array.
 
     # Returns:
-        poses_combined: Array of shape `(num_prior_boxes, 10)`
+        poses_combined: Array of shape `(num_boxes, 10)`
             containing the transformed rotation.
     """
     def __init__(self):
@@ -495,6 +495,15 @@ class ConcatenatePoses(Processor):
 
 
 def concatenate_poses(rotations, translations):
+    """Concatenates rotations and translations into a single array.
+
+    # Arguments:
+        rotations: Array, of shape `(num_boxes, 6)`.
+        translations: Array, of shape `(num_boxes, 4)`.
+
+    # Returns:
+        Array: of shape (num_boxes, 10)
+    """
     return np.concatenate((rotations, translations), axis=-1)
 
 
@@ -513,6 +522,15 @@ class ConcatenateScale(Processor):
 
 
 def concatenate_scale(poses, scale):
+    """Concatenates poses and scale into a single array.
+
+    # Arguments:
+        poses: Array, of shape `(num_boxes, 10)`.
+        scale: Array, of shape `()`.
+
+    # Returns:
+        Array: of shape (num_boxes, 11)
+    """
     scale = np.repeat(scale, poses.shape[0])
     scale = scale[np.newaxis, :]
     return np.concatenate((poses, scale.T), axis=1)
@@ -532,6 +550,15 @@ class ScaleBoxes2D(Processor):
 
 
 def scale_boxes2D(boxes2D, scale):
+    """Scales coordinates of Boxes2D.
+
+    # Arguments:
+        boxes2D: List, of Box2D objects.
+        scale: Foat, scale value.
+
+    # Returns:
+        boxes2D: List, of Box2D objects with scale coordinates.
+    """
     for box2D in boxes2D:
         box2D.coordinates = tuple(np.array(box2D.coordinates) * scale)
     return boxes2D
@@ -576,6 +603,26 @@ class Augment6DOF(Processor):
 def augment_6DOF(image, boxes, rotation, translation_raw, mask,
                  scale_min, scale_max, angle_min, angle_max,
                  mask_value, input_size):
+    """Performs 6 degree of freedom augmentation of image
+    and its corresponding poses.
+
+    # Arguments
+        image: Array raw image.
+        boxes: Array of shape `(n, 5)`
+        rotation: Array of shape `(n, 9)`
+        translation_raw: Array of shape `(n, 3)`
+        mask: Array mask corresponding to raw image.
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+        mask_value: Int, pixel gray value of foreground in mask image.
+        input_size: Int, input image size of the model.
+
+    # Returns:
+        List: Containing augmented_image, augmented_boxes,
+            augmented_rotation, augmented_translation, augmented_mask
+    """
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max)
     augmented_image = apply_transformation(
@@ -622,6 +669,17 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
 
 def generate_random_transformation(scale_min, scale_max,
                                    angle_min, angle_max):
+    """Generates random affine transformation matrix.
+
+    # Arguments
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+
+    # Returns:
+        List: Containing transformation matrix, angle, scale
+    """
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
@@ -630,37 +688,92 @@ def generate_random_transformation(scale_min, scale_max,
 
 
 def apply_transformation(image, transformation, interpolation):
+    """Applies random affine to raw image.
+
+    # Arguments
+        image: Array raw image.
+        transformation: Array of shape `(2, 3)`.
+        interpolation: Int, type of pixel interpolation.
+
+    # Returns:
+        Array: of affine transformed image.
+    """
     H, W, _ = image.shape
     return cv2.warpAffine(image, transformation, (W, H), flags=interpolation)
 
 
 def compute_box_from_mask(mask, mask_value):
-    segmentation = np.where(mask == mask_value)
-    segmentation_x, segmentation_y = segmentation[1], segmentation[0]
-    if segmentation_x.size <= 0 or segmentation_y.size <= 0:
+    """Computes bounding box from mask image.
+
+    # Arguments
+        mask: Array mask corresponding to raw image.
+        mask_value: Int, pixel gray value of foreground in mask image.
+
+    # Returns:
+        box: List containing box coordinates.
+    """
+    masked = np.where(mask == mask_value)
+    mask_x, mask_y = masked[1], masked[0]
+    if mask_x.size <= 0 or mask_y.size <= 0:
         box = [0, 0, 0, 0]
     else:
-        x_min, y_min = np.min(segmentation_x), np.min(segmentation_y)
-        x_max, y_max = np.max(segmentation_x), np.max(segmentation_y)
+        x_min, y_min = np.min(mask_x), np.min(mask_y)
+        x_max, y_max = np.max(mask_x), np.max(mask_y)
         box = [x_min, y_min, x_max, y_max]
     return box
 
 
 def compute_rotation_vector(angle):
+    """Computes rotation vector that results from rotation
+    by angle `angle` around Z axis.
+
+    # Arguments
+        angle: Float, angle of rotation in degree.
+
+    # Returns:
+        rotation_vector: Array of shape `(3, )`
+    """
     rotation_vector = np.zeros((3, ))
     rotation_vector[2] = angle / 180 * np.pi
     return rotation_vector
 
 
 def transform_rotation_matrix(rotation_matrix, transformation):
+    """Computes augmented rotation matrix.
+
+    # Arguments
+        rotation_matrix: Array, of shape `(3, 3)`.
+        transformation: Array, of shape `(3, 3)`.
+
+    # Returns:
+        Array: of shape `(3, 3)`
+    """
     return np.dot(transformation, rotation_matrix)
 
 
 def transform_translation_vector(translation, transformation):
+    """Computes augmented translation vector.
+
+    # Arguments
+        translation: Array, of shape `(3, )`.
+        transformation: Array, of shape `(3, 3)`.
+
+    # Returns:
+        Array: of shape `(3, )`
+    """
     return np.dot(transformation, translation.T)
 
 
 def scale_translation_vector(translation, scale):
+    """Scales translation vector.
+
+    # Arguments
+        translation: Array, of shape `(3, )`.
+        scale: Float, scaling factor.
+
+    # Returns:
+        Array: of shape `(3, )`
+    """
     translation[2] = translation[2] / scale
     return translation
 
