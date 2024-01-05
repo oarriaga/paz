@@ -5,6 +5,30 @@ from pose import LINEMOD_CAMERA_MATRIX
 
 
 class MultiPoseLoss(object):
+    """Multi-pose loss for a single-shot 6D object pose estimation
+    architecture.
+
+    # Arguments
+        object_id: Str, ID of object to train in LINEMOD dataset,
+            ex. powerdrill has an `object_id` of `08`.
+        translation_priors: Array of shape `(num_boxes, 3)`,
+            translation anchors.
+        data_path: Str, root directory of LINEMOD dataset.
+        target_num_points: Int,number of points of 3D model of object
+            to consider for loss calculation.
+        num_pose_dims: Int, number of pose dimensions.
+        model_path: Directory containing ply files of LINEMOD objects.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+
+    # References
+        - [EfficientPose: An efficient, accurate and scalable
+           end-to-end 6D multi object pose estimation approach](
+            https://arxiv.org/abs/2011.04307)
+        - [EfficientPose](https://github.com/ybkscht/EfficientPose)
+    """
     def __init__(self, object_id, translation_priors, data_path,
                  target_num_points=500, num_pose_dims=3, model_path='models/',
                  translation_scale_norm=1000):
@@ -108,6 +132,17 @@ class MultiPoseLoss(object):
         return tf.reduce_mean(distances, axis=-1)
 
     def compute_loss(self, y_true, y_pred):
+        """Computes pose loss.
+
+        # Arguments
+            y_true: Tensor of shape '[batch_size, num_boxes, 11]'
+                with correct labels.
+            y_pred: Tensor of shape '[batch_size, num_boxes, 6]'
+                with predicted inferences.
+
+        # Returns
+            Tensor with loss per sample in batch.
+        """
         rotation_pred = y_pred[:, :, :self.num_pose_dims]
         rotation_true = y_true[:, :, :self.num_pose_dims]
         translation_true = y_true[:, :, 2 * self.num_pose_dims:2 *
