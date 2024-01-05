@@ -23,7 +23,7 @@ description = 'Training script for single-shot object detection models'
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument('-bs', '--batch_size', default=16, type=int,
                     help='Batch size for training')
-parser.add_argument('-et', '--evaluation_period', default=50, type=int,
+parser.add_argument('-et', '--evaluation_period', default=10, type=int,
                     help='evaluation frequency')
 parser.add_argument('-lr', '--learning_rate', default=1e-4, type=float,
                     help='Initial learning rate for SGD')
