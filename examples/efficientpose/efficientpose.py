@@ -90,14 +90,14 @@ def EfficientPose(image, num_classes, base_weights, head_weights,
 
     if not ((base_weights is None) and (head_weights is None)):
         weights_path = WEIGHT_PATH + model_filename
-        finetunning_model_names = ['efficientpose-a-COCO-None_weights.hdf5',
-                                   'efficientpose-b-COCO-None_weights.hdf5',
-                                   'efficientpose-c-COCO-None_weights.hdf5',
-                                   'efficientpose-d-COCO-None_weights.hdf5',
-                                   'efficientpose-e-COCO-None_weights.hdf5',
-                                   'efficientpose-f-COCO-None_weights.hdf5',
-                                   'efficientpose-g-COCO-None_weights.hdf5',
-                                   'efficientpose-h-COCO-None_weights.hdf5']
+        finetunning_model_names = ['EfficientPose-Phi0-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi1-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi2-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi3-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi4-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi5-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi6-COCO-None_weights.hdf5',
+                                   'EfficientPose-Phi7-COCO-None_weights.hdf5']
         by_name = True if model_filename in finetunning_model_names else False
         print('Loading %s model weights' % weights_path)
         model.load_weights(weights_path, by_name=by_name)
@@ -117,7 +117,7 @@ def EfficientPosePhi0(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=3, subnet_repeats=2,
                       subnet_iterations=1, box_class_repeats=3,
                       anchor_scale=4.0, fusion='fast', return_base=False,
-                      model_name='efficientpose-a',
+                      model_name='EfficientPose-Phi0',
                       scaling_coefficients=(1.0, 1.0, 0.8)):
     """Instantiates EfficientPose model with phi=0.
 
@@ -157,7 +157,7 @@ def EfficientPosePhi1(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=4, subnet_repeats=2,
                       subnet_iterations=1, box_class_repeats=3,
                       anchor_scale=4.0, fusion='fast', return_base=False,
-                      model_name='efficientpose-b',
+                      model_name='EfficientPose-Phi1',
                       scaling_coefficients=(1.0, 1.0, 0.8)):
     """Instantiates EfficientPose model with phi=1.
 
@@ -197,7 +197,7 @@ def EfficientPosePhi2(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=5, subnet_repeats=2,
                       subnet_iterations=1, box_class_repeats=3,
                       anchor_scale=4.0, fusion='fast', return_base=False,
-                      model_name='efficientpose-c',
+                      model_name='EfficientPose-Phi2',
                       scaling_coefficients=(1.1, 1.2, 0.7)):
     """Instantiates EfficientPose model with phi=2.
 
@@ -237,7 +237,7 @@ def EfficientPosePhi3(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=6, subnet_repeats=3,
                       subnet_iterations=2, box_class_repeats=4,
                       anchor_scale=4.0, fusion='fast', return_base=False,
-                      model_name='efficientpose-d',
+                      model_name='EfficientPose-Phi3',
                       scaling_coefficients=(1.2, 1.4, 0.7)):
     """Instantiates EfficientPose model with phi=3.
 
@@ -277,7 +277,7 @@ def EfficientPosePhi4(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=7, subnet_repeats=3,
                       subnet_iterations=2, box_class_repeats=4,
                       anchor_scale=4.0, fusion='fast', return_base=False,
-                      model_name='efficientpose-e',
+                      model_name='EfficientPose-Phi4',
                       scaling_coefficients=(1.2, 1.4, 0.7)):
     """Instantiates EfficientPose model with phi=4.
 
@@ -317,7 +317,7 @@ def EfficientPosePhi5(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=7, subnet_repeats=3,
                       subnet_iterations=2, box_class_repeats=4,
                       anchor_scale=4.0, fusion='fast', return_base=False,
-                      model_name='efficientpose-f',
+                      model_name='EfficientPose-Phi5',
                       scaling_coefficients=(1.6, 2.2, 0.6)):
     """Instantiates EfficientPose model with phi=5.
 
@@ -357,7 +357,7 @@ def EfficientPosePhi6(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=8, subnet_repeats=4,
                       subnet_iterations=3, box_class_repeats=5,
                       anchor_scale=5.0, fusion='sum', return_base=False,
-                      model_name='efficientpose-g',
+                      model_name='EfficientPose-Phi6',
                       scaling_coefficients=(1.8, 2.6, 0.5)):
     """Instantiates EfficientPose model with phi=6.
 
@@ -397,7 +397,7 @@ def EfficientPosePhi7(num_classes=8, base_weights='COCO',
                       FPN_cell_repeats=8, subnet_repeats=4,
                       subnet_iterations=3, box_class_repeats=5,
                       anchor_scale=5.0, fusion='sum', return_base=False,
-                      model_name='efficientpose-h',
+                      model_name='EfficientPose-Phi7',
                       scaling_coefficients=(1.8, 2.6, 0.5)):
     """Instantiates EfficientPose model with phi=7.
 
