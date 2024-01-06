@@ -5,11 +5,11 @@ from paz.abstract import Loader
 from pose import get_class_names
 
 
-class LINEMOD(Loader):
-    """ Dataset loader for the LINEMOD dataset.
+class Linemod(Loader):
+    """ Dataset loader for the Linemod dataset.
 
     # Arguments
-        path: Str, data path to LINEMOD annotations.
+        path: Str, data path to Linemod annotations.
         object_id: Str, ID of the object to train.
         split: Str, determining the data split to load.
             e.g. `train`, `val` or `test`
@@ -29,12 +29,12 @@ class LINEMOD(Loader):
 
     """
     def __init__(self, path=None, object_id='08', split='train',
-                 name='LINEMOD', evaluate=False,
+                 name='Linemod', evaluate=False,
                  image_size={'width': 512.0, 'height': 512.0}):
         self.path = path
         self.object_id = object_id
         self.split = split
-        self.class_names_all = get_class_names('LINEMOD')
+        self.class_names_all = get_class_names('Linemod')
         self.evaluate = evaluate
         self.image_size = image_size
         self.arg_to_class = None
@@ -42,17 +42,17 @@ class LINEMOD(Loader):
         self.class_name = self.class_names_all[
             self.object_id_to_class_arg[int(self.object_id)]]
         self.class_names = [self.class_names_all[0], self.class_name]
-        super(LINEMOD, self).__init__(path, split, self.class_names, name)
+        super(Linemod, self).__init__(path, split, self.class_names, name)
 
     def load_data(self):
-        if self.name == 'LINEMOD':
-            ground_truth_data = self._load_LINEMOD(self.name, self.split)
+        if self.name == 'Linemod':
+            ground_truth_data = self._load_Linemod(self.name, self.split)
         else:
             raise ValueError('Invalid name given.')
         return ground_truth_data
 
-    def _load_LINEMOD(self, dataset_name, split):
-        self.parser = LINEMODParser(self.object_id_to_class_arg, dataset_name,
+    def _load_Linemod(self, dataset_name, split):
+        self.parser = LinemodParser(self.object_id_to_class_arg, dataset_name,
                                     split, self.path, self.evaluate,
                                     self.object_id, self.class_names,
                                     self.image_size)
@@ -64,8 +64,8 @@ class LINEMOD(Loader):
         return {0: 0, 1: 1, 5: 2, 6: 3, 8: 4, 9: 5, 10: 6, 11: 7, 12: 8}
 
 
-class LINEMODParser(object):
-    """ Preprocess the LINEMOD yaml annotations data.
+class LinemodParser(object):
+    """ Preprocess the Linemod yaml annotations data.
 
     # Arguments
         object_id_to_class_arg: Dict, containing a mapping
@@ -74,7 +74,7 @@ class LINEMODParser(object):
             to load. e.g. ``VOC2007`` or ``[''VOC2007'', VOC2012]``.
         split: Str, determining the data split to load.
             e.g. `train`, `val` or `test`
-        dataset_path: Str, data path to LINEMOD annotations.
+        dataset_path: Str, data path to Linemod annotations.
         evaluate: Bool, If ``True`` returned data will be loaded
             without normalization for a direct evaluation.
         object_id: Str, ID of the object to train.
@@ -91,14 +91,14 @@ class LINEMODParser(object):
             are numpy arrays for boxes, rotation, translation
             and integer for class.
     """
-    def __init__(self, object_id_to_class_arg, dataset_name='LINEMOD',
+    def __init__(self, object_id_to_class_arg, dataset_name='Linemod',
                  split='train', dataset_path='/Linemod_preprocessed/',
                  evaluate=False, object_id='08',
                  class_names=['background', 'driller'],
                  image_size={'width': 640.0, 'height': 480.0},
                  ground_truth_file='gt', info_file='info', data='data/'):
 
-        if dataset_name != 'LINEMOD':
+        if dataset_name != 'Linemod':
             raise Exception('Invalid dataset name.')
 
         self.dataset_name = dataset_name

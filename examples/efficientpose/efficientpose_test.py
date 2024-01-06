@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import tensorflow as tf
 from losses import MultiPoseLoss
-from efficientpose import EFFICIENTPOSEA
+from efficientpose import EfficientPosePhi0
 
 
 @pytest.fixture
@@ -11,7 +11,7 @@ def dataset_path():
 
 
 def test_multi_pose_loss_zero_condition(dataset_path):
-    model = EFFICIENTPOSEA()
+    model = EfficientPosePhi0()
     pose_loss = MultiPoseLoss('08', model.translation_priors, dataset_path)
     num_anchors = model.translation_priors.shape[0]
     target_shape = (1, num_anchors, 11)
@@ -35,7 +35,7 @@ def test_multi_pose_loss_zero_condition(dataset_path):
                             (5000, 1094.8196),
                          ])
 def test_multi_pose_loss_non_zero_condition(dataset_path, num_anchors, loss):
-    model = EFFICIENTPOSEA()
+    model = EfficientPosePhi0()
     pose_loss = MultiPoseLoss('08', model.translation_priors[:num_anchors, :],
                               dataset_path)
     prediction_shape = (1, num_anchors, 6)
@@ -65,7 +65,7 @@ def test_multi_pose_loss_non_zero_condition(dataset_path, num_anchors, loss):
                             (5000),
                          ])
 def test_loss_gradients(dataset_path, num_anchors):
-    model = EFFICIENTPOSEA()
+    model = EfficientPosePhi0()
     pose_loss = MultiPoseLoss('08', model.translation_priors[:num_anchors, :],
                               dataset_path)
     prediction_shape = (1, num_anchors, 6)

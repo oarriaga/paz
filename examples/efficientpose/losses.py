@@ -9,15 +9,15 @@ class MultiPoseLoss(object):
     architecture.
 
     # Arguments
-        object_id: Str, ID of object to train in LINEMOD dataset,
+        object_id: Str, ID of object to train in Linemod dataset,
             ex. powerdrill has an `object_id` of `08`.
         translation_priors: Array of shape `(num_boxes, 3)`,
             translation anchors.
-        data_path: Str, root directory of LINEMOD dataset.
+        data_path: Str, root directory of Linemod dataset.
         target_num_points: Int,number of points of 3D model of object
             to consider for loss calculation.
         num_pose_dims: Int, number of pose dimensions.
-        model_path: Directory containing ply files of LINEMOD objects.
+        model_path: Directory containing ply files of Linemod objects.
         translation_scale_norm: Float, factor to change units.
             EfficientPose internally works with meter and if the
             dataset unit is mm for example, then this parameter

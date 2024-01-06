@@ -10,7 +10,7 @@ from efficientpose_blocks import build_pose_estimator_head
 WEIGHT_PATH = 'weights/'
 
 
-def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+def EfficientPose(image, num_classes, base_weights, head_weights,
                   FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                   anchor_scale, fusion, return_base, model_name, EfficientNet,
                   subnet_iterations=1, subnet_repeats=3, num_scales=3,
@@ -55,7 +55,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
     """
     if base_weights not in ['COCO', None]:
         raise ValueError('Invalid base_weights: ', base_weights)
-    if head_weights not in ['LINEMOD_OCCLUDED', None]:
+    if head_weights not in ['LinemodOccluded', None]:
         raise ValueError('Invalid head_weights: ', head_weights)
     if (base_weights is None) and (head_weights == 'COCO'):
         raise NotImplementedError('Invalid `base_weights` with head_weights')
@@ -80,7 +80,7 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
 
     model = Model(inputs=image, outputs=outputs, name=model_name)
 
-    if ((base_weights == 'COCO') and (head_weights == 'LINEMOD_OCCLUDED')):
+    if ((base_weights == 'COCO') and (head_weights == 'LinemodOccluded')):
         model_filename = '-'.join([model_name, str(base_weights),
                                    str(head_weights) + '_weights.hdf5'])
 
@@ -111,14 +111,15 @@ def EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
     return model
 
 
-def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED', input_shape=(512, 512, 3),
-                   FPN_num_filters=64, FPN_cell_repeats=3, subnet_repeats=2,
-                   subnet_iterations=1, box_class_repeats=3, anchor_scale=4.0,
-                   fusion='fast', return_base=False,
-                   model_name='efficientpose-a',
-                   scaling_coefficients=(1.0, 1.0, 0.8)):
-    """Instantiates EfficientPose-A model.
+def EfficientPosePhi0(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(512, 512, 3), FPN_num_filters=64,
+                      FPN_cell_repeats=3, subnet_repeats=2,
+                      subnet_iterations=1, box_class_repeats=3,
+                      anchor_scale=4.0, fusion='fast', return_base=False,
+                      model_name='efficientpose-a',
+                      scaling_coefficients=(1.0, 1.0, 0.8)):
+    """Instantiates EfficientPose model with phi=0.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -139,25 +140,26 @@ def EFFICIENTPOSEA(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-A model.
+        model: EfficientPose model phi=0.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb0, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSEB(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED', input_shape=(640, 640, 3),
-                   FPN_num_filters=88, FPN_cell_repeats=4, subnet_repeats=2,
-                   subnet_iterations=1, box_class_repeats=3, anchor_scale=4.0,
-                   fusion='fast', return_base=False,
-                   model_name='efficientpose-b',
-                   scaling_coefficients=(1.0, 1.0, 0.8)):
-    """Instantiates EfficientPose-B model.
+def EfficientPosePhi1(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(640, 640, 3), FPN_num_filters=88,
+                      FPN_cell_repeats=4, subnet_repeats=2,
+                      subnet_iterations=1, box_class_repeats=3,
+                      anchor_scale=4.0, fusion='fast', return_base=False,
+                      model_name='efficientpose-b',
+                      scaling_coefficients=(1.0, 1.0, 0.8)):
+    """Instantiates EfficientPose model with phi=1.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -178,25 +180,26 @@ def EFFICIENTPOSEB(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-B model.
+        model: EfficientPose model phi=1.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb1 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb1, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSEC(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED', input_shape=(768, 768, 3),
-                   FPN_num_filters=112, FPN_cell_repeats=5, subnet_repeats=2,
-                   subnet_iterations=1, box_class_repeats=3, anchor_scale=4.0,
-                   fusion='fast', return_base=False,
-                   model_name='efficientpose-c',
-                   scaling_coefficients=(1.1, 1.2, 0.7)):
-    """Instantiates EfficientPose-C model.
+def EfficientPosePhi2(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(768, 768, 3), FPN_num_filters=112,
+                      FPN_cell_repeats=5, subnet_repeats=2,
+                      subnet_iterations=1, box_class_repeats=3,
+                      anchor_scale=4.0, fusion='fast', return_base=False,
+                      model_name='efficientpose-c',
+                      scaling_coefficients=(1.1, 1.2, 0.7)):
+    """Instantiates EfficientPose model with phi=2.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -217,25 +220,26 @@ def EFFICIENTPOSEC(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-C model.
+        model: EfficientPose model phi=2.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb2 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb2, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSED(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED', input_shape=(896, 896, 3),
-                   FPN_num_filters=160, FPN_cell_repeats=6, subnet_repeats=3,
-                   subnet_iterations=2, box_class_repeats=4, anchor_scale=4.0,
-                   fusion='fast', return_base=False,
-                   model_name='efficientpose-d',
-                   scaling_coefficients=(1.2, 1.4, 0.7)):
-    """Instantiates EfficientPose-D model.
+def EfficientPosePhi3(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(896, 896, 3), FPN_num_filters=160,
+                      FPN_cell_repeats=6, subnet_repeats=3,
+                      subnet_iterations=2, box_class_repeats=4,
+                      anchor_scale=4.0, fusion='fast', return_base=False,
+                      model_name='efficientpose-d',
+                      scaling_coefficients=(1.2, 1.4, 0.7)):
+    """Instantiates EfficientPose model with phi=3.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -256,25 +260,26 @@ def EFFICIENTPOSED(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-D model.
+        model: EfficientPose model phi=3.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb3 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb3, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSEE(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED',
-                   input_shape=(1024, 1024, 3), FPN_num_filters=224,
-                   FPN_cell_repeats=7, subnet_repeats=3, subnet_iterations=2,
-                   box_class_repeats=4, anchor_scale=4.0, fusion='fast',
-                   return_base=False, model_name='efficientpose-e',
-                   scaling_coefficients=(1.2, 1.4, 0.7)):
-    """Instantiates EfficientPose-E model.
+def EfficientPosePhi4(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(1024, 1024, 3), FPN_num_filters=224,
+                      FPN_cell_repeats=7, subnet_repeats=3,
+                      subnet_iterations=2, box_class_repeats=4,
+                      anchor_scale=4.0, fusion='fast', return_base=False,
+                      model_name='efficientpose-e',
+                      scaling_coefficients=(1.2, 1.4, 0.7)):
+    """Instantiates EfficientPose model with phi=4.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -295,25 +300,26 @@ def EFFICIENTPOSEE(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-E model.
+        model: EfficientPose model phi=4.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb4 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb4, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSEF(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED',
-                   input_shape=(1280, 1280, 3), FPN_num_filters=288,
-                   FPN_cell_repeats=7, subnet_repeats=3, subnet_iterations=2,
-                   box_class_repeats=4, anchor_scale=4.0, fusion='fast',
-                   return_base=False, model_name='efficientpose-f',
-                   scaling_coefficients=(1.6, 2.2, 0.6)):
-    """Instantiates EfficientPose-F model.
+def EfficientPosePhi5(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(1280, 1280, 3), FPN_num_filters=288,
+                      FPN_cell_repeats=7, subnet_repeats=3,
+                      subnet_iterations=2, box_class_repeats=4,
+                      anchor_scale=4.0, fusion='fast', return_base=False,
+                      model_name='efficientpose-f',
+                      scaling_coefficients=(1.6, 2.2, 0.6)):
+    """Instantiates EfficientPose model with phi=5.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -334,25 +340,26 @@ def EFFICIENTPOSEF(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-F model.
+        model: EfficientPose model phi=5.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb5 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb5, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSEG(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED',
-                   input_shape=(1280, 1280, 3), FPN_num_filters=384,
-                   FPN_cell_repeats=8, subnet_repeats=4, subnet_iterations=3,
-                   box_class_repeats=5, anchor_scale=5.0, fusion='sum',
-                   return_base=False, model_name='efficientpose-g',
-                   scaling_coefficients=(1.8, 2.6, 0.5)):
-    """Instantiates EfficientPose-G model.
+def EfficientPosePhi6(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(1280, 1280, 3), FPN_num_filters=384,
+                      FPN_cell_repeats=8, subnet_repeats=4,
+                      subnet_iterations=3, box_class_repeats=5,
+                      anchor_scale=5.0, fusion='sum', return_base=False,
+                      model_name='efficientpose-g',
+                      scaling_coefficients=(1.8, 2.6, 0.5)):
+    """Instantiates EfficientPose model with phi=6.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -373,25 +380,26 @@ def EFFICIENTPOSEG(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-G model.
+        model: EfficientPose model phi=6.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb6, subnet_iterations, subnet_repeats)
     return model
 
 
-def EFFICIENTPOSEH(num_classes=8, base_weights='COCO',
-                   head_weights='LINEMOD_OCCLUDED',
-                   input_shape=(1536, 1536, 3), FPN_num_filters=384,
-                   FPN_cell_repeats=8, subnet_repeats=4, subnet_iterations=3,
-                   box_class_repeats=5, anchor_scale=5.0, fusion='sum',
-                   return_base=False, model_name='efficientpose-h',
-                   scaling_coefficients=(1.8, 2.6, 0.5)):
-    """Instantiates EfficientPose-H model.
+def EfficientPosePhi7(num_classes=8, base_weights='COCO',
+                      head_weights='LinemodOccluded',
+                      input_shape=(1536, 1536, 3), FPN_num_filters=384,
+                      FPN_cell_repeats=8, subnet_repeats=4,
+                      subnet_iterations=3, box_class_repeats=5,
+                      anchor_scale=5.0, fusion='sum', return_base=False,
+                      model_name='efficientpose-h',
+                      scaling_coefficients=(1.8, 2.6, 0.5)):
+    """Instantiates EfficientPose model with phi=7.
 
     # Arguments
         num_classes: Int, number of object classes.
@@ -412,11 +420,11 @@ def EFFICIENTPOSEH(num_classes=8, base_weights='COCO',
         scaling_coefficients: Tuple, EfficientNet scaling coefficients.
 
     # Returns
-        model: EfficientPose-H model.
+        model: EfficientPose model phi=7.
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
-    model = EFFICIENTPOSE(image, num_classes, base_weights, head_weights,
+    model = EfficientPose(image, num_classes, base_weights, head_weights,
                           FPN_num_filters, FPN_cell_repeats, box_class_repeats,
                           anchor_scale, fusion, return_base, model_name,
                           EfficientNetb6, subnet_iterations, subnet_repeats)

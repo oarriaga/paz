@@ -5,9 +5,9 @@ from paz.abstract import Processor
 from paz.backend.image import lincolor
 from paz.backend.image import show_image
 from paz.abstract import ProcessingSequence
-from linemod import LINEMOD
+from linemod import Linemod
 from pose import get_class_names
-from efficientpose import EFFICIENTPOSEA
+from efficientpose import EfficientPosePhi0
 from processors import DrawPose6D, ComputeSelectedIndices, ToPose6D
 from pose import (AugmentPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                   EfficientPosePreprocess)
@@ -126,13 +126,13 @@ def denormalize_box(box):
     return (x_min, y_min, x_max, y_max)
 
 
-class EFFICIENTPOSEALINEMODDEBUG(DetectAndEstimateEfficientPose):
+class EfficientPosePhi0LinemodDebug(DetectAndEstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
-        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights=None)
-        super(EFFICIENTPOSEALINEMODDEBUG, self).__init__(
+        names = get_class_names('Linemod_EfficientPose_Driller')
+        model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
+                                  head_weights=None)
+        super(EfficientPosePhi0LinemodDebug, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
@@ -151,22 +151,24 @@ if __name__ == '__main__':
     object_id = '08'
     split = pr.TRAIN
     data_split = 'train'
-    data_name = 'LINEMOD'
+    data_name = 'Linemod'
 
     # loading datasets
-    data_manager = LINEMOD(data_path, object_id, data_split, name=data_name)
+    data_manager = Linemod(data_path, object_id, data_split, name=data_name)
     dataset = data_manager.load_data()
     num_classes = data_manager.num_classes
 
     # instantiating model
-    model = EFFICIENTPOSEA(num_classes, base_weights='COCO', head_weights=None)
+    model = EfficientPosePhi0(
+        num_classes, base_weights='COCO', head_weights=None)
 
     # setting data augmentation pipeline
     augmentator = AugmentPose(model, split, size=input_shape,
                               num_classes=num_classes)
     sequencer = ProcessingSequence(augmentator, 1, dataset)
 
-    detect = EFFICIENTPOSEALINEMODDEBUG(show_boxes2D=True, show_poses6D=True)
+    detect = EfficientPosePhi0LinemodDebug(show_boxes2D=True,
+                                           show_poses6D=True)
     for sequence in sequencer:
         image = sequence[0]['image'][0]
         image = deprocess_image(image)

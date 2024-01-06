@@ -4,7 +4,7 @@ import paz.processors as pr
 from paz.backend.boxes import change_box_coordinates
 from paz.backend.image import lincolor
 from paz.pipelines.detection import PreprocessBoxes
-from efficientpose import EFFICIENTPOSEA
+from efficientpose import EfficientPosePhi0
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
@@ -35,16 +35,16 @@ LINEMOD_OBJECT_SIZES = {
     }
 
 
-def get_class_names(dataset_name='LINEMOD'):
-    if dataset_name in ['LINEMOD']:
+def get_class_names(dataset_name='Linemod'):
+    if dataset_name in ['Linemod']:
         class_names = ['background', 'ape', 'can', 'cat', 'driller',
                        'duck', 'eggbox', 'glue', 'holepuncher']
 
-    elif dataset_name in ['LINEMOD_EFFICIENTPOSE']:
+    elif dataset_name in ['Linemod_EfficientPose']:
         class_names = ['ape', 'can', 'cat', 'driller', 'duck',
                        'eggbox', 'glue', 'holepuncher']
 
-    elif dataset_name in ['LINEMOD_EFFICIENTPOSE_DRILLER']:
+    elif dataset_name in ['Linemod_EfficientPose_Driller']:
         class_names = ['background', 'driller']
     return class_names
 
@@ -123,8 +123,8 @@ class DetectAndEstimatePose(Processor):
         score_thresh: Float between [0, 1].
         nms_thresh: Float between [0, 1].
         LINEMOD_CAMERA_MATRIX: Array of shape `(3, 3)`
-            LINEMOD camera matrix.
-        LINEMOD_OBJECT_SIZES: Dict, LINEMOD dataset object sizes.
+            Linemod camera matrix.
+        LINEMOD_OBJECT_SIZES: Dict, Linemod dataset object sizes.
         preprocess: Callable, preprocessing pipeline.
         postprocess: Callable, postprocessing pipeline.
         variances: List of float values.
@@ -411,8 +411,8 @@ class DetectAndEstimateEfficientPose(Processor):
         score_thresh: Float between [0, 1].
         nms_thresh: Float between [0, 1].
         LINEMOD_CAMERA_MATRIX: Array of shape `(3, 3)`
-            LINEMOD camera matrix.
-        LINEMOD_OBJECT_SIZES: Dict, LINEMOD dataset object sizes.
+            Linemod camera matrix.
+        LINEMOD_OBJECT_SIZES: Dict, Linemod dataset object sizes.
         preprocess: Callable, preprocessing pipeline.
         postprocess: Callable, postprocessing pipeline.
         variances: List of float values.
@@ -491,8 +491,8 @@ class DetectAndEstimateEfficientPose(Processor):
         return self.wrap(image, boxes2D, poses6D)
 
 
-class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
-    """Inference pipeline with EFFICIENTPOSEA trained on LINEMOD.
+class EfficientPosePhi0Linemod(DetectAndEstimatePose):
+    """Inference pipeline with EfficientPosePhi0 trained on Linemod.
 
     # Arguments
         score_thresh: Float between [0, 1].
@@ -509,17 +509,17 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('LINEMOD_EFFICIENTPOSE')
-        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights='LINEMOD_OCCLUDED')
-        super(EFFICIENTPOSEALINEMOD, self).__init__(
+        names = get_class_names('Linemod_EfficientPose')
+        model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
+                                  head_weights='LinemodOccluded')
+        super(EfficientPosePhi0Linemod, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
-class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
-    """Inference pipeline with EFFICIENTPOSEA trained on LINEMOD.
+class EfficientPosePhi0LinemodDriller(DetectAndEstimateEfficientPose):
+    """Inference pipeline with EfficientPose phi=0 trained on Linemod.
 
     # Arguments
         score_thresh: Float between [0, 1].
@@ -536,10 +536,10 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
-        model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights=None)
-        super(EFFICIENTPOSEALINEMODDRILLER, self).__init__(
+        names = get_class_names('Linemod_EfficientPose_Driller')
+        model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
+                                  head_weights=None)
+        super(EfficientPosePhi0LinemodDriller, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
