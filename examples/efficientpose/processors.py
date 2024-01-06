@@ -15,7 +15,7 @@ LINEMOD_CAMERA_MATRIX = np.array([
 
 class ComputeResizingShape(Processor):
     """Computes the final size of the image to be scaled by `size`
-    such that the maximum dimension of the image is equal to `size`.
+    such that the largest dimension of the image is equal to `size`.
 
     # Arguments
         size: Int, final size of maximum dimension of the image.
@@ -29,12 +29,22 @@ class ComputeResizingShape(Processor):
 
 
 def compute_resizing_shape(image, size):
+    """Computes the final size of the image to be scaled by `size`
+    such that the largest dimension of the image is equal to `size`.
+
+    # Arguments
+        image: Array, raw image to be scaled.
+        size: Int, final size of the image.
+
+    # Returns
+        List: Containing final shape of image and scale.
+    """
     H, W = image.shape[:2]
     image_scale = size / max(H, W)
     resizing_W = int(W * image_scale)
     resizing_H = int(H * image_scale)
     resizing_shape = (resizing_W, resizing_H)
-    return resizing_shape, np.array(image_scale)
+    return [resizing_shape, np.array(image_scale)]
 
 
 class PadImage(Processor):
@@ -54,12 +64,21 @@ class PadImage(Processor):
 
 
 def pad_image(image, size, mode):
+    """Pads the image to the final size `size`.
+
+    # Arguments
+        image: Array, image to be padded.
+        size: Int, final size of the image.
+        mode: Str, specifying the type of padding.
+
+    # Returns
+        Array: Padded image.
+    """
     H, W = image.shape[:2]
     pad_H = size - H
     pad_W = size - W
     pad_shape = [(0, pad_H), (0, pad_W), (0, 0)]
-    image = np.pad(image, pad_shape, mode=mode)
-    return image
+    return np.pad(image, pad_shape, mode=mode)
 
 
 class ComputeCameraParameter(Processor):
@@ -85,18 +104,28 @@ class ComputeCameraParameter(Processor):
 
 def compute_camera_parameter(image_scale, camera_matrix,
                              translation_scale_norm):
-    camera_parameter = np.array([camera_matrix[0, 0],
-                                 camera_matrix[1, 1],
-                                 camera_matrix[0, 2],
-                                 camera_matrix[1, 2],
-                                 translation_scale_norm,
-                                 image_scale])
-    return camera_parameter
+    """Computes camera parameter given camera matrix
+    and scale normalization factor of translation.
+
+    # Arguments
+        image_scale: Array, scale of image.
+        camera_matrix: Array, Camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+
+    # Returns
+        Array: of shape `(6,)` Camera parameter.
+    """
+    return np.array([camera_matrix[0, 0], camera_matrix[1, 1],
+                     camera_matrix[0, 2], camera_matrix[1, 2],
+                     translation_scale_norm, image_scale])
 
 
 class RegressTranslation(Processor):
-    """Applies regression offset values to translation
-    anchors to get the 2D translation center-point and Tz.
+    """Applies regression offset values to translation anchors
+    to get the 2D translation center-point and Tz.
 
     # Arguments
         translation_priors: Array of shape `(num_boxes, 3)`,
@@ -111,26 +140,46 @@ class RegressTranslation(Processor):
 
 
 def regress_translation(translation_raw, translation_priors):
+    """Applies regression offset values to translation anchors
+    to get the 2D translation center-point and Tz.
+
+    # Arguments
+        translation_raw: Array of shape `(1, num_boxes, 3)`,
+        translation_priors: Array of shape `(num_boxes, 3)`,
+            translation anchors.
+
+    # Returns
+        Array: of shape `(num_boxes, 3)`.
+    """
     stride = translation_priors[:, -1]
     x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
     y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
     Tz = translation_raw[:, :, 2]
-    translations_predicted = np.concatenate((x, y, Tz), axis=0)
-    return translations_predicted.T
+    return np.concatenate((x, y, Tz), axis=0).T
 
 
-class ComputeTxTy(Processor):
+class ComputeTxTyTz(Processor):
     """Computes the Tx and Ty components of the translation vector
     with a given 2D-point and the intrinsic camera parameters.
     """
     def __init__(self):
-        super(ComputeTxTy, self).__init__()
+        super(ComputeTxTyTz, self).__init__()
 
     def call(self, translation_xy_Tz, camera_parameter):
-        return compute_tx_ty(translation_xy_Tz, camera_parameter)
+        return compute_tx_ty_tz(translation_xy_Tz, camera_parameter)
 
 
-def compute_tx_ty(translation_xy_Tz, camera_parameter):
+def compute_tx_ty_tz(translation_xy_Tz, camera_parameter):
+    """Computes Tx, Ty and Tz components of the translation vector
+    with a given 2D-point and the intrinsic camera parameters.
+
+    # Arguments
+        translation_xy_Tz: Array of shape `(num_boxes, 3)`,
+        camera_parameter: Array: of shape `(6,)` camera parameter.
+
+    # Returns
+        Array: of shape `(num_boxes, 3)`.
+    """
     fx, fy = camera_parameter[0], camera_parameter[1],
     px, py = camera_parameter[2], camera_parameter[3],
     tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
@@ -141,14 +190,10 @@ def compute_tx_ty(translation_xy_Tz, camera_parameter):
 
     x = x - px
     y = y - py
-
     tx = np.multiply(x, tz) / fx
     ty = np.multiply(y, tz) / fy
-
     tx, ty, tz = tx[np.newaxis, :], ty[np.newaxis, :], tz[np.newaxis, :]
-
-    translations = np.concatenate((tx, ty, tz), axis=0)
-    return translations.T
+    return np.concatenate((tx, ty, tz), axis=0).T
 
 
 class ComputeSelectedIndices(Processor):
@@ -163,9 +208,18 @@ class ComputeSelectedIndices(Processor):
 
 
 def compute_selected_indices(box_data_all, box_data):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+
+    # Arguments
+        box_data_all: Array of shape `(num_boxes, 5)`,
+        box_data: Array: of shape `(n, 5)` box data.
+
+    # Returns
+        Array: of shape `(n, 3)`.
+    """
     box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
     box_data_tuple = [tuple(row) for row in box_data[:, :4]]
-
     location_indices = []
     for tuple_element in box_data_tuple:
         location_index = box_data_all_tuple.index(tuple_element)
@@ -178,8 +232,8 @@ class ToPose6D(Processor):
     translations into `Pose6D` messages.
 
     # Arguments
-        class_names: List of class names ordered with respect to the
-            class indices from the dataset ``boxes``.
+        class_names: List of class names ordered with respect
+            to the class indices from the dataset ``boxes``.
         one_hot_encoded: Bool, indicating if scores are one hot vectors.
         default_score: Float, score to set.
         default_class: Str, class to set.
@@ -325,8 +379,8 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
     # Arguments
         image: Array (H, W).
         pose6D: paz.abstract.Pose6D instance.
-        intrinsics: Array (3, 3). Camera intrinsics for projecting
-            3D rays into 2D image.
+        intrinsics: Array (3, 3). Camera intrinsics
+            for projecting 3D rays into 2D image.
         points3D: Array (num_points, 3).
         thickness: Positive integer indicating line thickness.
         color: List, the color to draw 3D bounding boxes.
@@ -357,11 +411,21 @@ class MatchPoses(Processor):
         super(MatchPoses, self).__init__()
 
     def call(self, boxes, poses):
-        matched_poses = match_poses(boxes, poses, self.prior_boxes, self.iou)
-        return matched_poses
+        return match_poses(boxes, poses, self.prior_boxes, self.iou)
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
+    """Match prior boxes with poses with ground truth boxes and poses.
+
+    # Arguments
+        boxes: Array of shape `(n, 5)`.
+        poses: Array of shape `(n, 5)`.
+        prior_boxes: Array of shape `(num_boxes, 4)`.
+        iou_threshold: Floats, IOU threshold value.
+
+    # Returns
+        matched_poses: Array of shape `(num_boxes, 6)`.
+    """
     matched_poses = np.zeros((prior_boxes.shape[0], poses.shape[1] + 1))
     ious = compute_ious(boxes, to_corner_form(np.float32(prior_boxes)))
     per_prior_which_box_iou = np.max(ious, axis=0)
@@ -371,7 +435,6 @@ def match_poses(boxes, poses, prior_boxes, iou_threshold):
     for box_arg in range(len(per_box_which_prior_arg)):
         best_prior_box_arg = per_box_which_prior_arg[box_arg]
         per_prior_which_box_arg[best_prior_box_arg] = box_arg
-
     matched_poses[:, :-1] = poses[per_prior_which_box_arg]
     matched_poses[per_prior_which_box_iou >= iou_threshold, -1] = 1
     return matched_poses
@@ -384,20 +447,27 @@ class TransformRotation(Processor):
         num_pose_dims: Int, number of dimensions of pose.
 
     # Returns:
-        transformed_rotations: Array of shape (5,) containing the
-            transformed rotation.
+        transformed_rotations: Array of shape (5,)
+            containing transformed rotation.
     """
     def __init__(self, num_pose_dims):
         self.num_pose_dims = num_pose_dims
         super(TransformRotation, self).__init__()
 
     def call(self, rotations):
-        transformed_rotations = transform_rotation(rotations,
-                                                   self.num_pose_dims)
-        return transformed_rotations
+        return transform_rotation(rotations, self.num_pose_dims)
 
 
 def transform_rotation(rotations, num_pose_dims):
+    """Computes axis angle rotation vector from a rotation matrix.
+
+    # Arguments:
+        rotation: Array, of shape `(n, 9)`.
+        num_pose_dims: Int, number of pose dimensions.
+
+    # Returns:
+        Array: of shape (n, 5) containing axis angle vector.
+    """
     final_axis_angles = []
     for rotation in rotations:
         final_axis_angle = np.zeros((num_pose_dims + 2))
@@ -407,26 +477,33 @@ def transform_rotation(rotations, num_pose_dims):
         final_axis_angle[:3] = axis_angle
         final_axis_angle = np.expand_dims(final_axis_angle, axis=0)
         final_axis_angles.append(final_axis_angle)
-    final_axis_angles = np.concatenate(final_axis_angles, axis=0)
-    return final_axis_angles
+    return np.concatenate(final_axis_angles, axis=0)
 
 
 class ConcatenatePoses(Processor):
     """Concatenates rotations and translations into a single array.
 
     # Returns:
-        poses_combined: Array of shape `(num_prior_boxes, 10)`
+        poses_combined: Array of shape `(num_boxes, 10)`
             containing the transformed rotation.
     """
     def __init__(self):
         super(ConcatenatePoses, self).__init__()
 
     def call(self, rotations, translations):
-        poses_combined = concatenate_poses(rotations, translations)
-        return poses_combined
+        return concatenate_poses(rotations, translations)
 
 
 def concatenate_poses(rotations, translations):
+    """Concatenates rotations and translations into a single array.
+
+    # Arguments:
+        rotations: Array, of shape `(num_boxes, 6)`.
+        translations: Array, of shape `(num_boxes, 4)`.
+
+    # Returns:
+        Array: of shape (num_boxes, 10)
+    """
     return np.concatenate((rotations, translations), axis=-1)
 
 
@@ -441,15 +518,22 @@ class ConcatenateScale(Processor):
         super(ConcatenateScale, self).__init__()
 
     def call(self, poses, scale):
-        poses_combined = concatenate_scale(poses, scale)
-        return poses_combined
+        return concatenate_scale(poses, scale)
 
 
 def concatenate_scale(poses, scale):
+    """Concatenates poses and scale into a single array.
+
+    # Arguments:
+        poses: Array, of shape `(num_boxes, 10)`.
+        scale: Array, of shape `()`.
+
+    # Returns:
+        Array: of shape (num_boxes, 11)
+    """
     scale = np.repeat(scale, poses.shape[0])
     scale = scale[np.newaxis, :]
-    poses = np.concatenate((poses, scale.T), axis=1)
-    return poses
+    return np.concatenate((poses, scale.T), axis=1)
 
 
 class ScaleBoxes2D(Processor):
@@ -462,17 +546,25 @@ class ScaleBoxes2D(Processor):
         super(ScaleBoxes2D, self).__init__()
 
     def call(self, boxes2D, scale):
-        boxes2D = scale_boxes2D(boxes2D, scale)
-        return boxes2D
+        return scale_boxes2D(boxes2D, scale)
 
 
 def scale_boxes2D(boxes2D, scale):
+    """Scales coordinates of Boxes2D.
+
+    # Arguments:
+        boxes2D: List, of Box2D objects.
+        scale: Foat, scale value.
+
+    # Returns:
+        boxes2D: List, of Box2D objects with scale coordinates.
+    """
     for box2D in boxes2D:
         box2D.coordinates = tuple(np.array(box2D.coordinates) * scale)
     return boxes2D
 
 
-class AugmentImageAndPose(Processor):
+class Augment6DOF(Processor):
     """Augment images, boxes, rotation and translation vector
     for pose estimation.
 
@@ -495,11 +587,11 @@ class AugmentImageAndPose(Processor):
         self.probability = probability
         self.mask_value = mask_value
         self.input_size = input_size
-        super(AugmentImageAndPose, self).__init__()
+        super(Augment6DOF, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
         if np.random.rand() < self.probability:
-            augmented_data = augment_image_and_pose(
+            augmented_data = augment_6DOF(
                 image, boxes, rotation, translation_raw, mask,
                 self.scale_min, self.scale_max, self.angle_min,
                 self.angle_max, self.mask_value, self.input_size)
@@ -508,16 +600,35 @@ class AugmentImageAndPose(Processor):
         return augmented_data
 
 
-def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
-                           scale_min, scale_max, angle_min, angle_max,
-                           mask_value, input_size):
+def augment_6DOF(image, boxes, rotation, translation_raw, mask,
+                 scale_min, scale_max, angle_min, angle_max,
+                 mask_value, input_size):
+    """Performs 6 degree of freedom augmentation of image
+    and its corresponding poses.
+
+    # Arguments
+        image: Array raw image.
+        boxes: Array of shape `(n, 5)`
+        rotation: Array of shape `(n, 9)`
+        translation_raw: Array of shape `(n, 3)`
+        mask: Array mask corresponding to raw image.
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+        mask_value: Int, pixel gray value of foreground in mask image.
+        input_size: Int, input image size of the model.
+
+    # Returns:
+        List: Containing augmented_image, augmented_boxes,
+            augmented_rotation, augmented_translation, augmented_mask
+    """
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max)
     augmented_image = apply_transformation(
         image, transformation, cv2.INTER_CUBIC)
     augmented_mask = apply_transformation(
         mask, transformation, cv2.INTER_NEAREST)
-
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
     rotation_vector = compute_rotation_vector(angle)
@@ -558,6 +669,17 @@ def augment_image_and_pose(image, boxes, rotation, translation_raw, mask,
 
 def generate_random_transformation(scale_min, scale_max,
                                    angle_min, angle_max):
+    """Generates random affine transformation matrix.
+
+    # Arguments
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+
+    # Returns:
+        List: Containing transformation matrix, angle, scale
+    """
     cx = LINEMOD_CAMERA_MATRIX[0, 2]
     cy = LINEMOD_CAMERA_MATRIX[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
@@ -566,37 +688,92 @@ def generate_random_transformation(scale_min, scale_max,
 
 
 def apply_transformation(image, transformation, interpolation):
+    """Applies random affine to raw image.
+
+    # Arguments
+        image: Array raw image.
+        transformation: Array of shape `(2, 3)`.
+        interpolation: Int, type of pixel interpolation.
+
+    # Returns:
+        Array: of affine transformed image.
+    """
     H, W, _ = image.shape
     return cv2.warpAffine(image, transformation, (W, H), flags=interpolation)
 
 
 def compute_box_from_mask(mask, mask_value):
-    segmentation = np.where(mask == mask_value)
-    segmentation_x, segmentation_y = segmentation[1], segmentation[0]
-    if segmentation_x.size <= 0 or segmentation_y.size <= 0:
+    """Computes bounding box from mask image.
+
+    # Arguments
+        mask: Array mask corresponding to raw image.
+        mask_value: Int, pixel gray value of foreground in mask image.
+
+    # Returns:
+        box: List containing box coordinates.
+    """
+    masked = np.where(mask == mask_value)
+    mask_x, mask_y = masked[1], masked[0]
+    if mask_x.size <= 0 or mask_y.size <= 0:
         box = [0, 0, 0, 0]
     else:
-        x_min, y_min = np.min(segmentation_x), np.min(segmentation_y)
-        x_max, y_max = np.max(segmentation_x), np.max(segmentation_y)
+        x_min, y_min = np.min(mask_x), np.min(mask_y)
+        x_max, y_max = np.max(mask_x), np.max(mask_y)
         box = [x_min, y_min, x_max, y_max]
     return box
 
 
 def compute_rotation_vector(angle):
+    """Computes rotation vector that results from rotation
+    by angle `angle` around Z axis.
+
+    # Arguments
+        angle: Float, angle of rotation in degree.
+
+    # Returns:
+        rotation_vector: Array of shape `(3, )`
+    """
     rotation_vector = np.zeros((3, ))
     rotation_vector[2] = angle / 180 * np.pi
     return rotation_vector
 
 
 def transform_rotation_matrix(rotation_matrix, transformation):
+    """Computes augmented rotation matrix.
+
+    # Arguments
+        rotation_matrix: Array, of shape `(3, 3)`.
+        transformation: Array, of shape `(3, 3)`.
+
+    # Returns:
+        Array: of shape `(3, 3)`
+    """
     return np.dot(transformation, rotation_matrix)
 
 
 def transform_translation_vector(translation, transformation):
-    return np.dot(translation, transformation.T)
+    """Computes augmented translation vector.
+
+    # Arguments
+        translation: Array, of shape `(3, )`.
+        transformation: Array, of shape `(3, 3)`.
+
+    # Returns:
+        Array: of shape `(3, )`
+    """
+    return np.dot(transformation, translation.T)
 
 
 def scale_translation_vector(translation, scale):
+    """Scales translation vector.
+
+    # Arguments
+        translation: Array, of shape `(3, )`.
+        scale: Float, scaling factor.
+
+    # Returns:
+        Array: of shape `(3, )`
+    """
     translation[2] = translation[2] / scale
     return translation
 
@@ -620,6 +797,21 @@ class AugmentColorspace(SequentialProcessor):
 
 
 class AutoContrast(Processor):
+    """Performs autocontrast or automatic contrast enhancement in a
+    given image. This method achieves this by computing the image
+    histogram and removing a certain `cutoff` percent from the lighter
+    and darker part of the histogram and then stretching the histogram
+    such that the lightest pixel gray value becomes 255 and the darkest
+    ones become 0.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+
+    # References:
+        [Python Pillow autocontrast](
+            https://github.com/python-pillow/Pillow/blob/main'
+            '/src/PIL/ImageOps.py)
+    """
     def __init__(self, probability=0.50):
         self.probability = probability
         super(AutoContrast, self).__init__()
@@ -631,6 +823,24 @@ class AutoContrast(Processor):
 
 
 def auto_contrast(image):
+    """Performs autocontrast or automatic contrast enhancement in a
+    given image. This method achieves this by computing the image
+    histogram and removing a certain `cutoff` percent from the lighter
+    and darker part of the histogram and then stretching the histogram
+    such that the lightest pixel gray value becomes 255 and the darkest
+    ones become 0.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        contrasted: Array, contrast enhanced image.
+
+    # References:
+        [Python Pillow autocontrast](
+            https://github.com/python-pillow/Pillow/blob/main'
+            '/src/PIL/ImageOps.py)
+    """
     contrasted = np.empty_like(image)
     num_channels = image.shape[2]
 
@@ -668,9 +878,10 @@ def auto_contrast(image):
 
 
 class EqualizeHistogram(Processor):
-    """The paper uses Histogram euqlaization algorithm from PIL.
-    This version of Histogram equalization produces slightly different
-    results from that in the paper.
+    """The Efficientpose implementation uses Histogram equalization
+    algorithm from python Pillow library. This version of Histogram
+    equalization produces slightly different results from that used in
+    the paper.
     """
     def __init__(self, probability=0.50):
         self.probability = probability
@@ -683,9 +894,16 @@ class EqualizeHistogram(Processor):
 
 
 def equalize_histogram(image):
+    """Performs histogram equalization on a given image.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        equalized: Array, histogram equalized image.
+    """
     equalized = np.empty_like(image)
     num_channels = image.shape[2]
-
     for channel_arg in range(num_channels):
         image_per_channel = image[:, :, channel_arg]
         equalized_per_channel = cv2.equalizeHist(image_per_channel)
@@ -694,6 +912,11 @@ def equalize_histogram(image):
 
 
 class InvertColors(Processor):
+    """Performs color / gray value inversion on a given image.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+    """
     def __init__(self, probability=0.50):
         self.probability = probability
         super(InvertColors, self).__init__()
@@ -705,11 +928,25 @@ class InvertColors(Processor):
 
 
 def invert_colors(image):
-    image_inverted = 255 - image
-    return image_inverted
+    """Performs color / gray value inversion on a given image.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        Array: Color inverted image.
+    """
+    return 255 - image
 
 
 class Posterize(Processor):
+    """Performs posterization on a given image. This is achieved
+    by reducing the bit depth of the gray value.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        num_bits: Int, final bit depth after posterization.
+    """
     def __init__(self, probability=0.50, num_bits=4):
         self.probability = probability
         self.num_bits = num_bits
@@ -722,18 +959,30 @@ class Posterize(Processor):
 
 
 def posterize(image, num_bits):
-    posterized = np.empty_like(image)
-    num_channels = image.shape[2]
-    for channel_arg in range(num_channels):
-        image_per_channel = image[:, :, channel_arg]
-        scale_factor = 2 ** (8 - num_bits)
-        posterized_per_channel = np.round(image_per_channel /
-                                          scale_factor) * scale_factor
-        posterized[:, :, channel_arg] = posterized_per_channel.astype(np.uint8)
-    return posterized
+    """Performs posterization on a given image. This is achieved
+    by reducing the bit depth of the gray value.
+
+    # Arguments
+        image: Array, raw image.
+        num_bits: Int, final bit depth after posterization.
+
+    # Returns:
+        Array: Posterized image.
+    """
+    scale_factor = 2 ** (8 - num_bits)
+    posterized = np.round(image / scale_factor) * scale_factor
+    return posterized.astype(np.uint8)
 
 
 class Solarize(Processor):
+    """Performs solarization on a given image. This is achieved
+    by inverting those pixels whose gray values lie above
+    a certain `threshold`.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        threshold: Int, threshold value.
+    """
     def __init__(self, probability=0.50, threshold=225):
         self.probability = probability
         self.threshold = threshold
@@ -746,11 +995,27 @@ class Solarize(Processor):
 
 
 def solarize(image, threshold):
-    solarized = np.where(image < threshold, image, 255 - image)
-    return solarized
+    """Performs solarization on a given image. This is achieved
+    by inverting those pixels whose gray values lie above
+    a certain `threshold`.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        threshold: Int, threshold value.
+
+    # Returns:
+        Array: Solarized image.
+    """
+    return np.where(image < threshold, image, 255 - image)
 
 
 class SharpenImage(Processor):
+    """Performs image sharpening by applying a high pass filter.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        kernel: Array, the high pass filter.
+    """
     def __init__(self, probability=0.50):
         self.probability = probability
         self.kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
@@ -758,16 +1023,32 @@ class SharpenImage(Processor):
 
     def call(self, image):
         if self.probability > np.random.rand():
-            image = sharpen_image(image, self.kernel)
+            image = convolve_image(image, self.kernel)
         return image
 
 
-def sharpen_image(image, kernel):
-    sharpened = cv2.filter2D(image, -1, kernel)
-    return sharpened
+def convolve_image(image, kernel):
+    """Convolves image by applying a `kernel`.
+
+    # Arguments
+        image: Array, raw image.
+        kernel: Array, the convolution kernel.
+
+    # Returns:
+        Array: Solarized image.
+    """
+    return cv2.filter2D(image, -1, kernel)
 
 
 class Cutout(Processor):
+    """Cuts out a square of size `size` x `size` at a random location
+    in the image and fills it with `fill` value.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        size: Int, size of cutout square.
+        fill: Int, value to fill cutout with.
+    """
     def __init__(self, probability=0.50, size=16, fill=128):
         self.probability = probability
         self.size = size
@@ -781,6 +1062,17 @@ class Cutout(Processor):
 
 
 def cutout(image, size, fill):
+    """Cuts out a square of size `size` x `size` at a random location
+    in the `image` and fills it with `fill` value.
+
+    # Arguments
+        image: Array, raw image.
+        size: Int, size of cutout square.
+        fill: Int, value to fill cutout with.
+
+    # Returns:
+        image: Array, cutout image.
+    """
     H, W, _ = image.shape
     y = np.random.randint(0, H - size)
     x = np.random.randint(0, W - size)
@@ -789,10 +1081,18 @@ def cutout(image, size, fill):
 
 
 class AddGaussianNoise(Processor):
-    def __init__(self, probability=0.50, mean=0, scale=20):
+    """Adds Gaussian noise defined by `mean` and `scale` to the image.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        mean: Int, mean of Gaussian noise.
+        scale: Int, percent of variance relative to 255
+            (max gray value of 8 bit image).
+    """
+    def __init__(self, probability=0.50, mean=0, scale=0.20):
         self.probability = probability
         self.mean = mean
-        self.variance = (scale / 100.0) * 255
+        self.variance = scale * 255
         self.sigma = self.variance ** 0.5
         super(AddGaussianNoise, self).__init__()
 
@@ -803,6 +1103,16 @@ class AddGaussianNoise(Processor):
 
 
 def add_gaussian_noise(image, mean, sigma):
+    """Adds Gaussian noise defined by `mean` and `scale` to the `image`.
+
+    # Arguments
+        image: Array, raw image.
+        mean: Int, mean of Gaussian noise.
+        sigma: Float, standard deviation of Gaussian noise.
+
+    # Returns:
+        Array: Image added with Gaussian noise.
+    """
     H, W, num_channels = image.shape
     noise = np.random.normal(mean, sigma, (H, W, num_channels))
     noisy_image = image + noise

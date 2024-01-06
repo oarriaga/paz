@@ -6,11 +6,10 @@ from paz.backend.image import lincolor
 from paz.pipelines.detection import PreprocessBoxes
 from efficientpose import EFFICIENTPOSEA
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
-                        RegressTranslation, ComputeTxTy, DrawPose6D,
+                        RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
                         MatchPoses, TransformRotation, ConcatenatePoses,
-                        ConcatenateScale, AugmentImageAndPose,
-                        AugmentColorspace)
+                        ConcatenateScale, Augment6DOF, AugmentColorspace)
 
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
@@ -65,6 +64,8 @@ class AugmentPose(SequentialProcessor):
         IOU: Float. Intersection over union used to match boxes.
         variances: List of two floats indicating variances to be encoded
             for encoding bounding boxes.
+        probability: Float indicating the probability
+            of data augmentation.
         num_pose_dims: Int, number of dimensions for pose.
     """
     def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
@@ -73,10 +74,10 @@ class AugmentPose(SequentialProcessor):
                  num_pose_dims=3):
         super(AugmentPose, self).__init__()
         self.augment_colorspace = AugmentColorspace()
-        self.augment_6DOF = AugmentImageAndPose(
-            probability=probability, input_size=size)
-        self.preprocess_image = EfficientPosePreprocess(
-            model, mean, camera_matrix)
+        self.augment_6DOF = Augment6DOF(probability=probability,
+                                        input_size=size)
+        self.preprocess_image = EfficientPosePreprocess(model, mean,
+                                                        camera_matrix)
 
         # box processors
         self.scale_boxes = pr.ScaleBox()
@@ -95,16 +96,16 @@ class AugmentPose(SequentialProcessor):
         self.add(pr.ControlMap(pr.LoadImage(), [5], [5]))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_colorspace, [0], [0]))
-            self.add(pr.ControlMap(self.augment_6DOF,
-                                   [0, 1, 2, 3, 5], [0, 1, 2, 3, 5]))
+            self.add(pr.ControlMap(self.augment_6DOF, [0, 1, 2, 3, 5],
+                                   [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
         self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
         self.add(pr.ControlMap(TransformRotation(num_pose_dims), [3], [3]))
         self.add(pr.ControlMap(self.match_poses, [4, 3], [3], keep={4: 4}))
         self.add(pr.ControlMap(self.match_poses, [4, 5], [7], keep={4: 4}))
-        self.add(pr.ControlMap(self.concatenate_poses,
-                               [3, 8], [8], keep={3: 3}))
+        self.add(pr.ControlMap(self.concatenate_poses, [3, 8], [8],
+                               keep={3: 3}))
         self.add(pr.ControlMap(self.concatenate_scale, [8, 1], [8]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
@@ -127,10 +128,10 @@ class DetectAndEstimatePose(Processor):
         preprocess: Callable, preprocessing pipeline.
         postprocess: Callable, postprocessing pipeline.
         variances: List of float values.
-        show_boxes2D: Boolean. If ``True`` prediction
-            are drawn in the returned image.
-        show_poses6D: Boolean. If ``True`` estimated poses
-            are drawn in the returned image.
+        show_boxes2D: Boolean. If ``True`` prediction are drawn
+            in the returned image.
+        show_poses6D: Boolean. If ``True`` estimated poses are drawn
+            in the returned image.
 
     # Properties
         model: Keras model.
@@ -196,7 +197,6 @@ class DetectAndEstimatePose(Processor):
             outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
-
         if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(
                 self.class_to_sizes, self.camera_matrix)
@@ -251,8 +251,6 @@ class EfficientPosePreprocess(Processor):
     # Arguments
         model: Keras model.
         mean: Tuple, containing mean per channel on ImageNet.
-        standard_deviation: Tuple, containing standard deviations
-            per channel on ImageNet.
         camera_matrix:  Array of shape `(3, 3)` camera matrix.
         translation_scale_norm: Float, factor to change units.
             EfficientPose internally works with meter and if the
@@ -313,7 +311,7 @@ class EfficientPoseLinemodPostprocess(Processor):
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
-        self.compute_tx_ty = ComputeTxTy()
+        self.compute_tx_ty_tz = ComputeTxTyTz()
         self.compute_selections = ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
@@ -327,7 +325,6 @@ class EfficientPoseLinemodPostprocess(Processor):
         box_data = self.postprocess_2(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.round_boxes(boxes2D)
-
         rotations = transformations[:, :, :self.num_pose_dims]
         translations = transformations[:, :, self.num_pose_dims:]
         poses6D = []
@@ -336,12 +333,10 @@ class EfficientPoseLinemodPostprocess(Processor):
             rotations = self.squeeze(rotations)
             rotations = rotations[selected_indices]
             rotations = self.transform_rotations(rotations)
-
             translation_xy_Tz = self.regress_translation(translations)
-            translation = self.compute_tx_ty(translation_xy_Tz,
-                                             camera_parameter)
+            translation = self.compute_tx_ty_tz(translation_xy_Tz,
+                                                camera_parameter)
             translations = translation[selected_indices]
-
         poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, poses6D
 
@@ -376,7 +371,7 @@ class EfficientPosePostprocess(Processor):
         self.round_boxes = pr.RoundBoxes2D()
         self.denormalize = pr.DenormalizeBoxes2D()
         self.regress_translation = RegressTranslation(model.translation_priors)
-        self.compute_tx_ty = ComputeTxTy()
+        self.compute_tx_ty_tz = ComputeTxTyTz()
         self.compute_selections = ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
@@ -391,7 +386,6 @@ class EfficientPosePostprocess(Processor):
         boxes2D = self.denormalize(image, boxes2D)
         boxes2D = self.scale_boxes2D(boxes2D, 1 / image_scale)
         boxes2D = self.round_boxes(boxes2D)
-
         rotations = transformations[:, :, :self.num_pose_dims]
         translations = transformations[:, :, self.num_pose_dims:]
         poses6D = []
@@ -400,12 +394,10 @@ class EfficientPosePostprocess(Processor):
             rotations = self.squeeze(rotations)
             rotations = rotations[selected_indices]
             rotations = self.transform_rotations(rotations)
-
             translation_xy_Tz = self.regress_translation(translations)
-            translation = self.compute_tx_ty(translation_xy_Tz,
-                                             camera_parameter)
+            translation = self.compute_tx_ty_tz(translation_xy_Tz,
+                                                camera_parameter)
             translations = translation[selected_indices]
-
         poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, poses6D
 
@@ -491,7 +483,6 @@ class DetectAndEstimateEfficientPose(Processor):
             preprocessed_image[0], outputs, image_scale, camera_parameter)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
-
         if self.show_poses6D:
             self.draw_pose6D = self._build_draw_pose6D(
                 self.class_to_sizes, self.camera_matrix)
@@ -511,16 +502,16 @@ class EFFICIENTPOSEALINEMOD(DetectAndEstimatePose):
         show_poses6D: Boolean. If ``True`` estimated poses
             are drawn in the returned image.
 
-    # References
-        [ybkscht repository implementation of EfficientPose](
-        https://github.com/ybkscht/EfficientPose)
+     # References
+        [EfficientPose: An efficient, accurate and scalable end-to-end
+        6D multi object pose estimation approach](
+            https://arxiv.org/pdf/2011.04307.pdf)
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights='LINEMOD_OCCLUDED', momentum=0.997,
-                               epsilon=0.0001, activation='sigmoid')
+                               head_weights='LINEMOD_OCCLUDED')
         super(EFFICIENTPOSEALINEMOD, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
@@ -538,16 +529,16 @@ class EFFICIENTPOSEALINEMODDRILLER(DetectAndEstimateEfficientPose):
         show_poses6D: Boolean. If ``True`` estimated poses
             are drawn in the returned image.
 
-    # References
-        [ybkscht repository implementation of EfficientPose](
-        https://github.com/ybkscht/EfficientPose)
+     # References
+        [EfficientPose: An efficient, accurate and scalable end-to-end
+        6D multi object pose estimation approach](
+            https://arxiv.org/pdf/2011.04307.pdf)
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = get_class_names('LINEMOD_EFFICIENTPOSE_DRILLER')
         model = EFFICIENTPOSEA(num_classes=len(names), base_weights='COCO',
-                               head_weights=None,  momentum=0.99,
-                               epsilon=0.001, activation='softmax')
+                               head_weights=None)
         super(EFFICIENTPOSEALINEMODDRILLER, self).__init__(
             model, names, score_thresh, nms_thresh,
             LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
