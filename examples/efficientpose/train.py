@@ -131,7 +131,7 @@ with open(model_info_file, 'r') as file:
 object_diameter = model_data[int(args.object_id)]['diameter']
 
 # Pose accuracy calculation pipeline
-pose_error = EvaluatePoseError(args.save_path,  evaluation_data_managers[0],
+pose_error = EvaluatePoseError(args.save_path, evaluation_data_managers[0],
                                inference, mesh_points, object_diameter,
                                args.evaluation_period)
 
