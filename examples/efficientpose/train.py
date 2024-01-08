@@ -39,6 +39,8 @@ parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-op', '--object_model_path', default='models/',
+                    type=str, help='Path for writing model weights and logs')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
@@ -114,15 +116,16 @@ inference = EfficientPosePhi0LinemodDriller(
 inference.model = model
 
 # Load object mesh
-mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
+mesh_root_path = os.path.join(args.data_path, args.object_model_path)
+mesh_file_name = 'obj_{}.ply'.format(args.object_id)
+mesh_path = os.path.join(mesh_root_path, mesh_file_name)
 mesh = trimesh.load(mesh_path)
 mesh_points = mesh.vertices.copy()
 
-mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
-mesh = trimesh.load(mesh_path)
-mesh_points = mesh.vertices.copy()
-gt_file = args.data_path + 'models/' + 'models_info.yml'
-with open(gt_file, 'r') as file:
+model_info_root_path = os.path.join(args.data_path, args.object_model_path)
+model_info_filename = 'models_info.yml'
+model_info_file = os.path.join(model_info_root_path, model_info_filename)
+with open(model_info_file, 'r') as file:
     model_data = yaml.safe_load(file)
     file.close()
 object_diameter = model_data[int(args.object_id)]['diameter']
