@@ -133,6 +133,7 @@ class LinemodParser(object):
         ground_truth_data = open_file(ground_truth_file)
 
         for split_data in split_file:
+            # Make image path
             image_path = make_image_path(root_path, self.image_path,
                                          split_data)
 
@@ -149,7 +150,7 @@ class LinemodParser(object):
             translation = get_data(split_data, ground_truth_data,
                                    key='cam_t_m2c')
 
-            # Get mask path
+            # Make mask path
             mask_path = make_image_path(root_path, self.mask_path, split_data)
 
             # Append class to box data
