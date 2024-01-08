@@ -122,10 +122,10 @@ class LinemodParser(object):
         self._preprocess_files()
 
     def _preprocess_files(self):
-        root_path = make_root_path(
-            self.dataset_path, self.data_path, self.object_id)
-        files = load_filenames(
-            root_path, self.ground_truth_file, self.info_file, self.split)
+        root_path = make_root_path(self.dataset_path, self.data_path,
+                                   self.object_id)
+        files = load_linemod_filenames(root_path, self.ground_truth_file,
+                                       self.info_file, self.split)
         ground_truth_file, info_file, split_file = files
         split_file = open_file(split_file)
         ground_truth_data = open_file(ground_truth_file)
@@ -135,9 +135,8 @@ class LinemodParser(object):
                                          split_data)
 
             # Compute bounding box
-            file_id = int(split_data)
-            bounding_box = ground_truth_data[file_id][0]['obj_bb']
-            x_min, y_min, W, H = bounding_box
+            box = get_data(split_data, ground_truth_data, key='obj_bb')
+            x_min, y_min, W, H = box
             x_max = x_min + W
             y_max = y_min + H
             x_min = x_min / self.image_size['width']
@@ -147,16 +146,16 @@ class LinemodParser(object):
             box_data = [x_min, y_min, x_max, y_max]
             box_data = np.asarray([box_data])
 
-            annotations = ground_truth_data[file_id][0]
             # Get rotation vector
-            rotation = annotations['cam_R_m2c']
+            rotation = get_data(split_data, ground_truth_data, key='cam_R_m2c')
             rotation = np.asarray(rotation)
             rotation = np.expand_dims(rotation, axis=0)
 
             # Get translation vector
-            translation_raw = annotations['cam_t_m2c']
-            translation_raw = np.asarray(translation_raw)
-            translation_raw = np.expand_dims(translation_raw, axis=0)
+            translation = get_data(split_data, ground_truth_data,
+                                   key='cam_t_m2c')
+            translation = np.asarray(translation)
+            translation = np.expand_dims(translation, axis=0)
 
             # Compute object class
             class_arg = 1
@@ -171,7 +170,7 @@ class LinemodParser(object):
 
             self.data.append({'image': image_path, 'boxes': box_data,
                               'rotation': rotation,
-                              'translation_raw': translation_raw,
+                              'translation_raw': translation,
                               'class': class_arg,
                               'mask': mask_path})
 
@@ -183,7 +182,7 @@ def make_root_path(dataset_path, data_path, object_id):
     return os.path.join(dataset_path, data_path, object_id)
 
 
-def load_filenames(root_path, ground_truth_file, info_file, split):
+def load_linemod_filenames(root_path, ground_truth_file, info_file, split):
     ground_truth_file = '{}.{}'.format(ground_truth_file, 'yml')
     info_file = '{}.{}'.format(info_file, 'yml')
     split_file = '{}.{}'.format(split, 'txt')
@@ -214,3 +213,8 @@ def parse_yml(file_handle):
 def make_image_path(root_path, image_path, split_data, image_extension='png'):
     file_name = '{}.{}'.format(split_data, image_extension)
     return os.path.join(root_path, image_path, file_name)
+
+
+def get_data(split_data, data, key):
+    file_key = int(split_data)
+    return data[file_key][0][key]
