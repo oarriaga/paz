@@ -26,7 +26,6 @@ class Linemod(Loader):
             ``[num_objects, 4 + 1]`` where the ``+ 1`` contains the
             ``class_arg`` and ``num_objects`` refers to the amount of
             boxes in the image.
-
     """
     def __init__(self, path=None, object_id='08', split='train',
                  name='Linemod', evaluate=False,
@@ -96,12 +95,11 @@ class LinemodParser(object):
                  evaluate=False, object_id='08',
                  class_names=['background', 'driller'],
                  image_size={'width': 640.0, 'height': 480.0},
-                 ground_truth_file='gt', info_file='info', data='data/'):
+                 data_path='data/', ground_truth_file='gt', info_file='info'):
 
         if dataset_name != 'Linemod':
             raise Exception('Invalid dataset name.')
 
-        self.dataset_name = dataset_name
         self.split = split
         self.dataset_path = dataset_path
         self.evaluate = evaluate
@@ -111,8 +109,8 @@ class LinemodParser(object):
         self.object_id_to_class_arg = object_id_to_class_arg
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
-        self.data = data
-        self.split_prefix = os.path.join(self.dataset_path, self.data)
+        self.data_path = data_path
+        self.object_path = os.path.join(self.dataset_path, self.data_path)
         self.num_classes = len(self.class_names)
         class_keys = np.arange(self.num_classes)
         self.arg_to_class = dict(zip(class_keys, self.class_names))
@@ -121,33 +119,26 @@ class LinemodParser(object):
         self.data = []
         self._preprocess_files()
 
-    def _load_filenames(self):
-        split_file = (self.split_prefix + self.object_id
-                      + '/' + self.split + '.txt')
-        ground_truth_files = (self.split_prefix + self.object_id
-                              + '/' + self.ground_truth_file + '.yml')
-        info_file = (self.split_prefix + self.object_id
-                     + '/' + self.info_file + '.yml')
-        return [split_file, ground_truth_files, info_file]
-
     def _preprocess_files(self):
-        data_file, ground_truth_file, info_file = self._load_filenames()
+        root_dir = make_root_path(self.dataset_path,
+                                  self.data_path,
+                                  self.object_id)
+        files = load_filenames(root_dir,
+                               self.ground_truth_file,
+                               self.info_file,
+                               self.split)
+        ground_truth_file, info_file, split_file = files
 
-        with open(data_file, 'r') as file:
-            data_file = [line.strip() for line in file.readlines()]
-            file.close()
+        split_file = open_file(split_file)
+        ground_truth_data = open_file(ground_truth_file)
 
-        with open(ground_truth_file, 'r') as file:
-            ground_truth_data = yaml.safe_load(file)
-            file.close()
-
-        for datum_file in data_file:
+        for split_data in split_file:
             # Get image path
-            image_path = (self.split_prefix + self.object_id
-                          + '/' + 'rgb' + '/' + datum_file + '.png')
+            image_path = (self.object_path + self.object_id
+                          + '/' + 'rgb' + '/' + split_data + '.png')
 
             # Compute bounding box
-            file_id = int(datum_file)
+            file_id = int(split_data)
             bounding_box = ground_truth_data[file_id][0]['obj_bb']
             x_min, y_min, W, H = bounding_box
             x_max = x_min + W
@@ -174,8 +165,8 @@ class LinemodParser(object):
             class_arg = 1
 
             # Get mask path
-            mask_path = (self.split_prefix + self.object_id
-                         + '/' + 'mask' + '/' + datum_file + '.png')
+            mask_path = (self.object_path + self.object_id
+                         + '/' + 'mask' + '/' + split_data + '.png')
 
             # Append class to box data
             box_data = np.concatenate(
@@ -189,3 +180,35 @@ class LinemodParser(object):
 
     def load_data(self):
         return self.data
+
+
+def make_root_path(dataset_path, data_path, object_id):
+    return os.path.join(dataset_path, data_path, object_id)
+
+
+def load_filenames(root_dir, ground_truth_file, info_file, split):
+    ground_truth_file = "{}.{}".format(ground_truth_file, 'yml')
+    info_file = "{}.{}".format(info_file, 'yml')
+    split_file = "{}.{}".format(split, 'txt')
+    return [os.path.join(root_dir, ground_truth_file),
+            os.path.join(root_dir, info_file),
+            os.path.join(root_dir, split_file)]
+
+
+def open_file(file):
+    file_to_parser = {'.txt': parse_txt,
+                      '.yml': parse_yml}
+    file_name, file_extension = os.path.splitext(file)
+    parser = file_to_parser[file_extension]
+    with open(file, 'r') as f:
+        file_contents = parser(f)
+    f.close()
+    return file_contents
+
+
+def parse_txt(file_handle):
+    return [line.strip() for line in file_handle.readlines()]
+
+
+def parse_yml(file_handle):
+    return yaml.safe_load(file_handle)
