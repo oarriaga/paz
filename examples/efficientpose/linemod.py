@@ -120,48 +120,12 @@ class LinemodParser(object):
         self.image_path = image_path
         self.mask_path = mask_path
         self.class_arg = class_arg
-        self.data = []
-        self._preprocess_files()
-
-    def _preprocess_files(self):
-        root_path = make_root_path(self.dataset_path, self.data_path,
-                                   self.object_id)
-        files = load_linemod_filenames(root_path, self.ground_truth_file,
-                                       self.info_file, self.split)
-        ground_truth_file, info_file, split_file = files
-        split_file = open_file(split_file)
-        ground_truth_data = open_file(ground_truth_file)
-
-        for split_data in split_file:
-            # Make image path
-            image_path = make_image_path(root_path, self.image_path,
-                                         split_data)
-
-            # Process bounding box
-            box = get_data(split_data, ground_truth_data, key='obj_bb')
-            box = linemod_to_corner_form(box)
-            box = normalize_box_input_size(box, self.input_size)
-            box = append_class_to_box(box, class_arg=self.class_arg)
-
-            # Get rotation vector
-            rotation = get_data(split_data, ground_truth_data, key='cam_R_m2c')
-
-            # Get translation vector
-            translation = get_data(split_data, ground_truth_data,
-                                   key='cam_t_m2c')
-
-            # Make mask path
-            mask_path = make_image_path(root_path, self.mask_path, split_data)
-
-            # Append class to box data
-            self.data.append({'image': image_path, 'boxes': box,
-                              'rotation': rotation,
-                              'translation_raw': translation,
-                              'class': self.class_arg,
-                              'mask': mask_path})
 
     def load_data(self):
-        return self.data
+        return load(self.dataset_path, self.data_path, self.object_id,
+                    self.ground_truth_file, self.info_file, self.split,
+                    self.image_path, self.input_size, self.class_arg,
+                    self.mask_path)
 
 
 def make_root_path(dataset_path, data_path, object_id):
@@ -201,8 +165,8 @@ def make_image_path(root_path, image_path, split_data, image_extension='png'):
     return os.path.join(root_path, image_path, file_name)
 
 
-def get_data(split_data, data, key):
-    file_key = int(split_data)
+def get_data(file_id, data, key):
+    file_key = int(file_id)
     data = np.asarray(data[file_key][0][key])
     return np.expand_dims(data, axis=0)
 
@@ -228,3 +192,43 @@ def normalize_box_input_size(box, input_size):
 
 def append_class_to_box(box, class_arg=1):
     return np.concatenate((box, np.array([[class_arg]])), axis=-1)
+
+
+def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
+         split, image_path, input_size, class_arg, mask_path):
+    root_path = make_root_path(dataset_path, data_path, object_id)
+    files = load_linemod_filenames(root_path, ground_truth_file,
+                                   info_file, split)
+    ground_truth_file, info_file, split_file = files
+    split_file = open_file(split_file)
+    ground_truth_data = open_file(ground_truth_file)
+
+    data = []
+    for split_data in split_file:
+        # Make image path
+        image_path = make_image_path(root_path, image_path, split_data)
+
+        # Process bounding box
+        box = get_data(split_data, ground_truth_data, key='obj_bb')
+        box = linemod_to_corner_form(box)
+        box = normalize_box_input_size(box, input_size)
+        box = append_class_to_box(box, class_arg=class_arg)
+
+        # Get rotation vector
+        rotation = get_data(split_data, ground_truth_data, key='cam_R_m2c')
+
+        # Get translation vector
+        translation = get_data(split_data, ground_truth_data,
+                               key='cam_t_m2c')
+
+        # Make mask path
+        mask_path = make_image_path(root_path, mask_path, split_data)
+
+        # Append class to box data
+        data.append({'image': image_path,
+                        'boxes': box,
+                        'rotation': rotation,
+                        'translation_raw': translation,
+                        'class': class_arg,
+                        'mask': mask_path})
+    return data
