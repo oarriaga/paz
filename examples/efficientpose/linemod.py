@@ -29,13 +29,13 @@ class Linemod(Loader):
     """
     def __init__(self, path=None, object_id='08', split='train',
                  name='Linemod', evaluate=False,
-                 image_size={'width': 512.0, 'height': 512.0}):
+                 input_size=(512, 512)):
         self.path = path
         self.object_id = object_id
         self.split = split
         self.class_names_all = get_class_names('Linemod')
         self.evaluate = evaluate
-        self.image_size = image_size
+        self.input_size = input_size
         self.arg_to_class = None
         self.object_id_to_class_arg = self._object_id_to_class_arg()
         self.class_name = self.class_names_all[
@@ -54,7 +54,7 @@ class Linemod(Loader):
         self.parser = LinemodParser(self.object_id_to_class_arg, dataset_name,
                                     split, self.path, self.evaluate,
                                     self.object_id, self.class_names,
-                                    self.image_size)
+                                    self.input_size)
         self.arg_to_class = self.parser.arg_to_class
         ground_truth_data = self.parser.load_data()
         return ground_truth_data
@@ -94,7 +94,7 @@ class LinemodParser(object):
                  split='train', dataset_path='/Linemod_preprocessed/',
                  evaluate=False, object_id='08',
                  class_names=['background', 'driller'],
-                 image_size={'width': 640.0, 'height': 480.0},
+                 input_size=(512, 512),
                  data_path='data/', ground_truth_file='gt', info_file='info',
                  image_path='rgb'):
 
@@ -106,7 +106,7 @@ class LinemodParser(object):
         self.evaluate = evaluate
         self.object_id = object_id
         self.class_names = class_names
-        self.image_size = image_size
+        self.input_size = input_size
         self.object_id_to_class_arg = object_id_to_class_arg
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
@@ -136,26 +136,15 @@ class LinemodParser(object):
 
             # Compute bounding box
             box = get_data(split_data, ground_truth_data, key='obj_bb')
-            x_min, y_min, W, H = box
-            x_max = x_min + W
-            y_max = y_min + H
-            x_min = x_min / self.image_size['width']
-            x_max = x_max / self.image_size['width']
-            y_min = y_min / self.image_size['height']
-            y_max = y_max / self.image_size['height']
-            box_data = [x_min, y_min, x_max, y_max]
-            box_data = np.asarray([box_data])
+            box = linemod_to_corner_form(box)
+            box = normalize_box_input_size(box, self.input_size)
 
             # Get rotation vector
             rotation = get_data(split_data, ground_truth_data, key='cam_R_m2c')
-            rotation = np.asarray(rotation)
-            rotation = np.expand_dims(rotation, axis=0)
 
             # Get translation vector
             translation = get_data(split_data, ground_truth_data,
                                    key='cam_t_m2c')
-            translation = np.asarray(translation)
-            translation = np.expand_dims(translation, axis=0)
 
             # Compute object class
             class_arg = 1
@@ -165,10 +154,9 @@ class LinemodParser(object):
                          + '/' + 'mask' + '/' + split_data + '.png')
 
             # Append class to box data
-            box_data = np.concatenate(
-                (box_data, np.array([[class_arg]])), axis=-1)
+            box = np.concatenate((box, np.array([[class_arg]])), axis=-1)
 
-            self.data.append({'image': image_path, 'boxes': box_data,
+            self.data.append({'image': image_path, 'boxes': box,
                               'rotation': rotation,
                               'translation_raw': translation,
                               'class': class_arg,
@@ -217,4 +205,24 @@ def make_image_path(root_path, image_path, split_data, image_extension='png'):
 
 def get_data(split_data, data, key):
     file_key = int(split_data)
-    return data[file_key][0][key]
+    data = np.asarray(data[file_key][0][key])
+    return np.expand_dims(data, axis=0)
+
+
+def linemod_to_corner_form(box):
+    x_min, y_min, W, H = box[0][0], box[0][1], box[0][2], box[0][3]
+    x_max = x_min + W
+    y_max = y_min + H
+    return np.array([[x_min, y_min, x_max, y_max]])
+
+
+def normalize_box_input_size(box, input_size):
+    x_min, y_min = box[0][0], box[0][1]
+    x_max, y_max = box[0][2], box[0][3]
+    input_W, input_H = input_size
+    x_min = x_min / input_W
+    x_max = x_max / input_W
+    y_min = y_min / input_H
+    y_max = y_max / input_H
+    box = [x_min, y_min, x_max, y_max]
+    return np.array([[x_min, y_min, x_max, y_max]])
