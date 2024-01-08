@@ -15,9 +15,7 @@ class Linemod(Loader):
             e.g. `train`, `val` or `test`
         name: Str, or list indicating with dataset or datasets to
             load. e.g. ``VOC2007`` or ``[''VOC2007'', VOC2012]``.
-        evaluate: Bool, If ``True`` returned data will be loaded
-            without normalization for a direct evaluation.
-        image_size: Dict, containing keys 'width' and 'height'
+        input_size: Dict, containing keys 'width' and 'height'
             with values equal to the input size of the model.
 
     # Return
@@ -35,42 +33,34 @@ class Linemod(Loader):
         self.input_size = input_size
         object_id_to_class_arg = {0: 0, 1: 1, 5: 2, 6: 3, 8: 4,
                                   9: 5, 10: 6, 11: 7, 12: 8}
-        class_arg = object_id_to_class_arg[int(self.object_id)]
-        class_names_all = get_class_names('Linemod')
-        foreground_class = class_names_all[class_arg]
-        background_class = 'background'
-        class_names = [background_class, foreground_class]
+        class_names = compute_class_names(object_id, object_id_to_class_arg)
         super(Linemod, self).__init__(path, split, class_names, name)
 
     def load_data(self):
-        if self.name == 'Linemod':
-            ground_truth_data = self._load_Linemod(self.name, self.split)
-        else:
-            raise ValueError('Invalid name given.')
-        return ground_truth_data
-
-    def _load_Linemod(self, dataset_name, split):
-        self.parser = LinemodParser(dataset_name, split, self.path,
+        self.parser = LinemodParser(self.split, self.path,
                                     self.object_id, self.input_size)
         return self.parser.load_data()
+
+
+def compute_class_names(object_id, object_id_to_class_arg):
+    class_arg = object_id_to_class_arg[int(object_id)]
+    class_names_all = get_class_names('Linemod')
+    foreground_class = class_names_all[class_arg]
+    background_class = class_names_all[0]
+    return [background_class, foreground_class]
 
 
 class LinemodParser(object):
     """ Preprocess the Linemod yaml annotations data.
 
     # Arguments
-        object_id_to_class_arg: Dict, containing a mapping
-            from object ID to class arg.
         dataset_name: Str, or list indicating with dataset or datasets
             to load. e.g. ``VOC2007`` or ``[''VOC2007'', VOC2012]``.
         split: Str, determining the data split to load.
             e.g. `train`, `val` or `test`
         dataset_path: Str, data path to Linemod annotations.
-        evaluate: Bool, If ``True`` returned data will be loaded
-            without normalization for a direct evaluation.
         object_id: Str, ID of the object to train.
-        class_names: List of strings indicating class names.
-        image_size: Dict, containing keys 'width' and 'height'
+        input_size: Dict, containing keys 'width' and 'height'
             with values equal to the input size of the model.
         ground_truth_file: Str, name of the file
             containing ground truths.
@@ -82,20 +72,17 @@ class LinemodParser(object):
             are numpy arrays for boxes, rotation, translation
             and integer for class.
     """
-    def __init__(self, dataset_name='Linemod', split='train',
-                 dataset_path='/Linemod_preprocessed/', object_id='08',
-                 input_size=(512, 512), data_path='data/',
+    def __init__(self, split='train', dataset_path='/Linemod_preprocessed/',
+                 object_id='08', input_size=(512, 512), data_path='data/',
                  ground_truth_file='gt', info_file='info', image_path='rgb/',
                  mask_path='mask/', class_arg=1):
-        if dataset_name != 'Linemod':
-            raise Exception('Invalid dataset name.')
         self.split = split
         self.dataset_path = dataset_path
         self.object_id = object_id
         self.input_size = input_size
+        self.data_path = data_path
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
-        self.data_path = data_path
         self.image_path = image_path
         self.mask_path = mask_path
         self.class_arg = class_arg
@@ -105,6 +92,33 @@ class LinemodParser(object):
                     self.ground_truth_file, self.info_file, self.split,
                     self.image_path, self.input_size, self.class_arg,
                     self.mask_path)
+
+
+def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
+         split, image_path, input_size, class_arg, mask_path):
+    root_path = make_root_path(dataset_path, data_path, object_id)
+    files = load_linemod_filenames(root_path, ground_truth_file,
+                                   info_file, split)
+    ground_truth_file, info_file, split_file = files
+    split_file = open_file(split_file)
+    annotation = open_file(ground_truth_file)
+
+    data = []
+    for split_data in split_file:
+        raw_image_path = make_image_path(root_path, image_path, split_data)
+        # Process bounding box
+        box = get_data(split_data, annotation, key='obj_bb')
+        box = linemod_to_corner_form(box)
+        box = normalize_box_input_size(box, input_size)
+        box = append_class_to_box(box, class_arg=class_arg)
+        # Load rotation and translation
+        rotation = get_data(split_data, annotation, key='cam_R_m2c')
+        translation = get_data(split_data, annotation, key='cam_t_m2c')
+        raw_mask_path = make_image_path(root_path, mask_path, split_data)
+        data.append({'image': raw_image_path, 'boxes': box,
+                     'rotation': rotation, 'translation_raw': translation,
+                     'class': class_arg, 'mask': raw_mask_path})
+    return data
 
 
 def make_root_path(dataset_path, data_path, object_id):
@@ -171,43 +185,3 @@ def normalize_box_input_size(box, input_size):
 
 def append_class_to_box(box, class_arg=1):
     return np.concatenate((box, np.array([[class_arg]])), axis=-1)
-
-
-def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
-         split, image_path, input_size, class_arg, mask_path):
-    root_path = make_root_path(dataset_path, data_path, object_id)
-    files = load_linemod_filenames(root_path, ground_truth_file,
-                                   info_file, split)
-    ground_truth_file, info_file, split_file = files
-    split_file = open_file(split_file)
-    ground_truth_data = open_file(ground_truth_file)
-
-    data = []
-    for split_data in split_file:
-        # Make image path
-        raw_image_path = make_image_path(root_path, image_path, split_data)
-
-        # Process bounding box
-        box = get_data(split_data, ground_truth_data, key='obj_bb')
-        box = linemod_to_corner_form(box)
-        box = normalize_box_input_size(box, input_size)
-        box = append_class_to_box(box, class_arg=class_arg)
-
-        # Get rotation vector
-        rotation = get_data(split_data, ground_truth_data, key='cam_R_m2c')
-
-        # Get translation vector
-        translation = get_data(split_data, ground_truth_data,
-                               key='cam_t_m2c')
-
-        # Make mask path
-        raw_mask_path = make_image_path(root_path, mask_path, split_data)
-
-        # Append class to box data
-        data.append({'image': raw_image_path,
-                     'boxes': box,
-                     'rotation': rotation,
-                     'translation_raw': translation,
-                     'class': class_arg,
-                     'mask': raw_mask_path})
-    return data
