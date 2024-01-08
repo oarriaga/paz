@@ -95,7 +95,8 @@ class LinemodParser(object):
                  evaluate=False, object_id='08',
                  class_names=['background', 'driller'],
                  image_size={'width': 640.0, 'height': 480.0},
-                 data_path='data/', ground_truth_file='gt', info_file='info'):
+                 data_path='data/', ground_truth_file='gt', info_file='info',
+                 image_path='rgb'):
 
         if dataset_name != 'Linemod':
             raise Exception('Invalid dataset name.')
@@ -116,26 +117,22 @@ class LinemodParser(object):
         self.arg_to_class = dict(zip(class_keys, self.class_names))
         self.class_to_arg = {value: key for key, value
                              in self.arg_to_class.items()}
+        self.image_path = image_path
         self.data = []
         self._preprocess_files()
 
     def _preprocess_files(self):
-        root_dir = make_root_path(self.dataset_path,
-                                  self.data_path,
-                                  self.object_id)
-        files = load_filenames(root_dir,
-                               self.ground_truth_file,
-                               self.info_file,
-                               self.split)
+        root_path = make_root_path(
+            self.dataset_path, self.data_path, self.object_id)
+        files = load_filenames(
+            root_path, self.ground_truth_file, self.info_file, self.split)
         ground_truth_file, info_file, split_file = files
-
         split_file = open_file(split_file)
         ground_truth_data = open_file(ground_truth_file)
 
         for split_data in split_file:
-            # Get image path
-            image_path = (self.object_path + self.object_id
-                          + '/' + 'rgb' + '/' + split_data + '.png')
+            image_path = make_image_path(root_path, self.image_path,
+                                         split_data)
 
             # Compute bounding box
             file_id = int(split_data)
@@ -186,13 +183,13 @@ def make_root_path(dataset_path, data_path, object_id):
     return os.path.join(dataset_path, data_path, object_id)
 
 
-def load_filenames(root_dir, ground_truth_file, info_file, split):
-    ground_truth_file = "{}.{}".format(ground_truth_file, 'yml')
-    info_file = "{}.{}".format(info_file, 'yml')
-    split_file = "{}.{}".format(split, 'txt')
-    return [os.path.join(root_dir, ground_truth_file),
-            os.path.join(root_dir, info_file),
-            os.path.join(root_dir, split_file)]
+def load_filenames(root_path, ground_truth_file, info_file, split):
+    ground_truth_file = '{}.{}'.format(ground_truth_file, 'yml')
+    info_file = '{}.{}'.format(info_file, 'yml')
+    split_file = '{}.{}'.format(split, 'txt')
+    return [os.path.join(root_path, ground_truth_file),
+            os.path.join(root_path, info_file),
+            os.path.join(root_path, split_file)]
 
 
 def open_file(file):
@@ -212,3 +209,8 @@ def parse_txt(file_handle):
 
 def parse_yml(file_handle):
     return yaml.safe_load(file_handle)
+
+
+def make_image_path(root_path, image_path, split_data, image_extension='png'):
+    file_name = '{}.{}'.format(split_data, image_extension)
+    return os.path.join(root_path, image_path, file_name)
