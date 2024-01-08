@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 import numpy as np
 from plyfile import PlyData
@@ -37,75 +38,9 @@ class MultiPoseLoss(object):
         self.num_pose_dims = num_pose_dims
         self.tz_scale = tf.convert_to_tensor(translation_scale_norm,
                                              dtype=tf.float32)
-        self.model_path = data_path + model_path + 'obj_' + object_id + '.ply'
-        self.model_points = self._load_model_file()
-        self.model_points = self._filter_model_points(target_num_points)
-
-    def _load_model_file(self):
-        model_data = PlyData.read(self.model_path)
-        vertex = model_data['vertex'][:]
-        vertices = [vertex['x'], vertex['y'], vertex['z']]
-        return np.stack(vertices, axis=-1)
-
-    def _filter_model_points(self, target_num_points):
-        num_points = self.model_points.shape[0]
-
-        if num_points == target_num_points:
-            points = self.model_points
-        elif num_points < target_num_points:
-            points = np.zeros((target_num_points, 3))
-            points[:num_points, :] = self.model_points
-        else:
-            step_size = (num_points // target_num_points) - 1
-            step_size = max(1, step_size)
-            points = self.model_points[::step_size, :]
-            points = points[np.newaxis, :target_num_points, :]
-
-        return tf.convert_to_tensor(points)
-
-    
-
-    
-
-   
-
-    def _separate_axis_from_angle(self, axis_angle):
-        squared = tf.math.square(axis_angle)
-        sum = tf.math.reduce_sum(squared, axis=-1)
-        angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
-        axis = tf.math.divide_no_nan(axis_angle, angle)
-        return [axis, angle]
-
-    def _rotate(self, point, axis, angle):
-        cos_angle = tf.cos(angle)
-        axis_dot_point = self._dot(axis, point)
-        return (point * cos_angle + self._cross(axis, point) * tf.sin(angle)
-                + axis * axis_dot_point * (1.0 - cos_angle))
-
-    def _dot(self, vector1, vector2, axis=-1, keepdims=True):
-        return tf.reduce_sum(input_tensor=vector1 * vector2,
-                             axis=axis, keepdims=keepdims)
-
-    def _cross(self, vector1, vector2):
-        vector1_x, vector1_y,  = vector1[:, :, 0], vector1[:, :, 1]
-        vector1_z = vector1[:, :, 2]
-        vector2_x, vector2_y = vector2[:, :, 0], vector2[:, :, 1]
-        vector2_z = vector2[:, :, 2]
-        n_x = vector1_y * vector2_z - vector1_z * vector2_y
-        n_y = vector1_z * vector2_x - vector1_x * vector2_z
-        n_z = vector1_x * vector2_y - vector1_y * vector2_x
-        return tf.stack((n_x, n_y, n_z), axis=-1)
-
-    def _calc_sym_distances(self, sym_points_pred, sym_points_true):
-        sym_points_pred = sym_points_pred[:, :, tf.newaxis]
-        sym_points_true = sym_points_true[:, tf.newaxis]
-        distances = tf.reduce_min(tf.norm(sym_points_pred - sym_points_true,
-                                          axis=-1), axis=-1)
-        return tf.reduce_mean(distances, axis=-1)
-
-    def _calc_asym_distances(self, asym_points_pred, asym_points_target):
-        distances = tf.norm(asym_points_pred - asym_points_target, axis=-1)
-        return tf.reduce_mean(distances, axis=-1)
+        model_points = load_model_file(data_path, model_path, object_id)
+        self.model_points = filter_model_points(model_points,
+                                                target_num_points)
 
     def compute_loss(self, y_true, y_pred):
         """Computes pose loss.
@@ -147,8 +82,8 @@ class MultiPoseLoss(object):
         class_indices = tf.gather_nd(class_indices, indices)
         class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
 
-        axis_pred, angle_pred = self._separate_axis_from_angle(rotation_pred)
-        axis_true, angle_true = self._separate_axis_from_angle(rotation_true)
+        axis_pred, angle_pred = separate_axis_from_angle(rotation_pred)
+        axis_true, angle_true = separate_axis_from_angle(rotation_true)
 
         axis_pred = axis_pred[:, tf.newaxis, :]
         axis_true = axis_true[:, tf.newaxis, :]
@@ -160,10 +95,10 @@ class MultiPoseLoss(object):
 
         selected_model_points = tf.gather(self.model_points,
                                           class_indices, axis=0)
-        transformed_points_pred = self._rotate(
-            selected_model_points, axis_pred, angle_pred) + translation_pred
-        transformed_points_true = (self._rotate(
-            selected_model_points, axis_true, angle_true) + translation_true)
+        transformed_points_pred = rotate(selected_model_points, axis_pred,
+                                         angle_pred) + translation_pred
+        transformed_points_true = rotate(selected_model_points, axis_true,
+                                         angle_true) + translation_true
 
         num_points = selected_model_points.shape[1]
         sym_indices = tf.where(tf.math.equal(is_symmetric, 1))
@@ -178,15 +113,37 @@ class MultiPoseLoss(object):
         asym_points_true = tf.reshape(tf.gather_nd(
             transformed_points_true, asym_indices), (-1, num_points, 3))
 
-        sym_distances = self._calc_sym_distances(
-            sym_points_pred, sym_points_true)
-        asym_distances = self._calc_asym_distances(
-            asym_points_pred, asym_points_true)
-
+        sym_distances = calc_sym_distances(sym_points_pred, sym_points_true)
+        asym_distances = calc_asym_distances(asym_points_pred,
+                                             asym_points_true)
         distances = tf.concat([sym_distances, asym_distances], axis=0)
         loss = tf.math.reduce_mean(distances)
         loss = tf.where(tf.math.is_nan(loss), tf.zeros_like(loss), loss)
         return loss
+
+
+def load_model_file(data_path, model_path, object_id):
+    object_filename = 'obj_{}.ply'.format(object_id)
+    model_file_path = os.path.join(data_path, model_path, object_filename)
+    model_data = PlyData.read(model_file_path)
+    vertex = model_data['vertex'][:]
+    vertices = [vertex['x'], vertex['y'], vertex['z']]
+    return np.stack(vertices, axis=-1)
+
+
+def filter_model_points(model_points, target_num_points):
+    num_points = model_points.shape[0]
+    if num_points == target_num_points:
+        points = model_points
+    elif num_points < target_num_points:
+        points = np.zeros((target_num_points, 3))
+        points[:num_points, :] = model_points
+    else:
+        step_size = (num_points // target_num_points) - 1
+        step_size = max(1, step_size)
+        points = model_points[::step_size, :]
+        points = points[np.newaxis, :target_num_points, :]
+    return tf.convert_to_tensor(points)
 
 
 def compute_translation(translation_raw_pred, scale, tz_scale,
@@ -222,6 +179,50 @@ def compute_tx_ty_tz(translation_xy_Tz, camera_matrix, tz_scale, scale):
     tx, ty = tx[:, :, tf.newaxis], ty[:, :, tf.newaxis]
     tz = tz[:, :, tf.newaxis]
     return tf.concat([tx, ty, tz], axis=-1)
+
+
+def separate_axis_from_angle(axis_angle):
+    squared = tf.math.square(axis_angle)
+    sum = tf.math.reduce_sum(squared, axis=-1)
+    angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
+    axis = tf.math.divide_no_nan(axis_angle, angle)
+    return [axis, angle]
+
+
+def rotate(point, axis, angle):
+    cos_angle = tf.cos(angle)
+    axis_dot_point = dot(axis, point)
+    return (point * cos_angle + cross(axis, point) * tf.sin(angle)
+            + axis * axis_dot_point * (1.0 - cos_angle))
+
+
+def dot(vector1, vector2, axis=-1, keepdims=True):
+    return tf.reduce_sum(input_tensor=vector1 * vector2,
+                         axis=axis, keepdims=keepdims)
+
+
+def cross(vector1, vector2):
+    vector1_x, vector1_y,  = vector1[:, :, 0], vector1[:, :, 1]
+    vector1_z = vector1[:, :, 2]
+    vector2_x, vector2_y = vector2[:, :, 0], vector2[:, :, 1]
+    vector2_z = vector2[:, :, 2]
+    n_x = vector1_y * vector2_z - vector1_z * vector2_y
+    n_y = vector1_z * vector2_x - vector1_x * vector2_z
+    n_z = vector1_x * vector2_y - vector1_y * vector2_x
+    return tf.stack((n_x, n_y, n_z), axis=-1)
+
+
+def calc_sym_distances(sym_points_pred, sym_points_true):
+    sym_points_pred = sym_points_pred[:, :, tf.newaxis]
+    sym_points_true = sym_points_true[:, tf.newaxis]
+    distances = tf.reduce_min(tf.norm(sym_points_pred - sym_points_true,
+                              axis=-1), axis=-1)
+    return tf.reduce_mean(distances, axis=-1)
+
+
+def calc_asym_distances(asym_points_pred, asym_points_target):
+    distances = tf.norm(asym_points_pred - asym_points_target, axis=-1)
+    return tf.reduce_mean(distances, axis=-1)
 
 
 if __name__ == "__main__":
