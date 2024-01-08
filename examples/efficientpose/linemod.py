@@ -28,20 +28,19 @@ class Linemod(Loader):
             boxes in the image.
     """
     def __init__(self, path=None, object_id='08', split='train',
-                 name='Linemod', evaluate=False,
-                 input_size=(512, 512)):
+                 name='Linemod', input_size=(512, 512)):
         self.path = path
         self.object_id = object_id
         self.split = split
-        self.class_names_all = get_class_names('Linemod')
-        self.evaluate = evaluate
         self.input_size = input_size
-        self.arg_to_class = None
-        self.object_id_to_class_arg = self._object_id_to_class_arg()
-        self.class_name = self.class_names_all[
-            self.object_id_to_class_arg[int(self.object_id)]]
-        self.class_names = [self.class_names_all[0], self.class_name]
-        super(Linemod, self).__init__(path, split, self.class_names, name)
+        object_id_to_class_arg = {0: 0, 1: 1, 5: 2, 6: 3, 8: 4, 9: 5,
+                                  10: 6, 11: 7, 12: 8}
+        class_arg = object_id_to_class_arg[int(self.object_id)]
+        class_names_all = get_class_names('Linemod')
+        foreground_class = class_names_all[class_arg]
+        background_class = 'background'
+        class_names = [background_class, foreground_class]
+        super(Linemod, self).__init__(path, split, class_names, name)
 
     def load_data(self):
         if self.name == 'Linemod':
@@ -51,16 +50,12 @@ class Linemod(Loader):
         return ground_truth_data
 
     def _load_Linemod(self, dataset_name, split):
-        self.parser = LinemodParser(self.object_id_to_class_arg, dataset_name,
-                                    split, self.path, self.evaluate,
-                                    self.object_id, self.class_names,
+        self.parser = LinemodParser(dataset_name,
+                                    split, self.path,
+                                    self.object_id,
                                     self.input_size)
-        self.arg_to_class = self.parser.arg_to_class
         ground_truth_data = self.parser.load_data()
         return ground_truth_data
-
-    def _object_id_to_class_arg(self):
-        return {0: 0, 1: 1, 5: 2, 6: 3, 8: 4, 9: 5, 10: 6, 11: 7, 12: 8}
 
 
 class LinemodParser(object):
@@ -90,10 +85,9 @@ class LinemodParser(object):
             are numpy arrays for boxes, rotation, translation
             and integer for class.
     """
-    def __init__(self, object_id_to_class_arg, dataset_name='Linemod',
+    def __init__(self, dataset_name='Linemod',
                  split='train', dataset_path='/Linemod_preprocessed/',
-                 evaluate=False, object_id='08',
-                 class_names=['background', 'driller'],
+                 object_id='08',
                  input_size=(512, 512),
                  data_path='data/', ground_truth_file='gt', info_file='info',
                  image_path='rgb/', mask_path='mask/', class_arg=1):
@@ -103,20 +97,11 @@ class LinemodParser(object):
 
         self.split = split
         self.dataset_path = dataset_path
-        self.evaluate = evaluate
         self.object_id = object_id
-        self.class_names = class_names
         self.input_size = input_size
-        self.object_id_to_class_arg = object_id_to_class_arg
         self.ground_truth_file = ground_truth_file
         self.info_file = info_file
         self.data_path = data_path
-        self.object_path = os.path.join(self.dataset_path, self.data_path)
-        self.num_classes = len(self.class_names)
-        class_keys = np.arange(self.num_classes)
-        self.arg_to_class = dict(zip(class_keys, self.class_names))
-        self.class_to_arg = {value: key for key, value
-                             in self.arg_to_class.items()}
         self.image_path = image_path
         self.mask_path = mask_path
         self.class_arg = class_arg
@@ -206,7 +191,7 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
     data = []
     for split_data in split_file:
         # Make image path
-        image_path = make_image_path(root_path, image_path, split_data)
+        raw_image_path = make_image_path(root_path, image_path, split_data)
 
         # Process bounding box
         box = get_data(split_data, ground_truth_data, key='obj_bb')
@@ -222,13 +207,13 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
                                key='cam_t_m2c')
 
         # Make mask path
-        mask_path = make_image_path(root_path, mask_path, split_data)
+        raw_mask_path = make_image_path(root_path, mask_path, split_data)
 
         # Append class to box data
-        data.append({'image': image_path,
-                        'boxes': box,
-                        'rotation': rotation,
-                        'translation_raw': translation,
-                        'class': class_arg,
-                        'mask': mask_path})
+        data.append({'image': raw_image_path,
+                     'boxes': box,
+                     'rotation': rotation,
+                     'translation_raw': translation,
+                     'class': class_arg,
+                     'mask': raw_mask_path})
     return data
