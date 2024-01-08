@@ -33,8 +33,8 @@ class Linemod(Loader):
         self.object_id = object_id
         self.split = split
         self.input_size = input_size
-        object_id_to_class_arg = {0: 0, 1: 1, 5: 2, 6: 3, 8: 4, 9: 5,
-                                  10: 6, 11: 7, 12: 8}
+        object_id_to_class_arg = {0: 0, 1: 1, 5: 2, 6: 3, 8: 4,
+                                  9: 5, 10: 6, 11: 7, 12: 8}
         class_arg = object_id_to_class_arg[int(self.object_id)]
         class_names_all = get_class_names('Linemod')
         foreground_class = class_names_all[class_arg]
@@ -50,12 +50,9 @@ class Linemod(Loader):
         return ground_truth_data
 
     def _load_Linemod(self, dataset_name, split):
-        self.parser = LinemodParser(dataset_name,
-                                    split, self.path,
-                                    self.object_id,
-                                    self.input_size)
-        ground_truth_data = self.parser.load_data()
-        return ground_truth_data
+        self.parser = LinemodParser(dataset_name, split, self.path,
+                                    self.object_id, self.input_size)
+        return self.parser.load_data()
 
 
 class LinemodParser(object):
@@ -85,16 +82,13 @@ class LinemodParser(object):
             are numpy arrays for boxes, rotation, translation
             and integer for class.
     """
-    def __init__(self, dataset_name='Linemod',
-                 split='train', dataset_path='/Linemod_preprocessed/',
-                 object_id='08',
-                 input_size=(512, 512),
-                 data_path='data/', ground_truth_file='gt', info_file='info',
-                 image_path='rgb/', mask_path='mask/', class_arg=1):
-
+    def __init__(self, dataset_name='Linemod', split='train',
+                 dataset_path='/Linemod_preprocessed/', object_id='08',
+                 input_size=(512, 512), data_path='data/',
+                 ground_truth_file='gt', info_file='info', image_path='rgb/',
+                 mask_path='mask/', class_arg=1):
         if dataset_name != 'Linemod':
             raise Exception('Invalid dataset name.')
-
         self.split = split
         self.dataset_path = dataset_path
         self.object_id = object_id
