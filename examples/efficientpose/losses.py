@@ -63,35 +63,11 @@ class MultiPoseLoss(object):
 
         return tf.convert_to_tensor(points)
 
-    def _compute_translation(self, translation_raw_pred, scale):
-        camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
-        translation_pred = self._regress_translation(translation_raw_pred)
-        return self._compute_tx_ty_tz(translation_pred, camera_matrix, scale)
+    
 
-    def _regress_translation(self, translation_raw):
-        stride = self.translation_priors[:, -1]
-        x = self.translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
-        y = self.translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
-        x, y = x[:, :, tf.newaxis], y[:, :, tf.newaxis]
-        Tz = translation_raw[:, :, 2]
-        Tz = Tz[:, :, tf.newaxis]
-        return tf.concat([x, y, Tz], axis=-1)
+    
 
-    def _compute_tx_ty_tz(self, translation_xy_Tz, camera_matrix, scale):
-        fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
-        px, py = camera_matrix[0, 2], camera_matrix[1, 2]
-
-        x = translation_xy_Tz[:, :, 0] / scale
-        y = translation_xy_Tz[:, :, 1] / scale
-        tz = translation_xy_Tz[:, :, 2] * self.tz_scale
-        x = x - px
-        y = y - py
-
-        tx = tf.math.multiply(x, tz) / fx
-        ty = tf.math.multiply(y, tz) / fy
-        tx, ty = tx[:, :, tf.newaxis], ty[:, :, tf.newaxis]
-        tz = tz[:, :, tf.newaxis]
-        return tf.concat([tx, ty, tz], axis=-1)
+   
 
     def _separate_axis_from_angle(self, axis_angle):
         squared = tf.math.square(axis_angle)
@@ -149,8 +125,9 @@ class MultiPoseLoss(object):
                                   self.num_pose_dims + self.num_pose_dims]
         translation_raw_pred = y_pred[:, :, self.num_pose_dims:]
         scale = y_true[0, 0, -1]
-        translation_pred = self._compute_translation(translation_raw_pred,
-                                                     scale)
+        translation_pred = compute_translation(
+            translation_raw_pred, scale, self.tz_scale,
+            self.translation_priors)
 
         anchor_flags = y_true[:, :, -2]
         anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
@@ -210,3 +187,57 @@ class MultiPoseLoss(object):
         loss = tf.math.reduce_mean(distances)
         loss = tf.where(tf.math.is_nan(loss), tf.zeros_like(loss), loss)
         return loss
+
+
+def compute_translation(translation_raw_pred, scale, tz_scale,
+                        translation_priors):
+    camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
+    translation_pred = regress_translation(translation_raw_pred,
+                                           translation_priors)
+    return compute_tx_ty_tz(translation_pred, camera_matrix, tz_scale, scale)
+
+
+def regress_translation(translation_raw, translation_priors):
+    stride = translation_priors[:, -1]
+    x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
+    y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
+    x, y = x[:, :, tf.newaxis], y[:, :, tf.newaxis]
+    Tz = translation_raw[:, :, 2]
+    Tz = Tz[:, :, tf.newaxis]
+    return tf.concat([x, y, Tz], axis=-1)
+
+
+def compute_tx_ty_tz(translation_xy_Tz, camera_matrix, tz_scale, scale):
+    fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+    px, py = camera_matrix[0, 2], camera_matrix[1, 2]
+
+    x = translation_xy_Tz[:, :, 0] / scale
+    y = translation_xy_Tz[:, :, 1] / scale
+    tz = translation_xy_Tz[:, :, 2] * tz_scale
+    x = x - px
+    y = y - py
+
+    tx = tf.math.multiply(x, tz) / fx
+    ty = tf.math.multiply(y, tz) / fy
+    tx, ty = tx[:, :, tf.newaxis], ty[:, :, tf.newaxis]
+    tz = tz[:, :, tf.newaxis]
+    return tf.concat([tx, ty, tz], axis=-1)
+
+
+if __name__ == "__main__":
+    import pickle
+    from pose import EfficientPosePhi0
+
+    with open('y_pred.pkl', 'rb') as f:
+        y_pred = pickle.load(f)
+        y_pred = tf.convert_to_tensor(y_pred, dtype=tf.float32)
+
+    with open('y_true.pkl', 'rb') as f:
+        y_true = pickle.load(f)
+        y_true = tf.convert_to_tensor(y_true, dtype=tf.float32)
+
+    model = EfficientPosePhi0(2, base_weights='COCO', head_weights=None)
+    pose_loss = MultiPoseLoss('08', model.translation_priors,
+                              'Linemod_preprocessed/')
+    loss = pose_loss.compute_loss(y_true, y_pred)         # should be 1038.3807
+    print("k")
