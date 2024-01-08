@@ -96,7 +96,7 @@ class LinemodParser(object):
                  class_names=['background', 'driller'],
                  input_size=(512, 512),
                  data_path='data/', ground_truth_file='gt', info_file='info',
-                 image_path='rgb'):
+                 image_path='rgb/', mask_path='mask/', class_arg=1):
 
         if dataset_name != 'Linemod':
             raise Exception('Invalid dataset name.')
@@ -118,6 +118,8 @@ class LinemodParser(object):
         self.class_to_arg = {value: key for key, value
                              in self.arg_to_class.items()}
         self.image_path = image_path
+        self.mask_path = mask_path
+        self.class_arg = class_arg
         self.data = []
         self._preprocess_files()
 
@@ -134,10 +136,11 @@ class LinemodParser(object):
             image_path = make_image_path(root_path, self.image_path,
                                          split_data)
 
-            # Compute bounding box
+            # Process bounding box
             box = get_data(split_data, ground_truth_data, key='obj_bb')
             box = linemod_to_corner_form(box)
             box = normalize_box_input_size(box, self.input_size)
+            box = append_class_to_box(box, class_arg=self.class_arg)
 
             # Get rotation vector
             rotation = get_data(split_data, ground_truth_data, key='cam_R_m2c')
@@ -146,20 +149,14 @@ class LinemodParser(object):
             translation = get_data(split_data, ground_truth_data,
                                    key='cam_t_m2c')
 
-            # Compute object class
-            class_arg = 1
-
             # Get mask path
-            mask_path = (self.object_path + self.object_id
-                         + '/' + 'mask' + '/' + split_data + '.png')
+            mask_path = make_image_path(root_path, self.mask_path, split_data)
 
             # Append class to box data
-            box = np.concatenate((box, np.array([[class_arg]])), axis=-1)
-
             self.data.append({'image': image_path, 'boxes': box,
                               'rotation': rotation,
                               'translation_raw': translation,
-                              'class': class_arg,
+                              'class': self.class_arg,
                               'mask': mask_path})
 
     def load_data(self):
@@ -226,3 +223,7 @@ def normalize_box_input_size(box, input_size):
     y_max = y_max / input_H
     box = [x_min, y_min, x_max, y_max]
     return np.array([[x_min, y_min, x_max, y_max]])
+
+
+def append_class_to_box(box, class_arg=1):
+    return np.concatenate((box, np.array([[class_arg]])), axis=-1)
