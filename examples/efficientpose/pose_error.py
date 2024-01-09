@@ -1,7 +1,6 @@
 import os
 import numpy as np
 from paz.backend.image import load_image
-from scipy import spatial
 from tensorflow.keras.callbacks import Callback
 from paz.backend.groups import quaternion_to_rotation_matrix
 
@@ -43,8 +42,7 @@ def compute_ADD(true_pose, pred_pose, mesh_points):
     true_mesh = transform_mesh_points(mesh_points, true_rotation,
                                       true_translation)
 
-    error = np.linalg.norm(pred_mesh - true_mesh, axis=1).mean()
-    return error
+    return np.linalg.norm(pred_mesh - true_mesh, axis=1).mean()
 
 
 def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
@@ -76,10 +74,14 @@ def compute_ADI(true_pose, pred_pose, mesh_points):
     true_translation = true_pose[:3, 3]
     true_mesh = transform_mesh_points(mesh_points, true_rotation,
                                       true_translation)
-    nn_index = spatial.cKDTree(pred_mesh)
-    nn_dists, _ = nn_index.query(true_mesh, k=1)
-    error = nn_dists.mean()
-    return error
+    return compute_nearest_distance(pred_mesh, true_mesh, k=1)
+
+
+def compute_nearest_distance(X, Y, k=1):
+    distance_matrix = np.linalg.norm(X[:, None, :] - Y[None, :, :], axis=-1)
+    distance_matrix_sorted = np.sort(distance_matrix, axis=-1)
+    top_k_distances = distance_matrix_sorted[:, :k]
+    return np.mean(top_k_distances)
 
 
 class EvaluatePoseError(Callback):
