@@ -15,7 +15,7 @@ def transform_mesh_points(mesh_points, rotation, translation):
 
     # Returns
         Array of shape `(n, 3)` with transformed 3D model points.
-      """
+    """
     assert (mesh_points.shape[1] == 3)
     pts_t = rotation.dot(mesh_points.T) + translation.reshape((3, 1))
     return pts_t.T
