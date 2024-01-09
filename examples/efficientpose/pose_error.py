@@ -8,13 +8,13 @@ from paz.backend.groups import quaternion_to_rotation_matrix
 def transform_mesh_points(mesh_points, rotation, translation):
     """Transforms object points.
 
-      # Arguments
-          mesh_points: Array of shape `(n, 3)` with 3D model points.
-          rotation: Array of shape `(3, 3)` rotation matrix.
-          translation: Array of shape `(1, 3)` translation vector.
+    # Arguments
+        mesh_points: Array of shape `(n, 3)` with 3D model points.
+        rotation: Array of shape `(3, 3)` rotation matrix.
+        translation: Array of shape `(1, 3)` translation vector.
 
-      # Returns
-          Array of shape `(n, 3)` with transformed 3D model points.
+    # Returns
+        Array of shape `(n, 3)` with transformed 3D model points.
       """
     assert (mesh_points.shape[1] == 3)
     pts_t = rotation.dot(mesh_points.T) + translation.reshape((3, 1))
@@ -24,13 +24,13 @@ def transform_mesh_points(mesh_points, rotation, translation):
 def compute_ADD(pose_true, pose_pred, mesh_points):
     """Calculates ADD error.
 
-      # Arguments
-          true_pose: Pose6D real pose.
-          pred_pose: Pose6D, predicted pose.
-          mesh_points: Array of shape `(n, 3)` with 3D model points.
+    # Arguments
+        true_pose: Pose6D real pose.
+        pred_pose: Pose6D, predicted pose.
+        mesh_points: Array of shape `(n, 3)` with 3D model points.
 
-      # Returns
-          Array of shape `()` with ADD error.
+    # Returns
+        Array of shape `()` with ADD error.
     """
     quaternion = pose_pred.quaternion
     translation_pred = pose_pred.translation
@@ -49,13 +49,13 @@ def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
     """Checks if ADD error is within tolerance. Returns `True`
     if ADD error is within tolerance else `False`.
 
-      # Arguments
-          ADD_error: Float, the ADD error.
-          diameter: Float, diameter of the object.
-          diameter_threshold: Float, diameter tolerance in %.
+    # Arguments
+        ADD_error: Float, the ADD error.
+        diameter: Float, diameter of the object.
+        diameter_threshold: Float, diameter tolerance in %.
 
-      # Returns
-          is_correct: Bool.
+    # Returns
+        is_correct: Bool.
     """
     if ADD_error <= (diameter * diameter_threshold):
         is_correct = True
@@ -69,13 +69,13 @@ def compute_ADI(pose_true, pose_pred, mesh_points):
     nearest neighbors from vertices in the ground-truth pose to
     vertices in the estimated pose.
 
-      # Arguments
-          true_pose: Pose6D real pose.
-          pred_pose: Pose6D, predicted pose.
-          mesh_points: Array of shape `(n, 3)` with 3D model points.
+    # Arguments
+        true_pose: Pose6D real pose.
+        pred_pose: Pose6D, predicted pose.
+        mesh_points: Array of shape `(n, 3)` with 3D model points.
 
-      # Returns
-          Array of shape `()` with ADI error.
+    # Returns
+        Array of shape `()` with ADI error.
     """
     quaternion = pose_pred.quaternion
     translation_pred = pose_pred.translation
@@ -93,13 +93,13 @@ def compute_nearest_distance(X, Y, k=1):
     """Calculates `k` nearest neighbour distances of points `X`
     with that of `Y`.
 
-      # Arguments
-          X: Array of shape `(n, 3)`.
-          Y: Array of shape `(n, 3)`.
-          k: Int, number of neighbours to consider.
+    # Arguments
+        X: Array of shape `(n, 3)`.
+        Y: Array of shape `(n, 3)`.
+        k: Int, number of neighbours to consider.
 
-      # Returns
-          Array of shape `()` mean distances.
+    # Returns
+        Array of shape `()` mean distances.
     """
     distance_matrix = np.linalg.norm(X[:, None, :] - Y[None, :, :], axis=-1)
     distance_matrix_sorted = np.sort(distance_matrix, axis=-1)
