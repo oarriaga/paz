@@ -95,8 +95,8 @@ def compute_nearest_distance(X, Y, k=1):
 
       # Arguments
           X: Array of shape `(n, 3)`.
-          k: Array of shape `(n, 3)`.
-          K: Int, number of neighbours to consider.
+          Y: Array of shape `(n, 3)`.
+          k: Int, number of neighbours to consider.
 
       # Returns
           Array of shape `()` mean distances.
