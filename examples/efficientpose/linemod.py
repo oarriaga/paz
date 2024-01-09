@@ -124,7 +124,7 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
         input_size: Dict, containing keys 'width' and 'height'
             with values equal to the input size of the model.
         class_arg: Int, class argument of object class.
-        mask_path: Str, containing path to the object mask images.        
+        mask_path: Str, containing path to the object mask images.
 
     # Return
         data: Dict, with keys correspond to the image and mask image
