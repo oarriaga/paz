@@ -9,40 +9,40 @@ def transform_mesh_points(mesh_points, rotation, translation):
     """Transforms object points.
 
       # Arguments
-          mesh_points: nx3 ndarray with 3D model points.
-          rotation: Rotation matrix.
-          translation: Translation vector.
+          mesh_points: Array of shape `(n, 3)` with 3D model points.
+          rotation: Array of shape `(3, 3)` rotation matrix.
+          translation: Array of shape `(1, 3)` translation vector.
 
       # Returns
-          Transformed model
+          Array of shape `(n, 3)` with transformed 3D model points.
       """
     assert (mesh_points.shape[1] == 3)
     pts_t = rotation.dot(mesh_points.T) + translation.reshape((3, 1))
     return pts_t.T
 
 
-def compute_ADD(true_pose, pred_pose, mesh_points):
+def compute_ADD(pose_true, pose_pred, mesh_points):
     """Calculates ADD error.
 
       # Arguments
-          true_pose: Real pose.
-          pred_pose: Predicted pose.
-          mesh_points: nx3 ndarray with 3D model points.
+          true_pose: Pose6D real pose.
+          pred_pose: Pose6D, predicted pose.
+          mesh_points: Array of shape `(n, 3)` with 3D model points.
 
       # Returns
-          Return ADD error.
+          Array of shape `()` with ADD error.
     """
-    quaternion = pred_pose.quaternion
-    pred_translation = pred_pose.translation
-    pred_rotation = quaternion_to_rotation_matrix(quaternion)
-    pred_mesh = transform_mesh_points(mesh_points, pred_rotation,
-                                      pred_translation)
-    true_rotation = true_pose[:3, :3]
-    true_translation = true_pose[:3, 3]
-    true_mesh = transform_mesh_points(mesh_points, true_rotation,
-                                      true_translation)
+    quaternion = pose_pred.quaternion
+    translation_pred = pose_pred.translation
+    rotation_pred = quaternion_to_rotation_matrix(quaternion)
+    mesh_pred = transform_mesh_points(mesh_points, rotation_pred,
+                                      translation_pred)
+    rotation_true = pose_true[:3, :3]
+    translation_true = pose_true[:3, 3]
+    mesh_true = transform_mesh_points(mesh_points, rotation_true,
+                                      translation_true)
 
-    return np.linalg.norm(pred_mesh - true_mesh, axis=1).mean()
+    return np.linalg.norm(mesh_pred - mesh_true, axis=1).mean()
 
 
 def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
@@ -53,30 +53,30 @@ def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
     return is_correct
 
 
-def compute_ADI(true_pose, pred_pose, mesh_points):
+def compute_ADI(pose_true, pose_pred, mesh_points):
     """Calculate The ADI error. Calculate distances to the
     nearest neighbors from vertices in the ground-truth pose to
     vertices in the estimated pose.
 
       # Arguments
-          true_pose: Real pose.
-          pred_pose: Predicted pose.
-          mesh_pts: nx3 ndarray with 3D model points.
+          true_pose: Pose6D real pose.
+          pred_pose: Pose6D, predicted pose.
+          mesh_points: Array of shape `(n, 3)` with 3D model points.
 
       # Returns
-          Return ADI error.
+          Array of shape `()` with ADI error.
       """
 
-    quaternion = pred_pose.quaternion
-    pred_translation = pred_pose.translation
-    pred_rotation = quaternion_to_rotation_matrix(quaternion)
-    pred_mesh = transform_mesh_points(mesh_points, pred_rotation,
-                                      pred_translation)
-    true_rotation = true_pose[:3, :3]
-    true_translation = true_pose[:3, 3]
-    true_mesh = transform_mesh_points(mesh_points, true_rotation,
-                                      true_translation)
-    return compute_nearest_distance(pred_mesh, true_mesh, k=1)
+    quaternion = pose_pred.quaternion
+    translation_pred = pose_pred.translation
+    rotation_pred = quaternion_to_rotation_matrix(quaternion)
+    mesh_pred = transform_mesh_points(mesh_points, rotation_pred,
+                                      translation_pred)
+    rotation_true = pose_true[:3, :3]
+    translation_true = pose_true[:3, 3]
+    mesh_true = transform_mesh_points(mesh_points, rotation_true,
+                                      translation_true)
+    return compute_nearest_distance(mesh_pred, mesh_true, k=1)
 
 
 def compute_nearest_distance(X, Y, k=1):
@@ -142,14 +142,14 @@ class EvaluatePoseError(Callback):
                 inferences = self.pipeline(image.copy())
                 pose6D = inferences[self.topic]
                 if pose6D:
-                    add_error = compute_ADD(gt_pose, pose6D[0],
+                    ADD_error = compute_ADD(gt_pose, pose6D[0],
                                             self.mesh_points)
-                    is_correct = check_ADD(add_error, self.object_diameter)
+                    is_correct = check_ADD(ADD_error, self.object_diameter)
                     sum_ADD_accuracy = sum_ADD_accuracy + float(is_correct)
-                    adi_error = compute_ADI(gt_pose, pose6D[0],
+                    ADI_error = compute_ADI(gt_pose, pose6D[0],
                                             self.mesh_points)
-                    sum_ADD = sum_ADD + add_error
-                    sum_ADI = sum_ADI + adi_error
+                    sum_ADD = sum_ADD + ADD_error
+                    sum_ADI = sum_ADI + ADI_error
                     valid_predictions = valid_predictions + 1
 
             error_path = os.path.join(self.experiment_path, 'error.txt')
