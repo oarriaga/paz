@@ -115,18 +115,49 @@ class MultiPoseLoss(object):
 
 
 def load_model_data(data_path, model_path, object_id):
+    """Loads model data stored in ply file.
+
+    # Arguments
+        data_path: Str, root directory of Linemod dataset.
+        model_path: Directory containing ply files of Linemod objects.
+        object_id: Str, ID of object to train in Linemod dataset,
+            ex. powerdrill has an `object_id` of `08`.
+
+    # Returns
+        PlyData object containing parsed ply file contents.
+    """
     object_filename = 'obj_{}.ply'.format(object_id)
     model_file_path = os.path.join(data_path, model_path, object_filename)
     return PlyData.read(model_file_path)
 
 
 def get_vertices(model_data, key='vertex'):
+    """Fetches vertices from model's ply file contents.
+
+    # Arguments
+        model_data: PlyData object containing parsed ply file contents.
+        key: Str, containing the key name of the data to be fetched.
+
+    # Returns
+        Array of shape `[num_points, 3]` containing model vertices.
+    """
     vertex = model_data[key][:]
     vertices = [vertex['x'], vertex['y'], vertex['z']]
     return np.stack(vertices, axis=-1)
 
 
 def filter_model_points(model_points, target_num_points):
+    """Filters/reduces model points to `target_num_points` points.
+
+    # Arguments
+        model_points: Array of shape `[num_points, 3]`
+            containing model vertices.
+        target_num_points: Int, number of points of 3D model of object
+            to consider for loss calculation.
+
+    # Returns
+        Array of shape `[target_num_points, 3]` filtered model vertices.
+    """
     num_points = model_points.shape[0]
     if num_points == target_num_points:
         points = model_points
@@ -143,6 +174,21 @@ def filter_model_points(model_points, target_num_points):
 
 def compute_translation(translation_pred_raw, scale, tz_scale,
                         translation_priors):
+    """Computes x,y and z translation components from model's
+    translation head output.
+
+    # Arguments
+        translation_pred_raw: Array of shape `(1, num_boxes, 3)`,
+        scale: Array of shape `() containing translation scales`.
+            containing model vertices.
+        tz_scale: Array of shape `()`, containing scale along z axis.
+        translation_priors:  Array of shape `(num_boxes, 3)` containing
+            translation anchors.
+
+    # Returns
+        Array of shape `(1, num_boxes, 3)` computed translations with
+        x, y and z components.
+    """
     camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
     translation_pred = regress_translation(translation_pred_raw,
                                            translation_priors)
@@ -150,6 +196,17 @@ def compute_translation(translation_pred_raw, scale, tz_scale,
 
 
 def regress_translation(translation_raw, translation_priors):
+    """Applies regression offset values to translation anchors
+    to get the 2D translation center-point and Tz.
+
+    # Arguments
+        translation_raw: Array of shape `(1, num_boxes, 3)`,
+        translation_priors:  Array of shape `(num_boxes, 3)` containing
+            translation anchors.
+
+    # Returns
+        Array: of shape `(1, num_boxes, 3)`.
+    """
     stride = translation_priors[:, -1]
     x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
     y = translation_priors[:, 1] + (translation_raw[:, :, 1] * stride)
@@ -160,6 +217,19 @@ def regress_translation(translation_raw, translation_priors):
 
 
 def compute_tx_ty_tz(translation_xy_Tz, camera_matrix, tz_scale, scale):
+    """Computes Tx, Ty and Tz components of the translation vector
+    with a given 2D-point and the intrinsic camera parameters.
+
+    # Arguments
+        translation_xy_Tz: Array of shape `(num_boxes, 3)`,
+        camera_matrix: Array: of shape `(3, 3)` camera parameter.
+        tz_scale: Array of shape `()`, containing scale along z axis.
+        scale: Array of shape `() containing translation scales`.
+
+    # Returns
+        Array of shape `(1, num_boxes, 3)` computed translations with
+        x, y and z components.
+    """
     fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
     px, py = camera_matrix[0, 2], camera_matrix[1, 2]
     x = translation_xy_Tz[:, :, 0] / scale
@@ -175,6 +245,14 @@ def compute_tx_ty_tz(translation_xy_Tz, camera_matrix, tz_scale, scale):
 
 
 def separate_axis_from_angle(axis_angle):
+    """Splits `axis_angle` into axis and angle component.
+
+    # Arguments
+        axis_angle: Array of shape `(target_num_points, 3)`,
+
+    # Returns
+        List, containing axis and angle components.
+    """
     squared = tf.math.square(axis_angle)
     sum = tf.math.reduce_sum(squared, axis=-1)
     angle = tf.expand_dims(tf.math.sqrt(sum), axis=-1)
@@ -184,19 +262,57 @@ def separate_axis_from_angle(axis_angle):
     return [axis, angle]
 
 
-def rotate(point, axis, angle):
+def rotate(points, axis, angle):
+    """Rotates `points` around `axis` with an `angle`.
+
+    # Arguments
+        points: Array of
+            shape `(target_num_points, target_num_points, 3)`.
+        axis: Array of shape `(target_num_points, 1, 3)`.
+        angle: Array of shape `(target_num_points, 1, 1)`.
+
+    # Returns
+        Array, of shape `(target_num_points, target_num_points, 3)`
+            rotated points.
+    """
     cos_angle = tf.cos(angle)
-    axis_dot_point = dot(axis, point)
-    return (point * cos_angle + cross(axis, point) * tf.sin(angle)
+    axis_dot_point = dot(axis, points)
+    return (points * cos_angle + cross(axis, points) * tf.sin(angle)
             + axis * axis_dot_point * (1.0 - cos_angle))
 
 
 def dot(vector1, vector2, axis=-1, keepdims=True):
+    """computes dot product of two vectors `vector1` and `vector2`
+    along an axis.
+
+    # Arguments
+        vector1: Array of shape `(target_num_points, 1, 3)`.
+        vector2: Array of shape
+            `(target_num_points, target_num_points, 3)`.
+        axis: Int, axis along which sum is calculated.
+        keepdims: Bool, retains array dimensions.
+
+    # Returns
+        Array, of shape `(target_num_points, target_num_points, 3)`
+            dot product.
+    """
     return tf.reduce_sum(input_tensor=vector1 * vector2,
                          axis=axis, keepdims=keepdims)
 
 
-def cross(vector1, vector2):
+def cross(vector1, vector2, axis=-1):
+    """computes cross product of two vectors `vector1` and `vector2`
+    along an axis.
+
+    # Arguments
+        vector1: Array of shape `(target_num_points, 1, 3)`.
+        vector2: Array of shape
+            `(target_num_points, target_num_points, 3)`.
+
+    # Returns
+        Array, of shape `(target_num_points, target_num_points, 3)`
+            cross product.
+    """
     vector1_x, vector1_y,  = vector1[:, :, 0], vector1[:, :, 1]
     vector1_z = vector1[:, :, 2]
     vector2_x, vector2_y = vector2[:, :, 0], vector2[:, :, 1]
@@ -204,10 +320,20 @@ def cross(vector1, vector2):
     n_x = vector1_y * vector2_z - vector1_z * vector2_y
     n_y = vector1_z * vector2_x - vector1_x * vector2_z
     n_z = vector1_x * vector2_y - vector1_y * vector2_x
-    return tf.stack((n_x, n_y, n_z), axis=-1)
+    return tf.stack((n_x, n_y, n_z), axis=axis)
 
 
 def calc_sym_distances(sym_points_true, sym_points_pred):
+    """computes the mean of pairwise point distances
+    for objects that are symmetric.
+
+    # Arguments
+        sym_points_true: Array of shape `(1, target_num_points, 3)`.
+        sym_points_pred: Array of shape `(1, target_num_points, 3)`.
+
+    # Returns
+        Array, of shape `()`.
+    """
     sym_points_pred = sym_points_pred[:, :, tf.newaxis]
     sym_points_true = sym_points_true[:, tf.newaxis]
     norm = tf.norm(sym_points_pred - sym_points_true, axis=-1)
@@ -215,6 +341,18 @@ def calc_sym_distances(sym_points_true, sym_points_pred):
     return tf.reduce_mean(distances, axis=-1)
 
 
-def calc_asym_distances(asym_points_target, asym_points_pred):
-    distances = tf.norm(asym_points_pred - asym_points_target, axis=-1)
+def calc_asym_distances(asym_points_true, asym_points_pred):
+    """computes the mean of pairwise point distances
+    for objects that are asymmetric.
+
+    # Arguments
+        asym_points_true: Array of shape
+            `(target_num_points, target_num_points, 3)`.
+        asym_points_pred: Array of shape
+            `(target_num_points, target_num_points, 3)`.
+
+    # Returns
+        Array, of shape `(target_num_points)`.
+    """
+    distances = tf.norm(asym_points_pred - asym_points_true, axis=-1)
     return tf.reduce_mean(distances, axis=-1)
