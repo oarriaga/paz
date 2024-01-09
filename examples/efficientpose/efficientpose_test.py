@@ -11,7 +11,8 @@ def dataset_path():
 
 
 def test_multi_pose_loss_zero_condition(dataset_path):
-    model = EfficientPosePhi0()
+    model = EfficientPosePhi0(num_classes=2, base_weights='COCO',
+                              head_weights=None)
     pose_loss = MultiPoseLoss('08', model.translation_priors, dataset_path)
     num_anchors = model.translation_priors.shape[0]
     target_shape = (1, num_anchors, 11)
@@ -35,7 +36,8 @@ def test_multi_pose_loss_zero_condition(dataset_path):
                             (5000, 1094.8196),
                          ])
 def test_multi_pose_loss_non_zero_condition(dataset_path, num_anchors, loss):
-    model = EfficientPosePhi0()
+    model = EfficientPosePhi0(num_classes=2, base_weights='COCO',
+                              head_weights=None)
     pose_loss = MultiPoseLoss('08', model.translation_priors[:num_anchors, :],
                               dataset_path)
     prediction_shape = (1, num_anchors, 6)
@@ -65,7 +67,8 @@ def test_multi_pose_loss_non_zero_condition(dataset_path, num_anchors, loss):
                             (5000),
                          ])
 def test_loss_gradients(dataset_path, num_anchors):
-    model = EfficientPosePhi0()
+    model = EfficientPosePhi0(num_classes=2, base_weights='COCO',
+                              head_weights=None)
     pose_loss = MultiPoseLoss('08', model.translation_priors[:num_anchors, :],
                               dataset_path)
     prediction_shape = (1, num_anchors, 6)
