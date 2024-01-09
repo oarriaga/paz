@@ -46,6 +46,17 @@ def compute_ADD(pose_true, pose_pred, mesh_points):
 
 
 def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
+    """Checks if ADD error is within tolerance. Returns `True`
+    if ADD error is within tolerance else `False`.
+
+      # Arguments
+          ADD_error: Float, the ADD error.
+          diameter: Float, diameter of the object.
+          diameter_threshold: Float, diameter tolerance in %.
+
+      # Returns
+          is_correct: Bool.
+    """
     if ADD_error <= (diameter * diameter_threshold):
         is_correct = True
     else:
@@ -65,8 +76,7 @@ def compute_ADI(pose_true, pose_pred, mesh_points):
 
       # Returns
           Array of shape `()` with ADI error.
-      """
-
+    """
     quaternion = pose_pred.quaternion
     translation_pred = pose_pred.translation
     rotation_pred = quaternion_to_rotation_matrix(quaternion)
@@ -80,6 +90,17 @@ def compute_ADI(pose_true, pose_pred, mesh_points):
 
 
 def compute_nearest_distance(X, Y, k=1):
+    """Calculates `k` nearest neighbour distances of points `X`
+    with that of `Y`.
+
+      # Arguments
+          X: Array of shape `(n, 3)`.
+          k: Array of shape `(n, 3)`.
+          K: Int, number of neighbours to consider.
+
+      # Returns
+          Array of shape `()` mean distances.
+    """
     distance_matrix = np.linalg.norm(X[:, None, :] - Y[None, :, :], axis=-1)
     distance_matrix_sorted = np.sort(distance_matrix, axis=-1)
     top_k_distances = distance_matrix_sorted[:, :k]
@@ -91,13 +112,18 @@ class EvaluatePoseError(Callback):
 
     # Arguments
         experiment_path: String. Path in which the images will be saved.
+        evaluation_data_manager: Object of type dataset loader
+            e.g. Linemod.
         pipeline: Function that takes as input an element of ''images''
             and outputs a ''Dict'' with inferences.
         mesh_points: nx3 ndarray with 3D model points.
+        object_diameter: Float, diameter of the object.
+        evaluation_period: Int, interval for pose error
+            metric calculation.
         topic: Key to the ''inferences'' dictionary containing as value
             the drawn inferences.
-        verbose: Integer. If is bigger than 1
-            messages would be displayed.
+        verbose: Integer. If is bigger than 1 messages
+            would be displayed.
     """
     def __init__(self, experiment_path, evaluation_data_manager, pipeline,
                  mesh_points, object_diameter, evaluation_period,
