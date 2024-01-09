@@ -266,14 +266,12 @@ def rotate(points, axis, angle):
     """Rotates `points` around `axis` with an `angle`.
 
     # Arguments
-        points: Array of
-            shape `(target_num_points, target_num_points, 3)`.
+        points: Array of shape `(n, target_num_points, 3)`.
         axis: Array of shape `(target_num_points, 1, 3)`.
         angle: Array of shape `(target_num_points, 1, 1)`.
 
     # Returns
-        Array, of shape `(target_num_points, target_num_points, 3)`
-            rotated points.
+        Array, of shape `(n, target_num_points, 3)` rotated points.
     """
     cos_angle = tf.cos(angle)
     axis_dot_point = dot(axis, points)
@@ -287,14 +285,12 @@ def dot(vector1, vector2, axis=-1, keepdims=True):
 
     # Arguments
         vector1: Array of shape `(target_num_points, 1, 3)`.
-        vector2: Array of shape
-            `(target_num_points, target_num_points, 3)`.
+        vector2: Array of shape `(n, target_num_points, 3)`.
         axis: Int, axis along which sum is calculated.
         keepdims: Bool, retains array dimensions.
 
     # Returns
-        Array, of shape `(target_num_points, target_num_points, 3)`
-            dot product.
+        Array, of shape `(n, target_num_points, 3)` dot product.
     """
     return tf.reduce_sum(input_tensor=vector1 * vector2,
                          axis=axis, keepdims=keepdims)
@@ -306,12 +302,11 @@ def cross(vector1, vector2, axis=-1):
 
     # Arguments
         vector1: Array of shape `(target_num_points, 1, 3)`.
-        vector2: Array of shape
-            `(target_num_points, target_num_points, 3)`.
+        vector2: Array of shape `(n, target_num_points, 3)`.
+        axis: Int, axis along which cross product is calculated.
 
     # Returns
-        Array, of shape `(target_num_points, target_num_points, 3)`
-            cross product.
+        Array, of shape `(n, target_num_points, 3)` cross product.
     """
     vector1_x, vector1_y,  = vector1[:, :, 0], vector1[:, :, 1]
     vector1_z = vector1[:, :, 2]
@@ -346,10 +341,8 @@ def calc_asym_distances(asym_points_true, asym_points_pred):
     for objects that are asymmetric.
 
     # Arguments
-        asym_points_true: Array of shape
-            `(target_num_points, target_num_points, 3)`.
-        asym_points_pred: Array of shape
-            `(target_num_points, target_num_points, 3)`.
+        asym_points_true: Array of shape `(n, target_num_points, 3)`.
+        asym_points_pred: Array of shape `(n, target_num_points, 3)`.
 
     # Returns
         Array, of shape `(target_num_points)`.

@@ -6,12 +6,12 @@ from paz.backend.groups import quaternion_to_rotation_matrix
 
 
 def transform_mesh_points(mesh_points, rotation, translation):
-    """Transforms object points
+    """Transforms object points.
 
       # Arguments
           mesh_points: nx3 ndarray with 3D model points.
-          rotaion: Rotation matrix
-          translation: Translation vector
+          rotation: Rotation matrix.
+          translation: Translation vector.
 
       # Returns
           Transformed model
@@ -25,12 +25,12 @@ def compute_ADD(true_pose, pred_pose, mesh_points):
     """Calculates ADD error.
 
       # Arguments
-          true_pose: Real pose
-          pred_pose: Predicted pose
-          mesh_pts: nx3 ndarray with 3D model points.
+          true_pose: Real pose.
+          pred_pose: Predicted pose.
+          mesh_points: nx3 ndarray with 3D model points.
 
       # Returns
-          Return ADD error
+          Return ADD error.
     """
     quaternion = pred_pose.quaternion
     pred_translation = pred_pose.translation
@@ -54,15 +54,17 @@ def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
 
 
 def compute_ADI(true_pose, pred_pose, mesh_points):
-    """Calculate The ADI error.
-       Calculate distances to the nearest neighbors from vertices in the
-       ground-truth pose to vertices in the estimated pose.
+    """Calculate The ADI error. Calculate distances to the
+    nearest neighbors from vertices in the ground-truth pose to
+    vertices in the estimated pose.
+
       # Arguments
-          true_pose: Real pose
-          pred_pose: Predicted pose
+          true_pose: Real pose.
+          pred_pose: Predicted pose.
           mesh_pts: nx3 ndarray with 3D model points.
+
       # Returns
-          Return ADI error
+          Return ADI error.
       """
 
     quaternion = pred_pose.quaternion
@@ -89,7 +91,6 @@ class EvaluatePoseError(Callback):
 
     # Arguments
         experiment_path: String. Path in which the images will be saved.
-        images: List of numpy arrays of shape.
         pipeline: Function that takes as input an element of ''images''
             and outputs a ''Dict'' with inferences.
         mesh_points: nx3 ndarray with 3D model points.
