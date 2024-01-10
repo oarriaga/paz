@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from losses import MultiPoseLoss
 from tensorflow.keras.layers import Input
+from tensorflow.keras.utils import get_file
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from paz.models.detection.efficientdet.efficientdet_blocks import (
     EfficientNet_to_BiFPN, BiFPN)
@@ -26,6 +27,19 @@ def model_input_name():
 @pytest.fixture
 def model_output_name():
     return ['boxes', 'transformation']
+
+
+def get_test_images(image_size, batch_size=1):
+    """Generates a simple mock image.
+
+    # Arguments
+        image_size: Int, integer value for H x W image shape.
+        batch_size: Int, batch size for the input tensor.
+
+    # Returns
+        image: Zeros of shape (batch_size, H, W, C)
+    """
+    return tf.zeros((batch_size, image_size, image_size, 3), dtype=tf.float32)
 
 
 def test_multi_pose_loss_zero_condition(dataset_path):
@@ -237,6 +251,26 @@ def test_EfficientPose_architecture(model, model_name, model_input_name,
     assert implemented_model.output_shape == model_output_shape, (
         "Incorrect output shape")
     del implemented_model
+
+
+@pytest.mark.parametrize(('model'),
+                         [
+                            EfficientPosePhi0,
+                            EfficientPosePhi1,
+                            EfficientPosePhi2,
+                            EfficientPosePhi3,
+                            EfficientPosePhi4,
+                            EfficientPosePhi5,
+                            EfficientPosePhi6,
+                            EfficientPosePhi7,
+                         ])
+def test_load_weights(model):
+    base_weight = 'COCO'
+    head_weight = None
+    num_classes = 2
+    detector = model(num_classes=num_classes, base_weights=base_weight,
+                     head_weights=head_weight)
+    del detector
 
 
 def count_params(weights):
