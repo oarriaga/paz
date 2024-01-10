@@ -2,17 +2,30 @@ import pytest
 import numpy as np
 import tensorflow as tf
 from losses import MultiPoseLoss
-from efficientpose import EfficientPosePhi0
 from tensorflow.keras.layers import Input
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from paz.models.detection.efficientdet.efficientdet_blocks import (
     EfficientNet_to_BiFPN, BiFPN)
+from efficientpose import (EfficientPosePhi0, EfficientPosePhi1,
+                           EfficientPosePhi2, EfficientPosePhi3,
+                           EfficientPosePhi4, EfficientPosePhi5,
+                           EfficientPosePhi6, EfficientPosePhi7)
 from efficientpose_blocks import RotationNet, TranslationNet
 
 
 @pytest.fixture
 def dataset_path():
     return 'Linemod_preprocessed/'
+
+
+@pytest.fixture
+def model_input_name():
+    return 'image'
+
+
+@pytest.fixture
+def model_output_name():
+    return ['boxes', 'transformation']
 
 
 def test_multi_pose_loss_zero_condition(dataset_path):
@@ -176,3 +189,74 @@ def test_EfficientPose_TranslationNet(input_shape, scaling_coefficients,
         assert translation.shape == (None, output_shape, 3), (
             'Translation outputs shape fail')
     del branch_tensors, branches, middles, skips, translations
+
+
+@pytest.mark.parametrize(('model, model_name, trainable_parameters,'
+                          'non_trainable_parameters, input_shape,'
+                          'output_shape'),
+                         [
+                            (EfficientPosePhi0, 'EfficientPose-Phi0', 4048025,
+                                47136, (512, 512, 3), 49104),
+                            (EfficientPosePhi1, 'EfficientPose-Phi1', 4279724,
+                                51424, (640, 640, 3), 76725),
+                            (EfficientPosePhi2, 'EfficientPose-Phi2', 8248005,
+                                81776, (768, 768, 3), 110484),
+                            (EfficientPosePhi3, 'EfficientPose-Phi3', 12436426,
+                                114304, (896, 896, 3), 150381),
+                            (EfficientPosePhi4, 'EfficientPose-Phi4', 14410717,
+                                129920, (1024, 1024, 3), 196416),
+                            (EfficientPosePhi5, 'EfficientPose-Phi5', 34012133,
+                                227392, (1280, 1280, 3), 306900),
+                            (EfficientPosePhi6, 'EfficientPose-Phi6', 52564204,
+                                311984, (1280, 1280, 3), 306900),
+                            (EfficientPosePhi7, 'EfficientPose-Phi7', 52564204,
+                                311984, (1536, 1536, 3), 441936),
+                         ])
+def test_EfficientPose_architecture(model, model_name, model_input_name,
+                                    model_output_name, trainable_parameters,
+                                    non_trainable_parameters, input_shape,
+                                    output_shape):
+    implemented_model = model(num_classes=2, base_weights='COCO',
+                              head_weights=None)
+    trainable_count = count_params(
+        implemented_model.trainable_weights)
+    non_trainable_count = count_params(
+        implemented_model.non_trainable_weights)
+    model_output_shape = [(None, output_shape, 6), (None, output_shape, 6)]
+    assert implemented_model.name == model_name, "Model name incorrect"
+    assert implemented_model.input_names[0] == model_input_name, (
+        "Input name incorrect")
+    assert implemented_model.output_names == model_output_name, (
+        "Output name incorrect")
+    assert trainable_count == trainable_parameters, (
+        "Incorrect trainable parameters count")
+    assert non_trainable_count == non_trainable_parameters, (
+        "Incorrect non-trainable parameters count")
+    assert implemented_model.input_shape[1:] == input_shape, (
+        "Incorrect input shape")
+    assert implemented_model.output_shape == model_output_shape, (
+        "Incorrect output shape")
+    del implemented_model
+
+
+def count_params(weights):
+    """Count the total number of scalars composing the weights.
+    This function is taken from the repository of [Keras]
+    (https://github.com/keras-team/keras/blob/428ed9f03a0a0b2edc22d4ce29
+     001857f617227c/keras/utils/layer_utils.py#L107)
+    This is a patch and it should be removed eventually.
+
+    # Arguments:
+        weights: List, containing the weights
+            on which to compute params.
+
+    # Returns:
+        Int, the total number of scalars composing the weights.
+    """
+    unique_weights = {id(w): w for w in weights}.values()
+    unique_weights = [w for w in unique_weights if hasattr(w, "shape")]
+    weight_shapes = [w.shape.as_list() for w in unique_weights]
+    standardized_weight_shapes = [
+        [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
+    ]
+    return int(sum(np.prod(p) for p in standardized_weight_shapes))
