@@ -265,12 +265,36 @@ def test_EfficientPose_architecture(model, model_name, model_input_name,
                             EfficientPosePhi7,
                          ])
 def test_load_weights(model):
-    base_weight = 'COCO'
-    head_weight = None
-    num_classes = 2
-    detector = model(num_classes=num_classes, base_weights=base_weight,
-                     head_weights=head_weight)
+    detector = model(num_classes=2, base_weights='COCO', head_weights=None)
     del detector
+
+
+@pytest.mark.parametrize(('model, input_shape, num_boxes'),
+                         [
+                            (EfficientPosePhi0, 512, 49104),
+                            (EfficientPosePhi1, 640, 76725),
+                            (EfficientPosePhi2, 768, 110484),
+                            (EfficientPosePhi3, 896, 150381),
+                            (EfficientPosePhi4, 1024, 196416),
+                            (EfficientPosePhi5, 1280, 306900),
+                            (EfficientPosePhi6, 1280, 306900),
+                            (EfficientPosePhi7, 1536, 441936),
+                         ])
+def test_translation_anchors(model, input_shape, num_boxes):
+    model = model(num_classes=2, base_weights='COCO', head_weights=None)
+    anchors = model.translation_priors
+    anchor_x, anchor_y = anchors[:, 0], anchors[:, 1]
+    assert np.logical_and(anchor_x >= 0, anchor_x <= input_shape).all(), (
+        "Invalid x-coordinates of anchor centre")
+    assert np.logical_and(anchor_y >= 0, anchor_y <= input_shape).all(), (
+        "Invalid y-coordinates of anchor centre")
+    assert np.round(np.mean(anchor_x), 2) == input_shape / 2.0, (
+        "Anchor boxes asymmetrically distributed along X-direction")
+    assert np.round(np.mean(anchor_y), 2) == input_shape / 2.0, (
+        "Anchor boxes asymmetrically distributed along Y-direction")
+    assert anchors.shape[0] == num_boxes, (
+        "Incorrect number of anchor boxes")
+    del model
 
 
 def count_params(weights):
