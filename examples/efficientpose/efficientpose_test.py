@@ -3,7 +3,6 @@ import numpy as np
 import tensorflow as tf
 from losses import MultiPoseLoss
 from tensorflow.keras.layers import Input
-from tensorflow.keras.utils import get_file
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from paz.models.detection.efficientdet.efficientdet_blocks import (
     EfficientNet_to_BiFPN, BiFPN)
