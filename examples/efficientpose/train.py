@@ -9,9 +9,9 @@ from paz.abstract import ProcessingSequence
 from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
-from linemod import LINEMOD
-from efficientpose import EFFICIENTPOSEA
-from pose import AugmentPose, EFFICIENTPOSEALINEMODDRILLER
+from linemod import Linemod
+from efficientpose import EfficientPosePhi0
+from pose import AugmentPose, EfficientPosePhi0LinemodDriller
 from losses import MultiPoseLoss
 from pose_error import EvaluatePoseError
 
@@ -39,6 +39,8 @@ parser.add_argument('-sp', '--save_path', default='trained_models/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-op', '--object_model_path', default='models/',
+                    type=str, help='Path for writing model weights and logs')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
@@ -53,24 +55,23 @@ args = parser.parse_args()
 optimizer = Adam(learning_rate=args.learning_rate, clipnorm=0.001)
 
 data_splits = ['train', 'test']
-data_names = ['LINEMOD', 'LINEMOD']
+data_names = ['Linemod', 'Linemod']
 
 # loading datasets
 data_managers, datasets, evaluation_data_managers = [], [], []
 for data_name, data_split in zip(data_names, data_splits):
-    data_manager = LINEMOD(args.data_path, args.object_id,
+    data_manager = Linemod(args.data_path, args.object_id,
                            data_split, name=data_name)
     data_managers.append(data_manager)
     datasets.append(data_manager.load_data())
     if data_split == 'test':
-        eval_data_manager = LINEMOD(
-            args.data_path, args.object_id, data_split,
-            name=data_name, evaluate=True)
+        eval_data_manager = Linemod(
+            args.data_path, args.object_id, data_split, name=data_name)
         evaluation_data_managers.append(eval_data_manager)
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = EFFICIENTPOSEA(num_classes, base_weights='COCO', head_weights=None)
+model = EfficientPosePhi0(num_classes, base_weights='COCO', head_weights=None)
 model.summary()
 
 # Instantiating loss and metrics
@@ -110,26 +111,27 @@ schedule = LearningRateScheduler(
     args.learning_rate, args.gamma_decay, args.scheduled_epochs)
 
 # Pose estimation pipeline
-inference = EFFICIENTPOSEALINEMODDRILLER(score_thresh=0.60, nms_thresh=0.45,
-                                         show_boxes2D=False, show_poses6D=True)
+inference = EfficientPosePhi0LinemodDriller(
+    score_thresh=0.60, nms_thresh=0.45, show_boxes2D=False, show_poses6D=True)
 inference.model = model
 
 # Load object mesh
-mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
+mesh_root_path = os.path.join(args.data_path, args.object_model_path)
+mesh_file_name = 'obj_{}.ply'.format(args.object_id)
+mesh_path = os.path.join(mesh_root_path, mesh_file_name)
 mesh = trimesh.load(mesh_path)
 mesh_points = mesh.vertices.copy()
 
-mesh_path = args.data_path + 'models/' + 'obj_' + args.object_id + '.ply'
-mesh = trimesh.load(mesh_path)
-mesh_points = mesh.vertices.copy()
-gt_file = args.data_path + 'models/' + 'models_info.yml'
-with open(gt_file, 'r') as file:
+model_info_root_path = os.path.join(args.data_path, args.object_model_path)
+model_info_filename = 'models_info.yml'
+model_info_file = os.path.join(model_info_root_path, model_info_filename)
+with open(model_info_file, 'r') as file:
     model_data = yaml.safe_load(file)
     file.close()
 object_diameter = model_data[int(args.object_id)]['diameter']
 
 # Pose accuracy calculation pipeline
-pose_error = EvaluatePoseError(args.save_path,  evaluation_data_managers[0],
+pose_error = EvaluatePoseError(args.save_path, evaluation_data_managers[0],
                                inference, mesh_points, object_diameter,
                                args.evaluation_period)
 
