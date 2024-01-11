@@ -9,7 +9,7 @@ from ..models import (
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
-from .classification import MiniXceptionFER, ClassifyVVAD
+from .classification import MiniXceptionFER, ClassifyVVAD, Architecture_Options
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
 from ..backend.boxes import change_box_coordinates
@@ -913,7 +913,7 @@ class DetectVVAD(Processor):
        - [Real-time Convolutional Neural Networks for Emotion and
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
-    def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
+    def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', offsets=[0, 0], colors=EMOTION_COLORS):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
         self.colors = colors
@@ -927,7 +927,7 @@ class DetectVVAD(Processor):
         self.crop = pr.CropBoxes2D()
 
         # classification
-        self.classify = ClassifyVVAD(update_rate=10, average=6, average_type='weighted')
+        self.classify = ClassifyVVAD(update_rate=10, average=6, average_type='weighted', architecture=architecture)
 
         # drawing and wrapping
         self.class_names = self.classify.class_names
@@ -940,10 +940,9 @@ class DetectVVAD(Processor):
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
         for cropped_image, box2D in zip(cropped_images, boxes2D):
-            # print(cropped_image.shape)
             predictions = self.classify(cropped_image)
-            if predictions["scores"] is not None:
-                print(predictions)
+            # if predictions["scores"] is not None:
+            #     print(predictions)
             box2D.class_name = predictions['class_name']
             box2D.score = np.amax(predictions['scores'] is None if -1.0 else predictions['scores'])
         image = self.draw(image, boxes2D)

@@ -96,7 +96,7 @@ class ClassifyVVAD(SequentialProcessor):
         average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set average to 1 to
             disable averaging
     """
-    def __init__(self, input_size=(38, 96, 96, 3), architecture: Architecture_Options ='CNN2Plus1D_Light',
+    def __init__(self, input_size=(38, 96, 96, 3), architecture: Architecture_Options = 'CNN2Plus1D_Light',
                  update_rate=38, average=2, average_type: Average_Options = 'mean'):
         super(ClassifyVVAD, self).__init__()
         options = get_args(Average_Options)
