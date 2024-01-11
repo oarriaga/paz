@@ -161,7 +161,13 @@ class VVAD_LRS3(Generator):
                 yield x_out, y_train[i]
         else:
             for i in indexes:
-                yield x_train[i], y_train[i]
+                if "reduce" in self.reduction_method:  # First tested using appending all wanted frames but it is
+                    # more efficient to remove the unwanted frames
+                    x_out = x_train[i]
+                    x_out = np.delete(x_out, self.dropout_ids, 0)
+                else:
+                    x_out = x_train[i][:self.reduced_length]
+                yield x_out, y_train[i]
         data.close()
 
     def get_index(self):
