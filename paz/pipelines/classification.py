@@ -119,7 +119,7 @@ class ClassifyVVAD(SequentialProcessor):
 
         preprocess = PreprocessImage(input_size[1:3], pr.RGB_NORMAL)
         preprocess.add(pr.BufferImages(input_size, play_rate=update_rate))
-        self.add(pr.Predict(self.classifier, preprocess))
+        self.add(pr.PredictBatch(self.classifier, preprocess))
         if average_type == 'mean':
             self.add(pr.AveragePredictions(average))
         elif average_type == 'weighted':

@@ -2,7 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import append_values, predict
+from ..backend.standard import append_values, predict, predict_batch
 
 
 class ControlMap(Processor):
@@ -245,6 +245,24 @@ class Predict(Processor):
 
     def call(self, x):
         return predict(x, self.model, self.preprocess, self.postprocess)
+
+class PredictBatch(Processor):
+    """Perform input preprocessing, model prediction and output postprocessing based on batches.
+
+    # Arguments
+        model: Class with a ''predict'' method e.g. a Keras model.
+        preprocess: Function applied to given inputs.
+        postprocess: Function applied to outputted predictions from model.
+    """
+
+    def __init__(self, model, preprocess=None, postprocess=None):
+        super(PredictBatch, self).__init__()
+        self.model = model
+        self.preprocess = preprocess
+        self.postprocess = postprocess
+
+    def call(self, x):
+        return predict_batch(x, self.model, self.preprocess, self.postprocess)
 
 
 class ToClassName(Processor):

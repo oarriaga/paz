@@ -265,10 +265,30 @@ def predict(x, model, preprocess=None, postprocess=None):
     """
     if preprocess is not None:
         x = preprocess(x)
+    y = model(x)
+    if isinstance(y, tf.Tensor):
+        y = y.numpy()
+    if postprocess is not None:
+        y = postprocess(y)
+    return y
+
+
+def predict_batch(x, model, preprocess=None, postprocess=None):
+    """Preprocess, predict and postprocess batched input.
+    # Arguments
+        x: Input to model
+        model: Callable i.e. Keras model.
+        preprocess: Callable, used for preprocessing input x.
+        postprocess: Callable, used for postprocessing output of model.
+
+    # Note
+        If model outputs a tf.Tensor is converted automatically to numpy array.
+    """
+    if preprocess is not None:
+        x = preprocess(x)
     if x is None:
         return None
     y = model(x)
-    # print(y)
     if isinstance(y, tf.Tensor):
         y = y.numpy()
     if postprocess is not None:
