@@ -3,7 +3,7 @@ import argparse
 from paz.backend.camera import VideoPlayer, Camera
 import paz.pipelines.detection as dt
 
-parser = argparse.ArgumentParser(description='Minimal hand detection')
+parser = argparse.ArgumentParser(description='Visual Voice Activity Detection Live Demonstration')
 parser.add_argument('-c', '--camera_id', type=int, default=0,
                     help='Camera device ID')
 args = parser.parse_args()
