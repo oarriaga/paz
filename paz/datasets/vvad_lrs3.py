@@ -16,7 +16,7 @@ class VvadLrs3Dataset(Generator):
     # Arguments
         path: String. Full path to vvadlrs3_faceImages_small.h5 file.
         split: String. Valid option contain 'train', 'val' or 'test'.
-        val_split: Float. Percentage of the dataset to be used for validation (valid options between 0.0 to 1.0). Set
+        validation_split: Float. Percentage of the dataset to be used for validation (valid options between 0.0 to 1.0). Set
             to 0.0 to disable.
         test_split: Float. Percentage of the dataset to be used for testing (valid options between 0.0 to 1.0). Set
             to 0.0 to disable.
