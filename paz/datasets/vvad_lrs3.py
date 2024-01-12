@@ -50,7 +50,7 @@ class VvadLrs3Dataset(Generator):
 
         class_names = get_class_names('VVAD_LRS3')
 
-        super(VVAD_LRS3, self).__init__(path, split, class_names, 'VVAD_LRS3')
+        super(VvadLrs3Dataset, self).__init__(path, split, class_names, 'VVAD_LRS3')
         self.validation_split = validation_split
         self.test_split = test_split
         self.use_test_data = testing
