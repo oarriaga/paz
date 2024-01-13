@@ -131,7 +131,7 @@ class ResizeVideo(Layer):
         return videos
 
 
-def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-30.hdf5"):
+def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-21.hdf5"):
     """Binary Classification for videos with 2+1D CNNs. Architecture is based on the tensorflow implementation
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
@@ -312,7 +312,7 @@ def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tm
 
     return model
 
-def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/cnn-2plus1d-light_weights-55.hdf5"):
+def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/cnn-2plus1d-light_weights-35.hdf5"):
     """Binary Classification for videos with 2+1D CNNs. Architecture is a version with one layer less
     # Arguments
         weights: String, path to the weights file to load. TODO add weights implementation when weights are available
