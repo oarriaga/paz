@@ -15,7 +15,7 @@ class VvadLrs3Dataset(Generator):
     """Class for generating the VVAD-LRS3 dataset.
     # Arguments
         path: String. Full path to vvadlrs3_faceImages_small.h5 file.
-        split: String. Valid option contain 'train', 'val' or 'test'.
+        split: String. Valid option contain 'train', 'validation' or 'test'.
         validation_split: Float. Percentage of the dataset to be used for validation (valid options between 0.0 to 1.0). Set
             to 0.0 to disable.
         test_split: Float. Percentage of the dataset to be used for testing (valid options between 0.0 to 1.0). Set
@@ -35,7 +35,7 @@ class VvadLrs3Dataset(Generator):
     def __init__(
             self, path=".keras/paz/datasets", split='train', validation_split=0.2, test_split=0.1, testing=False,
             evaluating=False, reduction_method: Reduction_Method = "cut", reduced_length=None):
-        if split != 'train' and split != 'val' and split != 'test':
+        if split != 'train' and split != 'validation' and split != 'test':
             raise ValueError('Invalid split name')
         if validation_split < 0.0 or validation_split > 1.0:
             raise ValueError('Invalid validation split')
@@ -63,11 +63,11 @@ class VvadLrs3Dataset(Generator):
         self.total_dataset_size, self.video_length = self.get_data_and_video_size()
 
         # Split dataset indexes
-        self.indexes_train, self.indexes_val, self.indexes_test = self.split_data_indices()
+        self.indexes_train, self.indexes_validation, self.indexes_test = self.split_data_indices()
 
         # Reduction init
         self.dropout_ids = []
-        self.reduction_init(reduction_method, reduced_length)
+        self.reduction_init()
 
         random.seed(445363)
 
@@ -76,8 +76,8 @@ class VvadLrs3Dataset(Generator):
         if self.split == 'train':
             indexes = self.indexes_train
             random.shuffle(indexes)  # Use always the same seed so every model gets the same shuffle
-        elif self.split == 'val':
-            indexes = self.indexes_val
+        elif self.split == 'validation':
+            indexes = self.indexes_validation
         elif self.split == 'test':
             indexes = self.indexes_test
 
@@ -109,7 +109,7 @@ class VvadLrs3Dataset(Generator):
         return total_size, length
 
     def split_data_indices(self):
-        """Splits the data indices into train, val and test."""
+        """Splits the data indices into train, validation and test."""
         indexes_positive = list(range(self.total_dataset_size // 2))
         indexes_negative = list(range(self.total_dataset_size // 2, self.total_dataset_size))
 
@@ -202,7 +202,7 @@ class VvadLrs3Dataset(Generator):
         if self.split == 'train':
             return (self.total_dataset_size - int(self.validation_split * 0.5 * self.total_dataset_size) * 2 -
                     int(self.test_split * 0.5 * self.total_dataset_size) * 2)
-        elif self.split == 'val':
+        elif self.split == 'validation':
             return int(self.validation_split * 0.5 * self.total_dataset_size) * 2
         elif self.split == 'test':
             print("total_size_test", self.total_dataset_size)
