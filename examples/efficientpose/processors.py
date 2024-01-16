@@ -625,13 +625,16 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
     """
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max)
-    augmented_image = apply_transformation(
-        image, transformation, cv2.INTER_CUBIC)
-    augmented_mask = apply_transformation(
-        mask, transformation, cv2.INTER_NEAREST)
+    H, W, _ = image.shape
+    augmented_image = cv2.warpAffine(image, transformation, (W, H),
+                                     flags=cv2.INTER_CUBIC)
+    H, W, _ = mask.shape
+    augmented_mask = cv2.warpAffine(mask, transformation, (W, H),
+                                    flags=cv2.INTER_NEAREST)
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
-    rotation_vector = compute_rotation_vector(angle)
+    rotation_vector = np.zeros((3, ))
+    rotation_vector[2] = angle / 180 * np.pi
     transformation, _ = cv2.Rodrigues(rotation_vector)
     augmented_translation = np.empty_like(translation_raw)
     box = compute_box_from_mask(augmented_mask, mask_value)
@@ -641,14 +644,14 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
     if is_valid_augmentation:
         for num_annotation in range(num_annotations):
             augmented_box = compute_box_from_mask(augmented_mask, mask_value)
-            rotation_matrix = transform_rotation_matrix(
-                rotation_matrices[num_annotation], transformation)
-            translation_vector = transform_translation_vector(
-                translation_raw[num_annotation], transformation)
+            rotation_matrix = np.dot(transformation,
+                                     rotation_matrices[num_annotation])
+            translation_vector = np.dot(transformation,
+                                        translation_raw[num_annotation].T)
             augmented_rotation[num_annotation] = rotation_matrix
             augmented_translation[num_annotation] = translation_vector
-            augmented_translation[num_annotation] = scale_translation_vector(
-                augmented_translation[num_annotation], scale)
+            augmented_translation[num_annotation][2] = augmented_translation[
+                num_annotation][2] / scale
             augmented_boxes.append(augmented_box)
             is_valid.append(bool(sum(augmented_box)))
         augmented_boxes = np.array(augmented_boxes) / input_size
@@ -687,21 +690,6 @@ def generate_random_transformation(scale_min, scale_max,
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
 
 
-def apply_transformation(image, transformation, interpolation):
-    """Applies random affine to raw image.
-
-    # Arguments
-        image: Array raw image.
-        transformation: Array of shape `(2, 3)`.
-        interpolation: Int, type of pixel interpolation.
-
-    # Returns:
-        Array: of affine transformed image.
-    """
-    H, W, _ = image.shape
-    return cv2.warpAffine(image, transformation, (W, H), flags=interpolation)
-
-
 def compute_box_from_mask(mask, mask_value):
     """Computes bounding box from mask image.
 
@@ -721,61 +709,6 @@ def compute_box_from_mask(mask, mask_value):
         x_max, y_max = np.max(mask_x), np.max(mask_y)
         box = [x_min, y_min, x_max, y_max]
     return box
-
-
-def compute_rotation_vector(angle):
-    """Computes rotation vector that results from rotation
-    by angle `angle` around Z axis.
-
-    # Arguments
-        angle: Float, angle of rotation in degree.
-
-    # Returns:
-        rotation_vector: Array of shape `(3, )`
-    """
-    rotation_vector = np.zeros((3, ))
-    rotation_vector[2] = angle / 180 * np.pi
-    return rotation_vector
-
-
-def transform_rotation_matrix(rotation_matrix, transformation):
-    """Computes augmented rotation matrix.
-
-    # Arguments
-        rotation_matrix: Array, of shape `(3, 3)`.
-        transformation: Array, of shape `(3, 3)`.
-
-    # Returns:
-        Array: of shape `(3, 3)`
-    """
-    return np.dot(transformation, rotation_matrix)
-
-
-def transform_translation_vector(translation, transformation):
-    """Computes augmented translation vector.
-
-    # Arguments
-        translation: Array, of shape `(3, )`.
-        transformation: Array, of shape `(3, 3)`.
-
-    # Returns:
-        Array: of shape `(3, )`
-    """
-    return np.dot(transformation, translation.T)
-
-
-def scale_translation_vector(translation, scale):
-    """Scales translation vector.
-
-    # Arguments
-        translation: Array, of shape `(3, )`.
-        scale: Float, scaling factor.
-
-    # Returns:
-        Array: of shape `(3, )`
-    """
-    translation[2] = translation[2] / scale
-    return translation
 
 
 class AugmentColorspace(SequentialProcessor):
