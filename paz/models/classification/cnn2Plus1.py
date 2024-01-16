@@ -1,13 +1,14 @@
 import einops
 import random
 import tensorflow as tf
+from tensorflow.keras import Sequential
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Conv3D, Input, BatchNormalization, Layer, GlobalAveragePooling3D, ReLU, Flatten,
+                                     LayerNormalization, Dense, add)
+from typing import Literal, get_args
 
-keras = tf.keras
-from keras import Sequential
-from keras.models import Model
-from keras.layers import (Conv3D, Input, BatchNormalization, Layer, GlobalAveragePooling3D, ReLU, Flatten,
-                          LayerNormalization, Dense, add)
-
+Architecture_Options = Literal["CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light",
+                               "CNN2Plus1D_18"]
 
 """
 References:
@@ -19,9 +20,9 @@ References:
 class Conv2Plus1D(Layer):
     def __init__(self, filters, kernel_size, padding):
         """
-      A sequence of convolutional layers that first apply the convolution operation over the
-      spatial dimensions, and then the temporal dimension.
-    """
+        A sequence of convolutional layers that first apply the convolution operation over the
+        spatial dimensions, and then the temporal dimension.
+        """
         super().__init__()
         initializer_glorot_spatial = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
         initializer_glorot_temporal = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
@@ -47,7 +48,7 @@ class ResidualMain(Layer):
     """
     Residual block of the model with convolution, layer normalization, and the
     activation function, ReLU.
-  """
+    """
 
     def __init__(self, filters, kernel_size):
         super().__init__()
@@ -71,7 +72,7 @@ class Project(Layer):
     """
     Project certain dimensions of the tensor as the data is passed through different
     sized filters and downsampled.
-  """
+    """
 
     def __init__(self, units):
         super().__init__()
@@ -90,7 +91,7 @@ def add_residual_block(input, filters, kernel_size):
     """
     Add residual blocks to the model. If the last dimensions of the input data
     and filter size does not match, project it such that last dimension matches.
-  """
+    """
     out = ResidualMain(filters, kernel_size)(input)
 
     res = input
@@ -112,14 +113,14 @@ class ResizeVideo(Layer):
     @tf.function
     def call(self, video):
         """
-      Use the einops library to resize the tensor.
+        Use the einops library to resize the tensor.
 
-      Args:
-        video: Tensor representation of the video, in the form of a set of frames.
+        Args:
+            video: Tensor representation of the video, in the form of a set of frames.
 
-      Return:
-        A downsampled size of the video according to the new height and width it should be resized to.
-    """
+        Return:
+            A downsampled size of the video according to the new height and width it should be resized to.
+        """
         # b stands for batch size, t stands for time, h stands for height,
         # w stands for width, and c stands for the number of channels.
         old_shape = einops.parse_shape(video, 'b t h w c')
@@ -131,294 +132,223 @@ class ResizeVideo(Layer):
         return videos
 
 
-def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-21.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs. Architecture is based on the tensorflow implementation
-    # Arguments
-        weights: String, path to the weights file to load. TODO add weights implementation when weights are available
-        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
-        e.g. (38, 96, 96, 3).
-
-    # Reference
-        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
-        - [Video classification with a 3D convolutional neural network]
-        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
-    """
-    if len(input_shape) != 4:
-        raise ValueError(
-            '`input_shape` must be a tuple of 4 integers. '
-            'Received: %s' % (input_shape,))
-
-    random.seed(seed)
-    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
-
-    HEIGHT = input_shape[1]
-    WIDTH = input_shape[2]
-
-    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
-    image = Input(shape=input_shape, name='image')
-    x = image
-
-    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(x)
+def normal(input_layer, height, width):
+    """ CNN2+1D architecture is based on the tensorflow implementation
+        # Arguments
+            input_layer: Tensorflow input layer of the network
+            height: Height of the input video
+            width: Width of the input video
+        """
+    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(input_layer)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = ResizeVideo(HEIGHT // 2, WIDTH // 2)(x)
+    x = ResizeVideo(height // 2, width // 2)(x)
 
     # Block 1
     x = add_residual_block(x, 16, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 4, WIDTH // 4)(x)
+    x = ResizeVideo(height // 4, width // 4)(x)
 
     # Block 2
     x = add_residual_block(x, 32, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 8, WIDTH // 8)(x)
+    x = ResizeVideo(height // 8, width // 8)(x)
 
     # Block 3
     x = add_residual_block(x, 64, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 16, WIDTH // 16)(x)
+    x = ResizeVideo(height // 16, width // 16)(x)
 
     # Block 4
     x = add_residual_block(x, 128, (3, 3, 3))
+    return x
 
-    x = GlobalAveragePooling3D()(x)
-    x = Flatten()(x)
-    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
-    model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
-
-    if weights is not None:
-        print("loading weights")
-        model.load_weights(tmp_weights_path)  # TODO Add download link
-
-    return model
-
-def CNN2Plus1D_Filters(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DFilters/2023_10_20-14_11_13/cnn-2plus1d-filters_weights-23.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with increased filter sizes
+def filters(input_layer, height, width):
+    """ Architecture is a CNN2+1D version with increased filter sizes
     # Arguments
-        weights: String, path to the weights file to load. TODO add weights implementation when weights are available
-        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
-        e.g. (38, 96, 96, 3).
-
-    # Reference
-        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
-        - [Video classification with a 3D convolutional neural network]
-        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
+        input_layer: Tensorflow input layer of the network
+        height: Height of the input video
+        width: Width of the input video
     """
-    if len(input_shape) != 4:
-        raise ValueError(
-            '`input_shape` must be a tuple of 4 integers. '
-            'Received: %s' % (input_shape,))
 
-    random.seed(seed)
-    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
-
-    HEIGHT = input_shape[1]
-    WIDTH = input_shape[2]
-
-    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
-    image = Input(shape=input_shape, name='image')
-    x = image
-
-    x = Conv2Plus1D(filters=32, kernel_size=(3, 7, 7), padding='same')(x)
+    x = Conv2Plus1D(filters=32, kernel_size=(3, 7, 7), padding='same')(input_layer)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = ResizeVideo(HEIGHT // 2, WIDTH // 2)(x)
+    x = ResizeVideo(height // 2, width // 2)(x)
 
     # Block 1
     x = add_residual_block(x, 32, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 4, WIDTH // 4)(x)
+    x = ResizeVideo(height // 4, width // 4)(x)
 
     # Block 2
     x = add_residual_block(x, 64, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 8, WIDTH // 8)(x)
+    x = ResizeVideo(height // 8, width // 8)(x)
 
     # Block 3
     x = add_residual_block(x, 128, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 16, WIDTH // 16)(x)
+    x = ResizeVideo(height // 16, width // 16)(x)
 
     # Block 4
     x = add_residual_block(x, 256, (3, 3, 3))
+    return x
 
-    x = GlobalAveragePooling3D()(x)
-    x = Flatten()(x)
-    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
-    model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
-
-    if weights is not None:
-        print("loading weights")
-        model.load_weights(tmp_weights_path)  # TODO Add download link
-
-    return model
-
-def CNN2Plus1D_Layers(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLayers/2023_10_16-10_14_48/cnn-2plus1d-layers_weights-17.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with doubled layers
-    # Arguments
-        weights: String, path to the weights file to load. TODO add weights implementation when weights are available
-        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
-        e.g. (38, 96, 96, 3).
-
-    # Reference
-        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
-        - [Video classification with a 3D convolutional neural network]
-        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
+def layers(input_layer, height, width):
+    """ Architecture is a CNN2+1D version with doubled layers
+        # Arguments
+            input_layer: Tensorflow input layer of the network
+            height: Height of the input video
+            width: Width of the input video
     """
-    if len(input_shape) != 4:
-        raise ValueError(
-            '`input_shape` must be a tuple of 4 integers. '
-            'Received: %s' % (input_shape,))
-
-    random.seed(seed)
-    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
-
-    HEIGHT = input_shape[1]
-    WIDTH = input_shape[2]
-
-    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
-    image = Input(shape=input_shape, name='image')
-    x = image
-
-    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(x)
+    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(input_layer)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = ResizeVideo(HEIGHT // 2, WIDTH // 2)(x)
+    x = ResizeVideo(height // 2, width // 2)(x)
 
     # Block 1
     x = add_residual_block(x, 16, (3, 3, 3))
     x = add_residual_block(x, 16, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 4, WIDTH // 4)(x)
+    x = ResizeVideo(height // 4, width // 4)(x)
 
     # Block 2
     x = add_residual_block(x, 32, (3, 3, 3))
     x = add_residual_block(x, 32, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 8, WIDTH // 8)(x)
+    x = ResizeVideo(height // 8, width // 8)(x)
 
     # Block 3
     x = add_residual_block(x, 64, (3, 3, 3))
     x = add_residual_block(x, 64, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 16, WIDTH // 16)(x)
+    x = ResizeVideo(height // 16, width // 16)(x)
 
     # Block 4
     x = add_residual_block(x, 128, (3, 3, 3))
     x = add_residual_block(x, 128, (3, 3, 3))
+    return x
 
-    x = GlobalAveragePooling3D()(x)
-    x = Flatten()(x)
-    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
-    model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
-
-    if weights is not None:
-        print("loading weights")
-        model.load_weights(tmp_weights_path)  # TODO Add download link
-
-    return model
-
-def CNN2Plus1D_Light(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/cnn-2plus1d-light_weights-35.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs. Architecture is a version with one layer less
-    # Arguments
-        weights: String, path to the weights file to load. TODO add weights implementation when weights are available
-        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
-        e.g. (38, 96, 96, 3).
-
-    # Reference
-        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
-        - [Video classification with a 3D convolutional neural network]
-        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
+def light(input_layer, height, width):
+    """ Architecture is a CNN2+1D version with one layer less
+        # Arguments
+            input_layer: Tensorflow input layer of the network
+            height: Height of the input video
+            width: Width of the input video
     """
-    if len(input_shape) != 4:
-        raise ValueError(
-            '`input_shape` must be a tuple of 4 integers. '
-            'Received: %s' % (input_shape,))
-
-    random.seed(seed)
-    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
-
-    HEIGHT = input_shape[1]
-    WIDTH = input_shape[2]
-
-    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
-    image = Input(shape=input_shape, name='image')
-    x = image
-
-    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(x)
+    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(input_layer)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = ResizeVideo(HEIGHT // 2, WIDTH // 2)(x)
+    x = ResizeVideo(height // 2, width // 2)(x)
 
     # Block 1
     x = add_residual_block(x, 16, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 4, WIDTH // 4)(x)
+    x = ResizeVideo(height // 4, width // 4)(x)
 
     # Block 2
     x = add_residual_block(x, 32, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 8, WIDTH // 8)(x)
+    x = ResizeVideo(height // 8, width // 8)(x)
 
     # Block 3
     x = add_residual_block(x, 64, (3, 3, 3))
-
-    x = GlobalAveragePooling3D()(x)
-    x = Flatten()(x)
-    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
-
-    model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
-
-    if weights is not None:
-        print("loading weights")
-        model.load_weights(tmp_weights_path)  # TODO Add download link
-
-    return model
+    return x
 
 
-def CNN2Plus1D_18(input_shape=(38, 96, 96, 3)):
-    """Binary Classification for videos with 2+1D CNNs. Only a dummy not ment for usage
-    # Arguments
-        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
-        e.g. (38, 96, 96, 3).
-
-    # Reference
-        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
-        - [Video classification with a 3D convolutional neural network]
-        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
+def original_18(input_layer, height, width):
+    """ Architecture is a CNN2+1D version based on the original paper.
+        # Arguments
+            input_layer: Tensorflow input layer of the network
+            height: Height of the input video
+            width: Width of the input video
     """
-    if len(input_shape) != 4:
-        raise ValueError(
-            '`input_shape` must be a tuple of 4 integers. '
-            'Received: %s' % (input_shape,))
-
-    HEIGHT = input_shape[1]
-    WIDTH = input_shape[2]
-
-    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
-    image = Input(shape=input_shape, name='image')
-    x = image
-
-    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(x)
+    x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(input_layer)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = ResizeVideo(HEIGHT // 2, WIDTH // 2)(x)
+    x = ResizeVideo(height // 2, width // 2)(x)
 
     # Block 1
     x = add_residual_block(x, 64, (3, 3, 3))
     x = add_residual_block(x, 64, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 4, WIDTH // 4)(x)
+    x = ResizeVideo(height // 4, width // 4)(x)
 
     # Block 2
     x = add_residual_block(x, 128, (3, 3, 3))
     x = add_residual_block(x, 128, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 8, WIDTH // 8)(x)
+    x = ResizeVideo(height // 8, width // 8)(x)
 
     # Block 3
     x = add_residual_block(x, 256, (3, 3, 3))
     x = add_residual_block(x, 256, (3, 3, 3))
-    x = ResizeVideo(HEIGHT // 16, WIDTH // 16)(x)
+    x = ResizeVideo(height // 16, width // 16)(x)
 
     # Block 4
     x = add_residual_block(x, 512, (3, 3, 3))
     x = add_residual_block(x, 512, (3, 3, 3))
+    return x
+
+
+def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
+               architecture: Architecture_Options = 'CNN2Plus1D',
+               tmp_weights_path=None):
+    """Binary Classification for videos with 2+1D CNNs.
+    # Arguments
+        weights: ``None`` or string with pre-trained dataset. Valid datasets
+            include only ``VVAD-LRS3``.
+        input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
+        e.g. (38, 96, 96, 3).
+        seed: Integer. Seed for random number generator.
+        architecture: String. Name of the architecture to use. Currently supported: 'CNN2Plus1D', 'CNN2Plus1D_Filters',
+            'CNN2Plus1D_Layers', 'CNN2Plus1D_Light'. 'CNN2Plus1D_18' is only available without weights.
+
+    # Reference
+        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
+        - [Video classification with a 3D convolutional neural network]
+        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
+    """
+    if len(input_shape) != 4:
+        raise ValueError(
+            '`input_shape` must be a tuple of 4 integers. '
+            'Received: %s' % (input_shape,))
+    options = get_args(Architecture_Options)
+    assert architecture in options, f"'{architecture}' is not in {options}"
+
+    random.seed(seed)
+    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
+
+    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
+    image = Input(shape=input_shape, name='image')
+    x = image
+
+    if architecture == 'CNN2Plus1D':
+        x = normal(x, input_shape[1], input_shape[2])
+        if tmp_weights_path is None:
+            tmp_weights_path = "../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-21.hdf5"
+    elif architecture == 'CNN2Plus1D_Filters':
+        x = filters(x, input_shape[1], input_shape[2])
+        if tmp_weights_path is None:
+            tmp_weights_path = ("../../../../CLUSTER_OUTPUTS/CNN2Plus1DFilters/2023_10_20-14_11_13/" +
+                                "cnn-2plus1d-filters_weights-21.hdf5")
+    elif architecture == 'CNN2Plus1D_Layers':
+        x = layers(x, input_shape[1], input_shape[2])
+        if tmp_weights_path is None:
+            tmp_weights_path = ("../../../../CLUSTER_OUTPUTS/CNN2Plus1DLayers/2023_10_16-10_14_48/" +
+                                "cnn-2plus1d-layers_weights-17.hdf5")
+    elif architecture == 'CNN2Plus1D_Light':
+        x = light(x, input_shape[1], input_shape[2])
+        if tmp_weights_path is None:
+            tmp_weights_path = ("../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/" +
+                                "cnn-2plus1d-light_weights-35.hdf5")
+    elif architecture == 'CNN2Plus1D_18':
+        x = original_18(x, input_shape[1], input_shape[2])
 
     x = GlobalAveragePooling3D()(x)
     x = Flatten()(x)
-    x = Dense(1, activation="sigmoid")(x)
+    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
-    model = Model(inputs=image, outputs=x, name='Vvad2Plus1D')
+    model = Model(inputs=image, outputs=x, name=architecture)
+
+    if weights == 'VVAD-LRS3':
+        if architecture == 'CNN2Plus1D_18':
+            raise ValueError(f"'{architecture}' is not available with weights.")
+        print("loading weights")
+        model.load_weights(tmp_weights_path)  # TODO Replace with download link
+    #     filename = 'fer2013_mini_XCEPTION.119-0.65.hdf5'
+    #     path = get_file(filename, URL + filename, cache_subdir='paz/models')
+    #     model = load_model(path)
 
     return model
