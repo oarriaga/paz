@@ -1,5 +1,4 @@
 import numpy as np
-from dvg_ringbuffer import RingBuffer
 
 from ..abstract import Processor
 
@@ -578,20 +577,35 @@ class BufferImages(Processor):
     def __init__(self, input_size, play_rate=25):
         if input_size[0] < play_rate:
             raise ValueError('Buffer size must be equal or larger than play rate')
-        self.ring_buffer = RingBuffer(input_size[0], dtype=(np.uint8, input_size[1:]))
         super(BufferImages, self).__init__()
         self.play_rate = play_rate
         self.counter = 0
+
+        # Buffer
+        self.buffer_size = input_size[0]
+        self.buffer = np.zeros(self.buffer_size, dtype=(np.uint8, input_size[1:]))
+        self.buffer_index = 0
+        self.is_full = False
+
+    def append(self, image):
+        """Appends an image to the end of the buffer."""
+        if self.is_full:
+            self.buffer = np.append(self.buffer[1:], [image], axis=0)
+        else:
+            self.buffer[self.buffer_index] = image
+            self.buffer_index += 1
+            if self.buffer_index >= self.buffer_size:
+                self.is_full = True
 
     def call(self, image):
         """
         # Arguments
             image: Array, raw input image.
         """
-        self.ring_buffer.append(image)
+        self.append(image)
         self.counter += 1
 
-        if self.ring_buffer.is_full and self.counter >= self.play_rate:
+        if self.is_full and self.counter >= self.play_rate:
             self.counter = 0
-            return np.array([self.ring_buffer])
+            return np.array([self.buffer])
         return None
