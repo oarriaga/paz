@@ -41,3 +41,7 @@ docs/theme/fonts/*
 docs/theme/img/*
 
 install.sh
+examples/implicit_orientation_learning/demo.py
+examples/implicit_orientation_learning/pipelines.py
+examples/implicit_orientation_learning/run_experiments.sh
+examples/implicit_orientation_learning/train.py
