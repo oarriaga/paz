@@ -7,19 +7,19 @@ from keras.applications.mobilenet import MobileNet
 import random
 
 def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/VVAD_LRS3/2023_10_30-09_51_57/vvad_lrs3-weights-57.hdf5"):
-    """Binary Classification for videos with 2+1D CNNs.
+    """Binary Classification for videos using a CNN based mobile net with an TimeDistributed layer (LSTM).
     # Arguments
-        weights: String, path to the weights file to load. TODO add weights implementation when weights are available
+        weights: ``None`` or string with pre-trained dataset. Valid datasets
+            include only ``VVAD-LRS3``.
         input_shape: List of integers. Input shape to the model in following format: (frames, height, width, channels)
         e.g. (38, 96, 96, 3).
+        seed: Integer. Seed for random number generator.
 
     # Reference
-        - [A Closer Look at Spatiotemporal Convolutions for Action Recognition](https://arxiv.org/abs/1711.11248v3)
-        - [Video classification with a 3D convolutional neural network]
-        (https://www.tensorflow.org/tutorials/video/video_classification#load_and_preprocess_video_data)
-
-
-        Model params according to vvadlrs3.pretrained_models.getFaceImageModel().summary()
+        - [The VVAD-LRS3 Dataset for Visual Voice Activity Detection]
+        (https://api.semanticscholar.org/CorpusID:238198700)
+        - [VVAD-LRS3 GitHub Repository]
+        (https://github.com/adriandavidauer/VVAD)
     """
     if len(input_shape) != 4:
         raise ValueError(
@@ -52,10 +52,13 @@ def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_w
 
     x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
-    model = Model(inputs=image, outputs=x, name='Vvad_lrs3')
+    model = Model(inputs=image, outputs=x, name='VVAD_LRS3_LSTM')
 
-    if weights is not None:
+    if weights == 'VVAD-LRS3':
         print("loading weights")
-        model.load_weights(tmp_weights_path)  # TODO Add download link
+        model.load_weights(tmp_weights_path)      # TODO Replace with download link
+    #     filename = 'fer2013_mini_XCEPTION.119-0.65.hdf5'
+    #     path = get_file(filename, URL + filename, cache_subdir='paz/models')
+    #     model = load_model(path)
 
     return model
