@@ -342,7 +342,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
 
     model = Model(inputs=image, outputs=x, name=architecture)
 
-    if weights == 'VVAD-LRS3':
+    if weights == 'VVAD_LRS3':
         if architecture == 'CNN2Plus1D_18':
             raise ValueError(f"'{architecture}' is not available with weights.")
         print("loading weights")
