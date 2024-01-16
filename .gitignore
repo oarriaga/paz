@@ -42,4 +42,4 @@ docs/theme/img/*
 
 install.sh
 
-examples/implicit_orientation_learning/*
+examples/implicit_orientation_learning/
