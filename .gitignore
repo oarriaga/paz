@@ -41,5 +41,3 @@ docs/theme/fonts/*
 docs/theme/img/*
 
 install.sh
-
-examples/implicit_orientation_learning/
