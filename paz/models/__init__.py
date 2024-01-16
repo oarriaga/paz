@@ -21,6 +21,8 @@ from .classification import build_xception
 from .classification import MiniXception
 from .classification import ProtoEmbedding
 from .classification import ProtoNet
+from .classification import CNN2Plus1D
+from .classification import VVAD_LRS3_LSTM
 from .segmentation import UNET
 from .segmentation import UNET_VGG16
 from .segmentation import UNET_VGG19

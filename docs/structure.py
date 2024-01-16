@@ -268,7 +268,8 @@ PAGES = [
             standard.tensor_to_numpy,
             standard.pad_matrix,
             standard.max_pooling_2d,
-            standard.predict
+            standard.predict,
+            standard.predict_batch
         ],
     },
 
@@ -278,7 +279,9 @@ PAGES = [
         'functions': [
             models.classification.MiniXception,
             models.ProtoEmbedding,
-            models.ProtoNet
+            models.ProtoNet,
+            models.CNN2Plus1D,
+            models.VVAD_LRS3_LSTM
         ],
     },
 
@@ -354,7 +357,8 @@ PAGES = [
             datasets.OpenImages,
             datasets.CityScapes,
             datasets.Shapes,
-            datasets.Omniglot
+            datasets.Omniglot,
+            datasets.VvadLrs3Dataset
         ],
     },
 
@@ -431,7 +435,8 @@ PAGES = [
             processors.GetNonZeroArguments,
             processors.FlipLeftRightImage,
             processors.DivideStandardDeviationImage,
-            processors.ScaledResize
+            processors.ScaledResize,
+            processors.BufferImages
         ]
     },
 
@@ -585,6 +590,7 @@ PAGES = [
             processors.ExtendInputs,
             processors.SequenceWrapper,
             processors.Predict,
+            processors.PredictBatch,
             processors.ToClassName,
             processors.ExpandDims,
             processors.BoxClassToOneHotVector,
@@ -601,7 +607,11 @@ PAGES = [
             processors.Scale,
             processors.AppendValues,
             processors.BooleanToTextMessage,
-            processors.PrintTopics
+            processors.PrintTopics,
+            processors.FloatToBoolean,
+            processors.NoneConverter,
+            processors.AveragePredictions,
+            processors.WeightedAveragePredictions
         ]
     },
 
@@ -618,7 +628,8 @@ PAGES = [
         'page': 'pipelines/classification.md',
         'classes': [
             pipelines.MiniXceptionFER,
-            pipelines.ClassifyHandClosure
+            pipelines.ClassifyHandClosure,
+            pipelines.ClassifyVVAD
         ]
     },
 
@@ -647,7 +658,8 @@ PAGES = [
             pipelines.EFFICIENTDETD5COCO,
             pipelines.EFFICIENTDETD6COCO,
             pipelines.EFFICIENTDETD7COCO,
-            pipelines.EFFICIENTDETD0VOC
+            pipelines.EFFICIENTDETD0VOC,
+            pipelines.DetectVVAD
         ]
     },
 
@@ -782,7 +794,8 @@ PAGES = [
     {
         'page': 'abstract/loader.md',
         'classes': [
-            (loader.Loader, [loader.Loader.load_data])
+            (loader.Loader, [loader.Loader.load_data]),
+            loader.Generator
         ]
     },
 
