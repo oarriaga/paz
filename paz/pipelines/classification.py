@@ -11,7 +11,8 @@ from typing import Literal, get_args
 EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
                   [0, 0, 255], [0, 255, 255], [0, 255, 0]]
 Average_Options = Literal["mean", "weighted"]
-Architecture_Options = Literal["VVAD-LRS3-LSTM", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light"]
+Architecture_Options = Literal["VVAD-LRS3-LSTM", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers",
+                               "CNN2Plus1D_Light"]
 
 
 class MiniXceptionFER(SequentialProcessor):
@@ -87,9 +88,9 @@ class ClassifyVVAD(SequentialProcessor):
     # Arguments
         input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
             e.g. (38, 96, 96, 3).
-        architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3', 'CNN2Plus1D',
+        architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
             'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
-        update_rate: Integer. How many frames are between the prediction (computational expansive (low update rate) vs
+        update_rate: Integer. How many frames are between the predictions (computational expansive (low update rate) vs
             high latency (high update rate))
         average: Integer. How many predictions are averaged. Set to 1 to disable averaging
         average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set average to 1 to

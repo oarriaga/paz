@@ -9,7 +9,7 @@ from ..models import (
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
-from .classification import MiniXceptionFER, ClassifyVVAD, Architecture_Options
+from .classification import MiniXceptionFER, ClassifyVVAD, Architecture_Options, Average_Options
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
 from ..backend.boxes import change_box_coordinates
@@ -889,31 +889,39 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
 
 
 class DetectVVAD(Processor):
-    """Emotion classification and detection pipeline.
+    """Visual Voice Activity Detection classification and detection pipeline.
+
+    # Example
+        ``` python
+        from paz.backend.camera import VideoPlayer, Camera
+        import paz.pipelines.detection as dt
+
+        detect = DetectVVAD()
+
+        pipeline = dt.DetectVVAD()
+        # To input multiple images, use a camera or a prerecorded video
+        camera = Camera(args.camera_id)
+        player = VideoPlayer((640, 480), pipeline, camera)
+        player.run()
+        ```
 
     # Returns
         Dictionary with ``image`` and ``boxes2D``.
 
-    # Example
-        ``` python
-        from paz.pipelines import DetectMiniXceptionFER
-
-        detect = DetectMiniXceptionFER()
-
-        # apply directly to an image (numpy-array)
-        inferences = detect(image)
-        ```
     # Returns
         A function that takes an RGB image and outputs the predictions
         as a dictionary with ``keys``: ``image`` and ``boxes2D``.
         The corresponding values of these keys contain the image with the drawn
         inferences and a list of ``paz.abstract.messages.Boxes2D``.
+        Note multiple images are needed to produce a prediction.
 
-    # References
-       - [Real-time Convolutional Neural Networks for Emotion and
-            Gender Classification](https://arxiv.org/abs/1710.07557)
+    # Arguments
+        architecture: String indicating the architecture to be used for
+            classification. Options are 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
+            'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
     """
-    def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', offsets=[0, 0], colors=EMOTION_COLORS):
+    def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', update_rate=10, average=6,
+                 average_type: Average_Options = 'weighted', offsets=[0, 0], colors=EMOTION_COLORS):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
         self.colors = colors
@@ -927,7 +935,8 @@ class DetectVVAD(Processor):
         self.crop = pr.CropBoxes2D()
 
         # classification
-        self.classify = ClassifyVVAD(update_rate=10, average=6, average_type='weighted', architecture=architecture)
+        self.classify = ClassifyVVAD(update_rate=update_rate, average=average, average_type=str(average_type),
+                                     architecture=architecture)
 
         # drawing and wrapping
         self.class_names = self.classify.class_names
@@ -941,8 +950,6 @@ class DetectVVAD(Processor):
         cropped_images = self.crop(image, boxes2D)
         for cropped_image, box2D in zip(cropped_images, boxes2D):
             predictions = self.classify(cropped_image)
-            # if predictions["scores"] is not None:
-            #     print(predictions)
             box2D.class_name = predictions['class_name']
             box2D.score = np.amax(predictions['scores'] is None if -1.0 else predictions['scores'])
         image = self.draw(image, boxes2D)

@@ -501,6 +501,7 @@ class PrintTopics(Processor):
         [print(dictionary[topic]) for topic in self.topics]
         return dictionary
 
+
 class FloatToBoolean(Processor):
     """Converts a float to a boolean.
     # Arguments
@@ -517,11 +518,12 @@ class FloatToBoolean(Processor):
     def call(self, value):
         return value > self.threshold
 
+
 class NoneConverter(Processor):
     """Converts a None value to the last valid or a default value.
     # Arguments
-        default_value: Any. Default value to convert to.
-        value: Noneable value.
+        default_value: Any. Default value to convert to until a first valid value is stored.
+        value: Any Noneable value.
 
     # Returns
         Any.
@@ -538,13 +540,14 @@ class NoneConverter(Processor):
             self.default_value = value
             return value
 
+
 class AveragePredictions(Processor):
     """Averages the last n predictions
     # Arguments
         averages: Int. Number of predictions to average over.
-        value: Noneable value.
+        value: Noneable Bool, Int or Float value. Value to average over.
     # Returns
-        Any.
+        Noneable Bool, Int or Float value. Averaged value.
     """
 
     def __init__(self, averages=1):
@@ -568,9 +571,9 @@ class WeightedAveragePredictions(Processor):
     """Weighted averages the last n predictions
     # Arguments
         averages: Int. Number of predictions to average over.
-        value: Noneable value.
+        value: Noneable Int or Float value. Value to average over.
     # Returns
-        Any.
+        Noneable Int or Float value. Averaged value.
     """
 
     def __init__(self, averages=1):
