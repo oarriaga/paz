@@ -1,8 +1,7 @@
 from ..abstract import SequentialProcessor
 from .. import processors as pr
 from . import PreprocessImage
-from ..models.classification import MiniXception, VVAD_LRS3_LSTM, CNN2Plus1D, CNN2Plus1D_Filters, CNN2Plus1D_Light, \
-    CNN2Plus1D_Layers
+from ..models.classification import MiniXception, VVAD_LRS3_LSTM, CNN2Plus1D
 from ..datasets import get_class_names
 from .keypoints import MinimalHandPoseEstimation
 from typing import Literal, get_args
@@ -12,7 +11,7 @@ from typing import Literal, get_args
 EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
                   [0, 0, 255], [0, 255, 255], [0, 255, 0]]
 Average_Options = Literal["mean", "weighted"]
-Architecture_Options = Literal["VVAD-LRS3", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light"]
+Architecture_Options = Literal["VVAD-LRS3-LSTM", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light"]
 
 
 class MiniXceptionFER(SequentialProcessor):
@@ -104,18 +103,13 @@ class ClassifyVVAD(SequentialProcessor):
         options = get_args(Architecture_Options)
         assert architecture in options, f"'{architecture}' is not in {options}"
 
-        if architecture == 'VVAD-LRS3':
-            self.classifier = VVAD_LRS3_LSTM(weights='VVAD-LRS3')
-        elif architecture == 'CNN2Plus1D':
-            self.classifier = CNN2Plus1D(weights='CNN2Plus1D')
-        elif architecture == 'CNN2Plus1D_Filters':
-            self.classifier = CNN2Plus1D_Filters(weights='CNN2Plus1D')
-        elif architecture == 'CNN2Plus1D_Layers':
-            self.classifier = CNN2Plus1D_Layers(weights='CNN2Plus1D')
-        elif architecture == 'CNN2Plus1D_Light':
-            self.classifier = CNN2Plus1D_Light(weights='CNN2Plus1D')
+        if architecture == 'VVAD-LRS3-LSTM':
+            self.classifier = VVAD_LRS3_LSTM(weights='VVAD_LRS3')
+        elif architecture.startswith('CNN2Plus1D'):
+            self.classifier = CNN2Plus1D(weights='VVAD_LRS3',
+                                         architecture=str(architecture))
 
-        self.class_names = get_class_names('VVAD-LRS3')
+        self.class_names = get_class_names('VVAD_LRS3')
 
         preprocess = PreprocessImage(input_size[1:3], pr.RGB_NORMAL)
         preprocess.add(pr.BufferImages(input_size, play_rate=update_rate))
