@@ -4,6 +4,11 @@ from ..abstract import Processor, Pose6D
 from ..backend.keypoints import solve_PNP
 from ..backend.keypoints import LEVENBERG_MARQUARDT
 from ..backend.keypoints import solve_PnP_RANSAC
+from ..backend.poses import match_poses
+from ..backend.poses import transform_rotation
+from ..backend.poses import concatenate_poses
+from ..backend.poses import concatenate_scale
+from ..backend.poses import augment_6DOF
 
 
 class SolvePNP(Processor):
@@ -127,3 +132,125 @@ class Translation3DFromBoxWidth(Processor):
             y_center = (z_center * v) / self.focal_length
             hands_center.append([x_center, y_center, z_center])
         return np.array(hands_center)
+
+
+class ComputeCameraParameter(Processor):
+    """Computes camera parameter given camera matrix
+    and scale normalization factor of translation.
+
+    # Arguments
+        camera_matrix: Array of shape `(3, 3)` camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
+    """
+    def __init__(self, camera_matrix, translation_scale_norm):
+        self.camera_matrix = camera_matrix
+        self.translation_scale_norm = translation_scale_norm
+        super(ComputeCameraParameter, self).__init__()
+
+    def call(self, image_scale):
+        return np.array([self.camera_matrix[0, 0], self.camera_matrix[1, 1],
+                         self.camera_matrix[0, 2], self.camera_matrix[1, 2],
+                         self.translation_scale_norm, image_scale])
+
+
+class MatchPoses(Processor):
+    """Match prior boxes with ground truth poses.
+
+    # Arguments
+        prior_boxes: Numpy array of shape (num_boxes, 4).
+        iou: Float in [0, 1]. Intersection over union in which prior
+            boxes will be considered positive. A positive box is box
+            with a class different than `background`.
+    """
+    def __init__(self, prior_boxes, iou=.5):
+        self.prior_boxes = prior_boxes
+        self.iou = iou
+        super(MatchPoses, self).__init__()
+
+    def call(self, boxes, poses):
+        return match_poses(boxes, poses, self.prior_boxes, self.iou)
+
+
+class TransformRotation(Processor):
+    """Computes axis angle rotation vector from a rotation matrix.
+
+    # Arguments:
+        num_pose_dims: Int, number of dimensions of pose.
+
+    # Returns:
+        transformed_rotations: Array of shape (5,)
+            containing transformed rotation.
+    """
+    def __init__(self, num_pose_dims):
+        self.num_pose_dims = num_pose_dims
+        super(TransformRotation, self).__init__()
+
+    def call(self, rotations):
+        return transform_rotation(rotations, self.num_pose_dims)
+
+
+class ConcatenatePoses(Processor):
+    """Concatenates rotations and translations into a single array.
+
+    # Returns:
+        poses_combined: Array of shape `(num_boxes, 10)`
+            containing the transformed rotation.
+    """
+    def __init__(self):
+        super(ConcatenatePoses, self).__init__()
+
+    def call(self, rotations, translations):
+        return concatenate_poses(rotations, translations)
+
+
+class ConcatenateScale(Processor):
+    """Concatenates poses with image scale into a single array.
+
+    # Returns:
+        poses_combined: Array of shape `(num_prior_boxes, 11)`
+            containing the transformed rotation.
+    """
+    def __init__(self):
+        super(ConcatenateScale, self).__init__()
+
+    def call(self, poses, scale):
+        return concatenate_scale(poses, scale)
+
+
+class Augment6DOF(Processor):
+    """Augment images, boxes, rotation and translation vector
+    for pose estimation.
+
+    # Arguments
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+        probability: Float, probability of data transformation.
+        mask_value: Int, pixel gray value of foreground in mask image.
+        input_size: Int, input image size of the model.
+    """
+    def __init__(self, scale_min=0.7, scale_max=1.3, angle_min=0,
+                 angle_max=360, probability=0.5, mask_value=255,
+                 input_size=512):
+        self.scale_min = scale_min
+        self.scale_max = scale_max
+        self.angle_min = angle_min
+        self.angle_max = angle_max
+        self.probability = probability
+        self.mask_value = mask_value
+        self.input_size = input_size
+        super(Augment6DOF, self).__init__()
+
+    def call(self, image, boxes, rotation, translation_raw, mask):
+        if np.random.rand() < self.probability:
+            augmented_data = augment_6DOF(
+                image, boxes, rotation, translation_raw, mask,
+                self.scale_min, self.scale_max, self.angle_min,
+                self.angle_max, self.mask_value, self.input_size)
+        else:
+            augmented_data = image, boxes, rotation, translation_raw, mask
+        return augmented_data
