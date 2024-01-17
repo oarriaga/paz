@@ -129,7 +129,7 @@ def denormalize_box(box):
 class EfficientPosePhi0LinemodDebug(DetectAndEstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('Linemod_EfficientPose_Driller')
+        names = get_class_names('Linemod_Driller')
         model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
                                   head_weights=None)
         super(EfficientPosePhi0LinemodDebug, self).__init__(

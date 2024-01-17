@@ -4,6 +4,8 @@ import paz.processors as pr
 from paz.backend.image import lincolor
 from paz.pipelines.detection import PreprocessBoxes
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
+from paz.datasets import (RGB_LINEMOD_MEAN, LINEMOD_CAMERA_MATRIX,
+                          LINEMOD_OBJECT_SIZES, get_class_names)
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
@@ -11,41 +13,41 @@ from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         ConcatenateScale, Augment6DOF, AugmentColorspace)
 
 
-B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
-RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
-B_LINEMOD_STDEV, G_LINEMOD_STDEV, R_LINEMOD_STDEV = 57.375, 57.12, 58.395
-RGB_LINEMOD_STDEV = (R_LINEMOD_STDEV, G_LINEMOD_STDEV, B_LINEMOD_STDEV)
+# B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
+# RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
+# B_LINEMOD_STDEV, G_LINEMOD_STDEV, R_LINEMOD_STDEV = 57.375, 57.12, 58.395
+# RGB_LINEMOD_STDEV = (R_LINEMOD_STDEV, G_LINEMOD_STDEV, B_LINEMOD_STDEV)
 
-LINEMOD_CAMERA_MATRIX = np.array([
-    [572.41140, 000.00000, 325.26110],
-    [000.00000, 573.57043, 242.04899],
-    [000.00000, 000.00000, 001.00000]],
-    dtype=np.float32)
+# LINEMOD_CAMERA_MATRIX = np.array([
+#     [572.41140, 000.00000, 325.26110],
+#     [000.00000, 573.57043, 242.04899],
+#     [000.00000, 000.00000, 001.00000]],
+#     dtype=np.float32)
 
-LINEMOD_OBJECT_SIZES = {
-    "ape":         np.array([075.86860000, 077.59920000, 091.76900000]),
-    "can":         np.array([100.79160000, 181.79580000, 193.73400000]),
-    "cat":         np.array([067.01070000, 127.63300000, 117.45660000]),
-    "driller":     np.array([229.47600000, 075.47140000, 208.00200000]),
-    "duck":        np.array([104.42920000, 077.40760000, 085.69700000]),
-    "eggbox":      np.array([150.18460000, 107.07500000, 069.24140000]),
-    "glue":        np.array([036.72110000, 077.86600000, 172.81580000]),
-    "holepuncher": np.array([100.88780000, 108.49700000, 090.80000000]),
-    }
+# LINEMOD_OBJECT_SIZES = {
+#     "ape":         np.array([075.86860000, 077.59920000, 091.76900000]),
+#     "can":         np.array([100.79160000, 181.79580000, 193.73400000]),
+#     "cat":         np.array([067.01070000, 127.63300000, 117.45660000]),
+#     "driller":     np.array([229.47600000, 075.47140000, 208.00200000]),
+#     "duck":        np.array([104.42920000, 077.40760000, 085.69700000]),
+#     "eggbox":      np.array([150.18460000, 107.07500000, 069.24140000]),
+#     "glue":        np.array([036.72110000, 077.86600000, 172.81580000]),
+#     "holepuncher": np.array([100.88780000, 108.49700000, 090.80000000]),
+#     }
 
 
-def get_class_names(dataset_name='Linemod'):
-    if dataset_name in ['Linemod']:
-        class_names = ['background', 'ape', 'can', 'cat', 'driller',
-                       'duck', 'eggbox', 'glue', 'holepuncher']
+# def get_class_names(dataset_name='Linemod'):
+#     if dataset_name in ['Linemod']:
+#         class_names = ['background', 'ape', 'can', 'cat', 'driller',
+#                        'duck', 'eggbox', 'glue', 'holepuncher']
 
-    elif dataset_name in ['Linemod_EfficientPose']:
-        class_names = ['ape', 'can', 'cat', 'driller', 'duck',
-                       'eggbox', 'glue', 'holepuncher']
+#     elif dataset_name in ['Linemod_EfficientPose']:
+#         class_names = ['ape', 'can', 'cat', 'driller', 'duck',
+#                        'eggbox', 'glue', 'holepuncher']
 
-    elif dataset_name in ['Linemod_EfficientPose_Driller']:
-        class_names = ['background', 'driller']
-    return class_names
+#     elif dataset_name in ['Linemod_EfficientPose_Driller']:
+#         class_names = ['background', 'driller']
+#     return class_names
 
 
 class AugmentEfficientPose(SequentialProcessor):
@@ -317,7 +319,7 @@ class EfficientPosePhi0LinemodDriller(DetectAndEstimateEfficientPose):
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('Linemod_EfficientPose_Driller')
+        names = get_class_names('Linemod_Driller')
         model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
                                   head_weights=None)
         super(EfficientPosePhi0LinemodDriller, self).__init__(

@@ -1,8 +1,30 @@
 import os
 import yaml
 import numpy as np
-from paz.abstract import Loader
-from pose import get_class_names
+from ..abstract import Loader
+from .utils import get_class_names
+
+B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
+RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
+B_LINEMOD_STDEV, G_LINEMOD_STDEV, R_LINEMOD_STDEV = 57.375, 57.12, 58.395
+RGB_LINEMOD_STDEV = (R_LINEMOD_STDEV, G_LINEMOD_STDEV, B_LINEMOD_STDEV)
+
+LINEMOD_CAMERA_MATRIX = np.array([
+    [572.41140, 000.00000, 325.26110],
+    [000.00000, 573.57043, 242.04899],
+    [000.00000, 000.00000, 001.00000]],
+    dtype=np.float32)
+
+LINEMOD_OBJECT_SIZES = {
+    "ape":         np.array([075.86860000, 077.59920000, 091.76900000]),
+    "can":         np.array([100.79160000, 181.79580000, 193.73400000]),
+    "cat":         np.array([067.01070000, 127.63300000, 117.45660000]),
+    "driller":     np.array([229.47600000, 075.47140000, 208.00200000]),
+    "duck":        np.array([104.42920000, 077.40760000, 085.69700000]),
+    "eggbox":      np.array([150.18460000, 107.07500000, 069.24140000]),
+    "glue":        np.array([036.72110000, 077.86600000, 172.81580000]),
+    "holepuncher": np.array([100.88780000, 108.49700000, 090.80000000]),
+    }
 
 
 class Linemod(Loader):

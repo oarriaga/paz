@@ -96,6 +96,13 @@ def get_class_names(dataset_name='VOC2007'):
         return ['void', 'flat', 'construction',
                 'object', 'nature', 'sky', 'human', 'vehicle']
 
+    elif dataset_name == 'Linemod':
+        return ['background', 'ape', 'can', 'cat', 'driller',
+                'duck', 'eggbox', 'glue', 'holepuncher']
+
+    elif dataset_name == 'Linemod_Driller':
+        return ['background', 'driller']
+
     else:
         raise ValueError('Invalid dataset', dataset_name)
 
