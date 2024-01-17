@@ -11,7 +11,7 @@ from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
 from linemod import Linemod
 from efficientpose import EfficientPosePhi0
-from pose import AugmentPose, EfficientPosePhi0LinemodDriller
+from pose import AugmentEfficientPose, EfficientPosePhi0LinemodDriller
 from losses import MultiPoseLoss
 from pose_error import EvaluatePoseError
 
@@ -91,7 +91,8 @@ model.compile(optimizer=optimizer, loss=loss,
 # setting data augmentation pipeline
 augmentators = []
 for split in [TRAIN, VAL]:
-    augmentator = AugmentPose(model, split, size=512, num_classes=num_classes)
+    augmentator = AugmentEfficientPose(model, split, size=512,
+                                       num_classes=num_classes)
     augmentators.append(augmentator)
 
 # setting sequencers

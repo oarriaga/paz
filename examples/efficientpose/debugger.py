@@ -9,7 +9,7 @@ from linemod import Linemod
 from pose import get_class_names
 from efficientpose import EfficientPosePhi0
 from processors import DrawPose6D, ComputeSelectedIndices, ToPose6D
-from pose import (AugmentPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+from pose import (AugmentEfficientPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                   EfficientPosePreprocess)
 
 raw_image_shape = (640, 480)
@@ -163,8 +163,8 @@ if __name__ == '__main__':
         num_classes, base_weights='COCO', head_weights=None)
 
     # setting data augmentation pipeline
-    augmentator = AugmentPose(model, split, size=input_shape,
-                              num_classes=num_classes)
+    augmentator = AugmentEfficientPose(model, split, size=input_shape,
+                                       num_classes=num_classes)
     sequencer = ProcessingSequence(augmentator, 1, dataset)
 
     detect = EfficientPosePhi0LinemodDebug(show_boxes2D=True,

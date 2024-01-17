@@ -48,7 +48,7 @@ def get_class_names(dataset_name='Linemod'):
     return class_names
 
 
-class AugmentPose(SequentialProcessor):
+class AugmentEfficientPose(SequentialProcessor):
     """Augment images, boxes and poses for pose estimation.
 
     # Arguments
@@ -71,7 +71,7 @@ class AugmentPose(SequentialProcessor):
                  mean=RGB_LINEMOD_MEAN, camera_matrix=LINEMOD_CAMERA_MATRIX,
                  IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], probability=0.5,
                  num_pose_dims=3):
-        super(AugmentPose, self).__init__()
+        super(AugmentEfficientPose, self).__init__()
         self.augment_colorspace = AugmentColorspace()
         self.augment_6DOF = Augment6DOF(probability=probability,
                                         input_size=size)
