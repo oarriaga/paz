@@ -36,7 +36,7 @@ def get_test_images(image_W, image_H, batch_size=1):
                          ])
 def test_ComputeResizingShape(size, target_resizing_shape, target_scale):
     image = get_test_images(640, 480, batch_size=1)[0]
-    compute_shape = ComputeResizingShape(size)    
+    compute_shape = ComputeResizingShape(size)
     resizing_shape, scale = compute_shape(image)
     assert resizing_shape == target_resizing_shape
     assert scale == target_scale
@@ -51,49 +51,49 @@ def test_PadImage(size):
     assert padded_image.shape == (size, size, 3)
 
 
-# @pytest.mark.parametrize(
-#         ('model'), [EfficientPosePhi0, EfficientPosePhi1, EfficientPosePhi2,
-#                     EfficientPosePhi3, EfficientPosePhi4, EfficientPosePhi5,
-#                     EfficientPosePhi6, EfficientPosePhi7])
-# def test_RegressTranslation(model):
-#     model = model(num_classes=2, base_weights='COCO', head_weights=None)
-#     regress_translation = RegressTranslation(model.translation_priors)
-#     translation_raw = np.zeros_like(model.translation_priors)
-#     translation_raw = np.expand_dims(translation_raw, axis=0)
-#     translation = regress_translation(translation_raw)
-#     assert translation[:, 0].sum() == model.translation_priors[:, 0].sum()
-#     assert translation[:, 1].sum() == model.translation_priors[:, 1].sum()
-#     assert translation[:, 2].sum() == translation_raw[:, :, 2].sum()
-#     del model
+@pytest.mark.parametrize(
+        ('model'), [EfficientPosePhi0, EfficientPosePhi1, EfficientPosePhi2,
+                    EfficientPosePhi3, EfficientPosePhi4, EfficientPosePhi5,
+                    EfficientPosePhi6, EfficientPosePhi7])
+def test_RegressTranslation(model):
+    model = model(num_classes=2, base_weights='COCO', head_weights=None)
+    regress_translation = RegressTranslation(model.translation_priors)
+    translation_raw = np.zeros_like(model.translation_priors)
+    translation_raw = np.expand_dims(translation_raw, axis=0)
+    translation = regress_translation(translation_raw)
+    assert translation[:, 0].sum() == model.translation_priors[:, 0].sum()
+    assert translation[:, 1].sum() == model.translation_priors[:, 1].sum()
+    assert translation[:, 2].sum() == translation_raw[:, :, 2].sum()
+    del model
 
 
-# @pytest.mark.parametrize(('image_scale'), [0.6, 0.7, 0.8, 0.9, 1.0])
-# def test_ComputeCameraParameter(image_scale):
-#     translation_scale_norm = 1000.0
-#     compute_camera_parameter = ComputeCameraParameter(camera_matrix,
-#                                                       translation_scale_norm)
-#     camera_parameter = compute_camera_parameter(image_scale)
-#     assert camera_parameter.shape == (6, )
-#     assert np.all(camera_parameter == np.array([camera_matrix[0, 0],
-#                                                 camera_matrix[1, 1],
-#                                                 camera_matrix[0, 2],
-#                                                 camera_matrix[1, 2],
-#                                                 translation_scale_norm,
-#                                                 image_scale]))
+@pytest.mark.parametrize(('image_scale'), [0.6, 0.7, 0.8, 0.9, 1.0])
+def test_ComputeCameraParameter(image_scale):
+    translation_scale_norm = 1000.0
+    compute_camera_parameter = ComputeCameraParameter(camera_matrix,
+                                                      translation_scale_norm)
+    camera_parameter = compute_camera_parameter(image_scale)
+    assert camera_parameter.shape == (6, )
+    assert np.all(camera_parameter == np.array([camera_matrix[0, 0],
+                                                camera_matrix[1, 1],
+                                                camera_matrix[0, 2],
+                                                camera_matrix[1, 2],
+                                                translation_scale_norm,
+                                                image_scale]))
 
 
-# @pytest.mark.parametrize(
-#         ('model'), [EfficientPosePhi0, EfficientPosePhi1, EfficientPosePhi2,
-#                     EfficientPosePhi3, EfficientPosePhi4, EfficientPosePhi5,
-#                     EfficientPosePhi6, EfficientPosePhi7])
-# def test_ComputeTxTyTz(model):
-#     model = model(num_classes=2, base_weights='COCO', head_weights=None)
-#     translation_raw = np.zeros_like(model.translation_priors)
-#     compute_camera_parameter = np.ones(shape=(6, ))
-#     compute_tx_ty_tz = ComputeTxTyTz()
-#     tx_ty_tz = compute_tx_ty_tz(translation_raw, compute_camera_parameter)
-#     assert tx_ty_tz.shape == model.translation_priors.shape
-#     del model
+@pytest.mark.parametrize(
+        ('model'), [EfficientPosePhi0, EfficientPosePhi1, EfficientPosePhi2,
+                    EfficientPosePhi3, EfficientPosePhi4, EfficientPosePhi5,
+                    EfficientPosePhi6, EfficientPosePhi7])
+def test_ComputeTxTyTz(model):
+    model = model(num_classes=2, base_weights='COCO', head_weights=None)
+    translation_raw = np.zeros_like(model.translation_priors)
+    compute_camera_parameter = np.ones(shape=(6, ))
+    compute_tx_ty_tz = ComputeTxTyTz()
+    tx_ty_tz = compute_tx_ty_tz(translation_raw, compute_camera_parameter)
+    assert tx_ty_tz.shape == model.translation_priors.shape
+    del model
 
 
 @pytest.mark.parametrize(('num_rotations'), [1, 2, 3, 4, 5])
@@ -153,10 +153,92 @@ def test_Augment6DOF(num_annotations, image_W, image_H):
     augmentations = augment_6DOF(image, boxes, rotation, translation_raw, mask)
     (augmented_image, augmented_boxes, augmented_rotation,
      augmented_translation, augmented_mask) = augmentations
+    assert augmented_image.dtype == image.dtype
     assert augmented_image.shape == (image_W, image_H, 3)
+    assert augmented_mask.dtype == mask.dtype
     assert augmented_mask.shape == (image_W, image_H, 1)
     assert augmented_boxes.shape == (num_annotations, 5)
     assert augmented_rotation.shape == (num_annotations, 9)
     assert augmented_translation.shape == (num_annotations, 3)
     assert augmented_image.mean() == 0.0
     assert augmented_mask.mean() == 1.0
+
+
+def test_AutoContrast():
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    auto_contrast = AutoContrast()
+    image_contrasted = auto_contrast(image)
+    assert image_contrasted.shape == image.shape
+    assert image_contrasted.dtype == image.dtype
+    assert np.std(image_contrasted) >= np.std(image)
+
+
+def test_EqualizeHistogram():
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    equalize_histogram = EqualizeHistogram()
+    image_histogram_equalized = equalize_histogram(image)
+    assert image_histogram_equalized.shape == image.shape
+    assert image_histogram_equalized.dtype == image.dtype
+    assert np.std(image_histogram_equalized) >= np.std(image)
+
+
+def test_InvertColors():
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    invert_colors = InvertColors(probability=1.0)
+    image_inverted = invert_colors(image)
+    assert np.all(image_inverted == 255 - image)
+    assert image_inverted.shape == image.shape
+    assert image_inverted.dtype == image.dtype
+
+
+def test_Posterize():
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    posterize = Posterize(probability=1.0, num_bits=4)
+    image_posterized = posterize(image)
+    assert np.std(image_posterized) <= np.std(image)
+    assert image_posterized.shape == image.shape
+    assert image_posterized.dtype == image.dtype
+
+
+@pytest.mark.parametrize(('threshold'), [75, 100, 125, 150, 175])
+def test_Solarize(threshold):
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    solarize = Solarize(probability=1.0, threshold=threshold)
+    image_solarized = solarize(image)
+    assert (np.all(image_solarized[image >= threshold] ==
+                   255 - image[image >= threshold]))
+    assert (np.all(image_solarized[image < threshold] ==
+                   image[image < threshold]))
+    assert image_solarized.shape == image.shape
+    assert image_solarized.dtype == image.dtype
+
+
+def test_SharpenImage():
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    sharpen_image = SharpenImage(probability=1.0)
+    image_sharpened = sharpen_image(image)
+    assert np.std(image_sharpened) >= np.std(image)
+    assert image_sharpened.shape == image.shape
+    assert image_sharpened.dtype == image.dtype
+
+
+def test_Cutout():
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    cutout = Cutout(probability=1.0)
+    image_cutout = cutout(image)
+    assert image_cutout.shape == image.shape
+    assert image_cutout.dtype == image.dtype
+
+
+@pytest.mark.parametrize(('mean, scale'),
+                         [(10, 1),
+                          (20, 2),
+                          (30, 3),
+                          (40, 4),
+                          (50, 5)])
+def test_AddGaussianNoise(mean, scale):
+    image = np.uint8(np.random.rand(640, 480, 3) * 255)
+    add_gaussian_noise = AddGaussianNoise(1.0, mean, scale)
+    image_noisy = add_gaussian_noise(image)
+    assert image_noisy.shape == image.shape
+    assert image_noisy.dtype == image.dtype
