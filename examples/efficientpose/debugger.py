@@ -9,8 +9,8 @@ from linemod import Linemod
 from pose import get_class_names
 from efficientpose import EfficientPosePhi0
 from processors import DrawPose6D, ComputeSelectedIndices, ToPose6D
-from pose import (AugmentEfficientPose, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
-                  EfficientPosePreprocess)
+from pose import (AugmentEfficientPose, LINEMOD_CAMERA_MATRIX,
+                  LINEMOD_OBJECT_SIZES, EfficientPosePreprocess)
 
 raw_image_shape = (640, 480)
 input_shape = 512
