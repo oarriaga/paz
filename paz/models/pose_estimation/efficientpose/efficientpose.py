@@ -1,13 +1,15 @@
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
-from paz.backend.anchors import build_anchors
-from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
+from tensorflow.keras.utils import get_file
+from ....backend.anchors import build_anchors
+from ...detection.efficientdet.efficientnet import EFFICIENTNET
 from anchors import build_translation_anchors
-from paz.models.detection.efficientdet.efficientdet_blocks import (
+from ...detection.efficientdet.efficientdet_blocks import (
     build_detector_head, EfficientNet_to_BiFPN, BiFPN)
-from efficientpose_blocks import build_pose_estimator_head
+from .efficientpose_blocks import build_pose_estimator_head
 
-WEIGHT_PATH = 'weights/'
+WEIGHT_PATH = (
+    'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
 
 
 def EfficientPose(image, num_classes, base_weights, head_weights,
@@ -89,7 +91,9 @@ def EfficientPose(image, num_classes, base_weights, head_weights,
                                    str(head_weights) + '_weights.hdf5'])
 
     if not ((base_weights is None) and (head_weights is None)):
-        weights_path = WEIGHT_PATH + model_filename
+        weights_path = get_file(model_filename, WEIGHT_PATH + model_filename,
+                                cache_subdir='paz/models')
+        print('Loading %s model weights' % weights_path)
         finetunning_model_names = ['EfficientPose-Phi0-COCO-None_weights.hdf5',
                                    'EfficientPose-Phi1-COCO-None_weights.hdf5',
                                    'EfficientPose-Phi2-COCO-None_weights.hdf5',
@@ -99,7 +103,6 @@ def EfficientPose(image, num_classes, base_weights, head_weights,
                                    'EfficientPose-Phi6-COCO-None_weights.hdf5',
                                    'EfficientPose-Phi7-COCO-None_weights.hdf5']
         by_name = True if model_filename in finetunning_model_names else False
-        print('Loading %s model weights' % weights_path)
         model.load_weights(weights_path, by_name=by_name)
 
     image_shape = image.shape[1:3].as_list()

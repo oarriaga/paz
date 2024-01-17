@@ -3,7 +3,7 @@ from paz.abstract import Processor, SequentialProcessor
 import paz.processors as pr
 from paz.backend.image import lincolor
 from paz.pipelines.detection import PreprocessBoxes
-from efficientpose import EfficientPosePhi0
+from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from processors import (ComputeResizingShape, PadImage, ComputeCameraParameter,
                         RegressTranslation, ComputeTxTyTz, DrawPose6D,
                         ComputeSelectedIndices, ScaleBoxes2D, ToPose6D,
