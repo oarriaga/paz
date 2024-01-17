@@ -41,6 +41,8 @@ parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-op', '--object_model_path', default='models/',
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-pm', '--pose_metric', default='ADD',
+                    type=str, help='type of pose error metric ADD/ADI')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
@@ -132,9 +134,9 @@ with open(model_info_file, 'r') as file:
 object_diameter = model_data[int(args.object_id)]['diameter']
 
 # Pose accuracy calculation pipeline
-pose_error = EvaluatePoseMetric(args.save_path, evaluation_data_managers[0],
-                                inference, mesh_points, object_diameter,
-                                args.evaluation_period, metric='ADD')
+pose_error = EvaluatePoseMetric(
+    args.save_path, evaluation_data_managers[0], inference, mesh_points,
+    object_diameter, args.evaluation_period, metric=args.pose_metric)
 
 # training
 model.fit(
