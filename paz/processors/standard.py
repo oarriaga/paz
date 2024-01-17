@@ -2,7 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import append_values, predict
+from ..backend.standard import append_values, predict, compute_selected_indices
 
 
 class ControlMap(Processor):
@@ -482,3 +482,14 @@ class PrintTopics(Processor):
     def call(self, dictionary):
         [print(dictionary[topic]) for topic in self.topics]
         return dictionary
+
+
+class ComputeSelectedIndices(Processor):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+    """
+    def __init__(self):
+        super(ComputeSelectedIndices, self).__init__()
+
+    def call(self, box_data_raw, box_data):
+        return compute_selected_indices(box_data_raw, box_data)

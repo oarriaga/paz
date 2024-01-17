@@ -271,3 +271,23 @@ def predict(x, model, preprocess=None, postprocess=None):
     if postprocess is not None:
         y = postprocess(y)
     return y
+
+
+def compute_selected_indices(box_data_all, box_data):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+
+    # Arguments
+        box_data_all: Array of shape `(num_boxes, 5)`,
+        box_data: Array: of shape `(n, 5)` box data.
+
+    # Returns
+        Array: of shape `(n, 3)`.
+    """
+    box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
+    box_data_tuple = [tuple(row) for row in box_data[:, :4]]
+    location_indices = []
+    for tuple_element in box_data_tuple:
+        location_index = box_data_all_tuple.index(tuple_element)
+        location_indices.append(location_index)
+    return np.array(location_indices)

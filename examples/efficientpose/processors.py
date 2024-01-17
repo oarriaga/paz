@@ -73,34 +73,3 @@ def compute_tx_ty_tz(translation_xy_Tz, camera_parameter):
     ty = np.multiply(y, tz) / fy
     tx, ty, tz = tx[np.newaxis, :], ty[np.newaxis, :], tz[np.newaxis, :]
     return np.concatenate((tx, ty, tz), axis=0).T
-
-
-class ComputeSelectedIndices(Processor):
-    """Computes row-wise intersection between two given
-    arrays and returns the indices of the intersections.
-    """
-    def __init__(self):
-        super(ComputeSelectedIndices, self).__init__()
-
-    def call(self, box_data_raw, box_data):
-        return compute_selected_indices(box_data_raw, box_data)
-
-
-def compute_selected_indices(box_data_all, box_data):
-    """Computes row-wise intersection between two given
-    arrays and returns the indices of the intersections.
-
-    # Arguments
-        box_data_all: Array of shape `(num_boxes, 5)`,
-        box_data: Array: of shape `(n, 5)` box data.
-
-    # Returns
-        Array: of shape `(n, 3)`.
-    """
-    box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
-    box_data_tuple = [tuple(row) for row in box_data[:, :4]]
-    location_indices = []
-    for tuple_element in box_data_tuple:
-        location_index = box_data_all_tuple.index(tuple_element)
-        location_indices.append(location_index)
-    return np.array(location_indices)

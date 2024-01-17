@@ -147,6 +147,7 @@ from .standard import Scale
 from .standard import AppendValues
 from .standard import BooleanToTextMessage
 from .standard import PrintTopics
+from .standard import ComputeSelectedIndices
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
