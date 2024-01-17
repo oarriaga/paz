@@ -69,7 +69,16 @@ from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
 from .image import DivideStandardDeviationImage
 from .image import ScaledResize
-
+from .image import ComputeResizingShape
+from .image import PadImage
+from .image import AutoContrast
+from .image import EqualizeHistogram
+from .image import InvertColors
+from .image import Posterize
+from .image import Solarize
+from .image import SharpenImage
+from .image import Cutout
+from .image import AddGaussianNoise
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN

@@ -174,3 +174,60 @@ def get_affine_transform(source_points, destination_points):
         Transformation matrix.
     '''
     return cv2.getAffineTransform(source_points, destination_points)
+
+
+def calculate_histogram(image, channels, mask, hist_size, hist_range):
+    '''
+    Return the histogram of an imagge.
+
+    # Arguments
+        image: Numpy array.
+        channels: List, indicating the channel.
+        mask: Numpy array to mask the image.
+        hist_size: List, histogram size.
+        hist_range: List, range of histogram.
+
+    # Returns
+        Histogram.
+    '''
+    return cv2.calcHist(image, channels, mask, hist_size, hist_range)
+
+
+def apply_LUT(image, LUT):
+    '''
+    Return the image applied by LUT.
+
+    # Arguments
+        image: Numpy array.
+        LUT: Numpy array, LUT.
+
+    # Returns
+        Numpy array.
+    '''
+    return cv2.LUT(image, LUT)
+
+
+def apply_histogram_equalization(image):
+    '''
+    Return the histogram equalized image.
+
+    # Arguments
+        image: Numpy array.
+
+    # Returns
+        Numpy array.
+    '''
+    return cv2.equalizeHist(image)
+
+
+def convolve_image(image, kernel):
+    """Convolves image by applying a `kernel`.
+
+    # Arguments
+        image: Array, raw image.
+        kernel: Array, the convolution kernel.
+
+    # Returns:
+        Array: Solarized image.
+    """
+    return cv2.filter2D(image, -1, kernel)

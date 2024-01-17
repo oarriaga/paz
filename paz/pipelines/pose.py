@@ -468,3 +468,21 @@ class PIX2YCBTools6D(MultiInstanceMultiClassPIX2POSE6D):
             '037_scissors': np.array([960, 2014, 156]) / 10000
         }
         return name_to_sizes
+
+
+class AugmentColorspace(SequentialProcessor):
+    def __init__(self):
+        super(AugmentColorspace, self).__init__()
+        self.add(pr.AutoContrast())
+        self.add(pr.EqualizeHistogram())
+        self.add(pr.InvertColors())
+        self.add(pr.Posterize())
+        self.add(pr.Solarize())
+        self.add(pr.RandomSaturation(1.0))
+        self.add(pr.RandomContrast(1.0))
+        self.add(pr.RandomBrightness(1.0))
+        self.add(pr.SharpenImage())
+        self.add(pr.Cutout())
+        self.add(pr.RandomImageBlur())
+        self.add(pr.RandomGaussianBlur())
+        self.add(pr.AddGaussianNoise())

@@ -2,7 +2,8 @@ import numpy as np
 
 from .opencv_image import (convert_color_space, gaussian_image_blur,
                            median_image_blur, warp_affine, resize_image,
-                           RGB2HSV, HSV2RGB)
+                           calculate_histogram, apply_LUT,
+                           apply_histogram_equalization, RGB2HSV, HSV2RGB)
 
 
 def cast_image(image, dtype):
@@ -351,3 +352,194 @@ def scale_resize(image, image_size):
     image_scale = np.array(1 / image_scale)
     output_image = output_image[np.newaxis]
     return output_image, image_scale
+
+
+def compute_resizing_shape(image, size):
+    """Computes the final size of the image to be scaled by `size`
+    such that the largest dimension of the image is equal to `size`.
+
+    # Arguments
+        image: Array, raw image to be scaled.
+        size: Int, final size of the image.
+
+    # Returns
+        List: Containing final shape of image and scale.
+    """
+    H, W = image.shape[:2]
+    image_scale = size / max(H, W)
+    resizing_W = int(W * image_scale)
+    resizing_H = int(H * image_scale)
+    resizing_shape = (resizing_W, resizing_H)
+    return [resizing_shape, np.array(image_scale)]
+
+
+def pad_image(image, size, mode):
+    """Pads the image to the final size `size`.
+
+    # Arguments
+        image: Array, image to be padded.
+        size: Int, final size of the image.
+        mode: Str, specifying the type of padding.
+
+    # Returns
+        Array: Padded image.
+    """
+    H, W = image.shape[:2]
+    pad_H = size - H
+    pad_W = size - W
+    pad_shape = [(0, pad_H), (0, pad_W), (0, 0)]
+    return np.pad(image, pad_shape, mode=mode)
+
+
+def auto_contrast(image):
+    """Performs autocontrast or automatic contrast enhancement in a
+    given image. This method achieves this by computing the image
+    histogram and removing a certain `cutoff` percent from the lighter
+    and darker part of the histogram and then stretching the histogram
+    such that the lightest pixel gray value becomes 255 and the darkest
+    ones become 0.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        contrasted: Array, contrast enhanced image.
+
+    # References:
+        [Python Pillow autocontrast](
+            https://github.com/python-pillow/Pillow/blob/main'
+            '/src/PIL/ImageOps.py)
+    """
+    contrasted = np.empty_like(image)
+    num_channels = image.shape[2]
+
+    for channel_arg in range(num_channels):
+        image_per_channel = image[:, :, channel_arg]
+        histogram = calculate_histogram(image_per_channel, [0],
+                                        None, [256], [0, 256])
+        histogram[0] = -histogram[0]
+
+        CDF_reversed = np.cumsum(histogram[::-1])
+        upper_cutoff_nonzero = np.nonzero(CDF_reversed > 0.0)[0]
+        if len(upper_cutoff_nonzero) == 0:
+            upper_cutoff = -1
+        else:
+            upper_cutoff = 255 - upper_cutoff_nonzero[0]
+
+        histogram[upper_cutoff+1:] = 0
+        if upper_cutoff > -1:
+            histogram[upper_cutoff] = CDF_reversed[255-upper_cutoff]
+
+        for lower_cutoff, lower_value in enumerate(histogram):
+            if lower_value:
+                break
+
+        if upper_cutoff <= lower_cutoff:
+            LUT = np.arange(256)
+        else:
+            scale = 255.0 / (upper_cutoff - lower_cutoff)
+            offset = -lower_cutoff * scale
+            LUT = np.arange(256).astype(np.float64) * scale + offset
+            LUT = np.clip(LUT, 0, 255).astype(np.uint8)
+        LUT = np.array(LUT, dtype=np.uint8)
+        contrast_adjusted = apply_LUT(image_per_channel, LUT)
+        contrasted[:, :, channel_arg] = contrast_adjusted
+    return contrasted
+
+
+def equalize_histogram(image):
+    """Performs histogram equalization on a given image.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        equalized: Array, histogram equalized image.
+    """
+    equalized = np.empty_like(image)
+    num_channels = image.shape[2]
+    for channel_arg in range(num_channels):
+        image_per_channel = image[:, :, channel_arg]
+        equalized_per_channel = apply_histogram_equalization(image_per_channel)
+        equalized[:, :, channel_arg] = equalized_per_channel
+    return equalized
+
+
+def invert_colors(image):
+    """Performs color / gray value inversion on a given image.
+
+    # Arguments
+        image: Array, raw image.
+
+    # Returns:
+        Array: Color inverted image.
+    """
+    return 255 - image
+
+
+def posterize(image, num_bits):
+    """Performs posterization on a given image. This is achieved
+    by reducing the bit depth of the gray value.
+
+    # Arguments
+        image: Array, raw image.
+        num_bits: Int, final bit depth after posterization.
+
+    # Returns:
+        Array: Posterized image.
+    """
+    scale_factor = 2 ** (8 - num_bits)
+    posterized = np.round(image / scale_factor) * scale_factor
+    return posterized.astype(np.uint8)
+
+
+def solarize(image, threshold):
+    """Performs solarization on a given image. This is achieved
+    by inverting those pixels whose gray values lie above
+    a certain `threshold`.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        threshold: Int, threshold value.
+
+    # Returns:
+        Array: Solarized image.
+    """
+    return np.where(image < threshold, image, 255 - image)
+
+
+def cutout(image, size, fill):
+    """Cuts out a square of size `size` x `size` at a random location
+    in the `image` and fills it with `fill` value.
+
+    # Arguments
+        image: Array, raw image.
+        size: Int, size of cutout square.
+        fill: Int, value to fill cutout with.
+
+    # Returns:
+        image: Array, cutout image.
+    """
+    H, W, _ = image.shape
+    y = np.random.randint(0, H - size)
+    x = np.random.randint(0, W - size)
+    image[y:y+size, x:x+size, :] = fill
+    return image
+
+
+def add_gaussian_noise(image, mean, sigma):
+    """Adds Gaussian noise defined by `mean` and `scale` to the `image`.
+
+    # Arguments
+        image: Array, raw image.
+        mean: Int, mean of Gaussian noise.
+        sigma: Float, standard deviation of Gaussian noise.
+
+    # Returns:
+        Array: Image added with Gaussian noise.
+    """
+    H, W, num_channels = image.shape
+    noise = np.random.normal(mean, sigma, (H, W, num_channels))
+    noisy_image = image + noise
+    noisy_image = np.clip(noisy_image, 0, 255)
+    return noisy_image.astype(np.uint8)
