@@ -21,7 +21,13 @@ def transform_mesh_points(mesh_points, rotation, translation):
     return pts_t.T
 
 
-def compute_ADD(pose_true, pose_pred, mesh_points):
+def compute_ADD_metric(gt_pose, pose6D, mesh_points, object_diameter):
+    ADD_error = compute_ADD_error(gt_pose, pose6D, mesh_points)
+    is_correct = check_ADD(ADD_error, object_diameter)
+    return [ADD_error, is_correct]
+
+
+def compute_ADD_error(pose_true, pose_pred, mesh_points):
     """Calculates ADD error.
 
     # Arguments
@@ -64,7 +70,7 @@ def check_ADD(ADD_error, diameter, diameter_threshold=0.1):
     return is_correct
 
 
-def compute_ADI(pose_true, pose_pred, mesh_points):
+def compute_ADI_metric(pose_true, pose_pred, mesh_points, *args):
     """Calculate The ADI error. Calculate distances to the
     nearest neighbors from vertices in the ground-truth pose to
     vertices in the estimated pose.
@@ -86,7 +92,7 @@ def compute_ADI(pose_true, pose_pred, mesh_points):
     translation_true = pose_true[:3, 3]
     mesh_true = transform_mesh_points(mesh_points, rotation_true,
                                       translation_true)
-    return compute_nearest_distance(mesh_pred, mesh_true, k=1)
+    return [compute_nearest_distance(mesh_pred, mesh_true, k=1), None]
 
 
 def compute_nearest_distance(X, Y, k=1):
@@ -107,8 +113,8 @@ def compute_nearest_distance(X, Y, k=1):
     return np.mean(top_k_distances)
 
 
-class EvaluatePoseError(Callback):
-    """Callback for evaluating the pose error on ADD and ADI metric.
+class EvaluatePoseMetric(Callback):
+    """Callback for evaluating the pose error on ADD/ADI metric.
 
     # Arguments
         experiment_path: String. Path in which the images will be saved.
@@ -120,13 +126,15 @@ class EvaluatePoseError(Callback):
         object_diameter: Float, diameter of the object.
         evaluation_period: Int, interval for pose error
             metric calculation.
+        metric: Str, 'ADD' for ADD calculation
+            and 'ADI' for ADI error calculation.
         topic: Key to the ''inferences'' dictionary containing as value
             the drawn inferences.
         verbose: Integer. If is bigger than 1 messages
             would be displayed.
     """
     def __init__(self, experiment_path, evaluation_data_manager, pipeline,
-                 mesh_points, object_diameter, evaluation_period,
+                 mesh_points, object_diameter, evaluation_period, metric='ADD',
                  topic='poses6D', verbose=1):
         self.experiment_path = experiment_path
         self.evaluation_data_manager = evaluation_data_manager
@@ -136,6 +144,10 @@ class EvaluatePoseError(Callback):
         self.mesh_points = mesh_points
         self.object_diameter = object_diameter
         self.evaluation_period = evaluation_period
+        self.metric_evaluators = {'ADD': compute_ADD_metric,
+                                  'ADI': compute_ADI_metric}
+        self.metric = metric
+        self.evaluate_metric = self.metric_evaluators[metric]
         self.topic = topic
         self.verbose = verbose
 
@@ -160,40 +172,36 @@ class EvaluatePoseError(Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         if (epoch + 1) % self.evaluation_period == 0:
-            sum_ADD = 0.0
-            sum_ADI = 0.0
-            sum_ADD_accuracy = 0.0
-            valid_predictions = 0
+            error_sum, accuracy_sum, valid_predictions = (0.0, 0.0, 0)
             for image, gt_pose in zip(self.images, self.gt_poses):
                 inferences = self.pipeline(image.copy())
                 pose6D = inferences[self.topic]
                 if pose6D:
-                    ADD_error = compute_ADD(gt_pose, pose6D[0],
-                                            self.mesh_points)
-                    is_correct = check_ADD(ADD_error, self.object_diameter)
-                    sum_ADD_accuracy = sum_ADD_accuracy + float(is_correct)
-                    ADI_error = compute_ADI(gt_pose, pose6D[0],
-                                            self.mesh_points)
-                    sum_ADD = sum_ADD + ADD_error
-                    sum_ADI = sum_ADI + ADI_error
+                    error, is_correct = self.evaluate_metric(
+                        gt_pose, pose6D[0], self.mesh_points,
+                        self.object_diameter)
+                    error_sum = error_sum + error
+                    accuracy_sum = accuracy_sum + float(bool(is_correct))
                     valid_predictions = valid_predictions + 1
 
             error_path = os.path.join(self.experiment_path, 'error.txt')
             if valid_predictions > 0:
-                average_ADD = sum_ADD / valid_predictions
-                average_ADD_accuracy = sum_ADD_accuracy / len(self.gt_poses)
-                average_ADI = sum_ADI / valid_predictions
+                average_error = error_sum / valid_predictions
+                metric_to_accuracy = {
+                    'ADD': (accuracy_sum / len(self.gt_poses)),
+                    'ADI': 'NIL'}
+                average_accuracy = metric_to_accuracy[self.metric]
                 with open(error_path, 'a') as filer:
-                    filer.write('epoch: %d\n' % epoch)
-                    filer.write('Estimated ADD error: %f\n' % average_ADD)
-                    filer.write(('Estimated ADD accuracy: %f\n\n' %
-                                 average_ADD_accuracy))
-                    filer.write('Estimated ADI error: %f\n\n' % average_ADI)
+                    filer.write('epoch: {}'.format(epoch))
+                    filer.write('\nEstimated {} error: {}'.format(
+                        self.metric, average_error))
+                    filer.write('\nEstimated {} accuracy: {}\n\n'.format(
+                        self.metric, average_accuracy))
             else:
-                average_ADD = None
-                average_ADI = None
-                average_ADD_accuracy = None
+                average_error = None
+                average_accuracy = None
             if self.verbose:
-                print('Estimated ADD error:', average_ADD)
-                print('Estimated ADD accuracy:', average_ADD_accuracy)
-                print('Estimated ADI error:', average_ADI)
+                print('Estimated {} error: {}'.format(
+                    self.metric, average_error))
+                print('Estimated {} accuracy: {}'.format(
+                    self.metric, average_accuracy))

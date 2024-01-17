@@ -13,7 +13,7 @@ from linemod import Linemod
 from efficientpose import EfficientPosePhi0
 from pose import AugmentEfficientPose, EfficientPosePhi0LinemodDriller
 from losses import MultiPoseLoss
-from pose_error import EvaluatePoseError
+from pose_error import EvaluatePoseMetric
 
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -132,9 +132,9 @@ with open(model_info_file, 'r') as file:
 object_diameter = model_data[int(args.object_id)]['diameter']
 
 # Pose accuracy calculation pipeline
-pose_error = EvaluatePoseError(args.save_path, evaluation_data_managers[0],
-                               inference, mesh_points, object_diameter,
-                               args.evaluation_period)
+pose_error = EvaluatePoseMetric(args.save_path, evaluation_data_managers[0],
+                                inference, mesh_points, object_diameter,
+                                args.evaluation_period, metric='ADD')
 
 # training
 model.fit(
