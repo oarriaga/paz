@@ -64,6 +64,7 @@ from .pose import SinglePowerDrillPIX2POSE6D
 from .pose import MultiPowerDrillPIX2POSE6D
 from .pose import PIX2POSEPowerDrill
 from .pose import PIX2YCBTools6D
+from .pose import AugmentColorspace
 
 from .masks import RGBMaskToImagePoints2D
 from .masks import RGBMaskToObjectPoints3D

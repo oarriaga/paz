@@ -9,3 +9,15 @@ from .anchors import build_base_anchor
 from .anchors import compute_aspect_size
 from .anchors import compute_anchor_dims
 from .anchors import compute_anchor_centres
+
+from .boxes import scale_boxes2D
+from .poses import match_poses
+from .poses import transform_rotation
+from .poses import concatenate_poses
+from .poses import concatenate_scale
+from .poses import augment_6DOF
+from .poses import generate_random_transformation
+from .poses import compute_box_from_mask
+from .poses import augment_6DOF
+
+from .standard import compute_selected_indices
