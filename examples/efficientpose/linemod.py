@@ -131,7 +131,7 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
             names and values are numpy arrays for boxes, rotation,
             translation and integer for class.
     """
-    root_path = make_root_path(dataset_path, data_path, object_id)
+    root_path = os.path.join(dataset_path, data_path, object_id)
     files = load_linemod_filenames(root_path, ground_truth_file,
                                    info_file, split)
     ground_truth_file, info_file, split_file = files
@@ -145,7 +145,7 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
         box = get_data(split_data, annotation, key='obj_bb')
         box = linemod_to_corner_form(box)
         box = normalize_box_input_size(box, input_size)
-        box = append_class_to_box(box, class_arg=class_arg)
+        box = np.concatenate((box, np.array([[class_arg]])), axis=-1)
         # Load rotation and translation
         rotation = get_data(split_data, annotation, key='cam_R_m2c')
         translation = get_data(split_data, annotation, key='cam_t_m2c')
@@ -154,21 +154,6 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
                      'rotation': rotation, 'translation_raw': translation,
                      'class': class_arg, 'mask': raw_mask_path})
     return data
-
-
-def make_root_path(dataset_path, data_path, object_id):
-    """Composes root path as a string from `dataset_path`,
-    `data_path` and `object_id`.
-
-    # Arguments
-        dataset_path: Str, data path to Linemod annotations.
-        data_path: Str, containing path to the Linemod data folder.
-        object_id: Str, ID of the object to train.
-
-    # Return
-        Str, root directory path to Linemod dataset.
-    """
-    return os.path.join(dataset_path, data_path, object_id)
 
 
 def load_linemod_filenames(root_path, ground_truth_file, info_file, split):
@@ -306,17 +291,3 @@ def normalize_box_input_size(box, input_size):
     y_max = y_max / input_H
     box = [x_min, y_min, x_max, y_max]
     return np.array([[x_min, y_min, x_max, y_max]])
-
-
-def append_class_to_box(box, class_arg=1):
-    """Appends class information to bounding box information.
-    In other words appends `class_arg` to `box` coordinates.
-
-    # Arguments
-        box: Array, of shape `[1, 4]`
-        class_arg: Int, class argument of object class.
-
-    # Return
-        Array: of shape `[1, 5]` containing box and class information.
-    """
-    return np.concatenate((box, np.array([[class_arg]])), axis=-1)
