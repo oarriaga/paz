@@ -14,6 +14,7 @@ from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
 from ..backend.boxes import filter_boxes
 from ..backend.boxes import scale_box
+from ..backend.boxes import scale_boxes2D
 
 
 class SquareBoxes2D(Processor):
@@ -420,3 +421,16 @@ class ScaleBox(Processor):
     def call(self, boxes, scales):
         boxes = scale_box(boxes, scales)
         return boxes
+
+
+class ScaleBoxes2D(Processor):
+    """Scales coordinates of Boxes2D.
+
+    # Returns:
+        boxes2D: List, containg Boxes2D with scaled coordinates.
+    """
+    def __init__(self):
+        super(ScaleBoxes2D, self).__init__()
+
+    def call(self, boxes2D, scale):
+        return scale_boxes2D(boxes2D, scale)

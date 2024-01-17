@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 from paz.abstract import Processor, Pose6D
 import paz.processors as pr
 from paz.processors.draw import (quaternion_to_rotation_matrix,
@@ -277,31 +276,3 @@ def draw_pose6D(image, pose6D, points3D, intrinsics, thickness, color):
     image = draw_cube(image, points2D.astype(np.int32),
                       thickness=thickness, color=color)
     return image
-
-
-class ScaleBoxes2D(Processor):
-    """Scales coordinates of Boxes2D.
-
-    # Returns:
-        boxes2D: List, containg Boxes2D with scaled coordinates.
-    """
-    def __init__(self):
-        super(ScaleBoxes2D, self).__init__()
-
-    def call(self, boxes2D, scale):
-        return scale_boxes2D(boxes2D, scale)
-
-
-def scale_boxes2D(boxes2D, scale):
-    """Scales coordinates of Boxes2D.
-
-    # Arguments:
-        boxes2D: List, of Box2D objects.
-        scale: Foat, scale value.
-
-    # Returns:
-        boxes2D: List, of Box2D objects with scale coordinates.
-    """
-    for box2D in boxes2D:
-        box2D.coordinates = tuple(np.array(box2D.coordinates) * scale)
-    return boxes2D
