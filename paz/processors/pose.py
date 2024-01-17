@@ -254,3 +254,127 @@ class Augment6DOF(Processor):
         else:
             augmented_data = image, boxes, rotation, translation_raw, mask
         return augmented_data
+
+
+class ToPose6D(Processor):
+    """Transforms poses i.e rotations and
+    translations into `Pose6D` messages.
+
+    # Arguments
+        class_names: List of class names ordered with respect
+            to the class indices from the dataset ``boxes``.
+        one_hot_encoded: Bool, indicating if scores are one hot vectors.
+        default_score: Float, score to set.
+        default_class: Str, class to set.
+        box_method: Int, method to convert boxes to ``Boxes2D``.
+
+    # Properties
+        one_hot_encoded: Bool.
+        box_processor: Callable.
+
+    # Methods
+        call()
+    """
+    def __init__(
+            self, class_names=None, one_hot_encoded=False,
+            default_score=1.0, default_class=None, box_method=0):
+        if class_names is not None:
+            arg_to_class = dict(zip(range(len(class_names)), class_names))
+        self.one_hot_encoded = one_hot_encoded
+        method_to_processor = {
+            0: BoxesWithOneHotVectorsToPose6D(arg_to_class),
+            1: BoxesToPose6D(default_score, default_class),
+            2: BoxesWithClassArgToPose6D(arg_to_class, default_score)}
+        self.pose_processor = method_to_processor[box_method]
+        super(ToPose6D, self).__init__()
+
+    def call(self, box_data, rotations, translations):
+        return self.pose_processor(box_data, rotations, translations)
+
+
+class BoxesWithOneHotVectorsToPose6D(Processor):
+    """Transforms poses into `Pose6D` messages
+    given boxes with scores as one hot vectors.
+
+    # Arguments
+        arg_to_class: List, of classes.
+
+    # Properties
+        arg_to_class: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, arg_to_class):
+        self.arg_to_class = arg_to_class
+        super(BoxesWithOneHotVectorsToPose6D, self).__init__()
+
+    def call(self, box_data, rotations, translations):
+        poses6D = []
+        for box, rotation, translation in zip(box_data, rotations,
+                                              translations):
+            class_scores = box[4:]
+            class_arg = np.argmax(class_scores)
+            class_name = self.arg_to_class[class_arg]
+            poses6D.append(Pose6D.from_rotation_vector(rotation, translation,
+                                                       class_name))
+        return poses6D
+
+
+class BoxesToPose6D(Processor):
+    """Transforms poses into `Pose6D` messages
+    given no class names and score.
+
+    # Arguments
+        default_score: Float, score to set.
+        default_class: Str, class to set.
+
+    # Properties
+        default_score: Float.
+        default_class: Str.
+
+    # Methods
+        call()
+    """
+    def __init__(self, default_score=1.0, default_class=None):
+        self.default_score = default_score
+        self.default_class = default_class
+        super(BoxesToPose6D, self).__init__()
+
+    def call(self, box_data, rotations, translations):
+        poses6D = []
+        for box, rotation, translation in zip(box_data, rotations,
+                                              translations):
+            poses6D.append(Pose6D.from_rotation_vector(rotation, translation,
+                                                       self.default_class))
+        return poses6D
+
+
+class BoxesWithClassArgToPose6D(Processor):
+    """Transforms poses into `Pose6D` messages
+    given boxes with class argument.
+
+    # Arguments
+        default_score: Float, score to set.
+        arg_to_class: List, of classes.
+
+    # Properties
+        default_score: Float.
+        arg_to_class: List.
+
+    # Methods
+        call()
+    """
+    def __init__(self, arg_to_class, default_score=1.0):
+        self.default_score = default_score
+        self.arg_to_class = arg_to_class
+        super(BoxesWithClassArgToPose6D, self).__init__()
+
+    def call(self, box_data, rotations, translations):
+        poses6D = []
+        for box, rotation, translation in zip(box_data, rotations,
+                                              translations):
+            class_name = self.arg_to_class[box[-1]]
+            poses6D.append(Pose6D.from_rotation_vector(rotation, translation,
+                                                       class_name))
+        return poses6D

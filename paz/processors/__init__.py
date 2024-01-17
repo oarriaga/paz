@@ -157,6 +157,10 @@ from .pose import TransformRotation
 from .pose import ConcatenatePoses
 from .pose import ConcatenateScale
 from .pose import Augment6DOF
+from .pose import ToPose6D
+from .pose import BoxesWithOneHotVectorsToPose6D
+from .pose import BoxesToPose6D
+from .pose import BoxesWithClassArgToPose6D
 
 from .groups import ToAffineMatrix
 from .groups import RotationVectorToQuaternion
