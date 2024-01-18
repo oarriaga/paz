@@ -20,6 +20,10 @@ def build_translation_anchors(image_shape, branches,
 
     # Returns
         translation_anchors: Array of shape `(num_boxes, 3)`.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     num_scale_aspect = num_scales * len(aspect_ratios)
     args = (branches, num_scale_aspect)
@@ -45,6 +49,10 @@ def make_branch_anchors(strides_y, strides_x, branch_arg,
 
     # Returns
         translation_anchors: Array of shape `(num_branch_boxes, 3)`.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     args_1 = (strides_y, strides_x, branch_arg, branches)
     centers = compute_translation_centers(*args_1)
@@ -64,6 +72,10 @@ def compute_translation_centers(strides_y, strides_x, branch_arg, branches):
 
     # Returns
         centers: Array of shape `(num_boxes, 2)`.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     feature_H, feature_W = branches[branch_arg].shape[1:3]
     center_x = (np.arange(0, feature_H) + 0.5) * strides_x[0]
@@ -85,6 +97,10 @@ def append_stride_to_centre(centers, strides_x, num_scale_aspect):
 
     # Returns
         translation_anchors: Array of shape `(num_branch_boxes, 3)`.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     centers = np.repeat(centers, num_scale_aspect, axis=0)
     num_translation_anchors = centers.shape[0]

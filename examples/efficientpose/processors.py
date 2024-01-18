@@ -9,6 +9,10 @@ class RegressTranslation(Processor):
     # Arguments
         translation_priors: Array of shape `(num_boxes, 3)`,
             translation anchors.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     def __init__(self, translation_priors):
         self.translation_priors = translation_priors
@@ -29,6 +33,10 @@ def regress_translation(translation_raw, translation_priors):
 
     # Returns
         Array: of shape `(num_boxes, 3)`.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     stride = translation_priors[:, -1]
     x = translation_priors[:, 0] + (translation_raw[:, :, 0] * stride)
@@ -40,6 +48,10 @@ def regress_translation(translation_raw, translation_priors):
 class ComputeTxTyTz(Processor):
     """Computes the Tx and Ty components of the translation vector
     with a given 2D-point and the intrinsic camera parameters.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     def __init__(self):
         super(ComputeTxTyTz, self).__init__()
@@ -58,6 +70,10 @@ def compute_tx_ty_tz(translation_xy_Tz, camera_parameter):
 
     # Returns
         Array: of shape `(num_boxes, 3)`.
+
+    # References
+        This module is derived based on [EfficientPose](
+            https://github.com/ybkscht/EfficientPose)
     """
     fx, fy = camera_parameter[0], camera_parameter[1],
     px, py = camera_parameter[2], camera_parameter[3],
