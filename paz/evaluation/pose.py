@@ -1,8 +1,8 @@
 import os
 import numpy as np
-from paz.backend.image import load_image
 from tensorflow.keras.callbacks import Callback
-from paz.backend.groups import quaternion_to_rotation_matrix
+from ..backend.image import load_image
+from ..backend.groups import quaternion_to_rotation_matrix
 
 
 def transform_mesh_points(mesh_points, rotation, translation):

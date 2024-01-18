@@ -12,8 +12,8 @@ from paz.processors import TRAIN, VAL
 from paz.datasets.linemod import Linemod
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from paz.pipelines import AugmentEfficientPose, EfficientPosePhi0LinemodDriller
+from paz.evaluation import EvaluatePoseMetric
 from losses import MultiPoseLoss
-from pose_error import EvaluatePoseMetric
 
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
