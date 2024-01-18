@@ -2,15 +2,14 @@ import cv2
 import numpy as np
 import paz.processors as pr
 from paz.abstract import Processor
-from paz.backend.image import lincolor
 from paz.backend.image import show_image
 from paz.abstract import ProcessingSequence
-from linemod import Linemod
-from pose import get_class_names
-from efficientpose import EfficientPosePhi0
-from processors import DrawPose6D, ComputeSelectedIndices, ToPose6D
-from pose import (AugmentEfficientPose, LINEMOD_CAMERA_MATRIX,
-                  LINEMOD_OBJECT_SIZES, EfficientPosePreprocess)
+from paz.datasets.linemod import Linemod
+from paz.datasets import get_class_names
+from paz.models.pose_estimation import EfficientPosePhi0
+from paz.pipelines import AugmentEfficientPose, EfficientPosePreprocess
+from paz.datasets import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
+
 
 raw_image_shape = (640, 480)
 input_shape = 512
@@ -28,7 +27,6 @@ class DetectAndEstimateEfficientPose(Processor):
         self.variances = variances
         self.class_to_sizes = LINEMOD_OBJECT_SIZES
         self.camera_matrix = LINEMOD_CAMERA_MATRIX
-        self.colors = lincolor(len(self.class_to_sizes.keys()))
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         self.preprocess = EfficientPosePreprocess(model)
@@ -41,9 +39,8 @@ class DetectAndEstimateEfficientPose(Processor):
 
     def _build_draw_pose6D(self, name_to_size, camera_parameter):
         name_to_draw = {}
-        iterator = zip(name_to_size.items(), self.colors)
-        for (name, object_size), box_color in iterator:
-            draw = DrawPose6D(object_size, camera_parameter, box_color)
+        for name, object_size in name_to_size.items():
+            draw = pr.DrawPose6D(object_size, camera_parameter)
             name_to_draw[name] = draw
         return name_to_draw
 
@@ -78,10 +75,10 @@ class EfficientPosePostprocess(Processor):
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
         self.denormalize = DenormalizeBoxes2D()
-        self.compute_selections = ComputeSelectedIndices()
+        self.compute_selections = pr.ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
-        self.to_pose_6D = ToPose6D(class_names)
+        self.to_pose_6D = pr.ToPose6D(class_names)
 
     def call(self, model_output):
         detections, transformations = model_output
