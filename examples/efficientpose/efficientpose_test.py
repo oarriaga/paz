@@ -1,16 +1,17 @@
 import pytest
 import numpy as np
 import tensorflow as tf
-from losses import MultiPoseLoss
 from tensorflow.keras.layers import Input
 from paz.models.detection.efficientdet.efficientnet import EFFICIENTNET
 from paz.models.detection.efficientdet.efficientdet_blocks import (
     EfficientNet_to_BiFPN, BiFPN)
-from efficientpose import (EfficientPosePhi0, EfficientPosePhi1,
-                           EfficientPosePhi2, EfficientPosePhi3,
-                           EfficientPosePhi4, EfficientPosePhi5,
-                           EfficientPosePhi6, EfficientPosePhi7)
-from efficientpose_blocks import RotationNet, TranslationNet
+from paz.models.pose_estimation import (EfficientPosePhi0, EfficientPosePhi1,
+                                        EfficientPosePhi2, EfficientPosePhi3,
+                                        EfficientPosePhi4, EfficientPosePhi5,
+                                        EfficientPosePhi6, EfficientPosePhi7)
+from paz.models.pose_estimation.efficientpose.efficientpose_blocks import (
+    RotationNet, TranslationNet)
+from losses import MultiPoseLoss
 
 
 @pytest.fixture

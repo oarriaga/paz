@@ -1,16 +1,12 @@
 import pytest
 import numpy as np
-from pose import LINEMOD_CAMERA_MATRIX as camera_matrix
-from efficientpose import (EfficientPosePhi0, EfficientPosePhi1,
-                           EfficientPosePhi2, EfficientPosePhi3,
-                           EfficientPosePhi4, EfficientPosePhi5,
-                           EfficientPosePhi6, EfficientPosePhi7)
-from processors import (ComputeResizingShape, PadImage, RegressTranslation,
-                        ComputeCameraParameter, ComputeTxTyTz,
-                        TransformRotation, ConcatenatePoses, ConcatenateScale,
-                        Augment6DOF, AutoContrast, EqualizeHistogram,
-                        InvertColors, Posterize, Solarize, SharpenImage,
-                        Cutout, AddGaussianNoise)
+from paz.datasets import LINEMOD_CAMERA_MATRIX as camera_matrix
+from paz.models.pose_estimation import (EfficientPosePhi0, EfficientPosePhi1,
+                                        EfficientPosePhi2, EfficientPosePhi3,
+                                        EfficientPosePhi4, EfficientPosePhi5,
+                                        EfficientPosePhi6, EfficientPosePhi7)
+import paz.processors as pr
+from processors import RegressTranslation, ComputeTxTyTz
 
 
 def get_test_images(image_W, image_H, batch_size=1):
@@ -36,7 +32,7 @@ def get_test_images(image_W, image_H, batch_size=1):
                          ])
 def test_ComputeResizingShape(size, target_resizing_shape, target_scale):
     image = get_test_images(640, 480, batch_size=1)[0]
-    compute_shape = ComputeResizingShape(size)
+    compute_shape = pr.ComputeResizingShape(size)
     resizing_shape, scale = compute_shape(image)
     assert resizing_shape == target_resizing_shape
     assert scale == target_scale
@@ -45,7 +41,7 @@ def test_ComputeResizingShape(size, target_resizing_shape, target_scale):
 @pytest.mark.parametrize(('size'), [32, 64, 128, 256, 512])
 def test_PadImage(size):
     image = get_test_images(16, 12, batch_size=1)[0]
-    pad_image = PadImage(size, mode='constant')
+    pad_image = pr.PadImage(size, mode='constant')
     padded_image = pad_image(image)
     assert np.sum(padded_image) == 0.0
     assert padded_image.shape == (size, size, 3)
@@ -70,8 +66,8 @@ def test_RegressTranslation(model):
 @pytest.mark.parametrize(('image_scale'), [0.6, 0.7, 0.8, 0.9, 1.0])
 def test_ComputeCameraParameter(image_scale):
     translation_scale_norm = 1000.0
-    compute_camera_parameter = ComputeCameraParameter(camera_matrix,
-                                                      translation_scale_norm)
+    compute_camera_parameter = pr.ComputeCameraParameter(
+        camera_matrix, translation_scale_norm)
     camera_parameter = compute_camera_parameter(image_scale)
     assert camera_parameter.shape == (6, )
     assert np.all(camera_parameter == np.array([camera_matrix[0, 0],
@@ -99,7 +95,7 @@ def test_ComputeTxTyTz(model):
 @pytest.mark.parametrize(('num_rotations'), [1, 2, 3, 4, 5])
 def test_TransformRotation(num_rotations):
     rotations = np.random.rand(num_rotations, 9)
-    transform_rotation = TransformRotation(num_pose_dims=3)
+    transform_rotation = pr.TransformRotation(num_pose_dims=3)
     rotations_transformed = transform_rotation(rotations)
     assert rotations_transformed.shape == (num_rotations, 5)
 
@@ -114,7 +110,7 @@ def test_ConcatenatePoses(rotation_size, translation_size):
     num_rows = 10
     rotations = np.random.rand(num_rows, rotation_size)
     translations = np.random.rand(num_rows, translation_size)
-    concatenate_poses = ConcatenatePoses()
+    concatenate_poses = pr.ConcatenatePoses()
     poses = concatenate_poses(rotations, translations)
     assert np.all(poses[:, :rotation_size] == rotations)
     assert np.all(poses[:, rotation_size:] == translations)
@@ -130,7 +126,7 @@ def test_ConcatenatePoses(rotation_size, translation_size):
 def test_ConcatenateScale(pose_size, scale):
     num_rows = 10
     poses = np.random.rand(num_rows, pose_size)
-    concatenate_scale = ConcatenateScale()
+    concatenate_scale = pr.ConcatenateScale()
     poses_concatenated = concatenate_scale(poses, scale)
     assert np.all(poses_concatenated[:, :-1] == poses)
     assert np.all(poses_concatenated[:, -1] == scale)
@@ -144,7 +140,7 @@ def test_ConcatenateScale(pose_size, scale):
                           (40, 400, 200),
                           (50, 500, 100)])
 def test_Augment6DOF(num_annotations, image_W, image_H):
-    augment_6DOF = Augment6DOF()
+    augment_6DOF = pr.Augment6DOF()
     image = np.zeros((image_W, image_H, 3))
     mask = np.ones((image_W, image_H, 1))
     boxes = np.random.rand(num_annotations, 5)
@@ -166,7 +162,7 @@ def test_Augment6DOF(num_annotations, image_W, image_H):
 
 def test_AutoContrast():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    auto_contrast = AutoContrast()
+    auto_contrast = pr.AutoContrast()
     image_contrasted = auto_contrast(image)
     assert image_contrasted.shape == image.shape
     assert image_contrasted.dtype == image.dtype
@@ -175,7 +171,7 @@ def test_AutoContrast():
 
 def test_EqualizeHistogram():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    equalize_histogram = EqualizeHistogram()
+    equalize_histogram = pr.EqualizeHistogram()
     image_histogram_equalized = equalize_histogram(image)
     assert image_histogram_equalized.shape == image.shape
     assert image_histogram_equalized.dtype == image.dtype
@@ -184,7 +180,7 @@ def test_EqualizeHistogram():
 
 def test_InvertColors():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    invert_colors = InvertColors(probability=1.0)
+    invert_colors = pr.InvertColors(probability=1.0)
     image_inverted = invert_colors(image)
     assert np.all(image_inverted == 255 - image)
     assert image_inverted.shape == image.shape
@@ -193,7 +189,7 @@ def test_InvertColors():
 
 def test_Posterize():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    posterize = Posterize(probability=1.0, num_bits=4)
+    posterize = pr.Posterize(probability=1.0, num_bits=4)
     image_posterized = posterize(image)
     assert np.std(image_posterized) <= np.std(image)
     assert image_posterized.shape == image.shape
@@ -203,7 +199,7 @@ def test_Posterize():
 @pytest.mark.parametrize(('threshold'), [75, 100, 125, 150, 175])
 def test_Solarize(threshold):
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    solarize = Solarize(probability=1.0, threshold=threshold)
+    solarize = pr.Solarize(probability=1.0, threshold=threshold)
     image_solarized = solarize(image)
     assert (np.all(image_solarized[image >= threshold] ==
                    255 - image[image >= threshold]))
@@ -215,7 +211,7 @@ def test_Solarize(threshold):
 
 def test_SharpenImage():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    sharpen_image = SharpenImage(probability=1.0)
+    sharpen_image = pr.SharpenImage(probability=1.0)
     image_sharpened = sharpen_image(image)
     assert np.std(image_sharpened) >= np.std(image)
     assert image_sharpened.shape == image.shape
@@ -224,7 +220,7 @@ def test_SharpenImage():
 
 def test_Cutout():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    cutout = Cutout(probability=1.0)
+    cutout = pr.Cutout(probability=1.0)
     image_cutout = cutout(image)
     assert image_cutout.shape == image.shape
     assert image_cutout.dtype == image.dtype
@@ -238,7 +234,7 @@ def test_Cutout():
                           (50, 5)])
 def test_AddGaussianNoise(mean, scale):
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    add_gaussian_noise = AddGaussianNoise(1.0, mean, scale)
+    add_gaussian_noise = pr.AddGaussianNoise(1.0, mean, scale)
     image_noisy = add_gaussian_noise(image)
     assert image_noisy.shape == image.shape
     assert image_noisy.dtype == image.dtype
