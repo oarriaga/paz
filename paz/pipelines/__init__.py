@@ -65,6 +65,12 @@ from .pose import MultiPowerDrillPIX2POSE6D
 from .pose import PIX2POSEPowerDrill
 from .pose import PIX2YCBTools6D
 from .pose import AugmentColorspace
+from .pose import AugmentEfficientPose
+from .pose import EfficientPosePreprocess
+from .pose import EfficientPosePostprocess
+from .pose import DetectAndEstimateEfficientPose
+from .pose import EfficientPosePhi0LinemodDriller
+
 
 from .masks import RGBMaskToImagePoints2D
 from .masks import RGBMaskToObjectPoints3D
