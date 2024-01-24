@@ -1,14 +1,18 @@
-import einops
 import random
 import tensorflow as tf
 from tensorflow.keras import Sequential
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (Conv3D, Input, BatchNormalization, Layer, GlobalAveragePooling3D, ReLU, Flatten,
                                      LayerNormalization, Dense, add)
+from tensorflow.keras.utils import get_file
+from tensorflow.keras.initializers import GlorotUniform
 from typing import Literal, get_args
+
 
 Architecture_Options = Literal["CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light",
                                "CNN2Plus1D_18"]
+URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.19/'
+
 
 """
 References:
@@ -76,7 +80,7 @@ class Project(Layer):
 
     def __init__(self, units):
         super().__init__()
-        initializer_glorot = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
+        initializer_glorot = GlorotUniform(seed=random.randint(0, 1_000_000))
 
         self.seq = Sequential([
             Dense(units, kernel_initializer=initializer_glorot),
@@ -112,23 +116,22 @@ class ResizeVideo(Layer):
 
     @tf.function
     def call(self, video):
-        """
-        Use the einops library to resize the tensor.
+        """Use tensorflow reshape to resize the tensor.
 
-        Args:
+          # Arguments
             video: Tensor representation of the video, in the form of a set of frames.
 
-        Return:
+          # Return
             A downsampled size of the video according to the new height and width it should be resized to.
         """
-        # b stands for batch size, t stands for time, h stands for height,
-        # w stands for width, and c stands for the number of channels.
-        old_shape = einops.parse_shape(video, 'b t h w c')
-        images = einops.rearrange(video, 'b t h w c -> (b t) h w c')
-        images = self.resizing_layer(images)
-        videos = einops.rearrange(
-            images, '(b t) h w c -> b t h w c',
-            t=old_shape['t'])
+        # Extract the images out of the batch video tensor.
+        video_shape = tf.shape(video)
+        video_reshaped = tf.reshape(video, [-1, video_shape[2], video_shape[3], video_shape[4]])
+        # Resize the images
+        images_resized = self.resizing_layer(video_reshaped)
+        # Rearrange the images back into the batch video tensor.
+        videos = tf.reshape(images_resized,
+                            [video_shape[0], video_shape[1], self.height, self.width, video_shape[4]])
         return videos
 
 
@@ -163,10 +166,10 @@ def normal(input_layer, height, width):
 
 def filters(input_layer, height, width):
     """ Architecture is a CNN2+1D version with increased filter sizes
-    # Arguments
-        input_layer: Tensorflow input layer of the network
-        height: Height of the input video
-        width: Width of the input video
+        # Arguments
+            input_layer: Tensorflow input layer of the network
+            height: Height of the input video
+            width: Width of the input video
     """
 
     x = Conv2Plus1D(filters=32, kernel_size=(3, 7, 7), padding='same')(input_layer)
@@ -283,8 +286,7 @@ def original_18(input_layer, height, width):
 
 
 def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
-               architecture: Architecture_Options = 'CNN2Plus1D',
-               tmp_weights_path=None):
+               architecture: Architecture_Options = 'CNN2Plus1D'):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: ``None`` or string with pre-trained dataset. Valid datasets
@@ -308,31 +310,33 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
     assert architecture in options, f"'{architecture}' is not in {options}"
 
     random.seed(seed)
-    initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
+    initializer_glorot_output = GlorotUniform(seed=random.randint(0, 1_000_000))
 
     # input_shape = (None, 10, HEIGHT, WIDTH, 3)
     image = Input(shape=input_shape, name='image')
     x = image
 
+    weights_path = ""
     if architecture == 'CNN2Plus1D':
         x = normal(x, input_shape[1], input_shape[2])
-        if tmp_weights_path is None:
-            tmp_weights_path = "../../../../CLUSTER_OUTPUTS/CNN2Plus1D/2023_10_05-22_08_31/cnn-2plus1d_weights-21.hdf5"
+        if weights == 'VVAD_LRS3':
+            filename = 'cnn-2plus1d_weights-21.hdf5'
+            weights_path = get_file(filename, URL + filename, cache_subdir='paz/models')
     elif architecture == 'CNN2Plus1D_Filters':
         x = filters(x, input_shape[1], input_shape[2])
-        if tmp_weights_path is None:
-            tmp_weights_path = ("../../../../CLUSTER_OUTPUTS/CNN2Plus1DFilters/2023_10_20-14_11_13/" +
-                                "cnn-2plus1d-filters_weights-21.hdf5")
+        if weights == 'VVAD_LRS3':
+            filename = 'cnn-2plus1d-filters_weights-23.hdf5'
+            weights_path = get_file(filename, URL + filename, cache_subdir='paz/models')
     elif architecture == 'CNN2Plus1D_Layers':
         x = layers(x, input_shape[1], input_shape[2])
-        if tmp_weights_path is None:
-            tmp_weights_path = ("../../../../CLUSTER_OUTPUTS/CNN2Plus1DLayers/2023_10_16-10_14_48/" +
-                                "cnn-2plus1d-layers_weights-17.hdf5")
+        if weights == 'VVAD_LRS3':
+            filename = 'cnn-2plus1d-layers_weights-17.hdf5'
+            weights_path = get_file(filename, URL + filename, cache_subdir='paz/models')
     elif architecture == 'CNN2Plus1D_Light':
         x = light(x, input_shape[1], input_shape[2])
-        if tmp_weights_path is None:
-            tmp_weights_path = ("../../../../CLUSTER_OUTPUTS/CNN2Plus1DLight/2023_10_10-11_26_58/" +
-                                "cnn-2plus1d-light_weights-35.hdf5")
+        if weights == 'VVAD_LRS3':
+            filename = 'cnn-2plus1d-light_weights-35.hdf5'
+            weights_path = get_file(filename, URL + filename, cache_subdir='paz/models')
     elif architecture == 'CNN2Plus1D_18':
         x = original_18(x, input_shape[1], input_shape[2])
 
@@ -345,10 +349,6 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
     if weights == 'VVAD_LRS3':
         if architecture == 'CNN2Plus1D_18':
             raise ValueError(f"'{architecture}' is not available with weights.")
-        print("loading weights")
-        model.load_weights(tmp_weights_path)  # TODO Replace with download link
-    #     filename = 'fer2013_mini_XCEPTION.119-0.65.hdf5'
-    #     path = get_file(filename, URL + filename, cache_subdir='paz/models')
-    #     model = load_model(path)
+        model.load_weights(weights_path)
 
     return model
