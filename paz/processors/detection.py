@@ -14,6 +14,7 @@ from ..backend.boxes import denormalize_box
 from ..backend.boxes import make_box_square
 from ..backend.boxes import filter_boxes
 from ..backend.boxes import scale_box
+from ..backend.boxes import add_class_and_score
 
 
 class SquareBoxes2D(Processor):
@@ -420,3 +421,19 @@ class ScaleBox(Processor):
     def call(self, boxes, scales):
         boxes = scale_box(boxes, scales)
         return boxes
+
+
+class AddClassAndScoreToBoxes(Processor):
+    """Adds class name and score to boxes.
+
+    # Arguments
+        classifier: Keras model.
+    """
+    def __init__(self, classifier):
+        super(AddClassAndScoreToBoxes, self).__init__()
+        self.classify = classifier
+
+    def __call__(self, cropped_images, boxes):
+        for cropped_image, box2D in zip(cropped_images, boxes):
+            predictions = self.classify(cropped_image)
+            add_class_and_score(predictions, box2D)

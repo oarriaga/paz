@@ -66,7 +66,8 @@ PAGES = [
             boxes.to_corner_form,
             boxes.extract_bounding_box_corners,
             boxes.scale_box,
-            boxes.change_box_coordinates
+            boxes.change_box_coordinates,
+            boxes.add_class_and_score
         ],
     },
 
@@ -502,7 +503,8 @@ PAGES = [
             processors.BoxesWithClassArgToBoxes2D,
             processors.RoundBoxes,
             processors.RemoveClass,
-            processors.ScaleBox
+            processors.ScaleBox,
+            processors.AddClassAndScoreToBoxes
         ]
     },
 

@@ -927,6 +927,7 @@ class DetectVVAD(Processor):
         self.colors = colors
 
         # detection
+        self.copy = pr.Copy()
         self.detect = HaarCascadeFrontalFace()
         self.square = SequentialProcessor()
         self.square.add(pr.SquareBoxes2D())
@@ -940,17 +941,16 @@ class DetectVVAD(Processor):
 
         # drawing and wrapping
         self.class_names = self.classify.class_names
+        self.add_class_and_score = pr.AddClassAndScoreToBoxes(self.classify)
         self.draw = pr.DrawBoxes2D(self.class_names, self.colors, True)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
     def call(self, image):
-        boxes2D = self.detect(image.copy())['boxes2D']
+        image_copy = self.copy(image)
+        boxes2D = self.detect(image_copy)['boxes2D']
         boxes2D = self.square(boxes2D)
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
-        for cropped_image, box2D in zip(cropped_images, boxes2D):
-            predictions = self.classify(cropped_image)
-            box2D.class_name = predictions['class_name']
-            box2D.score = np.amax(predictions['scores'] is None if -1.0 else predictions['scores'])
+        self.add_class_and_score(cropped_images, boxes2D)
         image = self.draw(image, boxes2D)
         return self.wrap(image, boxes2D)
