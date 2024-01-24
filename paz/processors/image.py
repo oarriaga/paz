@@ -569,7 +569,10 @@ class BufferImages(Processor):
     # Arguments
         input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
             e.g. (38, 96, 96, 3).
-        play_rate: Integer, number of images to buffer before returning. Must be smaller than buffer_size.
+        play_rate: Integer, specifies after how many images the buffer will return the all buffered images.
+            In a scenario with an already full buffer and a play_rate of 10,
+            after each 10th call the buffer will be returned.
+            The play_rate must be smaller than the frames (the first argument of the input_size).
 
     # Methods
         call()
@@ -579,7 +582,7 @@ class BufferImages(Processor):
             raise ValueError('Buffer size must be equal or larger than play rate')
         super(BufferImages, self).__init__()
         self.play_rate = play_rate
-        self.counter = 0
+        self.frames_since_last_update = 0
 
         # Buffer
         self.buffer_size = input_size[0]
@@ -601,11 +604,13 @@ class BufferImages(Processor):
         """
         # Arguments
             image: Array, raw input image.
+        # Returns
+            an array of images if the buffer is full and the play rate is reached, else None.
         """
         self.append(image)
-        self.counter += 1
+        self.frames_since_last_update += 1
 
-        if self.is_full and self.counter >= self.play_rate:
-            self.counter = 0
+        if self.is_full and self.frames_since_last_update >= self.play_rate:
+            self.frames_since_last_update = 0
             return np.array([self.buffer])
         return None
