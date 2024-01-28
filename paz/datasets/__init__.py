@@ -14,4 +14,3 @@ from .CMU_poanoptic import MANOHandJoints
 from .CMU_poanoptic import MPIIHandJoints
 from .shapes import Shapes
 from .omniglot import Omniglot
-from .vvad_lrs3 import VvadLrs3Dataset

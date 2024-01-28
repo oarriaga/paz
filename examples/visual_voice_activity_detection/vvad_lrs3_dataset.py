@@ -5,8 +5,8 @@ import numpy as np
 import math
 from typing import Literal, get_args
 
-from .utils import get_class_names
-from ..abstract import Generator
+from paz.datasets.utils import get_class_names
+from generator import Generator
 
 Reduction_Method = Literal["cut", "reduce"]
 

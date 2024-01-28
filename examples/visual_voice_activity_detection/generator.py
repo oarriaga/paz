@@ -1,5 +1,5 @@
-class Loader(object):
-    """Abstract class for loading a dataset.
+class Generator(object):
+    """Abstract class for generating a dataset.
 
     # Arguments
         path: String. Path to data.
@@ -15,7 +15,7 @@ class Loader(object):
         num_classes: Int.
 
     # Methods
-        load_data()
+        __call__()
     """
     def __init__(self, path, split, class_names, name):
         self.path = path
@@ -23,12 +23,11 @@ class Loader(object):
         self.class_names = class_names
         self.name = name
 
-    def load_data(self):
-        """Abstract method for loading dataset.
+    def __call__(self):
+        """Abstract method for generating a dataset.
 
-        # Returns
-            dictionary containing absolute image paths as keys, and
-            ground truth vectors as values.
+        # Yields
+            tuple containing a sample and a label.
         """
         raise NotImplementedError()
 
