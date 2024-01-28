@@ -358,8 +358,7 @@ PAGES = [
             datasets.OpenImages,
             datasets.CityScapes,
             datasets.Shapes,
-            datasets.Omniglot,
-            datasets.VvadLrs3Dataset
+            datasets.Omniglot
         ],
     },
 
@@ -796,8 +795,7 @@ PAGES = [
     {
         'page': 'abstract/loader.md',
         'classes': [
-            (loader.Loader, [loader.Loader.load_data]),
-            loader.Generator
+            (loader.Loader, [loader.Loader.load_data])
         ]
     },
 
