@@ -16,7 +16,6 @@ from .pipelines import EFFICIENTDETD5COCO
 from .pipelines import EFFICIENTDETD6COCO
 from .pipelines import EFFICIENTDETD7COCO
 from .pipelines import EFFICIENTDETD0VOC
-from .pipelines import EfficientPosePhi0LinemodDriller
 
 from .pipelines import SinglePowerDrillPIX2POSE6D
 from .pipelines import MultiPowerDrillPIX2POSE6D
