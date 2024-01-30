@@ -456,13 +456,11 @@ def equalize_histogram(image):
     # Returns:
         equalized: Array, histogram equalized image.
     """
-    equalized = np.empty_like(image)
-    num_channels = image.shape[2]
-    for channel_arg in range(num_channels):
-        image_per_channel = image[:, :, channel_arg]
-        equalized_per_channel = apply_histogram_equalization(image_per_channel)
-        equalized[:, :, channel_arg] = equalized_per_channel
-    return equalized
+    R, G, B = np.split(image, 3, axis=2)
+    R_equalized = apply_histogram_equalization(R)
+    G_equalized = apply_histogram_equalization(G)
+    B_equalized = apply_histogram_equalization(B)
+    return np.concatenate([R_equalized, G_equalized, B_equalized], axis=2)
 
 
 def invert_colors(image):
