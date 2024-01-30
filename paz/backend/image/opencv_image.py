@@ -193,7 +193,7 @@ def calculate_histogram(image, channels, mask, hist_size, hist_range):
     return cv2.calcHist(image, channels, mask, hist_size, hist_range)
 
 
-def apply_LUT(image, LUT):
+def apply_lookup_table(image, LUT):
     '''
     Return the image applied by LUT.
 

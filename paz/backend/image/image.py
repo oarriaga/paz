@@ -2,7 +2,7 @@ import numpy as np
 
 from .opencv_image import (convert_color_space, gaussian_image_blur,
                            median_image_blur, warp_affine, resize_image,
-                           calculate_histogram, apply_LUT,
+                           calculate_histogram, apply_lookup_table,
                            apply_histogram_equalization, RGB2HSV, HSV2RGB)
 
 
@@ -435,14 +435,14 @@ def auto_contrast(image):
                 break
 
         if upper_cutoff <= lower_cutoff:
-            LUT = np.arange(256)
+            lookup_table = np.arange(256)
         else:
             scale = 255.0 / (upper_cutoff - lower_cutoff)
             offset = -lower_cutoff * scale
-            LUT = np.arange(256).astype(np.float64) * scale + offset
-            LUT = np.clip(LUT, 0, 255).astype(np.uint8)
-        LUT = np.array(LUT, dtype=np.uint8)
-        contrast_adjusted = apply_LUT(image_per_channel, LUT)
+            lookup_table = np.arange(256).astype(np.float64) * scale + offset
+            lookup_table = np.clip(lookup_table, 0, 255).astype(np.uint8)
+        lookup_table = np.array(lookup_table, dtype=np.uint8)
+        contrast_adjusted = apply_lookup_table(image_per_channel, lookup_table)
         contrasted[:, :, channel_arg] = contrast_adjusted
     return contrasted
 
