@@ -5,6 +5,163 @@ from ..backend.image import load_image
 from ..backend.groups import quaternion_to_rotation_matrix
 
 
+class EvaluateADD(Callback):
+    """Callback for evaluating the pose error on ADD/ADI metric.
+
+    # Arguments
+        experiment_path: String. Path in which the images will be saved.
+        evaluation_data_manager: Object of type dataset loader
+            e.g. Linemod.
+        pipeline: Function that takes as input an element of ''images''
+            and outputs a ''Dict'' with inferences.
+        mesh_points: nx3 ndarray with 3D model points.
+        object_diameter: Float, diameter of the object.
+        evaluation_period: Int, interval for pose error
+            metric calculation.
+        topic: Key to the ''inferences'' dictionary containing as value
+            the drawn inferences.
+        verbose: Integer. If is bigger than 1 messages
+            would be displayed.
+    """
+    def __init__(self, experiment_path, evaluation_data_manager, pipeline,
+                 mesh_points, object_diameter, evaluation_period,
+                 topic='poses6D', verbose=1):
+        self.experiment_path = experiment_path
+        self.evaluation_data_manager = evaluation_data_manager
+        self.images = load_test_images(evaluation_data_manager)
+        self.gt_poses = load_gt_poses(evaluation_data_manager)
+        self.pipeline = pipeline
+        self.mesh_points = mesh_points
+        self.object_diameter = object_diameter
+        self.evaluation_period = evaluation_period
+        self.topic = topic
+        self.verbose = verbose
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.evaluation_period == 0:
+            ADD_error_sum, ADD_accuracy_sum, valid_predictions = (0.0, 0.0, 0)
+            for image, gt_pose in zip(self.images, self.gt_poses):
+                inferences = self.pipeline(image.copy())
+                pose6D = inferences[self.topic]
+                if pose6D:
+                    ADD_error, is_correct = compute_ADD_metric(
+                        gt_pose, pose6D[0], self.mesh_points,
+                        self.object_diameter)
+                    ADD_error_sum = ADD_error_sum + ADD_error
+                    ADD_accuracy_sum = ADD_accuracy_sum + float(is_correct)
+                    valid_predictions = valid_predictions + 1
+
+            error_path = os.path.join(self.experiment_path, 'ADD_error.txt')
+            if valid_predictions > 0:
+                average_ADD_error = ADD_error_sum / valid_predictions
+                average_accuracy = ADD_accuracy_sum / len(self.gt_poses)
+                with open(error_path, 'a') as filer:
+                    filer.write('epoch: {}'.format(epoch))
+                    filer.write('\nEstimated ADD error: {}'.format(
+                        average_ADD_error))
+                    filer.write('\nEstimated ADD accuracy: {}\n\n'.format(
+                        average_accuracy))
+            else:
+                average_ADD_error = None
+                average_accuracy = None
+            if self.verbose:
+                print('Estimated ADD error: {}'.format(average_ADD_error))
+                print('Estimated ADD accuracy: {}'.format(average_accuracy))
+
+
+class EvaluateADI(Callback):
+    """Callback for evaluating the pose error on ADD/ADI metric.
+
+    # Arguments
+        experiment_path: String. Path in which the images will be saved.
+        evaluation_data_manager: Object of type dataset loader
+            e.g. Linemod.
+        pipeline: Function that takes as input an element of ''images''
+            and outputs a ''Dict'' with inferences.
+        mesh_points: nx3 ndarray with 3D model points.
+        object_diameter: Float, diameter of the object.
+        evaluation_period: Int, interval for pose error
+            metric calculation.
+        topic: Key to the ''inferences'' dictionary containing as value
+            the drawn inferences.
+        verbose: Integer. If is bigger than 1 messages
+            would be displayed.
+    """
+    def __init__(self, experiment_path, evaluation_data_manager, pipeline,
+                 mesh_points, object_diameter, evaluation_period,
+                 topic='poses6D', verbose=1):
+        self.experiment_path = experiment_path
+        self.evaluation_data_manager = evaluation_data_manager
+        self.images = load_test_images(evaluation_data_manager)
+        self.gt_poses = load_gt_poses(evaluation_data_manager)
+        self.pipeline = pipeline
+        self.mesh_points = mesh_points
+        self.object_diameter = object_diameter
+        self.evaluation_period = evaluation_period
+        self.topic = topic
+        self.verbose = verbose
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.evaluation_period == 0:
+            ADI_error_sum, valid_predictions = (0.0, 0)
+            for image, gt_pose in zip(self.images, self.gt_poses):
+                inferences = self.pipeline(image.copy())
+                pose6D = inferences[self.topic]
+                if pose6D:
+                    error = compute_ADI_metric(
+                        gt_pose, pose6D[0], self.mesh_points,
+                        self.object_diameter)
+                    ADI_error_sum = ADI_error_sum + error
+                    valid_predictions = valid_predictions + 1
+
+            error_path = os.path.join(self.experiment_path, 'ADI_error.txt')
+            if valid_predictions > 0:
+                average_error = ADI_error_sum / valid_predictions
+                with open(error_path, 'a') as filer:
+                    filer.write('epoch: {}'.format(epoch))
+                    filer.write('\nEstimated ADI error: {}'.format(
+                        average_error))
+            else:
+                average_error = None
+            if self.verbose:
+                print('Estimated {} error: {}'.format(
+                    self.metric, average_error))
+
+
+def load_test_images(data_manager):
+    """Loads test images from a given evaluation data manager.
+
+    # Arguments
+        data_manager: Object of type dataset loader e.g. Linemod.
+
+    # Returns
+        List, containinig images for metric evaluation.
+    """
+    data = data_manager.load_data()
+    images = [load_image(datum['image']) for datum in data]
+    return images
+
+
+def load_gt_poses(data_manager):
+    """Loads ground truth poses from a given evaluation data manager.
+
+    # Arguments
+        data_manager: Object of type dataset loader e.g. Linemod.
+
+    # Returns
+        List, containinig ground truth poses for metric evaluation.
+    """
+    data = data_manager.load_data()
+    gt_poses = []
+    for datum in data:
+        rotation = datum['rotation']
+        rotation_matrix = rotation.reshape((3, 3))
+        translation = datum['translation_raw']
+        gt_pose = np.concatenate((rotation_matrix, translation.T), axis=1)
+        gt_poses.append(gt_pose)
+    return gt_poses
+
+
 def transform_mesh_points(mesh_points, rotation, translation):
     """Transforms object points.
 
@@ -92,7 +249,7 @@ def compute_ADI_metric(pose_true, pose_pred, mesh_points, *args):
     translation_true = pose_true[:3, 3]
     mesh_true = transform_mesh_points(mesh_points, rotation_true,
                                       translation_true)
-    return [compute_nearest_distance(mesh_pred, mesh_true, k=1), None]
+    return compute_nearest_distance(mesh_pred, mesh_true, k=1)
 
 
 def compute_nearest_distance(X, Y, k=1):
@@ -111,97 +268,3 @@ def compute_nearest_distance(X, Y, k=1):
     distance_matrix_sorted = np.sort(distance_matrix, axis=-1)
     top_k_distances = distance_matrix_sorted[:, :k]
     return np.mean(top_k_distances)
-
-
-class EvaluatePoseMetric(Callback):
-    """Callback for evaluating the pose error on ADD/ADI metric.
-
-    # Arguments
-        experiment_path: String. Path in which the images will be saved.
-        evaluation_data_manager: Object of type dataset loader
-            e.g. Linemod.
-        pipeline: Function that takes as input an element of ''images''
-            and outputs a ''Dict'' with inferences.
-        mesh_points: nx3 ndarray with 3D model points.
-        object_diameter: Float, diameter of the object.
-        evaluation_period: Int, interval for pose error
-            metric calculation.
-        metric: Str, 'ADD' for ADD calculation
-            and 'ADI' for ADI error calculation.
-        topic: Key to the ''inferences'' dictionary containing as value
-            the drawn inferences.
-        verbose: Integer. If is bigger than 1 messages
-            would be displayed.
-    """
-    def __init__(self, experiment_path, evaluation_data_manager, pipeline,
-                 mesh_points, object_diameter, evaluation_period, metric='ADD',
-                 topic='poses6D', verbose=1):
-        self.experiment_path = experiment_path
-        self.evaluation_data_manager = evaluation_data_manager
-        self.images = self._load_test_images()
-        self.gt_poses = self._load_gt_poses()
-        self.pipeline = pipeline
-        self.mesh_points = mesh_points
-        self.object_diameter = object_diameter
-        self.evaluation_period = evaluation_period
-        self.metric_evaluators = {'ADD': compute_ADD_metric,
-                                  'ADI': compute_ADI_metric}
-        self.metric = metric
-        self.evaluate_metric = self.metric_evaluators[metric]
-        self.topic = topic
-        self.verbose = verbose
-
-    def _load_test_images(self):
-        evaluation_data = self.evaluation_data_manager.load_data()
-        evaluation_images = []
-        for evaluation_datum in evaluation_data:
-            evaluation_image = load_image(evaluation_datum['image'])
-            evaluation_images.append(evaluation_image)
-        return evaluation_images
-
-    def _load_gt_poses(self):
-        evaluation_data = self.evaluation_data_manager.load_data()
-        gt_poses = []
-        for evaluation_datum in evaluation_data:
-            rotation = evaluation_datum['rotation']
-            rotation_matrix = rotation.reshape((3, 3))
-            translation = evaluation_datum['translation_raw']
-            gt_pose = np.concatenate((rotation_matrix, translation.T), axis=1)
-            gt_poses.append(gt_pose)
-        return gt_poses
-
-    def on_epoch_end(self, epoch, logs=None):
-        if (epoch + 1) % self.evaluation_period == 0:
-            error_sum, accuracy_sum, valid_predictions = (0.0, 0.0, 0)
-            for image, gt_pose in zip(self.images, self.gt_poses):
-                inferences = self.pipeline(image.copy())
-                pose6D = inferences[self.topic]
-                if pose6D:
-                    error, is_correct = self.evaluate_metric(
-                        gt_pose, pose6D[0], self.mesh_points,
-                        self.object_diameter)
-                    error_sum = error_sum + error
-                    accuracy_sum = accuracy_sum + float(bool(is_correct))
-                    valid_predictions = valid_predictions + 1
-
-            error_path = os.path.join(self.experiment_path, 'error.txt')
-            if valid_predictions > 0:
-                average_error = error_sum / valid_predictions
-                metric_to_accuracy = {
-                    'ADD': (accuracy_sum / len(self.gt_poses)),
-                    'ADI': 'NIL'}
-                average_accuracy = metric_to_accuracy[self.metric]
-                with open(error_path, 'a') as filer:
-                    filer.write('epoch: {}'.format(epoch))
-                    filer.write('\nEstimated {} error: {}'.format(
-                        self.metric, average_error))
-                    filer.write('\nEstimated {} accuracy: {}\n\n'.format(
-                        self.metric, average_accuracy))
-            else:
-                average_error = None
-                average_accuracy = None
-            if self.verbose:
-                print('Estimated {} error: {}'.format(
-                    self.metric, average_error))
-                print('Estimated {} accuracy: {}'.format(
-                    self.metric, average_accuracy))

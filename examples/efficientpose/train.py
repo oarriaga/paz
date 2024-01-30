@@ -13,7 +13,7 @@ from paz.datasets.linemod import Linemod
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from paz.pipelines import AugmentEfficientPose
 from pose import EfficientPosePhi0LinemodDriller
-from paz.evaluation import EvaluatePoseMetric
+from paz.evaluation import EvaluateADD
 from losses import MultiPoseLoss
 
 
@@ -134,9 +134,9 @@ with open(model_info_file, 'r') as file:
     file.close()
 object_diameter = model_data[int(args.object_id)]['diameter']
 
-pose_error = EvaluatePoseMetric(
+pose_error = EvaluateADD(
     args.save_path, evaluation_data_managers[0], inference, mesh_points,
-    object_diameter, args.evaluation_period, metric=args.pose_metric)
+    object_diameter, args.evaluation_period)
 
 # training
 model.fit(
