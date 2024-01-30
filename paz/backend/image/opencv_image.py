@@ -178,7 +178,7 @@ def get_affine_transform(source_points, destination_points):
 
 def calculate_histogram(image, channels, mask, hist_size, hist_range):
     '''
-    Return the histogram of an imagge.
+    Return the histogram of an image.
 
     # Arguments
         image: Numpy array.
