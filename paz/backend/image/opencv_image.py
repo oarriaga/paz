@@ -177,8 +177,7 @@ def get_affine_transform(source_points, destination_points):
 
 
 def calculate_histogram(image, channels, mask, hist_size, hist_range):
-    '''
-    Return the histogram of an image.
+    """Return the histogram of an image.
 
     # Arguments
         image: Numpy array.
@@ -189,34 +188,32 @@ def calculate_histogram(image, channels, mask, hist_size, hist_range):
 
     # Returns
         Histogram.
-    '''
+    """
     return cv2.calcHist(image, channels, mask, hist_size, hist_range)
 
 
-def apply_lookup_table(image, LUT):
-    '''
-    Return the image applied by LUT.
+def apply_lookup_table(image, lookup_table):
+    """Return the image applied by lookup table.
 
     # Arguments
         image: Numpy array.
-        LUT: Numpy array, LUT.
+        lookup_table: Numpy array, lookup table.
 
     # Returns
         Numpy array.
-    '''
-    return cv2.LUT(image, LUT)
+    """
+    return cv2.LUT(image, lookup_table)
 
 
 def apply_histogram_equalization(image):
-    '''
-    Return the histogram equalized image.
+    """Return the histogram equalized image.
 
     # Arguments
         image: Numpy array.
 
     # Returns
         Numpy array.
-    '''
+    """
     return cv2.equalizeHist(image)
 
 
