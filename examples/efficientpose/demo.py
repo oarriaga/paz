@@ -1,5 +1,5 @@
 from paz.backend.image import load_image, show_image
-from paz.pipelines import EfficientPosePhi0LinemodDriller
+from pose import EfficientPosePhi0LinemodDriller
 
 IMAGE_PATH = ('/home/manummk95/Desktop/paz/paz/examples/efficientpose/'
               'Linemod_preprocessed/data/08/rgb/0002.png')

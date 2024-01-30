@@ -11,7 +11,8 @@ from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
 from paz.datasets.linemod import Linemod
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
-from paz.pipelines import AugmentEfficientPose, EfficientPosePhi0LinemodDriller
+from paz.pipelines import AugmentEfficientPose
+from pose import EfficientPosePhi0LinemodDriller
 from paz.evaluation import EvaluatePoseMetric
 from losses import MultiPoseLoss
 
