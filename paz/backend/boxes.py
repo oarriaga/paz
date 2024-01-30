@@ -722,18 +722,3 @@ def change_box_coordinates(outputs):
     classes = classes[np.newaxis]
     outputs = np.concatenate([boxes, classes], axis=2)
     return outputs
-
-
-def scale_boxes2D(boxes2D, scale):
-    """Scales coordinates of Boxes2D.
-
-    # Arguments:
-        boxes2D: List, of Box2D objects.
-        scale: Foat, scale value.
-
-    # Returns:
-        boxes2D: List, of Box2D objects with scale coordinates.
-    """
-    for box2D in boxes2D:
-        box2D.coordinates = tuple(np.array(box2D.coordinates) * scale)
-    return boxes2D

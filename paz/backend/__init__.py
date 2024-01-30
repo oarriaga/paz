@@ -10,7 +10,6 @@ from .anchors import compute_aspect_size
 from .anchors import compute_anchor_dims
 from .anchors import compute_anchor_centres
 
-from .boxes import scale_boxes2D
 from .poses import match_poses
 from .poses import transform_rotation
 from .poses import concatenate_poses

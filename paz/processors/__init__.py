@@ -21,7 +21,6 @@ from .detection import BoxesWithOneHotVectorsToBoxes2D
 from .detection import BoxesWithClassArgToBoxes2D
 from .detection import RoundBoxes
 from .detection import MergeNMSBoxWithClass
-from .detection import ScaleBoxes2D
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D

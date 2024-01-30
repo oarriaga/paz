@@ -612,7 +612,7 @@ class EfficientPosePostprocess(Processor):
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
             pr.RemoveClass(class_names, class_arg)])
-        self.scale_boxes2D = pr.ScaleBoxes2D()
+        self.scale_box = pr.ScaleBox()
         self.postprocess_2 = pr.SequentialProcessor([
             pr.NonMaximumSuppressionPerClass(nms_thresh),
             pr.MergeNMSBoxWithClass(),
@@ -630,11 +630,11 @@ class EfficientPosePostprocess(Processor):
     def call(self, image, model_output, image_scale, camera_parameter):
         detections, transformations = model_output
         box_data = self.postprocess_1(detections)
+        box_data = self.scale_box(box_data, 1 / image_scale)
         box_data_all = box_data
         box_data = self.postprocess_2(box_data)
         boxes2D = self.to_boxes2D(box_data)
         boxes2D = self.denormalize(image, boxes2D)
-        boxes2D = self.scale_boxes2D(boxes2D, 1 / image_scale)
         boxes2D = self.round_boxes(boxes2D)
         rotations = transformations[:, :, :self.num_pose_dims]
         translations = transformations[:, :, self.num_pose_dims:]
