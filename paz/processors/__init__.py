@@ -153,7 +153,7 @@ from .pose import SolveChangingObjectPnPRANSAC
 from .pose import Translation3DFromBoxWidth
 from .pose import ComputeCameraParameter
 from .pose import MatchPoses
-from .pose import TransformRotation
+from .pose import RotationMatrixToAxisAngle
 from .pose import ConcatenatePoses
 from .pose import ConcatenateScale
 from .pose import Augment6DOF

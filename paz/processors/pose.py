@@ -5,7 +5,7 @@ from ..backend.keypoints import solve_PNP
 from ..backend.keypoints import LEVENBERG_MARQUARDT
 from ..backend.keypoints import solve_PnP_RANSAC
 from ..backend.poses import match_poses
-from ..backend.poses import transform_rotation
+from ..backend.poses import rotation_matrix_to_axis_angle
 from ..backend.poses import concatenate_poses
 from ..backend.poses import concatenate_scale
 from ..backend.poses import augment_6DOF
@@ -174,7 +174,7 @@ class MatchPoses(Processor):
         return match_poses(boxes, poses, self.prior_boxes, self.iou)
 
 
-class TransformRotation(Processor):
+class RotationMatrixToAxisAngle(Processor):
     """Computes axis angle rotation vector from a rotation matrix.
 
     # Arguments:
@@ -186,10 +186,10 @@ class TransformRotation(Processor):
     """
     def __init__(self, num_pose_dims):
         self.num_pose_dims = num_pose_dims
-        super(TransformRotation, self).__init__()
+        super(RotationMatrixToAxisAngle, self).__init__()
 
     def call(self, rotations):
-        return transform_rotation(rotations, self.num_pose_dims)
+        return rotation_matrix_to_axis_angle(rotations, self.num_pose_dims)
 
 
 class ConcatenatePoses(Processor):

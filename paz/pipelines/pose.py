@@ -542,7 +542,8 @@ class AugmentEfficientPose(SequentialProcessor):
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
         self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
-        self.add(pr.ControlMap(pr.TransformRotation(num_pose_dims), [3], [3]))
+        self.add(pr.ControlMap(pr.RotationMatrixToAxisAngle(num_pose_dims),
+                               [3], [3]))
         self.add(pr.ControlMap(self.match_poses, [4, 3], [3], keep={4: 4}))
         self.add(pr.ControlMap(self.match_poses, [4, 5], [7], keep={4: 4}))
         self.add(pr.ControlMap(self.concatenate_poses, [3, 8], [8],

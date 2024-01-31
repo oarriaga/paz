@@ -11,7 +11,7 @@ from .anchors import compute_anchor_dims
 from .anchors import compute_anchor_centres
 
 from .poses import match_poses
-from .poses import transform_rotation
+from .poses import rotation_matrix_to_axis_angle
 from .poses import concatenate_poses
 from .poses import concatenate_scale
 from .poses import augment_6DOF

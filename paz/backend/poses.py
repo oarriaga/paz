@@ -31,7 +31,7 @@ def match_poses(boxes, poses, prior_boxes, iou_threshold):
     return matched_poses
 
 
-def transform_rotation(rotations, num_pose_dims):
+def rotation_matrix_to_axis_angle(rotations, num_pose_dims):
     """Computes axis angle rotation vector from a rotation matrix.
 
     # Arguments:
