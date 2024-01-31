@@ -1,10 +1,10 @@
-from paz.pipelines.pose import DetectAndEstimateEfficientPose
+from paz.pipelines.pose import EstimateEfficientPose
 from paz.datasets.linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                                   RGB_LINEMOD_MEAN)
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 
 
-class EfficientPosePhi0LinemodDriller(DetectAndEstimateEfficientPose):
+class EfficientPosePhi0LinemodDriller(EstimateEfficientPose):
     """Inference pipeline with EfficientPose phi=0 trained on Linemod.
 
     # Arguments

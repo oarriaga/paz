@@ -13,7 +13,6 @@ from .masks import Pix2Points
 from .detection import HaarCascadeFrontalFace
 from .keypoints import FaceKeypointNet2D32
 from .detection import SSD300FAT, PostprocessBoxes2D, PreprocessBoxes
-from ..datasets.linemod import RGB_LINEMOD_MEAN, LINEMOD_CAMERA_MATRIX
 from processors import RegressTranslation, ComputeTxTyTz
 
 
@@ -651,7 +650,7 @@ class EfficientPosePostprocess(Processor):
         return boxes2D, poses6D
 
 
-class DetectAndEstimateEfficientPose(Processor):
+class EstimateEfficientPose(Processor):
     """Object detection and pose estimation for EfficientPose models.
 
     # Arguments
@@ -710,7 +709,7 @@ class DetectAndEstimateEfficientPose(Processor):
             self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 
-        super(DetectAndEstimateEfficientPose, self).__init__()
+        super(EstimateEfficientPose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
 

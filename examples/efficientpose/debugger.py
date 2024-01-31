@@ -15,7 +15,7 @@ raw_image_shape = (640, 480)
 input_shape = 512
 
 
-class DetectAndEstimateEfficientPose(Processor):
+class EstimateEfficientPose(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
                  object_sizes=LINEMOD_OBJECT_SIZES, mean=RGB_LINEMOD_MEAN,
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
@@ -34,7 +34,7 @@ class DetectAndEstimateEfficientPose(Processor):
         self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 
-        super(DetectAndEstimateEfficientPose, self).__init__()
+        super(EstimateEfficientPose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
         self.wrap = pr.WrapOutput(['image', 'boxes2D', 'poses6D'])
 
@@ -124,7 +124,7 @@ def denormalize_box(box):
     return (x_min, y_min, x_max, y_max)
 
 
-class EfficientPosePhi0LinemodDebug(DetectAndEstimateEfficientPose):
+class EfficientPosePhi0LinemodDebug(EstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = ['background', 'driller']
