@@ -47,6 +47,7 @@ from .image import RandomContrast
 from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
+from .image import ResizeImageDynamic
 from .image import RandomImageBlur
 from .image import RandomGaussianBlur
 from .image import RandomFlipImageLeftRight

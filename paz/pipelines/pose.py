@@ -572,9 +572,9 @@ class EfficientPosePreprocess(Processor):
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
                  translation_scale_norm=1000.0):
         super(EfficientPosePreprocess, self).__init__()
-
         self.compute_resizing_shape = pr.ComputeResizingShape(
             model.input_shape[1])
+        self.resize_image = pr.ResizeImageDynamic()
         self.preprocess = pr.SequentialProcessor([
             pr.SubtractMeanImage(mean),
             pr.PadImage(model.input_shape[1]),
@@ -585,8 +585,7 @@ class EfficientPosePreprocess(Processor):
 
     def call(self, image):
         resizing_shape, image_scale = self.compute_resizing_shape(image)
-        resize_image = pr.ResizeImage(resizing_shape)
-        preprocessed_image = resize_image(image)
+        preprocessed_image = self.resize_image(image, resizing_shape)
         preprocessed_image = self.preprocess(preprocessed_image)
         camera_parameter = self.compute_camera_parameter(image_scale)
         return preprocessed_image, image_scale, camera_parameter

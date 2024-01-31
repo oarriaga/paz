@@ -212,6 +212,20 @@ class ResizeImages(Processor):
         return [resize_image(image, self.shape) for image in images]
 
 
+class ResizeImageDynamic(Processor):
+    """Resize image.
+
+    # Arguments
+        size: List of two ints.
+    """
+    def __init__(self, method=BILINEAR):
+        self.method = method
+        super(ResizeImageDynamic, self).__init__()
+
+    def call(self, image, shape):
+        return resize_image(image, shape, self.method)
+
+
 class RandomImageBlur(Processor):
     """Randomizes image quality
 
