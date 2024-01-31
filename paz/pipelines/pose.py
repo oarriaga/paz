@@ -472,9 +472,9 @@ class PIX2YCBTools6D(MultiInstanceMultiClassPIX2POSE6D):
         return name_to_sizes
 
 
-class AugmentColorspace(SequentialProcessor):
+class AugmentColor(SequentialProcessor):
     def __init__(self):
-        super(AugmentColorspace, self).__init__()
+        super(AugmentColor, self).__init__()
         self.add(pr.AutoContrast())
         self.add(pr.EqualizeHistogram())
         self.add(pr.InvertColors())
@@ -514,7 +514,7 @@ class AugmentEfficientPose(SequentialProcessor):
                  IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], probability=0.5,
                  num_pose_dims=3):
         super(AugmentEfficientPose, self).__init__()
-        self.augment_colorspace = AugmentColorspace()
+        self.augment_color = AugmentColor()
         self.augment_6DOF = pr.Augment6DOF(
             camera_matrix, probability=probability, input_size=size)
         self.preprocess_image = EfficientPosePreprocess(model, mean,
@@ -536,7 +536,7 @@ class AugmentEfficientPose(SequentialProcessor):
         self.add(pr.ControlMap(pr.LoadImage(), [0], [0]))
         self.add(pr.ControlMap(pr.LoadImage(), [5], [5]))
         if split == pr.TRAIN:
-            self.add(pr.ControlMap(self.augment_colorspace, [0], [0]))
+            self.add(pr.ControlMap(self.augment_color, [0], [0]))
             self.add(pr.ControlMap(self.augment_6DOF, [0, 1, 2, 3, 5],
                                    [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))

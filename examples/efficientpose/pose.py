@@ -1,4 +1,4 @@
-from paz.pipelines import DetectAndEstimateEfficientPose
+from paz.pipelines.pose import DetectAndEstimateEfficientPose
 from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 

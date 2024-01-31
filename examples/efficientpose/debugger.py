@@ -6,7 +6,7 @@ from paz.backend.image import show_image
 from paz.abstract import ProcessingSequence
 from paz.datasets.linemod import Linemod
 from paz.models.pose_estimation import EfficientPosePhi0
-from paz.pipelines import AugmentEfficientPose, EfficientPosePreprocess
+from paz.pipelines.pose import AugmentEfficientPose, EfficientPosePreprocess
 from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
 
 
