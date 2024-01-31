@@ -2,7 +2,6 @@ import numpy as np
 
 from .opencv_image import (convert_color_space, gaussian_image_blur,
                            median_image_blur, warp_affine, resize_image,
-                           calculate_histogram, apply_lookup_table,
                            apply_histogram_equalization, RGB2HSV, HSV2RGB)
 
 
@@ -389,62 +388,6 @@ def pad_image(image, size, mode):
     pad_W = size - W
     pad_shape = [(0, pad_H), (0, pad_W), (0, 0)]
     return np.pad(image, pad_shape, mode=mode)
-
-
-def auto_contrast(image):
-    """Performs autocontrast or automatic contrast enhancement in a
-    given image. This method achieves this by computing the image
-    histogram and removing a certain `cutoff` percent from the lighter
-    and darker part of the histogram and then stretching the histogram
-    such that the lightest pixel gray value becomes 255 and the darkest
-    ones become 0.
-
-    # Arguments
-        image: Array, raw image.
-
-    # Returns:
-        contrasted: Array, contrast enhanced image.
-
-    # References:
-        [Python Pillow autocontrast](
-            https://github.com/python-pillow/Pillow/blob/main'
-            '/src/PIL/ImageOps.py)
-    """
-    contrasted = np.empty_like(image)
-    num_channels = image.shape[2]
-
-    for channel_arg in range(num_channels):
-        image_per_channel = image[:, :, channel_arg]
-        histogram = calculate_histogram(image_per_channel, [0],
-                                        None, [256], [0, 256])
-        histogram[0] = -histogram[0]
-
-        CDF_reversed = np.cumsum(histogram[::-1])
-        upper_cutoff_nonzero = np.nonzero(CDF_reversed > 0.0)[0]
-        if len(upper_cutoff_nonzero) == 0:
-            upper_cutoff = -1
-        else:
-            upper_cutoff = 255 - upper_cutoff_nonzero[0]
-
-        histogram[upper_cutoff+1:] = 0
-        if upper_cutoff > -1:
-            histogram[upper_cutoff] = CDF_reversed[255-upper_cutoff]
-
-        for lower_cutoff, lower_value in enumerate(histogram):
-            if lower_value:
-                break
-
-        if upper_cutoff <= lower_cutoff:
-            lookup_table = np.arange(256)
-        else:
-            scale = 255.0 / (upper_cutoff - lower_cutoff)
-            offset = -lower_cutoff * scale
-            lookup_table = np.arange(256).astype(np.float64) * scale + offset
-            lookup_table = np.clip(lookup_table, 0, 255).astype(np.uint8)
-        lookup_table = np.array(lookup_table, dtype=np.uint8)
-        contrast_adjusted = apply_lookup_table(image_per_channel, lookup_table)
-        contrasted[:, :, channel_arg] = contrast_adjusted
-    return contrasted
 
 
 def equalize_histogram(image):

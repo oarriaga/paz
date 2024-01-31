@@ -26,7 +26,6 @@ from ..backend.image import replace_lower_than_threshold
 from ..backend.image import flip_left_right
 from ..backend.image import compute_resizing_shape
 from ..backend.image import pad_image
-from ..backend.image import auto_contrast
 from ..backend.image import equalize_histogram
 from ..backend.image import invert_colors
 from ..backend.image import posterize
@@ -614,32 +613,6 @@ class PadImage(Processor):
 
     def call(self, image):
         return pad_image(image, self.size, self.mode)
-
-
-class AutoContrast(Processor):
-    """Performs autocontrast or automatic contrast enhancement in a
-    given image. This method achieves this by computing the image
-    histogram and removing a certain `cutoff` percent from the lighter
-    and darker part of the histogram and then stretching the histogram
-    such that the lightest pixel gray value becomes 255 and the darkest
-    ones become 0.
-
-    # Arguments
-        probability: Float, probability of data transformation.
-
-    # References:
-        [Python Pillow autocontrast](
-            https://github.com/python-pillow/Pillow/blob/main'
-            '/src/PIL/ImageOps.py)
-    """
-    def __init__(self, probability=0.50):
-        self.probability = probability
-        super(AutoContrast, self).__init__()
-
-    def call(self, image):
-        if self.probability > np.random.rand():
-            image = auto_contrast(image)
-        return image
 
 
 class EqualizeHistogram(Processor):

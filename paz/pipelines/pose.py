@@ -474,7 +474,6 @@ class PIX2YCBTools6D(MultiInstanceMultiClassPIX2POSE6D):
 class AugmentColor(SequentialProcessor):
     def __init__(self):
         super(AugmentColor, self).__init__()
-        self.add(pr.AutoContrast())
         self.add(pr.EqualizeHistogram())
         self.add(pr.InvertColors())
         self.add(pr.Posterize())

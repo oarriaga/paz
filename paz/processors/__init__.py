@@ -72,7 +72,6 @@ from .image import DivideStandardDeviationImage
 from .image import ScaledResize
 from .image import ComputeResizingShape
 from .image import PadImage
-from .image import AutoContrast
 from .image import EqualizeHistogram
 from .image import InvertColors
 from .image import Posterize
