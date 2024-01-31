@@ -1,5 +1,4 @@
 from paz.pipelines import DetectAndEstimateEfficientPose
-from paz.datasets import get_class_names
 from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 
@@ -22,7 +21,7 @@ class EfficientPosePhi0LinemodDriller(DetectAndEstimateEfficientPose):
     """
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('Linemod_Driller')
+        names = ['background', 'driller']
         model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
                                   head_weights=None)
         super(EfficientPosePhi0LinemodDriller, self).__init__(
