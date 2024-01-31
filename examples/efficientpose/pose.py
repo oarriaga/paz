@@ -1,6 +1,6 @@
 from paz.pipelines import DetectAndEstimateEfficientPose
-from paz.datasets import (LINEMOD_CAMERA_MATRIX, get_class_names,
-                          LINEMOD_OBJECT_SIZES)
+from paz.datasets import get_class_names
+from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 
 
@@ -27,5 +27,5 @@ class EfficientPosePhi0LinemodDriller(DetectAndEstimateEfficientPose):
                                   head_weights=None)
         super(EfficientPosePhi0LinemodDriller, self).__init__(
             model, names, score_thresh, nms_thresh,
-            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+            LINEMOD_OBJECT_SIZES, LINEMOD_CAMERA_MATRIX,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)

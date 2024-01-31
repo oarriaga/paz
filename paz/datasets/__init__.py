@@ -14,7 +14,3 @@ from .CMU_poanoptic import MANOHandJoints
 from .CMU_poanoptic import MPIIHandJoints
 from .shapes import Shapes
 from .omniglot import Omniglot
-from .linemod import RGB_LINEMOD_MEAN
-from .linemod import RGB_LINEMOD_STDEV
-from .linemod import LINEMOD_CAMERA_MATRIX
-from .linemod import LINEMOD_OBJECT_SIZES

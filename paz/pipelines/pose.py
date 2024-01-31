@@ -13,7 +13,7 @@ from .masks import Pix2Points
 from .detection import HaarCascadeFrontalFace
 from .keypoints import FaceKeypointNet2D32
 from .detection import SSD300FAT, PostprocessBoxes2D, PreprocessBoxes
-from ..datasets import RGB_LINEMOD_MEAN, LINEMOD_CAMERA_MATRIX
+from ..datasets.linemod import RGB_LINEMOD_MEAN, LINEMOD_CAMERA_MATRIX
 from processors import RegressTranslation, ComputeTxTyTz
 
 
@@ -660,9 +660,8 @@ class DetectAndEstimateEfficientPose(Processor):
         class_names: List of strings indicating class names.
         score_thresh: Float between [0, 1].
         nms_thresh: Float between [0, 1].
-        LINEMOD_CAMERA_MATRIX: Array of shape `(3, 3)`
-            Linemod camera matrix.
-        LINEMOD_OBJECT_SIZES: Dict, Linemod dataset object sizes.
+        camera_matrix: Array of shape `(3, 3)` camera matrix.
+        object_sizes: Dict, dataset object sizes.
         preprocess: Callable, preprocessing pipeline.
         postprocess: Callable, postprocessing pipeline.
         variances: List of float values.
@@ -692,16 +691,17 @@ class DetectAndEstimateEfficientPose(Processor):
         call()
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES, preprocess=None,
-                 postprocess=None, variances=[0.1, 0.1, 0.2, 0.2],
-                 show_boxes2D=False, show_poses6D=True):
+                 object_sizes, camera_matrix=LINEMOD_CAMERA_MATRIX,
+                 preprocess=None, postprocess=None,
+                 variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
+                 show_poses6D=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
-        self.class_to_sizes = LINEMOD_OBJECT_SIZES
-        self.camera_matrix = LINEMOD_CAMERA_MATRIX
+        self.camera_matrix = camera_matrix
+        self.class_to_sizes = object_sizes
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         if preprocess is None:
