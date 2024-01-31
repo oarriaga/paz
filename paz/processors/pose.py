@@ -220,7 +220,7 @@ class ConcatenateScale(Processor):
         return concatenate_scale(poses, scale)
 
 
-class Augment6DOF(Processor):
+class Augment6DPose(Processor):
     """Augment images, boxes, rotation and translation vector
     for pose estimation.
 
@@ -245,7 +245,7 @@ class Augment6DOF(Processor):
         self.probability = probability
         self.mask_value = mask_value
         self.input_size = input_size
-        super(Augment6DOF, self).__init__()
+        super(Augment6DPose, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
         if np.random.rand() < self.probability:
