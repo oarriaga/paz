@@ -5,10 +5,9 @@ from paz.abstract import Processor
 from paz.backend.image import show_image
 from paz.abstract import ProcessingSequence
 from paz.datasets.linemod import Linemod
-from paz.datasets import get_class_names
 from paz.models.pose_estimation import EfficientPosePhi0
 from paz.pipelines import AugmentEfficientPose, EfficientPosePreprocess
-from paz.datasets import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
+from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
 
 
 raw_image_shape = (640, 480)
@@ -17,7 +16,8 @@ input_shape = 512
 
 class DetectAndEstimateEfficientPose(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                 object_sizes=LINEMOD_OBJECT_SIZES,
+                 camera_matrix=LINEMOD_CAMERA_MATRIX,
                  variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
                  show_poses6D=True):
         self.model = model
@@ -25,8 +25,8 @@ class DetectAndEstimateEfficientPose(Processor):
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.variances = variances
-        self.class_to_sizes = LINEMOD_OBJECT_SIZES
-        self.camera_matrix = LINEMOD_CAMERA_MATRIX
+        self.class_to_sizes = object_sizes
+        self.camera_matrix = camera_matrix
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         self.preprocess = EfficientPosePreprocess(model)
@@ -126,12 +126,12 @@ def denormalize_box(box):
 class EfficientPosePhi0LinemodDebug(DetectAndEstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
-        names = get_class_names('Linemod_Driller')
+        names = ['background', 'driller']
         model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
                                   head_weights=None)
         super(EfficientPosePhi0LinemodDebug, self).__init__(
             model, names, score_thresh, nms_thresh,
-            LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+            LINEMOD_OBJECT_SIZES, LINEMOD_CAMERA_MATRIX,
             show_boxes2D=show_boxes2D, show_poses6D=show_poses6D)
 
 
