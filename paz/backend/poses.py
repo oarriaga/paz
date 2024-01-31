@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 from .boxes import compute_ious, to_corner_form
-from ..datasets import LINEMOD_CAMERA_MATRIX
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
@@ -82,7 +81,7 @@ def concatenate_scale(poses, scale):
 
 def augment_6DOF(image, boxes, rotation, translation_raw, mask,
                  scale_min, scale_max, angle_min, angle_max,
-                 mask_value, input_size):
+                 mask_value, input_size, camera_matrix):
     """Performs 6 degree of freedom augmentation of image
     and its corresponding poses.
 
@@ -98,13 +97,14 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
         angle_max: Int, maximum degree to rotate image.
         mask_value: Int, pixel gray value of foreground in mask image.
         input_size: Int, input image size of the model.
+        camera_matrix: Array with camera matrix of shape `(3, 3)`.
 
     # Returns:
         List: Containing augmented_image, augmented_boxes,
             augmented_rotation, augmented_translation, augmented_mask
     """
     transformation, angle, scale = generate_random_transformation(
-        scale_min, scale_max, angle_min, angle_max)
+        scale_min, scale_max, angle_min, angle_max, camera_matrix)
     H, W, _ = image.shape
     augmented_image = cv2.warpAffine(image, transformation, (W, H),
                                      flags=cv2.INTER_CUBIC)
@@ -150,8 +150,8 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
             augmented_translation, augmented_mask)
 
 
-def generate_random_transformation(scale_min, scale_max,
-                                   angle_min, angle_max):
+def generate_random_transformation(scale_min, scale_max, angle_min,
+                                   angle_max, camera_matrix):
     """Generates random affine transformation matrix.
 
     # Arguments
@@ -159,12 +159,13 @@ def generate_random_transformation(scale_min, scale_max,
         scale_max: Float, maximum value to scale image.
         angle_min: Int, minimum degree to rotate image.
         angle_max: Int, maximum degree to rotate image.
+        camera_matrix: Array with camera matrix of shape `(3, 3)`.
 
     # Returns:
         List: Containing transformation matrix, angle, scale
     """
-    cx = LINEMOD_CAMERA_MATRIX[0, 2]
-    cy = LINEMOD_CAMERA_MATRIX[1, 2]
+    cx = camera_matrix[0, 2]
+    cy = camera_matrix[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]

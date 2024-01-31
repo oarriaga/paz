@@ -225,6 +225,7 @@ class Augment6DOF(Processor):
     for pose estimation.
 
     # Arguments
+        camera_matrix: Array with camera matrix of shape `(3, 3)`.
         scale_min: Float, minimum value to scale image.
         scale_max: Float, maximum value to scale image.
         angle_min: Int, minimum degree to rotate image.
@@ -233,9 +234,10 @@ class Augment6DOF(Processor):
         mask_value: Int, pixel gray value of foreground in mask image.
         input_size: Int, input image size of the model.
     """
-    def __init__(self, scale_min=0.7, scale_max=1.3, angle_min=0,
-                 angle_max=360, probability=0.5, mask_value=255,
-                 input_size=512):
+    def __init__(self, camera_matrix, scale_min=0.7, scale_max=1.3,
+                 angle_min=0, angle_max=360, probability=0.5,
+                 mask_value=255, input_size=512):
+        self.camera_matrix = camera_matrix
         self.scale_min = scale_min
         self.scale_max = scale_max
         self.angle_min = angle_min
@@ -248,9 +250,9 @@ class Augment6DOF(Processor):
     def call(self, image, boxes, rotation, translation_raw, mask):
         if np.random.rand() < self.probability:
             augmented_data = augment_6DOF(
-                image, boxes, rotation, translation_raw, mask,
-                self.scale_min, self.scale_max, self.angle_min,
-                self.angle_max, self.mask_value, self.input_size)
+                image, boxes, rotation, translation_raw, mask, self.scale_min,
+                self.scale_max, self.angle_min, self.angle_max,
+                self.mask_value, self.input_size, self.camera_matrix)
         else:
             augmented_data = image, boxes, rotation, translation_raw, mask
         return augmented_data

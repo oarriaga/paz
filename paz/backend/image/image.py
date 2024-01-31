@@ -460,7 +460,9 @@ def equalize_histogram(image):
     R_equalized = apply_histogram_equalization(R)
     G_equalized = apply_histogram_equalization(G)
     B_equalized = apply_histogram_equalization(B)
-    return np.concatenate([R_equalized, G_equalized, B_equalized], axis=2)
+    return np.concatenate([R_equalized[:, :, np.newaxis],
+                           G_equalized[:, :, np.newaxis],
+                           B_equalized[:, :, np.newaxis]], axis=2)
 
 
 def invert_colors(image):
