@@ -53,20 +53,27 @@ class ComputeTxTyTz(Processor):
         This module is derived based on [EfficientPose](
             https://github.com/ybkscht/EfficientPose)
     """
-    def __init__(self):
+    def __init__(self, translation_scale_norm=1000):
+        self.translation_scale_norm = translation_scale_norm
         super(ComputeTxTyTz, self).__init__()
 
-    def call(self, translation_xy_Tz, camera_parameter):
-        return compute_tx_ty_tz(translation_xy_Tz, camera_parameter)
+    def call(self, translation_xy_Tz, camera_matrix, image_scale):
+        return compute_tx_ty_tz(translation_xy_Tz, camera_matrix,
+                                image_scale, self.translation_scale_norm)
 
 
-def compute_tx_ty_tz(translation_xy_Tz, camera_parameter):
+def compute_tx_ty_tz(translation_xy_Tz, camera_matrix, image_scale,
+                     translation_scale_norm=1000):
     """Computes Tx, Ty and Tz components of the translation vector
     with a given 2D-point and the intrinsic camera parameters.
 
     # Arguments
         translation_xy_Tz: Array of shape `(num_boxes, 3)`,
-        camera_parameter: Array: of shape `(6,)` camera parameter.
+        camera_matrix: Array of shape `(3, 3)` camera matrix.
+        translation_scale_norm: Float, factor to change units.
+            EfficientPose internally works with meter and if the
+            dataset unit is mm for example, then this parameter
+            should be set to 1000.
 
     # Returns
         Array: of shape `(num_boxes, 3)`.
@@ -75,13 +82,12 @@ def compute_tx_ty_tz(translation_xy_Tz, camera_parameter):
         This module is derived based on [EfficientPose](
             https://github.com/ybkscht/EfficientPose)
     """
-    fx, fy = camera_parameter[0], camera_parameter[1],
-    px, py = camera_parameter[2], camera_parameter[3],
-    tz_scale, image_scale = camera_parameter[4], camera_parameter[5]
+    fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+    px, py = camera_matrix[0, 2], camera_matrix[1, 2]
 
     x = translation_xy_Tz[:, 0] / image_scale
     y = translation_xy_Tz[:, 1] / image_scale
-    tz = translation_xy_Tz[:, 2] * tz_scale
+    tz = translation_xy_Tz[:, 2] * translation_scale_norm
 
     x = x - px
     y = y - py

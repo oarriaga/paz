@@ -30,7 +30,7 @@ class EstimateEfficientPose(Processor):
         self.camera_matrix = camera_matrix
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
-        self.preprocess = EfficientPosePreprocess(model, mean, camera_matrix)
+        self.preprocess = EfficientPosePreprocess(model, mean)
         self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 

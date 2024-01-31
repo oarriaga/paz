@@ -134,28 +134,6 @@ class Translation3DFromBoxWidth(Processor):
         return np.array(hands_center)
 
 
-class ComputeCameraParameter(Processor):
-    """Computes camera parameter given camera matrix
-    and scale normalization factor of translation.
-
-    # Arguments
-        camera_matrix: Array of shape `(3, 3)` camera matrix.
-        translation_scale_norm: Float, factor to change units.
-            EfficientPose internally works with meter and if the
-            dataset unit is mm for example, then this parameter
-            should be set to 1000.
-    """
-    def __init__(self, camera_matrix, translation_scale_norm):
-        self.camera_matrix = camera_matrix
-        self.translation_scale_norm = translation_scale_norm
-        super(ComputeCameraParameter, self).__init__()
-
-    def call(self, image_scale):
-        return np.array([self.camera_matrix[0, 0], self.camera_matrix[1, 1],
-                         self.camera_matrix[0, 2], self.camera_matrix[1, 2],
-                         self.translation_scale_norm, image_scale])
-
-
 class MatchPoses(Processor):
     """Match prior boxes with ground truth poses.
 

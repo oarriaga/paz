@@ -515,8 +515,7 @@ class AugmentEfficientPose(SequentialProcessor):
         self.augment_color = AugmentColor()
         self.augment_6D_pose = pr.Augment6DPose(
             camera_matrix, probability=probability, input_size=size)
-        self.preprocess_image = EfficientPosePreprocess(model, mean,
-                                                        camera_matrix)
+        self.preprocess_image = EfficientPosePreprocess(model, mean)
 
         # box processors
         self.scale_boxes = pr.ScaleBox()
@@ -538,19 +537,19 @@ class AugmentEfficientPose(SequentialProcessor):
             self.add(pr.ControlMap(self.augment_6D_pose, [0, 1, 2, 3, 5],
                                    [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
-        self.add(pr.ControlMap(self.scale_boxes, [3, 1], [3], keep={1: 1}))
-        self.add(pr.ControlMap(self.preprocess_boxes, [4], [5], keep={4: 4}))
+        self.add(pr.ControlMap(self.scale_boxes, [2, 1], [2], keep={1: 1}))
+        self.add(pr.ControlMap(self.preprocess_boxes, [3], [4], keep={3: 3}))
         self.add(pr.ControlMap(pr.RotationMatrixToAxisAngle(num_pose_dims),
-                               [3], [3]))
-        self.add(pr.ControlMap(self.match_poses, [4, 3], [3], keep={4: 4}))
-        self.add(pr.ControlMap(self.match_poses, [4, 5], [7], keep={4: 4}))
-        self.add(pr.ControlMap(self.concatenate_poses, [3, 8], [8],
-                               keep={3: 3}))
-        self.add(pr.ControlMap(self.concatenate_scale, [8, 1], [8]))
+                               [2], [2]))
+        self.add(pr.ControlMap(self.match_poses, [3, 2], [2], keep={3: 3}))
+        self.add(pr.ControlMap(self.match_poses, [3, 4], [6], keep={3: 3}))
+        self.add(pr.ControlMap(self.concatenate_poses, [2, 7], [7],
+                               keep={2: 2}))
+        self.add(pr.ControlMap(self.concatenate_scale, [7, 1], [7]))
         self.add(pr.SequenceWrapper(
             {0: {'image': [size, size, 3]}},
-            {4: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
-             7: {'transformation': [len(model.prior_boxes),
+            {3: {'boxes': [len(model.prior_boxes), 4 + num_classes]},
+             6: {'transformation': [len(model.prior_boxes),
                                     3 * num_pose_dims + 2]}}))
 
 
@@ -560,14 +559,8 @@ class EfficientPosePreprocess(Processor):
     # Arguments
         model: Keras model.
         mean: Tuple, containing mean per channel on ImageNet.
-        camera_matrix:  Array of shape `(3, 3)` camera matrix.
-        translation_scale_norm: Float, factor to change units.
-            EfficientPose internally works with meter and if the
-            dataset unit is mm for example, then this parameter
-            should be set to 1000.
     """
-    def __init__(self, model, mean, camera_matrix,
-                 translation_scale_norm=1000.0):
+    def __init__(self, model, mean):
         super(EfficientPosePreprocess, self).__init__()
         self.compute_resizing_shape = pr.ComputeResizingShape(
             model.input_shape[1])
@@ -577,15 +570,12 @@ class EfficientPosePreprocess(Processor):
             pr.PadImage(model.input_shape[1]),
             pr.CastImage(float),
             pr.ExpandDims(axis=0)])
-        self.compute_camera_parameter = pr.ComputeCameraParameter(
-            camera_matrix, translation_scale_norm)
 
     def call(self, image):
         resizing_shape, image_scale = self.compute_resizing_shape(image)
         preprocessed_image = self.resize_image(image, resizing_shape)
         preprocessed_image = self.preprocess(preprocessed_image)
-        camera_parameter = self.compute_camera_parameter(image_scale)
-        return preprocessed_image, image_scale, camera_parameter
+        return preprocessed_image, image_scale
 
 
 class EfficientPosePostprocess(Processor):
@@ -601,10 +591,11 @@ class EfficientPosePostprocess(Processor):
         num_pose_dims: Int, number of dimensions for pose.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
-                 num_pose_dims=3):
+                 camera_matrix, variances=[0.1, 0.1, 0.2, 0.2],
+                 class_arg=None, num_pose_dims=3):
         super(EfficientPosePostprocess, self).__init__()
         self.num_pose_dims = num_pose_dims
+        self.camera_matrix = camera_matrix
         self.postprocess_1 = pr.SequentialProcessor([
             pr.Squeeze(axis=None),
             pr.DecodeBoxes(model.prior_boxes, variances),
@@ -624,7 +615,7 @@ class EfficientPosePostprocess(Processor):
         self.transform_rotations = pr.Scale(np.pi)
         self.to_pose_6D = pr.ToPose6D(class_names)
 
-    def call(self, image, model_output, image_scale, camera_parameter):
+    def call(self, image, model_output, image_scale):
         detections, transformations = model_output
         box_data = self.postprocess_1(detections)
         box_data = self.scale_box(box_data, 1 / image_scale)
@@ -642,8 +633,8 @@ class EfficientPosePostprocess(Processor):
             rotations = rotations[selected_indices]
             rotations = self.transform_rotations(rotations)
             translation_xy_Tz = self.regress_translation(translations)
-            translation = self.compute_tx_ty_tz(translation_xy_Tz,
-                                                camera_parameter)
+            translation = self.compute_tx_ty_tz(
+                translation_xy_Tz, self.camera_matrix, image_scale)
             translations = translation[selected_indices]
         poses6D = self.to_pose_6D(box_data, rotations, translations)
         return boxes2D, poses6D
@@ -702,11 +693,11 @@ class EstimateEfficientPose(Processor):
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         if preprocess is None:
-            self.preprocess = EfficientPosePreprocess(model, mean,
-                                                      camera_matrix)
+            self.preprocess = EfficientPosePreprocess(model, mean)
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess(
-                model, class_names, score_thresh, nms_thresh, class_arg=0)
+                model, class_names, score_thresh,
+                nms_thresh, camera_matrix, class_arg=0)
 
         super(EstimateEfficientPose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
@@ -721,12 +712,12 @@ class EstimateEfficientPose(Processor):
 
     def call(self, image):
         preprocessed_data = self.preprocess(image)
-        preprocessed_image, image_scale, camera_parameter = preprocessed_data
+        preprocessed_image, image_scale = preprocessed_data
         outputs = self.model(preprocessed_image)
         detections, transformations = outputs
         outputs = detections, transformations
-        boxes2D, poses6D = self.postprocess(
-            preprocessed_image[0], outputs, image_scale, camera_parameter)
+        boxes2D, poses6D = self.postprocess(preprocessed_image[0],
+                                            outputs, image_scale)
         if self.show_boxes2D:
             image = self.draw_boxes2D(image, boxes2D)
         if self.show_poses6D:

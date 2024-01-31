@@ -151,7 +151,6 @@ from .standard import ComputeSelectedIndices
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
 from .pose import Translation3DFromBoxWidth
-from .pose import ComputeCameraParameter
 from .pose import MatchPoses
 from .pose import RotationMatrixToAxisAngle
 from .pose import ConcatenatePoses
