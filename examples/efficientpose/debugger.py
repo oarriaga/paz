@@ -7,7 +7,8 @@ from paz.abstract import ProcessingSequence
 from paz.datasets.linemod import Linemod
 from paz.models.pose_estimation import EfficientPosePhi0
 from paz.pipelines.pose import AugmentEfficientPose, EfficientPosePreprocess
-from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES
+from paz.datasets.linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                                  RGB_LINEMOD_MEAN)
 
 
 raw_image_shape = (640, 480)
@@ -16,7 +17,7 @@ input_shape = 512
 
 class DetectAndEstimateEfficientPose(Processor):
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 object_sizes=LINEMOD_OBJECT_SIZES,
+                 object_sizes=LINEMOD_OBJECT_SIZES, mean=RGB_LINEMOD_MEAN,
                  camera_matrix=LINEMOD_CAMERA_MATRIX,
                  variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
                  show_poses6D=True):
@@ -29,7 +30,7 @@ class DetectAndEstimateEfficientPose(Processor):
         self.camera_matrix = camera_matrix
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
-        self.preprocess = EfficientPosePreprocess(model)
+        self.preprocess = EfficientPosePreprocess(model, mean, camera_matrix)
         self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)
 
@@ -160,7 +161,9 @@ if __name__ == '__main__':
         num_classes, base_weights='COCO', head_weights=None)
 
     # setting data augmentation pipeline
-    augmentator = AugmentEfficientPose(model, split, size=input_shape,
+    augmentator = AugmentEfficientPose(model, RGB_LINEMOD_MEAN,
+                                       LINEMOD_CAMERA_MATRIX, split,
+                                       size=input_shape,
                                        num_classes=num_classes)
     sequencer = ProcessingSequence(augmentator, 1, dataset)
 

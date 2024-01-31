@@ -509,9 +509,9 @@ class AugmentEfficientPose(SequentialProcessor):
             of data augmentation.
         num_pose_dims: Int, number of dimensions for pose.
     """
-    def __init__(self, model, split=pr.TRAIN, num_classes=8, size=512,
-                 mean=RGB_LINEMOD_MEAN, camera_matrix=LINEMOD_CAMERA_MATRIX,
-                 IOU=.5, variances=[0.1, 0.1, 0.2, 0.2], probability=0.5,
+    def __init__(self, model, mean, camera_matrix, split=pr.TRAIN,
+                 num_classes=8, size=512, IOU=.5,
+                 variances=[0.1, 0.1, 0.2, 0.2], probability=0.5,
                  num_pose_dims=3):
         super(AugmentEfficientPose, self).__init__()
         self.augment_color = AugmentColor()
@@ -568,8 +568,7 @@ class EfficientPosePreprocess(Processor):
             dataset unit is mm for example, then this parameter
             should be set to 1000.
     """
-    def __init__(self, model, mean=RGB_LINEMOD_MEAN,
-                 camera_matrix=LINEMOD_CAMERA_MATRIX,
+    def __init__(self, model, mean, camera_matrix,
                  translation_scale_norm=1000.0):
         super(EfficientPosePreprocess, self).__init__()
         self.compute_resizing_shape = pr.ComputeResizingShape(
@@ -691,10 +690,9 @@ class DetectAndEstimateEfficientPose(Processor):
         call()
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 object_sizes, camera_matrix=LINEMOD_CAMERA_MATRIX,
-                 preprocess=None, postprocess=None,
-                 variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
-                 show_poses6D=True):
+                 object_sizes, mean, camera_matrix, preprocess=None,
+                 postprocess=None, variances=[0.1, 0.1, 0.2, 0.2],
+                 show_boxes2D=False, show_poses6D=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -702,10 +700,12 @@ class DetectAndEstimateEfficientPose(Processor):
         self.variances = variances
         self.camera_matrix = camera_matrix
         self.class_to_sizes = object_sizes
+        self.mean = mean
         self.show_boxes2D = show_boxes2D
         self.show_poses6D = show_poses6D
         if preprocess is None:
-            self.preprocess = EfficientPosePreprocess(model)
+            self.preprocess = EfficientPosePreprocess(model, mean,
+                                                      camera_matrix)
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh, nms_thresh, class_arg=0)

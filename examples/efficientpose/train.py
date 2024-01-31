@@ -14,6 +14,7 @@ from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from paz.pipelines import AugmentEfficientPose
 from pose import EfficientPosePhi0LinemodDriller
 from paz.evaluation import EvaluateADD
+from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, RGB_LINEMOD_MEAN
 from losses import MultiPoseLoss
 
 
@@ -94,7 +95,8 @@ model.compile(optimizer=optimizer, loss=loss,
 # setting data augmentation pipeline
 augmentators = []
 for split in [TRAIN, VAL]:
-    augmentator = AugmentEfficientPose(model, split, size=512,
+    augmentator = AugmentEfficientPose(model, RGB_LINEMOD_MEAN,
+                                       LINEMOD_CAMERA_MATRIX, split, size=512,
                                        num_classes=num_classes)
     augmentators.append(augmentator)
 
