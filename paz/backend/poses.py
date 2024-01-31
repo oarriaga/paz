@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from .boxes import compute_ious, to_corner_form
+from .standard import compute_box_from_mask
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
@@ -169,24 +170,3 @@ def generate_random_transformation(scale_min, scale_max, angle_min,
     angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
     return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
-
-
-def compute_box_from_mask(mask, mask_value):
-    """Computes bounding box from mask image.
-
-    # Arguments
-        mask: Array mask corresponding to raw image.
-        mask_value: Int, pixel gray value of foreground in mask image.
-
-    # Returns:
-        box: List containing box coordinates.
-    """
-    masked = np.where(mask == mask_value)
-    mask_x, mask_y = masked[1], masked[0]
-    if mask_x.size <= 0 or mask_y.size <= 0:
-        box = [0, 0, 0, 0]
-    else:
-        x_min, y_min = np.min(mask_x), np.min(mask_y)
-        x_max, y_max = np.max(mask_x), np.max(mask_y)
-        box = [x_min, y_min, x_max, y_max]
-    return box
