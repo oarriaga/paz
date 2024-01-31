@@ -228,3 +228,7 @@ def convolve_image(image, kernel):
         Array: Solarized image.
     """
     return cv2.filter2D(image, -1, kernel)
+
+
+def rotation_matrix_to_rotation_vector(rotation_matrix):
+    return cv2.Rodrigues(rotation_matrix)

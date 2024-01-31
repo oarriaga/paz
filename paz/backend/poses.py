@@ -1,7 +1,8 @@
-import cv2
 import numpy as np
 from .boxes import compute_ious, to_corner_form
 from .standard import compute_box_from_mask
+from .image.opencv_image import (warp_affine, get_rotation_matrix,
+                                 rotation_matrix_to_rotation_vector)
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold):
@@ -44,7 +45,8 @@ def transform_rotation(rotations, num_pose_dims):
     for rotation in rotations:
         final_axis_angle = np.zeros((num_pose_dims + 2))
         rotation_matrix = np.reshape(rotation, (num_pose_dims, num_pose_dims))
-        axis_angle, jacobian = cv2.Rodrigues(rotation_matrix)
+        rotation_vector = rotation_matrix_to_rotation_vector(rotation_matrix)
+        axis_angle, jacobian = rotation_vector
         axis_angle = np.squeeze(axis_angle) / np.pi
         final_axis_angle[:3] = axis_angle
         final_axis_angle = np.expand_dims(final_axis_angle, axis=0)
@@ -107,16 +109,14 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max, camera_matrix)
     H, W, _ = image.shape
-    augmented_image = cv2.warpAffine(image, transformation, (W, H),
-                                     flags=cv2.INTER_CUBIC)
+    augmented_image = warp_affine(image, transformation, size=(W, H))
     H, W, _ = mask.shape
-    augmented_mask = cv2.warpAffine(mask, transformation, (W, H),
-                                    flags=cv2.INTER_NEAREST)
+    augmented_mask = warp_affine(mask, transformation, size=(W, H))
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
     rotation_vector = np.zeros((3, ))
     rotation_vector[2] = angle / 180 * np.pi
-    transformation, _ = cv2.Rodrigues(rotation_vector)
+    transformation, _ = rotation_matrix_to_rotation_vector(rotation_vector)
     augmented_translation = np.empty_like(translation_raw)
     box = compute_box_from_mask(augmented_mask, mask_value)
     rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
@@ -169,4 +169,4 @@ def generate_random_transformation(scale_min, scale_max, angle_min,
     cy = camera_matrix[1, 2]
     angle = np.random.uniform(angle_min, angle_max)
     scale = np.random.uniform(scale_min, scale_max)
-    return [cv2.getRotationMatrix2D((cx, cy), -angle, scale), angle, scale]
+    return [get_rotation_matrix((cx, cy), -angle, scale), angle, scale]
