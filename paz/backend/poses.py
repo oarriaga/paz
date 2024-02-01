@@ -147,6 +147,16 @@ def generate_random_transformation(scale_min, scale_max, angle_min,
 
 
 def augment_images(transformation, image, mask):
+    """Augments raw image and mask by applying affine transformation.
+
+    # Arguments
+        transformation: Array of shape (2,3) indicating affine transformation.
+        image: Array raw image.
+        mask: Array mask corresponding to raw image.
+
+    # Returns:
+        List: Containing augmented_image and augmented_mask.
+    """
     H, W, _ = image.shape
     augmented_image = warp_affine(image, transformation, size=(W, H))
     H, W, _ = mask.shape
@@ -156,6 +166,23 @@ def augment_images(transformation, image, mask):
 
 def augment_annotations(boxes, scale, angle, rotation, translation_raw,
                         augmented_mask, mask_value, input_size):
+    """Augments pose data such as rotations and translations.
+    and its corresponding poses.
+
+    # Arguments
+        boxes: Array of shape `(n, 5)`
+        scale: Float, value to scale pose annotations.
+        angle: Int, angle to rotate pose annotations.
+        rotation: Array of shape `(n, 9)`
+        translation_raw: Array of shape `(n, 3)`
+        augmented_mask: Array mask corresponding to raw image.
+        mask_value: Int, pixel gray value of foreground in mask image.
+        input_size: Int, input image size of the model.
+
+    # Returns:
+        List: Containing is_valid_augmentation, augmented_boxes,
+            augmented_rotation, and augmented_translation.
+    """
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
     rotation_vector = np.zeros((3, ))
