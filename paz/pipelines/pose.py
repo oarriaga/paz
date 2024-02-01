@@ -13,7 +13,6 @@ from .masks import Pix2Points
 from .detection import HaarCascadeFrontalFace
 from .keypoints import FaceKeypointNet2D32
 from .detection import SSD300FAT, PostprocessBoxes2D, PreprocessBoxes
-from processors import RegressTranslation, ComputeTxTyTz
 
 
 class EstimatePoseKeypoints(Processor):
@@ -591,8 +590,9 @@ class EfficientPosePostprocess(Processor):
         num_pose_dims: Int, number of dimensions for pose.
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 camera_matrix, variances=[0.1, 0.1, 0.2, 0.2],
-                 class_arg=None, num_pose_dims=3):
+                 camera_matrix, regress_translation, compute_tx_ty_tz,
+                 variances=[0.1, 0.1, 0.2, 0.2], class_arg=None,
+                 num_pose_dims=3):
         super(EfficientPosePostprocess, self).__init__()
         self.num_pose_dims = num_pose_dims
         self.camera_matrix = camera_matrix
@@ -608,8 +608,8 @@ class EfficientPosePostprocess(Processor):
         self.to_boxes2D = pr.ToBoxes2D(class_names)
         self.round_boxes = pr.RoundBoxes2D()
         self.denormalize = pr.DenormalizeBoxes2D()
-        self.regress_translation = RegressTranslation(model.translation_priors)
-        self.compute_tx_ty_tz = ComputeTxTyTz()
+        self.regress_translation = regress_translation
+        self.compute_tx_ty_tz = compute_tx_ty_tz
         self.compute_selections = pr.ComputeSelectedIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
@@ -679,9 +679,10 @@ class EstimateEfficientPose(Processor):
         call()
     """
     def __init__(self, model, class_names, score_thresh, nms_thresh,
-                 object_sizes, mean, camera_matrix, preprocess=None,
-                 postprocess=None, variances=[0.1, 0.1, 0.2, 0.2],
-                 show_boxes2D=False, show_poses6D=True):
+                 object_sizes, mean, camera_matrix, regress_translation,
+                 compute_tx_ty_tz, preprocess=None, postprocess=None,
+                 variances=[0.1, 0.1, 0.2, 0.2], show_boxes2D=False,
+                 show_poses6D=True):
         self.model = model
         self.class_names = class_names
         self.score_thresh = score_thresh
@@ -697,7 +698,8 @@ class EstimateEfficientPose(Processor):
         if postprocess is None:
             self.postprocess = EfficientPosePostprocess(
                 model, class_names, score_thresh,
-                nms_thresh, camera_matrix, class_arg=0)
+                nms_thresh, camera_matrix, regress_translation,
+                compute_tx_ty_tz, class_arg=0)
 
         super(EstimateEfficientPose, self).__init__()
         self.draw_boxes2D = pr.DrawBoxes2D(self.class_names)
