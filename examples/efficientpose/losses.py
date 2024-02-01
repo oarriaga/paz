@@ -32,12 +32,14 @@ class MultiPoseLoss(object):
             https://arxiv.org/abs/2011.04307)        
     """
     def __init__(self, object_id, translation_priors, data_path,
-                 target_num_points=500, num_pose_dims=3, model_path='models/',
+                 camera_matrix=LINEMOD_CAMERA_MATRIX, target_num_points=500,
+                 num_pose_dims=3, model_path='models/',
                  translation_scale_norm=1000):
         self.translation_priors = translation_priors
         self.num_pose_dims = num_pose_dims
         self.tz_scale = tf.convert_to_tensor(translation_scale_norm,
                                              dtype=tf.float32)
+        self.camera_matrix = camera_matrix
         model_data = load_model_data(data_path, model_path, object_id)
         model_points = get_vertices(model_data, key='vertex')
         self.model_points = filter_model_points(model_points,
@@ -64,7 +66,8 @@ class MultiPoseLoss(object):
          translation_raw_pred, scale) = pose_data
         translation_pred = compute_translation(translation_raw_pred, scale,
                                                self.tz_scale,
-                                               self.translation_priors)
+                                               self.translation_priors,
+                                               self.camera_matrix)
         indices = compute_valid_anchor_indices(y_true)
         valid_poses = extract_valid_poses(rotation_true, rotation_pred,
                                           translation_true, translation_pred,
@@ -91,17 +94,13 @@ class MultiPoseLoss(object):
                                          angle_pred) + translation_pred
         num_points = selected_model_points.shape[1]
 
-        sym_indices = tf.where(tf.math.equal(is_symmetric, 1))
-        sym_points_true = tf.reshape(tf.gather_nd(
-            points_true_transformed, sym_indices), (-1, num_points, 3))
-        sym_points_pred = tf.reshape(tf.gather_nd(
-            points_pred_transformed, sym_indices), (-1, num_points, 3))
+        sym_points_true, sym_points_pred = extract_sym_points(
+            points_true_transformed, points_pred_transformed,
+            is_symmetric, num_points)
 
-        asym_indices = tf.where(tf.math.not_equal(is_symmetric, 1))
-        asym_points_true = tf.reshape(tf.gather_nd(
-            points_true_transformed, asym_indices), (-1, num_points, 3))
-        asym_points_pred = tf.reshape(tf.gather_nd(
-            points_pred_transformed, asym_indices), (-1, num_points, 3))
+        asym_points_true, asym_points_pred = extract_asym_points(
+            points_true_transformed, points_pred_transformed,
+            is_symmetric, num_points)
 
         sym_distances = calc_sym_distances(sym_points_true, sym_points_pred)
         asym_distances = calc_asym_distances(asym_points_true,
@@ -211,8 +210,26 @@ def extract_symmetric_indices(y_true, indices, num_pose_dims):
     return [is_symmetric, class_indices]
 
 
+def extract_sym_points(points_true, points_pred, is_symmetric, num_points):
+    sym_indices = tf.where(tf.math.equal(is_symmetric, 1))
+    sym_points_true = tf.reshape(tf.gather_nd(
+        points_true, sym_indices), (-1, num_points, 3))
+    sym_points_pred = tf.reshape(tf.gather_nd(
+        points_pred, sym_indices), (-1, num_points, 3))
+    return [sym_points_true, sym_points_pred]
+
+
+def extract_asym_points(points_true, points_pred, is_symmetric, num_points):
+    asym_indices = tf.where(tf.math.not_equal(is_symmetric, 1))
+    asym_points_true = tf.reshape(tf.gather_nd(
+        points_true, asym_indices), (-1, num_points, 3))
+    asym_points_pred = tf.reshape(tf.gather_nd(
+        points_pred, asym_indices), (-1, num_points, 3))
+    return [asym_points_true, asym_points_pred]
+
+
 def compute_translation(translation_raw_pred, scale, tz_scale,
-                        translation_priors):
+                        translation_priors, camera_matrix):
     """Computes x,y and z translation components from model's
     translation head output.
 
@@ -232,7 +249,7 @@ def compute_translation(translation_raw_pred, scale, tz_scale,
         This module is derived based on [EfficientPose](
             https://github.com/ybkscht/EfficientPose)
     """
-    camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
+    camera_matrix = tf.convert_to_tensor(camera_matrix)
     translation_pred = regress_translation(translation_raw_pred,
                                            translation_priors)
     return compute_tx_ty_tz(translation_pred, camera_matrix, tz_scale, scale)
