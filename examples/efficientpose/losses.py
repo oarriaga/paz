@@ -507,22 +507,3 @@ def calc_asym_distances(asym_points_true, asym_points_pred):
     """
     distances = tf.norm(asym_points_pred - asym_points_true, axis=-1)
     return tf.reduce_mean(distances, axis=-1)
-
-
-if __name__ == "__main__":
-    import pickle
-    from paz.models.pose_estimation import EfficientPosePhi0
-
-    with open('y_pred.pkl', 'rb') as f:
-        y_pred = pickle.load(f)
-        y_pred = tf.convert_to_tensor(y_pred, dtype=tf.float32)
-
-    with open('y_true.pkl', 'rb') as f:
-        y_true = pickle.load(f)
-        y_true = tf.convert_to_tensor(y_true, dtype=tf.float32)
-
-    model = EfficientPosePhi0(2, base_weights='COCO', head_weights=None)
-    pose_loss = MultiPoseLoss('08', model.translation_priors,
-                              'Linemod_preprocessed/')
-    loss = pose_loss.compute_loss(y_true, y_pred)         # should be 1038.3807
-    print('')
