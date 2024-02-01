@@ -284,13 +284,9 @@ def compute_common_row_indices(box_data_all, box_data):
     # Returns
         Array: of shape `(n, 3)`.
     """
-    box_data_all_tuple = [tuple(row) for row in box_data_all[:, :4]]
-    box_data_tuple = [tuple(row) for row in box_data[:, :4]]
-    location_indices = []
-    for tuple_element in box_data_tuple:
-        location_index = box_data_all_tuple.index(tuple_element)
-        location_indices.append(location_index)
-    return np.array(location_indices)
+    matches_element_wise = np.isin(box_data_all, box_data)
+    matches_row_wise = np.all(matches_element_wise, axis=-1)
+    return np.where(matches_row_wise)[0]
 
 
 def compute_box_from_mask(mask, mask_value):
