@@ -174,6 +174,17 @@ def filter_model_points(model_points, target_num_points):
 
 
 def extract_pose_data(y_true, y_pred, num_pose_dims):
+    """Extracts rotations and translations from `y_true` and `y_pred`.
+
+    # Arguments:
+        y_true: Tensor of shape '[batch_size, num_boxes, 11]'.
+        y_pred: Tensor of shape '[batch_size, num_boxes, 6]'.
+        num_pose_dims: Int, number of pose dimensions.
+
+    # Returns:
+        List: containing rotation_true, rotation_pred,
+            translation_true, translation_pred, scale.
+    """
     rotation_true = y_true[:, :, :num_pose_dims]
     rotation_pred = y_pred[:, :, :num_pose_dims]
     translation_true = y_true[:, :, 2 * num_pose_dims:2 *
@@ -185,6 +196,15 @@ def extract_pose_data(y_true, y_pred, num_pose_dims):
 
 
 def compute_valid_anchor_indices(y_true):
+    """Computes indices of valid anchors from `y_true`.
+
+    # Arguments:
+        y_true: Tensor of shape '[batch_size, num_boxes, 11]'
+            with correct labels.
+
+    # Returns:
+        indices: Tensor, indices corresponding to valid anchors.
+    """
     anchor_flags = y_true[:, :, -2]
     anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
     indices = tf.where(tf.equal(anchor_state, 1))
@@ -193,6 +213,20 @@ def compute_valid_anchor_indices(y_true):
 
 def extract_valid_poses(rotation_true, rotation_pred, translation_true,
                         translation_pred, indices):
+    """Extracts rotations and translations corresponding
+    to valid anchors.
+
+    # Arguments:
+        rotation_true: Tensor of shape '[batch_size, num_boxes, 3]'.
+        rotation_pred: Tensor of shape '[batch_size, num_boxes, 3]'.
+        translation_true: Tensor of shape '[batch_size, num_boxes, 3]'.
+        translation_pred: Tensor of shape '[batch_size, num_boxes, 3]'.
+        indices: Tensor of shape '[n, 2]'
+
+    # Returns:
+        List: Containing rotation_true, rotation_pred,
+            translation_true, translation_pred
+    """
     rotation_true = tf.gather_nd(rotation_true, indices)
     rotation_pred = tf.gather_nd(rotation_pred, indices)
     translation_true = tf.gather_nd(translation_true, indices)
@@ -201,6 +235,16 @@ def extract_valid_poses(rotation_true, rotation_pred, translation_true,
 
 
 def extract_symmetric_indices(y_true, indices, num_pose_dims):
+    """Extracts indices of symmetric points.
+
+    # Arguments:
+        y_true: Tensor of shape '[batch_size, num_boxes, 11]'.
+        indices: Tensor of shape '[n, 2]'.
+        num_pose_dims: Int, number of pose dimensions.
+
+    # Returns:
+        List: Containing is_symmetric, class_indices.
+    """
     is_symmetric = y_true[:, :, num_pose_dims]
     is_symmetric = tf.gather_nd(is_symmetric, indices)
     is_symmetric = tf.cast(tf.math.round(is_symmetric), tf.int32)
@@ -211,6 +255,17 @@ def extract_symmetric_indices(y_true, indices, num_pose_dims):
 
 
 def extract_sym_points(points_true, points_pred, is_symmetric, num_points):
+    """Extracts symmetric points.
+
+    # Arguments:
+        points_true: Tensor of shape '[n, num_points, 3]'.
+        points_pred: Tensor of shape '[n, num_points, 3]'.
+        is_symmetric: Tensor of shape '(n)'.
+        num_points: Int, number of points to consider.
+
+    # Returns:
+        List: Containing sym_points_true, sym_points_pred.
+    """
     sym_indices = tf.where(tf.math.equal(is_symmetric, 1))
     sym_points_true = tf.reshape(tf.gather_nd(
         points_true, sym_indices), (-1, num_points, 3))
@@ -220,6 +275,17 @@ def extract_sym_points(points_true, points_pred, is_symmetric, num_points):
 
 
 def extract_asym_points(points_true, points_pred, is_symmetric, num_points):
+    """Extracts asymmetric points.
+
+    # Arguments:
+        points_true: Tensor of shape '[n, num_points, 3]'.
+        points_pred: Tensor of shape '[n, num_points, 3]'.
+        is_symmetric: Tensor of shape '(n)'.
+        num_points: Int, number of points to consider.
+
+    # Returns:
+        List: Containing asym_points_true, asym_points_pred.
+    """
     asym_indices = tf.where(tf.math.not_equal(is_symmetric, 1))
     asym_points_true = tf.reshape(tf.gather_nd(
         points_true, asym_indices), (-1, num_points, 3))
