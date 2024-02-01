@@ -61,8 +61,8 @@ class MultiPoseLoss(object):
         """
         pose_data = extract_pose_data(y_true, y_pred, self.num_pose_dims)
         (rotation_true, rotation_pred, translation_true,
-         translation_pred, scale) = pose_data
-        translation_pred = compute_translation(translation_pred, scale,
+         translation_raw_pred, scale) = pose_data
+        translation_pred = compute_translation(translation_raw_pred, scale,
                                                self.tz_scale,
                                                self.translation_priors)
         indices = compute_valid_anchor_indices(y_true)
@@ -80,12 +80,8 @@ class MultiPoseLoss(object):
         translation_true = translation_true[:, tf.newaxis, :]
         translation_pred = translation_pred[:, tf.newaxis, :]
 
-        is_symmetric = y_true[:, :, self.num_pose_dims]
-        is_symmetric = tf.gather_nd(is_symmetric, indices)
-        is_symmetric = tf.cast(tf.math.round(is_symmetric), tf.int32)
-        class_indices = y_true[:, :, self.num_pose_dims + 1]
-        class_indices = tf.gather_nd(class_indices, indices)
-        class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
+        is_symmetric, class_indices = extract_symmetric_indices(
+            y_true, indices, self.num_pose_dims)
 
         selected_model_points = tf.gather(self.model_points,
                                           class_indices, axis=0)
@@ -205,13 +201,23 @@ def extract_valid_poses(rotation_true, rotation_pred, translation_true,
     return [rotation_true, rotation_pred, translation_true, translation_pred]
 
 
-def compute_translation(translation_pred_raw, scale, tz_scale,
+def extract_symmetric_indices(y_true, indices, num_pose_dims):
+    is_symmetric = y_true[:, :, num_pose_dims]
+    is_symmetric = tf.gather_nd(is_symmetric, indices)
+    is_symmetric = tf.cast(tf.math.round(is_symmetric), tf.int32)
+    class_indices = y_true[:, :, num_pose_dims + 1]
+    class_indices = tf.gather_nd(class_indices, indices)
+    class_indices = tf.cast(tf.math.round(class_indices), tf.int32)
+    return [is_symmetric, class_indices]
+
+
+def compute_translation(translation_raw_pred, scale, tz_scale,
                         translation_priors):
     """Computes x,y and z translation components from model's
     translation head output.
 
     # Arguments
-        translation_pred_raw: Array of shape `(1, num_boxes, 3)`,
+        translation_raw_pred: Array of shape `(1, num_boxes, 3)`,
         scale: Array of shape `() containing translation scales`.
             containing model vertices.
         tz_scale: Array of shape `()`, containing scale along z axis.
@@ -227,7 +233,7 @@ def compute_translation(translation_pred_raw, scale, tz_scale,
             https://github.com/ybkscht/EfficientPose)
     """
     camera_matrix = tf.convert_to_tensor(LINEMOD_CAMERA_MATRIX)
-    translation_pred = regress_translation(translation_pred_raw,
+    translation_pred = regress_translation(translation_raw_pred,
                                            translation_priors)
     return compute_tx_ty_tz(translation_pred, camera_matrix, tz_scale, scale)
 
