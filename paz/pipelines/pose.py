@@ -610,7 +610,7 @@ class EfficientPosePostprocess(Processor):
         self.denormalize = pr.DenormalizeBoxes2D()
         self.regress_translation = regress_translation
         self.compute_tx_ty_tz = compute_tx_ty_tz
-        self.compute_selections = pr.ComputeSelectedIndices()
+        self.compute_common_rows = pr.ComputeCommonRowIndices()
         self.squeeze = pr.Squeeze(axis=0)
         self.transform_rotations = pr.Scale(np.pi)
         self.to_pose_6D = pr.ToPose6D(class_names)
@@ -628,7 +628,7 @@ class EfficientPosePostprocess(Processor):
         translations = transformations[:, :, self.num_pose_dims:]
         poses6D = []
         if len(boxes2D) > 0:
-            selected_indices = self.compute_selections(box_data_all, box_data)
+            selected_indices = self.compute_common_rows(box_data_all, box_data)
             rotations = self.squeeze(rotations)
             rotations = rotations[selected_indices]
             rotations = self.transform_rotations(rotations)

@@ -18,4 +18,4 @@ from .poses import augment_6DOF
 from .poses import generate_random_transformation
 from .poses import compute_box_from_mask
 
-from .standard import compute_selected_indices
+from .standard import compute_common_row_indices

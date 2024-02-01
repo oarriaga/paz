@@ -273,7 +273,7 @@ def predict(x, model, preprocess=None, postprocess=None):
     return y
 
 
-def compute_selected_indices(box_data_all, box_data):
+def compute_common_row_indices(box_data_all, box_data):
     """Computes row-wise intersection between two given
     arrays and returns the indices of the intersections.
 
