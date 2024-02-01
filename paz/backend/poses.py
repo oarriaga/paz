@@ -108,10 +108,54 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
     """
     transformation, angle, scale = generate_random_transformation(
         scale_min, scale_max, angle_min, angle_max, camera_matrix)
+    augmented_image, augmented_mask = augment_images(transformation,
+                                                     image, mask)
+    (is_valid_augmentation, augmented_boxes, augmented_rotation,
+     augmented_translation) = augment_annotations(
+        boxes, scale, angle, rotation, translation_raw,
+        augmented_mask, mask_value, input_size)
+
+    if not is_valid_augmentation:
+        augmented_image = image
+        augmented_boxes = boxes
+        augmented_rotation = rotation
+        augmented_translation = translation_raw
+        augmented_mask = mask
+    return (augmented_image, augmented_boxes, augmented_rotation,
+            augmented_translation, augmented_mask)
+
+
+def generate_random_transformation(scale_min, scale_max, angle_min,
+                                   angle_max, camera_matrix):
+    """Generates random affine transformation matrix.
+
+    # Arguments
+        scale_min: Float, minimum value to scale image.
+        scale_max: Float, maximum value to scale image.
+        angle_min: Int, minimum degree to rotate image.
+        angle_max: Int, maximum degree to rotate image.
+        camera_matrix: Array with camera matrix of shape `(3, 3)`.
+
+    # Returns:
+        List: Containing transformation matrix, angle, scale
+    """
+    cx = camera_matrix[0, 2]
+    cy = camera_matrix[1, 2]
+    angle = np.random.uniform(angle_min, angle_max)
+    scale = np.random.uniform(scale_min, scale_max)
+    return [get_rotation_matrix((cx, cy), -angle, scale), angle, scale]
+
+
+def augment_images(transformation, image, mask):
     H, W, _ = image.shape
     augmented_image = warp_affine(image, transformation, size=(W, H))
     H, W, _ = mask.shape
     augmented_mask = warp_affine(mask, transformation, size=(W, H))
+    return [augmented_image, augmented_mask]
+
+
+def augment_annotations(boxes, scale, angle, rotation, translation_raw,
+                        augmented_mask, mask_value, input_size):
     num_annotations = boxes.shape[0]
     augmented_boxes, is_valid = [], []
     rotation_vector = np.zeros((3, ))
@@ -140,33 +184,5 @@ def augment_6DOF(image, boxes, rotation, translation_raw, mask,
             is_valid][:, -1][np.newaxis, :].T), axis=1)
         augmented_rotation = np.reshape(augmented_rotation,
                                         (num_annotations, 9))
-    else:
-        augmented_image = image
-        augmented_boxes = boxes
-        augmented_rotation = rotation
-        augmented_translation = translation_raw
-        augmented_mask = mask
-
-    return (augmented_image, augmented_boxes, augmented_rotation,
-            augmented_translation, augmented_mask)
-
-
-def generate_random_transformation(scale_min, scale_max, angle_min,
-                                   angle_max, camera_matrix):
-    """Generates random affine transformation matrix.
-
-    # Arguments
-        scale_min: Float, minimum value to scale image.
-        scale_max: Float, maximum value to scale image.
-        angle_min: Int, minimum degree to rotate image.
-        angle_max: Int, maximum degree to rotate image.
-        camera_matrix: Array with camera matrix of shape `(3, 3)`.
-
-    # Returns:
-        List: Containing transformation matrix, angle, scale
-    """
-    cx = camera_matrix[0, 2]
-    cy = camera_matrix[1, 2]
-    angle = np.random.uniform(angle_min, angle_max)
-    scale = np.random.uniform(scale_min, scale_max)
-    return [get_rotation_matrix((cx, cy), -angle, scale), angle, scale]
+    return [is_valid_augmentation, augmented_boxes,
+            augmented_rotation, augmented_translation]
