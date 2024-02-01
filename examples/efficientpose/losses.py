@@ -59,27 +59,24 @@ class MultiPoseLoss(object):
             This module is derived based on [EfficientPose](
                 https://github.com/ybkscht/EfficientPose)
         """
-        rotation_true = y_true[:, :, :self.num_pose_dims]
-        rotation_pred = y_pred[:, :, :self.num_pose_dims]
-        translation_true = y_true[:, :, 2 * self.num_pose_dims:2 *
-                                  self.num_pose_dims + self.num_pose_dims]
-        translation_pred = y_pred[:, :, self.num_pose_dims:]
-        scale = y_true[0, 0, -1]
+        pose_data = extract_pose_data(y_true, y_pred, self.num_pose_dims)
+        (rotation_true, rotation_pred, translation_true,
+         translation_pred, scale) = pose_data
         translation_pred = compute_translation(translation_pred, scale,
                                                self.tz_scale,
                                                self.translation_priors)
-        anchor_flags = y_true[:, :, -2]
-        anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
-        indices = tf.where(tf.equal(anchor_state, 1))
+        indices = compute_valid_anchor_indices(y_true)
+        valid_poses = extract_valid_poses(rotation_true, rotation_pred,
+                                          translation_true, translation_pred,
+                                          indices)
+        (rotation_true, rotation_pred, translation_true,
+         translation_pred) = valid_poses
 
-        rotation_true = tf.gather_nd(rotation_true, indices)
-        rotation_pred = tf.gather_nd(rotation_pred, indices)
         rotation_true = rotation_true * np.pi
         rotation_pred = rotation_pred * np.pi
         axis_true, angle_true = separate_axis_from_angle(rotation_true)
         axis_pred, angle_pred = separate_axis_from_angle(rotation_pred)
-        translation_true = tf.gather_nd(translation_true, indices)
-        translation_pred = tf.gather_nd(translation_pred, indices)
+
         translation_true = translation_true[:, tf.newaxis, :]
         translation_pred = translation_pred[:, tf.newaxis, :]
 
@@ -179,6 +176,33 @@ def filter_model_points(model_points, target_num_points):
         points = model_points[::step_size, :]
         points = points[np.newaxis, :target_num_points, :]
     return tf.convert_to_tensor(points)
+
+
+def extract_pose_data(y_true, y_pred, num_pose_dims):
+    rotation_true = y_true[:, :, :num_pose_dims]
+    rotation_pred = y_pred[:, :, :num_pose_dims]
+    translation_true = y_true[:, :, 2 * num_pose_dims:2 *
+                              num_pose_dims + num_pose_dims]
+    translation_pred = y_pred[:, :, num_pose_dims:]
+    scale = y_true[0, 0, -1]
+    return [rotation_true, rotation_pred, translation_true,
+            translation_pred, scale]
+
+
+def compute_valid_anchor_indices(y_true):
+    anchor_flags = y_true[:, :, -2]
+    anchor_state = tf.cast(tf.math.round(anchor_flags), tf.int32)
+    indices = tf.where(tf.equal(anchor_state, 1))
+    return indices
+
+
+def extract_valid_poses(rotation_true, rotation_pred, translation_true,
+                        translation_pred, indices):
+    rotation_true = tf.gather_nd(rotation_true, indices)
+    rotation_pred = tf.gather_nd(rotation_pred, indices)
+    translation_true = tf.gather_nd(translation_true, indices)
+    translation_pred = tf.gather_nd(translation_pred, indices)
+    return [rotation_true, rotation_pred, translation_true, translation_pred]
 
 
 def compute_translation(translation_pred_raw, scale, tz_scale,
@@ -394,3 +418,22 @@ def calc_asym_distances(asym_points_true, asym_points_pred):
     """
     distances = tf.norm(asym_points_pred - asym_points_true, axis=-1)
     return tf.reduce_mean(distances, axis=-1)
+
+
+if __name__ == "__main__":
+    import pickle
+    from paz.models.pose_estimation import EfficientPosePhi0
+
+    with open('y_pred.pkl', 'rb') as f:
+        y_pred = pickle.load(f)
+        y_pred = tf.convert_to_tensor(y_pred, dtype=tf.float32)
+
+    with open('y_true.pkl', 'rb') as f:
+        y_true = pickle.load(f)
+        y_true = tf.convert_to_tensor(y_true, dtype=tf.float32)
+
+    model = EfficientPosePhi0(2, base_weights='COCO', head_weights=None)
+    pose_loss = MultiPoseLoss('08', model.translation_priors,
+                              'Linemod_preprocessed/')
+    loss = pose_loss.compute_loss(y_true, y_pred)         # should be 1038.3807
+    print('')
