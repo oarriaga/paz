@@ -64,14 +64,14 @@ class MultiPoseLoss(object):
         pose_data = extract_pose_data(y_true, y_pred, self.num_pose_dims)
         (rotation_true, rotation_pred, translation_true,
          translation_raw_pred, scale) = pose_data
-        translation_pred = compute_translation(translation_raw_pred, scale,
-                                               self.tz_scale,
-                                               self.translation_priors,
-                                               self.camera_matrix)
+        translation_pred = compute_translation(
+            translation_raw_pred, scale, self.tz_scale,
+            self.translation_priors, self.camera_matrix)
+
         indices = compute_valid_anchor_indices(y_true)
-        valid_poses = extract_valid_poses(rotation_true, rotation_pred,
-                                          translation_true, translation_pred,
-                                          indices)
+        valid_poses = extract_valid_poses(
+            rotation_true, rotation_pred, translation_true,
+            translation_pred, indices)
         (rotation_true, rotation_pred, translation_true,
          translation_pred) = valid_poses
 
@@ -97,7 +97,6 @@ class MultiPoseLoss(object):
         sym_points_true, sym_points_pred = extract_sym_points(
             points_true_transformed, points_pred_transformed,
             is_symmetric, num_points)
-
         asym_points_true, asym_points_pred = extract_asym_points(
             points_true_transformed, points_pred_transformed,
             is_symmetric, num_points)
