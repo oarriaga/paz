@@ -534,35 +534,30 @@ class NoneConverter(Processor):
         self.default_value = default_value
 
     def call(self, value):
-        if value is None:
-            return self.default_value
-        else:
+        if value is not None:
             self.default_value = value
-            return value
+        return self.default_value
 
 
 class AveragePredictions(Processor):
     """Averages the last n predictions
     # Arguments
-        averages: Int. Number of predictions to average over.
-        value: Noneable Bool, Int or Float value. Value to average over.
+        window_size: Int. Number of predictions to average over.
+        value: Bool, Int or Float value. Value to average over.
     # Returns
-        Noneable Bool, Int or Float value. Averaged value.
+        Bool, Int or Float value. Averaged value.
     """
 
-    def __init__(self, averages=1):
+    def __init__(self, window_size=1):
         super(AveragePredictions, self).__init__()
-        self.averages = averages
+        if window_size <= 0:
+            raise ValueError('``window_size`` must be greater than 0')
+        self.window_size = window_size
         self.predictions = []
 
     def call(self, value):
-        if self.averages <= 1:
-            return value
-        elif value is None:
-            return value
-
         self.predictions.append(value)
-        if len(self.predictions) > self.averages:
+        if len(self.predictions) > self.window_size:
             self.predictions.pop(0)
         return np.mean(self.predictions, axis=0)
 
@@ -570,37 +565,33 @@ class AveragePredictions(Processor):
 class WeightedAveragePredictions(Processor):
     """Weighted averages the last n predictions
     # Arguments
-        averages: Int. Number of predictions to average over.
-        value: Noneable Int or Float value. Value to average over.
+        window_size: Int. Number of predictions to average over.
+        value: Int or Float value. Value to average over.
     # Returns
-        Noneable Int or Float value. Averaged value.
+        Int or Float value. Averaged value.
     """
 
-    def __init__(self, averages=1):
+    def __init__(self, window_size=1):
         super(WeightedAveragePredictions, self).__init__()
-        self.averages = averages
+        self.window_size = window_size
         self.predictions = []
 
     def call(self, value):
-        if self.averages <= 1:
-            return value
-        elif value is None:
-            return value
-
         size = len(self.predictions)
 
         self.predictions.append(value)
-        if size > self.averages:
+        if size > self.window_size:
             self.predictions.pop(0)
 
-        if len(self.predictions) <= 1:
-            return value
-
         result = 0
-        total_weights = 0
-        for i in range(0, size):
-            weight = (i + 1) / size
-            result += self.predictions[i] * weight
-            total_weights += weight
+        if len(self.predictions) <= 1:
+            result = value
+        else:
+            total_weights = 0
+            for i in range(0, size):
+                weight = (i + 1) / size
+                result += self.predictions[i] * weight
+                total_weights += weight
+            result = result / total_weights
 
-        return result / total_weights
+        return result
