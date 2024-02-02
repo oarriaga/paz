@@ -46,9 +46,7 @@ def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_w
     x = LSTM(32, kernel_initializer=initializer_glorot_lstm, recurrent_initializer=initializer_orthogonal)(x)
     x = BatchNormalization()(x)
 
-    # Add some more dense here
-    for i in range(1):
-        x = Dense(512, activation='relu', kernel_initializer=initializer_glorot_dense)(x)
+    x = Dense(512, activation='relu', kernel_initializer=initializer_glorot_dense)(x)
 
     x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
 
