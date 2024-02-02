@@ -270,7 +270,7 @@ PAGES = [
             standard.pad_matrix,
             standard.max_pooling_2d,
             standard.predict,
-            standard.predict_batch
+            standard.predict_noneable
         ],
     },
 
@@ -591,7 +591,7 @@ PAGES = [
             processors.ExtendInputs,
             processors.SequenceWrapper,
             processors.Predict,
-            processors.PredictBatch,
+            processors.PredictNoneable,
             processors.ToClassName,
             processors.ExpandDims,
             processors.BoxClassToOneHotVector,

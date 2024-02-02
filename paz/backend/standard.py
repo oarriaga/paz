@@ -273,10 +273,10 @@ def predict(x, model, preprocess=None, postprocess=None):
     return y
 
 
-def predict_batch(x, model, preprocess=None, postprocess=None):
+def predict_noneable(x, model, preprocess=None, postprocess=None):
     """Preprocess, predict and postprocess batched input.
     # Arguments
-        x: Input to model
+        x: Noneable input to model
         model: Callable i.e. Keras model.
         preprocess: Callable, used for preprocessing input x.
         postprocess: Callable, used for postprocessing output of model.
