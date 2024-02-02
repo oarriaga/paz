@@ -568,19 +568,19 @@ class BufferImages(Processor):
     # Arguments
         input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
             e.g. (38, 96, 96, 3).
-        play_rate: Integer, specifies after how many images the buffer will return the all buffered images.
-            In a scenario with an already full buffer and a play_rate of 10,
+        stride: Integer, specifies after how many images the buffer will return the all buffered images.
+            In a scenario with an already full buffer and a stride of 10,
             after each 10th call the buffer will be returned.
-            The play_rate must be smaller than the frames (the first argument of the input_size).
+            The stride must be smaller than the frames (the first argument of the input_size).
 
     # Methods
         call()
     """
-    def __init__(self, input_size, play_rate=25):
-        if input_size[0] < play_rate:
+    def __init__(self, input_size, stride=25):
+        if input_size[0] < stride:
             raise ValueError('Buffer size must be equal or larger than play rate')
         super(BufferImages, self).__init__()
-        self.play_rate = play_rate
+        self.stride = stride
         self.frames_since_last_update = 0
 
         # Buffer
@@ -609,7 +609,7 @@ class BufferImages(Processor):
         self.append(image)
         self.frames_since_last_update += 1
 
-        if self.is_full and self.frames_since_last_update >= self.play_rate:
+        if self.is_full and self.frames_since_last_update >= self.stride:
             self.frames_since_last_update = 0
             return np.array([self.buffer])
         return None
