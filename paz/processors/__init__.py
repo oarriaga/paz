@@ -75,7 +75,6 @@ from .image import BufferImages
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
 from .image import RGB_IMAGENET_STDEV
-from .image import RGB_NORMAL
 
 from .renderer import Render
 
