@@ -33,7 +33,6 @@ BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
 RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
 B_IMAGENET_STDEV, G_IMAGENET_STDEV, R_IMAGENET_STDEV = 57.3, 57.1, 58.4
 RGB_IMAGENET_STDEV = (R_IMAGENET_STDEV, G_IMAGENET_STDEV, B_IMAGENET_STDEV)
-RGB_NORMAL = (0.0, 0.0, 0.0)
 
 
 class CastImage(Processor):
@@ -596,7 +595,7 @@ class BufferImages(Processor):
             self.buffer = np.append(self.buffer[1:], [image], axis=0)
         else:
             self.buffer[self.buffer_index] = image
-            self.buffer_index += 1
+            self.buffer_index = self.buffer_index + 1
             if self.buffer_index >= self.buffer_size:
                 self.is_full = True
 
