@@ -1,57 +1,6 @@
 import pytest
 import numpy as np
-from paz.datasets import LINEMOD_CAMERA_MATRIX as camera_matrix
-from paz.models.pose_estimation import (EfficientPosePhi0, EfficientPosePhi1,
-                                        EfficientPosePhi2, EfficientPosePhi3,
-                                        EfficientPosePhi4, EfficientPosePhi5,
-                                        EfficientPosePhi6, EfficientPosePhi7)
 import paz.processors as pr
-from processors import RegressTranslation, ComputeTxTyTz
-
-
-@pytest.mark.parametrize(
-        ('model'), [EfficientPosePhi0, EfficientPosePhi1, EfficientPosePhi2,
-                    EfficientPosePhi3, EfficientPosePhi4, EfficientPosePhi5,
-                    EfficientPosePhi6, EfficientPosePhi7])
-def test_RegressTranslation(model):
-    model = model(num_classes=2, base_weights='COCO', head_weights=None)
-    regress_translation = RegressTranslation(model.translation_priors)
-    translation_raw = np.zeros_like(model.translation_priors)
-    translation_raw = np.expand_dims(translation_raw, axis=0)
-    translation = regress_translation(translation_raw)
-    assert translation[:, 0].sum() == model.translation_priors[:, 0].sum()
-    assert translation[:, 1].sum() == model.translation_priors[:, 1].sum()
-    assert translation[:, 2].sum() == translation_raw[:, :, 2].sum()
-    del model
-
-
-@pytest.mark.parametrize(('image_scale'), [0.6, 0.7, 0.8, 0.9, 1.0])
-def test_ComputeCameraParameter(image_scale):
-    translation_scale_norm = 1000.0
-    compute_camera_parameter = pr.ComputeCameraParameter(
-        camera_matrix, translation_scale_norm)
-    camera_parameter = compute_camera_parameter(image_scale)
-    assert camera_parameter.shape == (6, )
-    assert np.all(camera_parameter == np.array([camera_matrix[0, 0],
-                                                camera_matrix[1, 1],
-                                                camera_matrix[0, 2],
-                                                camera_matrix[1, 2],
-                                                translation_scale_norm,
-                                                image_scale]))
-
-
-@pytest.mark.parametrize(
-        ('model'), [EfficientPosePhi0, EfficientPosePhi1, EfficientPosePhi2,
-                    EfficientPosePhi3, EfficientPosePhi4, EfficientPosePhi5,
-                    EfficientPosePhi6, EfficientPosePhi7])
-def test_ComputeTxTyTz(model):
-    model = model(num_classes=2, base_weights='COCO', head_weights=None)
-    translation_raw = np.zeros_like(model.translation_priors)
-    compute_camera_parameter = np.ones(shape=(6, ))
-    compute_tx_ty_tz = ComputeTxTyTz()
-    tx_ty_tz = compute_tx_ty_tz(translation_raw, compute_camera_parameter)
-    assert tx_ty_tz.shape == model.translation_priors.shape
-    del model
 
 
 @pytest.mark.parametrize(('rotation_size, translation_size'),
@@ -93,8 +42,8 @@ def test_ConcatenateScale(pose_size, scale):
                           (30, 300, 300),
                           (40, 400, 200),
                           (50, 500, 100)])
-def test_Augment6DOF(num_annotations, image_W, image_H):
-    augment_6DOF = pr.Augment6DOF()
+def test_AugmentPose6D(num_annotations, image_W, image_H):
+    augment_6DOF = pr.AugmentPose6D()
     image = np.zeros((image_W, image_H, 3))
     mask = np.ones((image_W, image_H, 1))
     boxes = np.random.rand(num_annotations, 5)
