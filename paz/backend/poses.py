@@ -1,6 +1,6 @@
 import numpy as np
 from .boxes import compute_ious, to_corner_form
-from .standard import compute_box_from_mask
+from .mask import mask_to_box
 from .image.opencv_image import (warp_affine, get_rotation_matrix,
                                  rotation_matrix_to_rotation_vector)
 
@@ -189,13 +189,13 @@ def augment_annotations(boxes, scale, angle, rotation, translation_raw,
     rotation_vector[2] = angle / 180 * np.pi
     transformation, _ = rotation_matrix_to_rotation_vector(rotation_vector)
     augmented_translation = np.empty_like(translation_raw)
-    box = compute_box_from_mask(augmented_mask, mask_value)
+    box = mask_to_box(augmented_mask, mask_value)
     rotation_matrices = np.reshape(rotation, (num_annotations, 3, 3))
     augmented_rotation = np.empty_like(rotation_matrices)
     is_valid_augmentation = sum(box)
     if is_valid_augmentation:
         for num_annotation in range(num_annotations):
-            augmented_box = compute_box_from_mask(augmented_mask, mask_value)
+            augmented_box = mask_to_box(augmented_mask, mask_value)
             rotation_matrix = np.dot(transformation,
                                      rotation_matrices[num_annotation])
             translation_vector = np.dot(transformation,

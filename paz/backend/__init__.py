@@ -16,6 +16,7 @@ from .poses import concatenate_poses
 from .poses import concatenate_scale
 from .poses import augment_pose_6D
 from .poses import generate_random_transformation
-from .poses import compute_box_from_mask
 
 from .standard import compute_common_row_indices
+
+from .mask import mask_to_box
