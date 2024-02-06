@@ -3,6 +3,7 @@ from paz.datasets.linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                                   RGB_LINEMOD_MEAN)
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from processors import ComputeTxTyTz, RegressTranslation
+from anchors import build_translation_anchors
 
 
 class EfficientPosePhi0LinemodDriller(EstimateEfficientPose):
@@ -24,7 +25,8 @@ class EfficientPosePhi0LinemodDriller(EstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = ['background', 'driller']
-        model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
+        model = EfficientPosePhi0(build_translation_anchors,
+                                  num_classes=len(names), base_weights='COCO',
                                   head_weights=None)
         regress_translation = RegressTranslation(model.translation_priors)
         compute_tx_ty_tz = ComputeTxTyTz()

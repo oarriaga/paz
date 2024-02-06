@@ -9,7 +9,7 @@ from paz.models.pose_estimation import EfficientPosePhi0
 from paz.pipelines.pose import AugmentEfficientPose, EfficientPosePreprocess
 from paz.datasets.linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
                                   RGB_LINEMOD_MEAN)
-
+from anchors import build_translation_anchors
 
 raw_image_shape = (640, 480)
 input_shape = 512
@@ -128,7 +128,8 @@ class EfficientPosePhi0LinemodDebug(EstimateEfficientPose):
     def __init__(self, score_thresh=0.60, nms_thresh=0.45,
                  show_boxes2D=False, show_poses6D=True):
         names = ['background', 'driller']
-        model = EfficientPosePhi0(num_classes=len(names), base_weights='COCO',
+        model = EfficientPosePhi0(build_translation_anchors,
+                                  num_classes=len(names), base_weights='COCO',
                                   head_weights=None)
         super(EfficientPosePhi0LinemodDebug, self).__init__(
             model, names, score_thresh, nms_thresh,
@@ -157,8 +158,8 @@ if __name__ == '__main__':
     num_classes = data_manager.num_classes
 
     # instantiating model
-    model = EfficientPosePhi0(
-        num_classes, base_weights='COCO', head_weights=None)
+    model = EfficientPosePhi0(build_translation_anchors, num_classes,
+                              base_weights='COCO', head_weights=None)
 
     # setting data augmentation pipeline
     augmentator = AugmentEfficientPose(model, RGB_LINEMOD_MEAN,

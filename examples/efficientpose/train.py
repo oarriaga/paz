@@ -15,6 +15,7 @@ from paz.pipelines import AugmentEfficientPose
 from pose import EfficientPosePhi0LinemodDriller
 from paz.evaluation import EvaluateADD
 from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, RGB_LINEMOD_MEAN
+from anchors import build_translation_anchors
 from losses import MultiPoseLoss
 
 
@@ -75,7 +76,8 @@ for data_name, data_split in zip(data_names, data_splits):
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = EfficientPosePhi0(num_classes, base_weights='COCO', head_weights=None)
+model = EfficientPosePhi0(build_translation_anchors, num_classes,
+                          base_weights='COCO', head_weights=None)
 model.summary()
 
 # Instantiating loss and metrics

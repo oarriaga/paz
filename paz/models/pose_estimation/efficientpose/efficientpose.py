@@ -3,7 +3,6 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import get_file
 from ....backend.anchors import build_anchors
 from ...detection.efficientdet.efficientnet import EFFICIENTNET
-from anchors import build_translation_anchors
 from ...detection.efficientdet.efficientdet_blocks import (
     build_detector_head, EfficientNet_to_BiFPN, BiFPN)
 from .efficientpose_blocks import build_pose_estimator_head
@@ -12,16 +11,18 @@ WEIGHT_PATH = (
     'https://github.com/oarriaga/altamira-data/releases/download/v0.16/')
 
 
-def EfficientPose(image, num_classes, base_weights, head_weights,
-                  FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                  anchor_scale, fusion, return_base, model_name, EfficientNet,
-                  subnet_iterations=1, subnet_repeats=3, num_scales=3,
+def EfficientPose(build_translation_anchors, image, num_classes, base_weights,
+                  head_weights, FPN_num_filters, FPN_cell_repeats,
+                  box_class_repeats, anchor_scale, fusion, return_base,
+                  model_name, EfficientNet, subnet_iterations=1,
+                  subnet_repeats=3, num_scales=3,
                   aspect_ratios=[1.0, 2.0, 0.5], survival_rate=None,
-                  num_dims=4, num_anchors=9, num_filters=64,
-                  num_pose_dims=3):
+                  num_dims=4, num_anchors=9, num_filters=64, num_pose_dims=3):
     """Builds EfficientPose model.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         image: Tensor of shape `(batch_size, input_shape)`.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
@@ -114,8 +115,8 @@ def EfficientPose(image, num_classes, base_weights, head_weights,
     return model
 
 
-def EfficientPosePhi0(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi0(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(512, 512, 3), FPN_num_filters=64,
                       FPN_cell_repeats=3, subnet_repeats=2,
                       subnet_iterations=1, box_class_repeats=3,
@@ -125,6 +126,8 @@ def EfficientPosePhi0(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=0.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -147,15 +150,16 @@ def EfficientPosePhi0(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb0 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb0, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb0,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi1(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi1(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(640, 640, 3), FPN_num_filters=88,
                       FPN_cell_repeats=4, subnet_repeats=2,
                       subnet_iterations=1, box_class_repeats=3,
@@ -165,6 +169,8 @@ def EfficientPosePhi1(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=1.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -187,15 +193,16 @@ def EfficientPosePhi1(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb1 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb1, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb1,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi2(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi2(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(768, 768, 3), FPN_num_filters=112,
                       FPN_cell_repeats=5, subnet_repeats=2,
                       subnet_iterations=1, box_class_repeats=3,
@@ -205,6 +212,8 @@ def EfficientPosePhi2(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=2.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -227,15 +236,16 @@ def EfficientPosePhi2(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb2 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb2, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb2,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi3(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi3(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(896, 896, 3), FPN_num_filters=160,
                       FPN_cell_repeats=6, subnet_repeats=3,
                       subnet_iterations=2, box_class_repeats=4,
@@ -245,6 +255,8 @@ def EfficientPosePhi3(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=3.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -267,15 +279,16 @@ def EfficientPosePhi3(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb3 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb3, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb3,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi4(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi4(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(1024, 1024, 3), FPN_num_filters=224,
                       FPN_cell_repeats=7, subnet_repeats=3,
                       subnet_iterations=2, box_class_repeats=4,
@@ -285,6 +298,8 @@ def EfficientPosePhi4(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=4.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -307,15 +322,16 @@ def EfficientPosePhi4(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb4 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb4, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb4,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi5(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi5(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(1280, 1280, 3), FPN_num_filters=288,
                       FPN_cell_repeats=7, subnet_repeats=3,
                       subnet_iterations=2, box_class_repeats=4,
@@ -325,6 +341,8 @@ def EfficientPosePhi5(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=5.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -347,15 +365,16 @@ def EfficientPosePhi5(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb5 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb5, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb5,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi6(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi6(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(1280, 1280, 3), FPN_num_filters=384,
                       FPN_cell_repeats=8, subnet_repeats=4,
                       subnet_iterations=3, box_class_repeats=5,
@@ -365,6 +384,8 @@ def EfficientPosePhi6(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=6.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -387,15 +408,16 @@ def EfficientPosePhi6(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb6, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb6,
+                          subnet_iterations, subnet_repeats)
     return model
 
 
-def EfficientPosePhi7(num_classes=8, base_weights='COCO',
-                      head_weights='LinemodOccluded',
+def EfficientPosePhi7(build_translation_anchors, num_classes=8,
+                      base_weights='COCO', head_weights='LinemodOccluded',
                       input_shape=(1536, 1536, 3), FPN_num_filters=384,
                       FPN_cell_repeats=8, subnet_repeats=4,
                       subnet_iterations=3, box_class_repeats=5,
@@ -405,6 +427,8 @@ def EfficientPosePhi7(num_classes=8, base_weights='COCO',
     """Instantiates EfficientPose model with phi=7.
 
     # Arguments
+        build_translation_anchors: Callable, a function to build
+            translation anchors.
         num_classes: Int, number of object classes.
         base_weights: Str, base weights name.
         head_weights: Str, head weights name.
@@ -427,8 +451,9 @@ def EfficientPosePhi7(num_classes=8, base_weights='COCO',
     """
     image = Input(shape=input_shape, name='image')
     EfficientNetb6 = EFFICIENTNET(image, scaling_coefficients)
-    model = EfficientPose(image, num_classes, base_weights, head_weights,
-                          FPN_num_filters, FPN_cell_repeats, box_class_repeats,
-                          anchor_scale, fusion, return_base, model_name,
-                          EfficientNetb6, subnet_iterations, subnet_repeats)
+    model = EfficientPose(build_translation_anchors, image, num_classes,
+                          base_weights, head_weights, FPN_num_filters,
+                          FPN_cell_repeats, box_class_repeats, anchor_scale,
+                          fusion, return_base, model_name, EfficientNetb6,
+                          subnet_iterations, subnet_repeats)
     return model
