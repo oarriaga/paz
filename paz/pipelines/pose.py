@@ -512,7 +512,7 @@ class AugmentEfficientPose(SequentialProcessor):
                  num_pose_dims=3):
         super(AugmentEfficientPose, self).__init__()
         self.augment_color = AugmentColor()
-        self.augment_6D_pose = pr.Augment6DPose(
+        self.augment_6D_pose = pr.AugmentPose6D(
             camera_matrix, probability=probability, input_size=size)
         self.preprocess_image = EfficientPosePreprocess(model, mean)
 

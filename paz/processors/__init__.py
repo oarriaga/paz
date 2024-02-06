@@ -155,7 +155,7 @@ from .pose import MatchPoses
 from .pose import RotationMatrixToAxisAngle
 from .pose import ConcatenatePoses
 from .pose import ConcatenateScale
-from .pose import Augment6DPose
+from .pose import AugmentPose6D
 from .pose import ToPose6D
 from .pose import BoxesWithOneHotVectorsToPose6D
 from .pose import BoxesToPose6D

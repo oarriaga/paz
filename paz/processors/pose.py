@@ -8,7 +8,7 @@ from ..backend.poses import match_poses
 from ..backend.poses import rotation_matrix_to_axis_angle
 from ..backend.poses import concatenate_poses
 from ..backend.poses import concatenate_scale
-from ..backend.poses import augment_6D_pose
+from ..backend.poses import augment_pose_6D
 
 
 class SolvePNP(Processor):
@@ -198,7 +198,7 @@ class ConcatenateScale(Processor):
         return concatenate_scale(poses, scale)
 
 
-class Augment6DPose(Processor):
+class AugmentPose6D(Processor):
     """Augment images, boxes, rotation and translation vector
     for pose estimation.
 
@@ -223,11 +223,11 @@ class Augment6DPose(Processor):
         self.probability = probability
         self.mask_value = mask_value
         self.input_size = input_size
-        super(Augment6DPose, self).__init__()
+        super(AugmentPose6D, self).__init__()
 
     def call(self, image, boxes, rotation, translation_raw, mask):
         if np.random.rand() < self.probability:
-            augmented_data = augment_6D_pose(
+            augmented_data = augment_pose_6D(
                 image, boxes, rotation, translation_raw, mask, self.scale_min,
                 self.scale_max, self.angle_min, self.angle_max,
                 self.mask_value, self.input_size, self.camera_matrix)

@@ -14,7 +14,7 @@ from .poses import match_poses
 from .poses import rotation_matrix_to_axis_angle
 from .poses import concatenate_poses
 from .poses import concatenate_scale
-from .poses import augment_6D_pose
+from .poses import augment_pose_6D
 from .poses import generate_random_transformation
 from .poses import compute_box_from_mask
 

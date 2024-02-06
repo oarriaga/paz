@@ -82,7 +82,7 @@ def concatenate_scale(poses, scale):
     return np.concatenate((poses, scale.T), axis=1)
 
 
-def augment_6D_pose(image, boxes, rotation, translation_raw, mask,
+def augment_pose_6D(image, boxes, rotation, translation_raw, mask,
                     scale_min, scale_max, angle_min, angle_max,
                     mask_value, input_size, camera_matrix):
     """Performs 6 degree of freedom augmentation of image
