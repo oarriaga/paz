@@ -4,11 +4,10 @@ import paz.processors as pr
 from paz.abstract import Processor
 from paz.backend.image import show_image
 from paz.abstract import ProcessingSequence
-from paz.datasets.linemod import Linemod
+from linemod import (Linemod, LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                     RGB_LINEMOD_MEAN)
 from paz.models.pose_estimation import EfficientPosePhi0
 from paz.pipelines.pose import AugmentEfficientPose, EfficientPosePreprocess
-from paz.datasets.linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
-                                  RGB_LINEMOD_MEAN)
 from anchors import build_translation_anchors
 
 raw_image_shape = (640, 480)

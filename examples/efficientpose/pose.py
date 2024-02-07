@@ -1,6 +1,6 @@
 from paz.pipelines.pose import EstimateEfficientPose
-from paz.datasets.linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
-                                  RGB_LINEMOD_MEAN)
+from linemod import (LINEMOD_CAMERA_MATRIX, LINEMOD_OBJECT_SIZES,
+                     RGB_LINEMOD_MEAN)
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from processors import ComputeTxTyTz, RegressTranslation
 from anchors import build_translation_anchors

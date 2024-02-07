@@ -2,7 +2,7 @@ import os
 import tensorflow as tf
 import numpy as np
 from plyfile import PlyData
-from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX
+from linemod import LINEMOD_CAMERA_MATRIX
 
 
 class MultiPoseLoss(object):

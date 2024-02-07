@@ -9,12 +9,12 @@ from paz.abstract import ProcessingSequence
 from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
-from paz.datasets.linemod import Linemod
+from linemod import Linemod
 from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
 from paz.pipelines import AugmentEfficientPose
 from pose import EfficientPosePhi0LinemodDriller
 from paz.evaluation import EvaluateADD
-from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX, RGB_LINEMOD_MEAN
+from linemod import LINEMOD_CAMERA_MATRIX, RGB_LINEMOD_MEAN
 from anchors import build_translation_anchors
 from losses import MultiPoseLoss
 

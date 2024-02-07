@@ -1,8 +1,8 @@
 import os
 import yaml
 import numpy as np
-from ..abstract import Loader
-from .utils import get_class_names
+from paz.abstract import Loader
+from paz.datasets.utils import get_class_names
 
 B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
 RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
