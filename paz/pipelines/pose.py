@@ -521,6 +521,8 @@ class AugmentEfficientPose(SequentialProcessor):
         args = (num_classes, model.prior_boxes, IOU, variances)
         self.preprocess_boxes = PreprocessBoxes(*args)
 
+        rotation_matrix_to_axis_angle = pr.RotationMatrixToAxisAngle(
+            num_pose_dims)
         # pose processors
         self.match_poses = pr.MatchPoses(model.prior_boxes)
         self.concatenate_poses = pr.ConcatenatePoses()
@@ -538,8 +540,7 @@ class AugmentEfficientPose(SequentialProcessor):
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [2, 1], [2], keep={1: 1}))
         self.add(pr.ControlMap(self.preprocess_boxes, [3], [4], keep={3: 3}))
-        self.add(pr.ControlMap(pr.RotationMatrixToAxisAngle(num_pose_dims),
-                               [2], [2]))
+        self.add(pr.ControlMap(rotation_matrix_to_axis_angle, [2], [2]))
         self.add(pr.ControlMap(self.match_poses, [3, 2], [2], keep={3: 3}))
         self.add(pr.ControlMap(self.match_poses, [3, 4], [6], keep={3: 3}))
         self.add(pr.ControlMap(self.concatenate_poses, [2, 7], [7],
