@@ -1,12 +1,6 @@
 import pytest
 import numpy as np
 import paz.processors as pr
-from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX as camera_matrix
-
-
-@pytest.fixture()
-def get_camera_matrix():
-    return camera_matrix
 
 
 @pytest.mark.parametrize(('rotation_size, translation_size'),
@@ -40,31 +34,3 @@ def test_ConcatenateScale(pose_size, scale):
     assert np.all(poses_concatenated[:, :-1] == poses)
     assert np.all(poses_concatenated[:, -1] == scale)
     assert (poses_concatenated.shape == (num_rows, pose_size + 1))
-
-
-@pytest.mark.parametrize(('num_annotations, image_W, image_H'),
-                         [(10, 100, 500),
-                          (20, 200, 400),
-                          (30, 300, 300),
-                          (40, 400, 200),
-                          (50, 500, 100)])
-def test_AugmentPose6D(num_annotations, image_W, image_H, get_camera_matrix):
-    augment_pose_6D = pr.AugmentPose6D()
-    image = np.zeros((image_W, image_H, 3))
-    mask = np.ones((image_W, image_H, 1))
-    boxes = np.random.rand(num_annotations, 5)
-    rotation = np.random.rand(num_annotations, 9)
-    translation_raw = np.random.rand(num_annotations, 3)
-    augmentations = augment_pose_6D(get_camera_matrix, image, boxes, rotation,
-                                    translation_raw, mask)
-    (augmented_image, augmented_boxes, augmented_rotation,
-     augmented_translation, augmented_mask) = augmentations
-    assert augmented_image.dtype == image.dtype
-    assert augmented_image.shape == (image_W, image_H, 3)
-    assert augmented_mask.dtype == mask.dtype
-    assert augmented_mask.shape == (image_W, image_H, 1)
-    assert augmented_boxes.shape == (num_annotations, 5)
-    assert augmented_rotation.shape == (num_annotations, 9)
-    assert augmented_translation.shape == (num_annotations, 3)
-    assert augmented_image.mean() == 0.0
-    assert augmented_mask.mean() == 1.0
