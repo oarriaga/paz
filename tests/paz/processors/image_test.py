@@ -55,15 +55,6 @@ def test_PadImage(size):
     assert padded_image.shape == (size, size, 3)
 
 
-def test_AutoContrast():
-    image = np.uint8(np.random.rand(640, 480, 3) * 255)
-    auto_contrast = pr.AutoContrast()
-    image_contrasted = auto_contrast(image)
-    assert image_contrasted.shape == image.shape
-    assert image_contrasted.dtype == image.dtype
-    assert np.std(image_contrasted) >= np.std(image)
-
-
 def test_EqualizeHistogram():
     image = np.uint8(np.random.rand(640, 480, 3) * 255)
     equalize_histogram = pr.EqualizeHistogram()

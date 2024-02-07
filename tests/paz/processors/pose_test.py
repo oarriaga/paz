@@ -1,6 +1,12 @@
 import pytest
 import numpy as np
 import paz.processors as pr
+from paz.datasets.linemod import LINEMOD_CAMERA_MATRIX as camera_matrix
+
+
+@pytest.fixture()
+def get_camera_matrix():
+    return camera_matrix
 
 
 @pytest.mark.parametrize(('rotation_size, translation_size'),
@@ -42,14 +48,15 @@ def test_ConcatenateScale(pose_size, scale):
                           (30, 300, 300),
                           (40, 400, 200),
                           (50, 500, 100)])
-def test_AugmentPose6D(num_annotations, image_W, image_H):
-    augment_6DOF = pr.AugmentPose6D()
+def test_AugmentPose6D(num_annotations, image_W, image_H, get_camera_matrix):
+    augment_pose_6D = pr.AugmentPose6D()
     image = np.zeros((image_W, image_H, 3))
     mask = np.ones((image_W, image_H, 1))
     boxes = np.random.rand(num_annotations, 5)
     rotation = np.random.rand(num_annotations, 9)
     translation_raw = np.random.rand(num_annotations, 3)
-    augmentations = augment_6DOF(image, boxes, rotation, translation_raw, mask)
+    augmentations = augment_pose_6D(get_camera_matrix, image, boxes, rotation,
+                                    translation_raw, mask)
     (augmented_image, augmented_boxes, augmented_rotation,
      augmented_translation, augmented_mask) = augmentations
     assert augmented_image.dtype == image.dtype
