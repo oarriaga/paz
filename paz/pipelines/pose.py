@@ -512,7 +512,7 @@ class AugmentEfficientPose(SequentialProcessor):
                  num_pose_dims=3):
         super(AugmentEfficientPose, self).__init__()
         self.augment_color = AugmentColor()
-        self.augment_6D_pose = pr.AugmentPose6D(
+        self.augment_pose_6D = pr.AugmentPose6D(
             camera_matrix, probability=probability, input_size=size)
         self.preprocess_image = EfficientPosePreprocess(model, mean)
 
@@ -535,7 +535,7 @@ class AugmentEfficientPose(SequentialProcessor):
         self.add(pr.ControlMap(pr.LoadImage(), [5], [5]))
         if split == pr.TRAIN:
             self.add(pr.ControlMap(self.augment_color, [0], [0]))
-            self.add(pr.ControlMap(self.augment_6D_pose, [0, 1, 2, 3, 5],
+            self.add(pr.ControlMap(self.augment_pose_6D, [0, 1, 2, 3, 5],
                                    [0, 1, 2, 3, 5]))
         self.add(pr.ControlMap(self.preprocess_image, [0], [0, 1, 2]))
         self.add(pr.ControlMap(self.scale_boxes, [2, 1], [2], keep={1: 1}))
