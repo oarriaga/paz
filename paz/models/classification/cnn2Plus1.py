@@ -325,7 +325,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
     elif architecture == 'CNN2Plus1D_Filters':
         x = filters(x, input_shape[1], input_shape[2])
         if weights == 'VVAD_LRS3':
-            filename = 'cnn-2plus1d-filters_weights-23.hdf5'
+            filename = 'cnn-2plus1d-filters_weights-21.hdf5'
             weights_path = get_file(filename, URL + filename, cache_subdir='paz/models')
     elif architecture == 'CNN2Plus1D_Layers':
         x = layers(x, input_shape[1], input_shape[2])
