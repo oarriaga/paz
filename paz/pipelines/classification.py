@@ -90,14 +90,14 @@ class ClassifyVVAD(SequentialProcessor):
             e.g. (38, 96, 96, 3).
         architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
             'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
-        update_rate: Integer. How many frames are between the predictions (computational expansive (low update rate) vs
+        stride: Integer. How many frames are between the predictions (computational expansive (low update rate) vs
             high latency (high update rate))
-        average: Integer. How many predictions are averaged. Set to 1 to disable averaging
+        averaging_window_size: Integer. How many predictions are averaged. Set to 1 to disable averaging
         average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set average to 1 to
             disable averaging
     """
     def __init__(self, input_size=(38, 96, 96, 3), architecture: Architecture_Options = 'CNN2Plus1D_Light',
-                 update_rate=38, average=2, average_type: Average_Options = 'mean'):
+                 stride=38, averaging_window_size=2, average_type: Average_Options = 'mean'):
         super(ClassifyVVAD, self).__init__()
         options = get_args(Average_Options)
         assert average_type in options, f"'{average_type}' is not in {options}"
@@ -113,14 +113,14 @@ class ClassifyVVAD(SequentialProcessor):
         self.class_names = get_class_names('VVAD_LRS3')
 
         preprocess = PreprocessImage(input_size[1:3], (0.0, 0.0, 0.0))
-        preprocess.add(pr.BufferImages(input_size, play_rate=update_rate))
+        preprocess.add(pr.BufferImages(input_size, stride=stride))
         self.add(pr.PredictNoneable(self.classifier, preprocess))
         self.add(pr.CopyDomain([0], [0]))
         self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))
         if average_type == 'mean':
-            self.add(pr.ControlMap(pr.AveragePredictions(average), [0], [0]))
+            self.add(pr.ControlMap(pr.AveragePredictions(averaging_window_size), [0], [0]))
         elif average_type == 'weighted':
-            self.add(pr.ControlMap(pr.WeightedAveragePredictions(average), [0], [0]))
+            self.add(pr.ControlMap(pr.WeightedAveragePredictions(averaging_window_size), [0], [0]))
         self.add(pr.ControlMap(pr.FloatToBoolean(), [0], [0]))
         self.add(pr.ControlMap(pr.BooleanToTextMessage(true_message=self.class_names[0], false_message=self.class_names[1]), [0], [0]))
         self.add(pr.WrapOutput(['class_name', 'scores']))

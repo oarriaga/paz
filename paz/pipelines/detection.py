@@ -916,11 +916,15 @@ class DetectVVAD(Processor):
         Note multiple images are needed to produce a prediction.
 
     # Arguments
-        architecture: String indicating the architecture to be used for
-            classification. Options are 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
+        architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
             'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
+        stride: Integer. How many frames are between the predictions (computational expansive (low stride) vs
+            high latency (high stride))
+        averaging_window_size: Integer. How many predictions are averaged. Set to 1 to disable averaging
+        average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set averaging_window_size to 1 to
+            disable averaging
     """
-    def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', update_rate=10, average=6,
+    def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', stride=10, averaging_window_size=6,
                  average_type: Average_Options = 'weighted', offsets=[0, 0], colors=EMOTION_COLORS):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
@@ -936,7 +940,7 @@ class DetectVVAD(Processor):
         self.crop = pr.CropBoxes2D()
 
         # classification
-        self.classify = ClassifyVVAD(update_rate=update_rate, average=average, average_type=str(average_type),
+        self.classify = ClassifyVVAD(stride=stride, averaging_window_size=averaging_window_size, average_type=str(average_type),
                                      architecture=architecture)
 
         # drawing and wrapping
