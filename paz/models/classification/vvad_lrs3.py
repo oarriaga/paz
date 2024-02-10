@@ -1,12 +1,13 @@
 import tensorflow as tf
-
-keras = tf.keras
-from keras.models import Model
-from keras.layers import (Input, BatchNormalization, Flatten, Dense, LSTM, TimeDistributed)
-from keras.applications.mobilenet import MobileNet
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Input, BatchNormalization, Flatten, Dense, LSTM, TimeDistributed)
+from tensorflow.keras.applications.mobilenet import MobileNet
+from tensorflow.keras.utils import get_file
 import random
 
-def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_weights_path="../../../../CLUSTER_OUTPUTS/VVAD_LRS3/2023_10_30-09_51_57/vvad_lrs3-weights-57.hdf5"):
+URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.19/'
+
+def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865):
     """Binary Classification for videos using a CNN based mobile net with an TimeDistributed layer (LSTM).
     # Arguments
         weights: ``None`` or string with pre-trained dataset. Valid datasets
@@ -32,7 +33,6 @@ def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_w
     initializer_glorot_output = tf.keras.initializers.GlorotUniform(seed=random.randint(0, 1000000))
     initializer_orthogonal = tf.keras.initializers.Orthogonal(seed=random.randint(0, 1000000))
 
-    # input_shape = (None, 10, HEIGHT, WIDTH, 3)
     image = Input(shape=input_shape, name='image')
     x = image
 
@@ -52,11 +52,10 @@ def VVAD_LRS3_LSTM(weights=None, input_shape=(38, 96, 96, 3), seed=305865, tmp_w
 
     model = Model(inputs=image, outputs=x, name='VVAD_LRS3_LSTM')
 
-    if weights == 'VVAD-LRS3':
+    if weights == 'VVAD_LRS3':
         print("loading weights")
-        model.load_weights(tmp_weights_path)      # TODO Replace with download link
-    #     filename = 'fer2013_mini_XCEPTION.119-0.65.hdf5'
-    #     path = get_file(filename, URL + filename, cache_subdir='paz/models')
-    #     model = load_model(path)
+        filename = 'vvad_lrs3-weights-23.hdf5'
+        weights_path = get_file(filename, URL + filename, cache_subdir='paz/models')
+        model.load_weights(weights_path)
 
     return model
