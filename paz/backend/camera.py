@@ -1,4 +1,6 @@
+import os
 import cv2
+import time
 import numpy as np
 
 from ..backend.image import resize_image, convert_color_space, show_image
@@ -78,8 +80,41 @@ class Camera(object):
         """
         return self._camera.isOpened()
 
-    def calibrate(self):
-        raise NotImplementedError
+    def calibrate(self, images, chess_board_size):
+        """Execute the camera calibration for a given chess board size and
+        returns the corresponding camera matrix and distortion coefficient.
+
+        # Arguments
+            images -- numpy array
+            chess_board_size -- tuple of ints
+
+        # Returns
+            camera_matrix -- numpy array of shape (3, 3)
+                            representing the camera matrix
+            distortion_coefficient -- numpy array of shape (1, 5)
+                                    representing the distortion coefficient
+        """
+
+        object_points = []    # 3D point of real world space
+        image_points = []    # 2D point of image
+
+        H, W = chess_board_size
+        object_points_2D = np.mgrid[0:W, 0:H].T.reshape(-1, 2)
+        zeros = np.zeros((H * W, 1))
+        object_points_3D = np.hstack((object_points_2D, zeros))
+        object_points_3D = np.asarray(object_points_3D, dtype=np.float32)
+
+        for image in images:
+            return_value, corners = cv2.findChessboardCorners(image, (W, H))
+            if return_value:
+                image_points.append(corners)
+                object_points.append(object_points_3D)
+
+        shape = image.shape[::-1]
+        calibration_parameters = cv2.calibrateCamera(
+            object_points, image_points, shape, None, None)
+        _, camera_matrix, distortion_coefficient, _, _ = calibration_parameters
+        return camera_matrix, distortion_coefficient
 
     def save(self, filepath):
         raise NotImplementedError
@@ -214,6 +249,7 @@ class VideoPlayer(object):
                 continue
             image = resize_image(output['image'], tuple(self.image_size))
             show_image(image, 'inference', wait=False)
+            image = convert_color_space(image, BGR2RGB)
             writer.write(image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -252,6 +288,7 @@ class VideoPlayer(object):
                     continue
                 image = resize_image(output['image'], tuple(self.image_size))
                 show_image(image, 'inference', wait=False)
+                image = convert_color_space(image, BGR2RGB)
                 writer.write(image)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
