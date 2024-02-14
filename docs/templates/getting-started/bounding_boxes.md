@@ -52,8 +52,7 @@ box_data = np.array(
 ```
 
 Let's create a simple visualization pipeline.
-For an explanation of what control-map is doing please check our tutorial at:
-[paz/examples/tutorials/controlmap_processor.py](paz/examples/tutorials/controlmap_processor.py)
+For an explanation of what control-map is doing please check our tutorial [here](https://github.com/oarriaga/paz/blob/master/examples/tutorials/controlmap_processor.py)
 ``` python
 draw_boxes = SequentialProcessor()
 draw_boxes.add(pr.ControlMap(pr.ToBoxes2D(class_names), [1], [1]))
