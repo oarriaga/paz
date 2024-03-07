@@ -167,7 +167,7 @@ class VvadLrs3Dataset(Generator):
             else:
                 count_dropouts = self.video_length - self.reduced_length
 
-                cal_drop_every = self.reduced_length / count_dropouts
+                cal_drop_every = self.video_length / count_dropouts
 
                 self.dropout_ids = [int(i * cal_drop_every - (cal_drop_every / 2))
                                     for i in range(1, count_dropouts + 1)]
