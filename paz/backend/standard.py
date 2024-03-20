@@ -271,3 +271,26 @@ def predict(x, model, preprocess=None, postprocess=None):
     if postprocess is not None:
         y = postprocess(y)
     return y
+
+
+def predict_with_nones(x, model, preprocess=None, postprocess=None):
+    """Preprocess, predict and postprocess batched input.
+    # Arguments
+        x: Noneable input to model
+        model: Callable i.e. Keras model.
+        preprocess: Callable, used for preprocessing input x.
+        postprocess: Callable, used for postprocessing output of model.
+
+    # Note
+        If model outputs a tf.Tensor is converted automatically to numpy array.
+    """
+    if preprocess is not None:
+        x = preprocess(x)
+    if x is None:
+        return None
+    y = model(x)
+    if isinstance(y, tf.Tensor):
+        y = y.numpy()
+    if postprocess is not None:
+        y = postprocess(y)
+    return y

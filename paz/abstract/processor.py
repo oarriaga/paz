@@ -99,7 +99,7 @@ class SequentialProcessor(object):
         """Adds a process to the sequence of processes to be applied to input.
 
         # Arguments
-            processor: An instantiated child class of of ``Processor``.
+            processor: An instantiated child class of ``Processor``.
         """
         self.processors.append(processor)
 
