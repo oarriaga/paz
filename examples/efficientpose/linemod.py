@@ -2,7 +2,29 @@ import os
 import yaml
 import numpy as np
 from paz.abstract import Loader
-from pose import get_class_names
+from paz.datasets.utils import get_class_names
+
+B_LINEMOD_MEAN, G_LINEMOD_MEAN, R_LINEMOD_MEAN = 103.53, 116.28, 123.675
+RGB_LINEMOD_MEAN = (R_LINEMOD_MEAN, G_LINEMOD_MEAN, B_LINEMOD_MEAN)
+B_LINEMOD_STDEV, G_LINEMOD_STDEV, R_LINEMOD_STDEV = 57.375, 57.12, 58.395
+RGB_LINEMOD_STDEV = (R_LINEMOD_STDEV, G_LINEMOD_STDEV, B_LINEMOD_STDEV)
+
+LINEMOD_CAMERA_MATRIX = np.array([
+    [572.41140, 000.00000, 325.26110],
+    [000.00000, 573.57043, 242.04899],
+    [000.00000, 000.00000, 001.00000]],
+    dtype=np.float32)
+
+LINEMOD_OBJECT_SIZES = {
+    "ape":         np.array([075.86860000, 077.59920000, 091.76900000]),
+    "can":         np.array([100.79160000, 181.79580000, 193.73400000]),
+    "cat":         np.array([067.01070000, 127.63300000, 117.45660000]),
+    "driller":     np.array([229.47600000, 075.47140000, 208.00200000]),
+    "duck":        np.array([104.42920000, 077.40760000, 085.69700000]),
+    "eggbox":      np.array([150.18460000, 107.07500000, 069.24140000]),
+    "glue":        np.array([036.72110000, 077.86600000, 172.81580000]),
+    "holepuncher": np.array([100.88780000, 108.49700000, 090.80000000]),
+    }
 
 
 class Linemod(Loader):
@@ -131,7 +153,7 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
             names and values are numpy arrays for boxes, rotation,
             translation and integer for class.
     """
-    root_path = make_root_path(dataset_path, data_path, object_id)
+    root_path = os.path.join(dataset_path, data_path, object_id)
     files = load_linemod_filenames(root_path, ground_truth_file,
                                    info_file, split)
     ground_truth_file, info_file, split_file = files
@@ -145,7 +167,7 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
         box = get_data(split_data, annotation, key='obj_bb')
         box = linemod_to_corner_form(box)
         box = normalize_box_input_size(box, input_size)
-        box = append_class_to_box(box, class_arg=class_arg)
+        box = np.concatenate((box, np.array([[class_arg]])), axis=-1)
         # Load rotation and translation
         rotation = get_data(split_data, annotation, key='cam_R_m2c')
         translation = get_data(split_data, annotation, key='cam_t_m2c')
@@ -154,21 +176,6 @@ def load(dataset_path, data_path, object_id, ground_truth_file, info_file,
                      'rotation': rotation, 'translation_raw': translation,
                      'class': class_arg, 'mask': raw_mask_path})
     return data
-
-
-def make_root_path(dataset_path, data_path, object_id):
-    """Composes root path as a string from `dataset_path`,
-    `data_path` and `object_id`.
-
-    # Arguments
-        dataset_path: Str, data path to Linemod annotations.
-        data_path: Str, containing path to the Linemod data folder.
-        object_id: Str, ID of the object to train.
-
-    # Return
-        Str, root directory path to Linemod dataset.
-    """
-    return os.path.join(dataset_path, data_path, object_id)
 
 
 def load_linemod_filenames(root_path, ground_truth_file, info_file, split):
@@ -306,17 +313,3 @@ def normalize_box_input_size(box, input_size):
     y_max = y_max / input_H
     box = [x_min, y_min, x_max, y_max]
     return np.array([[x_min, y_min, x_max, y_max]])
-
-
-def append_class_to_box(box, class_arg=1):
-    """Appends class information to bounding box information.
-    In other words appends `class_arg` to `box` coordinates.
-
-    # Arguments
-        box: Array, of shape `[1, 4]`
-        class_arg: Int, class argument of object class.
-
-    # Return
-        Array: of shape `[1, 5]` containing box and class information.
-    """
-    return np.concatenate((box, np.array([[class_arg]])), axis=-1)

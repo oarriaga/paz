@@ -119,3 +119,21 @@ class PreprocessImageHigherHRNet(pr.Processor):
         transform = get_affine_transform(source_point, destination_point)
         image = self.transform_image(image, transform, size)
         return image, center, scale
+
+
+class AugmentColorspace(SequentialProcessor):
+    def __init__(self):
+        super(AugmentColorspace, self).__init__()
+        self.add(pr.AutoContrast())
+        self.add(pr.EqualizeHistogram())
+        self.add(pr.InvertColors())
+        self.add(pr.Posterize())
+        self.add(pr.Solarize())
+        self.add(pr.RandomSaturation(1.0))
+        self.add(pr.RandomContrast(1.0))
+        self.add(pr.RandomBrightness(1.0))
+        self.add(pr.SharpenImage())
+        self.add(pr.Cutout())
+        self.add(pr.RandomImageBlur())
+        self.add(pr.RandomGaussianBlur())
+        self.add(pr.AddGaussianNoise())

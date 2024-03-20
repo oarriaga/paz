@@ -10,10 +10,13 @@ from paz.optimization import MultiBoxLoss
 from paz.optimization.callbacks import LearningRateScheduler
 from paz.processors import TRAIN, VAL
 from linemod import Linemod
-from efficientpose import EfficientPosePhi0
-from pose import AugmentPose, EfficientPosePhi0LinemodDriller
+from paz.models.pose_estimation.efficientpose import EfficientPosePhi0
+from paz.pipelines import AugmentEfficientPose
+from pose import EfficientPosePhi0LinemodDriller
+from paz.evaluation import EvaluateADD
+from linemod import LINEMOD_CAMERA_MATRIX, RGB_LINEMOD_MEAN
+from anchors import build_translation_anchors
 from losses import MultiPoseLoss
-from pose_error import EvaluatePoseError
 
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -41,6 +44,8 @@ parser.add_argument('-dp', '--data_path', default='Linemod_preprocessed/',
                     type=str, help='Path for writing model weights and logs')
 parser.add_argument('-op', '--object_model_path', default='models/',
                     type=str, help='Path for writing model weights and logs')
+parser.add_argument('-pm', '--pose_metric', default='ADD',
+                    type=str, help='type of pose error metric ADD/ADI')
 parser.add_argument('-id', '--object_id', default='08',
                     type=str, help='ID of the object to train')
 parser.add_argument('-se', '--scheduled_epochs', nargs='+', type=int,
@@ -71,7 +76,8 @@ for data_name, data_split in zip(data_names, data_splits):
 
 # instantiating model
 num_classes = data_managers[0].num_classes
-model = EfficientPosePhi0(num_classes, base_weights='COCO', head_weights=None)
+model = EfficientPosePhi0(build_translation_anchors, num_classes,
+                          base_weights='COCO', head_weights=None)
 model.summary()
 
 # Instantiating loss and metrics
@@ -91,7 +97,9 @@ model.compile(optimizer=optimizer, loss=loss,
 # setting data augmentation pipeline
 augmentators = []
 for split in [TRAIN, VAL]:
-    augmentator = AugmentPose(model, split, size=512, num_classes=num_classes)
+    augmentator = AugmentEfficientPose(model, RGB_LINEMOD_MEAN,
+                                       LINEMOD_CAMERA_MATRIX, split, size=512,
+                                       num_classes=num_classes)
     augmentators.append(augmentator)
 
 # setting sequencers
@@ -130,10 +138,9 @@ with open(model_info_file, 'r') as file:
     file.close()
 object_diameter = model_data[int(args.object_id)]['diameter']
 
-# Pose accuracy calculation pipeline
-pose_error = EvaluatePoseError(args.save_path, evaluation_data_managers[0],
-                               inference, mesh_points, object_diameter,
-                               args.evaluation_period)
+pose_error = EvaluateADD(
+    args.save_path, evaluation_data_managers[0], inference, mesh_points,
+    object_diameter, args.evaluation_period)
 
 # training
 model.fit(

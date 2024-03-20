@@ -1,4 +1,3 @@
-from .higher_hrnet import HigherHRNet
 from .efficientpose import EfficientPosePhi0
 from .efficientpose import EfficientPosePhi1
 from .efficientpose import EfficientPosePhi2

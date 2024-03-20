@@ -271,3 +271,19 @@ def predict(x, model, preprocess=None, postprocess=None):
     if postprocess is not None:
         y = postprocess(y)
     return y
+
+
+def compute_common_row_indices(box_data_all, box_data):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+
+    # Arguments
+        box_data_all: Array of shape `(num_boxes, 5)`,
+        box_data: Array: of shape `(n, 5)` box data.
+
+    # Returns
+        Array: of shape `(n, 3)`.
+    """
+    matches_element_wise = np.isin(box_data_all, box_data)
+    matches_row_wise = np.all(matches_element_wise, axis=-1)
+    return np.where(matches_row_wise)[0]
