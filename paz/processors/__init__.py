@@ -115,7 +115,7 @@ from .standard import CopyDomain
 from .standard import ExtendInputs
 from .standard import SequenceWrapper
 from .standard import Predict
-from .standard import PredictNoneable
+from .standard import PredictWithNones
 from .standard import ToClassName
 from .standard import ExpandDims
 from .standard import BoxClassToOneHotVector

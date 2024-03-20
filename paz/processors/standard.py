@@ -2,7 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import append_values, predict, predict_noneable
+from ..backend.standard import append_values, predict, predict_with_nones
 
 
 class ControlMap(Processor):
@@ -246,7 +246,7 @@ class Predict(Processor):
     def call(self, x):
         return predict(x, self.model, self.preprocess, self.postprocess)
 
-class PredictNoneable(Processor):
+class PredictWithNones(Processor):
     """Perform input preprocessing, model prediction and output postprocessing based on batches.
 
     # Arguments
@@ -256,13 +256,13 @@ class PredictNoneable(Processor):
     """
 
     def __init__(self, model, preprocess=None, postprocess=None):
-        super(PredictNoneable, self).__init__()
+        super(PredictWithNones, self).__init__()
         self.model = model
         self.preprocess = preprocess
         self.postprocess = postprocess
 
     def call(self, x):
-        return predict_noneable(x, self.model, self.preprocess, self.postprocess)
+        return predict_with_nones(x, self.model, self.preprocess, self.postprocess)
 
 
 class ToClassName(Processor):

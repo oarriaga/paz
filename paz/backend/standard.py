@@ -273,7 +273,7 @@ def predict(x, model, preprocess=None, postprocess=None):
     return y
 
 
-def predict_noneable(x, model, preprocess=None, postprocess=None):
+def predict_with_nones(x, model, preprocess=None, postprocess=None):
     """Preprocess, predict and postprocess batched input.
     # Arguments
         x: Noneable input to model
