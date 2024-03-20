@@ -437,3 +437,4 @@ class AddClassAndScoreToBoxes(Processor):
         for cropped_image, box2D in zip(cropped_images, boxes):
             predictions = self.classify(cropped_image)
             add_class_and_score(predictions, box2D)
+        return boxes

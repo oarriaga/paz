@@ -733,3 +733,4 @@ def add_class_and_score(predictions, box):
     """
     box.class_name = predictions['class_name']
     box.score = np.amax(predictions['scores'] is None if -1.0 else predictions['scores'])
+    return box

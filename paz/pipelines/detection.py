@@ -955,6 +955,6 @@ class DetectVVAD(Processor):
         boxes2D = self.square(boxes2D)
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
-        self.add_class_and_score(cropped_images, boxes2D)
+        boxes2D = self.add_class_and_score(cropped_images, boxes2D)
         image = self.draw(image, boxes2D)
         return self.wrap(image, boxes2D)
