@@ -6,11 +6,10 @@ from tensorflow.keras.layers import (Conv3D, Input, BatchNormalization, Layer, G
                                      LayerNormalization, Dense, add)
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.initializers import GlorotUniform
-from typing import Literal, get_args
 
 
-Architecture_Options = Literal["CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light",
-                               "CNN2Plus1D_18"]
+Architecture_Options = ["CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light",
+                        "CNN2Plus1D_18"]
 URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.19/'
 
 
@@ -306,8 +305,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
         raise ValueError(
             '`input_shape` must be a tuple of 4 integers. '
             'Received: %s' % (input_shape,))
-    options = get_args(Architecture_Options)
-    assert architecture in options, f"'{architecture}' is not in {options}"
+    assert architecture in Architecture_Options, f"'{architecture}' is not in {Architecture_Options}"
 
     random.seed(seed)
     initializer_glorot_output = GlorotUniform(seed=random.randint(0, 1_000_000))

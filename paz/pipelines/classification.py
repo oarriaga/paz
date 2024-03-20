@@ -4,15 +4,14 @@ from . import PreprocessImage
 from ..models.classification import MiniXception, VVAD_LRS3_LSTM, CNN2Plus1D
 from ..datasets import get_class_names
 from .keypoints import MinimalHandPoseEstimation
-from typing import Literal, get_args
 
 
 # neutral, happiness, surprise, sadness, anger, disgust, fear, contempt
 EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
                   [0, 0, 255], [0, 255, 255], [0, 255, 0]]
-Average_Options = Literal["mean", "weighted"]
-Architecture_Options = Literal["VVAD-LRS3-LSTM", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers",
-                               "CNN2Plus1D_Light"]
+Average_Options = ["mean", "weighted"]
+Architecture_Options = ["VVAD-LRS3-LSTM", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers",
+                        "CNN2Plus1D_Light"]
 
 
 class MiniXceptionFER(SequentialProcessor):
@@ -89,7 +88,7 @@ class ClassifyVVAD(SequentialProcessor):
         input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
             e.g. (38, 96, 96, 3).
         architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
-            'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
+            'CNN2Plus1D_Filters', 'CNN2Plus1D_Layers' and 'CNN2Plus1D_Light'
         stride: Integer. How many frames are between the predictions (computational expansive (low update rate) vs
             high latency (high update rate))
         averaging_window_size: Integer. How many predictions are averaged. Set to 1 to disable averaging
@@ -99,10 +98,8 @@ class ClassifyVVAD(SequentialProcessor):
     def __init__(self, input_size=(38, 96, 96, 3), architecture: Architecture_Options = 'CNN2Plus1D_Light',
                  stride=38, averaging_window_size=2, average_type: Average_Options = 'mean'):
         super(ClassifyVVAD, self).__init__()
-        options = get_args(Average_Options)
-        assert average_type in options, f"'{average_type}' is not in {options}"
-        options = get_args(Architecture_Options)
-        assert architecture in options, f"'{architecture}' is not in {options}"
+        assert average_type in Average_Options, f"'{average_type}' is not in {Average_Options}"
+        assert architecture in Architecture_Options, f"'{architecture}' is not in {Architecture_Options}"
 
         if architecture == 'VVAD-LRS3-LSTM':
             self.classifier = VVAD_LRS3_LSTM(weights='VVAD_LRS3')
