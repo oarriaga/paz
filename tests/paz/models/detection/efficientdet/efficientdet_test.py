@@ -441,9 +441,9 @@ def test_EfficientDet_architecture(model, model_name, model_input_name,
     non_trainable_count = count_params(
         implemented_model.non_trainable_weights)
     assert implemented_model.name == model_name, "Model name incorrect"
-    assert implemented_model.input_names[0] == model_input_name, (
+    assert implemented_model.input.name == model_input_name, (
         "Input name incorrect")
-    assert implemented_model.output_names[0] == model_output_name, (
+    assert implemented_model.layers[-1].name == model_output_name, (
         "Output name incorrect")
     assert trainable_count == trainable_parameters, (
         "Incorrect trainable parameters count")
