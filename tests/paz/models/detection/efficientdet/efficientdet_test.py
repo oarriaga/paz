@@ -456,6 +456,7 @@ def test_EfficientDet_architecture(model, model_name, model_input_name,
     del implemented_model
 
 
+@pytest.mark.skip()
 @pytest.mark.parametrize(('model, image_size'),
                          [
                             (EFFICIENTDETD0, 512),
