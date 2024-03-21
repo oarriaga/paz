@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (GroupNormalization, Concatenate,
                                      Add, Reshape)
+from tensorflow.keras.activations import swish
 from ...detection.efficientdet.efficientdet_blocks import (
     build_head_conv2D, build_head)
 
@@ -115,7 +116,7 @@ def refine_rotation(x, repeats, num_filters, bias_initializer,
     for block_arg in range(repeats):
         x = conv_body[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
-        x = tf.nn.swish(x)
+        x = swish(x)
     return conv_head(x)
 
 
@@ -189,7 +190,7 @@ def build_translation_subnets(x, repeats, num_filters, bias_initializer,
     for block_arg in range(repeats):
         x = conv_body[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
-        x = tf.nn.swish(x)
+        x = swish(x)
     return [x, conv_head_xy(x), conv_head_z(x)]
 
 
@@ -255,5 +256,5 @@ def refine_translation(x, repeats, num_filters, bias_initializer,
     for block_arg in range(repeats):
         x = conv_body[block_arg](x)
         x = GroupNormalization(groups=num_groups)(x)
-        x = tf.nn.swish(x)
+        x = swish(x)
     return [conv_head_xy(x), conv_head_z(x)]

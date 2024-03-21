@@ -106,7 +106,7 @@ def EfficientPose(build_translation_anchors, image, num_classes, base_weights,
         by_name = True if model_filename in finetunning_model_names else False
         model.load_weights(weights_path, by_name=by_name)
 
-    image_shape = image.shape[1:3].as_list()
+    image_shape = list(image.shape[1:3])
     model.prior_boxes = build_anchors(
         image_shape, branches, num_scales, aspect_ratios, anchor_scale)
 
