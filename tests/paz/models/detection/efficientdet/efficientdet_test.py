@@ -265,7 +265,7 @@ def test_fuse_feature(input_shape, fusion):
     z = tf.random.uniform(input_shape, minval=0, maxval=1,
                           dtype=tf.dtypes.float32)
     to_fuse = [x, y, z]
-    fused_feature = FuseFeature(fusion=fusion)(to_fuse, fusion)
+    fused_feature = FuseFeature(fusion=fusion)(to_fuse, fusion=fusion)
     assert fused_feature.shape == input_shape, 'Incorrect target shape'
     assert fused_feature.dtype == tf.dtypes.float32, (
         'Incorrect target datatype')

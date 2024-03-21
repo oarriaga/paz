@@ -80,8 +80,8 @@ class FuseFeature(Layer):
 
     def build(self, input_shape):
         num_in = len(input_shape)
-        args = (self.name, (num_in,), tf.float32,
-                tf.keras.initializers.constant(1 / num_in))
+        args = ((num_in,), tf.keras.initializers.constant(1 / num_in),
+                tf.float32)
         self.w = self.add_weight(*args, trainable=True)
 
     def call(self, inputs, fusion):

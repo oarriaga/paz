@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Activation, Concatenate, Reshape
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
                                      MaxPooling2D, SeparableConv2D,
                                      UpSampling2D, GroupNormalization)
+from tensorflow.keras.activations import swish
 from .layers import FuseFeature, GetDropConnect
 
 
@@ -119,7 +120,7 @@ def build_head(middle_features, num_blocks, num_filters,
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
             x = normalizer(*args)(x)
-            x = tf.nn.swish(x)
+            x = swish(x)
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
         pre_head_outputs.append(x)
@@ -289,8 +290,8 @@ def node_BiFPN(up, middle, down, skip, num_filters, fusion):
         to_fuse = [middle, up]
     else:
         to_fuse = [middle, down] if skip is None else [skip, middle, down]
-    middle = FuseFeature(fusion=fusion)(to_fuse, fusion)
-    middle = tf.nn.swish(middle)
+    middle = FuseFeature(fusion=fusion)(to_fuse, fusion=fusion)
+    middle = swish(middle)
     middle = SeparableConv2D(num_filters, 3, 1, 'same', use_bias=True)(middle)
     middle = BatchNormalization()(middle)
     return middle
