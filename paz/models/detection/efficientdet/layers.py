@@ -80,9 +80,9 @@ class FuseFeature(Layer):
 
     def build(self, input_shape):
         num_in = len(input_shape)
-        args = ((num_in,), tf.keras.initializers.constant(1 / num_in),
-                tf.float32)
-        self.w = self.add_weight(*args, trainable=True)
+        kwargs = {'name': self.name, 'shape': (num_in,), 'dtype': tf.float32,
+                  'initializer': tf.keras.initializers.constant(1 / num_in)}
+        self.w = self.add_weight(**kwargs, trainable=True)
 
     def call(self, inputs, fusion):
         inputs = [input for input in inputs if input is not None]
