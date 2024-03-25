@@ -1,7 +1,9 @@
 import math
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.activations import swish
 from tensorflow.keras.layers import BatchNormalization, Conv2D, DepthwiseConv2D
+from ....models.layers import ReduceMean, Sigmoid, Add
 
 
 def EFFICIENTNET(image, scaling_coefficients, D_divisor=8, excite_ratio=0.25,
@@ -64,7 +66,7 @@ def conv_block(image, intro_filters, width_coefficient, depth_divisor):
     x = Conv2D(filters, [3, 3], [2, 2], 'same', 'channels_last', [1, 1], 1,
                None, False, kernel_initializer)(image)
     x = BatchNormalization()(x)
-    x = tf.nn.swish(x)
+    x = swish(x)
     return x
 
 
@@ -223,7 +225,7 @@ def MB_input(inputs, filters, expand_ratio):
     if expand_ratio != 1:
         x = MB_conv2D(inputs, filters, use_bias=False)
         x = BatchNormalization()(x)
-        x = tf.nn.swish(x)
+        x = swish(x)
     else:
         x = inputs
     return x
@@ -238,17 +240,17 @@ def MB_convolution(x, kernel_size, strides):
     kwargs = {'padding': 'same', 'depthwise_initializer': kernel_initializer}
     x = DepthwiseConv2D(kernel_size, strides, use_bias=False, **kwargs)(x)
     x = BatchNormalization()(x)
-    x = tf.nn.swish(x)
+    x = swish(x)
     return x
 
 
 def MB_squeeze_excitation(x, intro_filters, expand_ratio, excite_ratio):
     num_reduced_filters = max(1, int(intro_filters * excite_ratio))
-    SE = tf.reduce_mean(x, [1, 2], keepdims=True)
+    SE = ReduceMean([1, 2], keepdims=True)(x)
     SE = MB_conv2D(SE, num_reduced_filters, use_bias=True)
-    SE = tf.nn.swish(SE)
+    SE = swish(SE)
     SE = MB_conv2D(SE, intro_filters * expand_ratio, use_bias=True)
-    SE = tf.sigmoid(SE)
+    SE = Sigmoid()(SE)
     return SE * x
 
 
@@ -259,7 +261,7 @@ def MB_output(x, inputs, intro_filters, outro_filters, strides, survival_rate):
     if all_strides_one and intro_filters == outro_filters:
         if survival_rate:
             x = apply_drop_connect(x, False, survival_rate)
-        x = tf.add(x, inputs)
+        x = Add()(x, inputs)
     return x
 
 
