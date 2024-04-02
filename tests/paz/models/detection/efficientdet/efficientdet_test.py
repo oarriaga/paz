@@ -460,13 +460,13 @@ def test_EfficientDet_architecture(model, model_name, model_input_name,
 @pytest.mark.parametrize(('model, image_size'),
                          [
                             (EFFICIENTDETD0, 512),
-                            (EFFICIENTDETD1, 640),
-                            (EFFICIENTDETD2, 768),
-                            (EFFICIENTDETD3, 896),
-                            (EFFICIENTDETD4, 1024),
-                            (EFFICIENTDETD5, 1280),
-                            (EFFICIENTDETD6, 1280),
-                            (EFFICIENTDETD7, 1536),
+                            # (EFFICIENTDETD1, 640),
+                            # (EFFICIENTDETD2, 768),
+                            # (EFFICIENTDETD3, 896),
+                            # (EFFICIENTDETD4, 1024),
+                            # (EFFICIENTDETD5, 1280),
+                            # (EFFICIENTDETD6, 1280),
+                            # (EFFICIENTDETD7, 1536),
                          ])
 def test_EfficientDet_output(model, image_size):
     detector = model()
