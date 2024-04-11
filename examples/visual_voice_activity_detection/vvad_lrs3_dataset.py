@@ -90,8 +90,8 @@ class VvadLrs3Dataset(Generator):
             x_train = data.get('x_test')
             y_train = data.get('y_test')
 
-        for i in indexes:
-            yield self.generate_x_data(x_train, i), y_train[i]
+        for index in indexes:
+            yield self.generate_x_data(x_train, index), y_train[index]
         data.close()
 
     def get_data_and_video_size(self):
