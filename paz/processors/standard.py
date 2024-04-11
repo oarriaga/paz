@@ -597,7 +597,7 @@ class WeightedAveragePredictions(Processor):
                 total_weights = 0
                 for prediction_index in range(0, size):
                     weight = (prediction_index + 1) / size
-                    result += self.predictions[prediction_index] * weight
-                    total_weights += weight
+                    result = result + self.predictions[prediction_index] * weight
+                    total_weights = total_weights + weight
                 result = result / total_weights
         return result

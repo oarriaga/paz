@@ -607,7 +607,7 @@ class BufferImages(Processor):
             an array of images if the buffer is full and the play rate is reached, else None.
         """
         self.append(image)
-        self.frames_since_last_update += 1
+        self.frames_since_last_update = self.frames_since_last_update + 1
 
         if self.is_full and self.frames_since_last_update >= self.stride:
             self.frames_since_last_update = 0
