@@ -557,13 +557,13 @@ class AveragePredictions(Processor):
 
     def call(self, value):
         if value is None:
-            result = None
+            mean = None
         else:
             self.predictions.append(value)
             if len(self.predictions) > self.window_size:
                 self.predictions.pop(0)
-            result = np.mean(self.predictions, axis=0)
-        return result
+            mean = np.mean(self.predictions, axis=0)
+        return mean
 
 
 class WeightedAveragePredictions(Processor):
@@ -582,7 +582,7 @@ class WeightedAveragePredictions(Processor):
 
     def call(self, value):
         if value is None:
-            result = None
+            mean = None
         else:
             size = len(self.predictions)
 
@@ -590,14 +590,14 @@ class WeightedAveragePredictions(Processor):
             if size > self.window_size:
                 self.predictions.pop(0)
 
-            result = 0
+            mean = 0
             if len(self.predictions) <= 1:
-                result = value
+                mean = value
             else:
                 total_weights = 0
                 for prediction_index in range(0, size):
                     weight = (prediction_index + 1) / size
-                    result = result + self.predictions[prediction_index] * weight
+                    mean = mean + self.predictions[prediction_index] * weight
                     total_weights = total_weights + weight
-                result = result / total_weights
-        return result
+                mean = mean / total_weights
+        return mean
