@@ -8,8 +8,8 @@ from tensorflow.keras.utils import get_file
 from tensorflow.keras.initializers import GlorotUniform
 
 
-Architecture_Options = ["CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers", "CNN2Plus1D_Light",
-                        "CNN2Plus1D_18"]
+Architecture_Options = ['CNN2Plus1D', 'CNN2Plus1D_Filters', 'CNN2Plus1D_Layers', 'CNN2Plus1D_Light',
+                        'CNN2Plus1D_18']
 URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.19/'
 
 
@@ -140,7 +140,7 @@ def normal(input_layer, height, width):
             input_layer: Tensorflow input layer of the network
             height: Height of the input video
             width: Width of the input video
-        """
+    """
     x = Conv2Plus1D(filters=16, kernel_size=(3, 7, 7), padding='same')(input_layer)
     x = BatchNormalization()(x)
     x = ReLU()(x)
@@ -314,7 +314,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
     image = Input(shape=input_shape, name='image')
     x = image
 
-    weights_path = ""
+    weights_path = ''
     if architecture == 'CNN2Plus1D':
         x = normal(x, input_shape[1], input_shape[2])
         if weights == 'VVAD_LRS3':
@@ -340,7 +340,7 @@ def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
 
     x = GlobalAveragePooling3D()(x)
     x = Flatten()(x)
-    x = Dense(1, activation="sigmoid", kernel_initializer=initializer_glorot_output)(x)
+    x = Dense(1, activation='sigmoid', kernel_initializer=initializer_glorot_output)(x)
 
     model = Model(inputs=image, outputs=x, name=architecture)
 

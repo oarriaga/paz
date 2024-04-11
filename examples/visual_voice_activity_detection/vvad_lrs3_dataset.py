@@ -8,7 +8,7 @@ from typing import Literal, get_args
 from paz.datasets.utils import get_class_names
 from generator import Generator
 
-Reduction_Method = Literal["cut", "reduce"]
+Reduction_Method = Literal['cut', 'reduce']
 
 
 class VvadLrs3Dataset(Generator):
@@ -33,8 +33,8 @@ class VvadLrs3Dataset(Generator):
         -[VVAD-LRS3](https://www.kaggle.com/datasets/adrianlubitz/vvadlrs3)
     """
     def __init__(
-            self, path=".keras/paz/datasets", split='train', validation_split=0.2, test_split=0.1, testing=False,
-            evaluating=False, reduction_method: Reduction_Method = "cut", reduced_length=None):
+            self, path='.keras/paz/datasets', split='train', validation_split=0.2, test_split=0.1, testing=False,
+            evaluating=False, reduction_method: Reduction_Method = 'cut', reduced_length=None):
         if split != 'train' and split != 'validation' and split != 'test':
             raise ValueError('Invalid split name')
         if validation_split < 0.0 or validation_split > 1.0:
@@ -83,12 +83,12 @@ class VvadLrs3Dataset(Generator):
 
         data = h5py.File(self.path, mode='r')
         if not self.use_test_data:
-            x_train = data.get("x_train")
-            y_train = data.get("y_train")
+            x_train = data.get('x_train')
+            y_train = data.get('y_train')
         else:
             indexes = reversed(indexes)
-            x_train = data.get("x_test")
-            y_train = data.get("y_test")
+            x_train = data.get('x_test')
+            y_train = data.get('y_test')
 
         for i in indexes:
             yield self.generate_x_data(x_train, i), y_train[i]
@@ -161,9 +161,9 @@ class VvadLrs3Dataset(Generator):
         else:
             self.reduced_length = math.ceil(self.reduced_length / 25 * self.video_length)
 
-        if "reduce" in self.reduction_method:
+        if 'reduce' in self.reduction_method:
             if self.reduced_length == self.video_length:
-                self.reduction_method = "cut"
+                self.reduction_method = 'cut'
             else:
                 count_dropouts = self.video_length - self.reduced_length
 
@@ -183,7 +183,7 @@ class VvadLrs3Dataset(Generator):
         if self.evaluating:
             self.index.append(i)
 
-        if "reduce" in self.reduction_method:  # First tested using appending all wanted frames, but it is
+        if 'reduce' in self.reduction_method:  # First tested using appending all wanted frames, but it is
             # more efficient to remove the unwanted frames
             x_out = x_train[i]
             x_out = np.delete(x_out, self.dropout_ids, 0)
@@ -205,5 +205,5 @@ class VvadLrs3Dataset(Generator):
         elif self.split == 'validation':
             return int(self.validation_split * 0.5 * self.total_dataset_size) * 2
         elif self.split == 'test':
-            print("total_size_test", self.total_dataset_size)
+            print('total_size_test', self.total_dataset_size)
             return int(self.test_split * 0.5 * self.total_dataset_size) * 2

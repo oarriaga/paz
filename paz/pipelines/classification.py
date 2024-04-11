@@ -9,9 +9,9 @@ from .keypoints import MinimalHandPoseEstimation
 # neutral, happiness, surprise, sadness, anger, disgust, fear, contempt
 EMOTION_COLORS = [[255, 0, 0], [45, 90, 45], [255, 0, 255], [255, 255, 0],
                   [0, 0, 255], [0, 255, 255], [0, 255, 0]]
-Average_Options = ["mean", "weighted"]
-Architecture_Options = ["VVAD-LRS3-LSTM", "CNN2Plus1D", "CNN2Plus1D_Filters", "CNN2Plus1D_Layers",
-                        "CNN2Plus1D_Light"]
+Average_Options = ['mean', 'weighted']
+Architecture_Options = ['VVAD-LRS3-LSTM', 'CNN2Plus1D', 'CNN2Plus1D_Filters', 'CNN2Plus1D_Layers',
+                        'CNN2Plus1D_Light']
 
 
 class MiniXceptionFER(SequentialProcessor):
