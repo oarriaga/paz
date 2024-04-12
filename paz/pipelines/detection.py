@@ -925,7 +925,7 @@ class DetectVVAD(Processor):
             disable averaging
     """
     def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', stride=10, averaging_window_size=6,
-                 average_type: Average_Options = 'weighted', offsets=[0, 0], colors=EMOTION_COLORS):
+                 average_type: Average_Options = 'weighted', offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
         self.colors = colors

@@ -118,6 +118,7 @@ class ClassifyVVAD(SequentialProcessor):
         elif average_type == 'weighted':
             self.add(pr.ControlMap(pr.WeightedAveragePredictions(averaging_window_size), [0], [0]))
         self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))
+        self.add(pr.CopyDomain([0], [1]))
         self.add(pr.ControlMap(pr.FloatToBoolean(), [0], [0]))
         self.add(pr.ControlMap(pr.BooleanToTextMessage(true_message=self.class_names[0], false_message=self.class_names[1]), [0], [0]))
         self.add(pr.WrapOutput(['class_name', 'scores']))
