@@ -2,7 +2,9 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import append_values, predict, predict_with_nones
+from ..backend.standard import predict_with_nones
+from ..backend.standard import (append_values, predict,
+                                compute_common_row_indices)
 
 
 class ControlMap(Processor):
@@ -601,3 +603,14 @@ class WeightedAveragePredictions(Processor):
                     total_weights = total_weights + weight
                 mean = mean / total_weights
         return mean
+      
+      
+class ComputeCommonRowIndices(Processor):
+    """Computes row-wise intersection between two given
+    arrays and returns the indices of the intersections.
+    """
+    def __init__(self):
+        super(ComputeCommonRowIndices, self).__init__()
+
+    def call(self, box_data_raw, box_data):
+        return compute_common_row_indices(box_data_raw, box_data)

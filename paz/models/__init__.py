@@ -9,6 +9,7 @@ from .detection import EFFICIENTDETD4
 from .detection import EFFICIENTDETD5
 from .detection import EFFICIENTDETD6
 from .detection import EFFICIENTDETD7
+from .keypoint.simplebaselines import SimpleBaseline
 from .keypoint.projector import Projector
 from .keypoint.keypointnet import KeypointNet
 from .keypoint.keypointnet import KeypointNetShared
@@ -28,3 +29,11 @@ from .segmentation import UNET_VGG16
 from .segmentation import UNET_VGG19
 from .segmentation import UNET_RESNET50
 from .pose_estimation import HigherHRNet
+from .pose_estimation import EfficientPosePhi0
+from .pose_estimation import EfficientPosePhi1
+from .pose_estimation import EfficientPosePhi2
+from .pose_estimation import EfficientPosePhi3
+from .pose_estimation import EfficientPosePhi4
+from .pose_estimation import EfficientPosePhi5
+from .pose_estimation import EfficientPosePhi6
+from .pose_estimation import EfficientPosePhi7

@@ -1,8 +1,9 @@
+import os
 import cv2
 import numpy as np
 
 from ..backend.image import resize_image, convert_color_space, show_image
-from ..backend.image import BGR2RGB
+from ..backend.image import BGR2RGB, write_image
 
 
 class Camera(object):
@@ -78,8 +79,41 @@ class Camera(object):
         """
         return self._camera.isOpened()
 
-    def calibrate(self):
-        raise NotImplementedError
+    def calibrate(self, images, chess_board_size):
+        """Execute the camera calibration for a given chess board size and
+        returns the corresponding camera matrix and distortion coefficient.
+
+        # Arguments
+            images -- numpy array
+            chess_board_size -- tuple of ints
+
+        # Returns
+            camera_matrix -- numpy array of shape (3, 3)
+                            representing the camera matrix
+            distortion_coefficient -- numpy array of shape (1, 5)
+                                    representing the distortion coefficient
+        """
+
+        object_points = []    # 3D point of real world space
+        image_points = []    # 2D point of image
+
+        H, W = chess_board_size
+        object_points_2D = np.mgrid[0:W, 0:H].T.reshape(-1, 2)
+        zeros = np.zeros((H * W, 1))
+        object_points_3D = np.hstack((object_points_2D, zeros))
+        object_points_3D = np.asarray(object_points_3D, dtype=np.float32)
+
+        for image in images:
+            return_value, corners = cv2.findChessboardCorners(image, (W, H))
+            if return_value:
+                image_points.append(corners)
+                object_points.append(object_points_3D)
+
+        shape = image.shape[::-1]
+        calibration_parameters = cv2.calibrateCamera(
+            object_points, image_points, shape, None, None)
+        _, camera_matrix, distortion_coefficient, _, _ = calibration_parameters
+        return camera_matrix, distortion_coefficient
 
     def save(self, filepath):
         raise NotImplementedError
@@ -214,6 +248,7 @@ class VideoPlayer(object):
                 continue
             image = resize_image(output['image'], tuple(self.image_size))
             show_image(image, 'inference', wait=False)
+            image = convert_color_space(image, BGR2RGB)
             writer.write(image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -252,9 +287,70 @@ class VideoPlayer(object):
                     continue
                 image = resize_image(output['image'], tuple(self.image_size))
                 show_image(image, 'inference', wait=False)
+                image = convert_color_space(image, BGR2RGB)
                 writer.write(image)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
         writer.release()
+        cv2.destroyAllWindows()
+
+    def record_frames(self, name='video.avi', fps=20, fourCC='XVID'):
+        """Opens camera and records continuous inference frames.
+
+        # Arguments
+            name: String. Video name. Must include the postfix .avi.
+            fps: Int. Frames per second.
+            fourCC: String. Indicates the four character code of the video.
+            e.g. XVID, MJPG, X264.
+        """
+        self.camera.start()
+        fourCC = cv2.VideoWriter_fourcc(*fourCC)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+        while True:
+            frame = self.camera.read()
+            if frame is None:
+                print('Frame: None')
+                return None
+            frame = convert_color_space(frame, BGR2RGB)
+            image = resize_image(frame, tuple(self.image_size))
+            show_image(image, 'frame', wait=False)
+            image = convert_color_space(image, BGR2RGB)
+            writer.write(image)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        self.camera.stop()
+        writer.release()
+        cv2.destroyAllWindows()
+
+    def extract_frames_from_video(self, video_file_path,
+                                  frame_selection_arg=20):
+        """Load video and split into frames.
+
+        # Arguments
+            video_file_path: String. Path to the video file.
+            frame_selection_arg: Int. Number of frames to be skipped.
+        """
+
+        video = cv2.VideoCapture(video_file_path)
+        if (video.isOpened() is False):
+            print("Error opening video  file")
+
+        frame_arg = 0
+        while video.isOpened():
+            is_frame_received, frame = video.read()
+            if not is_frame_received:
+                print("Frame not received. Exiting ...")
+                break
+            if is_frame_received is True:
+                image = resize_image(frame, tuple(self.image_size))
+                image_path = os.path.join('./images', str(frame_arg) + '.jpg')
+                image = convert_color_space(image, BGR2RGB)
+                if frame_arg % frame_selection_arg == 0:
+                    write_image(image_path, image)
+                frame_arg += 1
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
         cv2.destroyAllWindows()

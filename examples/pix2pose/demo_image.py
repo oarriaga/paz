@@ -1,20 +1,20 @@
-from paz.backend.image import show_image, load_image
+import os
+from tensorflow.keras.utils import get_file
+from paz.backend.image import load_image, show_image
+from paz.applications import PIX2YCBTools6D
 from paz.backend.camera import Camera
-from paz.pipelines import PIX2POSEPowerDrill
 
 
-image = load_image('images/test_image2.jpg')
+URL = ('https://github.com/oarriaga/altamira-data/releases/download'
+       '/v0.9.1/image_with_YCB_objects.jpg')
+filename = os.path.basename(URL)
+fullpath = get_file(filename, URL, cache_subdir='paz/tests')
+image = load_image(fullpath)
 camera = Camera()
 camera.intrinsics_from_HFOV(55, image.shape)
 
-pipeline = PIX2POSEPowerDrill(camera, offsets=[0.25, 0.25], epsilon=0.015)
-inferences = pipeline(image)
-show_image(inferences['image'])
+detect = PIX2YCBTools6D(camera, offsets=[0.25, 0.25], epsilon=0.015)
+inferences = detect(image)
 
-
-import glob
-for image_path in glob.glob('images/test_0*.jpg'):
-    print(image_path)
-    image = load_image(image_path)
-    inferences = pipeline(image)
-    show_image(inferences['image'])
+image = inferences['image']
+show_image(image)
