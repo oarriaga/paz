@@ -97,13 +97,12 @@ def add_residual_block(input, filters, kernel_size):
     """
     out = ResidualMain(filters, kernel_size)(input)
 
-    res = input
-    # Using the Keras functional APIs, project the last dimension of the tensor to
-    # match the new filter size
-    if out.shape[-1] != input.shape[-1]:
-        res = Project(out.shape[-1])(res)
+    residual = input
 
-    return add([res, out])
+    if out.shape[-1] != input.shape[-1]:
+        residual = Project(out.shape[-1])(residual)
+
+    return add([residual, out])
 
 
 class ResizeVideo(Layer):
@@ -123,12 +122,11 @@ class ResizeVideo(Layer):
           # Return
             A downsampled size of the video according to the new height and width it should be resized to.
         """
-        # Extract the images out of the batch video tensor.
         video_shape = tf.shape(video)
         video_reshaped = tf.reshape(video, [-1, video_shape[2], video_shape[3], video_shape[4]])
-        # Resize the images
+
         images_resized = self.resizing_layer(video_reshaped)
-        # Rearrange the images back into the batch video tensor.
+
         videos = tf.reshape(images_resized,
                             [video_shape[0], video_shape[1], self.height, self.width, video_shape[4]])
         return videos
