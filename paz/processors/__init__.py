@@ -136,7 +136,6 @@ from .standard import PrintTopics
 from .standard import FloatToBoolean
 from .standard import NoneConverter
 from .standard import AveragePredictions
-from .standard import WeightedAveragePredictions
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC

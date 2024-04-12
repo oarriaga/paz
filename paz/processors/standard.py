@@ -2,7 +2,7 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import append_values, predict, predict_with_nones
+from ..backend.standard import append_values, predict, predict_with_nones, weighted_average
 
 
 class ControlMap(Processor):
@@ -543,16 +543,18 @@ class AveragePredictions(Processor):
     """Averages the last n predictions
     # Arguments
         window_size: Int. Number of predictions to average over.
+        weighted: Bool. If True, the average is weighted by the index of the prediction.
         value: Bool, Int or Float value. Value to average over.
     # Returns
         Bool, Int or Float value. Averaged value.
     """
 
-    def __init__(self, window_size=1):
+    def __init__(self, window_size=1, weighted=False):
         super(AveragePredictions, self).__init__()
         if window_size <= 0:
             raise ValueError('``window_size`` must be greater than 0')
         self.window_size = window_size
+        self.weighted = weighted
         self.predictions = []
 
     def call(self, value):
@@ -562,42 +564,9 @@ class AveragePredictions(Processor):
             self.predictions.append(value)
             if len(self.predictions) > self.window_size:
                 self.predictions.pop(0)
-            mean = np.mean(self.predictions, axis=0)
-        return mean
 
-
-class WeightedAveragePredictions(Processor):
-    """Weighted averages the last n predictions
-    # Arguments
-        window_size: Int. Number of predictions to average over.
-        value: Int or Float value. Value to average over.
-    # Returns
-        Int or Float value. Averaged value.
-    """
-
-    def __init__(self, window_size=1):
-        super(WeightedAveragePredictions, self).__init__()
-        self.window_size = window_size
-        self.predictions = []
-
-    def call(self, value):
-        if value is None:
-            mean = None
-        else:
-            size = len(self.predictions)
-
-            self.predictions.append(value)
-            if size > self.window_size:
-                self.predictions.pop(0)
-
-            mean = 0
-            if len(self.predictions) <= 1:
-                mean = value
+            if self.weighted:
+                mean = weighted_average(self.predictions)
             else:
-                total_weights = 0
-                for prediction_index in range(0, size):
-                    weight = (prediction_index + 1) / size
-                    mean = mean + self.predictions[prediction_index] * weight
-                    total_weights = total_weights + weight
-                mean = mean / total_weights
+                mean = np.mean(self.predictions, axis=0)
         return mean

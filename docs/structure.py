@@ -270,7 +270,8 @@ PAGES = [
             standard.pad_matrix,
             standard.max_pooling_2d,
             standard.predict,
-            standard.predict_with_nones
+            standard.predict_with_nones,
+            standard.weighted_average
         ],
     },
 
@@ -611,8 +612,7 @@ PAGES = [
             processors.PrintTopics,
             processors.FloatToBoolean,
             processors.NoneConverter,
-            processors.AveragePredictions,
-            processors.WeightedAveragePredictions
+            processors.AveragePredictions
         ]
     },
 

@@ -294,3 +294,22 @@ def predict_with_nones(x, model, preprocess=None, postprocess=None):
     if postprocess is not None:
         y = postprocess(y)
     return y
+
+def weighted_average(list_of_values):
+    """Returns the weighted average of a list of values.
+    # Arguments
+        list_of_values: List of values to be averaged.
+    # Returns
+        Bool, Int or Float value. Averaged value.
+    """
+    if len(list_of_values) < 1:
+        raise ValueError('List must contain at least one element')
+    else:
+        total_weights = 0
+        mean = 0
+        for list_index in range(0, len(list_of_values)):
+            weight = (list_index + 1) / len(list_of_values)
+            mean = mean + list_of_values[list_index] * weight
+            total_weights = total_weights + weight
+        mean = mean / total_weights
+    return mean

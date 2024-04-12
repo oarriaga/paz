@@ -112,11 +112,10 @@ class ClassifyVVAD(SequentialProcessor):
         preprocess = PreprocessImage(input_size[1:3], (0.0, 0.0, 0.0))
         preprocess.add(pr.BufferImages(input_size, stride=stride))
         self.add(pr.PredictWithNones(self.classifier, preprocess))
-        self.add(pr.CopyDomain([0], [0]))
-        if average_type == 'mean':
-            self.add(pr.ControlMap(pr.AveragePredictions(averaging_window_size), [0], [0]))
-        elif average_type == 'weighted':
-            self.add(pr.ControlMap(pr.WeightedAveragePredictions(averaging_window_size), [0], [0]))
+
+        weighted_mean = average_type == 'weighted'
+        self.add(pr.ControlMap(pr.AveragePredictions(averaging_window_size, weighted_mean), [0], [0]))
+
         self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))
         self.add(pr.CopyDomain([0], [1]))
         self.add(pr.ControlMap(pr.FloatToBoolean(), [0], [0]))
