@@ -43,7 +43,7 @@ class OpenImages(Loader):
 
     def load_class_names(self):
         classes_file = os.path.join(self.path, CLASS_DESCRIPTIONS_FILE)
-        class_data = np.loadtxt(classes_file, delimiter=",", dtype=np.str)
+        class_data = np.loadtxt(classes_file, delimiter=",", dtype=str)
 
         # class ID zero is background
         self.machine_to_arg['background'] = 0

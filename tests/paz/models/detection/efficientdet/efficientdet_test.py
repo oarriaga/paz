@@ -1,8 +1,7 @@
 import pytest
 import numpy as np
 import tensorflow as tf
-from keras.utils.layer_utils import count_params
-from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Input, Flatten
 from tensorflow.keras.utils import get_file
 from paz.models.detection.efficientdet import (
     EFFICIENTDETD0, EFFICIENTDETD1, EFFICIENTDETD2, EFFICIENTDETD3,
@@ -355,7 +354,8 @@ def test_EfficientDet_ClassNet(input_shape, scaling_coefficients,
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
-    class_outputs = ClassNet(*args, num_classes)
+    _, class_outputs = ClassNet(*args, num_classes)
+    class_outputs = [Flatten()(class_output) for class_output in class_outputs]
     assert len(class_outputs) == 5, 'Class outputs length fail'
     for class_output, output_shape in zip(class_outputs, output_shapes):
         assert class_output.shape == (None, output_shape), (
@@ -401,7 +401,8 @@ def test_EfficientDet_BoxesNet(input_shape, scaling_coefficients,
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
-    boxes_outputs = BoxesNet(*args, num_dims)
+    _, boxes_outputs = BoxesNet(*args, num_dims)
+    boxes_outputs = [Flatten()(boxes_output) for boxes_output in boxes_outputs]
     assert len(boxes_outputs) == 5
     for boxes_output, output_shape in zip(boxes_outputs, output_shapes):
         assert boxes_output.shape == (None, output_shape), (
@@ -538,3 +539,26 @@ def test_prior_boxes(model, aspect_ratios, num_boxes):
     assert prior_boxes.shape[0] == num_boxes, (
         "Incorrect number of anchor boxes")
     del model
+
+
+def count_params(weights):
+    """Count the total number of scalars composing the weights.
+    This function is taken from the repository of [Keras]
+    (https://github.com/keras-team/keras/blob/428ed9f03a0a0b2edc22d4ce29
+     001857f617227c/keras/utils/layer_utils.py#L107)
+    This is a patch and it should be removed eventually.
+
+    # Arguments:
+        weights: List, containing the weights
+            on which to compute params.
+
+    # Returns:
+        Int, the total number of scalars composing the weights.
+    """
+    unique_weights = {id(w): w for w in weights}.values()
+    unique_weights = [w for w in unique_weights if hasattr(w, "shape")]
+    weight_shapes = [w.shape.as_list() for w in unique_weights]
+    standardized_weight_shapes = [
+        [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
+    ]
+    return int(sum(np.prod(p) for p in standardized_weight_shapes))

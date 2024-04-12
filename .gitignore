@@ -25,6 +25,8 @@ checkpoint
 *.iml
 *.jpeg
 *.tgz
+*.yml
+*.ply
 
 !.github/manifest.xml
 

@@ -34,6 +34,7 @@ from .draw import DrawHandSkeleton
 from .draw import DrawRGBMask
 from .draw import DrawRGBMasks
 from .draw import DrawText
+from .draw import DrawHumanPose6D
 
 from .image import CastImage
 from .image import SubtractMeanImage
@@ -47,6 +48,7 @@ from .image import RandomContrast
 from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
+from .image import ResizeImageDynamic
 from .image import RandomImageBlur
 from .image import RandomGaussianBlur
 from .image import RandomFlipImageLeftRight
@@ -70,7 +72,15 @@ from .image import ImagenetPreprocessInput
 from .image import DivideStandardDeviationImage
 from .image import ScaledResize
 from .image import BufferImages
-
+from .image import ComputeResizingShape
+from .image import PadImage
+from .image import EqualizeHistogram
+from .image import InvertColors
+from .image import Posterize
+from .image import Solarize
+from .image import SharpenImage
+from .image import Cutout
+from .image import AddGaussianNoise
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
@@ -108,6 +118,12 @@ from .keypoints import NormalizeKeypoints2D
 from .keypoints import ArgumentsToImageKeypoints2D
 from .keypoints import ScaleKeypoints
 from .keypoints import ComputeOrientationVector
+from .keypoints import MergeKeypoints2D
+from .keypoints import FilterKeypoints2D
+from .keypoints import StandardizeKeypoints2D
+from .keypoints import DestandardizeKeypoints2D
+from .keypoints import OptimizeHumanPose3D
+
 
 from .standard import ControlMap
 from .standard import ExpandDomain
@@ -136,10 +152,20 @@ from .standard import PrintTopics
 from .standard import FloatToBoolean
 from .standard import NoneConverter
 from .standard import AveragePredictions
+from .standard import ComputeCommonRowIndices
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
 from .pose import Translation3DFromBoxWidth
+from .pose import MatchPoses
+from .pose import RotationMatrixToAxisAngle
+from .pose import ConcatenatePoses
+from .pose import ConcatenateScale
+from .pose import AugmentPose6D
+from .pose import ToPose6D
+from .pose import BoxesWithOneHotVectorsToPose6D
+from .pose import BoxesToPose6D
+from .pose import BoxesWithClassArgToPose6D
 
 from .groups import ToAffineMatrix
 from .groups import RotationVectorToQuaternion

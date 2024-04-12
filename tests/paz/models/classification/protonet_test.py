@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-from keras.utils.layer_utils import count_params
 from paz.models.classification.protonet import (
     ProtoEmbedding, ProtoNet, compute_pairwise_distances)
 
@@ -91,3 +90,26 @@ def test_pairwise_distances_with_values_to_negative():
     values = compute_pairwise_distances(a, b).numpy()
     distances = np.array([[4.0], [2.0], [3.0]])
     assert np.allclose(values, distances)
+
+
+def count_params(weights):
+    """Count the total number of scalars composing the weights.
+    This function is taken from the repository of [Keras]
+    (https://github.com/keras-team/keras/blob/428ed9f03a0a0b2edc22d4ce29
+     001857f617227c/keras/utils/layer_utils.py#L107)
+    This is a patch and it should be removed eventually.
+
+    # Arguments:
+        weights: List, containing the weights
+            on which to compute params.
+
+    # Returns:
+        Int, the total number of scalars composing the weights.
+    """
+    unique_weights = {id(w): w for w in weights}.values()
+    unique_weights = [w for w in unique_weights if hasattr(w, "shape")]
+    weight_shapes = [w.shape.as_list() for w in unique_weights]
+    standardized_weight_shapes = [
+        [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
+    ]
+    return int(sum(np.prod(p) for p in standardized_weight_shapes))

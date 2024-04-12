@@ -174,3 +174,32 @@ def get_affine_transform(source_points, destination_points):
         Transformation matrix.
     '''
     return cv2.getAffineTransform(source_points, destination_points)
+
+
+def apply_histogram_equalization(image):
+    """Return the histogram equalized image.
+
+    # Arguments
+        image: Numpy array.
+
+    # Returns
+        Numpy array.
+    """
+    return cv2.equalizeHist(image)
+
+
+def convolve_image(image, kernel):
+    """Convolves image by applying a `kernel`.
+
+    # Arguments
+        image: Array, raw image.
+        kernel: Array, the convolution kernel.
+
+    # Returns:
+        Array: Solarized image.
+    """
+    return cv2.filter2D(image, -1, kernel)
+
+
+def rotation_matrix_to_rotation_vector(rotation_matrix):
+    return cv2.Rodrigues(rotation_matrix)

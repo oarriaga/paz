@@ -25,7 +25,7 @@ class AugmentBoxes(SequentialProcessor):
         super(AugmentBoxes, self).__init__()
         self.add(pr.ToImageBoxCoordinates())
         self.add(pr.Expand(mean=mean))
-        self.add(pr.RandomSampleCrop())
+        self.add(pr.RandomSampleCrop(1.0))
         self.add(pr.RandomFlipBoxesLeftRight())
         self.add(pr.ToNormalizedBoxCoordinates())
 
