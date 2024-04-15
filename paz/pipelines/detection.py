@@ -924,8 +924,8 @@ class DetectVVAD(Processor):
         average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set averaging_window_size to 1 to
             disable averaging
     """
-    def __init__(self, architecture: Architecture_Options = 'CNN2Plus1D_Light', stride=10, averaging_window_size=6,
-                 average_type: Average_Options = 'weighted', offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
+    def __init__(self, architecture='CNN2Plus1D_Light', stride=10, averaging_window_size=6,
+                 average_type='weighted', offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
         self.colors = colors
