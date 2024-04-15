@@ -283,7 +283,7 @@ def original_18(input_layer, height, width):
 
 
 def CNN2Plus1D(weights=None, input_shape=(38, 96, 96, 3), seed=305865,
-               architecture: Architecture_Options = 'CNN2Plus1D'):
+               architecture='CNN2Plus1D'):
     """Binary Classification for videos with 2+1D CNNs.
     # Arguments
         weights: ``None`` or string with pre-trained dataset. Valid datasets
