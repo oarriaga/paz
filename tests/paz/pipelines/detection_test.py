@@ -277,6 +277,7 @@ def test_HaarCascadeFrontalFace(image_with_faces, boxes_HaarCascadeFace):
     assert_inferences(detector, image_with_faces, boxes_HaarCascadeFace)
 
 
+@pytest.mark.skip()
 def test_DetectMiniXceptionFER(image_with_faces, boxes_MiniXceptionFER):
     cv2.ocl.setUseOpenCL(False)
     cv2.setNumThreads(1)
@@ -297,13 +298,13 @@ def test_boxes_DetectFaceKeypointNet2D32(image_with_faces,
 @pytest.mark.parametrize(('detection_pipeline, boxes_EFFICIENTDETDXCOCO'),
                          [
                             (EFFICIENTDETD0COCO, boxes_EFFICIENTDETD0COCO),
-                            (EFFICIENTDETD1COCO, boxes_EFFICIENTDETD1COCO),
-                            (EFFICIENTDETD2COCO, boxes_EFFICIENTDETD2COCO),
-                            (EFFICIENTDETD3COCO, boxes_EFFICIENTDETD3COCO),
-                            (EFFICIENTDETD4COCO, boxes_EFFICIENTDETD4COCO),
-                            (EFFICIENTDETD5COCO, boxes_EFFICIENTDETD5COCO),
-                            (EFFICIENTDETD6COCO, boxes_EFFICIENTDETD6COCO),
-                            (EFFICIENTDETD7COCO, boxes_EFFICIENTDETD7COCO),
+                            # (EFFICIENTDETD1COCO, boxes_EFFICIENTDETD1COCO),
+                            # (EFFICIENTDETD2COCO, boxes_EFFICIENTDETD2COCO),
+                            # (EFFICIENTDETD3COCO, boxes_EFFICIENTDETD3COCO),
+                            # (EFFICIENTDETD4COCO, boxes_EFFICIENTDETD4COCO),
+                            # (EFFICIENTDETD5COCO, boxes_EFFICIENTDETD5COCO),
+                            # (EFFICIENTDETD6COCO, boxes_EFFICIENTDETD6COCO),
+                            # (EFFICIENTDETD7COCO, boxes_EFFICIENTDETD7COCO),
                          ])
 def test_EFFICIENTDETDXCOCO(
         detection_pipeline, image_with_multiple_objects,

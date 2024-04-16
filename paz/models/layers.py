@@ -117,3 +117,29 @@ class ExpectedDepth(Layer):
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0][0], self.num_keypoints, 1)
+
+
+class ReduceMean(Layer):
+    def __init__(self, axes=[1, 2], keepdims=True):
+        self.axes = axes
+        self.keepdims = keepdims
+        super(ReduceMean, self).__init__()
+
+    def call(self, x):
+        return tf.reduce_mean(x, self.axes, keepdims=True)
+
+
+class Sigmoid(Layer):
+    def __init__(self):
+        super(Sigmoid, self).__init__()
+
+    def call(self, x):
+        return tf.sigmoid(x)
+
+
+class Add(Layer):
+    def __init__(self):
+        super(Add, self).__init__()
+
+    def call(self, x, y):
+        return tf.add(x, y)
