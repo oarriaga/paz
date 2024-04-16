@@ -584,6 +584,59 @@ class ScaledResize(Processor):
         return output_image, image_scale
 
 
+class BufferImages(Processor):
+    """Buffers an image to store and process multiple images.
+
+    # Arguments
+        input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
+            e.g. (38, 96, 96, 3).
+        stride: Integer, specifies after how many images the buffer will return the all buffered images.
+            In a scenario with an already full buffer and a stride of 10,
+            after each 10th call the buffer will be returned.
+            The stride must be smaller than the frames (the first argument of the input_size).
+
+    # Methods
+        call()
+    """
+    def __init__(self, input_size, stride=25):
+        if input_size[0] < stride:
+            raise ValueError('Buffer size must be equal or larger than play rate')
+        super(BufferImages, self).__init__()
+        self.stride = stride
+        self.frames_since_last_update = 0
+
+        # Buffer
+        self.buffer_size = input_size[0]
+        self.buffer = np.zeros(self.buffer_size, dtype=(np.uint8, input_size[1:]))
+        self.buffer_index = 0
+        self.is_full = False
+
+    def append(self, image):
+        """Appends an image to the end of the buffer."""
+        if self.is_full:
+            self.buffer = np.append(self.buffer[1:], [image], axis=0)
+        else:
+            self.buffer[self.buffer_index] = image
+            self.buffer_index = self.buffer_index + 1
+            if self.buffer_index >= self.buffer_size:
+                self.is_full = True
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Array, raw input image.
+        # Returns
+            an array of images if the buffer is full and the play rate is reached, else None.
+        """
+        self.append(image)
+        self.frames_since_last_update = self.frames_since_last_update + 1
+
+        if self.is_full and self.frames_since_last_update >= self.stride:
+            self.frames_since_last_update = 0
+            return np.array([self.buffer])
+        return None
+
+      
 class ComputeResizingShape(Processor):
     """Computes the final size of the image to be scaled by `size`
     such that the largest dimension of the image is equal to `size`.
