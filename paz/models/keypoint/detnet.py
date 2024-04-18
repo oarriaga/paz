@@ -1,5 +1,6 @@
 
 import numpy as np
+import sys
 import os
 import keras
 import tensorflow as tf
@@ -42,22 +43,17 @@ class ZeroPadding(Layer):
 
 
 class GatherND(Layer):
-    def __init__(self, input_shape, uv, batch_dims=0, name=None, **kwargs):
+    def __init__(self, uv, batch_dims=0, name=None, **kwargs):
         super().__init__(name=name, **kwargs)
         self.batch_dims = batch_dims
         self.uv = uv
-        self.input_shape = input_shape
+        self.num_keypoints = 21
 
-    def build(self):
-        self.compute_output_spec(self.input_shape)
+    def compute_output_shape(self):
+        return (None, 21, 3)
 
     def gather_nd(self, inputs):
-
-        inputs = tf.convert_to_tensor(inputs)
-        xyz = tf.gather_nd(
-                keras.ops.transpose(inputs, [0, 3, 1, 2, 4]),
-                self.uv, batch_dims=self.batch_dims)
-        return xyz
+        return tf.gather_nd(inputs, self.uv, batch_dims=self.batch_dims)
 
     def call(self, inputs):
         outputs = self.gather_nd(inputs)
@@ -80,7 +76,7 @@ def block(tensor, filters, kernel_size, strides, name, rate=1, with_relu=True):
                    kernel_regularizer=l2(0.5 * (1.0)), name=name + '_conv2d',
                    kernel_initializer=VarianceScaling(
                        mode="fan_avg", distribution="uniform"))(x)
-    x = BatchNormalization(name=name + '_batch_normaliReshapezation')(x)
+    x = BatchNormalization(name=name + '_batch_normalization')(x)
     if with_relu:
         x = ReLU()(x)
     return x
@@ -148,18 +144,18 @@ def get_pose_tile(N):
                   np.tile(x.reshape([32, 1]), [1, 32])], -1)
     x = np.expand_dims(x, 0)
     x = tf.constant(x, dtype=tf.float32)
-    pose_tile = K.tile(x, [N, 1, 1, 1])
+    pose_tile = tf.tile(x, [1, 1, 1, 1])
     return pose_tile
 
 
 def tf_heatmap_to_uv(heatmap):
     shape = K.int_shape(heatmap)
-    heatmap = Reshape((shape[1], -1, shape[3]))(heatmap)
+    heatmap = Reshape((-1, shape[3]))(heatmap)
     argmax = keras.ops.argmax(heatmap, axis=1)
     argmax_x = argmax // shape[2]
     argmax_y = argmax % shape[2]
     uv = keras.ops.stack((argmax_x, argmax_y), axis=1)
-    uv = keras.ops.transpose(uv, [0, 1, 3, 2])
+    uv = keras.ops.transpose(uv, [0, 2, 1])
     return uv
 
 
@@ -189,9 +185,9 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21):
 
     name = 'prior_based_hand'
     features = resnet50(x, name + '_resnet')
-    pose_tile = get_pose_tile(K.int_shape(x)[1])
-    features = concatenate([features, pose_tile], -1)
+    pose_tile = get_pose_tile(K.int_shape(x)[0])
 
+    features = concatenate([features, pose_tile], -1)
     heat_map = net2D(features, num_keypoints, name + '_hmap_0')
     features = concatenate([features, heat_map], axis=-1)
 
@@ -205,17 +201,15 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21):
 
     uv = tf_heatmap_to_uv(heat_map)
 
-    # xyz = keras.ops.transpose(location_map, [0, 3, 1, 2, 4])
-    # xyz = tf.gather_nd(
-        # keras.ops.transpose(location_map, [0, 3, 1, 2, 4]), uv, batch_dims=2)[0]
-    # uv = uv[0]
-    
-    # shape_ = K.int_shape(location_map)
+    xyz = keras.ops.transpose(location_map, [0, 3, 1, 2, 4])
+    # xyz = keras.ops.take(xyz[0], uv[0], axis=0)
+    # print(K.int_shape(xyz))
+    xyz = GatherND(uv, batch_dims=2)(xyz)
 
-    xyz = GatherND((None, 32, 32, 21, 3), uv, batch_dims=2)(location_map)[0]
-
-
+    xyz = xyz[0]
+    uv = uv[0]
     model = Model(image, outputs=[xyz, uv])
+    # print(model.summary())
 
     URL = ('https://github.com/oarriaga/altamira-data/releases/download'
            '_v0.14/detnet_weights.hdf5')
