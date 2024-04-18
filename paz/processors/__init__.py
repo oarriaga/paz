@@ -21,6 +21,7 @@ from .detection import BoxesWithOneHotVectorsToBoxes2D
 from .detection import BoxesWithClassArgToBoxes2D
 from .detection import RoundBoxes
 from .detection import MergeNMSBoxWithClass
+from .detection import AddClassAndScoreToBoxes
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
@@ -70,6 +71,7 @@ from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
 from .image import DivideStandardDeviationImage
 from .image import ScaledResize
+from .image import BufferImages
 from .image import ComputeResizingShape
 from .image import PadImage
 from .image import EqualizeHistogram
@@ -129,6 +131,7 @@ from .standard import CopyDomain
 from .standard import ExtendInputs
 from .standard import SequenceWrapper
 from .standard import Predict
+from .standard import PredictWithNones
 from .standard import ToClassName
 from .standard import ExpandDims
 from .standard import BoxClassToOneHotVector
@@ -146,6 +149,9 @@ from .standard import Scale
 from .standard import AppendValues
 from .standard import BooleanToTextMessage
 from .standard import PrintTopics
+from .standard import FloatToBoolean
+from .standard import NoneConverter
+from .standard import AveragePredictions
 from .standard import ComputeCommonRowIndices
 
 from .pose import SolvePNP

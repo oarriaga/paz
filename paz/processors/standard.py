@@ -2,9 +2,8 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import (append_values, predict,
+from ..backend.standard import (append_values, predict, predict_with_nones, weighted_average,
                                 compute_common_row_indices)
-
 
 class ControlMap(Processor):
     """Controls which inputs are passed ''processor'' and the order of its
@@ -247,6 +246,24 @@ class Predict(Processor):
     def call(self, x):
         return predict(x, self.model, self.preprocess, self.postprocess)
 
+class PredictWithNones(Processor):
+    """Perform input preprocessing, model prediction and output postprocessing based on batches.
+
+    # Arguments
+        model: Class with a ''predict'' method e.g. a Keras model.
+        preprocess: Function applied to given inputs.
+        postprocess: Function applied to outputted predictions from model.
+    """
+
+    def __init__(self, model, preprocess=None, postprocess=None):
+        super(PredictWithNones, self).__init__()
+        self.model = model
+        self.preprocess = preprocess
+        self.postprocess = postprocess
+
+    def call(self, x):
+        return predict_with_nones(x, self.model, self.preprocess, self.postprocess)
+
 
 class ToClassName(Processor):
     def __init__(self, labels):
@@ -483,6 +500,76 @@ class PrintTopics(Processor):
     def call(self, dictionary):
         [print(dictionary[topic]) for topic in self.topics]
         return dictionary
+
+
+class FloatToBoolean(Processor):
+    """Converts a float to a boolean.
+    # Arguments
+        threshold: Float. Threshold value to convert to boolean.
+        value: Float.
+
+    # Returns
+        Boolean.
+    """
+    def __init__(self, threshold=0.5):
+        super(FloatToBoolean, self).__init__()
+        self.threshold = threshold
+
+    def call(self, value):
+        return value > self.threshold
+
+
+class NoneConverter(Processor):
+    """Converts a None value to the last valid or a default value.
+    # Arguments
+        default_value: Any. Default value to convert to until a first valid value is stored.
+        value: Any Noneable value.
+
+    # Returns
+        Any.
+    """
+
+    def __init__(self, default_value=0.0):
+        super(NoneConverter, self).__init__()
+        self.default_value = default_value
+
+    def call(self, value):
+        if value is not None:
+            self.default_value = value
+        return self.default_value
+
+
+class AveragePredictions(Processor):
+    """Averages the last n predictions
+    # Arguments
+        window_size: Int. Number of predictions to average over.
+        weighted: Bool. If True, the average is weighted by the index of the prediction.
+        value: Bool, Int or Float value. Value to average over.
+    # Returns
+        Bool, Int or Float value. Averaged value.
+    """
+
+    def __init__(self, window_size=1, weighted=False):
+        super(AveragePredictions, self).__init__()
+        if window_size <= 0:
+            raise ValueError('``window_size`` must be greater than 0')
+        self.window_size = window_size
+        self.weighted = weighted
+        self.predictions = []
+
+    def call(self, value):
+        if value is None:
+            mean = None
+        else:
+            self.predictions.append(value)
+            if len(self.predictions) > self.window_size:
+                self.predictions.pop(0)
+
+            if self.weighted:
+                mean = weighted_average(self.predictions)
+            else:
+                mean = np.mean(self.predictions, axis=0)
+        return mean
 
 
 class ComputeCommonRowIndices(Processor):

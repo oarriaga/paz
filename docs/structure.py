@@ -66,7 +66,8 @@ PAGES = [
             boxes.to_corner_form,
             boxes.extract_bounding_box_corners,
             boxes.scale_box,
-            boxes.change_box_coordinates
+            boxes.change_box_coordinates,
+            boxes.add_class_and_score
         ],
     },
 
@@ -281,7 +282,9 @@ PAGES = [
             standard.tensor_to_numpy,
             standard.pad_matrix,
             standard.max_pooling_2d,
-            standard.predict
+            standard.predict,
+            standard.predict_with_nones,
+            standard.weighted_average
         ],
     },
 
@@ -291,7 +294,9 @@ PAGES = [
         'functions': [
             models.classification.MiniXception,
             models.ProtoEmbedding,
-            models.ProtoNet
+            models.ProtoNet,
+            models.CNN2Plus1D,
+            models.VVAD_LRS3_LSTM
         ],
     },
 
@@ -445,7 +450,8 @@ PAGES = [
             processors.GetNonZeroArguments,
             processors.FlipLeftRightImage,
             processors.DivideStandardDeviationImage,
-            processors.ScaledResize
+            processors.ScaledResize,
+            processors.BufferImages
         ]
     },
 
@@ -512,7 +518,8 @@ PAGES = [
             processors.BoxesWithClassArgToBoxes2D,
             processors.RoundBoxes,
             processors.RemoveClass,
-            processors.ScaleBox
+            processors.ScaleBox,
+            processors.AddClassAndScoreToBoxes
         ]
     },
 
@@ -605,6 +612,7 @@ PAGES = [
             processors.ExtendInputs,
             processors.SequenceWrapper,
             processors.Predict,
+            processors.PredictWithNones,
             processors.ToClassName,
             processors.ExpandDims,
             processors.BoxClassToOneHotVector,
@@ -621,7 +629,10 @@ PAGES = [
             processors.Scale,
             processors.AppendValues,
             processors.BooleanToTextMessage,
-            processors.PrintTopics
+            processors.PrintTopics,
+            processors.FloatToBoolean,
+            processors.NoneConverter,
+            processors.AveragePredictions
         ]
     },
 
@@ -638,7 +649,8 @@ PAGES = [
         'page': 'pipelines/classification.md',
         'classes': [
             pipelines.MiniXceptionFER,
-            pipelines.ClassifyHandClosure
+            pipelines.ClassifyHandClosure,
+            pipelines.ClassifyVVAD
         ]
     },
 
@@ -667,7 +679,8 @@ PAGES = [
             pipelines.EFFICIENTDETD5COCO,
             pipelines.EFFICIENTDETD6COCO,
             pipelines.EFFICIENTDETD7COCO,
-            pipelines.EFFICIENTDETD0VOC
+            pipelines.EFFICIENTDETD0VOC,
+            pipelines.DetectVVAD
         ]
     },
 
