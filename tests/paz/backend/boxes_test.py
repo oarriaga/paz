@@ -121,35 +121,33 @@ def input_box_indices():
 @pytest.fixture
 def class_predictions():
     return np.array(
-            [[0.21607161, 0.1958673, 0.15782336, 0.14358733, 0.2866504],
-             [0.21370212, 0.25497785, 0.11090728, 0.14044093, 0.27997182],
-             [0.13075765, 0.29108782, 0.15743962, 0.17582314, 0.24489177],
-             [0.2383799, 0.14701877, 0.20044762, 0.20865859, 0.20549512],
-             [0.12209236, 0.12411443, 0.20841956, 0.27059405, 0.2747796]])
+        [[0.21607161, 0.1958673, 0.15782336, 0.14358733, 0.2866504],
+         [0.21370212, 0.25497785, 0.11090728, 0.14044093, 0.27997182],
+         [0.13075765, 0.29108782, 0.15743962, 0.17582314, 0.24489177],
+         [0.2383799, 0.14701877, 0.20044762, 0.20865859, 0.20549512],
+         [0.12209236, 0.12411443, 0.20841956, 0.27059405, 0.2747796]])
 
 
 @pytest.fixture
 def target_nms_box_indices():
-    return np.array([
+    return [
         [3, 1, 2, 65, 2, 1, 3, 65, 65, 3, 2, 1, 65, 3, 2, 1, 0, 65],
         [3, 1, 2, 1, 65, 3, 65, 3, 0, 65],
         [3, 0, 1, 2, 65, 2, 1, 0, 3, 65, 65, 3, 0, 2, 1, 65, 3, 2, 0,
          1, 0, 1, 65, 2, 3],
         [3, 0, 1, 2, 1, 65, 3, 65, 3, 0, 1, 65, 2, 3],
-        [3, 1, 2, 65, 2, 1, 3, 65, 65, 3, 2, 1, 65, 3, 2, 1, 0, 1, 65]
-        ])
+        [3, 1, 2, 65, 2, 1, 3, 65, 65, 3, 2, 1, 65, 3, 2, 1, 0, 1, 65]]
 
 
 @pytest.fixture
 def target_class_labels():
-    return np.array([
+    return [
         [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4],
         [0, 0, 1, 1, 2, 2, 3, 3, 4, 4],
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3,
          4, 4, 4, 4, 4],
         [0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4, 4],
-        [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4]
-        ])
+        [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4]]
 
 
 def test_compute_iou(boxes, target):
@@ -174,7 +172,7 @@ def test_compute_ious(boxes, target):
 @pytest.mark.parametrize('box', [[.1, .2, .3, .4]])
 def test_denormalize_box(box):
     box = denormalize_box(box, (200, 300))
-    assert(box == (30, 40, 90, 80))
+    assert (box == (30, 40, 90, 80))
 
 
 def test_to_center_form_inverse(boxes):
@@ -191,7 +189,7 @@ def test_to_center_form(boxes):
     box_A = boxes[0]
     boxes = to_center_form(box_A)
     boxes_A_result = to_corner_form(boxes)
-    assert(boxes_A_result.all() == box_A.all())
+    assert (boxes_A_result.all() == box_A.all())
 
 
 def test_match_box(boxes_with_label, target_unique_matches):
@@ -247,16 +245,12 @@ def test_extract_corners3D(points3D):
     assert np.allclose(top_right, np.array([267, 310, 299]))
 
 
-@pytest.mark.parametrize(
-                            ('arg, nms_thresh, epsilon'),
-                            [
-                                (0, 0.45, 0.01),
-                                (1, 0.45, 0.2),
-                                (2, 0.75, 0.01),
-                                (3, 0.75, 0.2),
-                                (4, 0.50, 0.01),
-                            ]
-                        )
+@pytest.mark.parametrize(('arg, nms_thresh, epsilon'),
+                         [(0, 0.45, 0.01),
+                          (1, 0.45, 0.2),
+                          (2, 0.75, 0.01),
+                          (3, 0.75, 0.2),
+                          (4, 0.50, 0.01)])
 def test_nms_per_class_and_merge_box(
     arg, nms_thresh, epsilon, prior_boxes_SSD300, input_box_indices,
         class_predictions, target_nms_box_indices, target_class_labels):

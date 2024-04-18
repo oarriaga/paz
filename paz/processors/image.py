@@ -24,9 +24,17 @@ from ..backend.image import normalized_device_coordinates_to_image
 from ..backend.image import image_to_normalized_device_coordinates
 from ..backend.image import replace_lower_than_threshold
 from ..backend.image import flip_left_right
+from ..backend.image import compute_resizing_shape
+from ..backend.image import pad_image
+from ..backend.image import equalize_histogram
+from ..backend.image import invert_colors
+from ..backend.image import posterize
+from ..backend.image import solarize
+from ..backend.image import cutout
+from ..backend.image import add_gaussian_noise
 from ..backend.image import BILINEAR
 from ..backend.image.tensorflow_image import imagenet_preprocess_input
-
+from ..backend.image.opencv_image import convolve_image
 
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
@@ -201,6 +209,20 @@ class ResizeImages(Processor):
 
     def call(self, images):
         return [resize_image(image, self.shape) for image in images]
+
+
+class ResizeImageDynamic(Processor):
+    """Resize image.
+
+    # Arguments
+        size: List of two ints.
+    """
+    def __init__(self, method=BILINEAR):
+        self.method = method
+        super(ResizeImageDynamic, self).__init__()
+
+    def call(self, image, shape):
+        return resize_image(image, shape, self.method)
 
 
 class RandomImageBlur(Processor):
@@ -560,3 +582,219 @@ class ScaledResize(Processor):
         """
         output_image, image_scale = scale_resize(image, self.image_size)
         return output_image, image_scale
+
+
+class BufferImages(Processor):
+    """Buffers an image to store and process multiple images.
+
+    # Arguments
+        input_size: Tuple of integers. Input shape to the model in following format: (frames, height, width, channels)
+            e.g. (38, 96, 96, 3).
+        stride: Integer, specifies after how many images the buffer will return the all buffered images.
+            In a scenario with an already full buffer and a stride of 10,
+            after each 10th call the buffer will be returned.
+            The stride must be smaller than the frames (the first argument of the input_size).
+
+    # Methods
+        call()
+    """
+    def __init__(self, input_size, stride=25):
+        if input_size[0] < stride:
+            raise ValueError('Buffer size must be equal or larger than play rate')
+        super(BufferImages, self).__init__()
+        self.stride = stride
+        self.frames_since_last_update = 0
+
+        # Buffer
+        self.buffer_size = input_size[0]
+        self.buffer = np.zeros(self.buffer_size, dtype=(np.uint8, input_size[1:]))
+        self.buffer_index = 0
+        self.is_full = False
+
+    def append(self, image):
+        """Appends an image to the end of the buffer."""
+        if self.is_full:
+            self.buffer = np.append(self.buffer[1:], [image], axis=0)
+        else:
+            self.buffer[self.buffer_index] = image
+            self.buffer_index = self.buffer_index + 1
+            if self.buffer_index >= self.buffer_size:
+                self.is_full = True
+
+    def call(self, image):
+        """
+        # Arguments
+            image: Array, raw input image.
+        # Returns
+            an array of images if the buffer is full and the play rate is reached, else None.
+        """
+        self.append(image)
+        self.frames_since_last_update = self.frames_since_last_update + 1
+
+        if self.is_full and self.frames_since_last_update >= self.stride:
+            self.frames_since_last_update = 0
+            return np.array([self.buffer])
+        return None
+
+      
+class ComputeResizingShape(Processor):
+    """Computes the final size of the image to be scaled by `size`
+    such that the largest dimension of the image is equal to `size`.
+
+    # Arguments
+        size: Int, final size of maximum dimension of the image.
+    """
+    def __init__(self, size):
+        self.size = size
+        super(ComputeResizingShape, self).__init__()
+
+    def call(self, image):
+        return compute_resizing_shape(image, self.size)
+
+
+class PadImage(Processor):
+    """Pads the image to the final size `size`.
+
+    # Arguments
+        size: Int, final size of maximum dimension of the image.
+        mode: Str, specifying the type of padding.
+    """
+    def __init__(self, size, mode='constant'):
+        self.size = size
+        self.mode = mode
+        super(PadImage, self).__init__()
+
+    def call(self, image):
+        return pad_image(image, self.size, self.mode)
+
+
+class EqualizeHistogram(Processor):
+    """The Efficientpose implementation uses Histogram equalization
+    algorithm from python Pillow library. This version of Histogram
+    equalization produces slightly different results from that used in
+    the paper.
+    """
+    def __init__(self, probability=0.50):
+        self.probability = probability
+        super(EqualizeHistogram, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = equalize_histogram(image)
+        return image
+
+
+class InvertColors(Processor):
+    """Performs color / gray value inversion on a given image.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+    """
+    def __init__(self, probability=0.50):
+        self.probability = probability
+        super(InvertColors, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = invert_colors(image)
+        return image
+
+
+class Posterize(Processor):
+    """Performs posterization on a given image. This is achieved
+    by reducing the bit depth of the gray value.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        num_bits: Int, final bit depth after posterization.
+    """
+    def __init__(self, probability=0.50, num_bits=4):
+        self.probability = probability
+        self.num_bits = num_bits
+        super(Posterize, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = posterize(image, self.num_bits)
+        return image
+
+
+class Solarize(Processor):
+    """Performs solarization on a given image. This is achieved
+    by inverting those pixels whose gray values lie above
+    a certain `threshold`.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        threshold: Int, threshold value.
+    """
+    def __init__(self, probability=0.50, threshold=225):
+        self.probability = probability
+        self.threshold = threshold
+        super(Solarize, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = solarize(image, self.threshold)
+        return image
+
+
+class SharpenImage(Processor):
+    """Performs image sharpening by applying a high pass filter.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        kernel: Array, the high pass filter.
+    """
+    def __init__(self, probability=0.50):
+        self.probability = probability
+        self.kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+        super(SharpenImage, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = convolve_image(image, self.kernel)
+        return image
+
+
+class Cutout(Processor):
+    """Cuts out a square of size `size` x `size` at a random location
+    in the image and fills it with `fill` value.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        size: Int, size of cutout square.
+        fill: Int, value to fill cutout with.
+    """
+    def __init__(self, probability=0.50, size=16, fill=128):
+        self.probability = probability
+        self.size = size
+        self.fill = fill
+        super(Cutout, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = cutout(image, self.size, self.fill)
+        return image
+
+
+class AddGaussianNoise(Processor):
+    """Adds Gaussian noise defined by `mean` and `scale` to the image.
+
+    # Arguments
+        probability: Float, probability of data transformation.
+        mean: Int, mean of Gaussian noise.
+        scale: Int, percent of variance relative to 255
+            (max gray value of 8 bit image).
+    """
+    def __init__(self, probability=0.50, mean=0, scale=0.20):
+        self.probability = probability
+        self.mean = mean
+        self.variance = scale * 255
+        self.sigma = self.variance ** 0.5
+        super(AddGaussianNoise, self).__init__()
+
+    def call(self, image):
+        if self.probability > np.random.rand():
+            image = add_gaussian_noise(image, self.mean, self.sigma)
+        return image

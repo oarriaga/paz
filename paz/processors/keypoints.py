@@ -2,7 +2,8 @@ from warnings import warn
 
 import numpy as np
 
-from ..abstract import Processor
+from .. import processors as pr
+from ..abstract import SequentialProcessor, Processor
 from ..backend.keypoints import translate_keypoints
 from ..backend.keypoints import arguments_to_image_points2D
 from ..backend.keypoints import normalize_keypoints2D
@@ -11,6 +12,17 @@ from ..backend.keypoints import normalize_keypoints
 from ..backend.keypoints import denormalize_keypoints
 from ..backend.keypoints import compute_orientation_vector
 from ..backend.image import get_scaling_factor
+from ..backend.keypoints import standardize
+from ..backend.keypoints import filter_keypoints2D
+from ..backend.keypoints import destandardize
+from ..backend.keypoints import merge_into_mean
+from ..backend.keypoints import filter_keypoints3D
+from ..backend.keypoints import initialize_translation, solve_least_squares
+from ..backend.keypoints import get_bones_length, compute_reprojection_error
+from ..backend.keypoints import compute_optimized_pose3D
+from ..datasets.human36m import args_to_mean
+from ..datasets.human36m import h36m_to_coco_joints2D
+from ..datasets.human36m import human_start_joints
 
 
 class ProjectKeypoints(Processor):
@@ -218,3 +230,122 @@ class ComputeOrientationVector(Processor):
     def call(self, keypoints):
         orientation = compute_orientation_vector(keypoints, self.parents)
         return orientation
+
+
+class MergeKeypoints2D(Processor):
+    def __init__(self, args_to_mean):
+        """ Merges keypoints together then takes the mean of the keypoints
+
+        # Arguments
+            args_to_mean: keypoints indices
+
+        # Returns
+            Filtered keypoints2D
+        """
+        super(MergeKeypoints2D, self).__init__()
+        self.args_to_mean = args_to_mean
+
+    def call(self, keypoints2D):
+        return merge_into_mean(keypoints2D, self.args_to_mean)
+
+
+class FilterKeypoints2D(Processor):
+    def __init__(self, args_to_mean, h36m_to_coco_joints2D):
+        """ Filter keypoints2D
+
+        # Arguments
+            args_to_mean: keypoints indices
+            h36m_to_coco_joints2D: h36m joints indices
+
+        # Returns
+            Filtered keypoints2D
+        """
+        super(FilterKeypoints2D, self).__init__()
+        self.h36m_to_coco_joints2D = h36m_to_coco_joints2D
+        self.args_to_mean = args_to_mean
+
+    def call(self, keypoints2D):
+        return filter_keypoints2D(keypoints2D, self.args_to_mean,
+                                  self.h36m_to_coco_joints2D)
+
+
+class StandardizeKeypoints2D(Processor):
+    def __init__(self, data_mean2D, data_stdev2D):
+        """ Standardize 2D keypoints
+
+        # Arguments
+            data_mean2D: mean 2D
+            data_stdev2D: standard deviation 2D
+
+        # Return
+            standerized keypoints2D
+        """
+        self.mean = data_mean2D
+        self.stdev = data_stdev2D
+        super(StandardizeKeypoints2D, self).__init__()
+
+    def call(self, keypoints2D):
+        return standardize(keypoints2D, self.mean, self.stdev)
+
+
+class DestandardizeKeypoints2D(Processor):
+    def __init__(self, data_mean3D, data_stdev3D, dim_to_use):
+        """ Destandardize 2D keypoints
+
+        # Arguments
+            data_mean3D: mean 3D
+            data_stdev3D: standard deviation 3D
+            dim_to_use: dimensions to use
+
+        # Return
+            detandardize 2D keypoints
+        """
+        self.mean = data_mean3D
+        self.stdev = data_stdev3D
+        self.valid = dim_to_use
+        super(DestandardizeKeypoints2D, self).__init__()
+
+    def call(self, keypoints2D):
+        data = keypoints2D.reshape(-1, 48)
+        rearanged_data = np.zeros((len(data), len(self.mean)),
+                                  dtype=np.float32)
+        rearanged_data[:, self.valid] = data
+        destandardize_data = destandardize(rearanged_data, self.mean,
+                                           self.stdev)
+        return destandardize_data
+
+
+class OptimizeHumanPose3D(Processor):
+    """ Optimize human 3D pose
+
+    #Arguments
+        solver: library solver
+        camera_intrinsics: camera intrinsic parameters
+
+    #Returns
+        keypoints3D, optimized keypoints3D
+    """
+    def __init__(self, args_to_joints3D, solver, camera_intrinsics):
+        super(OptimizeHumanPose3D, self).__init__()
+        self.args_to_joints3D = args_to_joints3D
+        self.camera_intrinsics = camera_intrinsics
+        self.filter_keypoints2D = SequentialProcessor(
+            [pr.MergeKeypoints2D(args_to_mean),
+             pr.FilterKeypoints2D(args_to_mean, h36m_to_coco_joints2D)])
+        self.solver = solver
+
+    def call(self, keypoints3D, keypoints2D):
+        joints3D = filter_keypoints3D(keypoints3D, self.args_to_joints3D)
+        joints2D = self.filter_keypoints2D(keypoints2D)
+        root2D = joints2D[:, :2]
+        length2D, length3D = get_bones_length(
+            joints2D, keypoints3D, human_start_joints)
+        ratio = length3D / length2D
+        initial_joint_translation = initialize_translation(
+            root2D, self.camera_intrinsics, ratio)
+        joint_translation = solve_least_squares(
+            self.solver, compute_reprojection_error, initial_joint_translation,
+            joints3D, joints2D, self.camera_intrinsics)
+        optimized_poses3D, projection2D = compute_optimized_pose3D(
+            keypoints3D, joint_translation, self.camera_intrinsics)
+        return joints2D, joints3D, optimized_poses3D, projection2D

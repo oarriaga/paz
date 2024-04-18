@@ -4,7 +4,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Activation, Concatenate, Reshape
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Flatten,
                                      MaxPooling2D, SeparableConv2D,
-                                     UpSampling2D)
+                                     UpSampling2D, GroupNormalization)
 from .layers import FuseFeature, GetDropConnect
 
 
@@ -32,8 +32,10 @@ def build_detector_head(middles, num_classes, num_dims, aspect_ratios,
     num_anchors = len(aspect_ratios) * num_scales
     args = (middles, num_anchors, FPN_num_filters,
             box_class_repeats, survival_rate)
-    class_outputs = ClassNet(*args, num_classes)
-    boxes_outputs = BoxesNet(*args, num_dims)
+    _, class_outputs = ClassNet(*args, num_classes)
+    class_outputs = [Flatten()(class_output) for class_output in class_outputs]
+    _, boxes_outputs = BoxesNet(*args, num_dims)
+    boxes_outputs = [Flatten()(boxes_output) for boxes_output in boxes_outputs]
     classes = Concatenate(axis=1)(class_outputs)
     regressions = Concatenate(axis=1)(boxes_outputs)
     num_boxes = K.int_shape(regressions)[-1] // num_dims
@@ -61,8 +63,8 @@ def ClassNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     """
     bias_initializer = tf.constant_initializer(-np.log((1 - 0.01) / 0.01))
     num_filters = [num_filters, num_classes * num_anchors]
-    return build_head(features, num_blocks, num_filters, survival_rate,
-                      bias_initializer)
+    return build_head(features, num_blocks, num_filters,
+                      bias_initializer, survival_rate)
 
 
 def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
@@ -82,20 +84,20 @@ def BoxesNet(features, num_anchors=9, num_filters=32, num_blocks=4,
     """
     bias_initializer = tf.zeros_initializer()
     num_filters = [num_filters, num_dims * num_anchors]
-    return build_head(features, num_blocks, num_filters, survival_rate,
-                      bias_initializer)
+    return build_head(features, num_blocks, num_filters,
+                      bias_initializer, survival_rate)
 
 
 def build_head(middle_features, num_blocks, num_filters,
-               survival_rate, bias_initializer):
+               bias_initializer, survival_rate, normalization='batch'):
     """Builds ClassNet/BoxNet head.
 
     # Arguments
         middle_features: Tuple. input features.
         num_blocks: Int, number of intermediate layers.
         num_filters: Int, number of intermediate layer filters.
-        survival_rate: Float, used by drop connect.
         bias_initializer: Callable, bias initializer.
+        survival_rate: Float, used by drop connect.
 
     # Returns
         head_outputs: List, with head outputs.
@@ -103,18 +105,27 @@ def build_head(middle_features, num_blocks, num_filters,
     conv_blocks = build_head_conv2D(
         num_blocks, num_filters[0], tf.zeros_initializer())
     final_head_conv = build_head_conv2D(1, num_filters[1], bias_initializer)[0]
-    head_outputs = []
+    pre_head_outputs, head_outputs = [], []
+
+    if normalization == 'batch':
+        normalizer = BatchNormalization
+        args = ()
+
+    elif normalization == 'group':
+        normalizer = GroupNormalization
+        args = (int(num_filters[0] / 16), )
+
     for x in middle_features:
         for block_arg in range(num_blocks):
             x = conv_blocks[block_arg](x)
-            x = BatchNormalization()(x)
+            x = normalizer(*args)(x)
             x = tf.nn.swish(x)
             if block_arg > 0 and survival_rate:
                 x = x + GetDropConnect(survival_rate=survival_rate)(x)
+        pre_head_outputs.append(x)
         x = final_head_conv(x)
-        x = Flatten()(x)
         head_outputs.append(x)
-    return head_outputs
+    return [pre_head_outputs, head_outputs]
 
 
 def build_head_conv2D(num_blocks, num_filters, bias_initializer):

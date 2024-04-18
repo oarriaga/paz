@@ -66,7 +66,8 @@ PAGES = [
             boxes.to_corner_form,
             boxes.extract_bounding_box_corners,
             boxes.scale_box,
-            boxes.change_box_coordinates
+            boxes.change_box_coordinates,
+            boxes.add_class_and_score
         ],
     },
 
@@ -109,7 +110,19 @@ PAGES = [
             keypoints.compute_orientation_vector,
             keypoints.rotate_keypoints3D,
             keypoints.flip_along_x_axis,
-            keypoints.uv_to_vu
+            keypoints.uv_to_vu,
+            keypoints.standardize,
+            keypoints.destandardize,
+            keypoints.initialize_translation,
+            keypoints.solve_least_squares,
+            keypoints.get_bones_length,
+            keypoints.compute_reprojection_error,
+            keypoints.merge_into_mean,
+            keypoints.filter_keypoints,
+            keypoints.filter_keypoints3D,
+            keypoints.filter_keypoints2D,
+            keypoints.compute_optimized_pose3D,
+            keypoints.human_pose3D_to_pose6D
         ],
     },
 
@@ -174,7 +187,8 @@ PAGES = [
             draw.draw_keypoints,
             draw.points3D_to_RGB,
             draw.draw_RGB_mask,
-            draw.draw_RGB_masks
+            draw.draw_RGB_masks,
+            draw.draw_human_pose6D
         ],
     },
 
@@ -268,7 +282,9 @@ PAGES = [
             standard.tensor_to_numpy,
             standard.pad_matrix,
             standard.max_pooling_2d,
-            standard.predict
+            standard.predict,
+            standard.predict_with_nones,
+            standard.weighted_average
         ],
     },
 
@@ -278,7 +294,9 @@ PAGES = [
         'functions': [
             models.classification.MiniXception,
             models.ProtoEmbedding,
-            models.ProtoNet
+            models.ProtoNet,
+            models.CNN2Plus1D,
+            models.VVAD_LRS3_LSTM
         ],
     },
 
@@ -309,6 +327,7 @@ PAGES = [
             models.Projector,
             models.DetNet,
             models.IKNet,
+            models.SimpleBaseline
 
         ],
     },
@@ -431,7 +450,8 @@ PAGES = [
             processors.GetNonZeroArguments,
             processors.FlipLeftRightImage,
             processors.DivideStandardDeviationImage,
-            processors.ScaledResize
+            processors.ScaledResize,
+            processors.BufferImages
         ]
     },
 
@@ -449,7 +469,8 @@ PAGES = [
             processors.DrawHandSkeleton,
             processors.DrawRGBMask,
             processors.DrawRGBMasks,
-            processors.DrawText
+            processors.DrawText,
+            processors.DrawHumanPose6D
         ]
     },
 
@@ -497,7 +518,8 @@ PAGES = [
             processors.BoxesWithClassArgToBoxes2D,
             processors.RoundBoxes,
             processors.RemoveClass,
-            processors.ScaleBox
+            processors.ScaleBox,
+            processors.AddClassAndScoreToBoxes
         ]
     },
 
@@ -517,6 +539,11 @@ PAGES = [
             processors.ArgumentsToImageKeypoints2D,
             processors.ScaleKeypoints,
             processors.ComputeOrientationVector,
+            processors.MergeKeypoints2D,
+            processors.FilterKeypoints2D,
+            processors.StandardizeKeypoints2D,
+            processors.DestandardizeKeypoints2D,
+            processors.OptimizeHumanPose3D
         ]
     },
 
@@ -585,6 +612,7 @@ PAGES = [
             processors.ExtendInputs,
             processors.SequenceWrapper,
             processors.Predict,
+            processors.PredictWithNones,
             processors.ToClassName,
             processors.ExpandDims,
             processors.BoxClassToOneHotVector,
@@ -601,7 +629,10 @@ PAGES = [
             processors.Scale,
             processors.AppendValues,
             processors.BooleanToTextMessage,
-            processors.PrintTopics
+            processors.PrintTopics,
+            processors.FloatToBoolean,
+            processors.NoneConverter,
+            processors.AveragePredictions
         ]
     },
 
@@ -618,7 +649,8 @@ PAGES = [
         'page': 'pipelines/classification.md',
         'classes': [
             pipelines.MiniXceptionFER,
-            pipelines.ClassifyHandClosure
+            pipelines.ClassifyHandClosure,
+            pipelines.ClassifyVVAD
         ]
     },
 
@@ -647,7 +679,8 @@ PAGES = [
             pipelines.EFFICIENTDETD5COCO,
             pipelines.EFFICIENTDETD6COCO,
             pipelines.EFFICIENTDETD7COCO,
-            pipelines.EFFICIENTDETD0VOC
+            pipelines.EFFICIENTDETD0VOC,
+            pipelines.DetectVVAD
         ]
     },
 
@@ -684,7 +717,9 @@ PAGES = [
             pipelines.HigherHRNetHumanPose2D,
             pipelines.DetNetHandKeypoints,
             pipelines.MinimalHandPoseEstimation,
-            pipelines.DetectMinimalHand
+            pipelines.DetectMinimalHand,
+            pipelines.EstimateHumanPose3D,
+            pipelines.EstimateHumanPose
         ]
     },
 
