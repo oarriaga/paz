@@ -3,7 +3,6 @@ import json
 import argparse
 from datetime import datetime
 
-# from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import (
     CSVLogger, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau)
@@ -14,7 +13,7 @@ from paz.pipelines import AugmentDetection
 from paz.optimization import MultiBoxLoss
 
 from open_images import OpenImagesV6
-from paz.models import SSD300
+from model import SSD512Custom
 
 root_path = os.path.expanduser('~')
 DEFAULT_DATA_PATH = os.path.join(root_path, 'hand_dataset/hand_dataset/')
@@ -51,42 +50,19 @@ args = parser.parse_args()
 
 
 # loading datasets
-"""
+path = os.path.join(root_path, 'fiftyone/open-images-v6/')
 data_managers, datasets = [], []
-for split in [pr.TRAIN, pr.VAL, pr.TEST]:
-    data_manager = HandDataset(args.data_path, split)
-    data = data_manager.load_data()
-    data_managers.append(data_manager)
-    datasets.append(data)
-
-from egohand_dataset import EgoHands
-path = os.path.join(root_path, 'Downloads/egohands/_LABELLED_SAMPLES/')
-data_manager = EgoHands(path)
-ego_data = data_manager.load_data()
-datasets[0].extend(ego_data)
-"""
-
-path = os.path.join(root_path, '/home/octavio/Datasets/fiftyone/open-images-v6/')
-data_managers, datasets = [], []
-for split in [pr.TRAIN, pr.VAL, pr.TEST]:
+for split in [pr.TRAIN, pr.VAL]:
     data_manager = OpenImagesV6(path, split, ['background', 'Human hand'])
     data = data_manager.load_data()
     data_managers.append(data_manager)
     datasets.append(data)
 
-
 # instantiating model
 num_classes = data_managers[0].num_classes
-from model import SSD512Custom
 
 model = SSD512Custom(num_classes, trainable_base=True)
-"""
-model = SSD300(num_classes, base_weights='VOC', head_weights=None,
-               trainable_base=True)
-model.load_weights('experiments/SSD300_RUN_00_10-06-2022_16-55-40/model_weights.hdf5')
-"""
 size = model.input_shape[1]
-
 
 # Instantiating loss and metrics
 # optimizer = SGD(args.learning_rate, args.momentum)
@@ -127,7 +103,7 @@ with open(os.path.join(experiment_path, 'model_summary.txt'), 'w') as filer:
 log = CSVLogger(os.path.join(experiment_path, 'optimization.log'))
 stop = EarlyStopping(patience=args.stop_patience, verbose=1)
 plateau = ReduceLROnPlateau(patience=args.reduce_patience, verbose=1)
-save_name = os.path.join(experiment_path, 'model_weights.hdf5')
+save_name = os.path.join(experiment_path, 'model.weights.h5')
 save = ModelCheckpoint(save_name, verbose=1, save_best_only=True,
                        save_weights_only=True)
 
@@ -137,6 +113,4 @@ model.fit(
     epochs=args.num_epochs,
     verbose=1,
     callbacks=[log, stop, plateau, save],
-    validation_data=sequencers[1],
-    use_multiprocessing=True,
-    workers=6)
+    validation_data=sequencers[1])

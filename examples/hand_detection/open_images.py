@@ -1,11 +1,11 @@
-from paz import processors as pr
-from paz.abstract import Loader
-
-
 import os
 import glob
 import csv
 import numpy as np
+from paz import processors as pr
+from paz.abstract import Loader
+
+root_path = os.path.expanduser('~')
 
 
 class OpenImagesV6(Loader):
@@ -81,7 +81,7 @@ class OpenImagesV6(Loader):
 
 if __name__ == '__main__':
     root_path = os.path.expanduser('~')
-    path = os.path.join(root_path, '/home/octavio/fiftyone/open-images-v6/')
+    path = os.path.join(root_path, 'fiftyone/open-images-v6/')
 
     train_data_manager = OpenImagesV6(
         path, pr.TRAIN, ['background', 'Human hand'])
