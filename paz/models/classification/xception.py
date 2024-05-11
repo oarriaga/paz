@@ -3,8 +3,8 @@ from tensorflow.keras.layers import Activation, MaxPooling2D, Add, Input
 from tensorflow.keras.layers import GlobalAveragePooling2D
 from tensorflow.keras import Model
 from tensorflow.keras.regularizers import l2
-from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import get_file
+from keras import layers
 
 
 URL = 'https://github.com/oarriaga/altamira-data/releases/download/v0.6/'
@@ -84,6 +84,113 @@ def build_xception(
     return model
 
 
+def build_minixception(input_shape, num_classes, l2_reg=0.01):
+    """Function for instantiating an Mini-Xception model.
+
+    # Arguments
+        input_shape: List corresponding to the input shape of the model.
+        num_classes: Integer.
+        l2_reg. Float. L2 regularization used in the convolutional kernels.
+
+    # Returns
+        Tensorflow-Keras model.
+    """
+
+    regularization = l2(l2_reg)
+
+    # base
+    img_input = Input(input_shape)
+    x = Conv2D(5, (3, 3), strides=(1, 1), kernel_regularizer=regularization,
+               use_bias=False)(img_input)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Conv2D(8, (3, 3), strides=(1, 1), kernel_regularizer=regularization,
+               use_bias=False)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+
+    # module 1
+    residual = Conv2D(16, (1, 1), strides=(2, 2),
+                      padding='same', use_bias=False)(x)
+    residual = BatchNormalization()(residual)
+
+    x = SeparableConv2D(16, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = SeparableConv2D(16, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+    x = layers.add([x, residual])
+
+    # module 2
+    residual = Conv2D(32, (1, 1), strides=(2, 2),
+                      padding='same', use_bias=False)(x)
+    residual = BatchNormalization()(residual)
+
+    x = SeparableConv2D(32, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = SeparableConv2D(32, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+    x = layers.add([x, residual])
+
+    # module 3
+    residual = Conv2D(64, (1, 1), strides=(2, 2),
+                      padding='same', use_bias=False)(x)
+    residual = BatchNormalization()(residual)
+
+    x = SeparableConv2D(64, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = SeparableConv2D(64, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+    x = layers.add([x, residual])
+
+    # module 4
+    residual = Conv2D(128, (1, 1), strides=(1, 1),
+                      padding='same', use_bias=False)(x)
+    residual = BatchNormalization()(residual)
+
+    x = SeparableConv2D(128, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = SeparableConv2D(128, (3, 3), padding='same',
+                        depthwise_regularizer=regularization,
+                        use_bias=False)(x)
+    x = BatchNormalization()(x)
+
+    # x = MaxPooling2D((3, 3), strides=(1, 1), padding='same')(x)
+    x = layers.add([x, residual])
+
+    x = Conv2D(num_classes, (3, 3),
+               # kernel_regularizer=regularization,
+               padding='same')(x)
+    x = GlobalAveragePooling2D()(x)
+    output = Activation('softmax', name='predictions')(x)
+
+    model = Model(img_input, output)
+    return model
+
+
 def MiniXception(input_shape, num_classes, weights=None):
     """Build MiniXception (see references).
 
@@ -101,9 +208,10 @@ def MiniXception(input_shape, num_classes, weights=None):
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
     if weights == 'FER':
-        filename = 'fer2013_mini_XCEPTION.119-0.65.hdf5'
+        filename = 'fer2013_mini_XCEPTION.hdf5'
         path = get_file(filename, URL + filename, cache_subdir='paz/models')
-        model = load_model(path)
+        model = build_minixception(input_shape, num_classes)
+        model.load_weights(path)
     else:
         stem_kernels = [32, 64]
         block_data = [128, 128, 256, 256, 512, 512, 1024]
