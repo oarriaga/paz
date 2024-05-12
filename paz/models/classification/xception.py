@@ -88,9 +88,11 @@ def build_minixception(input_shape, num_classes, l2_reg=0.01):
     """Function for instantiating an Mini-Xception model.
 
     # Arguments
-        input_shape: List corresponding to the input shape of the model.
+        input_shape: List corresponding to the input shape
+            of the model.
         num_classes: Integer.
-        l2_reg. Float. L2 regularization used in the convolutional kernels.
+        l2_reg. Float. L2 regularization used
+            in the convolutional kernels.
 
     # Returns
         Tensorflow-Keras model.
@@ -178,12 +180,9 @@ def build_minixception(input_shape, num_classes, l2_reg=0.01):
                         use_bias=False)(x)
     x = BatchNormalization()(x)
 
-    # x = MaxPooling2D((3, 3), strides=(1, 1), padding='same')(x)
     x = layers.add([x, residual])
 
-    x = Conv2D(num_classes, (3, 3),
-               # kernel_regularizer=regularization,
-               padding='same')(x)
+    x = Conv2D(num_classes, (3, 3), padding='same')(x)
     x = GlobalAveragePooling2D()(x)
     output = Activation('softmax', name='predictions')(x)
 
