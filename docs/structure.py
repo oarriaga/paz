@@ -230,7 +230,15 @@ PAGES = [
             image.calculate_image_center,
             image.get_affine_transform,
             image.get_scaling_factor,
-            image.scale_resize
+            image.scale_resize,
+            image.compute_resizing_shape,
+            image.pad_image,
+            image.equalize_histogram,
+            image.invert_colors,
+            image.posterize,
+            image.solarize,
+            image.cutout,
+            image.add_gaussian_noise,
         ],
     },
 
@@ -284,7 +292,8 @@ PAGES = [
             standard.max_pooling_2d,
             standard.predict,
             standard.predict_with_nones,
-            standard.weighted_average
+            standard.weighted_average,
+            standard.compute_common_row_indices,
         ],
     },
 
@@ -346,7 +355,15 @@ PAGES = [
     {
         'page': 'models/pose_estimation.md',
         'functions': [
-            models.HigherHRNet
+            models.HigherHRNet,
+            models.EfficientPosePhi0,
+            models.EfficientPosePhi1,
+            models.EfficientPosePhi2,
+            models.EfficientPosePhi3,
+            models.EfficientPosePhi4,
+            models.EfficientPosePhi5,
+            models.EfficientPosePhi6,
+            models.EfficientPosePhi7,
         ],
     },
 
@@ -358,7 +375,10 @@ PAGES = [
             models.layers.Conv2DNormalization,
             models.layers.SubtractScalar,
             models.layers.ExpectedValue2D,
-            models.layers.ExpectedDepth
+            models.layers.ExpectedDepth,
+            models.layers.ReduceMean,
+            models.layers.Sigmoid,
+            models.layers.Add,
         ],
     },
 
@@ -451,7 +471,16 @@ PAGES = [
             processors.FlipLeftRightImage,
             processors.DivideStandardDeviationImage,
             processors.ScaledResize,
-            processors.BufferImages
+            processors.BufferImages,
+            processors.PadImage,
+            processors.EqualizeHistogram,
+            processors.InvertColors,
+            processors.Posterize,
+            processors.Solarize,
+            processors.SharpenImage,
+            processors.Cutout,
+            processors.AddGaussianNoise,
+
         ]
     },
 
@@ -580,7 +609,16 @@ PAGES = [
         'classes': [
             processors.SolvePNP,
             processors.SolveChangingObjectPnPRANSAC,
-            processors.Translation3DFromBoxWidth
+            processors.Translation3DFromBoxWidth,
+            processors.MatchPoses,
+            processors.RotationMatrixToAxisAngle,
+            processors.ConcatenatePoses,
+            processors.ConcatenateScale,
+            processors.AugmentPose6D,
+            processors.ToPose6D,
+            processors.BoxesWithOneHotVectorsToPose6D,
+            processors.BoxesToPose6D,
+            processors.BoxesWithClassArgToPose6D,
         ]
     },
 
@@ -632,7 +670,8 @@ PAGES = [
             processors.PrintTopics,
             processors.FloatToBoolean,
             processors.NoneConverter,
-            processors.AveragePredictions
+            processors.AveragePredictions,
+            processors.ComputeCommonRowIndices,
         ]
     },
 
@@ -731,7 +770,12 @@ PAGES = [
             pipelines.HeadPoseKeypointNet2D32,
             pipelines.SingleInstancePIX2POSE6D,
             pipelines.MultiInstancePIX2POSE6D,
-            pipelines.MultiInstanceMultiClassPIX2POSE6D
+            pipelines.MultiInstanceMultiClassPIX2POSE6D,
+            pipelines.AugmentColor,
+            pipelines.AugmentEfficientPose,
+            pipelines.EfficientDetPreprocess,
+            pipelines.EfficientDetPostprocess,
+            pipelines.EstimateEfficientPose,
         ]
     },
 
