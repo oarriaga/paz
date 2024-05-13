@@ -29,7 +29,6 @@ def labeled_emotion():
     return 'happy'
 
 
-@pytest.mark.skip()
 def test_MiniXceptionFER(image_with_face, labeled_emotion, labeled_scores):
     classifier = MiniXceptionFER()
     inferences = classifier(image_with_face)

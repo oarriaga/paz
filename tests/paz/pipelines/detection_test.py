@@ -277,7 +277,6 @@ def test_HaarCascadeFrontalFace(image_with_faces, boxes_HaarCascadeFace):
     assert_inferences(detector, image_with_faces, boxes_HaarCascadeFace)
 
 
-@pytest.mark.skip()
 def test_DetectMiniXceptionFER(image_with_faces, boxes_MiniXceptionFER):
     cv2.ocl.setUseOpenCL(False)
     cv2.setNumThreads(1)
