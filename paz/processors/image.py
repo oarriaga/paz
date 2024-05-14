@@ -32,7 +32,7 @@ from ..backend.image import posterize
 from ..backend.image import solarize
 from ..backend.image import cutout
 from ..backend.image import add_gaussian_noise
-from ..backend.image import BILINEAR
+from ..backend.image import BILINEAR, CUBIC
 from ..backend.image.tensorflow_image import imagenet_preprocess_input
 from ..backend.image.opencv_image import convolve_image
 
@@ -383,16 +383,35 @@ class BlendRandomCroppedBackground(Processor):
             raise ValueError('No paths given in ``background_paths``')
         self.background_paths = background_paths
 
+    def _random_shape_crop(self, image, shape, buffer=200):
+        """Randomly crops an image of the given ``shape``.
+
+        # Arguments
+            image: Numpy array.
+            shape: List of two ints ''(H, W)''.
+
+        # Returns
+            Numpy array of cropped image.
+        """
+        H, W = image.shape[:2]
+        image_copy = image.copy()
+        if (shape[0] >= H) or (shape[1] >= W):
+            image = resize_image(image_copy, (shape[0] + buffer,
+                                              shape[1] + buffer),
+                                 method=CUBIC)
+            H, W = image.shape[:2]
+        x_min = np.random.randint(0, W - shape[1])
+        y_min = np.random.randint(0, H - shape[0])
+        x_max = int(x_min + shape[1])
+        y_max = int(y_min + shape[0])
+        cropped_image = image[y_min:y_max, x_min:x_max]
+        return cropped_image
+
     def call(self, image):
         random_arg = np.random.randint(0, len(self.background_paths))
         background_path = self.background_paths[random_arg]
         background = load_image(background_path)
-        background = random_shape_crop(background, image.shape[:2])
-        if background is None:
-            H, W, num_channels = image.shape
-            # background contains always a channel less
-            num_channels = num_channels - 1
-            background = make_random_plain_image((H, W, num_channels))
+        background = self._random_shape_crop(background, image.shape[:2])
         return blend_alpha_channel(image, background)
 
 
