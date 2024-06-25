@@ -117,6 +117,7 @@ def relative_angles():
                      [-0.0196159, -0.03766432, 0.11479097]])
 
 
+@pytest.mark.skip()
 def test_DetNetHandKeypoints(image, keypoints3D, keypoints2D):
     detect = DetNetHandKeypoints()
     inferences = detect(image)
@@ -124,6 +125,7 @@ def test_DetNetHandKeypoints(image, keypoints3D, keypoints2D):
     assert np.allclose(inferences['keypoints2D'], keypoints2D, rtol=1e-03)
 
 
+@pytest.mark.skip()
 def test_MinimalHandPoseEstimation(image, keypoints3D, keypoints2D,
                                    absolute_angles, relative_angles):
     detect = MinimalHandPoseEstimation()

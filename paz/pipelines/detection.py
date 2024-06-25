@@ -9,7 +9,7 @@ from ..models import (
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
-from .classification import MiniXceptionFER
+from .classification import MiniXceptionFER, ClassifyVVAD, Architecture_Options, Average_Options
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
 from ..backend.boxes import change_box_coordinates
@@ -886,3 +886,75 @@ class EFFICIENTDETD0VOC(DetectSingleShot):
                                base_weights='VOC', head_weights='VOC')
         super(EFFICIENTDETD0VOC, self).__init__(
             model, names, score_thresh, nms_thresh, draw=draw)
+
+
+class DetectVVAD(Processor):
+    """Visual Voice Activity Detection classification and detection pipeline.
+
+    # Example
+        ``` python
+        from paz.backend.camera import VideoPlayer, Camera
+        import paz.pipelines.detection as dt
+
+        detect = DetectVVAD()
+
+        pipeline = dt.DetectVVAD()
+        # To input multiple images, use a camera or a prerecorded video
+        camera = Camera(args.camera_id)
+        player = VideoPlayer((640, 480), pipeline, camera)
+        player.run()
+        ```
+
+    # Returns
+        Dictionary with ``image`` and ``boxes2D``.
+
+    # Returns
+        A function that takes an RGB image and outputs the predictions
+        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
+        The corresponding values of these keys contain the image with the drawn
+        inferences and a list of ``paz.abstract.messages.Boxes2D``.
+        Note multiple images are needed to produce a prediction.
+
+    # Arguments
+        architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
+            'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
+        stride: Integer. How many frames are between the predictions (computational expansive (low stride) vs
+            high latency (high stride))
+        averaging_window_size: Integer. How many predictions are averaged. Set to 1 to disable averaging
+        average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set averaging_window_size to 1 to
+            disable averaging
+    """
+    def __init__(self, architecture='CNN2Plus1D_Light', stride=10, averaging_window_size=6,
+                 average_type='weighted', offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
+        super(DetectVVAD, self).__init__()
+        self.offsets = offsets
+        self.colors = colors
+
+        # detection
+        self.copy = pr.Copy()
+        self.detect = HaarCascadeFrontalFace()
+        self.square = SequentialProcessor()
+        self.square.add(pr.SquareBoxes2D())
+        self.square.add(pr.OffsetBoxes2D(offsets))
+        self.clip = pr.ClipBoxes2D()
+        self.crop = pr.CropBoxes2D()
+
+        # classification
+        self.classify = ClassifyVVAD(stride=stride, averaging_window_size=averaging_window_size, average_type=str(average_type),
+                                     architecture=architecture)
+
+        # drawing and wrapping
+        self.class_names = self.classify.class_names
+        self.add_class_and_score = pr.AddClassAndScoreToBoxes(self.classify)
+        self.draw = pr.DrawBoxes2D(self.class_names, self.colors, True)
+        self.wrap = pr.WrapOutput(['image', 'boxes2D'])
+
+    def call(self, image):
+        image_copy = self.copy(image)
+        boxes2D = self.detect(image_copy)['boxes2D']
+        boxes2D = self.square(boxes2D)
+        boxes2D = self.clip(image, boxes2D)
+        cropped_images = self.crop(image, boxes2D)
+        boxes2D = self.add_class_and_score(cropped_images, boxes2D)
+        image = self.draw(image, boxes2D)
+        return self.wrap(image, boxes2D)

@@ -26,7 +26,7 @@ class Conv2DNormalization(Layer):
 
     def build(self, input_shape):
         self.gamma = self.add_weight(
-            name='gamma', shape=(input_shape[self.axis]),
+            name='gamma', shape=(input_shape[self.axis],),
             initializer=Constant(self.scale), trainable=True)
         # super(Conv2DNormalization, self).build(input_shape)
 
@@ -117,3 +117,42 @@ class ExpectedDepth(Layer):
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0][0], self.num_keypoints, 1)
+
+
+class ReduceMean(Layer):
+    """Wraps tensorflow's `reduce_mean` function into a keras layer.
+
+    # Arguments
+        axes: List of integers. Axes along which mean is to be calculated.
+        keepdims: Bool, whether to presere the dimension or not.
+    """
+ 
+    def __init__(self, axes=[1, 2], keepdims=True):
+        self.axes = axes
+        self.keepdims = keepdims
+        super(ReduceMean, self).__init__()
+
+    def call(self, x):
+        return tf.reduce_mean(x, self.axes, keepdims=True)
+
+
+class Sigmoid(Layer):
+    """Wraps tensorflow's `sigmoid` function into a keras layer.
+    """
+
+    def __init__(self):
+        super(Sigmoid, self).__init__()
+
+    def call(self, x):
+        return tf.sigmoid(x)
+
+
+class Add(Layer):
+    """Wraps tensorflow's `add` function into a keras layer.
+    """
+
+    def __init__(self):
+        super(Add, self).__init__()
+
+    def call(self, x, y):
+        return tf.add(x, y)

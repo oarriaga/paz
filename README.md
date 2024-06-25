@@ -1,7 +1,7 @@
 # (PAZ) Perception for Autonomous Systems
 [![Unit testing](https://github.com/oarriaga/paz/actions/workflows/python-package.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-package.yml)
 [![PyPI upload](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/python-publish.yml)
-[![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
+[![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg?branch=master)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
 [![Downloads](https://static.pepy.tech/personalized-badge/pypaz?period=total&units=international_system&left_color=grey&right_color=blue&left_text=Downloads)](https://pepy.tech/project/pypaz)
 
 Hierarchical perception library in Python.
@@ -33,7 +33,7 @@ PAZ is used in the following examples (links to **real-time demos** and training
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="250"> |
 
-|[MAML](https://github.com/oarriaga/paz/tree/maml_branch/examples/maml)| | |
+|[MAML](https://github.com/oarriaga/paz/blob/master/examples/maml)| | |
 |---------------------------|-----------------------|-----------------|
 |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/maml.png" width="325"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330"> |
 

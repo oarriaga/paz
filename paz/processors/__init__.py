@@ -21,6 +21,7 @@ from .detection import BoxesWithOneHotVectorsToBoxes2D
 from .detection import BoxesWithClassArgToBoxes2D
 from .detection import RoundBoxes
 from .detection import MergeNMSBoxWithClass
+from .detection import AddClassAndScoreToBoxes
 
 from .draw import DrawBoxes2D
 from .draw import DrawKeypoints2D
@@ -47,6 +48,7 @@ from .image import RandomContrast
 from .image import RandomHue
 from .image import ResizeImage
 from .image import ResizeImages
+from .image import ResizeImageDynamic
 from .image import RandomImageBlur
 from .image import RandomGaussianBlur
 from .image import RandomFlipImageLeftRight
@@ -69,7 +71,16 @@ from .image import FlipLeftRightImage
 from .image import ImagenetPreprocessInput
 from .image import DivideStandardDeviationImage
 from .image import ScaledResize
-
+from .image import BufferImages
+from .image import ComputeResizingShape
+from .image import PadImage
+from .image import EqualizeHistogram
+from .image import InvertColors
+from .image import Posterize
+from .image import Solarize
+from .image import SharpenImage
+from .image import Cutout
+from .image import AddGaussianNoise
 
 from .image import BGR_IMAGENET_MEAN
 from .image import RGB_IMAGENET_MEAN
@@ -120,6 +131,7 @@ from .standard import CopyDomain
 from .standard import ExtendInputs
 from .standard import SequenceWrapper
 from .standard import Predict
+from .standard import PredictWithNones
 from .standard import ToClassName
 from .standard import ExpandDims
 from .standard import BoxClassToOneHotVector
@@ -137,10 +149,23 @@ from .standard import Scale
 from .standard import AppendValues
 from .standard import BooleanToTextMessage
 from .standard import PrintTopics
+from .standard import FloatToBoolean
+from .standard import NoneConverter
+from .standard import AveragePredictions
+from .standard import ComputeCommonRowIndices
 
 from .pose import SolvePNP
 from .pose import SolveChangingObjectPnPRANSAC
 from .pose import Translation3DFromBoxWidth
+from .pose import MatchPoses
+from .pose import RotationMatrixToAxisAngle
+from .pose import ConcatenatePoses
+from .pose import ConcatenateScale
+from .pose import AugmentPose6D
+from .pose import ToPose6D
+from .pose import BoxesWithOneHotVectorsToPose6D
+from .pose import BoxesToPose6D
+from .pose import BoxesWithClassArgToPose6D
 
 from .groups import ToAffineMatrix
 from .groups import RotationVectorToQuaternion

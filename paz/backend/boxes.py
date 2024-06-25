@@ -722,3 +722,15 @@ def change_box_coordinates(outputs):
     classes = classes[np.newaxis]
     outputs = np.concatenate([boxes, classes], axis=2)
     return outputs
+
+
+def add_class_and_score(predictions, box):
+    """Adds class and score to box.
+
+    # Arguments
+        predictions: Dictionary with keys `class_name` and `scores`.
+        box: Array of shape `(num_nms_boxes, 4 + num_classes)`.
+    """
+    box.class_name = predictions['class_name']
+    box.score = np.amax(predictions['scores'])
+    return box

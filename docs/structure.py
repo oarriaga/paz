@@ -66,7 +66,8 @@ PAGES = [
             boxes.to_corner_form,
             boxes.extract_bounding_box_corners,
             boxes.scale_box,
-            boxes.change_box_coordinates
+            boxes.change_box_coordinates,
+            boxes.add_class_and_score
         ],
     },
 
@@ -229,7 +230,15 @@ PAGES = [
             image.calculate_image_center,
             image.get_affine_transform,
             image.get_scaling_factor,
-            image.scale_resize
+            image.scale_resize,
+            image.compute_resizing_shape,
+            image.pad_image,
+            image.equalize_histogram,
+            image.invert_colors,
+            image.posterize,
+            image.solarize,
+            image.cutout,
+            image.add_gaussian_noise,
         ],
     },
 
@@ -281,7 +290,10 @@ PAGES = [
             standard.tensor_to_numpy,
             standard.pad_matrix,
             standard.max_pooling_2d,
-            standard.predict
+            standard.predict,
+            standard.predict_with_nones,
+            standard.weighted_average,
+            standard.compute_common_row_indices,
         ],
     },
 
@@ -291,7 +303,9 @@ PAGES = [
         'functions': [
             models.classification.MiniXception,
             models.ProtoEmbedding,
-            models.ProtoNet
+            models.ProtoNet,
+            models.CNN2Plus1D,
+            models.VVAD_LRS3_LSTM
         ],
     },
 
@@ -341,7 +355,15 @@ PAGES = [
     {
         'page': 'models/pose_estimation.md',
         'functions': [
-            models.HigherHRNet
+            models.HigherHRNet,
+            models.EfficientPosePhi0,
+            models.EfficientPosePhi1,
+            models.EfficientPosePhi2,
+            models.EfficientPosePhi3,
+            models.EfficientPosePhi4,
+            models.EfficientPosePhi5,
+            models.EfficientPosePhi6,
+            models.EfficientPosePhi7,
         ],
     },
 
@@ -353,7 +375,10 @@ PAGES = [
             models.layers.Conv2DNormalization,
             models.layers.SubtractScalar,
             models.layers.ExpectedValue2D,
-            models.layers.ExpectedDepth
+            models.layers.ExpectedDepth,
+            models.layers.ReduceMean,
+            models.layers.Sigmoid,
+            models.layers.Add,
         ],
     },
 
@@ -445,7 +470,17 @@ PAGES = [
             processors.GetNonZeroArguments,
             processors.FlipLeftRightImage,
             processors.DivideStandardDeviationImage,
-            processors.ScaledResize
+            processors.ScaledResize,
+            processors.BufferImages,
+            processors.PadImage,
+            processors.EqualizeHistogram,
+            processors.InvertColors,
+            processors.Posterize,
+            processors.Solarize,
+            processors.SharpenImage,
+            processors.Cutout,
+            processors.AddGaussianNoise,
+
         ]
     },
 
@@ -512,7 +547,8 @@ PAGES = [
             processors.BoxesWithClassArgToBoxes2D,
             processors.RoundBoxes,
             processors.RemoveClass,
-            processors.ScaleBox
+            processors.ScaleBox,
+            processors.AddClassAndScoreToBoxes
         ]
     },
 
@@ -573,7 +609,16 @@ PAGES = [
         'classes': [
             processors.SolvePNP,
             processors.SolveChangingObjectPnPRANSAC,
-            processors.Translation3DFromBoxWidth
+            processors.Translation3DFromBoxWidth,
+            processors.MatchPoses,
+            processors.RotationMatrixToAxisAngle,
+            processors.ConcatenatePoses,
+            processors.ConcatenateScale,
+            processors.AugmentPose6D,
+            processors.ToPose6D,
+            processors.BoxesWithOneHotVectorsToPose6D,
+            processors.BoxesToPose6D,
+            processors.BoxesWithClassArgToPose6D,
         ]
     },
 
@@ -605,6 +650,7 @@ PAGES = [
             processors.ExtendInputs,
             processors.SequenceWrapper,
             processors.Predict,
+            processors.PredictWithNones,
             processors.ToClassName,
             processors.ExpandDims,
             processors.BoxClassToOneHotVector,
@@ -621,7 +667,11 @@ PAGES = [
             processors.Scale,
             processors.AppendValues,
             processors.BooleanToTextMessage,
-            processors.PrintTopics
+            processors.PrintTopics,
+            processors.FloatToBoolean,
+            processors.NoneConverter,
+            processors.AveragePredictions,
+            processors.ComputeCommonRowIndices,
         ]
     },
 
@@ -638,7 +688,8 @@ PAGES = [
         'page': 'pipelines/classification.md',
         'classes': [
             pipelines.MiniXceptionFER,
-            pipelines.ClassifyHandClosure
+            pipelines.ClassifyHandClosure,
+            pipelines.ClassifyVVAD
         ]
     },
 
@@ -667,7 +718,8 @@ PAGES = [
             pipelines.EFFICIENTDETD5COCO,
             pipelines.EFFICIENTDETD6COCO,
             pipelines.EFFICIENTDETD7COCO,
-            pipelines.EFFICIENTDETD0VOC
+            pipelines.EFFICIENTDETD0VOC,
+            pipelines.DetectVVAD
         ]
     },
 
@@ -718,7 +770,12 @@ PAGES = [
             pipelines.HeadPoseKeypointNet2D32,
             pipelines.SingleInstancePIX2POSE6D,
             pipelines.MultiInstancePIX2POSE6D,
-            pipelines.MultiInstanceMultiClassPIX2POSE6D
+            pipelines.MultiInstanceMultiClassPIX2POSE6D,
+            pipelines.AugmentColor,
+            pipelines.AugmentEfficientPose,
+            pipelines.EfficientDetPreprocess,
+            pipelines.EfficientDetPostprocess,
+            pipelines.EstimateEfficientPose,
         ]
     },
 

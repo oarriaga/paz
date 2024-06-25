@@ -35,6 +35,7 @@ from .detection import EFFICIENTDETD5COCO
 from .detection import EFFICIENTDETD6COCO
 from .detection import EFFICIENTDETD7COCO
 from .detection import EFFICIENTDETD0VOC
+from .detection import DetectVVAD
 
 from .keypoints import KeypointNetSharedAugmentation
 from .keypoints import KeypointNetInference
@@ -54,6 +55,7 @@ from .renderer import RandomizeRenderedImage
 
 from .classification import MiniXceptionFER
 from .classification import ClassifyHandClosure
+from .classification import ClassifyVVAD
 
 from .pose import EstimatePoseKeypoints
 from .pose import HeadPoseKeypointNet2D32
@@ -64,6 +66,11 @@ from .pose import SinglePowerDrillPIX2POSE6D
 from .pose import MultiPowerDrillPIX2POSE6D
 from .pose import PIX2POSEPowerDrill
 from .pose import PIX2YCBTools6D
+from .pose import AugmentColor
+from .pose import AugmentEfficientPose
+from .pose import EfficientPosePreprocess
+from .pose import EfficientPosePostprocess
+from .pose import EstimateEfficientPose
 
 from .masks import RGBMaskToImagePoints2D
 from .masks import RGBMaskToObjectPoints3D
