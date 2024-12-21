@@ -1,43 +1,12 @@
-*.pyc
-*.hdf5
-*.h5
-*.log
-*.pkl
-*.json
-*.pdf
-*.txt
-*.png
-*.jpg
-*.xml
-*.avi
-*.mp4
-*.npz
-*.csv
-*.ipynb_checkpoints
-*.ipynb
-*tf.data*
-*tf.index*
-checkpoint
-*.coverage
-*.npy
-*.p
-*.zip
-*.iml
-*.jpeg
-*.tgz
-*.yml
-*.ply
+# ignore everything
+*
 
-!.github/manifest.xml
+# except
+!.gitignore
+!*.py
+!*.md
+!*.sh
+!requirements.txt
 
-dist/*
-build/*
-pypaz.egg-info/
-.pytest_cache/
-
-docs/site/*
-docs/sources/*
-docs/theme/fonts/*
-docs/theme/img/*
-
-install.sh
+# extend exceptions to subdirectories
+!*/

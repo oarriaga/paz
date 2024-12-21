@@ -1,2 +1,0 @@
-from .canonical_pose_pixel_mask_renderer import CanonicalPosePixelMaskRenderer
-from .pixel_mask_renderer import PixelMaskRenderer
