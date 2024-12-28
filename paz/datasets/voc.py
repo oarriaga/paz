@@ -30,12 +30,12 @@ def get_class_names():
     ]
 
 
-def build_class_map():
+def build_arg_to_name():
     class_names = get_class_names()
     return dict(zip(range(len(class_names)), class_names))
 
 
-def build_class_map_inverse():
+def build_name_to_arg():
     class_names = get_class_names()
     return dict(zip(class_names, range(len(class_names))))
 
@@ -107,16 +107,17 @@ def load(name, split):
     """
     validate_inputs(name, split)
     path = download(name, split)
-    label_paths = get_label_paths(path, name, split)
     image_root = os.path.join(path, name, "JPEGImages")
-    parse = partial(parse_XML, build_class_map_inverse())
-    image_paths, boxes, class_args = [], [], []
-    for label_path in label_paths:
+    masks_root = os.path.join(path, name, "SegmentationClass")
+    parse = partial(parse_XML, build_name_to_arg())
+    image_paths, masks_paths, boxes, class_args = [], [], [], []
+    for label_path in get_label_paths(path, name, split):
         image_name, image_boxes, image_class_args = parse(label_path)
         if len(image_boxes) != 0:
             image_paths.append(os.path.join(image_root, image_name))
+            masks_paths.append(os.path.join(masks_root, image_name))
             boxes.append(image_boxes)
             class_args.append(image_class_args)
         else:
             print(f"Image {image_name} had not boxes.")
-    return image_paths, boxes, class_args
+    return image_paths, masks_paths, boxes, class_args

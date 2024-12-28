@@ -37,3 +37,35 @@ def to_corner_form(boxes):
     y_min = center_y - (H / 2.0)
     y_max = center_y + (H / 2.0)
     return jp.concatenate([x_min, y_min, x_max, y_max], axis=1)
+
+
+def pad(boxes, size, value=-1):
+    """Pads boxes with given value.
+
+    # Arguments
+        boxes: Array `(num_boxes, 4)`.
+
+    # Returns
+        Padded boxes with shape `(size, 4)`.
+    """
+    num_boxes = len(boxes)
+    if num_boxes > size:
+        raise ValueError(f"Samples ({num_boxes}) exceeds pad ({size}).")
+    padding = ((0, size - num_boxes), (0, 0))
+    return jp.pad(boxes, padding, "constant", constant_values=value)
+
+
+def pad_data(boxes, size, value=-1):
+    """Pads list of boxes with a given.
+
+    # Arguments
+        boxes: List of size `(num_samples)` containing boxes as lists.
+
+    # Returns
+        boxes with shape `(num_samples, size, 4)`
+    """
+    padded_elements = []
+    for sample in boxes:
+        padded_element = pad(jp.array(sample), size, value)
+        padded_elements.append(padded_element)
+    return jp.array(padded_elements)
