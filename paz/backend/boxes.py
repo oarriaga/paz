@@ -5,6 +5,10 @@ def split(boxes):
     return jp.split(boxes, 4, axis=1)
 
 
+def join(x_min, y_min, x_max, y_max):
+    return jp.concatenate([x_min, y_min, x_max, y_max], axis=1)
+
+
 def to_center_form(boxes):
     """Transform from corner coordinates to center coordinates.
 
@@ -69,3 +73,16 @@ def pad_data(boxes, size, value=-1):
         padded_element = pad(jp.array(sample), size, value)
         padded_elements.append(padded_element)
     return jp.array(padded_elements)
+
+
+def flip_left_right(boxes, image_width):
+    """Flips box coordinates from left-to-right and vice-versa.
+
+    # Arguments
+        boxes: Numpy array of shape `(num_boxes, 4)`.
+
+    # Returns
+        Numpy array of shape `(num_boxes, 4)`.
+    """
+    x_min, y_min, x_max, y_max = split(boxes)
+    return join(x_max, y_min, x_min, y_max)
