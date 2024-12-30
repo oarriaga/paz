@@ -1,8 +1,11 @@
 import cv2
 import numpy as np
 
+GREEN = (0, 255, 0)
+WHITE = (255, 255, 255)
 
-def square(image, center, color, size):
+
+def square(image, center, size, color):
     """Draw a square in an image
 
     # Arguments
@@ -24,7 +27,7 @@ def square(image, center, color, size):
     return image
 
 
-def circle(image, center, color, radius=5):
+def circle(image, center, radius, color):
     """Draw a circle in an image
 
     # Arguments
@@ -40,7 +43,7 @@ def circle(image, center, color, radius=5):
     return image
 
 
-def triangle(image, center, color, size):
+def triangle(image, center, size, color):
     """Draw a triangle in an image
 
     # Arguments

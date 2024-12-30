@@ -2,20 +2,8 @@ import tensorflow as tf
 import paz
 
 
-images, masks, boxes, class_args = paz.datasets.load("VOC2007", "trainval")
+images, masks, boxes, class_args = paz.datasets.load("VOC2007", split="trainval")
 
 boxes = paz.boxes.pad_data(boxes, 32)
 class_args = paz.classes.pad_data(class_args, 32)
 data = tf.data.Dataset.from_tensor_slices((images, masks, boxes, class_args))
-
-
-augment = keras.Sequential(
-    layers=[
-        RandomFlip(mode="horizontal", bounding_box_format=box_format),
-        JitteredResize(
-            target_size=(H, W),
-            scale_factor=(0.8, 1.25),
-            bounding_box_format=box_format,
-        ),
-    ]
-)

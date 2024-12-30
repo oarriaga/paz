@@ -4,6 +4,8 @@ from functools import partial
 
 from keras.utils import get_file
 
+import paz
+
 
 def get_class_names():
     return [
@@ -28,16 +30,6 @@ def get_class_names():
         'train',
         'tvmonitor'
     ]
-
-
-def build_arg_to_name():
-    class_names = get_class_names()
-    return dict(zip(range(len(class_names)), class_names))
-
-
-def build_name_to_arg():
-    class_names = get_class_names()
-    return dict(zip(class_names, range(len(class_names))))
 
 
 def parse_box(box):
@@ -109,7 +101,8 @@ def load(name, split):
     path = download(name, split)
     image_root = os.path.join(path, name, "JPEGImages")
     masks_root = os.path.join(path, name, "SegmentationClass")
-    parse = partial(parse_XML, build_name_to_arg())
+    class_names = get_class_names()
+    parse = partial(parse_XML, paz.datasets.build_name_to_arg(class_names))
     image_paths, masks_paths, boxes, class_args = [], [], [], []
     for label_path in get_label_paths(path, name, split):
         image_name, image_boxes, image_class_args = parse(label_path)
