@@ -24,3 +24,9 @@ def lock(function, *args, **kwargs):
         return function(*combined_args, **combined_kwargs)
 
     return wrap
+
+
+def cast(x, dtype):
+    """Casts array to different type
+    """
+    return x.astype(dtype)
