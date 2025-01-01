@@ -20,6 +20,25 @@ def remove_masks_colormap(filepath):
     image.save(filepath)
 
 
+def _color_to_class(mask, colormap_to_class):
+    class_masks = np.ones(mask.shape[:2]) * 21
+    for color, class_arg in colormap_to_class.items():
+        color = np.array(color).astype("uint8")
+        is_class = np.all(mask == color, axis=-1)
+        class_masks = np.where(is_class, class_arg, class_masks)
+    return class_masks[..., 0:1]
+
+
+def color_map_to_class_arg(mask, colormap_to_class):
+    class_masks = ops.ones(ops.shape(mask)[:2]) * 21
+    for color, class_arg in colormap_to_class.items():
+        color = ops.cast(ops.convert_to_tensor(color), "uint8")
+        is_class = ops.all(mask == color, axis=-1)
+        class_masks = ops.where(is_class, class_arg, class_masks)
+    return class_masks
+    return class_masks[..., 0:1]
+
+
 def plot_labels(dataset, bounding_box_format, class_map):
     sample = next(iter(dataset.take(1)))
     visualization.plot_bounding_box_gallery(
@@ -42,13 +61,11 @@ def load_image(image_path, channels=3):
     return image
 
 
-def load_masks(masks_path, colormap_to_class):
+def load_masks(masks_path, color_map):
     masks = tf.io.read_file(masks_path)
-    masks = tf.image.decode_png(masks, channels=4)
-    class_masks = ops.zeros_like(masks)
-    for color, class_arg in colormap_to_class.items():
-        class_masks = ops.where(masks == color, class_arg, class_masks)
-    return class_masks[..., 0:1]
+    masks = tf.image.decode_png(masks, channels=3, dtype="uint8")
+    masks = color_map_to_class_arg(masks, color_map)
+    return masks
 
 
 def Resize(H, W):
@@ -66,10 +83,9 @@ def AugmentImage():
         hue_factor=(0.0, 0.0))
 
 
-def load(x, colormap_to_class):
+def load(x, color_map):
     x["images"] = load_image(x["images"], 3)
-    x["segmentation_masks"] = load_masks(
-        x["segmentation_masks"], colormap_to_class)
+    x["segmentation_masks"] = load_masks(x["segmentation_masks"], color_map)
     return x
 
 
@@ -99,12 +115,20 @@ def Pipeline(data, H, W, batch_size):
     return data
 
 
-def plot_masks(image, masks):
+def plot_masks(image, masks, class_map):
     labels = np.unique(masks)
+    print(labels)
     figure, axes = plt.subplots(1, len(labels) + 1)
     axes[0].imshow(image)
     for axis, label in zip(axes[1:], labels):
-        axis.imshow(np.where(masks == label, 255, 0).astype(np.uint8))
+        # class_name = class_map[label]
+        # axis.imshow(np.where(masks == label, 255, 0).astype(np.uint8))
+        print(masks.shape)
+        # is_class = np.all(masks == label, axis=-1)
+        is_class = masks == label
+        print(is_class.shape)
+        axis.imshow(np.where(is_class, 255, 0).astype(np.uint8))
+        # axis.set_title(f"LABEL {label} {class_name}")
         axis.set_title(f"LABEL {label}")
     plt.show()
 
@@ -118,13 +142,19 @@ data = Pipeline(data, 340, 340, 4)
 class_map = paz.datasets.class_map("VOC2007")
 plot_labels(data, "xyxy", class_map)
 plt.show()
-x = next(iter(data.take(1)))
-masks = x["segmentation_masks"].numpy()[0]
-image = x["images"].numpy()[0]
-# labels = np.unique(masks)
-# print(labels)
-plot_masks(image, masks)
+
+# m = load_masks(masks[0], paz.datasets.voc.colormap_to_class())
+# i = load_image(images[0])
+# plot_masks(i, m, paz.datasets.class_map("VOC2007"))
+for sample in data:
+    m = ops.convert_to_numpy(sample["segmentation_masks"])[0]
+    i = ops.convert_to_numpy(sample["images"])[0]
+    plot_masks(i, m, paz.datasets.class_map("VOC2007"))
 # train_pipeline = data.map(wrap, num_parallel_calls=tf.data.AUTOTUNE)
 # boxes = paz.boxes.pad_data(boxes, 32)
 # class_args = paz.classes.pad_data(class_args, 32)
 # data = tf.data.Dataset.from_tensor_slices((images, masks, boxes, class_args))
+
+# m = ops.convert_to_numpy(m)
+# color_to_class = paz.datasets.voc.colormap_to_class()
+# m_i = _to_int_mask(m, color_to_class)
