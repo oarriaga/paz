@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jp
 
-from ..math import safe_norm, divide, near_zero
+from paz.backend.algebra import safe_norm, divide, near_zero
 
 
 def hat(so3_vector):
@@ -13,9 +13,13 @@ def hat(so3_vector):
     # Return
         The skew symmetric representation of so3_vector.
     """
-    return jp.array([[0.0, -so3_vector[2], so3_vector[1]],
-                     [so3_vector[2], 0.0, -so3_vector[0]],
-                     [-so3_vector[1], so3_vector[0], 0.0]])
+    return jp.array(
+        [
+            [0.0, -so3_vector[2], so3_vector[1]],
+            [so3_vector[2], 0.0, -so3_vector[0]],
+            [-so3_vector[1], so3_vector[0], 0.0],
+        ]
+    )
 
 
 def vee(so3_matrix):
@@ -96,10 +100,13 @@ def rpy_to_SO3(coordinates):
     coordinates = jp.array(coordinates)
     c3, c2, c1 = jp.cos(coordinates)
     s3, s2, s1 = jp.sin(coordinates)
-    return jp.array([
-        [c1 * c2, (c1 * s2 * s3) - (c3 * s1), (s1 * s3) + (c1 * c3 * s2)],
-        [c2 * s1, (c1 * c3) + (s1 * s2 * s3), (c3 * s1 * s2) - (c1 * s3)],
-        [-s2, c2 * s3, c2 * c3]])
+    return jp.array(
+        [
+            [c1 * c2, (c1 * s2 * s3) - (c3 * s1), (s1 * s3) + (c1 * c3 * s2)],
+            [c2 * s1, (c1 * c3) + (s1 * s2 * s3), (c3 * s1 * s2) - (c1 * s3)],
+            [-s2, c2 * s3, c2 * c3],
+        ]
+    )
 
 
 def case_0_log(R):
@@ -109,10 +116,18 @@ def case_0_log(R):
 def case_1_log(SO3):
     choose_omega_0 = jp.logical_not(near_zero(1 + SO3[2, 2]))
     choose_omega_1 = jp.logical_not(near_zero(1 + SO3[1, 1]))
-    omega_0 = (1.0 / jp.sqrt(2 * (1 + SO3[2, 2]))) * jp.array([SO3[0, 2], SO3[1, 2], 1 + SO3[2, 2]])
-    omega_1 = (1.0 / jp.sqrt(2 * (1 + SO3[1, 1]))) * jp.array([SO3[0, 1], SO3[1, 1], 1 + SO3[2, 1]])
-    omega_2 = (1.0 / jp.sqrt(2 * (1 + SO3[0, 0]))) * jp.array([1 + SO3[0, 0], SO3[1, 0], SO3[2, 0]])
-    omega = jp.where(choose_omega_0, omega_0, jp.where(choose_omega_1, omega_1, omega_2))
+    omega_0 = (1.0 / jp.sqrt(2 * (1 + SO3[2, 2]))) * jp.array(
+        [SO3[0, 2], SO3[1, 2], 1 + SO3[2, 2]]
+    )
+    omega_1 = (1.0 / jp.sqrt(2 * (1 + SO3[1, 1]))) * jp.array(
+        [SO3[0, 1], SO3[1, 1], 1 + SO3[2, 1]]
+    )
+    omega_2 = (1.0 / jp.sqrt(2 * (1 + SO3[0, 0]))) * jp.array(
+        [1 + SO3[0, 0], SO3[1, 0], SO3[2, 0]]
+    )
+    omega = jp.where(
+        choose_omega_0, omega_0, jp.where(choose_omega_1, omega_1, omega_2)
+    )
     return omega
 
 
@@ -129,10 +144,8 @@ def log(SO3_matrix):
     return jp.where(
         choose_0,
         case_0_log(SO3_matrix),
-        jp.where(
-            choose_1,
-            case_1_log(SO3_matrix),
-            case_2_log(SO3_matrix)))
+        jp.where(choose_1, case_1_log(SO3_matrix), case_2_log(SO3_matrix)),
+    )
 
 
 def sample(key):
@@ -158,9 +171,13 @@ def rotation_z(angle):
     """
     cos_angle = jp.cos(angle)
     sin_angle = jp.sin(angle)
-    rotation_matrix_z = jp.array([[+cos_angle, -sin_angle, 0.0],
-                                  [+sin_angle, +cos_angle, 0.0],
-                                  [0.0, 0.0, 1.0]])
+    rotation_matrix_z = jp.array(
+        [
+            [+cos_angle, -sin_angle, 0.0],
+            [+sin_angle, +cos_angle, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
     return rotation_matrix_z
 
 
@@ -175,9 +192,13 @@ def rotation_x(angle):
     """
     cos_angle = jp.cos(angle)
     sin_angle = jp.sin(angle)
-    rotation_matrix_x = jp.array([[1.0, 0.0, 0.0],
-                                  [0.0, +cos_angle, -sin_angle],
-                                  [0.0, +sin_angle, +cos_angle]])
+    rotation_matrix_x = jp.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, +cos_angle, -sin_angle],
+            [0.0, +sin_angle, +cos_angle],
+        ]
+    )
     return rotation_matrix_x
 
 
@@ -192,7 +213,11 @@ def rotation_y(angle):
     """
     cos_angle = jp.cos(angle)
     sin_angle = jp.sin(angle)
-    rotation_matrix_y = jp.array([[+cos_angle, 0.0, +sin_angle],
-                                  [0.0, 1.0, 0.0],
-                                  [-sin_angle, 0.0, +cos_angle]])
+    rotation_matrix_y = jp.array(
+        [
+            [+cos_angle, 0.0, +sin_angle],
+            [0.0, 1.0, 0.0],
+            [-sin_angle, 0.0, +cos_angle],
+        ]
+    )
     return rotation_matrix_y

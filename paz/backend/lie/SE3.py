@@ -1,8 +1,8 @@
 import jax
 import jax.numpy as jp
 
-from . import SO3
-from ..math import divide, near_zero, to_column_vector
+from paz.backend.lie import SO3
+from paz.backend.algebra import divide, near_zero, to_column_vector
 
 
 def get_rotation_matrix(affine_matrix):
@@ -152,10 +152,14 @@ def translation(translation_vector):
         Array (4, 4) translation matrix.
     """
     x, y, z = translation_vector
-    return jp.array([[1.0, 0.0, 0.0, x],
-                     [0.0, 1.0, 0.0, y],
-                     [0.0, 0.0, 1.0, z],
-                     [0.0, 0.0, 0.0, 1.0]])
+    return jp.array(
+        [
+            [1.0, 0.0, 0.0, x],
+            [0.0, 1.0, 0.0, y],
+            [0.0, 0.0, 1.0, z],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
 
 
 def invert(SE3_matrix):
@@ -213,7 +217,13 @@ def ad(twist):
 
 
 def case_log_0(SE3_matrix):
-    return jp.r_[jp.c_[jp.zeros((3, 3)), [SE3_matrix[0, 3], SE3_matrix[1, 3], SE3_matrix[2, 3]]], [[0, 0, 0, 0]]]
+    return jp.r_[
+        jp.c_[
+            jp.zeros((3, 3)),
+            [SE3_matrix[0, 3], SE3_matrix[1, 3], SE3_matrix[2, 3]],
+        ],
+        [[0, 0, 0, 0]],
+    ]
 
     omega = jp.zeros((3, 3))
     se3_matrix = jp.concatenate([omega, SE3_matrix[:3, 3]], axis=1)
@@ -223,12 +233,12 @@ def case_log_0(SE3_matrix):
 
 def case_log_1(SE3_matrix):
     rotation, position = split(SE3_matrix)
-    omega_matrix = SO3.log(rotation) # return [w]*theta
+    omega_matrix = SO3.log(rotation)  # return [w]*theta
     theta = jp.arccos((jp.trace(rotation) - 1) / 2.0)
     omega = omega_matrix / theta
 
     term_0 = (1.0 / theta) * jp.eye(3)
-    term_1 = - 0.5 * omega
+    term_1 = -0.5 * omega
     cotangent = 1.0 / jp.tan(0.5 * theta)
     term_2 = ((1.0 / theta) - (0.5 * cotangent)) * (omega @ omega)
     G_inverse = term_0 + term_1 + term_2
@@ -246,8 +256,7 @@ def log(SE3_matrix):
 
 
 def vee(se3_matrix):
-    """Transforms se3 4x4 matrix to it's vector representation
-    """
+    """Transforms se3 4x4 matrix to it's vector representation"""
     so3_matrix, se3_position = split(se3_matrix)
     so3_vector = SO3.vee(so3_matrix)
     return jp.concatenate([so3_vector, se3_position])
@@ -270,7 +279,11 @@ def scaling(scaling_vector):
         Array (4, 4) scale matrix.
     """
     x, y, z = scaling_vector
-    return jp.array([[x, 0.0, 0.0, 0.0],
-                     [0.0, y, 0.0, 0.0],
-                     [0.0, 0.0, z, 0.0],
-                     [0.0, 0.0, 0.0, 1.0]])
+    return jp.array(
+        [
+            [x, 0.0, 0.0, 0.0],
+            [0.0, y, 0.0, 0.0],
+            [0.0, 0.0, z, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
