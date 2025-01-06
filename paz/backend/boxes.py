@@ -26,6 +26,14 @@ def to_center_form(boxes):
     return jp.concatenate([center_x, center_y, W, H], axis=1)
 
 
+def to_xywh(boxes):
+    x_min, y_min = boxes[:, 0:1], boxes[:, 1:2]
+    x_max, y_max = boxes[:, 2:3], boxes[:, 3:4]
+    W = x_max - x_min
+    H = y_max - y_min
+    return jp.concatenate([x_min, y_min, W, H], axis=1)
+
+
 def to_corner_form(boxes):
     """Transform from center coordinates to corner coordinates.
 
