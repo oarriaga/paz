@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jp
 
 from paz.backend import algebra
@@ -82,15 +83,16 @@ def to_depth(pointcloud, camera_intrinsics, H, W, min_depth=0.0):
         y_pixel_arg = v[point_arg]
         z_value_new = z[point_arg]
         z_value_old = depth_image[y_pixel_arg, x_pixel_arg]
-        if (min_depth < z_value_new < z_value_old):
+        if min_depth < z_value_new < z_value_old:
             depth_image[y_pixel_arg, x_pixel_arg] = z_value_new
     depth_image = jp.where(depth_image == jp.inf, 0, depth_image)
     return depth_image
 
 
 def sample(key, pointcloud, num_points):
-    point_args = jp.random.choice(
-        key, len(pointcloud), shape=(num_points,), replace=False)
+    point_args = jax.random.choice(
+        key, len(pointcloud), shape=(num_points,), replace=False
+    )
     return pointcloud[point_args]
 
 
@@ -105,7 +107,7 @@ def to_camera_coordinates(pointcloud, camera_intrinsics):
     return jp.vstack([u, v]).T
 
 
-def remove_outliers(pointcloud, num_stdvs=3):
+def remove_outliers(pointcloud, num_stdvs=3.0):
     data_mean = jp.mean(pointcloud, axis=0)
     data_stdv = jp.std(pointcloud, axis=0)
     cut_off = data_stdv * num_stdvs
