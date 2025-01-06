@@ -1,4 +1,6 @@
 from functools import wraps
+import numpy as np
+import jax.numpy as jp
 
 
 def merge_dicts(a, b):
@@ -27,6 +29,13 @@ def lock(function, *args, **kwargs):
 
 
 def cast(x, dtype):
-    """Casts array to different type
-    """
+    """Casts array to different type"""
     return x.astype(dtype)
+
+
+def to_numpy(x):
+    return np.array(x)
+
+
+def to_jax(x):
+    return jp.array(x)
