@@ -36,7 +36,6 @@ def color_map_to_class_arg(mask, colormap_to_class):
         is_class = ops.all(mask == color, axis=-1)
         class_masks = ops.where(is_class, class_arg, class_masks)
     return class_masks
-    return class_masks[..., 0:1]
 
 
 def plot_labels(dataset, bounding_box_format, class_map):
@@ -80,7 +79,8 @@ def AugmentImage():
         brightness_factor=(-0.2, 0.2),
         contrast_factor=(0.5, 0.5),
         saturation_factor=(0.5, 0.9),
-        hue_factor=(0.0, 0.0))
+        hue_factor=(0.0, 0.0),
+    )
 
 
 def load(x, color_map):
@@ -91,10 +91,11 @@ def load(x, color_map):
 
 def wrap(images, classes, boxes, masks):
     boxes = {"classes": classes, "boxes": boxes}
-    return {"images": images,
-            "bounding_boxes": boxes,
-            "segmentation_masks": masks
-            }
+    return {
+        "images": images,
+        "bounding_boxes": boxes,
+        "segmentation_masks": masks,
+    }
 
 
 def to_ragged(values):
@@ -107,7 +108,10 @@ def TFDataset(*args):
 
 def Pipeline(data, H, W, batch_size):
     data = data.map(wrap, num_parallel_calls=tf.data.AUTOTUNE)
-    data = data.map(paz.lock(load, paz.datasets.voc.colormap_to_class()), num_parallel_calls=tf.data.AUTOTUNE)
+    data = data.map(
+        paz.lock(load, paz.datasets.voc.colormap_to_class()),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
     data = data.shuffle(batch_size * 4)
     data = data.ragged_batch(batch_size, drop_remainder=True)
     # data = data.map(AugmentImage(), num_parallel_calls=tf.data.AUTOTUNE)
@@ -116,25 +120,26 @@ def Pipeline(data, H, W, batch_size):
 
 
 def plot_masks(image, masks, class_map):
-    labels = np.unique(masks)
+    labels = (np.unique(masks).astype(int)).tolist()
+    labels.remove(21)
+    labels.remove(0)
     print(labels)
     figure, axes = plt.subplots(1, len(labels) + 1)
     axes[0].imshow(image)
     for axis, label in zip(axes[1:], labels):
         # class_name = class_map[label]
         # axis.imshow(np.where(masks == label, 255, 0).astype(np.uint8))
-        print(masks.shape)
         # is_class = np.all(masks == label, axis=-1)
         is_class = masks == label
-        print(is_class.shape)
         axis.imshow(np.where(is_class, 255, 0).astype(np.uint8))
         # axis.set_title(f"LABEL {label} {class_name}")
-        axis.set_title(f"LABEL {label}")
+        axis.set_title(f"LABEL {class_map[label - 1]}")
     plt.show()
 
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 data = paz.datasets.load("VOC2007", "trainval", "segmentation")
 images, masks, boxes, class_args = data
 data = TFDataset(images, class_args, boxes, masks)
@@ -149,6 +154,8 @@ plt.show()
 for sample in data:
     m = ops.convert_to_numpy(sample["segmentation_masks"])[0]
     i = ops.convert_to_numpy(sample["images"])[0]
+    print("Masks shape", m.shape)
+    print("Image shape", i.shape)
     plot_masks(i, m, paz.datasets.class_map("VOC2007"))
 # train_pipeline = data.map(wrap, num_parallel_calls=tf.data.AUTOTUNE)
 # boxes = paz.boxes.pad_data(boxes, 32)
