@@ -20,10 +20,12 @@ def flip_left_right(image):
     return image[:, ::-1]
 
 
+def BGR_to_RGB(image_BGR):
+    return image_BGR[..., ::-1]
+
+
 def load(filepath):
-    image_BGR = cv2.imread(filepath)
-    image_RGB = image_BGR[..., ::-1]
-    return jp.array(image_RGB)
+    return jp.array(BGR_to_RGB(cv2.imread(filepath)))
 
 
 def resize(image, shape):
