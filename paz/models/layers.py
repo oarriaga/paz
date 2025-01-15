@@ -120,6 +120,13 @@ class ExpectedDepth(Layer):
 
 
 class ReduceMean(Layer):
+    """Wraps tensorflow's `reduce_mean` function into a keras layer.
+
+    # Arguments
+        axes: List of integers. Axes along which mean is to be calculated.
+        keepdims: Bool, whether to presere the dimension or not.
+    """
+ 
     def __init__(self, axes=[1, 2], keepdims=True):
         self.axes = axes
         self.keepdims = keepdims
@@ -130,6 +137,9 @@ class ReduceMean(Layer):
 
 
 class Sigmoid(Layer):
+    """Wraps tensorflow's `sigmoid` function into a keras layer.
+    """
+
     def __init__(self):
         super(Sigmoid, self).__init__()
 
@@ -138,6 +148,9 @@ class Sigmoid(Layer):
 
 
 class Add(Layer):
+    """Wraps tensorflow's `add` function into a keras layer.
+    """
+
     def __init__(self):
         super(Add, self).__init__()
 
