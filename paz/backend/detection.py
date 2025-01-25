@@ -1,3 +1,4 @@
+import numpy as np
 import jax.numpy as jp
 import paz
 
@@ -8,8 +9,8 @@ def random_flip_left_right(image, boxes):
     return image, boxes
 
 
-def non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
-    selected_indices = jp.zeros(shape=len(scores))
+def non_max_suppression(boxes, scores, iou_thresh=0.45, top_k=200):
+    selected_indices = np.zeros(shape=len(scores))
     if boxes is None or len(boxes) == 0:
         return selected_indices
     x_min = boxes[:, 0]
@@ -17,7 +18,7 @@ def non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
     x_max = boxes[:, 2]
     y_max = boxes[:, 3]
     areas = (x_max - x_min) * (y_max - y_min)
-    remaining_sorted_box_indices = jp.argsort(scores)
+    remaining_sorted_box_indices = np.argsort(scores)
     remaining_sorted_box_indices = remaining_sorted_box_indices[-top_k:]
 
     num_selected_boxes = 0
@@ -40,16 +41,16 @@ def non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
         remaining_x_max = x_max[remaining_sorted_box_indices]
         remaining_y_max = y_max[remaining_sorted_box_indices]
 
-        inner_x_min = jp.maximum(remaining_x_min, best_x_min)
-        inner_y_min = jp.maximum(remaining_y_min, best_y_min)
-        inner_x_max = jp.minimum(remaining_x_max, best_x_max)
-        inner_y_max = jp.minimum(remaining_y_max, best_y_max)
+        inner_x_min = np.maximum(remaining_x_min, best_x_min)
+        inner_y_min = np.maximum(remaining_y_min, best_y_min)
+        inner_x_max = np.minimum(remaining_x_max, best_x_max)
+        inner_y_max = np.minimum(remaining_y_max, best_y_max)
 
         inner_box_widths = inner_x_max - inner_x_min
         inner_box_heights = inner_y_max - inner_y_min
 
-        inner_box_widths = jp.maximum(inner_box_widths, 0.0)
-        inner_box_heights = jp.maximum(inner_box_heights, 0.0)
+        inner_box_widths = np.maximum(inner_box_widths, 0.0)
+        inner_box_heights = np.maximum(inner_box_heights, 0.0)
 
         intersections = inner_box_widths * inner_box_heights
         remaining_box_areas = areas[remaining_sorted_box_indices]
@@ -58,6 +59,7 @@ def non_max_suppression(boxes, scores, iou_thresh=.45, top_k=200):
         intersec_over_union = intersections / unions
         intersec_over_union_mask = intersec_over_union <= iou_thresh
         remaining_sorted_box_indices = remaining_sorted_box_indices[
-            intersec_over_union_mask]
+            intersec_over_union_mask
+        ]
 
     return selected_indices.astype(int), num_selected_boxes
