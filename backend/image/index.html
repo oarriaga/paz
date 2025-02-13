@@ -1,0 +1,2906 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Modular Robot Perception library in Python.">
+      
+      
+      
+      
+        <link rel="prev" href="../../processors/renderer/">
+      
+      
+        <link rel="next" href="../draw/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.4">
+    
+    
+      
+        <title>Image - PAZ - Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.8608ea7d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="orange" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#resize_image" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="PAZ - Documentation" class="md-header__button md-logo" aria-label="PAZ - Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PAZ - Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Image
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/oarriaga/paz" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    oarriaga/paz
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="PAZ - Documentation" class="md-nav__button md-logo" aria-label="PAZ - Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PAZ - Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/oarriaga/paz" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    oarriaga/paz
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Getting-started
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/introduction_to_processors/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Intro to processors
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/image_augmentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image augmentation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/bounding_boxes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Bounding boxes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/controlmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Control-map
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/object_detection_pipeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Object detection pipeline
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Models
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/keypoint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Classification
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/layers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Layers
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Pipelines (high-level)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Pipelines (high-level)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/applications/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Applications
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/image/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/keypoints/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/pose/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pose
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/renderer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Renderer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Processors (mid-level)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Processors (mid-level)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/image/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/draw/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Draw
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/geometric/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Geometric
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/keypoints/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/standard/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Standard
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/pose/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pose
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../processors/renderer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Renderer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Backends (low-level)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Backends (low-level)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#resize_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      resize_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert_color_space" class="md-nav__link">
+    <span class="md-ellipsis">
+      convert_color_space
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      load_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#show_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      show_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#warp_affine" class="md-nav__link">
+    <span class="md-ellipsis">
+      warp_affine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#write_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      write_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gaussian_image_blur" class="md-nav__link">
+    <span class="md-ellipsis">
+      gaussian_image_blur
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#median_image_blur" class="md-nav__link">
+    <span class="md-ellipsis">
+      median_image_blur
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_rotation_matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_rotation_matrix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cast_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      cast_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_saturation" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_saturation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_brightness" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_brightness
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_contrast" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_contrast
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_hue" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_hue
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flip_left_right" class="md-nav__link">
+    <span class="md-ellipsis">
+      flip_left_right
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_flip_left_right" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_flip_left_right
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crop_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      crop_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image_to_normalized_device_coordinates" class="md-nav__link">
+    <span class="md-ellipsis">
+      image_to_normalized_device_coordinates
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#normalized_device_coordinates_to_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      normalized_device_coordinates_to_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_shape_crop" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_shape_crop
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make_random_plain_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      make_random_plain_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blend_alpha_channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      blend_alpha_channel
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concatenate_alpha_mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      concatenate_alpha_mask
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#split_and_normalize_alpha_channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      split_and_normalize_alpha_channel
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_image_blur" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_image_blur
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#translate_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      translate_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample_scaled_translation" class="md-nav__link">
+    <span class="md-ellipsis">
+      sample_scaled_translation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#replace_lower_than_threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      replace_lower_than_threshold
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#normalize_min_max" class="md-nav__link">
+    <span class="md-ellipsis">
+      normalize_min_max
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample_scaled_translation_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      sample_scaled_translation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_rotation_matrix_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_rotation_matrix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calculate_image_center" class="md-nav__link">
+    <span class="md-ellipsis">
+      calculate_image_center
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_affine_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_affine_transform
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_scaling_factor" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_scaling_factor
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scale_resize" class="md-nav__link">
+    <span class="md-ellipsis">
+      scale_resize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute_resizing_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      compute_resizing_shape
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pad_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      pad_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#equalize_histogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      equalize_histogram
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invert_colors" class="md-nav__link">
+    <span class="md-ellipsis">
+      invert_colors
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#posterize" class="md-nav__link">
+    <span class="md-ellipsis">
+      posterize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solarize" class="md-nav__link">
+    <span class="md-ellipsis">
+      solarize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cutout" class="md-nav__link">
+    <span class="md-ellipsis">
+      cutout
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#add_gaussian_noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      add_gaussian_noise
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../draw/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Draw
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boxes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Boxes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../keypoints/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quaternion/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quaternions
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../camera/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Camera
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../render/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Render
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Abstract (core)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Abstract (core)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Messages
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/processor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Processor
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/sequence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sequence
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/loader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Loader
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Additional functionality
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Additional functionality
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../datasets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Datasets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../optimization/losses/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Losses
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../optimization/callbacks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Callbacks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#resize_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      resize_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert_color_space" class="md-nav__link">
+    <span class="md-ellipsis">
+      convert_color_space
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      load_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#show_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      show_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#warp_affine" class="md-nav__link">
+    <span class="md-ellipsis">
+      warp_affine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#write_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      write_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gaussian_image_blur" class="md-nav__link">
+    <span class="md-ellipsis">
+      gaussian_image_blur
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#median_image_blur" class="md-nav__link">
+    <span class="md-ellipsis">
+      median_image_blur
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_rotation_matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_rotation_matrix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cast_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      cast_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_saturation" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_saturation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_brightness" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_brightness
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_contrast" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_contrast
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_hue" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_hue
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flip_left_right" class="md-nav__link">
+    <span class="md-ellipsis">
+      flip_left_right
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_flip_left_right" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_flip_left_right
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crop_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      crop_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image_to_normalized_device_coordinates" class="md-nav__link">
+    <span class="md-ellipsis">
+      image_to_normalized_device_coordinates
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#normalized_device_coordinates_to_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      normalized_device_coordinates_to_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_shape_crop" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_shape_crop
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make_random_plain_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      make_random_plain_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blend_alpha_channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      blend_alpha_channel
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concatenate_alpha_mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      concatenate_alpha_mask
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#split_and_normalize_alpha_channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      split_and_normalize_alpha_channel
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random_image_blur" class="md-nav__link">
+    <span class="md-ellipsis">
+      random_image_blur
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#translate_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      translate_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample_scaled_translation" class="md-nav__link">
+    <span class="md-ellipsis">
+      sample_scaled_translation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#replace_lower_than_threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      replace_lower_than_threshold
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#normalize_min_max" class="md-nav__link">
+    <span class="md-ellipsis">
+      normalize_min_max
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample_scaled_translation_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      sample_scaled_translation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_rotation_matrix_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_rotation_matrix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calculate_image_center" class="md-nav__link">
+    <span class="md-ellipsis">
+      calculate_image_center
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_affine_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_affine_transform
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get_scaling_factor" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_scaling_factor
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scale_resize" class="md-nav__link">
+    <span class="md-ellipsis">
+      scale_resize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute_resizing_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      compute_resizing_shape
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pad_image" class="md-nav__link">
+    <span class="md-ellipsis">
+      pad_image
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#equalize_histogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      equalize_histogram
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#invert_colors" class="md-nav__link">
+    <span class="md-ellipsis">
+      invert_colors
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#posterize" class="md-nav__link">
+    <span class="md-ellipsis">
+      posterize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solarize" class="md-nav__link">
+    <span class="md-ellipsis">
+      solarize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cutout" class="md-nav__link">
+    <span class="md-ellipsis">
+      cutout
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#add_gaussian_noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      add_gaussian_noise
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>Image</h1>
+
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L18">[source]</a></span></p>
+<h3 id="resize_image">resize_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">resize_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Resize image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>size</strong>: List of two ints.</li>
+<li><strong>method</strong>: Flag indicating interpolation method i.e.
+    paz.backend.image.CUBIC</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L37">[source]</a></span></p>
+<h3 id="convert_color_space">convert_color_space</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">convert_color_space</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">flag</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Convert image to a different color space.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>flag</strong>: PAZ or openCV flag. e.g. paz.backend.image.RGB2BGR.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L50">[source]</a></span></p>
+<h3 id="load_image">load_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">load_image</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">num_channels</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Load image from a ''filepath''.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>filepath</strong>: String indicating full path to the image.</li>
+<li><strong>num_channels</strong>: Int.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L71">[source]</a></span></p>
+<h3 id="show_image">show_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">show_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;image&#39;</span><span class="p">,</span> <span class="n">wait</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Shows RGB image in an external window.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array</li>
+<li><strong>name</strong>: String indicating the window name.</li>
+<li><strong>wait</strong>: Boolean. If ''True'' window stays open until user presses a key.
+    If ''False'' windows closes immediately.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L92">[source]</a></span></p>
+<h3 id="warp_affine">warp_affine</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">warp_affine</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">matrix</span><span class="p">,</span> <span class="n">fill_color</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Transforms <code>image</code> using an affine <code>matrix</code> transformation.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>matrix</strong>: Numpy array of shape (2,3) indicating affine transformation.</li>
+<li><strong>fill_color</strong>: List/tuple representing BGR use for filling empty space.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L108">[source]</a></span></p>
+<h3 id="write_image">write_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">write_image</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Writes an image inside <code>filepath</code>. If <code>filepath</code> doesn't exist
+it makes a directory. If <code>image</code> has three channels the image is
+converted into BGR and then written. This is done such that this
+function compatible with <code>load_image</code>.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>filepath</strong>: String with image path. It should include postfix e.g. .png</li>
+<li><strong>image</strong>: Numpy array.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L126">[source]</a></span></p>
+<h3 id="gaussian_image_blur">gaussian_image_blur</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">gaussian_image_blur</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+</code></pre></div>
+
+<p>Applies Gaussian blur to an image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array of shape ''(H, W, 4)''.</li>
+<li><strong>kernel_size</strong>: List of two ints e.g. ''(5, 5)''.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L139">[source]</a></span></p>
+<h3 id="median_image_blur">median_image_blur</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">median_image_blur</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">apperture</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies median blur to an image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array of shape ''(H, W, 3)''.</li>
+</ul>
+<p>apperture. Int.</p>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L152">[source]</a></span></p>
+<h3 id="get_rotation_matrix">get_rotation_matrix</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">get_rotation_matrix</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">degrees</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Returns a 2D rotation matrix.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>center</strong>: List of two integer values.</li>
+<li><strong>degrees</strong>: Float indicating the angle in degrees.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L8">[source]</a></span></p>
+<h3 id="cast_image">cast_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">cast_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Casts an image into a different type</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>dtype</strong>: String or np.dtype.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L21">[source]</a></span></p>
+<h3 id="random_saturation">random_saturation</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_saturation</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies random saturation to an RGB image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array representing an image RGB format.</li>
+<li><strong>lower</strong>: Float.</li>
+<li><strong>upper</strong>: Float.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L38">[source]</a></span></p>
+<h3 id="random_brightness">random_brightness</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_brightness</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies random brightness to an RGB image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array representing an image RGB format.</li>
+<li><strong>delta</strong>: Int.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L53">[source]</a></span></p>
+<h3 id="random_contrast">random_contrast</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_contrast</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies random contrast to an RGB image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array representing an image RGB format.</li>
+<li><strong>lower</strong>: Float.</li>
+<li><strong>upper</strong>: Float.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L69">[source]</a></span></p>
+<h3 id="random_hue">random_hue</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_hue</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mi">18</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies random hue to an RGB image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array representing an image RGB format.</li>
+<li><strong>delta</strong>: Int.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L86">[source]</a></span></p>
+<h3 id="flip_left_right">flip_left_right</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">flip_left_right</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Flips an image left and right.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L95">[source]</a></span></p>
+<h3 id="random_flip_left_right">random_flip_left_right</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_flip_left_right</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies random left or right flip.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L106">[source]</a></span></p>
+<h3 id="crop_image">crop_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">crop_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">crop_box</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Resize image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>crop_box</strong>: List of four ints.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L125">[source]</a></span></p>
+<h3 id="image_to_normalized_device_coordinates">image_to_normalized_device_coordinates</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image_to_normalized_device_coordinates</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Map image value from [0, 255] -&gt; [-1, 1].</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L131">[source]</a></span></p>
+<h3 id="normalized_device_coordinates_to_image">normalized_device_coordinates_to_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">normalized_device_coordinates_to_image</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Map normalized value from [-1, 1] -&gt; [0, 255].</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L137">[source]</a></span></p>
+<h3 id="random_shape_crop">random_shape_crop</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_shape_crop</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Randomly crops an image of the given <code>shape</code>.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>shape</strong>: List of two ints ''(H, W)''.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array of cropped image.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L158">[source]</a></span></p>
+<h3 id="make_random_plain_image">make_random_plain_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">make_random_plain_image</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Makes random plain image by sampling three random values.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>shape</strong>: Image shape e.g. ''(H, W, 3)''.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array of shape ''(H, W, 3)''.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L172">[source]</a></span></p>
+<h3 id="blend_alpha_channel">blend_alpha_channel</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">blend_alpha_channel</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">background</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Blends image with background using an alpha channel.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array with alpha channel. Shape must be ''(H, W, 4)''</li>
+<li><strong>background</strong>: Numpy array of shape ''(H, W, 3)''.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L188">[source]</a></span></p>
+<h3 id="concatenate_alpha_mask">concatenate_alpha_mask</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">concatenate_alpha_mask</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">alpha_mask</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Concatenates alpha mask to image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array of shape ''(H, W, 3)''.</li>
+<li><strong>alpha_mask</strong>: Numpy array array of shape ''(H, W)''.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array of shape ''(H, W, 4)''.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L201">[source]</a></span></p>
+<h3 id="split_and_normalize_alpha_channel">split_and_normalize_alpha_channel</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">split_and_normalize_alpha_channel</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Splits alpha channel from an RGBA image and normalizes alpha channel.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array of shape ''(H, W, 4)''.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>List of two numpy arrays containing respectively the image and the
+    alpha channel.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L218">[source]</a></span></p>
+<h3 id="random_image_blur">random_image_blur</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">random_image_blur</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Applies random choice blur.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array of shape ''(H, W, 3)''.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L231">[source]</a></span></p>
+<h3 id="translate_image">translate_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">translate_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">translation</span><span class="p">,</span> <span class="n">fill_color</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Translate image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>translation</strong>: A list of length two indicating the x,y translation values</li>
+<li><strong>fill_color</strong>: List of three floats representing a color.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L249">[source]</a></span></p>
+<h3 id="sample_scaled_translation">sample_scaled_translation</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">sample_scaled_translation</span><span class="p">(</span><span class="n">delta_scale</span><span class="p">,</span> <span class="n">image_shape</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Samples a scaled translation from a uniform distribution.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>delta_scale</strong>: List with two elements having the normalized deltas.
+    e.g. ''[.25, .25]''.</li>
+<li><strong>image_shape</strong>: List containing the height and width of the image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L263">[source]</a></span></p>
+<h3 id="replace_lower_than_threshold">replace_lower_than_threshold</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">replace_lower_than_threshold</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">replacement</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Replace values from source that are lower than the given threshold.
+This function doesn't create a new array but does replacement in place.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>source</strong>: Array.</li>
+<li><strong>threshold</strong>: Float. Values lower than this value will be replaced.</li>
+<li><strong>replacement</strong>: Float. Value taken by elements lower than threshold.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Array of same shape as source.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L280">[source]</a></span></p>
+<h3 id="normalize_min_max">normalize_min_max</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">normalize_min_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x_min</span><span class="p">,</span> <span class="n">x_max</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Normalized data using it's maximum and minimum values</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>x</strong>: array</li>
+<li><strong>x_min</strong>: minimum value of x</li>
+<li><strong>x_max</strong>: maximum value of x</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>min-max normalized data</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L249">[source]</a></span></p>
+<h3 id="sample_scaled_translation_1">sample_scaled_translation</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">sample_scaled_translation</span><span class="p">(</span><span class="n">delta_scale</span><span class="p">,</span> <span class="n">image_shape</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Samples a scaled translation from a uniform distribution.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>delta_scale</strong>: List with two elements having the normalized deltas.
+    e.g. ''[.25, .25]''.</li>
+<li><strong>image_shape</strong>: List containing the height and width of the image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L152">[source]</a></span></p>
+<h3 id="get_rotation_matrix_1">get_rotation_matrix</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">get_rotation_matrix</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">degrees</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Returns a 2D rotation matrix.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>center</strong>: List of two integer values.</li>
+<li><strong>degrees</strong>: Float indicating the angle in degrees.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Numpy array</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L294">[source]</a></span></p>
+<h3 id="calculate_image_center">calculate_image_center</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">calculate_image_center</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Return image center.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>image center.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/opencv_image.py#L165">[source]</a></span></p>
+<h3 id="get_affine_transform">get_affine_transform</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">opencv_image</span><span class="o">.</span><span class="n">get_affine_transform</span><span class="p">(</span><span class="n">source_points</span><span class="p">,</span> <span class="n">destination_points</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Return the transformation matrix.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>source_points</strong>: Numpy array.</li>
+<li><strong>destination_points</strong>: Numpy array.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Transformation matrix.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L310">[source]</a></span></p>
+<h3 id="get_scaling_factor">get_scaling_factor</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">get_scaling_factor</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>
+</code></pre></div>
+
+<p>Return scaling factor for the image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Numpy array.</li>
+<li><strong>scale</strong>: Int.</li>
+<li><strong>shape</strong>: Tuple of integers. eg. (128, 128)</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>scaling factor: Numpy array of size 2</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L328">[source]</a></span></p>
+<h3 id="scale_resize">scale_resize</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">scale_resize</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">image_size</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Resizes and crops image by returning the scales to original
+image.</p>
+<p>Args:
+image: Numpy array, raw image.
+image_size: Int, size of the image.</p>
+<p>Returns:
+Tuple: output_image, image_scale.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L356">[source]</a></span></p>
+<h3 id="compute_resizing_shape">compute_resizing_shape</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">compute_resizing_shape</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Computes the final size of the image to be scaled by <code>size</code>
+such that the largest dimension of the image is equal to <code>size</code>.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, raw image to be scaled.</li>
+<li><strong>size</strong>: Int, final size of the image.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<ul>
+<li><strong>List</strong>: Containing final shape of image and scale.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L375">[source]</a></span></p>
+<h3 id="pad_image">pad_image</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">pad_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Pads the image to the final size <code>size</code>.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, image to be padded.</li>
+<li><strong>size</strong>: Int, final size of the image.</li>
+<li><strong>mode</strong>: Str, specifying the type of padding.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<ul>
+<li><strong>Array</strong>: Padded image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L393">[source]</a></span></p>
+<h3 id="equalize_histogram">equalize_histogram</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">equalize_histogram</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Performs histogram equalization on a given image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, raw image.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>equalized</strong>: Array, histogram equalized image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L411">[source]</a></span></p>
+<h3 id="invert_colors">invert_colors</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">invert_colors</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Performs color / gray value inversion on a given image.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, raw image.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>Array</strong>: Color inverted image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L423">[source]</a></span></p>
+<h3 id="posterize">posterize</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">posterize</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Performs posterization on a given image. This is achieved
+by reducing the bit depth of the gray value.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, raw image.</li>
+<li><strong>num_bits</strong>: Int, final bit depth after posterization.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>Array</strong>: Posterized image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L439">[source]</a></span></p>
+<h3 id="solarize">solarize</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">solarize</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">threshold</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Performs solarization on a given image. This is achieved
+by inverting those pixels whose gray values lie above
+a certain <code>threshold</code>.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>probability</strong>: Float, probability of data transformation.</li>
+<li><strong>threshold</strong>: Int, threshold value.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>Array</strong>: Solarized image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L454">[source]</a></span></p>
+<h3 id="cutout">cutout</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">cutout</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">fill</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Cuts out a square of size <code>size</code> x <code>size</code> at a random location
+in the <code>image</code> and fills it with <code>fill</code> value.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, raw image.</li>
+<li><strong>size</strong>: Int, size of cutout square.</li>
+<li><strong>fill</strong>: Int, value to fill cutout with.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>image</strong>: Array, cutout image.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/backend/image/image.py#L473">[source]</a></span></p>
+<h3 id="add_gaussian_noise">add_gaussian_noise</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">add_gaussian_noise</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">mean</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Adds Gaussian noise defined by <code>mean</code> and <code>scale</code> to the <code>image</code>.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>image</strong>: Array, raw image.</li>
+<li><strong>mean</strong>: Int, mean of Gaussian noise.</li>
+<li><strong>sigma</strong>: Float, standard deviation of Gaussian noise.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>Array</strong>: Image added with Gaussian noise.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f1b6f286.min.js"></script>
+      
+    
+  </body>
+</html>

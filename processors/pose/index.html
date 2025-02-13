@@ -1,0 +1,1986 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Modular Robot Perception library in Python.">
+      
+      
+      
+      
+        <link rel="prev" href="../standard/">
+      
+      
+        <link rel="next" href="../renderer/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.4">
+    
+    
+      
+        <title>Pose - PAZ - Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.8608ea7d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="orange" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#solvepnp" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="PAZ - Documentation" class="md-header__button md-logo" aria-label="PAZ - Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PAZ - Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Pose
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/oarriaga/paz" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    oarriaga/paz
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="PAZ - Documentation" class="md-nav__button md-logo" aria-label="PAZ - Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PAZ - Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/oarriaga/paz" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    oarriaga/paz
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Getting-started
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/introduction_to_processors/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Intro to processors
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/image_augmentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image augmentation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/bounding_boxes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Bounding boxes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/controlmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Control-map
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/object_detection_pipeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Object detection pipeline
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Models
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/keypoint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Classification
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/layers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Layers
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Pipelines (high-level)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Pipelines (high-level)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/applications/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Applications
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/image/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/keypoints/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/pose/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pose
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/renderer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Renderer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Processors (mid-level)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Processors (mid-level)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../image/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../draw/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Draw
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../geometric/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Geometric
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../keypoints/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../standard/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Standard
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Pose
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Pose
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#solvepnp" class="md-nav__link">
+    <span class="md-ellipsis">
+      SolvePNP
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solvechangingobjectpnpransac" class="md-nav__link">
+    <span class="md-ellipsis">
+      SolveChangingObjectPnPRANSAC
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#translation3dfromboxwidth" class="md-nav__link">
+    <span class="md-ellipsis">
+      Translation3DFromBoxWidth
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      MatchPoses
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rotationmatrixtoaxisangle" class="md-nav__link">
+    <span class="md-ellipsis">
+      RotationMatrixToAxisAngle
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concatenateposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      ConcatenatePoses
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concatenatescale" class="md-nav__link">
+    <span class="md-ellipsis">
+      ConcatenateScale
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#augmentpose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      AugmentPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      ToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boxeswithonehotvectorstopose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      BoxesWithOneHotVectorsToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boxestopose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      BoxesToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boxeswithclassargtopose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      BoxesWithClassArgToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../renderer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Renderer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Backends (low-level)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Backends (low-level)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/image/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/draw/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Draw
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/boxes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Boxes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/keypoints/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keypoints
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/quaternion/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quaternions
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/camera/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Camera
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/render/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Render
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Abstract (core)
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Abstract (core)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Messages
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/processor/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Processor
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/sequence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sequence
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../abstract/loader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Loader
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Additional functionality
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Additional functionality
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../datasets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Datasets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../optimization/losses/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Losses
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../optimization/callbacks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Callbacks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#solvepnp" class="md-nav__link">
+    <span class="md-ellipsis">
+      SolvePNP
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solvechangingobjectpnpransac" class="md-nav__link">
+    <span class="md-ellipsis">
+      SolveChangingObjectPnPRANSAC
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#translation3dfromboxwidth" class="md-nav__link">
+    <span class="md-ellipsis">
+      Translation3DFromBoxWidth
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matchposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      MatchPoses
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rotationmatrixtoaxisangle" class="md-nav__link">
+    <span class="md-ellipsis">
+      RotationMatrixToAxisAngle
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concatenateposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      ConcatenatePoses
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concatenatescale" class="md-nav__link">
+    <span class="md-ellipsis">
+      ConcatenateScale
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#augmentpose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      AugmentPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      ToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boxeswithonehotvectorstopose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      BoxesWithOneHotVectorsToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boxestopose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      BoxesToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boxeswithclassargtopose6d" class="md-nav__link">
+    <span class="md-ellipsis">
+      BoxesWithClassArgToPose6D
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>Pose</h1>
+
+<p>Processors for pose estimation</p>
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L14">[source]</a></span></p>
+<h3 id="solvepnp">SolvePNP</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">SolvePNP</span><span class="p">(</span><span class="n">points3D</span><span class="p">,</span> <span class="n">camera</span><span class="p">,</span> <span class="n">solver</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Calculates 6D pose from 3D points and 2D keypoints correspondences.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>model_points</strong>: Numpy array of shape <code>[num_points, 3]</code>.
+    Model 3D points known in advance.</li>
+<li><strong>camera</strong>: Instance of ''paz.backend.Camera'' containing as properties
+    the <code>camera_intrinsics</code> a Numpy array of shape <code>[3, 3]</code>
+    usually calculated from the openCV <code>calibrateCamera</code> function,
+    and the <code>distortion</code> a Numpy array of shape <code>[5]</code> in which the
+    elements are usually obtained from the openCV
+    <code>calibrateCamera</code> function.</li>
+<li><strong>solver</strong>: Flag specifying solvers. Current solvers are:
+    <code>paz.processors.LEVENBERG_MARQUARDT</code> and <code>paz.processors.UPNP</code>.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Instance from <code>Pose6D</code> message.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L50">[source]</a></span></p>
+<h3 id="solvechangingobjectpnpransac">SolveChangingObjectPnPRANSAC</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">SolveChangingObjectPnPRANSAC</span><span class="p">(</span><span class="n">camera_intrinsics</span><span class="p">,</span> <span class="n">inlier_thresh</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_iterations</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Returns rotation (Roc) and translation (Toc) vectors that transform
+3D points in object frame to camera frame.</p>
+<p>O------------O
+/|           /|
+/ |          / |
+O------------O  |
+|  |    z    |  |
+|  O<strong><em>_|</em></strong>_|__O
+|  /    |___y|  /   object
+| /    /     | /  coordinates
+|/    x      |/
+O------------O</p>
+<hr />
+<p>Z                |
+/                 | Rco, Tco
+/_____X     &lt;------|
+|
+|    camera
+Y  coordinates</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>object_points3D</strong>: Array (num_points, 3). Points 3D in object reference
+    frame. Represented as (0) in image above.</li>
+<li><strong>image_points2D</strong>: Array (num_points, 2). Points in 2D in camera UV space.</li>
+<li><strong>camera_intrinsics</strong>: Array of shape (3, 3). Diagonal elements represent
+    focal lenghts and last column the image center translation.</li>
+<li><strong>inlier_threshold</strong>: Number of inliers for RANSAC method.</li>
+<li><strong>num_iterations</strong>: Maximum number of iterations.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Boolean indicating success, rotation vector in axis-angle form (3)
+    and translation vector (3).</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L101">[source]</a></span></p>
+<h3 id="translation3dfromboxwidth">Translation3DFromBoxWidth</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">Translation3DFromBoxWidth</span><span class="p">(</span><span class="n">camera</span><span class="p">,</span> <span class="n">real_width</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Computes 3D translation from box width and real width ratio.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>camera</strong>: Instance of ''paz.backend.Camera'' containing as properties
+    the <code>camera_intrinsics</code> a Numpy array of shape <code>[3, 3]</code>
+    usually calculated from the openCV <code>calibrateCamera</code> function,
+    and the <code>distortion</code> a Numpy array of shape <code>[5]</code> in which the
+    elements are usually obtained from the openCV
+    <code>calibrateCamera</code> function.</li>
+<li><strong>real_width</strong>: Real width of the predicted box2D.</li>
+</ul>
+<p><strong>Returns</strong></p>
+<p>Array (num_boxes, 3) containing all 3D translations.</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L137">[source]</a></span></p>
+<h3 id="matchposes">MatchPoses</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">MatchPoses</span><span class="p">(</span><span class="n">prior_boxes</span><span class="p">,</span> <span class="n">iou</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Match prior boxes with ground truth poses.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>prior_boxes</strong>: Numpy array of shape (num_boxes, 4).</li>
+<li><strong>iou</strong>: Float in [0, 1]. Intersection over union in which prior
+    boxes will be considered positive. A positive box is box
+    with a class different than <code>background</code>.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L155">[source]</a></span></p>
+<h3 id="rotationmatrixtoaxisangle">RotationMatrixToAxisAngle</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">RotationMatrixToAxisAngle</span><span class="p">(</span><span class="n">num_pose_dims</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Computes axis angle rotation vector from a rotation matrix.</p>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><strong>num_pose_dims</strong>: Int, number of dimensions of pose.</li>
+</ul>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>transformed_rotations</strong>: Array of shape (5,)
+    containing transformed rotation.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L173">[source]</a></span></p>
+<h3 id="concatenateposes">ConcatenatePoses</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">ConcatenatePoses</span><span class="p">()</span>
+</code></pre></div>
+
+<p>Concatenates rotations and translations into a single array.</p>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>poses_combined</strong>: Array of shape <code>(num_boxes, 10)</code>
+    containing the transformed rotation.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L187">[source]</a></span></p>
+<h3 id="concatenatescale">ConcatenateScale</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">ConcatenateScale</span><span class="p">()</span>
+</code></pre></div>
+
+<p>Concatenates poses with image scale into a single array.</p>
+<p><strong>Returns:</strong></p>
+<ul>
+<li><strong>poses_combined</strong>: Array of shape <code>(num_prior_boxes, 11)</code>
+    containing the transformed rotation.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L201">[source]</a></span></p>
+<h3 id="augmentpose6d">AugmentPose6D</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">AugmentPose6D</span><span class="p">(</span><span class="n">camera_matrix</span><span class="p">,</span> <span class="n">scale_min</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">scale_max</span><span class="o">=</span><span class="mf">1.3</span><span class="p">,</span> <span class="n">angle_min</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">angle_max</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span> <span class="n">probability</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">mask_value</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span> <span class="n">input_size</span><span class="o">=</span><span class="mi">512</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Augment images, boxes, rotation and translation vector
+for pose estimation.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>camera_matrix</strong>: Array with camera matrix of shape <code>(3, 3)</code>.</li>
+<li><strong>scale_min</strong>: Float, minimum value to scale image.</li>
+<li><strong>scale_max</strong>: Float, maximum value to scale image.</li>
+<li><strong>angle_min</strong>: Int, minimum degree to rotate image.</li>
+<li><strong>angle_max</strong>: Int, maximum degree to rotate image.</li>
+<li><strong>probability</strong>: Float, probability of data transformation.</li>
+<li><strong>mask_value</strong>: Int, pixel gray value of foreground in mask image.</li>
+<li><strong>input_size</strong>: Int, input image size of the model.</li>
+</ul>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L239">[source]</a></span></p>
+<h3 id="topose6d">ToPose6D</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">ToPose6D</span><span class="p">(</span><span class="n">class_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">one_hot_encoded</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default_score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">default_class</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">box_method</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Transforms poses i.e rotations and
+translations into <code>Pose6D</code> messages.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>class_names</strong>: List of class names ordered with respect
+    to the class indices from the dataset <code>boxes</code>.</li>
+<li><strong>one_hot_encoded</strong>: Bool, indicating if scores are one hot vectors.</li>
+<li><strong>default_score</strong>: Float, score to set.</li>
+<li><strong>default_class</strong>: Str, class to set.</li>
+<li><strong>box_method</strong>: Int, method to convert boxes to <code>Boxes2D</code>.</li>
+</ul>
+<p><strong>Properties</strong></p>
+<ul>
+<li><strong>one_hot_encoded</strong>: Bool.</li>
+<li><strong>box_processor</strong>: Callable.</li>
+</ul>
+<p><strong>Methods</strong></p>
+<p>call()</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L275">[source]</a></span></p>
+<h3 id="boxeswithonehotvectorstopose6d">BoxesWithOneHotVectorsToPose6D</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">BoxesWithOneHotVectorsToPose6D</span><span class="p">(</span><span class="n">arg_to_class</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Transforms poses into <code>Pose6D</code> messages
+given boxes with scores as one hot vectors.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>arg_to_class</strong>: List, of classes.</li>
+</ul>
+<p><strong>Properties</strong></p>
+<ul>
+<li><strong>arg_to_class</strong>: List.</li>
+</ul>
+<p><strong>Methods</strong></p>
+<p>call()</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L304">[source]</a></span></p>
+<h3 id="boxestopose6d">BoxesToPose6D</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">BoxesToPose6D</span><span class="p">(</span><span class="n">default_score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">default_class</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Transforms poses into <code>Pose6D</code> messages
+given no class names and score.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>default_score</strong>: Float, score to set.</li>
+<li><strong>default_class</strong>: Str, class to set.</li>
+</ul>
+<p><strong>Properties</strong></p>
+<ul>
+<li><strong>default_score</strong>: Float.</li>
+<li><strong>default_class</strong>: Str.</li>
+</ul>
+<p><strong>Methods</strong></p>
+<p>call()</p>
+<hr />
+<p><span style="float:right;"><a href="https://github.com/oarriaga/paz/blob/master/paz/processors/pose.py#L333">[source]</a></span></p>
+<h3 id="boxeswithclassargtopose6d">BoxesWithClassArgToPose6D</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">paz</span><span class="o">.</span><span class="n">processors</span><span class="o">.</span><span class="n">pose</span><span class="o">.</span><span class="n">BoxesWithClassArgToPose6D</span><span class="p">(</span><span class="n">arg_to_class</span><span class="p">,</span> <span class="n">default_score</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Transforms poses into <code>Pose6D</code> messages
+given boxes with class argument.</p>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>default_score</strong>: Float, score to set.</li>
+<li><strong>arg_to_class</strong>: List, of classes.</li>
+</ul>
+<p><strong>Properties</strong></p>
+<ul>
+<li><strong>default_score</strong>: Float.</li>
+<li><strong>arg_to_class</strong>: List.</li>
+</ul>
+<p><strong>Methods</strong></p>
+<p>call()</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f1b6f286.min.js"></script>
+      
+    
+  </body>
+</html>
