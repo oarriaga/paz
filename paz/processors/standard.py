@@ -2,8 +2,8 @@ import numpy as np
 
 from ..abstract import Processor
 from ..backend.boxes import to_one_hot
-from ..backend.standard import (append_values, predict, predict_with_nones, weighted_average,
-                                compute_common_row_indices)
+from ..backend.standard import (append_values, predict, predict_with_nones,
+                                weighted_average, compute_common_row_indices)
 
 class ControlMap(Processor):
     """Controls which inputs are passed ''processor'' and the order of its
@@ -247,7 +247,8 @@ class Predict(Processor):
         return predict(x, self.model, self.preprocess, self.postprocess)
 
 class PredictWithNones(Processor):
-    """Perform input preprocessing, model prediction and output postprocessing based on batches.
+    """Perform input preprocessing, model prediction and output postprocessing
+    based on batches.
 
     # Arguments
         model: Class with a ''predict'' method e.g. a Keras model.
@@ -262,7 +263,8 @@ class PredictWithNones(Processor):
         self.postprocess = postprocess
 
     def call(self, x):
-        return predict_with_nones(x, self.model, self.preprocess, self.postprocess)
+        return predict_with_nones(x, self.model, self.preprocess,
+                                  self.postprocess)
 
 
 class ToClassName(Processor):
@@ -522,7 +524,8 @@ class FloatToBoolean(Processor):
 class NoneConverter(Processor):
     """Converts a None value to the last valid or a default value.
     # Arguments
-        default_value: Any. Default value to convert to until a first valid value is stored.
+        default_value: Any. Default value to convert to until
+            a first valid value is stored.
         value: Any Noneable value.
 
     # Returns
@@ -543,7 +546,8 @@ class AveragePredictions(Processor):
     """Averages the last n predictions
     # Arguments
         window_size: Int. Number of predictions to average over.
-        weighted: Bool. If True, the average is weighted by the index of the prediction.
+        weighted: Bool. If True, the average is weighted
+            by the index of the prediction.
         value: Bool, Int or Float value. Value to average over.
     # Returns
         Bool, Int or Float value. Averaged value.
