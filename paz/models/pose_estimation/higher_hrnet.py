@@ -95,7 +95,7 @@ def final_layers(num_keypoints, with_AE_loss=None, num_deconv=1):
         output_channels = num_keypoints * 2
     else:
         output_channels = num_keypoints
-    x = Conv2D(output_channels, 1, padding='same', name='final_layers.0')
+    x = Conv2D(output_channels, 1, padding='same', name='keypoints_0')
     final_layers.append(x)
 
     for arg in range(num_deconv):
@@ -103,7 +103,7 @@ def final_layers(num_keypoints, with_AE_loss=None, num_deconv=1):
             output_channels = num_keypoints * 2
         else:
             output_channels = num_keypoints
-        x1 = Conv2D(output_channels, 1, padding='same', name='final_layers.1')
+        x1 = Conv2D(output_channels, 1, padding='same', name='keypoints')
         final_layers.append(x1)
     return final_layers
 
@@ -292,7 +292,7 @@ def HigherHRNet(weights='COCO', input_shape=(None, None, 3), num_keypoints=17,
 
     model = Model(image, outputs=final_outputs, name='HigherHRNet')
 
-    if(weights == 'COCO'):
+    if (weights == 'COCO'):
         URL = ('https://github.com/oarriaga/altamira-data/releases/download'
                '/v0.10/HigherHRNet_weights.hdf5')
         filename = os.path.basename(URL)
