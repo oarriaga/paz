@@ -2,6 +2,7 @@ from keras.layers import Layer
 from keras.initializers import Constant
 import keras.ops as K
 import keras.backend as B
+from keras import activations
 
 
 class Conv2DNormalization(Layer):
@@ -41,3 +42,40 @@ class Conv2DNormalization(Layer):
         )
         normalized_x = x / l2_norm
         return self.gamma * normalized_x
+
+
+class ReduceMean(Layer):
+    """Wraps tensorflow's `reduce_mean` function into a keras layer.
+
+    # Arguments
+        axes: List of integers. Axes along which mean is to be calculated.
+        keepdims: Bool, whether to presere the dimension or not.
+    """
+
+    def __init__(self, axes=[1, 2], keepdims=True):
+        self.axes = axes
+        self.keepdims = keepdims
+        super(ReduceMean, self).__init__()
+
+    def call(self, x):
+        return K.mean(x, axis=self.axes, keepdims=self.keepdims)
+
+
+class Sigmoid(Layer):
+    """Wraps tensorflow's `sigmoid` function into a keras layer."""
+
+    def __init__(self):
+        super(Sigmoid, self).__init__()
+
+    def call(self, x):
+        return activations.sigmoid(x)
+
+
+class Add(Layer):
+    """Wraps tensorflow's `add` function into a keras layer."""
+
+    def __init__(self):
+        super(Add, self).__init__()
+
+    def call(self, x, y):
+        return K.add(x, y)
