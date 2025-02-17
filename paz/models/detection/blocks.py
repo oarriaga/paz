@@ -1,14 +1,25 @@
-import keras.backend as K
 from keras.regularizers import l2
-from keras.layers import (Conv2D, Activation, BatchNormalization,
-                          Flatten, Reshape, Concatenate)
+from keras.layers import (
+    Conv2D,
+    Activation,
+    BatchNormalization,
+    Flatten,
+    Reshape,
+    Concatenate,
+)
+import numpy as np
+from ..layers import Conv2DNormalization
 
 
-from .layers import Conv2DNormalization
-
-
-def build_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
-                        num_regressions=4, l2_norm=False, batch_norm=False):
+def build_multibox_head(
+    tensors,
+    num_classes,
+    num_priors,
+    l2_loss=0.0005,
+    num_regressions=4,
+    l2_norm=False,
+    batch_norm=False,
+):
     """Adds multibox head with classification and regression output tensors.
 
     # Arguments
@@ -32,8 +43,9 @@ def build_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
 
         # classification leaf -------------------------------------------------
         num_kernels = num_priors[layer_arg] * num_classes
-        class_leaf = Conv2D(num_kernels, 3, padding="same",
-                            kernel_regularizer=l2(l2_loss))(base_layer)
+        class_leaf = Conv2D(
+            num_kernels, 3, padding="same", kernel_regularizer=l2(l2_loss)
+        )(base_layer)
         if batch_norm:
             class_leaf = BatchNormalization()(class_leaf)
         class_leaf = Flatten()(class_leaf)
@@ -41,8 +53,9 @@ def build_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
 
         # regression leaf -----------------------------------------------------
         num_kernels = num_priors[layer_arg] * num_regressions
-        regress_leaf = Conv2D(num_kernels, 3, padding="same",
-                              kernel_regularizer=l2(l2_loss))(base_layer)
+        regress_leaf = Conv2D(
+            num_kernels, 3, padding="same", kernel_regularizer=l2(l2_loss)
+        )(base_layer)
         if batch_norm:
             regress_leaf = BatchNormalization()(regress_leaf)
 
@@ -51,7 +64,7 @@ def build_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
 
     classifications = Concatenate(axis=1)(classification_layers)
     regressions = Concatenate(axis=1)(regression_layers)
-    num_boxes = K.int_shape(regressions)[-1] // num_regressions
+    num_boxes = np.shape(regressions)[-1] // num_regressions
     classifications = Reshape((num_boxes, num_classes))(classifications)
     classifications = Activation("softmax")(classifications)
     regressions = Reshape((num_boxes, num_regressions))(regressions)
