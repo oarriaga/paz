@@ -1,4 +1,5 @@
 import pytest
+
 from paz.backend.standard import lock, merge_dicts
 
 
