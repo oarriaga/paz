@@ -1,4 +1,6 @@
+import cv2
 import jax.numpy as jp
+import paz
 
 
 def split(boxes):
@@ -94,3 +96,40 @@ def flip_left_right(boxes, image_width):
     """
     x_min, y_min, x_max, y_max = split(boxes)
     return join(x_max, y_min, x_min, y_max)
+
+
+def from_selection(image, radius=5, color=(255, 0, 0), window_name="image"):
+    points, boxes = [], []
+    image = image.copy()
+
+    def order_xyxy(point_A, point_B):
+        (x1, y1) = point_A
+        (x2, y2) = point_B
+        return min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)
+
+    def take_last_two_points(points):
+        point_A = points[-1]
+        point_B = points[-2]
+        return point_A, point_B
+
+    def on_double_click(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDBLCLK:
+            paz.draw.circle(image, (x, y), radius, color)
+            points.append((x, y))
+            if len(points) % 2 == 0:
+                point_A, point_B = take_last_two_points(points)
+                box = order_xyxy(point_A, point_B)
+                paz.draw.box(image, box, color, radius)
+                boxes.append(box)
+
+    def key_is_pressed(key="q", time=20):
+        return cv2.waitKey(time) & 0xFF == ord(key)
+
+    cv2.namedWindow(window_name)
+    cv2.setMouseCallback(window_name, on_double_click)
+    while True:
+        paz.image.show(image, window_name, False)
+        if key_is_pressed("q"):
+            break
+    cv2.destroyWindow(window_name)
+    return jp.array(boxes)
