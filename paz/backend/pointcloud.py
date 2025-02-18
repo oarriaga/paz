@@ -117,3 +117,10 @@ def remove_outliers(pointcloud, num_stdvs=3.0):
     is_below_upper_cutoff = jp.all(pointcloud < upper_cutoff, axis=1)
     mask = jp.logical_or(is_above_lower_cutoff, is_below_upper_cutoff)
     return pointcloud[mask]
+
+
+def compute_bounding_volume(pointcloud):
+    min_coords = jp.min(pointcloud, axis=0)
+    max_coords = jp.max(pointcloud, axis=0)
+    volume = jp.prod(max_coords - min_coords)
+    return volume
