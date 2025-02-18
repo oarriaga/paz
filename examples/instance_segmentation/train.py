@@ -40,10 +40,9 @@ elif dataset == "voc":
             "magenta",
             "crimson",
             "pink",
-            "white",
+            "green",
         ]
     )
-    # cmap_mask = plt.cm.Paired
 else:
     raise ValueError
 
@@ -71,7 +70,8 @@ def get_colormap_to_class():
         (0, 192, 0): 18,
         (128, 192, 0): 19,
         (0, 64, 128): 20,
-        (224, 224, 192): 21,
+        # (224, 224, 192): 21,
+        (224, 224, 192): 0,
     }
 
 
@@ -104,6 +104,7 @@ for arg in range(100):
         image = np.array(paz.image.load(image))
         mask = np.array(paz.image.load(mask))
         mask = color_map_to_class_arg(mask, colormap_to_class)
+        print("UNIQUE CLASS", np.unique(mask))
     image_boxes = boxes[arg]
     image_class_args = class_args[arg]
     figure, axes = plt.subplots(1, 3)
