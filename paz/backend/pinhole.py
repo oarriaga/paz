@@ -1,8 +1,9 @@
-from paz.backend import algebra
-
 from functools import partial
+
 import jax.numpy as jp
 from jax import vmap
+
+from paz.backend import algebra
 
 
 def project_to_3D(camera_intrinsics, point2D, depth):
@@ -17,6 +18,13 @@ def project_to_2D(camera_matrix, point3D):
     homogenous_point2D = jp.matmul(camera_matrix, homogenous_point3D)
     point2D = algebra.dehomogenize_coordinates(homogenous_point2D)
     return point2D
+
+
+def make_camera_matrix(camera_intrinsics, camera_pose):
+    # camera_intrinsics (3 x 3), camera_pose: (4 x 4)
+    intrinsics = jp.concatenate([camera_intrinsics, jp.zeros((3, 1))], axis=1)
+    camera_matrix = jp.matmul(intrinsics, camera_pose)
+    return camera_matrix
 
 
 def scale_intrinsics(camera_intrinsics, scale):
