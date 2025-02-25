@@ -56,3 +56,13 @@ def show(image, name="image", wait=True):
             if cv2.waitKey(0) & 0xFF == ord("q"):
                 break
         cv2.destroyAllWindows()
+
+
+def normalize(image):
+    return image / 255.0
+
+
+def rgb_to_gray(image):
+    weights = jp.array([0.2989, 0.5870, 0.1140], dtype=image.dtype)
+    gray_image = jp.tensordot(image, weights, axes=(-1, -1))
+    return jp.expand_dims(gray_image, axis=-1)

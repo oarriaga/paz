@@ -54,8 +54,8 @@ class Tree:
             parent = self.parent(node)
             if (parent == NO_PARENT) or (parent in sorted_nodes):
                 sorted_nodes.append(node)
-        # return sorted_nodes
-        return list(set(sorted_nodes))
+        return sorted_nodes
+        # return list(set(sorted_nodes))
 
     def parent_array(self, sorted_nodes):
         parent_array = []
