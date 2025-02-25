@@ -16,18 +16,3 @@ def Sequential(nodes=None):
         return x
 
     return SequentialState(add, call)
-
-
-def fn_a(x):
-    return x + 1
-
-
-def fn_b(y):
-    return y * 2
-
-
-model = Sequential()
-model.add(fn_a)
-model.add(fn_b)
-
-print(model.call(1.0))
