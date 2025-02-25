@@ -33,8 +33,15 @@ def load(filepath):
     return jp.array(BGR_to_RGB(cv2.imread(filepath)))
 
 
-def resize(image, shape):
-    return jax.image.resize(image, (*shape, 3), "bilinear")
+def resize(image, shape, method="bilinear"):
+    return jax.image.resize(image, (*shape, image.shape[-1]), method)
+
+
+def scale(image, scale, method="bilinear"):
+    H, W, num_channels = image.shape
+    H_scaled = int(H * scale[0])
+    W_scaled = int(W * scale[1])
+    return jax.image.resize(image, (H_scaled, W_scaled, num_channels), method)
 
 
 def show(image, name="image", wait=True):
