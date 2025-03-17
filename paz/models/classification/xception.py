@@ -46,7 +46,6 @@ def xception_block(input_tensor, num_kernels, l2_reg=0.01):
         use_bias=False,
     )(x)
     x = BatchNormalization()(x)
-
     x = MaxPooling2D(3, strides=(2, 2), padding="same")(x)
     x = Add()([x, residual])
     return x
@@ -90,7 +89,6 @@ def build_xception(
         x = xception_block(x, num_kernels, l2_reg)
 
     x = Conv2D(num_classes, 3, kernel_regularizer=l2(l2_reg), padding="same")(x)
-    # x = BatchNormalization()(x)
     x = GlobalAveragePooling2D()(x)
     output = Activation("softmax", name="label")(x)
 
@@ -258,7 +256,7 @@ def build_minixception(input_shape, num_classes, l2_reg=0.01):
     return model
 
 
-def MiniXception(input_shape=(48, 48, 1), num_classes=7, weights="FER"):
+def MiniXception(input_shape, num_classes):
     """Build MiniXception (see references).
 
     # Arguments
@@ -268,24 +266,33 @@ def MiniXception(input_shape=(48, 48, 1), num_classes=7, weights="FER"):
             include only ``FER``.
 
     # Returns
-        Tensorflow-Keras model.
+        Keras model.
 
     # References
        - [Real-time Convolutional Neural Networks for Emotion and
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
-    if weights == "FER":
-        filename = "fer2013_mini_XCEPTION.hdf5"
-        URL = (
-            "https://github.com/oarriaga/altamira-data/releases/download/v0.6/"
-        )
-        path = get_file(filename, URL + filename, cache_subdir="paz/models")
-        model = build_minixception(input_shape, num_classes)
-        model.load_weights(path)
-    else:
-        stem_kernels = [32, 64]
-        block_data = [128, 128, 256, 256, 512, 512, 1024]
-        model_inputs = (input_shape, num_classes, stem_kernels, block_data)
-        model = build_xception(*model_inputs)
+    stem_kernels = [32, 64]
+    block_data = [128, 128, 256, 256, 512, 512, 1024]
+    model_inputs = (input_shape, num_classes, stem_kernels, block_data)
+    model = build_xception(*model_inputs)
     model._name = "MINI-XCEPTION"
+    return model
+
+
+def MiniXceptionFER():
+    """Build MiniXception trained in FER (see references).
+
+    # Returns
+        Keras model.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+    """
+    model = build_minixception((48, 48, 1), 7)
+    filename = "fer2013_mini_XCEPTION.hdf5"
+    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.6/"
+    path = get_file(filename, URL + filename, cache_subdir="paz/models")
+    model.load_weights(path)
     return model

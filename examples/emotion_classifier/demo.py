@@ -4,9 +4,9 @@ os.environ["KERAS_BACKEND"] = "jax"
 
 import jax.numpy as jp
 import paz
-from paz.applications import MiniXception
+from paz.applications import MiniXceptionFER
 
-model = MiniXception()
+# model = MiniXception()
 
 
 def to_labels(probabilities, labels):
@@ -21,37 +21,17 @@ def preprocess(image, shape):
     return image
 
 
-def OldMiniXceptionFER():
-    x = image = paz.Input("image")
-    # TODO fix reusing the same name
-    x = paz.Node(preprocess, (48, 48))(x)
-    scores = paz.Node(
-        MiniXception((48, 48, 1), 7, weights="FER"), name="score"
-    )(x)
-    # TODO *args does not stop :(
-    labels = paz.Node(to_labels, paz.datasets.labels("FER"), name="labels")(
-        scores
-    )
-    return paz.Model([image], [labels], "MiniXceptionFER")
-
-
-def MiniXceptionFER():
+def ClassifyMiniXceptionFER():
     x = image = paz.Input("image")
     x = paz.Node(preprocess, (48, 48))(x)
-    x = paz.Node(MiniXception((48, 48, 1), 7, weights="FER"), name="score")(x)
-    # x = paz.Node(to_labels, paz.datasets.labels("FER"))(x)
+    x = paz.Node(MiniXceptionFER(), name="score")(x)
+    x = paz.Node(to_labels, paz.datasets.labels("FER"), name="label")(x)
     return paz.Model([image], [x], "MiniXceptionFER")
 
 
 # score = MiniXception((48, 48, 1), 7, weights="FER")
-model = MiniXceptionFER()
+model = ClassifyMiniXceptionFER()
 y = model(jp.full((128, 128, 3), 255))
-
-import jax
-
-batch_model = jax.vmap(model)
-
-yy = batch_model(jp.full((32, 128, 128, 3), 255))
 
 
 """

@@ -1,1 +1,1 @@
-from paz.models.classification import MiniXception
+from paz.models.classification.xception import MiniXceptionFER
