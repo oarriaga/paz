@@ -196,10 +196,10 @@ def apply_per_class_NMS(detections, num_classes, iou_thresh, top_k, epsilon):
     return detections
 
 
-def filter_by_score(detections, threshold):
+def filter_by_score(detections, threshold, invalid_value=-1):
     """Filters detections by scores."""
     scores = jp.max(paz.detection.get_scores(detections), axis=1, keepdims=True)
-    return jp.where(scores >= threshold, detections, -1)
+    return jp.where(scores >= threshold, detections, invalid_value)
 
 
 def remove_class(detections, class_arg):
@@ -213,9 +213,9 @@ def remove_class(detections, class_arg):
     return jp.delete(detections, 4 + class_arg, axis=1)
 
 
-def denormalize(detections, image_shape):
+def denormalize(detections, H, W):
     boxes, scores = split(detections)
-    boxes = paz.boxes.denormalize(boxes, image_shape)
+    boxes = paz.boxes.denormalize(boxes, H, W)
     return merge(boxes, scores)
 
 

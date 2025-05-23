@@ -1,5 +1,5 @@
-import jax
 import jax.numpy as jp
+import jax
 import cv2
 import paz
 
@@ -203,133 +203,227 @@ def compute_IOUs(boxes_A, boxes_B):
     return jp.clip(intersection_area / union_area, 0.0, 1.0)
 
 
-def apply_NMS(boxes, scores, iou_thresh=0.45, top_k=200):
-    top_k = min(top_k, len(boxes))
-    sorted_score_args = jp.argsort(scores)[::-1]
-    top_k_score_args = sorted_score_args[:top_k]
-    top_k_boxes = jp.take(boxes, top_k_score_args, axis=0)
-    top_k_args = jp.arange(len(top_k_boxes))
-
-    def step(suppressed_mask, top_k_arg):
-        is_suppressed = suppressed_mask[top_k_arg]
-
-        def suppress():
-            current_box = top_k_boxes[top_k_arg]
-            current_box = jp.expand_dims(current_box, 0)
-            ious = compute_IOUs(current_box, top_k_boxes)
-            ious = jp.squeeze(ious, 0)
-            mask_to_suppress = (ious > iou_thresh) & (top_k_args != top_k_arg)
-            return jp.logical_or(suppressed_mask, mask_to_suppress)
-
-        def do_nothing():
-            return suppressed_mask
-
-        new_suppressed_mask = jax.lax.cond(is_suppressed, do_nothing, suppress)
-        keep_this_box = jp.logical_not(is_suppressed)
-        return new_suppressed_mask, keep_this_box
-
-    initial_mask = jp.zeros(len(top_k_boxes), dtype=bool)
-    _, keep_mask = jax.lax.scan(step, initial_mask, top_k_args)
-    selected_indices = top_k_score_args[keep_mask]
-    return selected_indices
+def xyxy_to_xywh(boxes):
+    x_min, y_min = boxes[:, 0:1], boxes[:, 1:2]
+    x_max, y_max = boxes[:, 2:3], boxes[:, 3:4]
+    W = x_max - x_min
+    H = y_max - y_min
+    return merge(x_min, y_min, W, H)
 
 
-def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2]):
-    """Encode matched bounding boxes relative to prior boxes.
+def xywh_to_xyxy(boxes):
+    x_min, y_min, W, H = split(boxes)
+    x_max = x_min + W
+    y_max = y_min + H
+    boxes = merge(x_min, y_min, x_max, y_max)
+    return boxes
+
+
+def flip_left_right(boxes, W):
+    """Flips box coordinates from left-to-right and vice-versa.
 
     # Arguments
-        matched (array): Matched target boxes (assumed [cx, cy, w, h, extras...])
-                         or converted by to_center_form if input is corner form.
-                         Original code implies input `matched` needs conversion.
-        priors (array): Prior boxes (assumed [cx, cy, w, h])
-        variances (list): Variances for encoding (cx, cy, w, h)
+        boxes: Numpy array of shape `(num_boxes, 4)`.
 
     # Returns
-        array: Encoded box parameters ([dx, dy, dw, dh, extras...])
+        Numpy array of shape `(num_boxes, 4)`.
     """
+    x_min, y_min, x_max, y_max = split(boxes)
+    return merge(x_max, y_min, x_min, y_max)
 
-    def encode_centers(boxes_center, priors, variances):
-        """Encode center coordinates using priors and variances."""
-        difference_x = boxes_center[:, 0:1] - priors[:, 0:1]
-        difference_y = boxes_center[:, 1:2] - priors[:, 1:2]
-        encoded_center_x = (difference_x / priors[:, 2:3]) / variances[0]
-        encoded_center_y = (difference_y / priors[:, 3:4]) / variances[1]
-        return encoded_center_x, encoded_center_y
 
-    def encode_sizes(boxes_center, priors, variances):
-        """Encode width and height dimensions."""
-        ratio_w = boxes_center[:, 2:3] / priors[:, 2:3]
-        ratio_h = boxes_center[:, 3:4] / priors[:, 3:4]
-        encoded_w = jp.log(ratio_w + 1e-8) / variances[2]
-        encoded_h = jp.log(ratio_h + 1e-8) / variances[3]
-        return encoded_w, encoded_h
+def append_class(boxes, class_arg):
+    class_args = jp.full((len(boxes), 1), class_arg)
+    return jp.hstack((boxes, class_args))
 
-    boxes_corner = matched[:, :4]
-    boxes_center = to_center_form(boxes_corner)
-    extras = matched[:, 4:]
 
-    priors_center = priors
+def sample(key, H, W, box_size, num_boxes=15):
+    keys = jax.random.split(key)
+    H_box, W_box = box_size
+    x_min = jax.random.randint(keys[0], (num_boxes, 1), 0, W - W_box + 1)
+    y_min = jax.random.randint(keys[1], (num_boxes, 1), 0, H - H_box + 1)
+    x_max = x_min + W_box
+    y_max = y_min + H_box
+    return merge(x_min, y_min, x_max, y_max)
 
-    encoded_x, encoded_y = encode_centers(
-        boxes_center, priors_center, variances
+
+def sample_negatives(key, boxes, H, W, box_size, num_boxes, num_trials):
+    negative_boxes = paz.boxes.sample(key, H, W, box_size, num_trials)
+    ious = compute_IOUs(negative_boxes, boxes)
+    mean_ious = jp.mean(ious, axis=1)
+    # best_args = jp.argsort(mean_ious)[::-1]
+    best_args = jp.argsort(mean_ious)
+    best_args = best_args[:num_boxes]
+    return negative_boxes[best_args]
+
+
+def denormalize(boxes, H, W):
+    return (boxes * jp.array([[W, H, W, H]])).astype(int)
+
+
+def scale(boxes, scale_W, scale_H):
+    """Scales the width and height of a bounding box (xywh format)."""
+    x_center, y_center, W, H = split(xyxy_to_xywh(boxes))
+    new_W = scale_W * W
+    new_H = scale_H * H
+    boxes = merge(x_center, y_center, new_W, new_H)
+    return xywh_to_xyxy(boxes)
+
+
+def translate(boxes, x_offset, y_offset):
+    """Translates the center of a bounding box (xywh format)."""
+    x_center, y_center, W, H = split(xyxy_to_xywh(boxes))
+    x_new_center = x_center + x_offset
+    y_new_center = y_center + y_offset
+    boxes = merge(x_new_center, y_new_center, W, H)
+    return xywh_to_xyxy(boxes)
+
+
+def clip(boxes, H, W):
+    """Clips bounding box coordinates to image boundaries."""
+    x_min, y_min, x_max, y_max = split(boxes)
+    x_min_clipped = jp.clip(x_min, 0, W - 1)
+    y_min_clipped = jp.clip(y_min, 0, H - 1)
+    x_max_clipped = jp.clip(x_max, 0, W - 1)
+    y_max_clipped = jp.clip(y_max, 0, H - 1)
+    boxes = merge(x_min_clipped, y_min_clipped, x_max_clipped, y_max_clipped)
+    return boxes
+
+
+def jitter(key, boxes, H, W, scale_range, shift_range):
+    """Applies random scaling and translation, then clips"""
+    # this function jitters all boxes with the same translation and scale
+    # shall we jitter all of the boxes?
+    keys = jax.random.split(key, 4)
+    scale_min, scale_max = scale_range
+    shift_min, shift_max = shift_range
+    scale_W = jax.random.uniform(keys[0], minval=scale_min, maxval=scale_max)
+    scale_H = jax.random.uniform(keys[1], minval=scale_min, maxval=scale_max)
+    x_offset = jax.random.randint(keys[2], (), shift_min, shift_max + 1)
+    y_offset = jax.random.randint(keys[3], (), shift_min, shift_max + 1)
+    boxes = translate(scale(boxes, scale_W, scale_H), x_offset, y_offset)
+    return clip(boxes, H, W)
+
+
+def sample_positives(key, boxes, H, W, num_samples, scale_range, shift_range):
+
+    def select_random_box(key, boxes):
+        arg = jax.random.randint(key, shape=(), minval=0, maxval=len(boxes))
+        return jp.expand_dims(boxes[arg], 0)
+
+    def apply(boxes, key):
+        box = select_random_box(key, boxes)
+        box = jitter(key, box, H, W, scale_range, shift_range)
+        return boxes, jp.squeeze(box, axis=0)
+
+    keys = jax.random.split(key, num_samples)
+    _, jittered_boxes = jax.lax.scan(apply, boxes, keys)
+    return jittered_boxes.astype(boxes.dtype)
+
+
+def filter_in_image(boxes, H, W):
+    """Filter boxes that are outside the image boundaries."""
+    x_min, y_min, x_max, y_max = split(boxes, keepdims=False)
+    valid_mask = jp.logical_and(
+        jp.logical_and(x_min >= 0, y_min >= 0),
+        jp.logical_and(x_max < W, y_max < H),
     )
-    encoded_w, encoded_h = encode_sizes(boxes_center, priors_center, variances)
-
-    return jp.concatenate(
-        [encoded_x, encoded_y, encoded_w, encoded_h, extras], axis=1
-    )
+    return boxes[valid_mask]
 
 
-def decode(predictions, priors, variances=[0.1, 0.1, 0.2, 0.2]):
-    """Decode predicted box parameters to actual coordinates.
+def crop_with_pad(boxes, image, box_H, box_W, pad_value=0):
+    x_min, y_min, x_max, y_max = split(boxes, False)
+    boxes_H, boxes_W = compute_sizes(boxes, False)
+    delta_x = jp.arange(box_W)
+    delta_y = jp.arange(box_H)
+
+    H, W = paz.image.get_size(image)
+    x_args = jp.expand_dims(x_min[:, None] + delta_x[None, :], axis=1)
+    y_args = jp.expand_dims(y_min[:, None] + delta_y[None, :], axis=2)
+    x_args_in_image_bounds = (x_args >= 0) & (x_args < W)
+    y_args_in_image_bounds = (y_args >= 0) & (y_args < H)
+
+    x_offset_in_box_bounds = delta_x[None, :] < boxes_W[:, None]
+    y_offset_in_box_bounds = delta_y[None, :] < boxes_H[:, None]
+    x_offset_in_box_bounds = x_offset_in_box_bounds[:, None, :]
+    y_offset_in_box_bounds = y_offset_in_box_bounds[:, :, None]
+
+    mask_x = x_offset_in_box_bounds & x_args_in_image_bounds
+    mask_y = y_offset_in_box_bounds & y_args_in_image_bounds
+    valid_mask = jp.expand_dims(mask_y & mask_x, axis=3)
+    safe_x_args = jp.clip(x_args, 0, W - 1)
+    safe_y_args = jp.clip(y_args, 0, H - 1)
+    gathered_image = image[safe_y_args, safe_x_args, :]
+    # pad = jp.full_like(gathered_image, pad_value, dtype=image.dtype)
+    return jp.where(valid_mask, gathered_image, pad_value)
+
+
+def resize(boxes, H_box, W_box):
+    x_center, y_center = paz.boxes.compute_centers(boxes)
+    x_min = x_center - (W_box / 2.0)
+    y_min = y_center - (H_box / 2.0)
+    x_max = x_center + (W_box / 2.0)
+    y_max = y_center + (H_box / 2.0)
+    return merge(x_min, y_min, x_max, y_max).astype(dtype=boxes.dtype)
+
+
+def match(boxes, prior_boxes, IOU_threshold=0.5):
+    """Matches each prior box with a ground truth box (box from `boxes`).
+    It then selects which matched box will be considered positive e.g. iou > .5
+    and returns for each prior box a ground truth box that is either positive
+    (with a class argument different than 0) or negative.
 
     # Arguments
-        predictions (array): Encoded box predictions ([dx, dy, dw, dh, extras...])
-        priors (array): Prior boxes (assumed [cx, cy, w, h])
-        variances (list): Decoding variances
+        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
+            argument. This boxes should be the ground truth boxes.
+        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
+            where the four coordinates are in center form coordinates.
+        iou_threshold: Float between [0, 1]. Intersection over union
+            used to determine which box is considered a positive box.
 
     # Returns
-        array: Decoded boxes in corner format with extras ([xmin, ymin, xmax, ymax, extras...])
+        Array of shape `(num_prior_boxes, 4 + 1)`.
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument.
     """
 
-    def decode_center_form_boxes(predictions, priors, variances):
-        """Compute center-form boxes from predictions."""
+    def mark_best_match(per_prior_best_IOU, per_box_best_prior_arg):
+        # The prior boxes that are the best match for each box are marked.
+        # They are marked by setting an IOU larger (2) than the maxium (1).
+        # the best prior box match of box_0 is per_box_best_prior_arg[0]
+        # the best prior box match of box_1 is per_box_best_prior_arg[1]
+        # ...
+        return per_prior_best_IOU.at[per_box_best_prior_arg].set(2.0)
 
-        def decode_center_x(predictions, priors, variances):
-            """Decode center x-coordinate from predictions."""
-            return (
-                predictions[:, 0:1] * priors[:, 2:3] * variances[0]
-                + priors[:, 0:1]
-            )
+    def select_for_each_prior_box_a_box(boxes, per_prior_best_box):
+        # Each prior box is assigned a ground truth box.
+        assigned_boxes = boxes[per_prior_best_box]
+        return assigned_boxes
 
-        def decode_center_y(predictions, priors, variances):
-            """Decode center y-coordinate from predictions."""
-            return (
-                predictions[:, 1:2] * priors[:, 3:4] * variances[1]
-                + priors[:, 1:2]
-            )
+    def force_match(per_prior_best_box, per_box_best_prior):
+        # Ensures that every ground truth box is matched with at least one prior
+        # box. Specifically, the prior box with which it has the highest IoU.
+        for box_arg, prior_arg in enumerate(per_box_best_prior):
+            per_prior_best_box = per_prior_best_box.at[prior_arg].set(box_arg)
+        return per_prior_best_box
 
-        def decode_W(predictions, priors, variances):
-            """Decode width from predictions."""
-            exp_term = predictions[:, 2:3] * variances[2]
-            return priors[:, 2:3] * jp.exp(exp_term)
+    def label_negative_boxes(assigned_boxes, per_prior_best_IOU):
+        is_low_IOU_match = per_prior_best_IOU < IOU_threshold
+        class_args = assigned_boxes[:, 4]
+        class_args = jp.where(is_low_IOU_match, 0.0, class_args)
+        return assigned_boxes.at[:, 4].set(class_args)
 
-        def decode_H(predictions, priors, variances):
-            """Decode height from predictions."""
-            exp_term = predictions[:, 3:4] * variances[3]
-            return priors[:, 3:4] * jp.exp(exp_term)
-
-        center_x = decode_center_x(predictions, priors, variances)
-        center_y = decode_center_y(predictions, priors, variances)
-        W = decode_W(predictions, priors, variances)
-        H = decode_H(predictions, priors, variances)
-
-        return jp.concatenate([center_x, center_y, W, H], axis=1)
-
-    priors_center = priors
-    boxes_center = decode_center_form_boxes(
-        predictions, priors_center, variances
-    )
-    boxes_corner = to_corner_form(boxes_center)
-
-    return jp.concatenate([boxes_corner, predictions[:, 4:]], axis=1)
+    prior_boxes = to_corner_form(prior_boxes)
+    IOUs = compute_IOUs(boxes, prior_boxes)  # (boxes, prior_boxes)
+    per_box_best_prior = jp.argmax(IOUs, axis=1)  # (boxes,)
+    per_prior_best_box = jp.argmax(IOUs, axis=0)  # (prior_boxes,)
+    per_prior_best_IOU = jp.max(IOUs, axis=0)  # (prior_boxes,)
+    per_prior_best_IOU = mark_best_match(per_prior_best_IOU, per_box_best_prior)
+    assign_args = (per_prior_best_box, per_box_best_prior)
+    per_prior_best_box = force_match(*assign_args)
+    selected_boxes = select_for_each_prior_box_a_box(boxes, per_prior_best_box)
+    selected_boxes = label_negative_boxes(selected_boxes, per_prior_best_IOU)
+    return selected_boxes
