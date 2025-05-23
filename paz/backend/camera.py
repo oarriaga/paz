@@ -121,11 +121,20 @@ class VideoPlayer(object):
         record()
     """
 
-    def __init__(self, image_size, pipeline, camera, topic="image"):
+    def __init__(self, image_size, pipeline, camera, topic=0):
         self.image_size = tuple(image_size)
         self.pipeline = pipeline
         self.camera = camera
         self.topic = topic
+
+        if isinstance(topic, str):
+            self.get_topic = lambda x: getattr(x, self.topic)
+            self.topic_name = self.topic
+        elif isinstance(topic, int):
+            self.get_topic = lambda x: x[self.topic]
+            self.topic_name = str(topic)
+        else:
+            raise ValueError("topic should be either a string or an integer")
 
     def step(self):
         """Runs the pipeline process once
@@ -151,9 +160,9 @@ class VideoPlayer(object):
                 continue
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
-            topic = getattr(output, self.topic)
+            topic = self.get_topic(output)
             image = paz.image.resize(topic, self.image_size).astype("uint8")
-            paz.image.show(image, self.topic, wait=False)
+            paz.image.show(image, self.topic_name, wait=False)
         self.camera.stop()
         cv2.destroyAllWindows()
 
@@ -176,7 +185,7 @@ class VideoPlayer(object):
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
             image = paz.image.resize(output["image"], self.image_size)
-            paz.image.show(image, self.topic, wait=False)
+            paz.image.show(image, self.topic_name, wait=False)
             writer.write(paz.image.RGB_to_BGR(image))
 
         self.camera.stop()

@@ -1,6 +1,6 @@
 def get_class_names():
     return [
-        "background",
+        # "background",
         "person",
         "bicycle",
         "car",

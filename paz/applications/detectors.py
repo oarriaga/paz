@@ -2,12 +2,47 @@ import jax.numpy as jp
 import numpy as np
 import jax
 import paz
+import cv2
+
+
+# def draw_boxes2D(image, boxes, class_args, scores, names, colors, thickness):
+#     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
+#     for box, class_arg, score in zip(boxes, class_args, scores):
+#         image = paz.draw.box(image, box.tolist(), colors[class_arg], thickness)
+#     return image, (boxes, class_args, scores)
 
 
 def draw_boxes2D(image, boxes, class_args, scores, names, colors, thickness):
+    font_scale = 0.7
+    font = cv2.FONT_HERSHEY_DUPLEX
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
     for box, class_arg, score in zip(boxes, class_args, scores):
-        image = paz.draw.box(image, box.tolist(), colors[class_arg], thickness)
+        color = colors[class_arg]
+        x_min, y_min, x_max, y_max = box = box.tolist()
+        image = paz.draw.box(image, box, colors[class_arg], thickness)
+        cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, thickness)
+        label = f"{names[class_arg]} {score * 100:.0f}%"
+        (text_width, text_height), baseline = cv2.getTextSize(
+            label, font, font_scale, thickness
+        )
+        offset = round(thickness / 2)
+        cv2.rectangle(
+            image,
+            (x_min - offset, y_min - text_height - baseline - thickness),
+            (x_min + text_width, y_min),
+            color,
+            -1,
+        )
+
+        cv2.putText(
+            image,
+            label,
+            (x_min, y_min - baseline),
+            font,
+            font_scale,
+            (255, 255, 255),
+        )
+
     return image, (boxes, class_args, scores)
 
 
@@ -47,12 +82,12 @@ def SSD(
         detections = paz.detection.remove_class(detections, 0)
         NMS_args = (len(class_names), IOU_thresh, top_k, 0.01)
         detections = paz.detection.apply_per_class_NMS(detections, *NMS_args)
-        # detections = paz.detection.denormalize(detections, *image_size)
         detections = paz.detection.filter_by_score(detections, score_thresh, -1)
         return detections
 
     image = jax.jit(preprocess)(image)
-    predictions = jax.jit(model)(image)
+    # predictions = jax.jit(model)(image)
+    predictions = model(image)
     detections = jax.jit(postprocess, device=jax.devices("cpu")[0])(predictions)
     detections = paz.detection.remove_invalid(detections)
     detections = paz.detection.denormalize(detections, *image_size)
