@@ -226,8 +226,8 @@ def remove_invalid(detections_array, value=-1):
     return valid_boxes
 
 
-def to_boxes2D(boxes_and_one_hot_vectors):
-    boxes, one_hot_vectors = split(boxes_and_one_hot_vectors)
-    class_args = jp.argmax(one_hot_vectors, axis=1)
-    scores = one_hot_vectors[class_args]
-    return jp.concatenate([boxes, class_args, scores], axis=1)
+def to_boxes2D(detections):
+    boxes, scores = paz.detection.split(detections)
+    labels = jp.argmax(scores, axis=-1)
+    scores = scores[jp.arange(len(scores)), labels]
+    return boxes.astype("int32"), labels.astype("int32"), scores

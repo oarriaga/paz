@@ -46,13 +46,6 @@ def draw_boxes2D(image, boxes, class_args, scores, names, colors, thickness):
     return image, (boxes, class_args, scores)
 
 
-def to_boxes2D(detections):
-    boxes, scores = paz.detection.split(detections)
-    labels = jp.argmax(scores, axis=-1)
-    scores = scores[jp.arange(len(scores)), labels]
-    return boxes.astype("int32"), labels.astype("int32"), scores
-
-
 def SSD(
     image,
     model,
@@ -91,7 +84,7 @@ def SSD(
     detections = jax.jit(postprocess, device=jax.devices("cpu")[0])(predictions)
     detections = paz.detection.remove_invalid(detections)
     detections = paz.detection.denormalize(detections, *image_size)
-    boxes, class_args, scores = to_boxes2D(detections)
+    boxes, class_args, scores = paz.detection.to_boxes2D(detections)
     return boxes, class_args, scores
 
 

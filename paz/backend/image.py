@@ -7,7 +7,6 @@ import jax.numpy as jp
 import paz
 
 
-BILINEAR = cv2.INTER_LINEAR
 B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN = 104, 117, 123
 BGR_IMAGENET_MEAN = (B_IMAGENET_MEAN, G_IMAGENET_MEAN, R_IMAGENET_MEAN)
 RGB_IMAGENET_MEAN = (R_IMAGENET_MEAN, G_IMAGENET_MEAN, B_IMAGENET_MEAN)
@@ -70,15 +69,30 @@ def write(filepath, image):
     return cv2.imwrite(filepath, image)
 
 
-def resize(image, shape, method="bilinear", antialias=True):
-    return jax.image.resize(image, (*shape, image.shape[-1]), method, antialias)
+def resize(image, size, method="linear", antialias=False):
+    return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
-def scale(image, scale, method="bilinear"):
-    H, W, num_channels = image.shape
+def scale(image, scale_factor, method="linear", antialias=False):
+    H, W = get_size(image)
+    H_scaled = int(H * scale_factor)
+    W_scaled = int(W * scale_factor)
+    return resize(image, (H_scaled, W_scaled), method, antialias)
+
+
+def resize_with_aspect_ratio(
+    image, largest_side, method="linear", antialias=False
+):
+    H, W = get_size(image)
+    min_scale = min(largest_side / H, largest_side / W)
+    return scale(image, min_scale, method, antialias)
+
+
+def scale_with_aspect_ratio(image, scale, method="linear", antialias=False):
+    H, W = get_size(image)
     H_scaled = int(H * scale[0])
     W_scaled = int(W * scale[1])
-    return jax.image.resize(image, (H_scaled, W_scaled, num_channels), method)
+    resize(image, (H_scaled, W_scaled), method, antialias)
 
 
 def show(image, name="image", wait=True):
@@ -133,7 +147,7 @@ def get_size(image):
     return H, W
 
 
-def num_channels(image):
+def get_num_channels(image):
     return image.shape[-1]
 
 
@@ -400,7 +414,7 @@ def patch(image, patch_size, strides, padding="valid"):
 
         def patch_one(y_min_args, x_min_args):
             start_args = (y_min_args, x_min_args, 0)
-            slice_args = (H_patch, W_patch, paz.image.num_channels(image))
+            slice_args = (H_patch, W_patch, get_num_channels(image))
             return jax.lax.dynamic_slice(image, start_args, slice_args)
 
         def patch_rows(y_min_args):
@@ -427,3 +441,19 @@ def augment_color(key, image):
 
 def subtract_mean(image, mean):
     return image - mean
+
+
+def divide_by_std(image, stdv):
+    return image / stdv
+
+
+def comput_aspect_ratio(image):
+    H, W = paz.image.get_size(image)
+    return W / H
+
+
+def resize_pad_top_left(image, largest_side, method="linear", antialias=False):
+    """Resizes and crops image by returning the scales to original"""
+    image = resize_with_aspect_ratio(image, largest_side, method, antialias)
+    H, W = get_size(image)
+    return pad(image, 0, largest_side - H, 0, largest_side - W, "constant", 0)
