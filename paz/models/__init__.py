@@ -9,4 +9,5 @@ from .detection import EFFICIENTDETD5
 from .detection import EFFICIENTDETD6
 from .detection import EFFICIENTDETD7
 from .classification.xception import MiniXception
+from .classification.xception import MiniXceptionFER
 from .attention.stn import STN
