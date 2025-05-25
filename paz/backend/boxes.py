@@ -204,8 +204,7 @@ def compute_IOUs(boxes_A, boxes_B):
 
 
 def xyxy_to_xywh(boxes):
-    x_min, y_min = boxes[:, 0:1], boxes[:, 1:2]
-    x_max, y_max = boxes[:, 2:3], boxes[:, 3:4]
+    x_min, y_min, x_max, y_max = split(boxes)
     W = x_max - x_min
     H = y_max - y_min
     return merge(x_min, y_min, W, H)
@@ -263,11 +262,11 @@ def denormalize(boxes, H, W):
 
 def scale(boxes, scale_W, scale_H):
     """Scales the width and height of a bounding box (xywh format)."""
-    x_center, y_center, W, H = split(xyxy_to_xywh(boxes))
+    x_center, y_center, W, H = split(to_center_form(boxes))
     new_W = scale_W * W
     new_H = scale_H * H
     boxes = merge(x_center, y_center, new_W, new_H)
-    return xywh_to_xyxy(boxes)
+    return to_corner_form(boxes)
 
 
 def translate(boxes, x_offset, y_offset):
@@ -427,3 +426,11 @@ def match(boxes, prior_boxes, IOU_threshold=0.5):
     selected_boxes = select_for_each_prior_box_a_box(boxes, per_prior_best_box)
     selected_boxes = label_negative_boxes(selected_boxes, per_prior_best_IOU)
     return selected_boxes
+
+
+def remove_invalid(boxes, value=-1):
+    # is_invalid_row_mask = jp.all(boxes == value, axis=1)
+    is_invalid_row_mask = jp.any(boxes < 0.0, axis=1)
+    is_valid_row_mask = jp.logical_not(is_invalid_row_mask)
+    valid_boxes = boxes[is_valid_row_mask]
+    return valid_boxes
