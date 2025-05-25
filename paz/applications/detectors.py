@@ -1,49 +1,6 @@
 import jax.numpy as jp
-import numpy as np
 import jax
 import paz
-import cv2
-
-
-# def draw_boxes2D(image, boxes, class_args, scores, names, colors, thickness):
-#     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
-#     for box, class_arg, score in zip(boxes, class_args, scores):
-#         image = paz.draw.box(image, box.tolist(), colors[class_arg], thickness)
-#     return image, (boxes, class_args, scores)
-
-
-def draw_boxes2D(image, boxes, class_args, scores, names, colors, thickness):
-    font_scale = 0.7
-    font = cv2.FONT_HERSHEY_DUPLEX
-    image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
-    for box, class_arg, score in zip(boxes, class_args, scores):
-        color = colors[class_arg]
-        x_min, y_min, x_max, y_max = box = box.tolist()
-        image = paz.draw.box(image, box, colors[class_arg], thickness)
-        cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, thickness)
-        label = f"{names[class_arg]} {score * 100:.0f}%"
-        (text_width, text_height), baseline = cv2.getTextSize(
-            label, font, font_scale, thickness
-        )
-        offset = round(thickness / 2)
-        cv2.rectangle(
-            image,
-            (x_min - offset, y_min - text_height - baseline - thickness),
-            (x_min + text_width, y_min),
-            color,
-            -1,
-        )
-
-        cv2.putText(
-            image,
-            label,
-            (x_min, y_min - baseline),
-            font,
-            font_scale,
-            (255, 255, 255),
-        )
-
-    return image, (boxes, class_args, scores)
 
 
 def SSD(
@@ -93,7 +50,8 @@ def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     boxes = paz.models.detection.utils.create_prior_boxes("VOC")
     names = paz.datasets.labels("VOC")
     if draw is None:
-        draw = paz.lock(draw_boxes2D, names, paz.draw.lincolor(len(names)), 3)
+        colors = paz.draw.lincolor(len(names))
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     args = (model, boxes, names, score_thresh, IOU_thresh, top_k, variances)
     detect = paz.lock(SSD, *args)
@@ -105,7 +63,8 @@ def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     boxes = paz.models.detection.utils.create_prior_boxes("COCO")
     names = paz.datasets.labels("COCO")
     if draw is None:
-        draw = paz.lock(draw_boxes2D, names, paz.draw.lincolor(len(names)), 3)
+        colors = paz.draw.lincolor(len(names))
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     args = (model, boxes, names, score_thresh, IOU_thresh, top_k, variances)
     detect = paz.lock(SSD, *args)

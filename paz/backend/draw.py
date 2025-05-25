@@ -148,3 +148,39 @@ def lincolor(num_colors, saturation=0.75, value=1.0, normalize=False):
             B = int(255 * b)
             colors.append((R, G, B))
     return colors
+
+
+def boxes2D(
+    image,
+    boxes,
+    class_args,
+    scores,
+    names,
+    colors,
+    thickness=3,
+    font_scale=0.7,
+    label_color=WHITE,
+    font=cv2.FONT_HERSHEY_DUPLEX,
+):
+
+    def draw_box2D(image, box, class_arg, score):
+        color = colors[class_arg]
+        image = paz.draw.box(image, box.tolist(), color, thickness)
+        label = f"{names[class_arg]} {score * 100:.0f}%"
+        draw_label_box(image, box, label, color)
+
+    def draw_label_box(image, box, label, color):
+        text_args = label, font, font_scale, thickness
+        (W_text, H_text), baseline = cv2.getTextSize(*text_args)
+        offset = round(thickness / 2)
+        x_min, y_min, x_max, y_max = box = box.tolist()
+        top_left = (x_min - offset, y_min - H_text - baseline - thickness)
+        bottom_right = (x_min + W_text, y_min)
+        image = rectangle(image, top_left, bottom_right, color, -1)
+        bottom_left = (x_min, y_min - baseline)
+        cv2.putText(image, label, bottom_left, font, font_scale, label_color)
+
+    image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
+    for box, class_arg, score in zip(boxes, class_args, scores):
+        draw_box2D(image, box, class_arg, score)
+    return image, (boxes, class_args, scores)
