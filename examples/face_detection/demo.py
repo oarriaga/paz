@@ -4,7 +4,7 @@ from paz.models.detection import HaarCascadeDetector
 
 parser = argparse.ArgumentParser(description="HaarCascadeDetector")
 parser.add_argument("--image_path", default=0, type=int)
-parser.add_argument("--camera", default=4, type=int)
+parser.add_argument("--camera", default=0, type=int)
 parser.add_argument("--H", default=480, type=int)
 parser.add_argument("--W", default=640, type=int)
 parser.add_argument("--models", nargs=2, default=["frontalface_default", "eye"])
