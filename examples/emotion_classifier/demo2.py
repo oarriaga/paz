@@ -18,7 +18,7 @@ def ClassifyMiniXceptionFER():
     classify = MiniXceptionFER()
 
     def preprocess(image, shape):
-        image = paz.image.resize(image, shape)
+        # image = paz.image.resize(image, shape)
         image = paz.image.normalize(image)
         image = paz.image.rgb_to_gray(image)
         return jp.expand_dims(image, [0, -1])
@@ -43,6 +43,7 @@ def DetectMiniXceptionFER():
         print(boxes)
         scores, labels = [], []
         for crop in paz.boxes.crop_with_pad(boxes, image, 48, 48, 0):
+            paz.image.show(crop)
             score = classify(crop)
             labels.append(jp.argmax(score))
             scores.append(jp.max(score))
