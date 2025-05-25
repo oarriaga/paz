@@ -17,6 +17,7 @@ from paz.backend.lie import SO3
 from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
 from paz.backend import points2D
+from paz.backend import algebra
 from paz.backend.standard import (
     lock,
     partial,
