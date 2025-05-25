@@ -18,9 +18,10 @@ def ClassifyMiniXceptionFER():
     classify = MiniXceptionFER()
 
     def preprocess(image, shape):
-        # image = paz.image.resize(image, shape)
+        image = paz.image.resize(image, shape)
         image = paz.image.normalize(image)
         image = paz.image.rgb_to_gray(image)
+        # paz.image.show(paz.image.denormalize(image))
         return jp.expand_dims(image, [0, -1])
 
     def postprocess(scores):
@@ -40,10 +41,13 @@ def DetectMiniXceptionFER():
 
     def apply(image):
         boxes = paz.detection.get_boxes(detect(image).boxes)
+        boxes = paz.boxes.square(boxes)
         print(boxes)
         scores, labels = [], []
-        for crop in paz.boxes.crop_with_pad(boxes, image, 48, 48, 0):
-            paz.image.show(crop)
+        # for crop in paz.boxes.crop_with_pad(boxes, image, 48, 48, 0):
+        for box in boxes:
+            crop = paz.image.crop(image, box)
+            # paz.image.show(crop)
             score = classify(crop)
             labels.append(jp.argmax(score))
             scores.append(jp.max(score))
@@ -67,6 +71,11 @@ fullpath = keras.utils.get_file(filename, URL, cache_subdir="paz/tests")
 image = paz.image.load(fullpath)
 paz.image.show(image)
 
-detect = DetectMiniXceptionFER()
-image_with_detections, (boxes, scores, labels) = detect(image)
+pipeline = DetectMiniXceptionFER()
+image_with_detections, (boxes, scores, labels) = pipeline(image)
 paz.image.show(image_with_detections)
+
+
+camera = paz.Camera(identifier=0)
+player = paz.VideoPlayer((480, 640), pipeline, camera)
+player.run()

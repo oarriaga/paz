@@ -1,11 +1,2 @@
 def get_class_names():
-    return [
-        "neutral",
-        "happiness",
-        "surprise",
-        "sadness",
-        "anger",
-        "disgust",
-        "fear",
-        "contempt",
-    ]
+    return ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
