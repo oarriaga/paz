@@ -1,6 +1,11 @@
 import jax.numpy as jp
 import jax
 import paz
+import cv2
+
+
+def resize(image, size, method=cv2.INTER_LINEAR):
+    return cv2.resize(image, size[::-1], interpolation=method)
 
 
 def SSD(
@@ -18,7 +23,8 @@ def SSD(
 
     def preprocess(image, mean=paz.image.BGR_IMAGENET_MEAN):
         """Single-shot Multi Box Detector preprocessing function."""
-        image = paz.image.resize(image, model_input_size, "linear", False)
+        # image = paz.image.resize(image, model_input_size, "linear", False)
+        # image = paz.to_jax(resize(paz.to_numpy(image), model_input_size))
         image = paz.image.RGB_to_BGR(image)
         image = paz.image.subtract_mean(image, jp.array(mean))
         image = paz.cast(image, "float32")
@@ -35,6 +41,10 @@ def SSD(
         detections = paz.detection.filter_by_score(detections, score_thresh, -1)
         return detections
 
+    # image = paz.to_jax(resize(paz.to_numpy(image), model_input_size))
+    image = jax.jit(
+        paz.lock(paz.image.resize, model_input_size, "linear", False)
+    )(image)
     image = jax.jit(preprocess)(image)
     # predictions = jax.jit(model)(image)
     predictions = model(image)
