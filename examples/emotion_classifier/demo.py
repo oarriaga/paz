@@ -2,11 +2,10 @@ import os
 
 os.environ["KERAS_BACKEND"] = "jax"
 
+import argparse
 import jax.numpy as jp
 import paz
 from paz.applications import MiniXceptionFER
-
-# model = MiniXception()
 
 
 def to_labels(probabilities, labels):
@@ -32,33 +31,19 @@ def ClassifyMiniXceptionFER():
 classify = ClassifyMiniXceptionFER()
 y = classify(jp.full((128, 128, 3), 255))
 
+parser = argparse.ArgumentParser(description="HaarCascadeDetector")
+parser.add_argument("--camera", default=0, type=int)
+parser.add_argument("--H", default=480, type=int)
+parser.add_argument("--W", default=640, type=int)
+parser.add_argument("--models", nargs=2, default=["frontalface_default", "eye"])
+args = parser.parse_args()
 
+
+camera = paz.Camera(args.camera)
+player = paz.VideoPlayer((args.H, args.W), pipeline, camera)
+
+"""
 class DetectMiniXceptionFER(Processor):
-    """Emotion classification and detection pipeline.
-
-    # Returns
-        Dictionary with ``image`` and ``boxes2D``.
-
-    # Example
-        ``` python
-        from paz.pipelines import DetectMiniXceptionFER
-
-        detect = DetectMiniXceptionFER()
-
-        # apply directly to an image (numpy-array)
-        inferences = detect(image)
-        ```
-    # Returns
-        A function that takes an RGB image and outputs the predictions
-        as a dictionary with ``keys``: ``image`` and ``boxes2D``.
-        The corresponding values of these keys contain the image with the drawn
-        inferences and a list of ``paz.abstract.messages.Boxes2D``.
-
-    # References
-       - [Real-time Convolutional Neural Networks for Emotion and
-            Gender Classification](https://arxiv.org/abs/1710.07557)
-    """
-
     def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
         super(DetectMiniXceptionFER, self).__init__()
         self.offsets = offsets
@@ -91,3 +76,4 @@ class DetectMiniXceptionFER(Processor):
             box2D.score = np.amax(predictions["scores"])
         image = self.draw(image, boxes2D)
         return self.wrap(image, boxes2D)
+"""
