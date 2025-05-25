@@ -85,7 +85,7 @@ def Model(inputs, outputs, name):
     if set(tree.root_nodes()) != set(root_names):
         raise ValueError(f"Not all inputs {inputs} are root {root_names}")
     Type = build_type(output_names)
-    non_root_nodes = [node for node in nodes if node.name not in root_names]
+    # non_root_nodes = [node for node in nodes if node.name not in root_names]
     sorted_root_nodes = get_non_root_nodes(nodes, sorted_names, root_names)
 
     def call(*args):
