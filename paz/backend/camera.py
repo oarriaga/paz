@@ -59,6 +59,7 @@ class Camera(object):
     def read(self):
         image = paz.image.BGR_to_RGB(self._camera.read()[1])
         return np.ascontiguousarray(image)
+        # return cv2.cvtColor(self._camera.read()[1], cv2.COLOR_BGR2RGB)
 
     def save(self, filepath):
         raise NotImplementedError
