@@ -23,6 +23,10 @@ def get_scores(detections):
     return detections[:, 4:]
 
 
+def build_invalid(shape=(1, 5), value=-1):
+    return jp.full(shape, value)
+
+
 def merge(boxes, class_args):
     return jp.concatenate([boxes, class_args], axis=1)
 
