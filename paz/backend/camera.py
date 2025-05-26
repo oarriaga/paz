@@ -2,6 +2,7 @@ import jax.numpy as jp
 import numpy as np
 import cv2
 import paz
+import jax
 
 
 class Camera(object):
@@ -147,6 +148,7 @@ class VideoPlayer(object):
         if frame is None:
             outputs = None
         else:
+            # outputs = paz.time(self.pipeline(frame), False, "pipeline")
             outputs = self.pipeline(frame)
         return outputs
 
@@ -154,7 +156,10 @@ class VideoPlayer(object):
         """Opens camera and starts continuous inference using ``pipeline``,
         until the user presses ``q`` inside the opened window.
         """
+        # just call it once to warm-start any jit compilation
         self.camera.start()
+        output = self.step()
+        output = self.step()
         while True:
             output = self.step()
             if output is None:
@@ -162,7 +167,18 @@ class VideoPlayer(object):
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
             topic = self.get_topic(output)
-            image = paz.image.resize(topic, self.image_size).astype("uint8")
+
+            image = cv2.resize(
+                paz.to_numpy(topic),
+                self.image_size[::-1],
+                interpolation=cv2.INTER_LINEAR,
+            )
+            # image = paz.image.resize(topic, self.image_size).astype("uint8")
+            # cpu = jax.devices("cpu")[0]
+            # image = jax.jit(
+            #     paz.lock(paz.image.resize, self.image_size, "linear", False),
+            #     device=cpu,
+            # )(topic).astype("uint8")
             paz.image.show(image, self.topic_name, wait=False)
         self.camera.stop()
         cv2.destroyAllWindows()
