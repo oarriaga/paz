@@ -74,22 +74,19 @@ def resize(image, size, method="linear", antialias=False):
 
 
 def resizeOpenCV(image, size, method=cv2.INTER_LINEAR):
+    # TODO remove
     return cv2.resize(image, size[::-1], interpolation=method)
 
 
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
-    output_shape_dtype = jax.ShapeDtypeStruct(
-        (size[0], size[1], image.shape[2]), image.dtype
-    )
+    data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)
 
     def resize(image, shape):
         image = paz.to_numpy(image)
         image = cv2.resize(image, size[::-1], interpolation=cv2.INTER_LINEAR)
         return image
-        # return paz.to_jax(image, shape)
 
-    image = jax.pure_callback(resize, output_shape_dtype, image, size)
-    return image
+    return jax.pure_callback(resize, data, image, size)
 
 
 def scale(image, scale_factor, method="linear", antialias=False):
