@@ -73,6 +73,25 @@ def resize(image, size, method="linear", antialias=False):
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
+def resizeOpenCV(image, size, method=cv2.INTER_LINEAR):
+    return cv2.resize(image, size[::-1], interpolation=method)
+
+
+def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
+    output_shape_dtype = jax.ShapeDtypeStruct(
+        (size[0], size[1], image.shape[2]), image.dtype
+    )
+
+    def resize(image, shape):
+        image = paz.to_numpy(image)
+        image = cv2.resize(image, size[::-1], interpolation=cv2.INTER_LINEAR)
+        return image
+        # return paz.to_jax(image, shape)
+
+    image = jax.pure_callback(resize, output_shape_dtype, image, size)
+    return image
+
+
 def scale(image, scale_factor, method="linear", antialias=False):
     H, W = get_size(image)
     H_scaled = int(H * scale_factor)
@@ -145,6 +164,10 @@ def preprocess(image, shape):
 def get_size(image):
     H, W = image.shape[:2]
     return H, W
+
+
+def get_input_size(model):
+    return model.input_shape[1:3]
 
 
 def get_num_channels(image):
