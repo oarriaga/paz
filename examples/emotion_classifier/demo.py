@@ -29,21 +29,22 @@ def ClassifyMiniXceptionFER():
     def call(image):
         return postprocess(model(preprocess(image)))
 
-    return lambda image: call(resize(image))
+    return lambda image: call(resize(image))  # split static vs dynamic for jit
 
 
 def DetectMiniXceptionFER(box_scale=1.2):
+    # TODO add draw flag
+
     detect = paz.time(
         HaarCascadeFrontalFaceDetector(draw=None), False, "Detect"
     )
-    classify = paz.time(ClassifyMiniXceptionFER(), True, "Classify")
+    classify = ClassifyMiniXceptionFER()
     names = paz.datasets.labels("FER")
     colors = paz.draw.lincolor(len(names))
 
     def apply(image):
-        boxes = paz.detection.get_boxes(detect(image).boxes)
+        boxes = paz.detection.get_boxes(detect(image))
         image_gpu = paz.to_jax(image)
-        boxes = paz.to_jax(boxes)
         boxes = paz.boxes.square(boxes)
         boxes = paz.boxes.scale(boxes, box_scale, box_scale)
         boxes = paz.cast(boxes, "int32")
@@ -56,19 +57,11 @@ def DetectMiniXceptionFER(box_scale=1.2):
             scores.append(jp.max(score))
         scores = np.array(scores)
         labels = np.array(labels)
-        return paz.draw.boxes2D(image, boxes, labels, scores, names, colors)
+        predictions = (boxes, labels, scores)
+        return predictions, paz.draw.boxes2D(image, *predictions, names, colors)
 
     return apply
 
-
-# URL = (
-#     "https://github.com/oarriaga/altamira-data/releases/download"
-#     "/v0.9.1/image_with_faces.jpg"
-# )
-# filename = os.path.basename(URL)
-# fullpath = keras.utils.get_file(filename, URL, cache_subdir="paz/tests")
-# image = paz.image.load(fullpath)
-# paz.image.show(image)
 
 pipeline = DetectMiniXceptionFER()
 camera = paz.Camera(identifier=0)
