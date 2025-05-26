@@ -183,4 +183,4 @@ def boxes2D(
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
     for box, class_arg, score in zip(boxes, class_args, scores):
         draw_box2D(image, box, class_arg, score)
-    return image, (boxes, class_args, scores)
+    return image
