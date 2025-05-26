@@ -1,4 +1,5 @@
 import jax.numpy as jp
+import numpy as np
 import jax
 import paz
 import cv2
@@ -79,3 +80,28 @@ def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     args = (model, boxes, names, score_thresh, IOU_thresh, top_k, variances)
     detect = paz.lock(SSD, *args)
     return lambda x: draw(x, *detect(x)) if callable(draw) else detect
+
+
+def DetectMiniXceptionFER(box_scale=1.2):
+    detect = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
+    classify = paz.applications.ClassifyMiniXceptionFER()
+    names = paz.datasets.labels("FER")
+    colors = paz.draw.lincolor(len(names))
+
+    def apply(image):
+        boxes = paz.detection.get_boxes(detect(image))
+        boxes = paz.boxes.square(boxes)
+        boxes = paz.boxes.scale(boxes, box_scale, box_scale)
+        boxes = paz.cast(boxes, "int32")
+        boxes = paz.boxes.remove_invalid(boxes)
+        scores, labels = [], []
+        for box in boxes:
+            score = classify(paz.image.crop(image, box))
+            labels.append(jp.argmax(score))
+            scores.append(jp.max(score))
+        scores = np.array(scores)
+        labels = np.array(labels)
+        predictions = (boxes, labels, scores)
+        return predictions, paz.draw.boxes2D(image, *predictions, names, colors)
+
+    return apply
