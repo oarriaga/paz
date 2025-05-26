@@ -11,27 +11,27 @@ parser.add_argument("--models", nargs=2, default=["frontalface_default", "eye"])
 args = parser.parse_args()
 
 
-def Detector(labels, colors):
+def Detector(labels):
+    colors = paz.draw.lincolor(len(labels))
     draw_functions = [paz.lock(paz.draw.boxes, color, 2) for color in colors]
 
     detectors = []
-    for class_arg, label in enumerate(labels):
-        detectors.append(HaarCascadeDetector(label, 1.3, 5, class_arg))
+    for arg, label in enumerate(labels):
+        detectors.append(HaarCascadeDetector(label, 1.3, 5, arg, 100, False))
 
     def call(image):
         boxes, image_with_boxes = [], image.copy()
         for detect, draw in zip(detectors, draw_functions):
-            class_boxes = detect(image).boxes
+            class_boxes = detect(image)
             image_with_boxes = draw(image_with_boxes, class_boxes)
             boxes.append(class_boxes)
         boxes = paz.boxes.join(boxes)
-        return paz.message.Detections(image_with_boxes, boxes)
+        return boxes, image_with_boxes
 
     return call
 
 
-colors = paz.draw.lincolor(len(args.models), normalize=False)
-pipeline = Detector(args.models, colors)
+pipeline = Detector(args.models)
 camera = paz.Camera(args.camera)
 player = paz.VideoPlayer((args.H, args.W), pipeline, camera)
 player.run()

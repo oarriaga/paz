@@ -83,6 +83,7 @@ def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 
 def DetectMiniXceptionFER(box_scale=1.2):
+    # TODO add original buffer window prediction
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
     classify = paz.applications.ClassifyMiniXceptionFER()
     names = paz.datasets.labels("FER")
