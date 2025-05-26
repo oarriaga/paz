@@ -1,79 +1,76 @@
+# TODO fix draw function in HaarCascadeFrontalFaceDetector
+# TODO fix automatic message in HaarCascadeFrontalFaceDetector
+# TODO keep numpy image
+# TODO assume that all pipelines must convert it to a jax array
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
-
-import argparse
+import numpy as np
 import jax.numpy as jp
 import paz
 from paz.applications import MiniXceptionFER
-
-
-def to_labels(probabilities, labels):
-    return labels[jp.argmax(probabilities)]
-
-
-def preprocess(image, shape):
-    image = paz.image.resize(image, shape)
-    image = paz.image.normalize(image)
-    image = paz.image.rgb_to_gray(image)
-    return jp.expand_dims(image, [0, -1])
+from paz.applications import HaarCascadeFrontalFaceDetector
+import jax
 
 
 def ClassifyMiniXceptionFER():
-    x = image = paz.Input("image")
-    x = paz.Node(preprocess, (48, 48))(x)
-    x = paz.Node(MiniXceptionFER(), name="score")(x)
-    x = paz.Node(to_labels, paz.datasets.labels("FER"), name="label")(x)
-    return paz.Model([image], [x], "MiniXceptionFER")
+    model = MiniXceptionFER()
+    resize = paz.lock(paz.image.resize_opencv, paz.image.get_input_size(model))
+
+    def preprocess(image):
+        image = paz.image.normalize(image)
+        image = paz.image.rgb_to_gray(image)
+        return jp.expand_dims(image, [0, -1])
+
+    def postprocess(scores):
+        return jp.squeeze(scores, axis=0)
+
+    @jax.jit
+    def call(image):
+        return postprocess(model(preprocess(image)))
+
+    return lambda image: call(resize(image))
 
 
-# score = MiniXception((48, 48, 1), 7, weights="FER")
-classify = ClassifyMiniXceptionFER()
-y = classify(jp.full((128, 128, 3), 255))
+def DetectMiniXceptionFER(box_scale=1.2):
+    detect = paz.time(
+        HaarCascadeFrontalFaceDetector(draw=None), False, "Detect"
+    )
+    classify = paz.time(ClassifyMiniXceptionFER(), True, "Classify")
+    names = paz.datasets.labels("FER")
+    colors = paz.draw.lincolor(len(names))
 
-parser = argparse.ArgumentParser(description="HaarCascadeDetector")
-parser.add_argument("--camera", default=0, type=int)
-parser.add_argument("--H", default=480, type=int)
-parser.add_argument("--W", default=640, type=int)
-parser.add_argument("--models", nargs=2, default=["frontalface_default", "eye"])
-args = parser.parse_args()
+    def apply(image):
+        boxes = paz.detection.get_boxes(detect(image).boxes)
+        image_gpu = paz.to_jax(image)
+        boxes = paz.to_jax(boxes)
+        boxes = paz.boxes.square(boxes)
+        boxes = paz.boxes.scale(boxes, box_scale, box_scale)
+        boxes = paz.cast(boxes, "int32")
+        scores, labels = [], []
+        boxes = paz.boxes.remove_invalid(boxes)
+        for box in boxes:
+            crop = paz.image.crop(image_gpu, box)
+            score = classify(crop)
+            labels.append(jp.argmax(score))
+            scores.append(jp.max(score))
+        scores = np.array(scores)
+        labels = np.array(labels)
+        return paz.draw.boxes2D(image, boxes, labels, scores, names, colors)
+
+    return apply
 
 
-camera = paz.Camera(args.camera)
-player = paz.VideoPlayer((args.H, args.W), pipeline, camera)
+# URL = (
+#     "https://github.com/oarriaga/altamira-data/releases/download"
+#     "/v0.9.1/image_with_faces.jpg"
+# )
+# filename = os.path.basename(URL)
+# fullpath = keras.utils.get_file(filename, URL, cache_subdir="paz/tests")
+# image = paz.image.load(fullpath)
+# paz.image.show(image)
 
-"""
-class DetectMiniXceptionFER(Processor):
-    def __init__(self, offsets=[0, 0], colors=EMOTION_COLORS):
-        super(DetectMiniXceptionFER, self).__init__()
-        self.offsets = offsets
-        self.colors = colors
-
-        # detection
-        self.detect = HaarCascadeFrontalFace()
-        self.square = SequentialProcessor()
-        self.square.add(pr.SquareBoxes2D())
-        self.square.add(pr.OffsetBoxes2D(offsets))
-        self.clip = pr.ClipBoxes2D()
-        self.crop = pr.CropBoxes2D()
-
-        # classification
-        self.classify = MiniXceptionFER()
-
-        # drawing and wrapping
-        self.class_names = self.classify.class_names
-        self.draw = pr.DrawBoxes2D(self.class_names, self.colors, True)
-        self.wrap = pr.WrapOutput(["image", "boxes2D"])
-
-    def call(self, image):
-        boxes2D = self.detect(image.copy())["boxes2D"]
-        boxes2D = self.square(boxes2D)
-        boxes2D = self.clip(image, boxes2D)
-        cropped_images = self.crop(image, boxes2D)
-        for cropped_image, box2D in zip(cropped_images, boxes2D):
-            predictions = self.classify(cropped_image)
-            box2D.class_name = predictions["class_name"]
-            box2D.score = np.amax(predictions["scores"])
-        image = self.draw(image, boxes2D)
-        return self.wrap(image, boxes2D)
-"""
+pipeline = DetectMiniXceptionFER()
+camera = paz.Camera(identifier=0)
+player = paz.VideoPlayer((480, 640), pipeline, camera)
+player.run()
