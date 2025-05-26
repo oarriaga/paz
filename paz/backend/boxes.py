@@ -31,6 +31,10 @@ def join(boxes):
     return jp.concatenate(boxes, axis=0)
 
 
+def build_invalid(shape=(1, 4), value=-1):
+    return jp.full(shape, value)
+
+
 def square(boxes):
     """Makes boxes square with sides equal to the longest original side.
 
@@ -111,10 +115,8 @@ def pad(boxes, size, value=-1):
     # Returns:
         Padded boxes with shape `(size, 4)`.
     """
-    num_boxes = len(boxes)
-    if num_boxes > size:
-        raise ValueError(f"Samples ({num_boxes}) exceeds pad ({size}).")
-    padding = ((0, size - num_boxes), (0, 0))
+    boxes = boxes[:size]
+    padding = ((0, size - len(boxes)), (0, 0))
     return jp.pad(boxes, padding, "constant", constant_values=value)
 
 
