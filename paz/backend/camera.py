@@ -123,7 +123,7 @@ class VideoPlayer(object):
         record()
     """
 
-    def __init__(self, image_size, pipeline, camera, topic=0):
+    def __init__(self, image_size, pipeline, camera, topic=1):
         self.image_size = tuple(image_size)
         self.pipeline = pipeline
         self.camera = camera
