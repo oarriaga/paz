@@ -1,5 +1,6 @@
 import time as pytime
 import statistics
+import jax
 
 
 def time(
@@ -25,7 +26,8 @@ def time(
     if asynch_dispatch:
         for _ in range(num_calls):
             start_time = pytime.perf_counter()
-            function(*args, **kwargs).block_until_ready()
+            values = function(*args, **kwargs)
+            jax.block_until_ready(values)
             end_time = pytime.perf_counter()
             times.append(end_time - start_time)
     else:
