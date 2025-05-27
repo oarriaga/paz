@@ -1,8 +1,9 @@
 import functools
 import time as pytime
+import jax
 
 
-def time(function, jax=True, name=None):
+def time(function, jax_fn=True, name=None):
 
     if name is not None:
         name = name
@@ -30,7 +31,9 @@ def time(function, jax=True, name=None):
     @functools.wraps(function)
     def jax_wrapper(*args, **kwargs):
         start_time = pytime.perf_counter()
-        value = function(*args, **kwargs).block_until_ready()
+        # value = function(*args, **kwargs).block_until_ready()
+        value = function(*args, **kwargs)
+        jax.block_until_ready(value)
         end_time = pytime.perf_counter()
         run_time = end_time - start_time
         print_time(run_time)
@@ -45,4 +48,4 @@ def time(function, jax=True, name=None):
         print_time(run_time)
         return value
 
-    return jax_wrapper if jax else wrapper
+    return jax_wrapper if jax_fn else wrapper
