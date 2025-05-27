@@ -181,6 +181,8 @@ def boxes2D(
         cv2.putText(image, label, bottom_left, font, font_scale, label_color)
 
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
+    if class_args is None:
+        class_args = [0] * len(boxes)
     for box, class_arg, score in zip(boxes, class_args, scores):
         draw_box2D(image, box, class_arg, score)
     return image
