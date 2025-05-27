@@ -128,76 +128,13 @@ def to_score(boxes_and_one_hot_vectors, class_arg):
     return boxes_and_scores
 
 
-def to_one_hot(boxes_and_scores, class_arg, num_classes):
+def score_to_one_hot(boxes_and_scores, class_arg, num_classes):
     boxes, scores = paz.detection.split(boxes_and_scores)
     one_hot_vectors = jp.zeros((len(boxes), num_classes))
     scores = jp.squeeze(scores, axis=-1)
     one_hot_vectors = one_hot_vectors.at[:, class_arg].set(scores)
     boxes_and_one_hot_vectors = paz.detection.merge(boxes, one_hot_vectors)
     return boxes_and_one_hot_vectors
-
-
-def apply_NMS(sorted_boxes_with_scores, iou_thresh=0.45, epsilon=0.01):
-    top_k_boxes = paz.detection.get_boxes(sorted_boxes_with_scores)
-    top_k_boxes_args = jp.arange(len(top_k_boxes))
-    num_total_boxes = top_k_boxes.shape[0]
-
-    def do_continue(state):
-        suppressed_mask, top_k_box_arg = state
-        in_bounds = top_k_box_arg < num_total_boxes
-
-        def any_unprocessed_unsuppressed():
-            is_suffix = top_k_boxes_args >= top_k_box_arg
-            is_unsuppressed = jp.logical_not(suppressed_mask)
-            unsuppressed_in_suffix = jp.logical_and(is_unsuppressed, is_suffix)
-            return jp.any(unsuppressed_in_suffix)
-
-        def do_exit():
-            return False
-
-        return jax.lax.cond(in_bounds, any_unprocessed_unsuppressed, do_exit)
-
-    def step(state):
-        suppressed_mask, top_k_box_arg = state
-        is_suppressed = suppressed_mask[top_k_box_arg]
-
-        def suppress():
-            current_box = top_k_boxes[top_k_box_arg]
-            ious = paz.boxes.compute_IOU(current_box, top_k_boxes)
-            is_not_this_box = top_k_boxes_args != top_k_box_arg
-            do_suppress = (ious > iou_thresh) & is_not_this_box
-            return jp.logical_or(suppressed_mask, do_suppress)
-
-        def do_nothing():
-            return suppressed_mask
-
-        new_suppressed_mask = jax.lax.cond(is_suppressed, do_nothing, suppress)
-        return (new_suppressed_mask, top_k_box_arg + 1)
-
-    scores = jp.squeeze(paz.detection.get_scores(sorted_boxes_with_scores), -1)
-    suppressed_mask = scores < epsilon
-    state = (suppressed_mask, 0)
-    suppressed_mask, num_steps = jax.lax.while_loop(do_continue, step, state)
-    return jp.logical_not(suppressed_mask)  # keep mask
-
-
-def apply_per_class_NMS(detections, num_classes, iou_thresh, top_k, epsilon):
-
-    def per_class_NMS(class_arg):
-        class_detections = to_score(detections, class_arg)
-        class_detections = select_top_k(class_detections, top_k)
-        non_suppressed = apply_NMS(class_detections, iou_thresh)
-        valid_scores = get_scores(class_detections) >= epsilon
-        non_suppressed = jp.expand_dims(non_suppressed, axis=-1)
-        class_keep_masks = jp.logical_and(valid_scores, non_suppressed)
-        class_detections = to_one_hot(class_detections, class_arg, num_classes)
-        return class_detections, class_keep_masks
-
-    detections, keep_masks = jax.vmap(per_class_NMS)(jp.arange(num_classes))
-    detections = detections.reshape(-1, detections.shape[-1])
-    keep_masks = keep_masks.reshape(-1, 1)
-    detections = jp.where(keep_masks, detections, -1.0)
-    return detections
 
 
 def filter_by_score(detections, threshold, invalid_value=-1):
@@ -213,7 +150,6 @@ def remove_class(detections, class_arg):
         class_names: List, indicating given class names.
         class_arg: Int, index of the class to be removed.
     """
-    # del class_names[class_arg]
     return jp.delete(detections, 4 + class_arg, axis=1)
 
 
@@ -223,10 +159,10 @@ def denormalize(detections, H, W):
     return merge(boxes, scores)
 
 
-def remove_invalid(detections_array, value=-1):
-    is_invalid_row_mask = jp.all(detections_array == value, axis=1)
+def remove_invalid(detections, value=-1):
+    is_invalid_row_mask = jp.any(detections < 0.0, axis=1)
     is_valid_row_mask = jp.logical_not(is_invalid_row_mask)
-    valid_boxes = detections_array[is_valid_row_mask]
+    valid_boxes = detections[is_valid_row_mask]
     return valid_boxes
 
 
