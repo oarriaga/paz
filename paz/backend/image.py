@@ -73,11 +73,6 @@ def resize(image, size, method="linear", antialias=False):
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
-def resizeOpenCV(image, size, method=cv2.INTER_LINEAR):
-    # TODO remove
-    return cv2.resize(image, size[::-1], interpolation=method)
-
-
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
     data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)
 
