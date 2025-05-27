@@ -4,7 +4,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 import paz
 
-camera = 0
+camera = 4
 pipeline = paz.applications.SSD300VOC()
 # pipeline = paz.applications.SSD512COCO()
 camera = paz.Camera(identifier=camera)

@@ -138,10 +138,11 @@ def score_to_one_hot(boxes_and_scores, class_arg, num_classes):
     return boxes_and_one_hot_vectors
 
 
-def filter_by_score(detections, threshold, invalid_value=-1):
+def filter_by_score(boxes_score_label, threshold, invalid_value=-1):
     """Filters detections by scores."""
-    scores = jp.max(paz.detection.get_scores(detections), axis=1, keepdims=True)
-    return jp.where(scores >= threshold, detections, invalid_value)
+    # scores = jp.max(paz.detection.get_scores(detections), axis=1, keepdims=True)
+    positive_mask = boxes_score_label[:, 4:5] >= threshold
+    return jp.where(positive_mask, boxes_score_label, invalid_value)
 
 
 def remove_class(detections, class_arg):
@@ -168,10 +169,13 @@ def remove_invalid(detections, value=-1):
 
 
 def to_boxes2D(detections):
-    boxes, scores = paz.detection.split(detections)
-    labels = jp.argmax(scores, axis=-1)
-    scores = scores[jp.arange(len(scores)), labels]
-    return boxes.astype("int32"), labels.astype("int32"), scores
+    boxes = detections[:, 0:4]
+    score = detections[:, 4]
+    label = detections[:, 5]
+    # boxes, scores = paz.detection.split(detections)
+    # labels = jp.argmax(scores, axis=-1)
+    # scores = scores[jp.arange(len(scores)), labels]
+    return boxes.astype("int32"), label.astype("int32"), score
 
 
 def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
@@ -262,11 +266,18 @@ def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
         keep_mask = np.expand_dims(np.logical_not(suppressed_mask), axis=-1)
         return np.where(keep_mask, class_detections, -1)
 
+    def build_labels(num_classes, top_k):
+        labels = jp.arange(num_classes)
+        labels = jp.repeat(labels, repeats=top_k)
+        return jp.expand_dims(labels, axis=-1)
+
     suppressed_detections = []
     for class_arg in np.arange(num_classes):
         class_detection = apply_NMS(detections, class_arg)
         suppressed_detections.append(class_detection)
-    return np.stack(suppressed_detections)
+    suppressed_detections = np.stack(suppressed_detections).reshape(-1, 5)
+    suppressed_detections = paz.to_jax(suppressed_detections)
+    return merge(suppressed_detections, build_labels(num_classes, top_k))
 
 
 def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
