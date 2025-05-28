@@ -8,6 +8,7 @@
 *.txt
 *.png
 *.jpg
+*.pgf
 *.xml
 *.avi
 *.mp4

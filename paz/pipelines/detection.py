@@ -9,7 +9,7 @@ from ..models import (
 from ..datasets import get_class_names
 
 from .image import AugmentImage, PreprocessImage
-from .classification import MiniXceptionFER, ClassifyVVAD, Architecture_Options, Average_Options
+from .classification import MiniXceptionFER, ClassifyVVAD
 from .keypoints import FaceKeypointNet2D32, DetectMinimalHand
 from .keypoints import MinimalHandPoseEstimation
 from ..backend.boxes import change_box_coordinates
@@ -916,16 +916,19 @@ class DetectVVAD(Processor):
         Note multiple images are needed to produce a prediction.
 
     # Arguments
-        architecture: String. Name of the architecture to use. Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
+        architecture: String. Name of the architecture to use.
+            Currently supported: 'VVAD-LRS3-LSTM', 'CNN2Plus1D',
             'CNN2Plus1D_Filters' and 'CNN2Plus1D_Light'
-        stride: Integer. How many frames are between the predictions (computational expansive (low stride) vs
-            high latency (high stride))
-        averaging_window_size: Integer. How many predictions are averaged. Set to 1 to disable averaging
-        average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set averaging_window_size to 1 to
-            disable averaging
+        stride: Integer. How many frames are between the predictions
+            (computational expansive (low stride) vs high latency (high stride))
+        averaging_window_size: Integer. How many predictions are averaged.
+            Set to 1 to disable averaging
+        average_type: String. 'mean' or 'weighted'. How the predictions
+            are averaged. Set averaging_window_size to 1 to disable averaging
     """
-    def __init__(self, architecture='CNN2Plus1D_Light', stride=10, averaging_window_size=6,
-                 average_type='weighted', offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
+    def __init__(self, architecture='CNN2Plus1D_Light', stride=10,
+                 averaging_window_size=6, average_type='weighted',
+                 offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
         self.colors = colors
@@ -940,8 +943,9 @@ class DetectVVAD(Processor):
         self.crop = pr.CropBoxes2D()
 
         # classification
-        self.classify = ClassifyVVAD(stride=stride, averaging_window_size=averaging_window_size, average_type=str(average_type),
-                                     architecture=architecture)
+        self.classify = ClassifyVVAD(
+            stride=stride, averaging_window_size=averaging_window_size,
+            average_type=str(average_type), architecture=architecture)
 
         # drawing and wrapping
         self.class_names = self.classify.class_names
