@@ -3,7 +3,7 @@ import keras.ops as ops
 from typing import Optional, Callable
 
 
-class SwiGLUFFNKeras(keras.layers.Layer):
+class SwiGLUFFN(keras.layers.Layer):
     def __init__(
         self,
         in_features: int,

@@ -14,7 +14,10 @@ def drop_path_keras_functional(
     shape_x = ops.shape(x)
     shape_for_random = [shape_x[0]] + [1] * (len(shape_x) - 1)
 
-    random_tensor = ops.random.bernoulli(shape_for_random, p=keep_prob, dtype=x.dtype)
+    # random_tensor = ops.random.bernoulli(shape_for_random, p=keep_prob, dtype=x.dtype)
+    random_tensor = keras.random.binomial(
+        shape=shape_for_random, counts=1.0, probabilities=keep_prob, dtype=x.dtype
+    )
 
     if keep_prob > 0.0:
         random_tensor = random_tensor / keep_prob
