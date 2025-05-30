@@ -29,6 +29,29 @@ def denormalize_keypoints(keypoints, height, width):
     return keypoints.astype(jp.int32)
 
 
+def denormalize(keypoints, H, W):
+    """Transform normalized keypoint coordinates into image coordinates.
+
+    # Arguments
+        keypoints: Array of shape ``(num_keypoints, 2)``.
+                   Normalized coordinates are expected in the range [-1.0, 1.0].
+        height: Int. Height of the image.
+        width: Int. Width of the image.
+
+    # Returns
+        Array of shape ``(num_keypoints, 2)`` with integer pixel coordinates.
+    """
+    keypoints = jp.clip(keypoints, -1.0, 1.0)
+    keypoints = keypoints + 1.0
+    keypoints = keypoints / 2.0
+    x, y = paz.points2D.split(keypoints)
+    x = (W - 1.0) * x
+    y = (H - 1.0) * (1.0 - y)
+    denormalized_keypoints = paz.points2D.merge(x, y)
+    denormalized_keypoints = jp.round(denormalized_keypoints)
+    return paz.cast(denormalized_keypoints, "int32")
+
+
 def DetectFaceKeypointNet2D32(box_scale=1.2, draw=None):
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=False)
     estimate_keypoints = FaceKeypointNet2D32(draw=False)
@@ -67,7 +90,8 @@ def FaceKeypointNet2D32(draw=None):
     def postprocess(keypoints, H, W):
         keypoints = jp.squeeze(keypoints, axis=0)
         # keypoints = paz.points2D.denormalize(keypoints, H, W)
-        keypoints = denormalize_keypoints(keypoints, H, W)
+        keypoints = denormalize(keypoints, H, W)
+        # keypoints = denormalize_keypoints(keypoints, H, W)
         return keypoints
 
     def call(image):
