@@ -1,4 +1,5 @@
 import jax.numpy as jp
+import paz
 
 
 def add_ones(points2D):
@@ -35,19 +36,20 @@ def shift_to_box_origin(points, box):
     return points + jp.array([x_min, y_min])
 
 
-def denormalize(points2D, H, W):
+def denormalize(keypoints, H, W):
     """Transform nomralized points2D to image UV coordinates i.e.
         [-1, 1] -> [U, V]. UV have maximum values of [W, H] respectively.
 
-             Image plane
+    Normalized Coordinates         Image plane
 
-           (0,0)-------->  (U)
-             |
-             |
-             |
-             v
-
-            (V)
+              (y)                   (0,0)-------->  (U)
+                                      |        (W,0)
+         (0,1) ^                      |
+               |            |-->      |
+               |                      v (H, 0)
+               |
+         (0,0) o -----> (x)          (V)
+                    (1,0)
 
     # Arguments
         points2D: Numpy array of shape (num_keypoints, 2).
@@ -57,8 +59,13 @@ def denormalize(points2D, H, W):
     # Returns
         Numpy array of shape (num_keypoints, 2).
     """
-    image_shape = jp.array([W, H])
-    points2D = points2D + 1.0  # [-1, 1], [-1, 1] -> [2, 0], [0, 2]
-    points2D = points2D / 2.0  # [2 , 0], [0 , 2] -> [1, 0], [0, 1]
-    points2D = points2D * image_shape  # [1 , 0], [0 , 1] -> [W, 0], [0, H]
-    return points2D.astype("int32")
+
+    keypoints = jp.clip(keypoints, -1.0, 1.0)
+    keypoints = keypoints + 1.0
+    keypoints = keypoints / 2.0
+    x, y = split(keypoints)
+    x = (W - 1.0) * x
+    y = (H - 1.0) * (1.0 - y)
+    denormalized_keypoints = merge(x, y)
+    denormalized_keypoints = jp.round(denormalized_keypoints)
+    return paz.cast(denormalized_keypoints, "int32")
