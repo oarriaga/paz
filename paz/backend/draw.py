@@ -213,3 +213,10 @@ def keypoints(image, points, colors, radius):
     for point, color in zip(points, colors):
         paz.draw.keypoint(image, point, color, radius)
     return image
+
+
+def boxes_and_points(image, boxes, all_points, box_color, points_colors):
+    image = paz.draw.boxes(image, boxes, box_color, thickness=3)
+    for points in all_points:
+        image = paz.draw.keypoints(image, points, points_colors, 8)
+    return image

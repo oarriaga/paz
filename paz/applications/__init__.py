@@ -4,3 +4,5 @@ from paz.applications.detectors import DetectMiniXceptionFER
 from paz.models.detection.haar_cascade import HaarCascadeFrontalFaceDetector
 from paz.models.detection.haar_cascade import HaarCascadeEyeDetector
 from paz.applications.classifiers import ClassifyMiniXceptionFER
+from paz.applications.keypoint_estimators import DetectFaceKeypointNet2D32
+from paz.applications.keypoint_estimators import FaceKeypointNet2D32

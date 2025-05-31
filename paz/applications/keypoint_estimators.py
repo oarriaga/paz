@@ -2,19 +2,12 @@ import jax.numpy as jp
 import paz
 
 
-def draw_boxes_and_points(image, boxes, all_points, box_color, points_colors):
-    image = paz.draw.boxes(image, boxes, box_color, thickness=3)
-    for points in all_points:
-        image = paz.draw.keypoints(image, points, points_colors, 8)
-    return image
-
-
 def DetectFaceKeypointNet2D32(box_scale=1.2, draw=None):
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=False)
     estimate_keypoints = FaceKeypointNet2D32(draw=False)
     colors = paz.draw.lincolor(15 + 1)
     if draw is None:
-        draw = paz.lock(draw_boxes_and_points, colors[-1], colors[:-1])
+        draw = paz.lock(paz.draw.boxes_and_points, colors[-1], colors[:-1])
 
     def call(image):
         boxes = paz.detection.get_boxes(detect(image))
