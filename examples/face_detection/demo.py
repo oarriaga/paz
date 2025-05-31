@@ -1,3 +1,4 @@
+# set jax backend
 import argparse
 import paz
 from paz.models.detection import HaarCascadeDetector
