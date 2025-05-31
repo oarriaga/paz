@@ -26,13 +26,13 @@ def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
         detections = paz.detection.denormalize(detections, *image_size)
         return detections
 
-    def apply(image):
+    def call(image):
         image_size = paz.image.get_size(image)
         detections = postprocess(model(preprocess(image)), image_size)
         detections = paz.detection.remove_invalid(detections)
         return paz.detection.to_boxes2D(detections)
 
-    return lambda x: (y := apply(x), draw(x, *y)) if callable(draw) else apply
+    return (lambda x: (y := call(x), draw(x, *y))) if callable(draw) else call
 
 
 def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
@@ -61,14 +61,16 @@ def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
-def DetectMiniXceptionFER(box_scale=1.2):
+def DetectMiniXceptionFER(box_scale=1.2, draw=None):
     # TODO add buffer window prediction
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
     classify = paz.applications.ClassifyMiniXceptionFER()
     names = paz.datasets.labels("FER")
     colors = paz.draw.lincolor(len(names))
+    if draw is None:
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
 
-    def apply(image):
+    def call(image):
         boxes = paz.detection.get_boxes(detect(image))
         boxes = paz.boxes.square(boxes)
         boxes = paz.boxes.scale(boxes, box_scale, box_scale)
@@ -82,6 +84,6 @@ def DetectMiniXceptionFER(box_scale=1.2):
         scores = np.array(scores)
         labels = np.array(labels)
         predictions = (boxes, labels, scores)
-        return predictions, paz.draw.boxes2D(image, *predictions, names, colors)
+        return predictions
 
-    return apply
+    return (lambda x: (y := call(x), draw(x, *y))) if callable(draw) else call
