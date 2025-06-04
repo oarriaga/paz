@@ -13,3 +13,5 @@ from .detection import HaarCascadeFrontalFaceDetector
 from .classification.xception import MiniXception
 from .classification.xception import MiniXceptionFER
 from .attention.stn import STN
+from .keypoint.keypointnet import KeypointNet2D
+from .keypoint.keypointnet import FaceKeypointNet2D32

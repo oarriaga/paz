@@ -186,3 +186,37 @@ def boxes2D(
     for box, class_arg, score in zip(boxes, class_args, scores):
         draw_box2D(image, box, class_arg, score)
     return image
+
+
+def keypoint(image, point, color=GREEN, radius=5):
+    """Draws a circle in image.
+
+    # Arguments
+        image: Numpy array of shape ``[H, W, 3]``.
+        point: List of length two indicating ``(y, x)``
+            openCV coordinates.
+        color: List of length three indicating RGB color of point.
+        radius: Integer indicating the radius of the point to be drawn.
+
+    # Returns
+        Numpy array with shape ``[H, W, 3]``. Image with circle.
+    """
+    cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
+    inner_radius = int(0.8 * radius)
+    cv2.circle(image, tuple(point), inner_radius, tuple(color), cv2.FILLED)
+    return image
+
+
+def keypoints(image, points, colors, radius):
+    image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
+    points = np.array(points, dtype=points.dtype)
+    for point, color in zip(points, colors):
+        paz.draw.keypoint(image, point, color, radius)
+    return image
+
+
+def boxes_and_points(image, boxes, all_points, box_color, points_colors):
+    image = paz.draw.boxes(image, boxes, box_color, thickness=3)
+    for points in all_points:
+        image = paz.draw.keypoints(image, points, points_colors, 8)
+    return image
