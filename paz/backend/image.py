@@ -58,6 +58,8 @@ def load(filepath, flag=COLOR):
         image = BGR_to_RGB(image)
     elif flag == GRAY:
         image = jp.expand_dims(image, axis=-1)
+    elif flag == DEPTH:
+        image = jp.expand_dims(image, axis=-1)
     else:
         raise ValueError("Invalid flag")
     return image
@@ -171,15 +173,14 @@ def crop(image, box):
     return image[y_min:y_max, x_min:x_max, :]
 
 
-def crop_center(image, crop_shape):
-    H_new, W_new = crop_shape
+def crop_center(image, H_crop, W_crop):
     H_now, W_now = get_size(image)
     center_x = W_now // 2
     center_y = H_now // 2
-    x_min = center_x - (W_new // 2)
-    y_min = center_y - (H_new // 2)
-    x_max = x_min + W_new
-    y_max = y_min + H_new
+    x_min = center_x - (W_crop // 2)
+    y_min = center_y - (H_crop // 2)
+    x_max = x_min + W_crop
+    y_max = y_min + H_crop
     cropped_image = image[y_min:y_max, x_min:x_max]
     return cropped_image
 
