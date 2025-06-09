@@ -28,8 +28,9 @@ from paz.backend.standard import (
     NamedTuple,
 )
 
-from paz.abstract import Model, Node, Input, Sequential
+from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz import message
 from paz import applications
 from paz.utils import time
+from paz.abstract import tree
