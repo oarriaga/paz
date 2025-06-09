@@ -1,4 +1,4 @@
-from paz.datasets import voc, shapes, fer, coco
+from paz.datasets import voc, shapes, fer, coco, fewsol
 
 
 def load(name, *args, **kwargs):
