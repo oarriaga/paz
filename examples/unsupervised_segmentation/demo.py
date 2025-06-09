@@ -1,7 +1,8 @@
 import os
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["KERAS_BACKEND"] = "jax"
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".50"
+# os.environ["KERAS_BACKEND"] = "jax"
 
 import argparse
 import paz
