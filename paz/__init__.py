@@ -27,7 +27,7 @@ from paz.backend.standard import (
     to_numpy,
     NamedTuple,
 )
-
+from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz import message

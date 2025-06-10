@@ -280,6 +280,51 @@ def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     return merge(suppressed_detections, build_labels(num_classes, top_k))
 
 
+def apply_NMS(detections, iou_thresh, top_k):
+    detections = paz.detection.select_top_k(detections, top_k)
+    top_k_boxes = paz.detection.get_boxes(detections)
+    top_k_boxes_args = jp.arange(len(top_k_boxes))
+    num_total_boxes = top_k_boxes.shape[0]
+
+    def do_continue(state):
+        suppressed_mask, top_k_box_arg = state
+        in_bounds = top_k_box_arg < num_total_boxes
+
+        def any_unprocessed_unsuppressed():
+            is_suffix = top_k_boxes_args >= top_k_box_arg
+            is_unsuppressed = jp.logical_not(suppressed_mask)
+            unsuppressed_in_suffix = jp.logical_and(is_unsuppressed, is_suffix)
+            return jp.any(unsuppressed_in_suffix)
+
+        return jax.lax.cond(
+            in_bounds, any_unprocessed_unsuppressed, lambda: False
+        )
+
+    def step(state):
+        suppressed_mask, top_k_box_arg = state
+        is_suppressed = suppressed_mask[top_k_box_arg]
+
+        def suppress():
+            current_box = top_k_boxes[top_k_box_arg]
+            ious = paz.boxes.compute_IOU(current_box, top_k_boxes)
+            is_not_this_box = top_k_boxes_args != top_k_box_arg
+            do_suppress = (ious > iou_thresh) & is_not_this_box
+            return jp.logical_or(suppressed_mask, do_suppress)
+
+        def do_nothing():
+            return suppressed_mask
+
+        new_suppressed_mask = jax.lax.cond(is_suppressed, do_nothing, suppress)
+        return (new_suppressed_mask, top_k_box_arg + 1)
+
+    scores = jp.squeeze(paz.detection.get_scores(detections), -1)
+    state = (scores < 0.01, 0)
+    state = jax.lax.while_loop(do_continue, step, state)
+    suppressed_mask, num_steps = state
+    keep_mask = jp.expand_dims(jp.logical_not(suppressed_mask), axis=-1)
+    return jp.where(keep_mask, detections, -1)
+
+
 def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     # TODO JAX version of apply_per_class_NMS is slower than the numpy version
 
