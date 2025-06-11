@@ -2,10 +2,14 @@ import jax
 import jax.numpy as jp
 
 
-def pad(class_args, size, value=-1):
+def pad_batch(ragged_class_args, size, value=-1):
     """Pads class_args with given value."""
+    return jp.array([pad(jp.array(x), size, value) for x in ragged_class_args])
+
+
+def pad(class_args, size, value=-1):
     class_args = class_args[:size]
-    padding = ((0, size - len(class_args)), (0, 0))
+    padding = (0, size - len(class_args))
     return jp.pad(class_args, padding, "constant", constant_values=value)
 
 
