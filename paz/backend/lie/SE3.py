@@ -137,7 +137,8 @@ def exp(matrix_se3):
     return affine_matrix
 
 
-def xyz_rpy_to_SE3(position, rotation):
+def xyz_rpy_to_matrix(position, rotation):
+    # TODO change name to xyz_rpy_to_affine_matrix
     rotation = SO3.rpy_to_SO3(rotation)
     return to_affine_matrix(rotation, position)
 

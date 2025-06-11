@@ -1,4 +1,4 @@
-NO_PARENT = -1
+ROOT = NO_PARENT = -1
 
 
 class Tree:

@@ -104,20 +104,24 @@ def to_corner_form(boxes):
     return jp.concatenate([x_min, y_min, x_max, y_max], axis=1)
 
 
-def pad(boxes, size, value=-1):
+def pad_batch(ragged_boxes, size, value=-1):
     """Pad boxes array to specified size with value.
 
     # Arguments:
-        boxes (Array): `(num_boxes, 4)` array of box coordinates.
+        boxes (list): List of lists containing `(num_boxes, 4)` box coordinates.
         size (int): target size for padding.
         value (int): Value to pad with.
 
     # Returns:
         Padded boxes with shape `(size, 4)`.
     """
-    boxes = boxes[:size]
-    padding = ((0, size - len(boxes)), (0, 0))
-    return jp.pad(boxes, padding, "constant", constant_values=value)
+    return jp.array([pad(box, size, value) for box in ragged_boxes])
+
+
+def pad(image_boxes, size, value=-1):
+    image_boxes = image_boxes[:size]
+    padding = ((0, size - len(image_boxes)), (0, 0))
+    return jp.pad(image_boxes, padding, "constant", constant_values=value)
 
 
 def from_selection(image, radius=5, color=(255, 0, 0), window_name="image"):

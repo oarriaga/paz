@@ -2,6 +2,7 @@ import numpy as np
 import paz
 import jax
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 
 
 def flatten_features(features):
@@ -13,12 +14,12 @@ def flatten_features(features):
 def apply_PCA(features, dimension=3):
     num_images, H, W = features.shape[:3]
     features = flatten_features(features)
-    # pca = PCA(n_components=dimension)
-    # pca.fit(features)
-    # projected_features = pca.transform(features)
+    pca = PCA(n_components=dimension)
+    pca.fit(features)
+    projected_features = pca.transform(features)
 
-    state = paz.PCA.fit(features, dimension)
-    projected_features = paz.PCA.transform(features, state)
+    # state = paz.PCA.fit(features, dimension)
+    # projected_features = paz.PCA.transform(features, state)
 
     # key = jax.random.key(777)
     # state = paz.PCA.fit_randomized(features, dimension, key)
@@ -42,14 +43,14 @@ def apply_PCA(features, dimension=3):
 def apply_masked_PCA(joint_features, foreground_masks, dimension=3):
     foreground_features = mask_features(joint_features, foreground_masks)
 
-    # pca = PCA(n_components=dimension)
-    # pca.fit(foreground_features)
-    # projected_features = pca.transform(flatten_features(joint_features))
+    pca = PCA(n_components=dimension)
+    pca.fit(foreground_features)
+    projected_features = pca.transform(flatten_features(joint_features))
 
-    state = paz.PCA.fit(foreground_features, dimension)
-    projected_features = paz.PCA.transform(
-        flatten_features(joint_features), state
-    )
+    # state = paz.PCA.fit(foreground_features, dimension)
+    # projected_features = paz.PCA.transform(
+    #     flatten_features(joint_features), state
+    # )
 
     return projected_features.reshape(*joint_features.shape[:3], dimension)
 
@@ -68,12 +69,12 @@ def apply_K_means(features, num_parts):
 
 
 def apply_PCA_K_means(dimension, num_parts, features):
-    # pca = PCA(n_components=dimension)
-    # pca.fit(features)
-    # features = pca.transform(features)
+    pca = PCA(n_components=dimension)
+    pca.fit(features)
+    features = pca.transform(features)
 
-    state = paz.PCA.fit(features, dimension)
-    features = paz.PCA.transform(features, state)
+    # state = paz.PCA.fit(features, dimension)
+    # features = paz.PCA.transform(features, state)
 
     # key = jax.random.key(778)
     # state = paz.PCA.fit_randomized(features, dimension, key)

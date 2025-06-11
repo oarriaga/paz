@@ -27,9 +27,10 @@ from paz.backend.standard import (
     to_numpy,
     NamedTuple,
 )
-
-from paz.abstract import Model, Node, Input, Sequential
+from paz import losses
+from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz import message
 from paz import applications
 from paz.utils import time
+from paz.abstract import tree

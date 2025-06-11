@@ -220,3 +220,22 @@ def boxes_and_points(image, boxes, all_points, box_color, points_colors):
     for points in all_points:
         image = paz.draw.keypoints(image, points, points_colors, 8)
     return image
+
+
+def axis(image, camera_intrinsics, object_to_camera):
+
+    def to_tuple(x):
+        return tuple(x.astype(int).tolist())
+
+    image = paz.to_numpy(image)
+    camera_matrix = camera_intrinsics @ object_to_camera
+    center = paz.pinhole.project_to_2D(camera_matrix, np.array([0.0, 0.0, 0.0]))
+    x_axis = paz.pinhole.project_to_2D(camera_matrix, np.array([0.1, 0.0, 0.0]))
+    y_axis = paz.pinhole.project_to_2D(camera_matrix, np.array([0.0, 0.1, 0.0]))
+    z_axis = paz.pinhole.project_to_2D(camera_matrix, np.array([0.0, 0.0, 0.1]))
+    center = to_tuple(center)
+    image = cv2.line(image, center, to_tuple(x_axis), (255, 0, 0), 3)
+    image = cv2.line(image, center, to_tuple(y_axis), (0, 255, 0), 3)
+    image = cv2.line(image, center, to_tuple(z_axis), (0, 0, 255), 3)
+    image = paz.to_jax(image)
+    return image

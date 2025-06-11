@@ -2,19 +2,14 @@ import jax
 import jax.numpy as jp
 
 
+def pad_batch(ragged_class_args, size, value=-1):
+    """Pads class_args with given value."""
+    return jp.array([pad(jp.array(x), size, value) for x in ragged_class_args])
+
+
 def pad(class_args, size, value=-1):
-    """Pads class_args with given value.
-
-    # Arguments
-        class_args: Array `(num_boxes, 4)`.
-
-    # Returns
-        Padded class_args with shape `(size, 4)`.
-    """
-    num_classes = len(class_args)
-    if num_classes > size:
-        raise ValueError(f"Samples ({num_classes}) exceeds pad ({size}).")
-    padding = (0, size - num_classes)
+    class_args = class_args[:size]
+    padding = (0, size - len(class_args))
     return jp.pad(class_args, padding, "constant", constant_values=value)
 
 

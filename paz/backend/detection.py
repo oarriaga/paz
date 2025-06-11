@@ -29,13 +29,19 @@ def build_invalid(shape=(1, 5), value=-1):
 
 
 def merge(boxes, class_args):
-    return jp.concatenate([boxes, class_args], axis=1)
+    return jp.concatenate([boxes, class_args], axis=-1)  # -1 to support batches
 
 
 def to_one_hot(detections, num_classes):
     boxes, classes = split(detections)
     classes = paz.classes.to_one_hot(classes, num_classes)
     return merge(boxes, classes)
+
+
+def pad(detections, size, value=-1):
+    detections = detections[:size]
+    padding = ((0, size - len(detections)), (0, 0))
+    return jp.pad(detections, padding, "constant", constant_values=value)
 
 
 def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2], epislon=1e-8):
@@ -61,11 +67,11 @@ def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2], epislon=1e-8):
         H_encoded = jp.log(H_ratio + epislon) / variances[3]
         return W_encoded, H_encoded
 
-    boxes_corner, scores = split(matched)
+    boxes_corner, class_args = split(matched)
     boxes_center = paz.boxes.to_center_form(boxes_corner)
     x_encoded, y_encoded = encode_centers(boxes_center, priors, variances)
     W_encoded, H_encoded = encode_sizes(boxes_center, priors, variances)
-    encooded_boxes = [x_encoded, y_encoded, W_encoded, H_encoded, scores]
+    encooded_boxes = [x_encoded, y_encoded, W_encoded, H_encoded, class_args]
     return jp.concatenate(encooded_boxes, axis=1)
 
 
@@ -280,6 +286,51 @@ def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     return merge(suppressed_detections, build_labels(num_classes, top_k))
 
 
+def apply_NMS(detections, iou_thresh, top_k):
+    detections = paz.detection.select_top_k(detections, top_k)
+    top_k_boxes = paz.detection.get_boxes(detections)
+    top_k_boxes_args = jp.arange(len(top_k_boxes))
+    num_total_boxes = top_k_boxes.shape[0]
+
+    def do_continue(state):
+        suppressed_mask, top_k_box_arg = state
+        in_bounds = top_k_box_arg < num_total_boxes
+
+        def any_unprocessed_unsuppressed():
+            is_suffix = top_k_boxes_args >= top_k_box_arg
+            is_unsuppressed = jp.logical_not(suppressed_mask)
+            unsuppressed_in_suffix = jp.logical_and(is_unsuppressed, is_suffix)
+            return jp.any(unsuppressed_in_suffix)
+
+        return jax.lax.cond(
+            in_bounds, any_unprocessed_unsuppressed, lambda: False
+        )
+
+    def step(state):
+        suppressed_mask, top_k_box_arg = state
+        is_suppressed = suppressed_mask[top_k_box_arg]
+
+        def suppress():
+            current_box = top_k_boxes[top_k_box_arg]
+            ious = paz.boxes.compute_IOU(current_box, top_k_boxes)
+            is_not_this_box = top_k_boxes_args != top_k_box_arg
+            do_suppress = (ious > iou_thresh) & is_not_this_box
+            return jp.logical_or(suppressed_mask, do_suppress)
+
+        def do_nothing():
+            return suppressed_mask
+
+        new_suppressed_mask = jax.lax.cond(is_suppressed, do_nothing, suppress)
+        return (new_suppressed_mask, top_k_box_arg + 1)
+
+    scores = jp.squeeze(paz.detection.get_scores(detections), -1)
+    state = (scores < 0.01, 0)
+    state = jax.lax.while_loop(do_continue, step, state)
+    suppressed_mask, num_steps = state
+    keep_mask = jp.expand_dims(jp.logical_not(suppressed_mask), axis=-1)
+    return jp.where(keep_mask, detections, -1)
+
+
 def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     # TODO JAX version of apply_per_class_NMS is slower than the numpy version
 
@@ -333,3 +384,70 @@ def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
         return jp.where(keep_mask, class_detections, -1)
 
     return jax.vmap(paz.partial(apply_NMS, detections))(jp.arange(num_classes))
+
+
+def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
+    """Matches each prior box with a ground truth box
+    (box from `boxes_with_class_arg`). It then selects which matched box will be
+    considered positive e.g. iou > .5 and returns for each prior box a ground
+    truth box that is either positive (with a class argument different
+    than 0) or negative.
+
+    # Arguments
+        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
+            argument. This boxes should be the ground truth boxes.
+        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
+            where the four coordinates are in center form coordinates.
+        iou_threshold: Float between [0, 1]. Intersection over union
+            used to determine which box is considered a positive box.
+
+    # Returns
+        Array of shape `(num_prior_boxes, 4 + 1)`.
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument.
+    """
+
+    def mark_best_match(per_prior_best_IOU, per_box_best_prior_arg):
+        # The prior boxes that are the best match for each box are marked.
+        # They are marked by setting an IOU larger (2) than the maxium (1).
+        # the best prior box match of box_0 is per_box_best_prior_arg[0]
+        # the best prior box match of box_1 is per_box_best_prior_arg[1]
+        # ...
+        return per_prior_best_IOU.at[per_box_best_prior_arg].set(2.0)
+
+    def select_for_each_prior_box_a_box(boxes, per_prior_best_box):
+        # Each prior box is assigned a ground truth box.
+        assigned_boxes = boxes[per_prior_best_box]
+        return assigned_boxes
+
+    def force_match(per_prior_best_box, per_box_best_prior):
+        # Ensures that every ground truth box is matched with at least one prior
+        # box. Specifically, the prior box with which it has the highest IoU.
+        for box_arg, prior_arg in enumerate(per_box_best_prior):
+            per_prior_best_box = per_prior_best_box.at[prior_arg].set(box_arg)
+        return per_prior_best_box
+
+    def label_negative_boxes(assigned_boxes, per_prior_best_IOU):
+        is_low_IOU_match = per_prior_best_IOU < IOU_threshold
+        class_args = assigned_boxes[:, 4]
+        class_args = jp.where(is_low_IOU_match, 0.0, class_args)
+        return assigned_boxes.at[:, 4].set(class_args)
+
+    prior_boxes = paz.boxes.to_corner_form(prior_boxes)
+    IOUs = paz.boxes.compute_IOUs(
+        boxes_with_class_arg, prior_boxes
+    )  # (boxes, prior_boxes)
+    per_box_best_prior = jp.argmax(IOUs, axis=1)  # (boxes,)
+    per_prior_best_box = jp.argmax(IOUs, axis=0)  # (prior_boxes,)
+    per_prior_best_IOU = jp.max(IOUs, axis=0)  # (prior_boxes,)
+    per_prior_best_IOU = mark_best_match(per_prior_best_IOU, per_box_best_prior)
+    assign_args = (per_prior_best_box, per_box_best_prior)
+    per_prior_best_box = force_match(*assign_args)
+    selected_boxes = select_for_each_prior_box_a_box(
+        boxes_with_class_arg, per_prior_best_box
+    )
+    selected_boxes = label_negative_boxes(selected_boxes, per_prior_best_IOU)
+    return selected_boxes

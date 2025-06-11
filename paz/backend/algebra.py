@@ -68,7 +68,7 @@ def safe_norm(x, axis=None):
     return norm
 
 
-def normalize(x, axis=None):
+def normalize_and_norm(x, axis=None):
     """Normalizes an array.
 
     # Arguments:
@@ -81,3 +81,18 @@ def normalize(x, axis=None):
     norm = safe_norm(x, axis=axis)
     x_normalized = x / (norm + 1e-6 * (norm == 0.0))
     return x_normalized, norm
+
+
+def normalize(x, axis=None):
+    """Normalizes an array.
+
+    # Arguments:
+        x: A jnp.array
+        axis: The axis along which to compute the norm
+
+    # Returns:
+        A tuple of (normalized array x, the norm).
+    """
+    norm = safe_norm(x, axis=axis)
+    x_normalized = x / (norm + 1e-6 * (norm == 0.0))
+    return x_normalized

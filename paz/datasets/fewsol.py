@@ -110,15 +110,13 @@ def build_centers_to_camera(label, markers, marker_label="ar_marker"):
 
 
 def load_mask(filepath):
-    paz.image.load()
     mask = paz.image.load(filepath, paz.image.GRAY)
-    return jp.expand_dims(mask.astype(bool), axis=-1)
+    return mask.astype(bool)
 
 
 def load_depth(filepath):
     depth = paz.image.load(filepath, paz.image.DEPTH)
-    depth = jp.expand_dims(depth, axis=2)
-    depth = depth / 1_000.0  # TODO check if the depth scaled like this?
+    depth = depth / 1_000.0
     return jp.array(depth)
 
 
@@ -154,7 +152,7 @@ def load_masks(concept_path):
 def masks_to_boxes(masks):
     boxes = [paz.mask.to_box(mask.astype("float32"), 1.0) for mask in masks]
     boxes = jp.array(boxes)
-    boxes = paz.boxes.to_xywh(boxes)
+    boxes = paz.boxes.xyxy_to_xywh(boxes)
     return jp.expand_dims(jp.array(boxes), axis=1)
 
 
