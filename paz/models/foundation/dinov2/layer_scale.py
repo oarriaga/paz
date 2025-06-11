@@ -1,17 +1,9 @@
 import keras
 import keras.ops as ops
-from typing import Union
 
 
 class LayerScale(keras.layers.Layer):
-    def __init__(
-        self,
-        dim: int,
-        init_values: float = 1e-5,
-        inplace: bool = False,
-        dtype: Union[str, keras.mixed_precision.Policy, None] = None,
-        **kwargs
-    ):
+    def __init__(self, dim, init_values=1e-5, inplace=False, dtype=None, **kwargs):
         super().__init__(dtype=dtype, **kwargs)
         self.dim = dim
         self.init_values = init_values
@@ -24,7 +16,7 @@ class LayerScale(keras.layers.Layer):
             trainable=True,
         )
 
-    def call(self, x: keras.KerasTensor) -> keras.KerasTensor:
+    def call(self, x):
         return ops.multiply(x, self.gamma)
 
     def get_config(self):

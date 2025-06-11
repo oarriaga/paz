@@ -1,17 +1,16 @@
 import keras
 import keras.ops as ops
-from typing import Optional, Callable
 
 
 class SwiGLUFFN(keras.layers.Layer):
     def __init__(
         self,
-        in_features: int,
-        hidden_features: Optional[int] = None,
-        out_features: Optional[int] = None,
-        act_layer: Optional[Callable] = None,
-        drop: float = 0.0,
-        bias: bool = True,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=None,
+        drop=0.0,
+        bias=True,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -26,7 +25,7 @@ class SwiGLUFFN(keras.layers.Layer):
         self.w12 = keras.layers.Dense(units=2 * self.effective_hidden_features, use_bias=bias, name="w12")
         self.w3 = keras.layers.Dense(units=self.effective_out_features, use_bias=bias, name="w3")
 
-    def call(self, x: keras.KerasTensor) -> keras.KerasTensor:
+    def call(self, x):
         x12 = self.w12(x)
         x1, x2 = ops.split(x12, num_or_size_splits=2, axis=-1)
 

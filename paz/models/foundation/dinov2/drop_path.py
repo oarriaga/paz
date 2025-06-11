@@ -38,11 +38,11 @@ def dropout_rate(x, drop_prob=0.0, training=False):
 
 
 class DropPath(keras.layers.Layer):
-    def __init__(self, drop_prob: Optional[float] = None, **kwargs):
+    def __init__(self, drop_prob, **kwargs):
         super().__init__(**kwargs)
         self.drop_prob = drop_prob if drop_prob is not None else 0.0
 
-    def call(self, x: keras.KerasTensor, training: Optional[bool] = None) -> keras.KerasTensor:
+    def call(self, x, training=None):
         is_training_mode = training if training is not None else False
 
         return dropout_rate(x, self.drop_prob, is_training_mode)
