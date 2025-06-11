@@ -3,9 +3,22 @@ from keras import ops
 from typing import Optional
 
 
-def drop_path_keras_functional(
-    x: keras.KerasTensor, drop_prob: float = 0.0, training: bool = False
-) -> keras.KerasTensor:
+def bernoulli_random(shape, probabilities, dtype=None):
+    """
+    Generate random samples from a Bernoulli distribution.
+
+    Args:
+        shape: Shape of the output tensor
+        p: Probability of success (0 <= p <= 1)
+        dtype: Data type of the output tensor
+
+    Returns:
+        Tensor with random binary values (0 or 1)
+    """
+    return keras.random.binomial(shape=shape, counts=1.0, probabilities=probabilities, dtype=dtype)
+
+
+def dropout_rate(x, drop_prob=0.0, training=False):
     if drop_prob == 0.0 or not training:
         return x
 
@@ -15,9 +28,7 @@ def drop_path_keras_functional(
     shape_for_random = [shape_x[0]] + [1] * (len(shape_x) - 1)
 
     # random_tensor = ops.random.bernoulli(shape_for_random, p=keep_prob, dtype=x.dtype)
-    random_tensor = keras.random.binomial(
-        shape=shape_for_random, counts=1.0, probabilities=keep_prob, dtype=x.dtype
-    )
+    random_tensor = bernoulli_random(shape=shape_for_random, probabilities=keep_prob, dtype=x.dtype)
 
     if keep_prob > 0.0:
         random_tensor = random_tensor / keep_prob
@@ -34,7 +45,7 @@ class DropPath(keras.layers.Layer):
     def call(self, x: keras.KerasTensor, training: Optional[bool] = None) -> keras.KerasTensor:
         is_training_mode = training if training is not None else False
 
-        return drop_path_keras_functional(x, self.drop_prob, is_training_mode)
+        return dropout_rate(x, self.drop_prob, is_training_mode)
 
     def get_config(self):
         config = super().get_config()

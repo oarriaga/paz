@@ -2,7 +2,7 @@ import keras
 from typing import Optional, Type
 
 
-class Mlp(keras.Model):
+class MLP(keras.Model):
     def __init__(
         self,
         in_features: int,
