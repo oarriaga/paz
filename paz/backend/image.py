@@ -469,6 +469,7 @@ def comput_aspect_ratio(image):
 
 
 def resize_pad_top_left(image, largest_side, method="linear", antialias=False):
+    # TODO refactor to be able to resize any shape (H, W)
     """Resizes and crops image by returning the scales to original"""
     image = resize_with_aspect_ratio(image, largest_side, method, antialias)
     H, W = get_size(image)
