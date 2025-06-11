@@ -29,13 +29,19 @@ def build_invalid(shape=(1, 5), value=-1):
 
 
 def merge(boxes, class_args):
-    return jp.concatenate([boxes, class_args], axis=1)
+    return jp.concatenate([boxes, class_args], axis=-1)  # -1 to support batches
 
 
 def to_one_hot(detections, num_classes):
     boxes, classes = split(detections)
     classes = paz.classes.to_one_hot(classes, num_classes)
     return merge(boxes, classes)
+
+
+def pad(detections, size, value=-1):
+    detections = detections[:size]
+    padding = ((0, size - len(detections)), (0, 0))
+    return jp.pad(detections, padding, "constant", constant_values=value)
 
 
 def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2], epislon=1e-8):
