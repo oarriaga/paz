@@ -103,10 +103,22 @@ def deprocess_detections(detections, prior_boxes, variances):
     return to_boxes2D(detections)
 
 
+def resize_with_aspect_ratio(boxes, H_now, W_now, H, W):
+    scale_factor = min(H / H_now, W / W_now)
+    x_min, y_min, x_max, y_max = paz.boxes.split(boxes)
+    x_min_new = x_min * scale_factor
+    y_min_new = y_min * scale_factor
+    x_max_new = x_max * scale_factor
+    y_max_new = y_max * scale_factor
+    boxes = paz.boxes.merge(x_min_new, y_min_new, x_max_new, y_max_new)
+    return boxes.astype(boxes.dtype)
+
+
 def resize_boxes(image, boxes, H, W):
     boxes = jp.array(boxes)  # input could be a list
     H_now, W_now = paz.image.get_size(image)
-    boxes = paz.boxes.resize(boxes, H_now, W_now, H, W)
+    # boxes = paz.boxes.resize(boxes, H_now, W_now, H, W)
+    boxes = resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
     return boxes
 
 
@@ -134,7 +146,8 @@ batch_boxes = [
 
 batch_images = [
     # paz.image.resize_with_aspect_ratio(image, H, W) for image in batch_images
-    paz.image.resize(image, (H, W))
+    paz.image.resize_with_aspect_ratio(image, H, W)
+    # paz.image.resize(image, (H, W))
     for image in batch_images
 ]
 
