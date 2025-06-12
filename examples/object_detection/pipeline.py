@@ -1,3 +1,4 @@
+# set negatives with -1 in match to remove extra background class
 # all resizes should output an image in uint8 format
 # TODO the problem is that the boxes need to be resize as well.
 # detections = paz.detection.to_image_coordinates(detections)
@@ -33,7 +34,9 @@ def add_background_class(detections):
 
 def preprocess_detections(detections, prior_boxes, num_classes, IOU, variances):
     detections = paz.detection.normalize(detections, 300, 300)
+    print("dets 0", paz.detection.get_scores(detections))
     detections = add_background_class(detections)
+    print("dets 1", paz.detection.get_scores(detections))
     detections = paz.detection.match(detections, prior_boxes, IOU)
     detections = paz.detection.encode(detections, prior_boxes, variances)
     # internally increase number of classes by 1 to account for background class
@@ -62,12 +65,15 @@ def to_class_args(detections):
 
 
 def filter_class_arg(detections, class_arg, value=-1):
+    one_hot_vectors = paz.detection.get_scores(detections)
     detections = to_class_args(detections)
     boxes, class_args = paz.detection.split(detections)
     mask = class_args != class_arg
     boxes = jp.where(mask, boxes, value)
-    class_args = jp.where(mask, class_args, value)
-    return paz.detection.merge(boxes, class_args)
+    class_args = jp.where(mask, one_hot_vectors, value)
+    # i am returning the class args and not the scores
+    detections = paz.detection.merge(boxes, one_hot_vectors)
+    return paz.detection.remove_class(detections, class_arg)
 
 
 def build_negative_mask(detections):
@@ -83,7 +89,6 @@ def build_positive_mask(detections):
 
 def to_boxes2D(detections):
     # negative_mask = build_negative_mask(detections)
-    print("dets shape", detections.shape)
     boxes, one_hot_vectors = paz.detection.split(detections)
     class_args = jp.argmax(one_hot_vectors, axis=-1, keepdims=False)
     scores = jp.max(one_hot_vectors, axis=-1, keepdims=False)
@@ -159,14 +164,14 @@ image_with_boxes = paz.draw.boxes2D(
 paz.image.show(image_with_boxes)
 
 
-image_path = images[0]
-image = paz.image.load(image_path)
-H, W = paz.image.get_size(image)
-image_boxes = jp.array(boxes[0])
-image_with_boxes = paz.draw.boxes(image, image_boxes)
-paz.image.show(image_with_boxes)
+# image_path = images[0]
+# image = paz.image.load(image_path)
+# H, W = paz.image.get_size(image)
+# image_boxes = jp.array(boxes[0])
+# image_with_boxes = paz.draw.boxes(image, image_boxes)
+# paz.image.show(image_with_boxes)
 
-resized_image = paz.image.resize(image, (300, 300))
-resized_boxes = paz.boxes.resize(image_boxes, H, W, 300, 300)
-image_with_resized_boxes = paz.draw.boxes(resized_image, resized_boxes)
-paz.image.show(image_with_resized_boxes.astype("uint8"))
+# resized_image = paz.image.resize(image, (300, 300))
+# resized_boxes = paz.boxes.resize(image_boxes, H, W, 300, 300)
+# image_with_resized_boxes = paz.draw.boxes(resized_image, resized_boxes)
+# paz.image.show(image_with_resized_boxes.astype("uint8"))
