@@ -32,16 +32,41 @@ def merge(boxes, class_args):
     return jp.concatenate([boxes, class_args], axis=-1)  # -1 to support batches
 
 
-def to_one_hot(detections, num_classes):
-    boxes, classes = split(detections)
-    classes = paz.classes.to_one_hot(classes, num_classes)
+def to_one_hot(boxes_and_class_args, num_classes):
+    boxes, class_args = split(boxes_and_class_args)
+    print("class args", class_args.shape)
+    class_args = jp.squeeze(class_args, axis=-1)
+    classes = paz.classes.to_one_hot(class_args, num_classes)
+    print("class args", classes.shape)
     return merge(boxes, classes)
 
 
-def pad(detections, size, value=-1):
+# def pad(detections, size, value=-1):
+#     detections = detections[:size]
+#     padding = ((0, size - len(detections)), (0, 0))
+#     return jp.pad(detections, padding, "constant", constant_values=value)
+
+
+def pad(detections, size, mode="constant", constant_value=-1):
+    # Ensure we don't exceed the target size from the start.
     detections = detections[:size]
-    padding = ((0, size - len(detections)), (0, 0))
-    return jp.pad(detections, padding, "constant", constant_values=value)
+
+    # Calculate the required padding.
+    padding_needed = size - detections.shape[0]
+    padding_config = ((0, padding_needed), (0, 0))
+
+    if mode == "constant":
+        return jp.pad(
+            detections,
+            padding_config,
+            mode="constant",
+            constant_values=constant_value,
+        )
+    elif mode == "edge":
+        # The 'edge' mode in jp.pad automatically repeats the last row for us.
+        return jp.pad(detections, padding_config, mode="edge")
+    else:
+        raise ValueError("Mode must be either 'constant' or 'edge'")
 
 
 def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2], epislon=1e-8):
@@ -164,6 +189,12 @@ def remove_class(detections, class_arg):
 def denormalize(detections, H, W):
     boxes, scores = split(detections)
     boxes = paz.boxes.denormalize(boxes, H, W)
+    return merge(boxes, scores)
+
+
+def normalize(detections, H, W):
+    boxes, scores = split(detections)
+    boxes = paz.boxes.normalize(boxes, H, W)
     return merge(boxes, scores)
 
 
@@ -437,9 +468,8 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
         return assigned_boxes.at[:, 4].set(class_args)
 
     prior_boxes = paz.boxes.to_corner_form(prior_boxes)
-    IOUs = paz.boxes.compute_IOUs(
-        boxes_with_class_arg, prior_boxes
-    )  # (boxes, prior_boxes)
+    IOUs = paz.boxes.compute_IOUs(boxes_with_class_arg, prior_boxes)
+    print("ious", IOUs)
     per_box_best_prior = jp.argmax(IOUs, axis=1)  # (boxes,)
     per_prior_best_box = jp.argmax(IOUs, axis=0)  # (prior_boxes,)
     per_prior_best_IOU = jp.max(IOUs, axis=0)  # (prior_boxes,)

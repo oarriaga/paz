@@ -266,6 +266,10 @@ def denormalize(boxes, H, W):
     return (boxes * jp.array([[W, H, W, H]])).astype(int)
 
 
+def normalize(boxes, H, W):
+    return boxes / jp.array([[W, H, W, H]])
+
+
 def scale(boxes, scale_W, scale_H):
     """Scales the width and height of a bounding box (xywh format)."""
     x_center, y_center, W, H = split(to_center_form(boxes))
