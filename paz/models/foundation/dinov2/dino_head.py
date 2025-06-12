@@ -1,15 +1,56 @@
 import keras
-from keras import layers, initializers, constraints
+from keras import layers, initializers
 import keras.ops as ops
 
 
-class WeightNormConstraint(constraints.Constraint):
-    """Constraint that implements weight normalization similar to PyTorch's weight_norm."""
+class WeightNormDense(layers.Layer):
+    def __init__(
+        self, units, use_bias=True, kernel_initializer="glorot_uniform", bias_initializer="zeros", **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.units = units
+        self.use_bias = use_bias
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.bias_initializer = initializers.get(bias_initializer)
 
-    def __call__(self, w):
-        # Normalize along all axes except the last (output) dimension
-        norm = ops.sqrt(ops.sum(ops.square(w), axis=0, keepdims=True))
-        return ops.divide(w, ops.add(norm, 1e-12))
+    def build(self, input_shape):
+        input_dim = input_shape[-1]
+
+        self.v = self.add_weight(
+            shape=(input_dim, self.units),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="v",
+        )
+
+        self.g = self.add_weight(shape=(self.units,), initializer="ones", trainable=True, name="g")
+
+        if self.use_bias:
+            self.bias = self.add_weight(
+                shape=(self.units,),
+                initializer=self.bias_initializer,
+                trainable=True,
+                name="bias",
+            )
+        else:
+            self.bias = None
+
+        self.built = True
+
+    def call(self, inputs):
+        v_norm = ops.sqrt(ops.sum(ops.square(self.v), axis=0, keepdims=True))
+        v_normalized = self.v / ops.maximum(v_norm, 1e-12)
+
+        kernel = self.g * v_normalized
+
+        output = ops.matmul(inputs, kernel)
+        if self.use_bias:
+            output = ops.add(output, self.bias)
+
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.units,)
 
 
 class DINOHead(layers.Layer):
@@ -30,36 +71,24 @@ class DINOHead(layers.Layer):
             nlayers, in_dim, bottleneck_dim, hidden_dim=hidden_dim, use_bn=use_bn, bias=mlp_bias
         )
 
-        # Apply weight normalization constraint to match PyTorch's weight_norm
-        self.last_layer = layers.Dense(
+        self.last_layer = WeightNormDense(
             out_dim,
             use_bias=False,
             kernel_initializer=initializers.TruncatedNormal(stddev=0.02),
-            kernel_constraint=WeightNormConstraint(),
         )
-
-        # Store the g parameter (magnitude) separately like PyTorch
-        self.weight_g = self.add_weight(name="weight_g", shape=(out_dim,), initializer="ones", trainable=True)
 
     def call(self, x):
         x = self.mlp(x)
         eps = 1e-6 if x.dtype == "float16" else 1e-12
 
-        # L2 normalization (equivalent to nn.functional.normalize)
-        norm = ops.sqrt(ops.sum(ops.square(x), axis=-1, keepdims=True))
-        x = ops.divide(x, ops.add(norm, eps))
+        x = ops.divide(x, ops.maximum(ops.sqrt(ops.sum(ops.square(x), axis=-1, keepdims=True)), eps))
 
-        # Apply last layer with weight normalization
         x = self.last_layer(x)
-
-        # Apply the magnitude scaling (g parameter)
-        x = x * self.weight_g
 
         return x
 
 
 def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, bias=True):
-    """Build MLP layers for DINOHead in Keras with proper weight initialization."""
     if nlayers == 1:
         return layers.Dense(
             bottleneck_dim,
@@ -70,7 +99,6 @@ def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, b
     else:
         mlp_layers = []
 
-        # First layer
         mlp_layers.append(
             layers.Dense(
                 hidden_dim,
@@ -83,7 +111,6 @@ def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, b
             mlp_layers.append(layers.BatchNormalization())
         mlp_layers.append(layers.Activation("gelu"))
 
-        # Hidden layers
         for _ in range(nlayers - 2):
             mlp_layers.append(
                 layers.Dense(
@@ -97,7 +124,6 @@ def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, b
                 mlp_layers.append(layers.BatchNormalization())
             mlp_layers.append(layers.Activation("gelu"))
 
-        # Final layer
         mlp_layers.append(
             layers.Dense(
                 bottleneck_dim,
