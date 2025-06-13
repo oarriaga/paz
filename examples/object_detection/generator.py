@@ -4,7 +4,7 @@ import jax
 
 
 def compute_num_batches(samples, batch_size):
-    return int(math.ceil(samples / batch_size))
+    return math.ceil(len(samples) / batch_size)
 
 
 class Generator(PyDataset):
@@ -23,7 +23,7 @@ class Generator(PyDataset):
         self.keys = jax.random.split(key, num_batches + 1)
 
     def __len__(self):
-        return len(self.images)
+        return compute_num_batches(self.images, self.batch_size)
 
     def __getitem__(self, batch_arg):
         lower_arg = batch_arg * self.batch_size
