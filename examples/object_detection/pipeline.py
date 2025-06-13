@@ -47,7 +47,7 @@ def resize_boxes(image, boxes, H, W):
     return boxes
 
 
-def AugmenDetections(
+def AugmentDetection(
     key,
     images,
     boxes,
