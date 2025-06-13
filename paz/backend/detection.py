@@ -34,10 +34,8 @@ def merge(boxes, class_args):
 
 def to_one_hot(boxes_and_class_args, num_classes):
     boxes, class_args = split(boxes_and_class_args)
-    print("class args", class_args.shape)
     class_args = jp.squeeze(class_args, axis=-1)
     classes = paz.classes.to_one_hot(class_args, num_classes)
-    print("class args", classes.shape)
     return merge(boxes, classes)
 
 
@@ -469,7 +467,6 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
 
     prior_boxes = paz.boxes.to_corner_form(prior_boxes)
     IOUs = paz.boxes.compute_IOUs(boxes_with_class_arg, prior_boxes)
-    print("ious", IOUs)
     per_box_best_prior = jp.argmax(IOUs, axis=1)  # (boxes,)
     per_prior_best_box = jp.argmax(IOUs, axis=0)  # (prior_boxes,)
     per_prior_best_IOU = jp.max(IOUs, axis=0)  # (prior_boxes,)
