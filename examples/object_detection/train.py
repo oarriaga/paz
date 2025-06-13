@@ -29,7 +29,9 @@ train_data = (train_images, train_boxes, train_class_args)
 
 test_images, test_class_args, test_boxes = paz.datasets.load("VOC2007", "test")
 
-model = paz.models.SSD300(num_classes, base_weights="VGG", head_weights=None)
+model = paz.models.SSD300(
+    num_classes + 1, base_weights="VGG", head_weights=None, trainable_base=False
+)
 model.summary()
 
 metrics = {
