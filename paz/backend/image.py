@@ -72,10 +72,12 @@ def write(filepath, image):
 
 
 def resize(image, size, method="linear", antialias=False):
+    # TODO change to split size into H, W
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
+    # TODO change to split size into H, W
     data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)
 
     def resize(image, shape):
