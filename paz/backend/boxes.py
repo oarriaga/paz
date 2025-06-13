@@ -447,6 +447,17 @@ def resize(boxes, H, W, H_new, W_new):
     return merge(x_min, y_min, x_max, y_max).astype(dtype=boxes.dtype)
 
 
+def resize_with_aspect_ratio(boxes, H_now, W_now, H, W):
+    scale_factor = min(H / H_now, W / W_now)
+    x_min, y_min, x_max, y_max = paz.boxes.split(boxes)
+    x_min_new = x_min * scale_factor
+    y_min_new = y_min * scale_factor
+    x_max_new = x_max * scale_factor
+    y_max_new = y_max * scale_factor
+    boxes = paz.boxes.merge(x_min_new, y_min_new, x_max_new, y_max_new)
+    return boxes.astype(boxes.dtype)
+
+
 def set_size(boxes, H_box, W_box):
     x_center, y_center = paz.boxes.compute_centers(boxes)
     x_min = x_center - (W_box / 2.0)
