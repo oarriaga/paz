@@ -34,9 +34,7 @@ def add_background_class(detections):
 
 def preprocess_detections(detections, prior_boxes, num_classes, IOU, variances):
     detections = paz.detection.normalize(detections, 300, 300)
-    print("dets 0", paz.detection.get_scores(detections))
     detections = add_background_class(detections)
-    print("dets 1", paz.detection.get_scores(detections))
     detections = paz.detection.match(detections, prior_boxes, IOU)
     detections = paz.detection.encode(detections, prior_boxes, variances)
     # internally increase number of classes by 1 to account for background class
@@ -49,6 +47,76 @@ def preprocess_image(key, image, mean):
     image = paz.image.RGB_to_BGR(image)
     image = paz.image.subtract_mean(image, mean)
     return image
+
+
+def resize_boxes(image, boxes, H, W):
+    boxes = jp.array(boxes)  # input could be a list
+    H_now, W_now = paz.image.get_size(image)
+    boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
+    return boxes
+
+
+def process_batch(
+    key,
+    images,
+    boxes,
+    class_args,
+    H,
+    W,
+    prior_boxes,
+    num_classes,
+    match_IOU,
+    variances,
+    mean,
+    max_num_boxes,
+):
+    images = [paz.image.load(image) for image in images]
+    iterator = zip(images, boxes)
+    boxes = [resize_boxes(*data, H, W) for data in iterator]
+    images = [paz.image.resize_with_aspect_ratio(x, H, W) for x in images]
+    images = jp.array(images)
+    detections = pad(boxes, class_args, max_num_boxes, -1)
+    preprocess_images = jax.vmap(paz.lock(preprocess_image, mean), (0, 0))
+    keys = jax.random.split(key, len(images))
+    images = preprocess_images(keys, images)
+    args = prior_boxes, num_classes, match_IOU, variances
+    _preprocess_detections = jax.vmap(paz.lock(preprocess_detections, *args))
+    detections = _preprocess_detections(detections)
+    return images, detections
+
+
+key = random.PRNGKey(0)
+images, class_args, boxes = paz.datasets.load("VOC2007", "trainval")
+batch_size = 16
+match_IOU = 0.5
+mean = jp.array(paz.image.BGR_IMAGENET_MEAN)
+prior_boxes = paz.models.detection.utils.create_prior_boxes("VOC")
+variances = [0.1, 0.1, 0.2, 0.2]
+batch_arg = 123
+num_classes = 20
+H = W = 300
+max_num_boxes = 32
+
+lower_arg = batch_arg * batch_size
+upper_arg = min(lower_arg + batch_size, len(images))
+
+batch_images = images[lower_arg:upper_arg]
+batch_boxes = boxes[lower_arg:upper_arg]
+batch_class_args = class_args[lower_arg:upper_arg]
+x_true, y_true = process_batch(
+    key,
+    batch_images,
+    batch_boxes,
+    batch_class_args,
+    H,
+    W,
+    prior_boxes,
+    num_classes,
+    match_IOU,
+    variances,
+    mean,
+    max_num_boxes,
+)
 
 
 def deprocess_image(image, mean):
@@ -71,110 +139,38 @@ def filter_class_arg(detections, class_arg, value=-1):
     mask = class_args != class_arg
     boxes = jp.where(mask, boxes, value)
     class_args = jp.where(mask, one_hot_vectors, value)
-    # i am returning the class args and not the scores
     detections = paz.detection.merge(boxes, one_hot_vectors)
     return paz.detection.remove_class(detections, class_arg)
 
 
-def build_negative_mask(detections):
-    is_invalid = jp.any(detections < 0.0, axis=1)
-    return is_invalid
-
-
-def build_positive_mask(detections):
-    is_invalid = jp.any(detections < 0.0, axis=1)
-    is_valid = jp.logical_not(is_invalid)
-    return is_valid
+def deprocess_detections(detections, prior_boxes, variances):
+    detections = paz.detection.decode(detections, prior_boxes, variances)
+    detections = filter_class_arg(detections, 0)
+    detections = paz.detection.denormalize(detections, 300, 300)
+    return to_boxes2D(detections)
 
 
 def to_boxes2D(detections):
-    # negative_mask = build_negative_mask(detections)
     boxes, one_hot_vectors = paz.detection.split(detections)
     class_args = jp.argmax(one_hot_vectors, axis=-1, keepdims=False)
     scores = jp.max(one_hot_vectors, axis=-1, keepdims=False)
     return boxes.astype("int32"), class_args.astype("int32"), scores
 
 
-def deprocess_detections(detections, prior_boxes, variances):
-    detections = paz.detection.decode(detections, prior_boxes, variances)
-    # detections = paz.detection.remove_class(detections, 0)
-    detections = filter_class_arg(detections, 0)
-    detections = paz.detection.denormalize(detections, 300, 300)
-    return to_boxes2D(detections)
-
-
-def resize_with_aspect_ratio(boxes, H_now, W_now, H, W):
-    scale_factor = min(H / H_now, W / W_now)
-    x_min, y_min, x_max, y_max = paz.boxes.split(boxes)
-    x_min_new = x_min * scale_factor
-    y_min_new = y_min * scale_factor
-    x_max_new = x_max * scale_factor
-    y_max_new = y_max * scale_factor
-    boxes = paz.boxes.merge(x_min_new, y_min_new, x_max_new, y_max_new)
-    return boxes.astype(boxes.dtype)
-
-
-def resize_boxes(image, boxes, H, W):
-    boxes = jp.array(boxes)  # input could be a list
-    H_now, W_now = paz.image.get_size(image)
-    # boxes = paz.boxes.resize(boxes, H_now, W_now, H, W)
-    boxes = resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
-    return boxes
-
-
-key = random.PRNGKey(0)
-images, class_args, boxes = paz.datasets.load("VOC2007", "trainval")
-batch_size = 16
-match_IOU = 0.5
-mean = jp.array(paz.image.BGR_IMAGENET_MEAN)
-prior_boxes = paz.models.detection.utils.create_prior_boxes("VOC")
-variances = [0.1, 0.1, 0.2, 0.2]
-batch_arg = 123
-num_classes = 20
-H = W = 300
-lower_arg = batch_arg * batch_size
-upper_arg = min(lower_arg + batch_size, len(images))
-batch_images = images[lower_arg:upper_arg]
-batch_boxes = boxes[lower_arg:upper_arg]
-batch_class_args = class_args[lower_arg:upper_arg]
-batch_images = [paz.image.load(image) for image in batch_images]
-
-
-batch_boxes = [
-    resize_boxes(*data, H, W) for data in zip(batch_images, batch_boxes)
-]
-
-batch_images = [
-    # paz.image.resize_with_aspect_ratio(image, H, W) for image in batch_images
-    paz.image.resize_with_aspect_ratio(image, H, W)
-    # paz.image.resize(image, (H, W))
-    for image in batch_images
-]
-
-
-batch_detections = pad(batch_boxes, batch_class_args, 32, -1)
-batch_images = jp.array(batch_images)
-preprocess_images = jax.vmap(paz.lock(preprocess_image, mean), in_axes=(0, 0))
-batch_images = preprocess_images(random.split(key, batch_size), batch_images)
-# [paz.image.show(deprocess_image(image, mean)) for image in batch_images]
-args = prior_boxes, num_classes, match_IOU, variances
-vpreprocess_detections = jax.vmap(paz.lock(preprocess_detections, *args))
-vbatch_detections = vpreprocess_detections(batch_detections)
-
-x = deprocess_image(batch_images[0], mean)
+x = deprocess_image(x_true[0], mean)
 y_boxes, y_class_args, y_scores = deprocess_detections(
-    vbatch_detections[0], prior_boxes, variances
+    y_true[0], prior_boxes, variances
 )
-# filter instead of removing class
-image_with_boxes = paz.draw.boxes2D(
-    x,
-    y_boxes,
-    y_class_args,
-    y_scores,
-    names=paz.datasets.labels("VOC"),
-    colors=paz.draw.lincolor(num_classes),
+paz.image.show(
+    paz.draw.boxes2D(
+        x,
+        y_boxes,
+        y_class_args,
+        y_scores,
+        names=paz.datasets.labels("VOC"),
+        colors=paz.draw.lincolor(num_classes),
+    )
 )
-paz.image.show(image_with_boxes)
 
 
 # image_path = images[0]
@@ -188,3 +184,14 @@ paz.image.show(image_with_boxes)
 # resized_boxes = paz.boxes.resize(image_boxes, H, W, 300, 300)
 # image_with_resized_boxes = paz.draw.boxes(resized_image, resized_boxes)
 # paz.image.show(image_with_resized_boxes.astype("uint8"))
+
+
+# def build_negative_mask(detections):
+#     is_invalid = jp.any(detections < 0.0, axis=1)
+#     return is_invalid
+
+
+# def build_positive_mask(detections):
+#     is_invalid = jp.any(detections < 0.0, axis=1)
+#     is_valid = jp.logical_not(is_invalid)
+#     return is_valid
