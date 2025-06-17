@@ -62,7 +62,13 @@ callbacks = [
 ]
 
 optimizer = keras.optimizers.SGD(args.learning_rate, args.momentum)
-model.compile(optimizer, loss=paz.losses.multibox.call, metrics=metrics)
+model.compile(
+    optimizer,
+    loss=paz.losses.multibox.call,
+    metrics=metrics,
+    run_eagerly=True,
+    jit_compile=False,
+)
 batch_args = (
     args.H,
     args.W,
