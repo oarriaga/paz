@@ -39,10 +39,11 @@ def regression(y_true, y_pred, alpha=1.0):
     positive_local_losses = local_loss * positive_mask
     positive_local_loss = ops.sum(positive_local_losses, axis=-1)
 
-    # num_positives = ops.sum(ops.cast(positive_mask, "float32"))
-    # num_positives = ops.maximum(1.0, num_positives)
-    num_positives_per_sample = ops.sum(positive_mask, axis=-1)
-    num_positives = ops.maximum(1.0, num_positives_per_sample)
+    num_positives = ops.sum(ops.cast(positive_mask, "float32"))
+    num_positives = ops.maximum(1.0, num_positives)
+
+    # num_positives_per_sample = ops.sum(positive_mask, axis=-1)
+    # num_positives = ops.maximum(1.0, num_positives_per_sample)
 
     return (alpha * positive_local_loss * batch_size) / num_positives
 
