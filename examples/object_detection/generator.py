@@ -9,9 +9,21 @@ def compute_num_batches(samples, batch_size):
 
 class Generator(PyDataset):
     def __init__(
-        self, key, images, boxes, class_args, batch_size, pipeline, **kwargs
+        self,
+        key,
+        images,
+        boxes,
+        class_args,
+        batch_size,
+        pipeline,
+        workers,
+        max_queue_size,
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            workers=workers,
+            use_multiprocessing=False,
+            max_queue_size=max_queue_size,
+        )
         if len(images) != len(boxes) != len(class_args):
             raise ValueError("Images, boxes and classes must have same length.")
         self.images = images

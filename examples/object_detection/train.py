@@ -20,6 +20,8 @@ parser.add_argument("--label", default=None)
 parser.add_argument("--batch_size", default=32, type=int)
 parser.add_argument("--learning_rate", default=0.001, type=float)
 parser.add_argument("--momentum", default=0.9, type=float)
+parser.add_argument("--num_workers", default=None, type=int)
+parser.add_argument("--max_queue_size", default=100, type=float)
 parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
 parser.add_argument("--decay_rate", default=0.1, type=float)
 parser.add_argument("--max_num_epochs", default=240, type=int)
@@ -80,10 +82,25 @@ batch_args = (
     args.max_num_boxes,
 )
 
+num_workers = os.cpu_count() if args.num_workers is None else args.num_workers
 train_pipeline = paz.lock(preprocess_batch, *batch_args, True)
-train_generator = Generator(key, *train_data, args.batch_size, train_pipeline)
+train_generator = Generator(
+    key,
+    *train_data,
+    args.batch_size,
+    train_pipeline,
+    num_workers,
+    args.max_queue_size
+)
 valid_pipeline = paz.lock(preprocess_batch, *batch_args, False)
-valid_generator = Generator(key, *test_data, args.batch_size, valid_pipeline)
+valid_generator = Generator(
+    key,
+    *test_data,
+    args.batch_size,
+    valid_pipeline,
+    num_workers,
+    args.max_queue_size
+)
 
 model.fit(
     train_generator, epochs=args.max_num_epochs, validation_data=valid_generator
