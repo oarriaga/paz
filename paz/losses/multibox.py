@@ -21,8 +21,8 @@ def calculate_masks(y_true):
     return positive_mask, negative_mask
 
 
-def localization(y_true, y_pred, alpha=1.0):
-    """Computes localization loss in a batch.
+def regression(y_true, y_pred, alpha=1.0):
+    """Computes regression loss in a batch.
 
     # Arguments
         y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
@@ -31,7 +31,7 @@ def localization(y_true, y_pred, alpha=1.0):
             with predicted inferences.
 
     # Returns
-        Tensor with localization loss per sample in batch.
+        Tensor with regression loss per sample in batch.
     """
     batch_size = ops.cast(ops.shape(y_pred)[0], "float32")
     local_loss = smooth_l1(y_true[:, :, :4], y_pred[:, :, :4])
@@ -105,7 +105,7 @@ def negative_classification(y_true, y_pred, neg_pos_ratio=3, max_negatives=300):
 
 
 def call(y_true, y_pred):
-    """Computes localization and classification losses in a batch.
+    """Computes regression and classification losses in a batch.
 
     # Arguments
         y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
@@ -116,7 +116,7 @@ def call(y_true, y_pred):
     # Returns
         Tensor with loss per sample in batch.
     """
-    localization_loss = localization(y_true, y_pred)
+    localization_loss = regression(y_true, y_pred)
     positive_loss = positive_classification(y_true, y_pred)
     negative_loss = negative_classification(y_true, y_pred)
     return localization_loss + positive_loss + negative_loss
