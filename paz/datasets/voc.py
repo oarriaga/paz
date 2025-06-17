@@ -134,9 +134,9 @@ def load(name, split="trainval", task="detection"):
         else:
             print(f"Image {image_name} had not boxes.")
     if task == "segmentation":
-        dataset = (image_paths, class_args, boxes, masks_paths)
+        dataset = (image_paths, boxes, class_args, masks_paths)
     else:
-        dataset = (image_paths, class_args, boxes)
+        dataset = (image_paths, boxes, class_args)
     return dataset
 
 
