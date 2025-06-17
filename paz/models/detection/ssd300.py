@@ -5,7 +5,6 @@ from keras.utils import get_file
 
 from ..layers import Conv2DNormalization
 from .utils import create_multibox_head
-from .utils import create_prior_boxes
 
 
 WEIGHT_PATH = (

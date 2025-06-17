@@ -43,6 +43,15 @@ class Conv2DNormalization(Layer):
         normalized_x = x / l2_norm
         return self.gamma * normalized_x
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"scale": self.scale, "axis": self.axis})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 
 class ReduceMean(Layer):
     """Wraps tensorflow's `reduce_mean` function into a keras layer.
