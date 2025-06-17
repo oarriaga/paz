@@ -10,6 +10,21 @@ def random_flip_left_right(image, boxes):
     return image, boxes
 
 
+def resize_boxes_with_aspect_ratio(image, boxes, H, W):
+    boxes = jp.array(boxes)  # input could be a list
+    H_now, W_now = paz.image.get_size(image)
+    boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
+    return boxes
+
+
+def resize_with_aspect_ratio(image, boxes, H, W):
+    H_now, W_now = paz.image.get_size(image)
+    boxes = jp.array(boxes)  # input could be a list
+    boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
+    image = paz.image.resize_with_aspect_ratio(image, H, W)
+    return image, boxes
+
+
 def split(detections):
     boxes = detections[:, :4]
     class_args = detections[:, 4:]
