@@ -2,6 +2,7 @@ import os
 
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
+import argparse
 import jax.numpy as jp
 import jax
 import paz
@@ -9,15 +10,26 @@ import keras
 from generator import Generator
 from pipeline import AugmentDetection
 
-key = jax.random.PRNGKey(777)
-batch_size = 32
-H = 300
-W = 300
+parser = argparse.ArgumentParser(description="Training script for SSD on VOC")
+parser.add_argument("--seed", default=777, type=int)
+parser.add_argument("--batch_size", default=32, type=int)
+parser.add_argument("--learning_rate", default=0.001, type=float)
+parser.add_argument("--momentum", default=0.9, type=float)
+parser.add_argument("--decay_rate", default=0.1, type=float)
+parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
+parser.add_argument("--max_num_epochs", default=240, type=int)
+parser.add_argument("--H", default=300, type=int, help="Height of input images")
+parser.add_argument("--W", default=300, type=int, help="Width of input images")
+parser.add_argument("--max_num_boxes", default=25, type=int)
+parser.add_argument("--match_IOU", default=0.5, type=float)
+parser.add_argument("--box_variances", nargs="+", default=[0.1, 0.1, 0.2, 0.2])
+args = parser.parse_args()
+
+keras.utils.set_random_seed(args.seed)
+key = jax.random.PRNGKey(args.seed)
+
 num_classes = 20
-max_num_boxes = 25
 prior_boxes = paz.models.detection.utils.create_prior_boxes("VOC")
-variances = [0.1, 0.1, 0.2, 0.2]
-match_IOU = 0.5
 mean = jp.array(paz.image.BGR_IMAGENET_MEAN)
 
 images_07, class_args_07, boxes_07 = paz.datasets.load("VOC2007", "trainval")
@@ -42,19 +54,20 @@ metrics = {
     ]
 }
 
-optimizer = keras.optimizers.SGD(0.001, 0.9)
+callbacks = [paz.callbacks.EpochScheduler(args.decay_epochs, args.decay_rate)]
+optimizer = keras.optimizers.SGD(args.learning_rate, args.momentum)
 model.compile(optimizer, loss=paz.losses.multibox.call, metrics=metrics)
 pipeline = paz.lock(
     AugmentDetection,
-    H,
-    W,
+    args.H,
+    args.W,
     prior_boxes,
     num_classes,
-    match_IOU,
-    variances,
+    args.match_IOU,
+    args.box_variances,
     mean,
-    max_num_boxes,
+    args.max_num_boxes,
 )
 
-generator = Generator(key, *train_data, batch_size, pipeline)
-model.fit(generator, epochs=10)
+generator = Generator(key, *train_data, args.batch_size, pipeline)
+model.fit(generator, epochs=args.max_num_epochs)

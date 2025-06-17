@@ -34,3 +34,4 @@ from paz import message
 from paz import applications
 from paz.utils import time
 from paz.abstract import tree
+from paz import callbacks
