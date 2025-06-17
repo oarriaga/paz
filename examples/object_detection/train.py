@@ -68,8 +68,8 @@ model.compile(
     optimizer,
     loss=paz.losses.multibox.call,
     metrics=metrics,
-    run_eagerly=True,
-    jit_compile=False,
+    run_eagerly=False,
+    jit_compile=True,
 )
 batch_args = (
     args.H,
