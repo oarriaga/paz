@@ -1,5 +1,3 @@
-import math
-from keras.utils import PyDataset
 import jax.numpy as jp
 import jax
 import paz
@@ -23,8 +21,10 @@ def add_background_class(detections):
     return detections
 
 
-def preprocess_detections(detections, prior_boxes, num_classes, IOU, variances):
-    detections = paz.detection.normalize(detections, 300, 300)
+def preprocess(detections, prior_boxes, num_classes, IOU, variances, H, W):
+    # TODO change name.
+    # TODO remove use of background class.
+    detections = paz.detection.normalize(detections, H, W)
     detections = add_background_class(detections)
     detections = paz.detection.match(detections, prior_boxes, IOU)
     detections = paz.detection.encode(detections, prior_boxes, variances)
@@ -33,18 +33,20 @@ def preprocess_detections(detections, prior_boxes, num_classes, IOU, variances):
     return detections
 
 
+def resize(images, boxes, H, W):
+    resized_images, resized_boxes = [], []
+    for sample in zip(images, boxes):
+        sample = paz.detection.resize_with_aspect_ratio(*sample, H, W)
+        resized_images.append(sample[0])
+        resized_boxes.append(sample[1])
+    return jp.array(resized_images), resized_boxes
+
+
 def preprocess_image(key, image, mean):
     image = paz.image.augment_color(key, image)
     image = paz.image.RGB_to_BGR(image)
     image = paz.image.subtract_mean(image, mean)
     return image
-
-
-def resize_boxes(image, boxes, H, W):
-    boxes = jp.array(boxes)  # input could be a list
-    H_now, W_now = paz.image.get_size(image)
-    boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
-    return boxes
 
 
 def AugmentDetection(
@@ -62,15 +64,13 @@ def AugmentDetection(
     max_num_boxes,
 ):
     images = [paz.image.load(image) for image in images]
-    iterator = zip(images, boxes)
-    boxes = [resize_boxes(*data, H, W) for data in iterator]
-    images = [paz.image.resize_with_aspect_ratio(x, H, W) for x in images]
-    images = jp.array(images)
+    images, boxes = resize(images, boxes, H, W)
     detections = pad(boxes, class_args, max_num_boxes, -1)
-    preprocess_images = jax.vmap(paz.lock(preprocess_image, mean), (0, 0))
-    keys = jax.random.split(key, len(images))
-    images = preprocess_images(keys, images)
-    args = prior_boxes, num_classes, match_IOU, variances
-    _preprocess_detections = jax.vmap(paz.lock(preprocess_detections, *args))
-    detections = _preprocess_detections(detections)
+
+    preprocess_images = jax.jit(
+        jax.vmap(paz.lock(preprocess_image, mean), (0, 0))
+    )
+    images = preprocess_images(jax.random.split(key, len(images)), images)
+    args = prior_boxes, num_classes, match_IOU, variances, H, W
+    detections = jax.jit(jax.vmap(paz.lock(preprocess, *args)))(detections)
     return images, detections
