@@ -36,7 +36,7 @@ model.summary()
 
 metrics = {
     "boxes": [
-        paz.losses.multibox.localization,
+        paz.losses.multibox.regression,
         paz.losses.multibox.positive_classification,
         paz.losses.multibox.negative_classification,
     ]
