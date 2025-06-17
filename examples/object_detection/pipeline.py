@@ -42,14 +42,15 @@ def resize(images, boxes, H, W):
     return jp.array(resized_images), resized_boxes
 
 
-def preprocess_image(key, image, mean):
-    image = paz.image.augment_color(key, image)
+def preprocess_image(key, image, mean, augment=True):
+    if augment:
+        image = paz.image.augment_color(key, image)
     image = paz.image.RGB_to_BGR(image)
     image = paz.image.subtract_mean(image, mean)
     return image
 
 
-def AugmentDetection(
+def preprocess_batch(
     key,
     images,
     boxes,
@@ -62,13 +63,14 @@ def AugmentDetection(
     variances,
     mean,
     max_num_boxes,
+    augment=True,
 ):
     images = [paz.image.load(image) for image in images]
     images, boxes = resize(images, boxes, H, W)
     detections = pad(boxes, class_args, max_num_boxes, -1)
 
     preprocess_images = jax.jit(
-        jax.vmap(paz.lock(preprocess_image, mean), (0, 0))
+        jax.vmap(paz.lock(preprocess_image, mean, augment), (0, 0))
     )
     images = preprocess_images(jax.random.split(key, len(images)), images)
     args = prior_boxes, num_classes, match_IOU, variances, H, W

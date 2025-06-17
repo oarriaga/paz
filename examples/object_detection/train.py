@@ -7,7 +7,7 @@ import jax.numpy as jp
 import paz
 import keras
 from generator import Generator
-from pipeline import AugmentDetection
+from pipeline import preprocess_batch
 
 parser = argparse.ArgumentParser(description="Training script for SSD on VOC")
 parser.add_argument("--seed", default=777, type=int)
@@ -32,13 +32,13 @@ root, key = paz.logger.setup(args)
 prior_boxes = paz.models.detection.utils.create_prior_boxes("VOC")
 num_classes = len(paz.datasets.labels("VOC"))
 mean = jp.array(paz.image.BGR_IMAGENET_MEAN)
-images_07, class_args_07, boxes_07 = paz.datasets.load("VOC2007", "trainval")
-images_12, class_args_12, boxes_12 = paz.datasets.load("VOC2012", "trainval")
+images_07, boxes_07, class_args_07 = paz.datasets.load("VOC2007", "trainval")
+images_12, boxes_12, class_args_12 = paz.datasets.load("VOC2012", "trainval")
 train_images = images_07 + images_12
-train_class_args = class_args_07 + class_args_12
 train_boxes = boxes_07 + boxes_12
+train_class_args = class_args_07 + class_args_12
 train_data = (train_images, train_boxes, train_class_args)
-test_images, test_class_args, test_boxes = paz.datasets.load("VOC2007", "test")
+test_data = paz.datasets.load("VOC2007", "test")
 
 model = paz.models.SSD300(
     num_classes + 1, base_weights="VGG", head_weights=None, trainable_base=False
@@ -60,8 +60,7 @@ callbacks = [
 
 optimizer = keras.optimizers.SGD(args.learning_rate, args.momentum)
 model.compile(optimizer, loss=paz.losses.multibox.call, metrics=metrics)
-pipeline = paz.lock(
-    AugmentDetection,
+batch_args = (
     args.H,
     args.W,
     prior_boxes,
@@ -72,5 +71,11 @@ pipeline = paz.lock(
     args.max_num_boxes,
 )
 
-train_generator = Generator(key, *train_data, args.batch_size, pipeline)
-model.fit(train_generator, epochs=args.max_num_epochs)
+train_pipeline = paz.lock(preprocess_batch, *batch_args, True)
+train_generator = Generator(key, *train_data, args.batch_size, train_pipeline)
+valid_pipeline = paz.lock(preprocess_batch, *batch_args, False)
+valid_generator = Generator(key, *test_data, args.batch_size, valid_pipeline)
+
+model.fit(
+    train_generator, epochs=args.max_num_epochs, validation_data=valid_generator
+)

@@ -12,11 +12,11 @@ from jax import random
 import jax.numpy as jp
 import jax
 import paz
-from pipeline import AugmentDetection
+from pipeline import preprocess_batch
 
 
 key = random.PRNGKey(0)
-images, class_args, boxes = paz.datasets.load("VOC2007", "trainval")
+images, boxes, class_args = paz.datasets.load("VOC2007", "trainval")
 batch_size = 16
 match_IOU = 0.5
 mean = jp.array(paz.image.BGR_IMAGENET_MEAN)
@@ -34,7 +34,7 @@ batch_images = images[lower_arg:upper_arg]
 batch_boxes = boxes[lower_arg:upper_arg]
 batch_class_args = class_args[lower_arg:upper_arg]
 
-x_true, y_true = AugmentDetection(
+x_true, y_true = preprocess_batch(
     key,
     batch_images,
     batch_boxes,
@@ -47,6 +47,7 @@ x_true, y_true = AugmentDetection(
     variances,
     mean,
     max_num_boxes,
+    True,
 )
 
 
