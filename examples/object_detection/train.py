@@ -3,11 +3,14 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 import argparse
+import jax
 import jax.numpy as jp
 import paz
 import keras
 from generator import Generator
 from pipeline import preprocess_batch
+
+jax.config.update("jax_debug_nans", True)
 
 parser = argparse.ArgumentParser(description="Training script for SSD on VOC")
 parser.add_argument("--seed", default=777, type=int)
