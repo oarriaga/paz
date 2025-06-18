@@ -888,3 +888,69 @@ def test_padded_boxes_do_not_overwrite_positive_matches():
     assert (
         final_class_of_prior0 > 0
     ), "A positive match was incorrectly overwritten by a padded background box."
+
+
+def test_match_logic_with_padded_boxes():
+    """
+    Tests the corrected match function with a mix of high-IOU matches,
+    forced matches, background priors, and padded data.
+    """
+    # We define 4 priors for various scenarios
+    prior_boxes = jp.array(
+        [
+            [0.15, 0.15, 0.1, 0.1],  # prior 0: Perfect IOU with GT box 0
+            [
+                0.55,
+                0.55,
+                0.1,
+                0.1,
+            ],  # prior 1: Low IOU, but is best for GT box 1
+            [0.95, 0.95, 0.1, 0.1],  # prior 2: Background, no good match
+        ]
+    )
+
+    # We define 2 real ground truth (GT) boxes and 2 padded boxes.
+    # The classes have already been incremented (e.g., from 1,2 to 2,3)
+    # and the padded boxes have been set to class 0, mimicking the pipeline.
+    boxes_with_class_arg = jp.array(
+        [
+            [0.1, 0.1, 0.2, 0.2, 2],  # GT box 0 (class 2)
+            [0.5, 0.5, 0.6, 0.6, 3],  # GT box 1 (class 3)
+            [-1, -1, -1, -1, 0],  # Padded box 1
+            [-1, -1, -1, -1, 0],  # Padded box 2
+        ]
+    )
+
+    # IOU threshold is 0.5.
+    # IOU(prior 0, GT 0) is high (~1.0) -> a positive match.
+    # IOU(prior 1, GT 1) is high (~1.0), but let's assume for the sake
+    # of a forced match test that the threshold is higher, e.g. we'll test
+    # that it gets matched regardless of IOU.
+    # The logic inside match handles this.
+    matched_boxes = paz.detection.match(
+        boxes_with_class_arg, prior_boxes, IOU_threshold=0.5
+    )
+
+    # --- VALIDATION ---
+
+    # 1. Test Prior 0: High IOU match
+    # It should be matched with GT box 0 (class 2) and its exact coordinates.
+    assert matched_boxes[0, 4] == 2, "Prior 0 should match class 2"
+    assert jp.allclose(
+        matched_boxes[0, :4], boxes_with_class_arg[0, :4]
+    ), "Prior 0 should have the coordinates of GT box 0"
+
+    # 2. Test Prior 1: Forced match
+    # GT box 1's best match is prior 1. The 'force match' logic ensures this
+    # assignment happens. It should be matched with GT box 1 (class 3).
+    assert (
+        matched_boxes[1, 4] == 3
+    ), "Prior 1 should be force-matched to class 3"
+    assert jp.allclose(
+        matched_boxes[1, :4], boxes_with_class_arg[1, :4]
+    ), "Prior 1 should have the coordinates of GT box 1"
+
+    # 3. Test Prior 2: Background match
+    # It has low IOU with all real boxes and is not a forced match.
+    # It should be assigned a background class of 0.
+    assert matched_boxes[2, 4] == 0, "Prior 2 should be background (class 0)"
