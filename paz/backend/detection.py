@@ -430,7 +430,7 @@ def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     return jax.vmap(paz.partial(apply_NMS, detections))(jp.arange(num_classes))
 
 
-def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
+def original_match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
     """Matches each prior box with a ground truth box
     (box from `boxes_with_class_arg`). It then selects which matched box will be
     considered positive e.g. iou > .5 and returns for each prior box a ground
@@ -492,4 +492,75 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
         boxes_with_class_arg, per_prior_best_box
     )
     selected_boxes = label_negative_boxes(selected_boxes, per_prior_best_IOU)
+    return selected_boxes
+
+
+def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
+    """Matches each prior box with a ground truth box, ignoring padded boxes.
+
+    This function is JIT-compatible and handles padded data by masking
+    operations rather than changing array shapes.
+
+    # Arguments
+        boxes_with_class_arg: Array of shape `(num_ground_truth_boxes, 5)`.
+            This should contain ground truth boxes, with padded boxes
+            represented by rows with negative coordinates.
+        prior_boxes: Array of shape `(num_prior_boxes, 4)`.
+        IOU_threshold: Float, threshold to consider a match positive.
+
+    #Returns
+        Array of shape `(num_prior_boxes, 5)`. For each prior, contains
+        the matched ground truth box data and class.
+    """
+    prior_boxes = paz.boxes.to_corner_form(prior_boxes)
+    IOUs = paz.boxes.compute_IOUs(boxes_with_class_arg, prior_boxes)
+
+    # For each prior, find the best GT box and its IOU
+    per_prior_best_box = jp.argmax(IOUs, axis=0)
+    per_prior_best_IOU = jp.max(IOUs, axis=0)
+
+    # For each GT box, find the best prior
+    per_box_best_prior = jp.argmax(IOUs, axis=1)
+
+    # --- JIT-SAFE FORCED MATCHING ---
+
+    # 1. Create a mask to identify valid (non-padded) ground truth boxes.
+    is_valid_box_mask = boxes_with_class_arg[:, 0] >= 0.0
+
+    # 2. Use `lax.scan` (a JIT-compatible loop) to perform the forced match.
+    # We will iterate through each ground truth box and ensure its best prior
+    # is marked as a positive match, but ONLY if the ground truth box is valid.
+    def body(iou_carry, i):
+        # Get the prior that best matches the current ground truth box `i`
+        prior_to_update = per_box_best_prior[i]
+
+        # Conditionally create the new IOU value. If the box is valid, the
+        # new IOU is 2.0. If not, the new IOU is the original IOU (a no-op).
+        new_iou = jp.where(
+            is_valid_box_mask[i],  # Condition: is the box valid?
+            2.0,  # If TRUE: set IOU to 2.0 to force a match
+            iou_carry[prior_to_update],  # If FALSE: keep the IOU as it is
+        )
+
+        # Update the IOU array with the new value. Because this is a scan,
+        # if multiple boxes map to the same prior, the last one wins.
+        return iou_carry.at[prior_to_update].set(new_iou), None
+
+    # Run the scan, starting with the original `per_prior_best_IOU`
+    final_IOU, _ = jax.lax.scan(
+        body, per_prior_best_IOU, jp.arange(boxes_with_class_arg.shape[0])
+    )
+
+    # --- FINAL LABELING ---
+
+    # 3. Gather the assigned ground truth boxes for each prior.
+    selected_boxes = boxes_with_class_arg[per_prior_best_box]
+
+    # 4. Label negative boxes: set the class of any box with an IOU below
+    #    the threshold to 0 (background), using our final updated IOU array.
+    is_low_IOU_match = final_IOU < IOU_threshold
+    class_args = selected_boxes[:, 4]
+    class_args = jp.where(is_low_IOU_match, 0.0, class_args)
+    selected_boxes = selected_boxes.at[:, 4].set(class_args)
+
     return selected_boxes
