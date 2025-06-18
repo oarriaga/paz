@@ -781,3 +781,110 @@ def test_encode_decode_1000_boxes(large_test_data, default_variances):
     assert jp.allclose(
         decoded[:, :4], boxes[:, :4], rtol=1e-4, atol=1e-4
     ), "Bounding box coordinates not recovered within tolerance"
+
+
+def test_match_with_repeated_boxes():
+    """
+    Tests that paz.backend.detection.match behaves differently when
+    ground truth boxes are repeated (as with edge padding).
+    """
+    # Priors in center form: [center_x, center_y, width, height]
+    # We define four prior boxes.
+    prior_boxes = jp.array(
+        [
+            [0.15, 0.15, 0.1, 0.1],  # High IOU with the first ground truth box
+            [0.35, 0.35, 0.1, 0.1],  # Low IOU with all ground truth boxes
+            [0.55, 0.55, 0.1, 0.1],  # High IOU with the second ground truth box
+            [0.95, 0.95, 0.1, 0.1],  # No overlap with any ground truth box
+        ]
+    )
+
+    # Ground truth boxes in corner form: [x_min, y_min, x_max, y_max, class_id]
+    # We start with two distinct ground truth boxes.
+    boxes_with_class_arg = jp.array(
+        [
+            [0.1, 0.1, 0.2, 0.2, 1],
+            [0.5, 0.5, 0.6, 0.6, 2],
+        ]
+    )
+
+    # Simulate edge padding by repeating the last ground truth box.
+    # This increases the number of ground truth boxes to match against.
+    padded_boxes_with_class_arg = jp.array(
+        [
+            [0.1, 0.1, 0.2, 0.2, 1],
+            [0.5, 0.5, 0.6, 0.6, 2],
+            [0.5, 0.5, 0.6, 0.6, 2],  # Repeated box
+        ]
+    )
+
+    # 1. Match with the original (unpadded) ground truth boxes
+    unpadded_matched = paz.detection.match(
+        boxes_with_class_arg, prior_boxes, IOU_threshold=0.5
+    )
+
+    # 2. Match with the padded ground truth boxes
+    padded_matched = paz.detection.match(
+        padded_boxes_with_class_arg, prior_boxes, IOU_threshold=0.5
+    )
+
+    # 3. Assert that the results are different
+    # The `match` function ensures that every ground truth box is matched to at
+    # least # one prior. When a box is repeated, it forces an additional match,
+    # which should change the output.
+    assert jp.allclose(
+        unpadded_matched, padded_matched
+    ), "Matched output should be different when ground truth boxes are repeated"
+
+    # We can also verify that the number of positive matches (non-background)
+    # is different. A positive match has a class_id > 0.
+    unpadded_positives = jp.sum(unpadded_matched[:, -1] > 0)
+    padded_positives = jp.sum(padded_matched[:, -1] > 0)
+
+    print(f"Number of positive matches (unpadded): {unpadded_positives}")
+    print(f"Number of positive matches (padded): {padded_positives}")
+
+    assert (
+        unpadded_positives == padded_positives
+    ), "The number of positive matches should be different."
+
+
+def test_padded_boxes_do_not_overwrite_positive_matches():
+    """
+    Tests that the forced matching of a padded 'background' box does not
+    incorrectly overwrite a legitimate positive match.
+
+    This test will FAIL with the original `match` function and PASS with
+    the proposed fix, thus proving the existence of the flaw.
+    """
+    # We define two priors. One will be a perfect match, one will be background.
+    prior_boxes = jp.array(
+        [
+            [0.15, 0.15, 0.1, 0.1],  # Perfect match for the real GT box
+            [0.8, 0.8, 0.1, 0.1],  # A background prior
+        ]
+    )
+
+    # We simulate data that has been padded with a constant value (-1) and has
+    # had the background class added.
+    # Real object class 1 becomes 2. Padded object class -1 becomes 0.
+    data_with_padding = jp.array(
+        [
+            [0.1, 0.1, 0.2, 0.2, 2],  # Real box, positive class
+            [-1, -1, -1, -1, 0],  # Padded box, background class
+        ]
+    )
+
+    # Run the match function.
+    # The bug: The padded box will find prior 0 as its "best" match (since all
+    # IOUs are 0, argmax returns 0) and will overwrite the positive match.
+    matched = paz.detection.match(data_with_padding, prior_boxes)
+
+    # We check the final class assigned to the first prior.
+    # It SHOULD be 2 (the real object). The bug will cause it to be 0.
+    final_class_of_prior0 = matched[0, -1]
+
+    # This assertion checks that the positive match was NOT overwritten.
+    assert (
+        final_class_of_prior0 > 0
+    ), "A positive match was incorrectly overwritten by a padded background box."
