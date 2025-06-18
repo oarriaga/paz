@@ -71,6 +71,30 @@ def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2]):
     return np.concatenate(encoded_boxes + [matched[:, 4:]], axis=1)
 
 
+def to_one_hot(boxes, num_classes):
+    def _to_one_hot(class_indices, num_classes):
+        """Transform from class index to one-hot encoded vector.
+
+        # Arguments
+            class_indices: Numpy array. One dimensional array specifying
+                the index argument of the class for each sample.
+            num_classes: Integer. Total number of classes.
+
+        # Returns
+            Numpy array with shape `(num_samples, num_classes)`.
+        """
+        one_hot_vectors = np.zeros((len(class_indices), num_classes))
+        for vector_arg, class_args in enumerate(class_indices):
+            one_hot_vectors[vector_arg, class_args] = 1.0
+        return one_hot_vectors
+
+    class_indices = boxes[:, 4].astype("int")
+    one_hot_vectors = _to_one_hot(class_indices, num_classes)
+    one_hot_vectors = one_hot_vectors.reshape(-1, num_classes)
+    boxes = np.hstack([boxes[:, :4], one_hot_vectors.astype("float")])
+    return boxes
+
+
 def preprocess(detections, prior_boxes, num_classes, IOU, variances, H, W):
     # TODO change name.
     # TODO remove use of background class.
@@ -82,8 +106,9 @@ def preprocess(detections, prior_boxes, num_classes, IOU, variances, H, W):
     # detections = paz.detection.encode(detections, prior_boxes, variances)
     detections = encode(detections, np.array(prior_boxes), variances)
     # internally increase number of classes by 1 to account for background class
-    detections = paz.detection.to_one_hot(jp.array(detections), num_classes + 1)
-    return detections
+    # detections = paz.detection.to_one_hot(jp.array(detections), num_classes + 1)
+    detections = to_one_hot(detections, num_classes + 1)
+    return jp.array(detections)
 
 
 def resize(images, boxes, H, W):

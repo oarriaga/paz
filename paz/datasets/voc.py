@@ -49,6 +49,7 @@ def parse_XML(name_to_arg, XML_filename, with_difficult_boxes=True):
         class_arg = name_to_arg[detection.find("name").text]
         difficult = int(detection.find("difficult").text)
         box = parse_box(detection.find("bndbox"))
+        # TODO fix use of difficult boxes
         # if not difficult:
         #     boxes.append(box)
         #     class_args.append(class_arg)
