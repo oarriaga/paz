@@ -4,7 +4,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 import numpy as np
 import pytest
 from paz.losses.multibox import (
-    localization,
+    regression,
     cross_entropy,
     smooth_l1,
     call,
@@ -233,7 +233,6 @@ def test_multiboxloss(y_true, y_pred, target_multibox_loss):
 def test_smooth_l1_loss(y_true, y_pred, target_smooth_l1_loss):
     smooth_l1_loss = smooth_l1(y_true, y_pred)
     smooth_l1_loss = np.asarray(smooth_l1_loss, dtype="float32")
-    print(smooth_l1_loss - target_smooth_l1_loss)
     assert np.allclose(smooth_l1_loss, target_smooth_l1_loss)
 
 
@@ -244,7 +243,7 @@ def test_cross_entropy_loss(y_true, y_pred, target_cross_entropy_loss):
 
 
 def test_localization_loss(y_true, y_pred, target_localization_loss):
-    localization_loss = localization(y_true, y_pred)
+    localization_loss = regression(y_true, y_pred)
     localization_loss = np.asarray(localization_loss, dtype="float32")
     assert np.allclose(localization_loss, target_localization_loss)
 
