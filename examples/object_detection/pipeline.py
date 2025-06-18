@@ -1,4 +1,5 @@
 import jax.numpy as jp
+import numpy as np
 import jax
 import paz
 
@@ -27,7 +28,9 @@ def preprocess(detections, prior_boxes, num_classes, IOU, variances, H, W):
     # TODO remove use of background class.
     detections = paz.detection.normalize(detections, H, W)
     detections = add_background_class(detections)
-    detections = paz.detection.match(detections, prior_boxes, IOU)
+    detections = jp.array(
+        paz.detection.match_np(np.array(detections), np.array(prior_boxes), IOU)
+    )
     detections = paz.detection.encode(detections, prior_boxes, variances)
     # internally increase number of classes by 1 to account for background class
     detections = paz.detection.to_one_hot(detections, num_classes + 1)
@@ -115,6 +118,7 @@ def preprocess_batch(
     images = preprocess_images(jax.random.split(key, len(images)), images)
     args = prior_boxes, num_classes, match_IOU, variances, H, W
     # detections = jax.jit(jax.vmap(paz.lock(preprocess, *args)))(detections)
-    jit_preprocess = jax.jit(paz.lock(preprocess, *args))
-    detections = jp.array([jit_preprocess(x) for x in detections])
+    # jit_preprocess = jax.jit(paz.lock(preprocess, *args))
+    # detections = jp.array([jit_preprocess(x) for x in detections])
+    detections = jp.array([preprocess(x, *args) for x in detections])
     return images, detections
