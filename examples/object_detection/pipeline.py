@@ -9,7 +9,7 @@ def pad(boxes, class_args, pad_size, pad_value):
         boxes = jp.array(boxes)
         class_args = jp.array(class_args).reshape(-1, 1)
         detections = paz.detection.merge(boxes, class_args)
-        detections = paz.detection.pad(detections, pad_size, "edge")
+        detections = paz.detection.pad(detections, pad_size, "constant", -1)
         return detections
 
     return jp.array([pad_sample(*sample) for sample in zip(boxes, class_args)])
