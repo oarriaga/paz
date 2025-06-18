@@ -41,7 +41,7 @@ def parse_box(box):
     return [x_min, y_min, x_max, y_max]
 
 
-def parse_XML(name_to_arg, XML_filename):
+def parse_XML(name_to_arg, XML_filename, with_difficult_boxes=True):
     tree = ElementTree.parse(XML_filename)
     image_name = tree.find("filename").text
     boxes, class_args = [], []
@@ -49,9 +49,11 @@ def parse_XML(name_to_arg, XML_filename):
         class_arg = name_to_arg[detection.find("name").text]
         difficult = int(detection.find("difficult").text)
         box = parse_box(detection.find("bndbox"))
-        if not difficult:
-            boxes.append(box)
-            class_args.append(class_arg)
+        # if not difficult:
+        #     boxes.append(box)
+        #     class_args.append(class_arg)
+        boxes.append(box)
+        class_args.append(class_arg)
     return image_name, boxes, class_args
 
 
