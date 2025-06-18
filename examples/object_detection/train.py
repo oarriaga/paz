@@ -51,11 +51,13 @@ model = paz.models.SSD300(
 )
 model.summary()
 
-metrics = [
-    paz.losses.multibox.regression,
-    paz.losses.multibox.positive_classification,
-    paz.losses.multibox.negative_classification,
-]
+metrics = {
+    "boxes": [
+        paz.losses.multibox.regression,
+        paz.losses.multibox.positive_classification,
+        paz.losses.multibox.negative_classification,
+    ]
+}
 
 checkpoint = os.path.join(root, args.model + ".keras")
 callbacks = [
