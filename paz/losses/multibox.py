@@ -16,7 +16,7 @@ def cross_entropy(y_true, y_pred):
 
 
 def calculate_masks(y_true):
-    negative_mask = y_true[:, :, 4]
+    negative_mask = y_true[:, :, 4]  # for all batches and prior boxes
     positive_mask = 1.0 - negative_mask
     return positive_mask, negative_mask
 
