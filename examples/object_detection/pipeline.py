@@ -68,7 +68,9 @@ def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2]):
     encoded_W = encoded_W / variances[2]
     encoded_H = encoded_H / variances[3]
     encoded_boxes = [encoded_center_x, encoded_center_y, encoded_W, encoded_H]
-    return np.concatenate(encoded_boxes + [matched[:, 4:]], axis=1)
+    return np.concatenate(encoded_boxes + [matched[:, 4:]], axis=1).astype(
+        "float32"
+    )
 
 
 def to_one_hot(boxes, num_classes):
@@ -92,7 +94,7 @@ def to_one_hot(boxes, num_classes):
     one_hot_vectors = _to_one_hot(class_indices, num_classes)
     one_hot_vectors = one_hot_vectors.reshape(-1, num_classes)
     boxes = np.hstack([boxes[:, :4], one_hot_vectors.astype("float")])
-    return boxes
+    return boxes.astype("float32")
 
 
 def preprocess(detections, prior_boxes, num_classes, IOU, variances, H, W):

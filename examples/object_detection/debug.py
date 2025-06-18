@@ -68,9 +68,9 @@ def filter_class_arg(detections, class_arg, value=-1):
     one_hot_vectors = paz.detection.get_scores(detections)
     detections = to_class_args(detections)
     boxes, class_args = paz.detection.split(detections)
-    mask = class_args != class_arg
-    boxes = jp.where(mask, boxes, value)
-    class_args = jp.where(mask, one_hot_vectors, value)
+    is_not_class_arg = class_args != class_arg
+    boxes = jp.where(is_not_class_arg, boxes, value)
+    class_args = jp.where(is_not_class_arg, one_hot_vectors, value)
     detections = paz.detection.merge(boxes, one_hot_vectors)
     return paz.detection.remove_class(detections, class_arg)
 
@@ -82,6 +82,21 @@ def deprocess_detections(detections, prior_boxes, variances):
     return to_boxes2D(detections)
 
 
+def select_prior_boxes(detections, prior_boxes, variances, class_arg=0):
+    detections = paz.detection.decode(detections, prior_boxes, variances)
+    one_hot_vectors = paz.detection.get_scores(detections)
+    detections = to_class_args(detections)
+    boxes, class_args = paz.detection.split(detections)
+    is_not_class_arg = class_args != class_arg
+    prior_boxes = paz.boxes.to_corner_form(prior_boxes)
+    boxes = jp.where(is_not_class_arg, prior_boxes, -1)
+    class_args = jp.where(is_not_class_arg, one_hot_vectors, -1)
+    detections = paz.detection.merge(boxes, one_hot_vectors)
+    detections = paz.detection.remove_class(detections, class_arg)
+    detections = paz.detection.denormalize(detections, 300, 300)
+    return to_boxes2D(detections)
+
+
 def to_boxes2D(detections):
     boxes, one_hot_vectors = paz.detection.split(detections)
     class_args = jp.argmax(one_hot_vectors, axis=-1, keepdims=False)
@@ -89,9 +104,36 @@ def to_boxes2D(detections):
     return boxes.astype("int32"), class_args.astype("int32"), scores
 
 
-x = deprocess_image(x_true[0], mean)
+def fn_pos(y_true_sample):
+    return y_true_sample[y_true_sample[:, 4] != 1]
+
+
+def fn_neg(y_true_sample):
+    return y_true_sample[y_true_sample[:, 4] == 1]
+
+
+sample_arg = 0
+x = deprocess_image(x_true[sample_arg], mean)
 y_boxes, y_class_args, y_scores = deprocess_detections(
-    y_true[0], prior_boxes, variances
+    y_true[sample_arg], prior_boxes, variances
+)
+
+paz.image.show(
+    paz.draw.boxes2D(
+        x,
+        y_boxes,
+        y_class_args,
+        y_scores,
+        names=paz.datasets.labels("VOC"),
+        colors=paz.draw.lincolor(num_classes),
+        thickness=1,
+        font_scale=0.5,
+    )
+)
+
+
+y_boxes, y_class_args, y_scores = select_prior_boxes(
+    y_true[sample_arg], prior_boxes, variances
 )
 paz.image.show(
     paz.draw.boxes2D(
@@ -101,29 +143,13 @@ paz.image.show(
         y_scores,
         names=paz.datasets.labels("VOC"),
         colors=paz.draw.lincolor(num_classes),
+        thickness=2,
+        font_scale=0.0,
     )
 )
 
-
-# image_path = images[0]
-# image = paz.image.load(image_path)
-# H, W = paz.image.get_size(image)
-# image_boxes = jp.array(boxes[0])
-# image_with_boxes = paz.draw.boxes(image, image_boxes)
-# paz.image.show(image_with_boxes)
-
-# resized_image = paz.image.resize(image, (300, 300))
-# resized_boxes = paz.boxes.resize(image_boxes, H, W, 300, 300)
-# image_with_resized_boxes = paz.draw.boxes(resized_image, resized_boxes)
-# paz.image.show(image_with_resized_boxes.astype("uint8"))
-
-
-# def build_negative_mask(detections):
-#     is_invalid = jp.any(detections < 0.0, axis=1)
-#     return is_invalid
-
-
-# def build_positive_mask(detections):
-#     is_invalid = jp.any(detections < 0.0, axis=1)
-#     is_valid = jp.logical_not(is_invalid)
-#     return is_valid
+print(fn_pos(y_true[sample_arg]))
+print(fn_neg(y_true[sample_arg]))
+# detections = paz.detection.normalize(detections, H, W)
+# detections = add_background_class(detections)
+# detections = paz.detection.match(detections, prior_boxes, IOU)
