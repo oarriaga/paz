@@ -95,7 +95,7 @@ def preprocess_batch(
     max_num_boxes,
     augment=True,
 ):
-    def pad(boxes, class_args, pad_size, pad_value):
+    def padder(boxes, class_args, pad_size, pad_value):
 
         def pad_sample(boxes, class_args):
             boxes = jp.array(boxes)
@@ -107,7 +107,7 @@ def preprocess_batch(
 
     images = [paz.image.load(image) for image in images]
     images, boxes = resize(images, boxes, H, W)
-    detections = pad(boxes, class_args, max_num_boxes, -1)
+    detections = padder(boxes, class_args, max_num_boxes, -1)
 
     preprocess_images = jax.jit(
         jax.vmap(paz.lock(preprocess_image, mean, augment), (0, 0))
