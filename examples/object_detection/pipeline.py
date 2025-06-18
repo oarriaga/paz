@@ -52,7 +52,7 @@ def preprocess_image(key, image, mean, augment=True):
     return image
 
 
-def preprocess_batch(
+def original_preprocess_batch(
     key,
     images,
     boxes,
@@ -77,4 +77,44 @@ def preprocess_batch(
     images = preprocess_images(jax.random.split(key, len(images)), images)
     args = prior_boxes, num_classes, match_IOU, variances, H, W
     detections = jax.jit(jax.vmap(paz.lock(preprocess, *args)))(detections)
+    return images, detections
+
+
+def preprocess_batch(
+    key,
+    images,
+    boxes,
+    class_args,
+    H,
+    W,
+    prior_boxes,
+    num_classes,
+    match_IOU,
+    variances,
+    mean,
+    max_num_boxes,
+    augment=True,
+):
+    def pad(boxes, class_args, pad_size, pad_value):
+
+        def pad_sample(boxes, class_args):
+            boxes = jp.array(boxes)
+            class_args = jp.array(class_args).reshape(-1, 1)
+            detections = paz.detection.merge(boxes, class_args)
+            return detections
+
+        return [pad_sample(*sample) for sample in zip(boxes, class_args)]
+
+    images = [paz.image.load(image) for image in images]
+    images, boxes = resize(images, boxes, H, W)
+    detections = pad(boxes, class_args, max_num_boxes, -1)
+
+    preprocess_images = jax.jit(
+        jax.vmap(paz.lock(preprocess_image, mean, augment), (0, 0))
+    )
+    images = preprocess_images(jax.random.split(key, len(images)), images)
+    args = prior_boxes, num_classes, match_IOU, variances, H, W
+    # detections = jax.jit(jax.vmap(paz.lock(preprocess, *args)))(detections)
+    jit_preprocess = jax.jit(paz.lock(preprocess, *args))
+    detections = jp.array([jit_preprocess(x) for x in detections])
     return images, detections
