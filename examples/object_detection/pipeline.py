@@ -9,7 +9,8 @@ def pad(boxes, class_args, pad_size, pad_value):
         boxes = jp.array(boxes)
         class_args = jp.array(class_args).reshape(-1, 1)
         detections = paz.detection.merge(boxes, class_args)
-        detections = paz.detection.pad(detections, pad_size, "constant", -1)
+        # detections = paz.detection.pad(detections, pad_size, "constant", -1)
+        detections = paz.detection.pad(detections, pad_size, "edge")
         return detections
 
     return jp.array([pad_sample(*sample) for sample in zip(boxes, class_args)])
@@ -36,7 +37,8 @@ def preprocess(detections, prior_boxes, num_classes, IOU, variances, H, W):
 def resize(images, boxes, H, W):
     resized_images, resized_boxes = [], []
     for sample in zip(images, boxes):
-        sample = paz.detection.resize_with_aspect_ratio(*sample, H, W)
+        # sample = paz.detection.resize_with_aspect_ratio(*sample, H, W)
+        sample = paz.detection.resize(*sample, H, W)
         resized_images.append(sample[0])
         resized_boxes.append(sample[1])
     return jp.array(resized_images), resized_boxes
