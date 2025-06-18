@@ -67,7 +67,9 @@ callbacks = [
 ]
 
 optimizer = keras.optimizers.SGD(
-    args.learning_rate, args.momentum, global_clipnorm=args.clipnorm
+    # args.learning_rate, args.momentum, global_clipnorm=args.clipnorm
+    args.learning_rate,
+    args.momentum,
 )
 model.compile(
     optimizer,
