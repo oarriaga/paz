@@ -1,14 +1,16 @@
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
+import jax
+
+# jax.config.update("jax_platform_name", "cpu")
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 import argparse
-import jax
 import jax.numpy as jp
 import paz
 import keras
 from generator import Generator
-from pipeline import preprocess_batch
+from pipeline2 import preprocess_batch
 
 jax.config.update("jax_debug_nans", True)
 
@@ -21,8 +23,9 @@ parser.add_argument("--batch_size", default=32, type=int)
 parser.add_argument("--learning_rate", default=0.001, type=float)
 parser.add_argument("--momentum", default=0.9, type=float)
 parser.add_argument("--clipnorm", default=10.0, type=float)
-parser.add_argument("--num_workers", default=None, type=int)
-parser.add_argument("--max_queue_size", default=100, type=float)
+parser.add_argument("--num_workers", default="max")
+# parser.add_argument("--num_workers", default=1)
+parser.add_argument("--max_queue_size", default=10, type=float)
 parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
 parser.add_argument("--decay_rate", default=0.1, type=float)
 parser.add_argument("--max_num_epochs", default=240, type=int)
@@ -89,7 +92,7 @@ batch_args = (
     args.max_num_boxes,
 )
 
-num_workers = os.cpu_count() if args.num_workers is None else args.num_workers
+num_workers = os.cpu_count() if args.num_workers is "max" else args.num_workers
 train_pipeline = paz.lock(preprocess_batch, *batch_args, True)
 train_generator = Generator(
     key,
@@ -110,5 +113,8 @@ valid_generator = Generator(
 )
 
 model.fit(
-    train_generator, epochs=args.max_num_epochs, validation_data=valid_generator
+    train_generator,
+    epochs=args.max_num_epochs,
+    validation_data=valid_generator,
+    callbacks=callbacks,
 )
