@@ -5,15 +5,21 @@ from keras.layers import Flatten
 from keras.layers import Reshape
 from keras.layers import Concatenate
 from keras.regularizers import l2
-
-from ..layers import Conv2DNormalization
+from paz.layers import Conv2DNormalization
 
 import numpy as np
 from itertools import product
 
 
-def create_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
-                         num_regressions=4, l2_norm=False, batch_norm=False):
+def create_multibox_head(
+    tensors,
+    num_classes,
+    num_priors,
+    l2_loss=0.0005,
+    num_regressions=4,
+    l2_norm=False,
+    batch_norm=False,
+):
     """Adds multibox head with classification and regression output tensors.
 
     # Arguments
@@ -37,8 +43,9 @@ def create_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
 
         # classification leaf -------------------------------------------------
         num_kernels = num_priors[layer_arg] * num_classes
-        class_leaf = Conv2D(num_kernels, 3, padding='same',
-                            kernel_regularizer=l2(l2_loss))(base_layer)
+        class_leaf = Conv2D(
+            num_kernels, 3, padding="same", kernel_regularizer=l2(l2_loss)
+        )(base_layer)
         if batch_norm:
             class_leaf = BatchNormalization()(class_leaf)
         class_leaf = Flatten()(class_leaf)
@@ -46,8 +53,9 @@ def create_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
 
         # regression leaf -----------------------------------------------------
         num_kernels = num_priors[layer_arg] * num_regressions
-        regress_leaf = Conv2D(num_kernels, 3, padding='same',
-                              kernel_regularizer=l2(l2_loss))(base_layer)
+        regress_leaf = Conv2D(
+            num_kernels, 3, padding="same", kernel_regularizer=l2(l2_loss)
+        )(base_layer)
         if batch_norm:
             regress_leaf = BatchNormalization()(regress_leaf)
 
@@ -59,21 +67,20 @@ def create_multibox_head(tensors, num_classes, num_priors, l2_loss=0.0005,
     # num_boxes = K.int_shape(regressions)[-1] // num_regressions
     num_boxes = np.shape(regressions)[-1] // num_regressions
     classifications = Reshape((num_boxes, num_classes))(classifications)
-    classifications = Activation('softmax')(classifications)
+    classifications = Activation("softmax")(classifications)
     regressions = Reshape((num_boxes, num_regressions))(regressions)
-    outputs = Concatenate(
-        axis=2, name='boxes')([regressions, classifications])
+    outputs = Concatenate(axis=2, name="boxes")([regressions, classifications])
     return outputs
 
 
-def create_prior_boxes(configuration_name='VOC'):
+def create_prior_boxes(configuration_name="VOC"):
     configuration = get_prior_box_configuration(configuration_name)
-    image_size = configuration['image_size']
-    feature_map_sizes = configuration['feature_map_sizes']
-    min_sizes = configuration['min_sizes']
-    max_sizes = configuration['max_sizes']
-    steps = configuration['steps']
-    model_aspect_ratios = configuration['aspect_ratios']
+    image_size = configuration["image_size"]
+    feature_map_sizes = configuration["feature_map_sizes"]
+    min_sizes = configuration["min_sizes"]
+    max_sizes = configuration["max_sizes"]
+    steps = configuration["steps"]
+    model_aspect_ratios = configuration["aspect_ratios"]
     mean = []
     for feature_map_arg, feature_map_size in enumerate(feature_map_sizes):
         step = steps[feature_map_arg]
@@ -89,37 +96,46 @@ def create_prior_boxes(configuration_name='VOC'):
             s_k_prime = np.sqrt(s_k * (max_size / image_size))
             mean = mean + [center_x, center_y, s_k_prime, s_k_prime]
             for aspect_ratio in aspect_ratios:
-                mean = mean + [center_x, center_y, s_k * np.sqrt(aspect_ratio),
-                               s_k / np.sqrt(aspect_ratio)]
-                mean = mean + [center_x, center_y, s_k / np.sqrt(aspect_ratio),
-                               s_k * np.sqrt(aspect_ratio)]
+                mean = mean + [
+                    center_x,
+                    center_y,
+                    s_k * np.sqrt(aspect_ratio),
+                    s_k / np.sqrt(aspect_ratio),
+                ]
+                mean = mean + [
+                    center_x,
+                    center_y,
+                    s_k / np.sqrt(aspect_ratio),
+                    s_k * np.sqrt(aspect_ratio),
+                ]
 
     output = np.asarray(mean).reshape((-1, 4))
     # output = np.clip(output, 0, 1)
     return output
 
 
-def get_prior_box_configuration(configuration_name='VOC'):
-    if configuration_name in {'VOC', 'FAT'}:
+def get_prior_box_configuration(configuration_name="VOC"):
+    if configuration_name in {"VOC", "FAT"}:
         configuration = {
-            'feature_map_sizes': [38, 19, 10, 5, 3, 1],
-            'image_size': 300,
-            'steps': [8, 16, 32, 64, 100, 300],
-            'min_sizes': [30, 60, 111, 162, 213, 264],
-            'max_sizes': [60, 111, 162, 213, 264, 315],
-            'aspect_ratios': [[2], [2, 3], [2, 3], [2, 3], [2], [2]],
-            'variance': [0.1, 0.2]}
+            "feature_map_sizes": [38, 19, 10, 5, 3, 1],
+            "image_size": 300,
+            "steps": [8, 16, 32, 64, 100, 300],
+            "min_sizes": [30, 60, 111, 162, 213, 264],
+            "max_sizes": [60, 111, 162, 213, 264, 315],
+            "aspect_ratios": [[2], [2, 3], [2, 3], [2, 3], [2], [2]],
+            "variance": [0.1, 0.2],
+        }
 
-    elif configuration_name in {'COCO', 'YCBVideo'}:
+    elif configuration_name in {"COCO", "YCBVideo"}:
         configuration = {
-            'feature_map_sizes': [64, 32, 16, 8, 4, 2, 1],
-            'image_size': 512,
-            'steps': [8, 16, 32, 64, 128, 256, 512],
-            'min_sizes': [21, 51, 133, 215, 297, 379, 461],
-            'max_sizes': [51, 133, 215, 297, 379, 461, 542],
-            'aspect_ratios': [[2], [2, 3], [2, 3],
-                              [2, 3], [2, 3], [2], [2]],
-            'variance': [0.1, 0.2]}
+            "feature_map_sizes": [64, 32, 16, 8, 4, 2, 1],
+            "image_size": 512,
+            "steps": [8, 16, 32, 64, 128, 256, 512],
+            "min_sizes": [21, 51, 133, 215, 297, 379, 461],
+            "max_sizes": [51, 133, 215, 297, 379, 461, 542],
+            "aspect_ratios": [[2], [2, 3], [2, 3], [2, 3], [2, 3], [2], [2]],
+            "variance": [0.1, 0.2],
+        }
     else:
-        raise ValueError('Invalid configuration name:', configuration_name)
+        raise ValueError("Invalid configuration name:", configuration_name)
     return configuration

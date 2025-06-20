@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 from keras.layers import Input
 from keras.models import Model
-from paz.models.layers import Conv2DNormalization
+import paz
 
 
 @pytest.fixture
-def common_params():
+def parameters():
     return {
         "input_shape": (4, 4, 3),
         "scale": 2.0,
@@ -14,23 +14,23 @@ def common_params():
     }
 
 
-def test_initialization(common_params):
+def test_initialization(parameters):
     """Test if the layer initializes correctly."""
-    scale = common_params["scale"]
-    axis = common_params["axis"]
-    layer = Conv2DNormalization(scale=scale, axis=axis)
+    scale = parameters["scale"]
+    axis = parameters["axis"]
+    layer = paz.layers.Conv2DNormalization(scale=scale, axis=axis)
     assert layer.scale == scale
     assert layer.axis == axis
 
 
-def test_normalization_and_scaling(common_params):
+def test_normalization_and_scaling(parameters):
     """Test if the layer normalizes and scales the input correctly."""
-    input_shape = common_params["input_shape"]
-    scale = common_params["scale"]
-    axis = common_params["axis"]
+    input_shape = parameters["input_shape"]
+    scale = parameters["scale"]
+    axis = parameters["axis"]
 
     input_tensor = Input(shape=input_shape)
-    layer = Conv2DNormalization(scale=scale, axis=axis)
+    layer = paz.layers.Conv2DNormalization(scale=scale, axis=axis)
     model = Model(inputs=input_tensor, outputs=layer(input_tensor))
 
     # Create a random input tensor
@@ -50,14 +50,14 @@ def test_normalization_and_scaling(common_params):
     np.testing.assert_allclose(output, expected_output, atol=1e-6)
 
 
-def test_output_shape(common_params):
+def test_output_shape(parameters):
     """Test if the output shape matches the input shape."""
-    input_shape = common_params["input_shape"]
-    scale = common_params["scale"]
-    axis = common_params["axis"]
+    input_shape = parameters["input_shape"]
+    scale = parameters["scale"]
+    axis = parameters["axis"]
 
     input_tensor = Input(shape=input_shape)
-    layer = Conv2DNormalization(scale=scale, axis=axis)
+    layer = paz.layers.Conv2DNormalization(scale=scale, axis=axis)
     model = Model(inputs=input_tensor, outputs=layer(input_tensor))
 
     # Create a random input tensor

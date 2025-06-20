@@ -2,8 +2,8 @@ import math
 import numpy as np
 from keras.activations import swish
 from keras.layers import BatchNormalization, Conv2D, DepthwiseConv2D
-from ....models.layers import ReduceMean, Sigmoid, Add
 import keras
+from paz.layers import ReduceMean, Sigmoid, Add
 
 
 def EFFICIENTNET(
@@ -183,10 +183,10 @@ def MBconv_blocks(
     excite_ratios = [excite_ratio] * len(outro_filters)
     survival_rates = [survival_rate] * len(outro_filters)
 
-    iterator_1 = list(
-        zip(intro_filters, outro_filters, strides, repeats))
+    iterator_1 = list(zip(intro_filters, outro_filters, strides, repeats))
     iterator_2 = list(
-        zip(kernel_sizes, survival_rates, expand_ratios, excite_ratios))
+        zip(kernel_sizes, survival_rates, expand_ratios, excite_ratios)
+    )
     feature_maps = []
     for feature_arg, args in enumerate(zip(iterator_1, iterator_2)):
         repeat_args, block_args = args
@@ -268,7 +268,7 @@ def MB_block(
     x = MB_squeeze_excitation(x, intro_filters, expand_ratio, excite_ratio)
     x = MB_output(
         x, inputs, intro_filters, outro_filters, strides, survival_rate
-        )
+    )
     return x
 
 

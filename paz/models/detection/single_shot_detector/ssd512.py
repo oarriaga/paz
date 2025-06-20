@@ -1,36 +1,38 @@
-from keras.layers import Input, Conv2D, MaxPooling2D, ZeroPadding2D
+from keras.layers import Conv2D
+from keras.layers import Input
+from keras.layers import MaxPooling2D
+from keras.layers import ZeroPadding2D
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import get_file
-
-from ..layers import Conv2DNormalization
+from paz.layers import Conv2DNormalization
 from .utils import create_multibox_head
-
+from .utils import create_prior_boxes
 
 WEIGHT_PATH = (
-    "https://github.com/oarriaga/altamira-data/releases/download/v0.2/"
+    "https://github.com/oarriaga/altamira-data/" "releases/download/v0.1/"
 )
 
 
-def SSD300(
-    num_classes=21,
-    base_weights="VOC",
-    head_weights="VOC",
-    input_shape=(300, 300, 3),
-    num_priors=[4, 6, 6, 6, 4, 4],
+def SSD512(
+    num_classes=81,
+    base_weights="COCO",
+    head_weights="COCO",
+    input_shape=(512, 512, 3),
+    num_priors=[4, 6, 6, 6, 6, 4, 4],
     l2_loss=0.0005,
     return_base=False,
     trainable_base=True,
 ):
-    """Single-shot-multibox detector for 300x300x3 BGR input images.
+    """Single-shot-multibox detector for 512x512x3 BGR input images.
     # Arguments
         num_classes: Integer. Specifies the number of class labels.
         base_weights: String or None. If string should be a valid dataset name.
-            Current valid datasets include `VOC` `FAT` and `VGG`.
+            Current valid datasets include `COCO` and `OIV6Hand`.
         head_weights: String or None. If string should be a valid dataset name.
-            Current valid datasets include `VOC` and `FAT`.
+            Current valid datasets include `COCO`, `YCBVideo` and `OIV6Hand`.
         input_shape: List of integers. Input shape to the model including only
-            spatial and channel resolution e.g. (300, 300, 3).
+            spatial and channel resolution e.g. (512, 512, 3).
         num_priors: List of integers. Number of default box shapes
             used in each detection layer.
         l2_loss: Float. l2 regularization loss for convolutional layers.
@@ -44,31 +46,28 @@ def SSD300(
             Detector](https://arxiv.org/abs/1512.02325)
     """
 
-    if base_weights not in ["VGG", "VOC", "FAT", None]:
+    if base_weights not in ["COCO", "OIV6Hand", None]:
         raise ValueError("Invalid `base_weights`:", base_weights)
 
-    if head_weights not in ["VOC", "FAT", None]:
-        raise ValueError("Invalid `base_weights`:", base_weights)
+    if head_weights not in ["COCO", "YCBVideo", "OIV6Hand", None]:
+        raise ValueError("Invalid `head_weights`:", head_weights)
 
-    if (base_weights == "VGG") and (head_weights is not None):
+    if (base_weights == "OIV6Hand") and (head_weights != "OIV6Hand"):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
 
     if (base_weights is None) and (head_weights is not None):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
 
-    if (base_weights == "FAT") and (head_weights == "VOC"):
+    if (base_weights == "COCO") and (head_weights is None):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
 
-    if (base_weights == "VOC") and (head_weights == "FAT"):
-        raise NotImplementedError("Invalid `base_weights` with head_weights")
-
-    if (base_weights == "FAT") and (head_weights is None):
-        raise NotImplementedError("Invalid `base_weights` with head_weights")
-
-    if (num_classes != 21) and (head_weights == "VOC"):
+    if (num_classes != 81) and (head_weights == "COCO"):
         raise ValueError("Invalid `head_weights` with given `num_classes`")
 
-    if (num_classes != 22) and (head_weights == "FAT"):
+    if (num_classes != 22) and (head_weights == "YCBVideo"):
+        raise ValueError("Invalid `head_weights` with given `num_classes`")
+
+    if (num_classes != 2) and (head_weights == "OIV6Hand"):
         raise ValueError("Invalid `head_weights` with given `num_classes`")
 
     image = Input(shape=input_shape, name="image")
@@ -230,7 +229,6 @@ def SSD300(
         trainable=trainable_base,
         name="fc6",
     )(pool5z)
-
     fc7 = Conv2D(
         1024,
         (1, 1),
@@ -242,6 +240,7 @@ def SSD300(
     )(fc6)
 
     # EXTRA layers in SSD -----------------------------------------------------
+
     # Block 6 -----------------------------------------------------------------
     conv6_1 = Conv2D(
         256,
@@ -249,6 +248,7 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv6_1",
     )(fc7)
     conv6_1z = ZeroPadding2D()(conv6_1)
     conv6_2 = Conv2D(
@@ -268,6 +268,7 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv7_1",
     )(conv6_2)
     conv7_1z = ZeroPadding2D()(conv7_1)
     conv7_2 = Conv2D(
@@ -287,16 +288,18 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv8_1",
     )(conv7_2)
+    conv8_1z = ZeroPadding2D()(conv8_1)
     conv8_2 = Conv2D(
         256,
         (3, 3),
         padding="valid",
-        strides=(1, 1),
+        strides=(2, 2),
         activation="relu",
         name="branch_5",
         kernel_regularizer=l2(l2_loss),
-    )(conv8_1)
+    )(conv8_1z)
 
     # Block 9 -----------------------------------------------------------------
     conv9_1 = Conv2D(
@@ -305,41 +308,71 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv9_1",
     )(conv8_2)
+    conv9_1z = ZeroPadding2D()(conv9_1)
     conv9_2 = Conv2D(
         256,
         (3, 3),
         padding="valid",
-        strides=(1, 1),
+        strides=(2, 2),
         activation="relu",
         name="branch_6",
         kernel_regularizer=l2(l2_loss),
-    )(conv9_1)
+    )(conv9_1z)
 
-    branch_tensors = [conv4_3_norm, fc7, conv6_2, conv7_2, conv8_2, conv9_2]
+    # Block 10 ----------------------------------------------------------------
+    conv10_1 = Conv2D(
+        128,
+        (1, 1),
+        padding="same",
+        activation="relu",
+        kernel_regularizer=l2(l2_loss),
+        name="conv10_1",
+    )(conv9_2)
+    conv10_1z = ZeroPadding2D()(conv10_1)
+    conv10_2 = Conv2D(
+        256,
+        (4, 4),
+        padding="valid",
+        strides=(1, 1),
+        activation="relu",
+        name="branch_7",
+        kernel_regularizer=l2(l2_loss),
+    )(conv10_1z)
+
+    branch_tensors = [
+        conv4_3_norm,
+        fc7,
+        conv6_2,
+        conv7_2,
+        conv8_2,
+        conv9_2,
+        conv10_2,
+    ]
     if return_base:
-        outputs = branch_tensors
+        output_tensor = branch_tensors
+
     else:
-        outputs = create_multibox_head(
+        output_tensor = create_multibox_head(
             branch_tensors, num_classes, num_priors, l2_loss
         )
 
-    model = Model(inputs=image, outputs=outputs, name="SSD300")
+    model = Model(inputs=image, outputs=output_tensor, name="SSD512")
 
     if (base_weights is not None) or (head_weights is not None):
-        model_filename = ["SSD300", str(base_weights), str(head_weights)]
-        model_filename = "_".join(["-".join(model_filename), "weights.hdf5"])
+        model_filename = [str(base_weights), str(head_weights)]
+        model_filename = "_".join(
+            ["SSD512", "-".join(model_filename), "weights.hdf5"]
+        )
         weights_path = get_file(
             model_filename,
             WEIGHT_PATH + model_filename,
             cache_subdir="paz/models",
         )
         print("Loading %s model weights" % weights_path)
-        finetunning_model_names = [
-            "SSD300-VGG-None_weights.hdf5",
-            "SSD300-VOC-None_weights.hdf5",
-        ]
-        by_name = True if model_filename in finetunning_model_names else False
-        model.load_weights(weights_path, by_name=by_name)
-    # model.prior_boxes = create_prior_boxes("VOC")
+
+        model.load_weights(weights_path)
+
+    model.prior_boxes = create_prior_boxes("COCO")
     return model
