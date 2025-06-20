@@ -37,7 +37,7 @@ def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
 
 def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     model = paz.models.detection.SSD300(21, "VOC", "VOC", (300, 300, 3))
-    boxes = paz.models.detection.utils.create_prior_boxes("VOC")
+    boxes = paz.models.detection.single_shot_detector.build_prior_boxes("VOC")
     names = paz.datasets.labels("VOC")
     label_colors = paz.draw.lincolor(len(names))
     if draw is None:
@@ -50,7 +50,7 @@ def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     model = paz.models.detection.SSD512(81, "COCO", "COCO", (512, 512, 3))
-    boxes = paz.models.detection.utils.create_prior_boxes("COCO")
+    boxes = paz.models.detection.single_shot_detector.build_prior_boxes("VOC")
     names = paz.datasets.labels("COCO")
     label_colors = paz.draw.lincolor(len(names))
     if draw is None:
