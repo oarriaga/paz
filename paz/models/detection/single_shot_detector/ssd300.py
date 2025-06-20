@@ -2,10 +2,9 @@ from keras.layers import Input, Conv2D, MaxPooling2D, ZeroPadding2D
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import get_file
+from paz.layers import Conv2DNormalization
 
-from ..layers import Conv2DNormalization
 from .utils import create_multibox_head
-from .utils import create_prior_boxes
 
 
 WEIGHT_PATH = (
@@ -342,5 +341,4 @@ def SSD300(
         ]
         by_name = True if model_filename in finetunning_model_names else False
         model.load_weights(weights_path, by_name=by_name)
-    # model.prior_boxes = create_prior_boxes("VOC")
     return model

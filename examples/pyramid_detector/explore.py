@@ -204,9 +204,9 @@ def batch(
     )
 
     positive_boxes = paz.boxes.square(positive_boxes)
-    positive_boxes = paz.boxes.resize(positive_boxes, *box_size)
+    positive_boxes = paz.boxes.set_size(positive_boxes, *box_size)
     negative_boxes = paz.boxes.square(negative_boxes)
-    negative_boxes = paz.boxes.resize(negative_boxes, *box_size)
+    negative_boxes = paz.boxes.set_size(negative_boxes, *box_size)
     positive_images = paz.boxes.crop_with_pad(
         positive_boxes, image, *box_size, pad
     )

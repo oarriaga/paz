@@ -367,15 +367,6 @@ def crop_with_pad(boxes, image, box_H, box_W, pad_value=0):
     return jp.where(valid_mask, gathered_image, pad_value)
 
 
-def resize(boxes, H_box, W_box):
-    x_center, y_center = paz.boxes.compute_centers(boxes)
-    x_min = x_center - (W_box / 2.0)
-    y_min = y_center - (H_box / 2.0)
-    x_max = x_center + (W_box / 2.0)
-    y_max = y_center + (H_box / 2.0)
-    return merge(x_min, y_min, x_max, y_max).astype(dtype=boxes.dtype)
-
-
 def match(boxes, prior_boxes, IOU_threshold=0.5):
     """Matches each prior box with a ground truth box (box from `boxes`).
     It then selects which matched box will be considered positive e.g. iou > .5
@@ -444,3 +435,33 @@ def remove_invalid(boxes, value=-1):
     is_valid_row_mask = jp.logical_not(is_invalid_row_mask)
     valid_boxes = boxes[is_valid_row_mask]
     return valid_boxes
+
+
+def resize(boxes, H, W, H_new, W_new):
+    """Resize boxes to a new image size."""
+    x_min, y_min, x_max, y_max = split(boxes)
+    x_min = (x_min / W) * W_new
+    y_min = (y_min / H) * H_new
+    x_max = (x_max / W) * W_new
+    y_max = (y_max / H) * H_new
+    return merge(x_min, y_min, x_max, y_max).astype(dtype=boxes.dtype)
+
+
+def resize_with_aspect_ratio(boxes, H_now, W_now, H, W):
+    scale_factor = min(H / H_now, W / W_now)
+    x_min, y_min, x_max, y_max = paz.boxes.split(boxes)
+    x_min_new = x_min * scale_factor
+    y_min_new = y_min * scale_factor
+    x_max_new = x_max * scale_factor
+    y_max_new = y_max * scale_factor
+    boxes = paz.boxes.merge(x_min_new, y_min_new, x_max_new, y_max_new)
+    return boxes.astype(boxes.dtype)
+
+
+def set_size(boxes, H_box, W_box):
+    x_center, y_center = paz.boxes.compute_centers(boxes)
+    x_min = x_center - (W_box / 2.0)
+    y_min = y_center - (H_box / 2.0)
+    x_max = x_center + (W_box / 2.0)
+    y_max = y_center + (H_box / 2.0)
+    return merge(x_min, y_min, x_max, y_max).astype(dtype=boxes.dtype)

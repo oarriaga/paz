@@ -1,5 +1,5 @@
-from .ssd300 import SSD300
-from .ssd512 import SSD512
+from .single_shot_detector.ssd300 import SSD300
+from .single_shot_detector.ssd512 import SSD512
 from .efficientdet import EFFICIENTDETD0
 from .efficientdet import EFFICIENTDETD1
 from .efficientdet import EFFICIENTDETD2

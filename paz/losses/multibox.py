@@ -16,13 +16,13 @@ def cross_entropy(y_true, y_pred):
 
 
 def calculate_masks(y_true):
-    negative_mask = y_true[:, :, 4]
+    negative_mask = y_true[:, :, 4]  # for all batches and prior boxes
     positive_mask = 1.0 - negative_mask
     return positive_mask, negative_mask
 
 
-def localization(y_true, y_pred, alpha=1.0):
-    """Computes localization loss in a batch.
+def regression(y_true, y_pred, alpha=1.0):
+    """Computes regression loss in a batch.
 
     # Arguments
         y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
@@ -31,15 +31,20 @@ def localization(y_true, y_pred, alpha=1.0):
             with predicted inferences.
 
     # Returns
-        Tensor with localization loss per sample in batch.
+        Tensor with regression loss per sample in batch.
     """
     batch_size = ops.cast(ops.shape(y_pred)[0], "float32")
     local_loss = smooth_l1(y_true[:, :, :4], y_pred[:, :, :4])
     positive_mask, negative_mask = calculate_masks(y_true)
     positive_local_losses = local_loss * positive_mask
     positive_local_loss = ops.sum(positive_local_losses, axis=-1)
+
     num_positives = ops.sum(ops.cast(positive_mask, "float32"))
     num_positives = ops.maximum(1.0, num_positives)
+
+    # num_positives_per_sample = ops.sum(positive_mask, axis=-1)
+    # num_positives = ops.maximum(1.0, num_positives_per_sample)
+
     return (alpha * positive_local_loss * batch_size) / num_positives
 
 
@@ -105,7 +110,7 @@ def negative_classification(y_true, y_pred, neg_pos_ratio=3, max_negatives=300):
 
 
 def call(y_true, y_pred):
-    """Computes localization and classification losses in a batch.
+    """Computes regression and classification losses in a batch.
 
     # Arguments
         y_true: Tensor of shape '[batch_size, num_boxes, 4 + num_classes]'
@@ -116,7 +121,7 @@ def call(y_true, y_pred):
     # Returns
         Tensor with loss per sample in batch.
     """
-    localization_loss = localization(y_true, y_pred)
+    localization_loss = regression(y_true, y_pred)
     positive_loss = positive_classification(y_true, y_pred)
     negative_loss = negative_classification(y_true, y_pred)
     return localization_loss + positive_loss + negative_loss

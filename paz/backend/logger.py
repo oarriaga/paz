@@ -5,6 +5,9 @@ import glob
 from pathlib import Path
 from datetime import datetime
 
+import keras
+import jax
+
 
 def make_timestamped_directory(root="experiments", label=None):
     """Builds and makes directory with time date and user given label.
@@ -38,18 +41,16 @@ def make_directory(directory_name):
     return directory_name
 
 
-def write_dictionary(dictionary, directory, filename, indent=4):
-    """Writes dictionary as json file.
+def write_dictionary(dictionary, filepath, indent=4):
+    """Writes a dictionary to a JSON file.
 
-    # Arguments:
-        dictionary: Dictionary to write in memory.
-        directory: String. Directory name.
-        filename: String. Filename.
-        indent: Number of spaces between keys.
+    Args:
+        dictionary: The dictionary to write to the file.
+        filepath: The full path to the output file.
+        indent: The number of spaces to use for indentation in the JSON file.
     """
-    fielpath = os.path.join(directory, filename)
-    filedata = open(fielpath, "w")
-    json.dump(dictionary, filedata, indent=indent)
+    with open(filepath, "w") as filedata:
+        json.dump(dictionary, filedata, indent=indent)
 
 
 def write_weights(model, directory, name=None):
@@ -80,6 +81,35 @@ def load_latest(wildcard, filename):
     filedata = open(filepath, "r")
     parameters = json.load(filedata)
     return parameters
+
+
+# def setup(args, model=None, label=None, root="experiments"):
+#     labels = [item for item in [model, label] if item]
+#     root = make_timestamped_directory(root, "_".join(labels))
+#     write_dictionary(args.__dict__, root, "parameters.json")
+#     keras.utils.set_random_seed(args.seed)
+#     key = jax.random.PRNGKey(args.seed)
+#     return root, key
+
+
+def warn(message):
+    print("\033[93m" + message + "\033[0m")
+
+
+def setup(args):
+    defaults = {"model": None, "label": None, "root": "log", "seed": 777}
+    for key, value in defaults.items():
+        if not hasattr(args, key):
+            setattr(args, key, value)
+            warn(f"`{key}` not found in `args`. Using default `{value}`.")
+
+    keras.utils.set_random_seed(args.seed)
+    labels = [item for item in [args.model, args.label] if item]
+    experiment_name = "_".join(labels)
+    experiment_root = make_timestamped_directory(args.root, experiment_name)
+    filepath = os.path.join(experiment_root, "parameters.json")
+    write_dictionary(args.__dict__, filepath)
+    return experiment_root, jax.random.PRNGKey(args.seed)
 
 
 def load_csv(filepath):

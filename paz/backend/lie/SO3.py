@@ -131,10 +131,26 @@ def case_1_log(SO3):
     return omega
 
 
-def case_2_log(SO3):
+def old_case_2_log(SO3):
     arccos_input = (jp.trace(SO3) - 1) / 2.0
     theta = jp.arccos(arccos_input - 1e-6)
     return (theta / (2.0 * jp.sin(theta) + 1e-6)) * (SO3 - SO3.T)
+
+
+def case_2_log(SO3):
+    arccos_input = jp.clip((jp.trace(SO3) - 1) / 2.0, -1.0, 1.0)
+    theta = jp.arccos(arccos_input - 1e-6)
+    return (theta / (2.0 * jp.sin(theta) + 1e-6)) * (SO3 - SO3.T)
+
+
+# def case_2_log(SO3):
+#     arccos_input = jp.clip((jp.trace(SO3) - 1) / 2.0, -1.0, 1.0)
+#     theta = jp.arccos(arccos_input)
+#     small_angle = theta < 1e-8
+#     scalar_factor = jp.where(
+#         small_angle, 0.5 + theta**2 / 12.0, theta / (2.0 * jp.sin(theta))
+#     )
+#     return scalar_factor * (SO3 - SO3.T)
 
 
 def log(SO3_matrix):

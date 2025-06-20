@@ -256,6 +256,12 @@ def log(SE3_matrix):
     return jp.where(choose_0, case_log_0(SE3_matrix), case_log_1(SE3_matrix))
 
 
+def Log(SE3_matrix):
+    se3_matrix = log(SE3_matrix)
+    se3_vector = vee(se3_matrix)
+    return se3_vector
+
+
 def vee(se3_matrix):
     """Transforms se3 4x4 matrix to it's vector representation"""
     so3_matrix, se3_position = split(se3_matrix)

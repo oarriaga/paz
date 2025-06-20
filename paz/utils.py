@@ -49,3 +49,20 @@ def time(function, jax_fn=True, name=None):
         return value
 
     return jax_wrapper if jax_fn else wrapper
+
+
+def on_device(device):
+    """Decorator factory to specify default device for JAX operations."""
+
+    def decorator(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            with jax.default_device(device):
+                print(f"--- INFO: Entering context for device: {device} ---")
+                result = function(*args, **kwargs)
+                print(f"--- INFO: Exiting context for device: {device} ---")
+            return result
+
+        return wrapper
+
+    return decorator

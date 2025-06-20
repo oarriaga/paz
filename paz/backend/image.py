@@ -72,10 +72,12 @@ def write(filepath, image):
 
 
 def resize(image, size, method="linear", antialias=False):
+    # TODO change to split size into H, W
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
+    # TODO change to split size into H, W
     data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)
 
     def resize(image, shape):
@@ -91,14 +93,6 @@ def scale(image, scale_factor, method="linear", antialias=False):
     H_scaled = int(H * scale_factor)
     W_scaled = int(W * scale_factor)
     return resize(image, (H_scaled, W_scaled), method, antialias)
-
-
-def resize_with_aspect_ratio(
-    image, largest_side, method="linear", antialias=False
-):
-    H, W = get_size(image)
-    min_scale = min(largest_side / H, largest_side / W)
-    return scale(image, min_scale, method, antialias)
 
 
 def scale_with_aspect_ratio(image, scale, method="linear", antialias=False):
@@ -468,9 +462,42 @@ def comput_aspect_ratio(image):
     return W / H
 
 
-def resize_pad_top_left(image, largest_side, method="linear", antialias=False):
-    # TODO refactor to be able to resize any shape (H, W)
-    """Resizes and crops image by returning the scales to original"""
-    image = resize_with_aspect_ratio(image, largest_side, method, antialias)
-    H, W = get_size(image)
-    return pad(image, 0, largest_side - H, 0, largest_side - W, "constant", 0)
+# def resize_with_aspect_ratio(
+#     image, largest_side, method="linear", antialias=False
+# ):
+#     H, W = get_size(image)
+#     min_scale = min(largest_side / H, largest_side / W)
+#     return scale(image, min_scale, method, antialias)
+
+
+# def resize_pad_top_left(image, largest_side, method="linear", antialias=False):
+#     # TODO refactor to be able to resize any shape (H, W)
+#     """Resizes and crops image by returning the scales to original"""
+#     image = resize_with_aspect_ratio(image, largest_side, method, antialias)
+#     H, W = get_size(image)
+#     return pad(image, 0, largest_side - H, 0, largest_side - W, "constant", 0)
+
+
+# def resize_with_aspect_ratio(image, H, W, method="linear", antialias=False):
+#     """Resize to fit within a given size while maintaining aspect ratio."""
+#     H_now, W_now = get_size(image)
+#     # Calculate the scaling factor to fit the image within the target dimensions
+#     scale_factor = min(H / H_now, W / W_now)
+#     return scale(image, scale_factor, method, antialias)
+
+
+def resize_with_aspect_ratio(image, H, W, method="linear", antialias=False):
+    """Resizes to fit within a target size and pads it to that exact size."""
+
+    def _resize_with_aspect_ratio(image, H, W, method, antialias):
+        """Resize to fit within a given size while maintaining aspect ratio."""
+        H_now, W_now = get_size(image)
+        # Calculate scaling factor to fit the image within the target dimensions
+        scale_factor = min(H / H_now, W / W_now)
+        return scale(image, scale_factor, method, antialias)
+
+    resized_image = _resize_with_aspect_ratio(image, H, W, method, antialias)
+    H_now, W_now = get_size(resized_image)
+    pad_bottom = H - H_now
+    pad_right = W - W_now
+    return pad(resized_image, 0, pad_bottom, 0, pad_right, "constant", 0)

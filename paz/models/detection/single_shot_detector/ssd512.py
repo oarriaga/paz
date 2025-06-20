@@ -5,10 +5,8 @@ from keras.layers import ZeroPadding2D
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import get_file
-
-from ..layers import Conv2DNormalization
+from paz.layers import Conv2DNormalization
 from .utils import create_multibox_head
-from .utils import create_prior_boxes
 
 WEIGHT_PATH = (
     "https://github.com/oarriaga/altamira-data/" "releases/download/v0.1/"
@@ -375,5 +373,4 @@ def SSD512(
 
         model.load_weights(weights_path)
 
-    model.prior_boxes = create_prior_boxes("COCO")
     return model

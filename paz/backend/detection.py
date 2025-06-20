@@ -10,6 +10,29 @@ def random_flip_left_right(image, boxes):
     return image, boxes
 
 
+def resize_boxes_with_aspect_ratio(image, boxes, H, W):
+    boxes = jp.array(boxes)  # input could be a list
+    H_now, W_now = paz.image.get_size(image)
+    boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
+    return boxes
+
+
+def resize_with_aspect_ratio(image, boxes, H, W):
+    H_now, W_now = paz.image.get_size(image)
+    boxes = jp.array(boxes)  # input could be a list
+    boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
+    image = paz.image.resize_with_aspect_ratio(image, H, W)
+    return image, boxes
+
+
+def resize(image, boxes, H, W):
+    H_now, W_now = paz.image.get_size(image)
+    boxes = jp.array(boxes)  # input could be a list
+    image = paz.image.resize_opencv(image, (H, W))
+    boxes = paz.boxes.resize(boxes, H_now, W_now, H, W)
+    return image, boxes
+
+
 def split(detections):
     boxes = detections[:, :4]
     class_args = detections[:, 4:]
@@ -34,10 +57,8 @@ def merge(boxes, class_args):
 
 def to_one_hot(boxes_and_class_args, num_classes):
     boxes, class_args = split(boxes_and_class_args)
-    print("class args", class_args.shape)
     class_args = jp.squeeze(class_args, axis=-1)
     classes = paz.classes.to_one_hot(class_args, num_classes)
-    print("class args", classes.shape)
     return merge(boxes, classes)
 
 
@@ -196,6 +217,17 @@ def normalize(detections, H, W):
     boxes, scores = split(detections)
     boxes = paz.boxes.normalize(boxes, H, W)
     return merge(boxes, scores)
+
+
+def build_negative_mask(detections, value=-1):
+    is_invalid_row_mask = jp.any(detections < 0.0, axis=1)
+    return is_invalid_row_mask
+
+
+def build_positive_mask(detections, value=-1):
+    is_invalid_row_mask = jp.any(detections < 0.0, axis=1)
+    is_valid_row_mask = jp.logical_not(is_invalid_row_mask)
+    return is_valid_row_mask
 
 
 def remove_invalid(detections, value=-1):
@@ -417,7 +449,7 @@ def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     return jax.vmap(paz.partial(apply_NMS, detections))(jp.arange(num_classes))
 
 
-def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
+def original_match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
     """Matches each prior box with a ground truth box
     (box from `boxes_with_class_arg`). It then selects which matched box will be
     considered positive e.g. iou > .5 and returns for each prior box a ground
@@ -441,13 +473,34 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
             argument.
     """
 
-    def mark_best_match(per_prior_best_IOU, per_box_best_prior_arg):
+    # def mark_best_match(per_prior_best_IOU, per_box_best_prior_arg):
+    #     # The prior boxes that are the best match for each box are marked.
+    #     # They are marked by setting an IOU larger (2) than the maxium (1).
+    #     # the best prior box match of box_0 is per_box_best_prior_arg[0]
+    #     # the best prior box match of box_1 is per_box_best_prior_arg[1]
+    #     # ...
+    #     return per_prior_best_IOU.at[per_box_best_prior_arg].set(2.0)
+    positive_mask = build_positive_mask(boxes_with_class_arg)
+
+    def mark_best_match(per_prior_best_IOU, per_box_best_prior):
         # The prior boxes that are the best match for each box are marked.
         # They are marked by setting an IOU larger (2) than the maxium (1).
         # the best prior box match of box_0 is per_box_best_prior_arg[0]
         # the best prior box match of box_1 is per_box_best_prior_arg[1]
         # ...
-        return per_prior_best_IOU.at[per_box_best_prior_arg].set(2.0)
+        def mark_match(per_prior_best_IOU, box_arg):
+            prior_arg = per_box_best_prior[box_arg]
+            is_box_valid = positive_mask[box_arg]
+            # it_overlaps = best_IOU >= IOU_threshold
+            best_IOU = per_prior_best_IOU[prior_arg]
+            best_IOU = jp.where(is_box_valid, 2.0, best_IOU)
+            return per_prior_best_IOU.at[prior_arg].set(best_IOU), None
+
+        box_args = jp.arange(len(boxes_with_class_arg))
+        per_prior_best_IOU, _ = jax.lax.scan(
+            mark_match, per_prior_best_IOU, box_args
+        )
+        return per_prior_best_IOU
 
     def select_for_each_prior_box_a_box(boxes, per_prior_best_box):
         # Each prior box is assigned a ground truth box.
@@ -458,6 +511,10 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
         # Ensures that every ground truth box is matched with at least one prior
         # box. Specifically, the prior box with which it has the highest IoU.
         for box_arg, prior_arg in enumerate(per_box_best_prior):
+            is_valid_box = positive_mask[box_arg]
+            box_arg = jp.where(
+                is_valid_box, box_arg, per_prior_best_box[prior_arg]
+            )
             per_prior_best_box = per_prior_best_box.at[prior_arg].set(box_arg)
         return per_prior_best_box
 
@@ -469,7 +526,6 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
 
     prior_boxes = paz.boxes.to_corner_form(prior_boxes)
     IOUs = paz.boxes.compute_IOUs(boxes_with_class_arg, prior_boxes)
-    print("ious", IOUs)
     per_box_best_prior = jp.argmax(IOUs, axis=1)  # (boxes,)
     per_prior_best_box = jp.argmax(IOUs, axis=0)  # (prior_boxes,)
     per_prior_best_IOU = jp.max(IOUs, axis=0)  # (prior_boxes,)
@@ -481,3 +537,128 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
     )
     selected_boxes = label_negative_boxes(selected_boxes, per_prior_best_IOU)
     return selected_boxes
+
+
+def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
+    prior_boxes = paz.boxes.to_corner_form(prior_boxes)
+    IOUs = paz.boxes.compute_IOUs(boxes_with_class_arg, prior_boxes)
+    per_prior_best_box = jp.argmax(IOUs, axis=0)
+    per_prior_best_IOU = jp.max(IOUs, axis=0)
+    per_box_best_prior = jp.argmax(IOUs, axis=1)
+    is_valid_box_mask = boxes_with_class_arg[:, 0] >= 0.0
+
+    def body(iou_carry, box_arg):
+        # Get the prior that best matches the current ground truth box `box_arg`
+        prior_to_update = per_box_best_prior[box_arg]
+        is_box_valid = is_valid_box_mask[box_arg]
+        # Conditionally create the new IOU value. If the box is valid, the
+        # new IOU is 2.0. If not, the new IOU is the original IOU (a no-op).
+        new_iou = jp.where(is_box_valid, 2.0, iou_carry[prior_to_update])
+        # Update the IOU array with the new value. Because this is a scan,
+        # if multiple boxes map to the same prior, the last one wins.
+        return iou_carry.at[prior_to_update].set(new_iou), None
+
+    # Run the scan, starting with the original `per_prior_best_IOU`
+    box_args = jp.arange(len(boxes_with_class_arg))
+    per_prior_best_IOU, _ = jax.lax.scan(body, per_prior_best_IOU, box_args)
+
+    selected_boxes = boxes_with_class_arg[per_prior_best_box]
+    # 4. Label negative boxes: set the class of any box with an IOU below
+    #    the threshold to 0 (background), using our final updated IOU array.
+    is_low_IOU_match = per_prior_best_IOU < IOU_threshold
+    class_args = selected_boxes[:, 4]
+    class_args = jp.where(is_low_IOU_match, 0.0, class_args)
+    selected_boxes = selected_boxes.at[:, 4].set(class_args)
+    return selected_boxes
+
+
+def match_np(boxes, prior_boxes, IOU_threshold=0.5):
+    """Matches each prior box with a ground truth box (box from `boxes`).
+    It then selects which matched box will be considered positive e.g. iou > .5
+    and returns for each prior box a ground truth box that is either positive
+    (with a class argument different than 0) or negative.
+
+    # Arguments
+        boxes: Numpy array of shape `(num_ground_truh_boxes, 4 + 1)`,
+            where the first the first four coordinates correspond to
+            box coordinates and the last coordinates is the class
+            argument. This boxes should be the ground truth boxes.
+        prior_boxes: Numpy array of shape `(num_prior_boxes, 4)`.
+            where the four coordinates are in center form coordinates.
+        iou_threshold: Float between [0, 1]. Intersection over union
+            used to determine which box is considered a positive box.
+
+    # Returns
+        numpy array of shape `(num_prior_boxes, 4 + 1)`.
+            where the first the first four coordinates correspond to point
+            form box coordinates and the last coordinates is the class
+            argument.
+    """
+
+    def compute_IOUs(boxes_A, boxes_B):
+        """Computes intersection over union (IOU) between `boxes_A` and `boxes_B`.
+
+        For each box (rows `boxes_A`) it computes the IOU to all `boxes_B`.
+
+        # Arguments
+            boxes_A: Numpy array with shape `(num_boxes_A, 4)` in corner form.
+            boxes_B: Numpy array with shape `(num_boxes_B, 4)` in corner form.
+
+        # Returns
+            Numpy array of shape `(num_boxes_A, num_boxes_B)`.
+        """
+        xy_min = np.maximum(boxes_A[:, None, 0:2], boxes_B[:, 0:2])
+        xy_max = np.minimum(boxes_A[:, None, 2:4], boxes_B[:, 2:4])
+        intersection = np.maximum(0.0, xy_max - xy_min)
+        intersection_area = intersection[:, :, 0] * intersection[:, :, 1]
+        areas_A = (boxes_A[:, 2] - boxes_A[:, 0]) * (
+            boxes_A[:, 3] - boxes_A[:, 1]
+        )
+        areas_B = (boxes_B[:, 2] - boxes_B[:, 0]) * (
+            boxes_B[:, 3] - boxes_B[:, 1]
+        )
+        # broadcasting for outer sum i.e. a sum of all possible combinations
+        union_area = (areas_A[:, np.newaxis] + areas_B) - intersection_area
+        union_area = np.maximum(union_area, 1e-8)
+        return np.clip(intersection_area / union_area, 0.0, 1.0)
+
+    def split(boxes, keepdims=True, axis=1):
+        """Split boxes into x_min, y_min, x_max, y_max components."""
+        coordinates = np.split(boxes, 4, axis=axis)
+        if not keepdims:
+            coordinates = tuple(
+                np.squeeze(column, axis=-1) for column in coordinates
+            )
+
+        return coordinates
+
+    def to_corner_form(boxes):
+        """Convert bounding boxes from center to corner form.
+
+        # Arguments:
+            Boxes: Array of boxes in center format ``[center_x, center_y, W, H]``.
+
+        # Returns:
+            Boxes in corner format ``[x_min, y_min, x_max, y_max]``.
+        """
+        center_x, center_y, W, H = split(boxes)
+        x_min = center_x - (W / 2.0)
+        x_max = center_x + (W / 2.0)
+        y_min = center_y - (H / 2.0)
+        y_max = center_y + (H / 2.0)
+        return np.concatenate([x_min, y_min, x_max, y_max], axis=1)
+
+    ious = compute_IOUs(boxes, to_corner_form(np.float32(prior_boxes)))
+    per_prior_which_box_iou = np.max(ious, axis=0)
+    per_prior_which_box_arg = np.argmax(ious, 0)
+
+    #  overwriting per_prior_which_box_arg if they are the best prior box
+    per_box_which_prior_arg = np.argmax(ious, 1)
+    per_prior_which_box_iou[per_box_which_prior_arg] = 2
+    for box_arg in range(len(per_box_which_prior_arg)):
+        best_prior_box_arg = per_box_which_prior_arg[box_arg]
+        per_prior_which_box_arg[best_prior_box_arg] = box_arg
+
+    matches = boxes[per_prior_which_box_arg]
+    matches[per_prior_which_box_iou < IOU_threshold, 4] = 0
+    return matches

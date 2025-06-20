@@ -32,3 +32,7 @@ def pad_data(class_args, size, value=-1):
 def to_one_hot(class_args, num_classes):
     """Transform from class index to one-hot encoded vector."""
     return jax.nn.one_hot(class_args, num_classes)
+
+
+def join(list_of_class_args):
+    return jp.concatenate(list_of_class_args, axis=0)
