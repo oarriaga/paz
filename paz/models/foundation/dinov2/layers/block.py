@@ -183,7 +183,6 @@ def drop_add_residual_stochastic_depth_list(
 
     return outputs
 
-
 class Block(keras.Layer):
     def __init__(
         self,
@@ -204,7 +203,7 @@ class Block(keras.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.norm1 = norm_layer()
+        self.norm1 = norm_layer(axis=-1, name="norm1")
         self.attn = attn_class(
             dim,
             num_heads=num_heads,
@@ -212,11 +211,16 @@ class Block(keras.Layer):
             projection_bias=proj_bias,
             attention_drop_rate=attn_drop,
             projection_drop_rate=drop,
+            name="attn",
         )
-        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else keras.layers.Identity()
-        self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else keras.layers.Identity()
+        self.ls1 = (
+            LayerScale(dim, init_values=init_values, name="ls1") if init_values else keras.layers.Identity()
+        )
+        self.drop_path1 = (
+            DropPath(drop_path, name="drop_path1") if drop_path > 0.0 else keras.layers.Identity()
+        )
 
-        self.norm2 = norm_layer()
+        self.norm2 = norm_layer(axis=-1, name="norm2")
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = ffn_layer(
             in_features=dim,
@@ -225,27 +229,34 @@ class Block(keras.Layer):
             drop=drop,
             bias=ffn_bias,
         )
-        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else keras.layers.Identity()
-        self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else keras.layers.Identity()
+        self.ls2 = (
+            LayerScale(dim, init_values=init_values, name="ls2") if init_values else keras.layers.Identity()
+        )
+        self.drop_path2 = (
+            DropPath(drop_path, name="drop_path2") if drop_path > 0.0 else keras.layers.Identity()
+        )
 
         self.sample_drop_ratio = drop_path
 
     def call(self, x, training=None):
-        # Attention Block
-        shortcut1 = x
-        x_norm = self.norm1(x)
-        x_attn = self.attn(x_norm, training=training)
-        x_attn = self.ls1(x_attn)
-        x_attn = self.drop_path1(x_attn, training=training)
-        x = shortcut1 + x_attn
+        def attn_residual_func(tensor):
+            tensor = self.norm1(tensor)
+            tensor = self.attn(tensor, training=training)
+            tensor = self.ls1(tensor, training=training)
+            return tensor
 
-        # MLP Block
-        shortcut2 = x
-        x_norm = self.norm2(x)
-        x_mlp = self.mlp(x_norm, training=training)
-        x_mlp = self.ls2(x_mlp)
-        x_mlp = self.drop_path2(x_mlp, training=training)
-        x = shortcut2 + x_mlp
+        def ffn_residual_func(tensor):
+            tensor = self.norm2(tensor)
+            tensor = self.mlp(tensor, training=training)
+            tensor = self.ls2(tensor, training=training)
+            return tensor
+
+        if training and self.sample_drop_ratio > 0.0:
+            x = x + self.drop_path1(attn_residual_func(x), training=training)
+            x = x + self.drop_path2(ffn_residual_func(x), training=training)
+        else:
+            x = x + attn_residual_func(x)
+            x = x + ffn_residual_func(x)
 
         return x
 

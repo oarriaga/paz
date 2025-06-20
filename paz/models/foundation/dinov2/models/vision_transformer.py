@@ -87,7 +87,7 @@ class DinoVisionTransformer(Model):
         self.patch_embed = embed_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim
         )
-
+        self.init_values = init_values
         num_patches = self.patch_embed.num_patches
         self.cls_token = self.add_weight(
             name="cls_token", shape=(1, 1, embed_dim), initializer=initializers.RandomNormal(stddev=1e-6)
@@ -156,7 +156,6 @@ class DinoVisionTransformer(Model):
         self.mask_token = self.add_weight(
             name="mask_token", shape=(1, embed_dim), initializer=initializers.Zeros()
         )
-
 
     def interpolate_pos_encoding(self, x, w, h):
         previous_dtype = x.dtype
@@ -319,11 +318,10 @@ class DinoVisionTransformer(Model):
                 "ffn_bias": True,
                 "proj_bias": True,
                 "drop_path_rate": 0.0,
-                "init_values": None,
+                "init_values": self.init_values,
                 "num_register_tokens": self.num_register_tokens,
                 "interpolate_antialias": self.interpolate_antialias,
                 "interpolate_offset": self.interpolate_offset,
-               
             }
         )
         return config
