@@ -73,7 +73,7 @@ def create_multibox_head(
     return outputs
 
 
-def create_prior_boxes(configuration_name="VOC"):
+def build_prior_boxes(configuration_name="VOC"):
     configuration = get_prior_box_configuration(configuration_name)
     image_size = configuration["image_size"]
     feature_map_sizes = configuration["feature_map_sizes"]
