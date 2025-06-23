@@ -1,3 +1,4 @@
+from keras.saving import register_keras_serializable
 from keras import ops
 
 
@@ -21,6 +22,7 @@ def calculate_masks(y_true):
     return positive_mask, negative_mask
 
 
+@register_keras_serializable("multibox_loss", "regression")
 def regression(y_true, y_pred, alpha=1.0):
     """Computes regression loss in a batch.
 
@@ -41,13 +43,10 @@ def regression(y_true, y_pred, alpha=1.0):
 
     num_positives = ops.sum(ops.cast(positive_mask, "float32"))
     num_positives = ops.maximum(1.0, num_positives)
-
-    # num_positives_per_sample = ops.sum(positive_mask, axis=-1)
-    # num_positives = ops.maximum(1.0, num_positives_per_sample)
-
     return (alpha * positive_local_loss * batch_size) / num_positives
 
 
+@register_keras_serializable("multibox_loss", "positive_classification")
 def positive_classification(y_true, y_pred):
     """Computes classification loss of boxes that contain an object.
 
@@ -70,6 +69,7 @@ def positive_classification(y_true, y_pred):
     return (positive_class_loss * batch_size) / num_positives
 
 
+@register_keras_serializable("multibox_loss", "negative_classification")
 def negative_classification(y_true, y_pred, neg_pos_ratio=3, max_negatives=300):
     """Computes classification loss of boxes that don't contain an object.
 
@@ -109,6 +109,7 @@ def negative_classification(y_true, y_pred, neg_pos_ratio=3, max_negatives=300):
     return (negative_class_loss * batch_size) / total_num_positives
 
 
+@register_keras_serializable("multibox_loss", "call")
 def call(y_true, y_pred):
     """Computes regression and classification losses in a batch.
 

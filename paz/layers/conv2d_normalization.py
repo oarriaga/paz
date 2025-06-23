@@ -2,7 +2,7 @@ from keras import ops
 import keras
 
 
-@keras.saving.register_keras_serializable()
+@keras.saving.register_keras_serializable("layers")
 class Conv2DNormalization(keras.layers.Layer):
     """Normalization layer as described in ParseNet paper.
 
@@ -19,9 +19,9 @@ class Conv2DNormalization(keras.layers.Layer):
     """
 
     def __init__(self, scale, axis=3, **kwargs):
+        super().__init__(**kwargs)
         self.scale = scale
         self.axis = axis
-        super(Conv2DNormalization, self).__init__(**kwargs)
 
     def build(self, input_shape):
         self.gamma = self.add_weight(
@@ -34,7 +34,7 @@ class Conv2DNormalization(keras.layers.Layer):
     def output_shape(self, input_shape):
         return input_shape
 
-    def call(self, x, mask=None):
+    def call(self, x):
         norm = ops.norm(x, ord=2, axis=self.axis, keepdims=True)
         return self.gamma * (x / norm)
 
