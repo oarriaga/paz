@@ -74,7 +74,7 @@ def preprocess_batch(
     detections = pad(boxes, class_args, max_num_boxes, -1)
 
     preprocess_images = jax.jit(
-        jax.vmap(paz.lock(preprocess_image, mean, augment), (0, 0))
+        jax.vmap(paz.lock(preprocess_image, jp.array(mean), augment), (0, 0))
     )
     images = preprocess_images(jax.random.split(key, len(images)), images)
     args = prior_boxes, num_classes, match_IOU, variances, H, W
