@@ -1,3 +1,5 @@
+import os
+import shutil
 import functools
 import time as pytime
 import jax
@@ -66,3 +68,9 @@ def on_device(device):
         return wrapper
 
     return decorator
+
+
+def extract(filepath):
+    output_path = os.path.dirname(filepath)
+    shutil.unpack_archive(filepath, output_path)
+    return output_path
