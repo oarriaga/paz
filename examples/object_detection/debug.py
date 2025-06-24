@@ -16,11 +16,12 @@ from pipeline2 import preprocess_batch
 
 
 key = random.PRNGKey(0)
-images, boxes, class_args = paz.datasets.load("VOC2007", "trainval")
+# images, detections = paz.datasets.load("VOC2007", "trainval")
+images, detections = paz.datasets.deepfish.load("train")
 batch_size = 16
 match_IOU = 0.5
 mean = jp.array(paz.image.BGR_IMAGENET_MEAN)
-prior_boxes = paz.models.detection.utils.create_prior_boxes("VOC")
+prior_boxes = paz.models.detection.single_shot_detector.build_prior_boxes("VOC")
 variances = [0.1, 0.1, 0.2, 0.2]
 batch_arg = 123
 num_classes = 20
@@ -31,14 +32,12 @@ lower_arg = batch_arg * batch_size
 upper_arg = min(lower_arg + batch_size, len(images))
 
 batch_images = images[lower_arg:upper_arg]
-batch_boxes = boxes[lower_arg:upper_arg]
-batch_class_args = class_args[lower_arg:upper_arg]
+batch_labels = detections[lower_arg:upper_arg]
 
 x_true, y_true = preprocess_batch(
     key,
     batch_images,
-    batch_boxes,
-    batch_class_args,
+    batch_labels,
     H,
     W,
     prior_boxes,
