@@ -4,17 +4,16 @@ import paz
 import jax
 
 
-def pad(boxes, class_args, pad_size, pad_value):
-
-    def pad_sample(boxes, class_args):
-        boxes = jp.array(boxes, dtype=jp.float32)
-        class_args = jp.array(class_args, dtype=jp.float32).reshape(-1, 1)
-        detections = paz.detection.merge(boxes, class_args)
-        detections = paz.detection.pad(detections, pad_size, "constant", -1)
-        # detections = paz.detection.pad(detections, pad_size, "edge")
-        return detections
-
-    return jp.array([pad_sample(*sample) for sample in zip(boxes, class_args)])
+def resize_and_pad(images, detections, H, W, pad_size):
+    resized_images, resized_labels = [], []
+    for sample in zip(images, detections):
+        sample = [jp.array(x) for x in sample]
+        sample_image, sample_label = paz.detection.resize(*sample, H, W)
+        sample_label = jp.array(sample_label, dtype=jp.float32)
+        sample_label = paz.detection.pad(sample_label, pad_size, "constant", -1)
+        resized_images.append(sample_image)
+        resized_labels.append(sample_label)
+    return jp.array(resized_images), jp.array(resized_labels)
 
 
 def add_background_class(detections):
@@ -35,16 +34,6 @@ def preprocess_detections(
     return jp.array(detections)
 
 
-def resize(images, boxes, H, W):
-    resized_images, resized_boxes = [], []
-    for sample in zip(images, boxes):
-        # sample = paz.detection.resize_with_aspect_ratio(*sample, H, W)
-        sample = paz.detection.resize(*sample, H, W)
-        resized_images.append(sample[0])
-        resized_boxes.append(sample[1])
-    return jp.array(resized_images), resized_boxes
-
-
 def preprocess_image(key, image, mean, augment=True):
     if augment:
         image = paz.image.augment_color(key, image)
@@ -56,8 +45,7 @@ def preprocess_image(key, image, mean, augment=True):
 def preprocess_batch(
     key,
     images,
-    boxes,
-    class_args,
+    detections,
     H,
     W,
     prior_boxes,
@@ -70,8 +58,7 @@ def preprocess_batch(
 ):
 
     images = [paz.image.load(image) for image in images]
-    images, boxes = resize(images, boxes, H, W)
-    detections = pad(boxes, class_args, max_num_boxes, -1)
+    images, detections = resize_and_pad(images, detections, H, W, max_num_boxes)
 
     preprocess_images = jax.jit(
         jax.vmap(paz.lock(preprocess_image, jp.array(mean), augment), (0, 0))
