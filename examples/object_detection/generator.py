@@ -9,26 +9,17 @@ def compute_num_batches(samples, batch_size):
 
 class Generator(PyDataset):
     def __init__(
-        self,
-        key,
-        images,
-        boxes,
-        class_args,
-        batch_size,
-        pipeline,
-        workers,
-        max_queue_size,
+        self, key, images, labels, batch_size, pipeline, workers, max_queue_size
     ):
         super().__init__(
             workers=workers,
             use_multiprocessing=False,
             max_queue_size=max_queue_size,
         )
-        if len(images) != len(boxes) != len(class_args):
-            raise ValueError("Images, boxes and classes must have same length.")
+        if len(images) != len(labels):
+            raise ValueError("Images and labels must have same length.")
         self.images = images
-        self.boxes = boxes
-        self.class_args = class_args
+        self.labels = labels
         self.pipeline = pipeline
         self.batch_size = batch_size
         num_batches = compute_num_batches(self.images, batch_size)
@@ -41,9 +32,8 @@ class Generator(PyDataset):
         lower_arg = batch_arg * self.batch_size
         upper_arg = min(lower_arg + self.batch_size, len(self.images))
         images = self.images[lower_arg:upper_arg]
-        boxes = self.boxes[lower_arg:upper_arg]
-        class_args = self.class_args[lower_arg:upper_arg]
-        return self.pipeline(self.keys[batch_arg], images, boxes, class_args)
+        labels = self.labels[lower_arg:upper_arg]
+        return self.pipeline(self.keys[batch_arg], images, labels)
 
     def on_epoch_end(self):
         # repopulates keys for the next epoch
