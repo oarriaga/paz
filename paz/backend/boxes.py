@@ -242,9 +242,19 @@ def append_class(boxes, class_arg):
     return jp.hstack((boxes, class_args))
 
 
-def sample(key, H, W, box_size, num_boxes=15):
+# def sample(key, H, W, box_size, num_boxes=15):
+#     # TODO refactor box_size to be a separate arguments
+#     keys = jax.random.split(key)
+#     H_box, W_box = box_size
+#     x_min = jax.random.randint(keys[0], (num_boxes, 1), 0, W - W_box + 1)
+#     y_min = jax.random.randint(keys[1], (num_boxes, 1), 0, H - H_box + 1)
+#     x_max = x_min + W_box
+#     y_max = y_min + H_box
+#     return merge(x_min, y_min, x_max, y_max)
+
+
+def sample(key, H, W, H_box, W_box, num_boxes=15):
     keys = jax.random.split(key)
-    H_box, W_box = box_size
     x_min = jax.random.randint(keys[0], (num_boxes, 1), 0, W - W_box + 1)
     y_min = jax.random.randint(keys[1], (num_boxes, 1), 0, H - H_box + 1)
     x_max = x_min + W_box
