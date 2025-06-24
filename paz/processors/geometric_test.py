@@ -55,9 +55,7 @@ def test_no_crop_when_probability_is_zero(sample_data):
     cropped_image, new_boxes = processor.call(image, boxes)
 
     # Ensure output is identical to input
-    assert jp.array_equal(
-        image, cropped_image
-    ), "Image should remain unchanged"
+    assert jp.array_equal(image, cropped_image), "Image should remain unchanged"
     assert jp.array_equal(
         boxes, new_boxes
     ), "Bounding boxes should remain unchanged"
