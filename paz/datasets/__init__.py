@@ -1,4 +1,4 @@
-from paz.datasets import voc, shapes, fer, coco, fewsol, deepfish
+from paz.datasets import voc, shapes, fer, coco, fewsol, deepfish, omniglot
 
 
 def load(name, *args, **kwargs):
