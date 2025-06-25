@@ -64,6 +64,11 @@ def compute_sizes(boxes, keepdims=True):
     return H, W
 
 
+def compute_aspect_ratios(boxes, keepdims=True):
+    H, W = compute_sizes(boxes, keepdims)
+    return H / W
+
+
 def compute_centers(boxes):
     """Compute center coordinates of boxes."""
     x_min, y_min, x_max, y_max = split(boxes)
@@ -126,6 +131,7 @@ def pad(image_boxes, size, value=-1):
 
 def from_selection(image, radius=5, color=(255, 0, 0), window_name="image"):
     """Manually select bounding boxes by double-clicking on an image."""
+    image = paz.to_numpy(image)
     points, boxes = [], []
 
     def order_xyxy(point_A, point_B):
@@ -242,24 +248,26 @@ def append_class(boxes, class_arg):
     return jp.hstack((boxes, class_args))
 
 
-# def sample(key, H, W, box_size, num_boxes=15):
-#     # TODO refactor box_size to be a separate arguments
-#     keys = jax.random.split(key)
-#     H_box, W_box = box_size
-#     x_min = jax.random.randint(keys[0], (num_boxes, 1), 0, W - W_box + 1)
-#     y_min = jax.random.randint(keys[1], (num_boxes, 1), 0, H - H_box + 1)
-#     x_max = x_min + W_box
-#     y_max = y_min + H_box
-#     return merge(x_min, y_min, x_max, y_max)
-
-
-def sample(key, H, W, H_box, W_box, num_boxes=15):
+def sample_with_shape(key, H, W, H_box, W_box, num_boxes=15):
     keys = jax.random.split(key)
     x_min = jax.random.randint(keys[0], (num_boxes, 1), 0, W - W_box + 1)
     y_min = jax.random.randint(keys[1], (num_boxes, 1), 0, H - H_box + 1)
     x_max = x_min + W_box
     y_max = y_min + H_box
     return merge(x_min, y_min, x_max, y_max)
+
+
+def sample(key, H, W, H_min_scale=0.3, W_min_scale=0.3, num_boxes=15):
+    H_crop_min = jp.clip(H_min_scale * H, 1, H)
+    W_crop_min = jp.clip(W_min_scale * W, 1, W)
+    keys = jax.random.split(key, 4)
+    Hcrop = jax.random.randint(keys[0], (num_boxes, 1), H_crop_min, H + 1)
+    Wcrop = jax.random.randint(keys[1], (num_boxes, 1), W_crop_min, W + 1)
+    y_min = jax.random.randint(keys[2], (num_boxes, 1), 0, H - Hcrop + 1)
+    x_min = jax.random.randint(keys[3], (num_boxes, 1), 0, W - Wcrop + 1)
+    x_max = x_min + Wcrop
+    y_max = y_min + Hcrop
+    return merge(x_min, y_min, x_max, y_max).astype(jp.int32)
 
 
 def sample_negatives(key, boxes, H, W, box_size, num_boxes, num_trials):
@@ -475,3 +483,13 @@ def set_size(boxes, H_box, W_box):
     x_max = x_center + (W_box / 2.0)
     y_max = y_center + (H_box / 2.0)
     return merge(x_min, y_min, x_max, y_max).astype(dtype=boxes.dtype)
+
+
+def fit_to_crop(boxes, crop_box):
+    x_min_crop, y_min_crop, x_max_crop, y_max_crop = crop_box
+    x_min, y_min, x_max, y_max = paz.boxes.split(boxes)
+    x_min = jp.maximum(x_min, x_min_crop)
+    y_min = jp.maximum(y_min, y_min_crop)
+    x_max = jp.minimum(x_max, x_max_crop)
+    y_max = jp.minimum(y_max, y_max_crop)
+    return paz.boxes.merge(x_min, y_min, x_max, y_max)
