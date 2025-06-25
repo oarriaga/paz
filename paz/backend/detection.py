@@ -664,3 +664,20 @@ def match_np(boxes, prior_boxes, IOU_threshold=0.5):
     matches = boxes[per_prior_which_box_arg]
     matches[per_prior_which_box_iou < IOU_threshold, 4] = 0
     return matches
+
+
+def fit_to_crop(detections, crop_box):
+    boxes, class_args = split(detections)
+    boxes = paz.boxes.fit_to_crop(boxes, crop_box)
+    return merge(boxes, class_args)
+
+
+def translate(detections, x_offset, y_offset):
+    """Translates the center of a bounding box (xywh format)."""
+    boxes, class_args = split(detections)
+    x_center, y_center, W, H = paz.boxes.split(paz.boxes.xyxy_to_xywh(boxes))
+    x_new_center = x_center + x_offset
+    y_new_center = y_center + y_offset
+    boxes = paz.boxes.merge(x_new_center, y_new_center, W, H)
+    boxes = paz.boxes.xywh_to_xyxy(boxes)
+    return merge(boxes, class_args)
