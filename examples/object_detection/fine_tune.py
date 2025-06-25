@@ -15,11 +15,12 @@ parser.add_argument("--model", default="SSD300", type=str)
 parser.add_argument("--root", default="experiments", type=str)
 parser.add_argument("--label", default=None)
 parser.add_argument("--trainable_base", default=False, type=bool)
+parser.add_argument("--model_path", default=None)
 parser.add_argument("--batch_size", default=32, type=int)
 parser.add_argument("--learning_rate", default=0.001, type=float)
 parser.add_argument("--momentum", default=0.9, type=float)
 parser.add_argument("--num_workers", default="max")
-parser.add_argument("--max_queue_size", default=10, type=float)
+parser.add_argument("--max_queue_size", default=75, type=float)
 parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
 parser.add_argument("--decay_rate", default=0.1, type=float)
 parser.add_argument("--max_num_epochs", default=240, type=int)
@@ -44,6 +45,10 @@ model = paz.models.SSD300(
     input_shape,
     trainable_base=args.trainable_base,
 )
+
+if args.model_path is not None:
+    model.load_weights(filepath=args.model_path)
+
 model.summary()
 
 metrics = {
