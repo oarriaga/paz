@@ -37,10 +37,10 @@ def SSDCustom(path, score_thresh=0.30, IOU_thresh=0.45, top_k=200, draw=None):
     )
 
 
-pipeline = SSDCustom("experiments/24-06-2025_11-16-56_SSD300/SSD300.keras")
+pipeline = SSDCustom("experiments/25-06-2025_07-45-12_SSD300/SSD300.keras")
 images, y_true = paz.datasets.deepfish.load("validation")
 for image_arg, image in enumerate(images):
-    y_pred, y_pred_image = pipeline(paz.image.load(image))
+    y_pred, y_pred_image = paz.time(pipeline)(paz.image.load(image))
     # paz.image.show(y_pred_image)
     paz.image.write(f"detections/y_pred_{image_arg}.jpg", y_pred_image)
 
