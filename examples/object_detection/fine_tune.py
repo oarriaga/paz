@@ -37,14 +37,29 @@ train_data = paz.datasets.deepfish.load("train")
 test_data = paz.datasets.deepfish.load("validation")
 num_classes = len(paz.datasets.deepfish.get_class_names())
 input_shape = (args.H, args.W, 3)
-prior_boxes = paz.models.detection.single_shot_detector.build_prior_boxes("VOC")
-model = paz.models.SSD300(
-    num_classes + 1,
-    "VOC",
-    None,
-    input_shape,
-    trainable_base=args.trainable_base,
-)
+if args.model == "SSD300":
+    prior_boxes = paz.models.detection.single_shot_detector.build_prior_boxes(
+        "VOC"
+    )
+    model = paz.models.SSD300(
+        num_classes + 1,
+        "VOC",
+        None,
+        input_shape,
+        trainable_base=args.trainable_base,
+    )
+elif args.model == "SSD512":
+    prior_boxes = paz.models.detection.single_shot_detector.build_prior_boxes(
+        "COCO"
+    )
+    model = paz.models.SSD512(
+        num_classes + 1,
+        "COCO",
+        None,
+        input_shape,
+        trainable_base=args.trainable_base,
+    )
+
 
 if args.model_path is not None:
     model.load_weights(filepath=args.model_path)
