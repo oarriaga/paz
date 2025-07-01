@@ -57,8 +57,8 @@ def SSD512(
     if (base_weights is None) and (head_weights is not None):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
 
-    if (base_weights == "COCO") and (head_weights is None):
-        raise NotImplementedError("Invalid `base_weights` with head_weights")
+    # if (base_weights == "COCO") and (head_weights is None):
+    #     raise NotImplementedError("Invalid `base_weights` with head_weights")
 
     if (num_classes != 81) and (head_weights == "COCO"):
         raise ValueError("Invalid `head_weights` with given `num_classes`")
@@ -358,8 +358,37 @@ def SSD512(
         )
 
     model = Model(inputs=image, outputs=output_tensor, name="SSD512")
+    if (base_weights == "COCO") and (head_weights is None):
+        base_model = SSD512(
+            base_weights="COCO",
+            head_weights="COCO",
+            trainable_base=trainable_base,
+        )
+        branch_names = [
+            "branch_1",
+            "branch_2",
+            "branch_3",
+            "branch_4",
+            "branch_5",
+            "branch_6",
+            "branch_7",
+        ]
+        branch_tensors = []
+        for branch_name in branch_names:
+            branch_layer = base_model.get_layer(branch_name)
+            branch_tensors.append(branch_layer.output)
 
-    if (base_weights is not None) or (head_weights is not None):
+        output_tensor = create_multibox_head(
+            branch_tensors, num_classes, num_priors, l2_loss
+        )
+        model_filename = [str(base_weights), str(head_weights)]
+        model_filename = "_".join(
+            ["SSD512", "-".join(model_filename), "weights.hdf5"]
+        )
+        model = Model(base_model.input, output_tensor, name="SSD512_COCO-None")
+        return model
+
+    elif (base_weights is not None) or (head_weights is not None):
         model_filename = [str(base_weights), str(head_weights)]
         model_filename = "_".join(
             ["SSD512", "-".join(model_filename), "weights.hdf5"]
@@ -369,8 +398,6 @@ def SSD512(
             WEIGHT_PATH + model_filename,
             cache_subdir="paz/models",
         )
-        print("Loading %s model weights" % weights_path)
-
         model.load_weights(weights_path)
 
     return model
