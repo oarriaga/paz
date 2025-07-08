@@ -44,18 +44,13 @@ def parse_box(box):
 def parse_XML(name_to_arg, XML_filename, with_difficult_boxes=True):
     tree = ElementTree.parse(XML_filename)
     image_name = tree.find("filename").text
-    boxes, class_args = [], []
+    detections = []
     for detection in tree.findall("object"):
         class_arg = name_to_arg[detection.find("name").text]
-        difficult = int(detection.find("difficult").text)
+        # difficult = int(detection.find("difficult").text)  # TODO
         box = parse_box(detection.find("bndbox"))
-        # TODO fix use of difficult boxes
-        # if not difficult:
-        #     boxes.append(box)
-        #     class_args.append(class_arg)
-        boxes.append(box)
-        class_args.append(class_arg)
-    return image_name, boxes, class_args
+        detections.append(box + [class_arg])
+    return image_name, detections
 
 
 def validate_inputs(name, split, task):
@@ -125,21 +120,20 @@ def load(name, split="trainval", task="detection"):
     masks_root = os.path.join(path, name, "SegmentationClass")
     class_names = get_class_names()
     parse = partial(parse_XML, paz.datasets.build_name_to_arg(class_names))
-    image_paths, masks_paths, boxes, class_args = [], [], [], []
+    image_paths, masks_paths, detections = [], [], []
     for label_path in get_label_paths(path, name, split, task):
-        image_name, image_boxes, image_class_args = parse(label_path)
-        if len(image_boxes) != 0:
+        image_name, image_detections = parse(label_path)
+        if len(image_detections) != 0:
             image_name = strip_extension(image_name)
             image_paths.append(os.path.join(image_root, image_name + ".jpg"))
             masks_paths.append(os.path.join(masks_root, image_name + ".png"))
-            boxes.append(image_boxes)
-            class_args.append(image_class_args)
+            detections.append(image_detections)
         else:
             print(f"Image {image_name} had not boxes.")
     if task == "segmentation":
-        dataset = (image_paths, boxes, class_args, masks_paths)
+        dataset = (image_paths, detections, masks_paths)
     else:
-        dataset = (image_paths, boxes, class_args)
+        dataset = (image_paths, detections)
     return dataset
 
 

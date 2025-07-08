@@ -67,8 +67,7 @@ def build_crop_region(key, width, height, orig_width, orig_height):
         array: Crop region array [x_start, y_start, x_end, y_end].
     """
     x_start = jax.random.randint(key, (), 0, orig_width - width, dtype=jp.int32)
-    y_start = jax.random.randint(key, (), 0, orig_height - height, dtype=jp.int32)
+    y_start = jax.random.randint(
+        key, (), 0, orig_height - height, dtype=jp.int32
+    )
     return jp.array([x_start, y_start, x_start + width, y_start + height])
-
-
-

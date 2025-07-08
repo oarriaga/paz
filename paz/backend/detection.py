@@ -4,33 +4,41 @@ import paz
 import jax
 
 
-def random_flip_left_right(image, boxes):
+def random_flip_left_right(image, detections):
+    boxes, class_args = split(detections)
     boxes = paz.boxes.flip_left_right(boxes, image.shape[1])
     image = paz.image.flip_left_right(image)
-    return image, boxes
+    detections = merge(boxes, class_args)
+    return image, detections
 
 
-def resize_boxes_with_aspect_ratio(image, boxes, H, W):
-    boxes = jp.array(boxes)  # input could be a list
+def resize_boxes_with_aspect_ratio(image, detections, H, W):
+    detections = jp.array(detections)  # input could be a list
+    boxes, class_args = split(detections)
     H_now, W_now = paz.image.get_size(image)
     boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
-    return boxes
+    detections = merge(boxes, class_args)
+    return detections
 
 
-def resize_with_aspect_ratio(image, boxes, H, W):
+def resize_with_aspect_ratio(image, detections, H, W):
     H_now, W_now = paz.image.get_size(image)
-    boxes = jp.array(boxes)  # input could be a list
+    # detections = jp.array(detections)  # input could be a list
+    boxes, class_args = split(detections)
     boxes = paz.boxes.resize_with_aspect_ratio(boxes, H_now, W_now, H, W)
     image = paz.image.resize_with_aspect_ratio(image, H, W)
-    return image, boxes
+    detections = merge(boxes, class_args)
+    return image, detections
 
 
-def resize(image, boxes, H, W):
+def resize(image, detections, H, W):
     H_now, W_now = paz.image.get_size(image)
-    boxes = jp.array(boxes)  # input could be a list
+    # detections = jp.array(detections)  # input could be a list
+    boxes, class_args = split(detections)
     image = paz.image.resize_opencv(image, (H, W))
     boxes = paz.boxes.resize(boxes, H_now, W_now, H, W)
-    return image, boxes
+    detections = merge(boxes, class_args)
+    return image, detections
 
 
 def split(detections):
@@ -60,12 +68,6 @@ def to_one_hot(boxes_and_class_args, num_classes):
     class_args = jp.squeeze(class_args, axis=-1)
     classes = paz.classes.to_one_hot(class_args, num_classes)
     return merge(boxes, classes)
-
-
-# def pad(detections, size, value=-1):
-#     detections = detections[:size]
-#     padding = ((0, size - len(detections)), (0, 0))
-#     return jp.pad(detections, padding, "constant", constant_values=value)
 
 
 def pad(detections, size, mode="constant", constant_value=-1):
@@ -662,3 +664,20 @@ def match_np(boxes, prior_boxes, IOU_threshold=0.5):
     matches = boxes[per_prior_which_box_arg]
     matches[per_prior_which_box_iou < IOU_threshold, 4] = 0
     return matches
+
+
+def fit_to_crop(detections, crop_box):
+    boxes, class_args = split(detections)
+    boxes = paz.boxes.fit_to_crop(boxes, crop_box)
+    return merge(boxes, class_args)
+
+
+def translate(detections, x_offset, y_offset):
+    """Translates the center of a bounding box (xywh format)."""
+    boxes, class_args = split(detections)
+    x_center, y_center, W, H = paz.boxes.split(paz.boxes.xyxy_to_xywh(boxes))
+    x_new_center = x_center + x_offset
+    y_new_center = y_center + y_offset
+    boxes = paz.boxes.merge(x_new_center, y_new_center, W, H)
+    boxes = paz.boxes.xywh_to_xyxy(boxes)
+    return merge(boxes, class_args)

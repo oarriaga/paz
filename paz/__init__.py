@@ -18,6 +18,7 @@ from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
 from paz.backend import points2D
 from paz.backend import algebra
+from paz.backend import scene
 from paz.backend.standard import (
     lock,
     partial,
@@ -36,4 +37,6 @@ from paz.utils import time
 from paz.abstract import tree
 from paz import callbacks
 from paz import layers
-from paz import plot
+
+# from paz import plot
+from paz.progress_bar import progress_bar
