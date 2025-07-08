@@ -19,41 +19,36 @@ class Attention(Layer):
         self.num_heads = num_heads
         self.qkv_bias = qkv_bias
         self.projection_bias = projection_bias
-        self.attention_drop_rate_val = attention_drop_rate
-        self.projection_drop_rate_val = projection_drop_rate
-        self.head_dim = self.dimension // self.num_heads
-        self.scale = self.head_dim**-0.5
+        self.attention_drop_rate = attention_drop_rate
+        self.projection_drop_rate = projection_drop_rate
+        self.head_dimension = self.dimension // self.num_heads
+        self.scale = self.head_dimension**-0.5
 
         initializer = keras.initializers.TruncatedNormal(stddev=0.02)
-        self.qkv = Dense(
-            self.dimension * 3, use_bias=self.qkv_bias, kernel_initializer=initializer, name="qkv"
-        )
-        self.proj = Dense(
-            self.dimension, use_bias=self.projection_bias, kernel_initializer=initializer, name="proj"
-        )
-        self.attention_drop = Dropout(self.attention_drop_rate_val)
-        self.projection_drop = Dropout(self.projection_drop_rate_val)
+        kwargs = {"kernel_initializer": initializer}
+        self.qkv = Dense(self.dimension * 3, use_bias=self.qkv_bias, name="qkv", **kwargs)
+        self.proj = Dense(self.dimension, use_bias=self.projection_bias, name="proj", **kwargs)
+        self.attention_drop = Dropout(self.attention_drop_rate)
+        self.projection_drop = Dropout(self.projection_drop_rate)
 
-    def build(self, input_shape):
-        super().build(input_shape)
+    def call(self, x, attention_bias=None, training=None):
+        batch_size, num_tokens, channels = ops.shape(x)
 
-    def call(self, x, attn_bias=None, training=None):
-        B, N, C = ops.shape(x)
         qkv = self.qkv(x)
-        qkv = ops.reshape(qkv, (B, N, 3, self.num_heads, self.head_dim))
+        qkv = ops.reshape(qkv, (batch_size, num_tokens, 3, self.num_heads, self.head_dimension))
         qkv = ops.transpose(qkv, axes=(2, 0, 3, 1, 4))
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        attn = ops.matmul(q, ops.transpose(k, axes=[0, 1, 3, 2])) * self.scale
+        attention = ops.matmul(q, ops.transpose(k, axes=[0, 1, 3, 2])) * self.scale
 
-        if attn_bias is not None:
-            attn += attn_bias
+        if attention_bias is not None:
+            attention = attention + attention_bias
 
-        attn = ops.softmax(attn, axis=-1)
-        attn = self.attention_drop(attn, training=training)
+        attention = ops.softmax(attention, axis=-1)
+        attention = self.attention_drop(attention, training=training)
 
-        x = ops.transpose((attn @ v), axes=(0, 2, 1, 3))
-        x = ops.reshape(x, (B, N, C))
+        x = ops.transpose((attention @ v), axes=(0, 2, 1, 3))
+        x = ops.reshape(x, (batch_size, num_tokens, channels))
 
         x = self.proj(x)
         x = self.projection_drop(x, training=training)
@@ -61,5 +56,5 @@ class Attention(Layer):
 
 
 class MemEffAttention(Attention):
-    def call(self, x, attn_bias=None, training=None):
-        return super().call(x, attn_bias=attn_bias, training=training)
+    def call(self, x, attention_bias=None, training=None):
+        return super().call(x, attention_bias=attention_bias, training=training)

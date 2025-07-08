@@ -34,7 +34,7 @@ MODEL_CONFIGS = [
 
 DEFAULT_INPUT_SIZE = 518
 SMALL_INPUT_SIZE = 224
-TOLERANCE = 1e-3
+TOLERANCE = 1e-5
 
 
 class TestFixtures:
@@ -259,9 +259,7 @@ class TestQuickVerification:
 
         mean_diff = np.mean(np.abs(pytorch_output - keras_output))
 
-        assert np.allclose(
-            pytorch_output, keras_output, atol=TOLERANCE
-        ), f"{model_config['variant']}: Outputs not close: mean_diff={mean_diff:.8f}"
+        assert mean_diff < TOLERANCE, f"{model_config['variant']}: Outputs not close: mean_diff={mean_diff:.8f}"
 
     def test_output_difference_metrics(self, pytorch_model, keras_model, test_input, model_config):
         """Test output difference metrics are within acceptable ranges."""
@@ -302,10 +300,9 @@ class TestLayerByLayerVerification:
             )
             return False, float("inf"), float("inf")
 
-        is_close = np.allclose(pytorch_tensor, keras_tensor, atol=TOLERANCE)
         mean_diff = np.mean(np.abs(pytorch_tensor - keras_tensor))
         max_diff = np.max(np.abs(pytorch_tensor - keras_tensor))
-
+        is_close = mean_diff < TOLERANCE
         return is_close, mean_diff, max_diff
 
     def get_patch_embed_layer_name(self, keras_model, variant: str) -> str:
@@ -622,10 +619,9 @@ class TestDeepVerification:
         if pytorch_tensor.shape != keras_tensor.shape:
             return False, float("inf"), float("inf")
 
-        is_close = np.allclose(pytorch_tensor, keras_tensor, atol=TOLERANCE)
         mean_diff = np.mean(np.abs(pytorch_tensor - keras_tensor))
         max_diff = np.max(np.abs(pytorch_tensor - keras_tensor))
-
+        is_close = mean_diff < TOLERANCE
         return is_close, mean_diff, max_diff
 
     def test_patch_embed_layer(self, pytorch_model, keras_model, test_input, model_config):
@@ -658,3 +654,7 @@ class TestDeepVerification:
         patch_embed_layer_name = self.get_patch_embed_layer_name(keras_model, variant)
 
         patch_embedded = keras_model.get_layer(patch_embed_layer_name)(keras_input)
+
+if __name__ == "__main__":
+    # Run pytest with specific arguments
+    pytest.main(["-v", "-x", __file__])
