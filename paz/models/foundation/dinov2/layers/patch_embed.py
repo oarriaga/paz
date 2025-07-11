@@ -15,8 +15,8 @@ class PatchEmbed(keras.layers.Layer):
     Args:
         img_size: Image size.
         patch_size: Patch token size.
-        in_chans: Number of input image channels.
-        embed_dim: Number of linear projection output channels.
+        input_channels: Number of input image channels.
+        embedding_dimension: Number of linear projection output channels.
         norm_layer: Normalization layer.
     """
 
@@ -24,8 +24,8 @@ class PatchEmbed(keras.layers.Layer):
         self,
         img_size=224,
         patch_size=16,
-        in_chans=3,
-        embed_dim=768,
+        input_channels=3,
+        embedding_dimension=768,
         norm_layer=None,
         flatten_embedding=True,
         **kwargs,
@@ -41,14 +41,14 @@ class PatchEmbed(keras.layers.Layer):
         self.patch_size = patch_HW
         self.patches_resolution = patch_grid_size
         self.num_patches = patch_grid_size[0] * patch_grid_size[1]
-        self.in_chans = in_chans
-        self.embed_dim = embed_dim
+        self.input_channels = input_channels
+        self.embedding_dimension = embedding_dimension
         self.flatten_embedding = flatten_embedding
 
         self.proj = keras.layers.Conv2D(
-            filters=embed_dim, kernel_size=patch_HW, strides=patch_HW, padding="valid", name="proj"
+            filters=embedding_dimension, kernel_size=patch_HW, strides=patch_HW, padding="valid", name="proj"
         )
-        self.norm = norm_layer(embed_dim) if norm_layer else keras.layers.Identity()
+        self.norm = norm_layer(embedding_dimension) if norm_layer else keras.layers.Identity()
 
     def call(self, x):
         batch_size = keras.ops.shape(x)[0]
@@ -68,18 +68,18 @@ class PatchEmbed(keras.layers.Layer):
         H_new = keras.ops.shape(x)[1]
         W_new = keras.ops.shape(x)[2]
 
-        x = keras.ops.reshape(x, (batch_size, H_new * W_new, self.embed_dim))
+        x = keras.ops.reshape(x, (batch_size, H_new * W_new, self.embedding_dimension))
 
         x = self.norm(x)
 
         if not self.flatten_embedding:
-            x = keras.ops.reshape(x, (batch_size, H_new, W_new, self.embed_dim))
+            x = keras.ops.reshape(x, (batch_size, H_new, W_new, self.embedding_dimension))
 
         return x
 
     def flops(self) -> float:
         Ho, Wo = self.patches_resolution
-        flops = Ho * Wo * self.embed_dim * self.in_chans * (self.patch_size[0] * self.patch_size[1])
+        flops = Ho * Wo * self.embedding_dimension * self.input_channels * (self.patch_size[0] * self.patch_size[1])
         if self.norm is not None:
-            flops += Ho * Wo * self.embed_dim
+            flops += Ho * Wo * self.embedding_dimension
         return flops

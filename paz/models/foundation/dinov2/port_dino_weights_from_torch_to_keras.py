@@ -35,22 +35,22 @@ def port_weights_from_state_dict(keras_model, state_dict):
     keras_model.cls_token.assign(state_dict["cls_token"].numpy())
     logging.info("✓ Ported cls_token.")
 
-    torch_pos_embed = state_dict["pos_embed"]
-    keras_pos_embed_shape = keras_model.pos_embed.shape
+    torch_positional_embedding = state_dict["pos_embed"]
+    keras_positional_embedding_shape = keras_model.positional_embedding.shape
 
-    if torch_pos_embed.shape != keras_pos_embed_shape:
+    if torch_positional_embedding.shape != keras_positional_embedding_shape:
         logging.info(
-            f"  - Resizing positional embedding from {list(torch_pos_embed.shape)} to {list(keras_pos_embed_shape)}..."
+            f"  - Resizing positional embedding from {list(torch_positional_embedding.shape)} to {list(keras_positional_embedding_shape)}..."
         )
-        torch_cls_pos = torch_pos_embed[:, :1, :]
-        torch_patch_pos = torch_pos_embed[:, 1:, :]
+        torch_cls_pos = torch_positional_embedding[:, :1, :]
+        torch_patch_pos = torch_positional_embedding[:, 1:, :]
         num_source_patches = torch_patch_pos.shape[1]
-        num_target_patches = keras_pos_embed_shape[1] - 1
+        num_target_patches = keras_positional_embedding_shape[1] - 1
         source_grid_size = int(np.sqrt(num_source_patches))
         target_grid_size = int(np.sqrt(num_target_patches))
-        embed_dim = keras_pos_embed_shape[2]
+        embedding_dimension = keras_positional_embedding_shape[2]
         torch_patch_pos_grid = torch_patch_pos.reshape(
-            1, source_grid_size, source_grid_size, embed_dim
+            1, source_grid_size, source_grid_size, embedding_dimension
         ).permute(0, 3, 1, 2)
         resized_patch_pos_grid = torch.nn.functional.interpolate(
             torch_patch_pos_grid,
@@ -58,24 +58,24 @@ def port_weights_from_state_dict(keras_model, state_dict):
             mode="bicubic",
             align_corners=False,
         )
-        resized_patch_pos = resized_patch_pos_grid.permute(0, 2, 3, 1).reshape(1, -1, embed_dim)
-        final_pos_embed = torch.cat([torch_cls_pos, resized_patch_pos], dim=1)
-        keras_model.pos_embed.assign(final_pos_embed.numpy())
+        resized_patch_pos = resized_patch_pos_grid.permute(0, 2, 3, 1).reshape(1, -1, embedding_dimension)
+        final_positional_embedding = torch.cat([torch_cls_pos, resized_patch_pos], dimension=1)
+        keras_model.positional_embedding.assign(final_positional_embedding.numpy())
     else:
-        keras_model.pos_embed.assign(torch_pos_embed.numpy())
-    logging.info("✓ Ported pos_embed.")
+        keras_model.positional_embedding.assign(torch_positional_embedding.numpy())
+    logging.info("✓ Ported positional_embedding.")
 
-    patch_embed_layer = None
+    patch_embedding_layer = None
     for layer in keras_model.layers:
         if isinstance(layer, PatchEmbed):
-            patch_embed_layer = layer
-            logging.info(f"Found PatchEmbed layer by its class: '{patch_embed_layer.name}'")
+            patch_embedding_layer = layer
+            logging.info(f"Found PatchEmbed layer by its class: '{patch_embedding_layer.name}'")
             break
 
-    if patch_embed_layer:
+    if patch_embedding_layer:
         pe_w = state_dict["patch_embed.proj.weight"].permute(2, 3, 1, 0).numpy()
         pe_b = state_dict["patch_embed.proj.bias"].numpy()
-        patch_embed_layer.proj.set_weights([pe_w, pe_b])
+        patch_embedding_layer.proj.set_weights([pe_w, pe_b])
         logging.info("✓ Ported patch_embed weights.")
     else:
         raise RuntimeError("Could not find the PatchEmbed layer in the Keras model.")
@@ -86,34 +86,34 @@ def port_weights_from_state_dict(keras_model, state_dict):
 
     for i in range(num_blocks):
         block = chunk_layer.blocks[i]
-        block.norm1.set_weights(
+        block.normalization1.set_weights(
             [state_dict[f"blocks.{i}.norm1.weight"].numpy(), state_dict[f"blocks.{i}.norm1.bias"].numpy()]
         )
-        block.norm2.set_weights(
+        block.normalization2.set_weights(
             [state_dict[f"blocks.{i}.norm2.weight"].numpy(), state_dict[f"blocks.{i}.norm2.bias"].numpy()]
         )
-        block.attn.qkv.set_weights(
+        block.attention.predict_query_key_value.set_weights(
             [
                 state_dict[f"blocks.{i}.attn.qkv.weight"].T.numpy(),
                 state_dict[f"blocks.{i}.attn.qkv.bias"].numpy(),
             ]
         )
-        block.attn.proj.set_weights(
+        block.attention.projection_layer.set_weights(
             [
                 state_dict[f"blocks.{i}.attn.proj.weight"].T.numpy(),
                 state_dict[f"blocks.{i}.attn.proj.bias"].numpy(),
             ]
         )
 
-        mlp_fc1_key = f"blocks.{i}.mlp.fc1.weight"
-        if mlp_fc1_key in state_dict:
-            block.mlp.fc1.set_weights(
+        mlp_fully_connected_layer_1_key = f"blocks.{i}.mlp.fc1.weight"
+        if mlp_fully_connected_layer_1_key in state_dict:
+            block.mlp.fully_connected_layer_1.set_weights(
                 [
                     state_dict[f"blocks.{i}.mlp.fc1.weight"].T.numpy(),
                     state_dict[f"blocks.{i}.mlp.fc1.bias"].numpy(),
                 ]
             )
-            block.mlp.fc2.set_weights(
+            block.mlp.fully_connected_layer_2.set_weights(
                 [
                     state_dict[f"blocks.{i}.mlp.fc2.weight"].T.numpy(),
                     state_dict[f"blocks.{i}.mlp.fc2.bias"].numpy(),
@@ -135,19 +135,20 @@ def port_weights_from_state_dict(keras_model, state_dict):
                     "Neither standard MLP nor SwiGLU keys were found."
                 )
         # LayerScale parameters
-        ls1_key = f"blocks.{i}.ls1.gamma"
-        ls2_key = f"blocks.{i}.ls2.gamma"
-        if ls1_key in state_dict and hasattr(block, "ls1"):
-            block.ls1.gamma.assign(state_dict[ls1_key].numpy())
-        if ls2_key in state_dict and hasattr(block, "ls2"):
-            block.ls2.gamma.assign(state_dict[ls2_key].numpy())
+        layer_scale_1_key = f"blocks.{i}.ls1.gamma"
+        layer_scale_2_key = f"blocks.{i}.ls2.gamma"
+        if layer_scale_1_key in state_dict and hasattr(block, "layer_scale_1"):
+            block.layer_scale_1.gamma.assign(state_dict[layer_scale_1_key].numpy())
+        if layer_scale_2_key in state_dict and hasattr(block, "layer_scale_2"):
+
+            block.layer_scale_2.gamma.assign(state_dict[layer_scale_2_key].numpy())
 
     logging.info("✓ Ported all transformer blocks.")
 
     # --- 5. Port final Layer Normalization ---
-    final_norm_layer = keras_model.get_layer("norm")
-    if final_norm_layer:
-        final_norm_layer.set_weights([state_dict["norm.weight"].numpy(), state_dict["norm.bias"].numpy()])
+    final_normalization_layer = keras_model.get_layer("norm")
+    if final_normalization_layer:
+        final_normalization_layer.set_weights([state_dict["norm.weight"].numpy(), state_dict["norm.bias"].numpy()])
         logging.info("✓ Ported final LayerNormalization.")
 
     logging.info("\n--- Weight porting complete! ---")

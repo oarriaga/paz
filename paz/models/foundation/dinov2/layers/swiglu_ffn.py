@@ -5,28 +5,28 @@ from keras import layers, ops
 class SwiGLUFFN(keras.layers.Layer):
     def __init__(
         self,
-        in_features,
+        input_features,
         hidden_features=None,
-        out_features=None,
+        output_features=None,
         bias=True,
-        act_layer=None,
+        activation_layer=None,
         drop=0.0,
         **kwargs
     ):
         super().__init__(**kwargs)
 
-        self.in_features = in_features
+        self.input_features = input_features
         self.hidden_features = hidden_features
-        self.out_features = out_features
+        self.output_features = output_features
         self.bias = bias
 
-        self.effective_out_features = out_features if out_features is not None else in_features
-        self.effective_hidden_features = hidden_features if hidden_features is not None else in_features
+        self.effective_output_features = output_features if output_features is not None else input_features
+        self.effective_hidden_features = hidden_features if hidden_features is not None else input_features
 
         self.w12 = keras.layers.Dense(units=2 * self.effective_hidden_features, use_bias=bias, name="w12")
-        self.w3 = keras.layers.Dense(units=self.effective_out_features, use_bias=bias, name="w3")
+        self.w3 = keras.layers.Dense(units=self.effective_output_features, use_bias=bias, name="w3")
 
-        self.act = act_layer if act_layer is not None else keras.layers.Activation("silu")
+        self.activation_layer = activation_layer if activation_layer is not None else keras.layers.Activation("silu")
 
     def call(self, x, training=None):
         x12 = self.w12(x)
@@ -38,9 +38,9 @@ class SwiGLUFFN(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_features": self.in_features,
+                "input_features": self.input_features,
                 "hidden_features": self.hidden_features,
-                "out_features": self.out_features,
+                "output_features": self.output_features,
                 "bias": self.bias,
             }
         )
@@ -50,9 +50,9 @@ class SwiGLUFFN(keras.layers.Layer):
 class SwiGLUFFNFused(keras.layers.Layer):
     def __init__(
         self,
-        in_features,
+        input_features,
         hidden_features=None,
-        out_features=None,
+        output_features=None,
         bias=True,
         act_layer=None,
         drop=0.0,
@@ -60,17 +60,17 @@ class SwiGLUFFNFused(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        self.in_features = in_features
+        self.input_features = input_features
         self.hidden_features = hidden_features
-        self.out_features = out_features
+        self.output_features = output_features
         self.bias = bias
 
-        self.effective_out_features = out_features if out_features is not None else in_features
-        effective_hidden_features = hidden_features if hidden_features is not None else in_features
+        self.effective_output_features = output_features if output_features is not None else input_features
+        effective_hidden_features = hidden_features if hidden_features is not None else input_features
         self.effective_hidden_features = (int(effective_hidden_features * 2 / 3) + 7) // 8 * 8
 
         self.w12 = keras.layers.Dense(units=2 * self.effective_hidden_features, use_bias=bias, name="w12")
-        self.w3 = keras.layers.Dense(units=self.effective_out_features, use_bias=bias, name="w3")
+        self.w3 = keras.layers.Dense(units=self.effective_output_features, use_bias=bias, name="w3")
         self.act = act_layer if act_layer is not None else keras.layers.Activation("silu")
 
     def call(self, x, training=None):
@@ -83,9 +83,9 @@ class SwiGLUFFNFused(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_features": self.in_features,
+                "input_features": self.input_features,
                 "hidden_features": self.hidden_features,
-                "out_features": self.out_features,
+                "output_features": self.output_features,
                 "bias": self.bias,
             }
         )
@@ -95,9 +95,9 @@ class SwiGLUFFNFused(keras.layers.Layer):
 class SwiGLUFFNAligned(keras.layers.Layer):
     def __init__(
         self,
-        in_features,
+        input_features,
         hidden_features=None,
-        out_features=None,
+        output_features=None,
         bias=True,
         align_to=8,
         act_layer=None,
@@ -106,21 +106,21 @@ class SwiGLUFFNAligned(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        self.in_features = in_features
+        self.input_features = input_features
         self.hidden_features = hidden_features
-        self.out_features = out_features
+        self.output_features = output_features
         self.bias = bias
         self.align_to = align_to
 
-        self.effective_out_features = out_features if out_features is not None else in_features
-        effective_hidden_features = hidden_features if hidden_features is not None else in_features
+        self.effective_output_features = output_features if output_features is not None else input_features
+        effective_hidden_features = hidden_features if hidden_features is not None else input_features
 
         d = int(effective_hidden_features * 2 / 3)
         self.swiglu_hidden_features = d + (-d % align_to)
 
         self.w1 = layers.Dense(self.swiglu_hidden_features, use_bias=bias, name="w1")
         self.w2 = layers.Dense(self.swiglu_hidden_features, use_bias=bias, name="w2")
-        self.w3 = layers.Dense(self.effective_out_features, use_bias=bias, name="w3")
+        self.w3 = layers.Dense(self.effective_output_features, use_bias=bias, name="w3")
         self.act = act_layer if act_layer is not None else keras.layers.Activation("silu")
 
 
@@ -134,9 +134,9 @@ class SwiGLUFFNAligned(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_features": self.in_features,
+                "input_features": self.input_features,
                 "hidden_features": self.hidden_features,
-                "out_features": self.out_features,
+                "output_features": self.output_features,
                 "bias": self.bias,
                 "align_to": self.align_to,
             }

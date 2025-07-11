@@ -34,7 +34,7 @@ def scale_and_add_residual(
 
     scaled_flattened_residual = ops.multiply(flattened_residual, residual_scale_factor)
 
-    scatter_indices = ops.expand_dims(selected_sample_indices, axis=1)
+    scatter_indices = ops.expand_dimensions(selected_sample_indices, axis=1)
 
     existing_values_at_indices = ops.take(flattened_input_tensor, selected_sample_indices, axis=0)
 
@@ -167,7 +167,7 @@ def add_residual(x, selected_sample_indices, residual, residual_scale_factor, sc
 
     existing_values = ops.take(x, selected_sample_indices, axis=0)
     updated_values = ops.add(existing_values, final_residual)
-    scatter_indices = ops.expand_dims(selected_sample_indices, axis=1)
+    scatter_indices = ops.expand_dimensions(selected_sample_indices, axis=1)
     x_plus_residual = ops.scatter_update(x, scatter_indices, updated_values)
 
     return x_plus_residual
@@ -333,9 +333,9 @@ def _split_and_reshape_residuals(concatenated_residuals, input_tensors, survivin
     for tensor, indices in zip(input_tensors, surviving_sample_indices):
         num_surviving_samples = ops.shape(indices)[0]
         seq_len = ops.shape(tensor)[1]
-        dim = ops.shape(tensor)[2]
+        dimension = ops.shape(tensor)[2]
         split_lengths.append(num_surviving_samples * seq_len)
-        target_shapes.append((num_surviving_samples, seq_len, dim))
+        target_shapes.append((num_surviving_samples, seq_len, dimension))
 
     flat_residuals = ops.reshape(concatenated_residuals, (-1, ops.shape(concatenated_residuals)[-1]))
     split_flat_residuals = ops.split(flat_residuals, split_lengths, axis=0)
@@ -377,7 +377,7 @@ def apply_stochastic_depth_with_residual_connection(
         input_tensors (list): A list of 3D tensors to which the operation
             will be applied.
         apply_residual (callable): A function that takes a tensor and an
-            attention bias (`attn_bias`) and returns a residual tensor of the
+            attention bias (`attention_bias`) and returns a residual tensor of the
             same shape.
         stochastic_depth_drop_ratio (float, optional): The probability of
             dropping a sample from each tensor. Defaults to 0.0 (no dropping).
@@ -395,7 +395,7 @@ def apply_stochastic_depth_with_residual_connection(
     attention_bias, concatenated_tensors = generate_attention_bias_and_concatenate_tensors(
         input_tensors, surviving_indices
     )
-    concatenated_residuals = apply_residual(concatenated_tensors, attn_bias=attention_bias)
+    concatenated_residuals = apply_residual(concatenated_tensors, attention_bias=attention_bias)
 
     split_residuals = _split_and_reshape_residuals(concatenated_residuals, input_tensors, surviving_indices)
     final_output_tensors = _apply_residuals_to_list(
@@ -411,51 +411,51 @@ def apply_stochastic_depth_with_residual_connection(
 class Block(keras.Layer):
     def __init__(
         self,
-        dim,
+        dimension,
         num_heads,
         mlp_ratio=4.0,
-        qkv_bias=False,
-        proj_bias=True,
+        use_qkv_bias=False,
+        use_projection_bias=True,
         ffn_bias=True,
         drop=0.0,
-        attn_drop=0.0,
+        attention_drop=0.0,
         init_values=None,
         drop_path=0.0,
-        act_layer=keras.activations.gelu,
-        norm_layer=keras.layers.LayerNormalization,
-        attn_class=Attention,
+        activation_layer=keras.activations.gelu,
+        normalization_layer=keras.layers.LayerNormalization,
+        attention_class=Attention,
         ffn_layer=MLP,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.norm1 = norm_layer(axis=-1, name="norm1")
-        self.attn = attn_class(
-            dim,
+        self.normalization1 = normalization_layer(axis=-1, name="norm1")
+        self.attention = attention_class(
+            dimension,
             num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            projection_bias=proj_bias,
-            attention_drop_rate=attn_drop,
+            use_qkv_bias=use_qkv_bias,
+            use_projection_bias=use_projection_bias,
+            attention_drop_rate=attention_drop,
             projection_drop_rate=drop,
-            name="attn",
+            name="attention",
         )
-        self.ls1 = (
-            LayerScale(dim, init_values=init_values, name="ls1") if init_values else keras.layers.Identity()
+        self.layer_scale_1 = (
+            LayerScale(dimension, init_values=init_values, name="ls1") if init_values else keras.layers.Identity()
         )
         self.drop_path1 = (
             DropPath(drop_path, name="drop_path1") if drop_path > 0.0 else keras.layers.Identity()
         )
 
-        self.norm2 = norm_layer(axis=-1, name="norm2")
-        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.normalization2 = normalization_layer(axis=-1, name="norm2")
+        mlp_hidden_dimension = int(dimension * mlp_ratio)
         self.mlp = ffn_layer(
-            in_features=dim,
-            hidden_features=mlp_hidden_dim,
-            act_layer=act_layer,
+            input_features=dimension,
+            hidden_features=mlp_hidden_dimension,
+            activation_layer=activation_layer,
             drop=drop,
             bias=ffn_bias,
         )
-        self.ls2 = (
-            LayerScale(dim, init_values=init_values, name="ls2") if init_values else keras.layers.Identity()
+        self.layer_scale_2 = (
+            LayerScale(dimension, init_values=init_values, name="ls2") if init_values else keras.layers.Identity()
         )
         self.drop_path2 = (
             DropPath(drop_path, name="drop_path2") if drop_path > 0.0 else keras.layers.Identity()
@@ -465,15 +465,15 @@ class Block(keras.Layer):
 
     def call(self, x, training=None):
         def apply_attention_residual(tensor):
-            tensor = self.norm1(tensor)
-            tensor = self.attn(tensor, training=training)
-            tensor = self.ls1(tensor, training=training)
+            tensor = self.normalization1(tensor)
+            tensor = self.attention(tensor, training=training)
+            tensor = self.layer_scale_1(tensor, training=training)
             return tensor
 
         def apply_feedforward_network_residual(tensor):
-            tensor = self.norm2(tensor)
+            tensor = self.normalization2(tensor)
             tensor = self.mlp(tensor, training=training)
-            tensor = self.ls2(tensor, training=training)
+            tensor = self.layer_scale_2(tensor, training=training)
             return tensor
 
         if training and self.sample_drop_ratio > 0.0:
@@ -501,29 +501,29 @@ class NestedTensorBlock(Block):
         output_list = None
         if training and self.sample_drop_ratio > 0.0:
             def apply_attention_residual(x, attention_bias=None):
-                return self.attn(self.norm1(x), attention_bias=attention_bias)
+                return self.attention(self.normalization1(x), attention_bias=attention_bias)
             def apply_feedforward_network_residual(x, attention_bias=None):
-                return self.mlp(self.norm2(x))
+                return self.mlp(self.normalization2(x))
             processed_list = apply_stochastic_depth_with_residual_connection(
                 x_list,
                 apply_attention_residual,
                 self.sample_drop_ratio,
-                self.ls1.gamma if isinstance(self.ls1, LayerScale) else None,
+                self.layer_scale_1.gamma if isinstance(self.layer_scale_1, LayerScale) else None,
             )
             processed_list = apply_stochastic_depth_with_residual_connection(
                 processed_list,
                 apply_feedforward_network_residual,
                 self.sample_drop_ratio,
-                self.ls2.gamma if isinstance(self.ls2, LayerScale) else None,
+                self.layer_scale_2.gamma if isinstance(self.layer_scale_2, LayerScale) else None,
             )
             output_list = processed_list
 
         else:
             def apply_attention_residual(x, attention_bias=None):
-                return self.ls1(self.attn(self.norm1(x), attention_bias=attention_bias))
+                return self.layer_scale_1(self.attention(self.normalization1(x), attention_bias=attention_bias))
 
             def apply_feedforward_network_residual(x, attention_bias=None):
-                return self.ls2(self.mlp(self.norm2(x)))
+                return self.layer_scale_2(self.mlp(self.normalization2(x)))
             attention_mask, x_concatenated = generate_attention_bias_and_concatenate_tensors(x_list)
 
             x_concatenated = x_concatenated + apply_attention_residual(x_concatenated, attention_bias=attention_mask)

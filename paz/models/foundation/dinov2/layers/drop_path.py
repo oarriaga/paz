@@ -18,35 +18,35 @@ def bernoulli_random(shape, probabilities, dtype=None):
     return keras.random.binomial(shape=shape, counts=1.0, probabilities=probabilities, dtype=dtype)
 
 
-def dropout_rate(x, drop_prob=0.0, training=False):
-    if drop_prob == 0.0 or not training:
+def dropout_rate(x, drop_probability=0.0, training=False):
+    if drop_probability == 0.0 or not training:
         return x
 
-    keep_prob = 1.0 - drop_prob
+    keep_probability = 1.0 - drop_probability
 
     shape_x = ops.shape(x)
     shape_for_random = [shape_x[0]] + [1] * (len(shape_x) - 1)
 
-    random_tensor = bernoulli_random(shape=shape_for_random, probabilities=keep_prob, dtype=x.dtype)
+    random_tensor = bernoulli_random(shape=shape_for_random, probabilities=keep_probability, dtype=x.dtype)
 
-    if keep_prob > 0.0:
-        random_tensor = random_tensor / keep_prob
+    if keep_probability > 0.0:
+        random_tensor = random_tensor / keep_probability
 
     output = x * random_tensor
     return output
 
 
 class DropPath(keras.layers.Layer):
-    def __init__(self, drop_prob, **kwargs):
+    def __init__(self, drop_probability, **kwargs):
         super().__init__(**kwargs)
-        self.drop_prob = drop_prob if drop_prob is not None else 0.0
+        self.drop_probability = drop_probability if drop_probability is not None else 0.0
 
     def call(self, x, training=None):
         is_training_mode = training if training is not None else False
 
-        return dropout_rate(x, self.drop_prob, is_training_mode)
+        return dropout_rate(x, self.drop_probability, is_training_mode)
 
     def get_config(self):
         config = super().get_config()
-        config.update({"drop_prob": self.drop_prob})
+        config.update({"drop_probability": self.drop_probability})
         return config
