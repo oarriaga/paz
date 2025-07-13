@@ -126,9 +126,11 @@ def write_or_show(figure, filepath=None):
 
 
 @matplotlib_required
-def set_axis(axis, x_label, y_label, x_range=None, y_range=None):
-    axis.set_xlabel(x_label)
-    axis.set_ylabel(y_label)
+def set_axis(axis, x_label=None, y_label=None, x_range=None, y_range=None):
+    if x_label is not None:
+        axis.set_xlabel(x_label)
+    if y_label is not None:
+        axis.set_ylabel(y_label)
     if x_range is not None:
         axis.set_xlim(x_range)
     if y_range is not None:
@@ -177,3 +179,22 @@ def find_values_by_wildcard(dictionary, wildcard):
 # def history(wildcard, fit, legends, filepath=None):
 #     name_to_data = find_values_by_wildcard(fit.history, wildcard)
 #     return None
+
+
+@matplotlib_required
+def trace(
+    x,
+    filepath=None,
+    y_label=None,
+    x_label="iteration",
+    x_range=None,
+    y_range=None,
+):
+    config = build_configuration()
+    figure, axis = plt.subplots(figsize=config.figsize)
+    hide_axes(axis)
+    set_minor_ticks(axis)
+    set_label_pads(axis, config)
+    set_axis(axis, x_label, y_label, x_range, y_range)
+    axis.plot(x, color="black")
+    write_or_show(figure, filepath)

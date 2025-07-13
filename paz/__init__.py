@@ -38,5 +38,6 @@ from paz.abstract import tree
 from paz import callbacks
 from paz import layers
 
-# from paz import plot
+from paz import plot
 from paz.progress_bar import progress_bar
+from paz.inference import metropolis_hastings
