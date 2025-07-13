@@ -2,7 +2,6 @@ import paz
 import jax
 import jax.numpy as jp
 
-import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
 tfd = tfp.distributions
@@ -31,4 +30,4 @@ def compute_acceptance_rate(infos):
     return jp.sum(infos.is_accepted, axis=0) / len(infos.is_accepted)
 
 
-acceptance_rate = compute_acceptance_rate(states)
+print("Chain acceptance rate:", compute_acceptance_rate(states))
