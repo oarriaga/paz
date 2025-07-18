@@ -8,25 +8,25 @@ def build_model(args, only_teacher=False, img_size=224):
             img_size=img_size,
             patch_size=args.patch_size,
             init_values=args.layerscale,
-            ffn_layer=args.ffn_layer,
+            feedforward_network_layer=args.feedforward_network_layer,
             block_chunks=args.block_chunks,
-            qkv_bias=args.qkv_bias,
+            query_key_value_bias=args.query_key_value_bias,
             proj_bias=args.proj_bias,
-            ffn_bias=args.ffn_bias,
-            num_register_tokens=args.num_register_tokens,
+            feedforward_network_bias=args.feedforward_network_bias,
+            number_of_register_tokens=args.number_of_register_tokens,
             interpolate_offset=args.interpolate_offset,
             interpolate_antialias=args.interpolate_antialias,
         )
         teacher = vits.__dict__[args.arch](**vit_kwargs)
         if only_teacher:
-            return teacher, teacher.embed_dim
+            return teacher, teacher.embed_dimension
         student = vits.__dict__[args.arch](
             **vit_kwargs,
             drop_path_rate=args.drop_path_rate,
             drop_path_uniform=args.drop_path_uniform,
         )
-        embed_dim = student.embed_dim
-    return student, teacher, embed_dim
+        embed_dimension = student.embed_dimension
+    return student, teacher, embed_dimension
 
 
 def build_model_from_cfg(cfg, only_teacher=False):

@@ -3,14 +3,19 @@ from keras import layers, ops
 
 
 class SwiGLUFFN(keras.layers.Layer):
+    """
+    Standard SwiGLU Feed-Forward Network.
+    This Class uses a single dense layer and splits the output.
+    """
+
     def __init__(
         self,
         input_features,
         hidden_features=None,
         output_features=None,
-        bias=True,
+        use_bias=True,
         activation_layer=None,
-        drop=0.0,
+        drop_rate=0.0,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -18,21 +23,37 @@ class SwiGLUFFN(keras.layers.Layer):
         self.input_features = input_features
         self.hidden_features = hidden_features
         self.output_features = output_features
-        self.bias = bias
+        self.use_bias = use_bias
 
-        self.effective_output_features = output_features if output_features is not None else input_features
-        self.effective_hidden_features = hidden_features if hidden_features is not None else input_features
+        self.effective_output_features = (
+            output_features if output_features is not None else input_features
+        )
+        self.effective_hidden_features = (
+            hidden_features if hidden_features is not None else input_features
+        )
 
-        self.w12 = keras.layers.Dense(units=2 * self.effective_hidden_features, use_bias=bias, name="w12")
-        self.w3 = keras.layers.Dense(units=self.effective_output_features, use_bias=bias, name="w3")
+        self.fused_gate_and_value_projection = keras.layers.Dense(
+            units=2 * self.effective_hidden_features,
+            use_bias=self.use_bias,
+            name="fused_gate_and_value_projection",
+        )
+        self.output_projection = keras.layers.Dense(
+            units=self.effective_output_features,
+            use_bias=self.use_bias,
+            name="output_projection",
+        )
 
-        self.activation_layer = activation_layer if activation_layer is not None else keras.layers.Activation("silu")
+        self.activation_layer = (
+            activation_layer
+            if activation_layer is not None
+            else keras.layers.Activation("silu")
+        )
 
     def call(self, x, training=None):
-        x12 = self.w12(x)
-        x1, x2 = ops.split(x12, 2, axis=-1)
-        hidden = self.act(x1) * x2
-        return self.w3(hidden)
+        gate_and_value = self.fused_gate_and_value_projection(x)
+        value, gate = ops.split(gate_and_value, 2, axis=-1)
+        hidden = self.activation_layer(value) * gate
+        return self.output_projection(hidden)
 
     def get_config(self):
         config = super().get_config()
@@ -41,13 +62,18 @@ class SwiGLUFFN(keras.layers.Layer):
                 "input_features": self.input_features,
                 "hidden_features": self.hidden_features,
                 "output_features": self.output_features,
-                "bias": self.bias,
+                "use_bias": self.use_bias,
             }
         )
         return config
 
 
 class SwiGLUFFNFused(keras.layers.Layer):
+    """
+    Fused SwiGLU Feed-Forward Network.
+    Similar to the standard Class but with specific hidden feature sizing.
+    """
+
     def __init__(
         self,
         input_features,
@@ -55,7 +81,7 @@ class SwiGLUFFNFused(keras.layers.Layer):
         output_features=None,
         bias=True,
         act_layer=None,
-        drop=0.0,
+        drop_rate=0.0,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -65,19 +91,35 @@ class SwiGLUFFNFused(keras.layers.Layer):
         self.output_features = output_features
         self.bias = bias
 
-        self.effective_output_features = output_features if output_features is not None else input_features
-        effective_hidden_features = hidden_features if hidden_features is not None else input_features
-        self.effective_hidden_features = (int(effective_hidden_features * 2 / 3) + 7) // 8 * 8
+        self.effective_output_features = (
+            output_features if output_features is not None else input_features
+        )
+        effective_hidden_features = (
+            hidden_features if hidden_features is not None else input_features
+        )
+        self.effective_hidden_features = (
+            (int(effective_hidden_features * 2 / 3) + 7) // 8 * 8
+        )
 
-        self.w12 = keras.layers.Dense(units=2 * self.effective_hidden_features, use_bias=bias, name="w12")
-        self.w3 = keras.layers.Dense(units=self.effective_output_features, use_bias=bias, name="w3")
-        self.act = act_layer if act_layer is not None else keras.layers.Activation("silu")
+        self.fused_gate_and_value_projection = keras.layers.Dense(
+            units=2 * self.effective_hidden_features,
+            use_bias=bias,
+            name="fused_gate_and_value_projection",
+        )
+        self.output_projection = keras.layers.Dense(
+            units=self.effective_output_features,
+            use_bias=bias,
+            name="output_projection",
+        )
+        self.activation_layer = (
+            act_layer if act_layer is not None else keras.layers.Activation("silu")
+        )
 
     def call(self, x, training=None):
-        x12 = self.w12(x)
-        x1, x2 = ops.split(x12, 2, axis=-1)
-        hidden = self.act(x1) * x2
-        return self.w3(hidden)
+        gate_and_value = self.fused_gate_and_value_projection(x)
+        value, gate = ops.split(gate_and_value, 2, axis=-1)
+        hidden = self.activation_layer(value) * gate
+        return self.output_projection(hidden)
 
     def get_config(self):
         config = super().get_config()
@@ -93,6 +135,11 @@ class SwiGLUFFNFused(keras.layers.Layer):
 
 
 class SwiGLUFFNAligned(keras.layers.Layer):
+    """
+    Aligned SwiGLU Feed-Forward Network.
+    This Class uses two separate dense layers for the initial projection.
+    """
+
     def __init__(
         self,
         input_features,
@@ -101,7 +148,7 @@ class SwiGLUFFNAligned(keras.layers.Layer):
         bias=True,
         align_to=8,
         act_layer=None,
-        drop=0.0,
+        drop_rate=0.0,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -112,23 +159,34 @@ class SwiGLUFFNAligned(keras.layers.Layer):
         self.bias = bias
         self.align_to = align_to
 
-        self.effective_output_features = output_features if output_features is not None else input_features
-        effective_hidden_features = hidden_features if hidden_features is not None else input_features
+        self.effective_output_features = (
+            output_features if output_features is not None else input_features
+        )
+        effective_hidden_features = (
+            hidden_features if hidden_features is not None else input_features
+        )
 
         d = int(effective_hidden_features * 2 / 3)
         self.swiglu_hidden_features = d + (-d % align_to)
 
-        self.w1 = layers.Dense(self.swiglu_hidden_features, use_bias=bias, name="w1")
-        self.w2 = layers.Dense(self.swiglu_hidden_features, use_bias=bias, name="w2")
-        self.w3 = layers.Dense(self.effective_output_features, use_bias=bias, name="w3")
-        self.act = act_layer if act_layer is not None else keras.layers.Activation("silu")
-
+        self.value_projection = layers.Dense(
+            self.swiglu_hidden_features, use_bias=bias, name="value_projection"
+        )
+        self.gate_projection = layers.Dense(
+            self.swiglu_hidden_features, use_bias=bias, name="gate_projection"
+        )
+        self.output_projection = layers.Dense(
+            self.effective_output_features, use_bias=bias, name="output_projection"
+        )
+        self.activation_layer = (
+            act_layer if act_layer is not None else keras.layers.Activation("silu")
+        )
 
     def call(self, x, training=None):
-        x1 = self.w1(x)
-        x2 = self.w2(x)
-        hidden = self.act(x1) * x2
-        return self.w3(hidden)
+        value = self.value_projection(x)
+        gate = self.gate_projection(x)
+        hidden = self.activation_layer(value) * gate
+        return self.output_projection(hidden)
 
     def get_config(self):
         config = super().get_config()
@@ -142,7 +200,3 @@ class SwiGLUFFNAligned(keras.layers.Layer):
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)

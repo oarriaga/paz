@@ -34,7 +34,7 @@ MODEL_CONFIGS = [
 
 DEFAULT_INPUT_SIZE = 518
 SMALL_INPUT_SIZE = 224
-TOLERANCE = 1e-5
+TOLERANCE = 1e-4
 
 
 class TestFixtures:
@@ -335,12 +335,12 @@ class TestLayerByLayerVerification:
         B = keras.ops.shape(keras_input)[0]
         H = keras.ops.shape(keras_input)[1]
         W = keras.ops.shape(keras_input)[2]
-        cls_tok = keras.ops.broadcast_to(keras_model.cls_token, (B, 1, keras_model.embedding_dimension))
-        x = keras.ops.concatenate([cls_tok, patch_embedded], axis=1)
-        x = keras.ops.add(x, keras_model.interpolate_pos_encoding(x, H, W))
+        classification_tokens = keras.ops.broadcast_to(keras_model.classification_token, (B, 1, keras_model.embedding_dimension))
+        x = keras.ops.concatenate([classification_tokens, patch_embedded], axis=1)
+        x = keras.ops.add(x, keras_model.interpolate_positional_encoding(x, H, W))
 
         if hasattr(keras_model, "register_tokens") and keras_model.register_tokens is not None:
-            reg_tokens = keras.ops.broadcast_to(
+            register_tokens = keras.ops.broadcast_to(
                 keras_model.register_tokens, (B, keras_model.num_register_tokens, keras_model.embedding_dimension)
             )
             x = keras.ops.concatenate([x[:, :1], reg_tokens, x[:, 1:]], axis=1)

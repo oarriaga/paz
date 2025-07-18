@@ -3,8 +3,10 @@ import keras.ops as ops
 
 
 class LayerScale(keras.layers.Layer):
-    def __init__(self, dimension, init_values=1e-5, inplace=False, dtype=None, **kwargs):
-        super().__init__(dtype=dtype, **kwargs)
+    def __init__(
+        self, dimension, init_values=1e-5, inplace=False, data_type=None, **kwargs
+    ):
+        super().__init__(dtype=data_type, **kwargs)
         self.dimension = dimension
         self.init_values = init_values
         self.inplace = inplace

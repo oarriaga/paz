@@ -8,21 +8,35 @@ class MLP(keras.layers.Layer):
         hidden_features=None,
         output_features=None,
         activation_layer=None,
-        drop=0.0,
-        bias=True,
+        drop_rate=0.0,
+        use_bias=True,
     ):
         super().__init__()
-        output_features = output_features if output_features is not None else input_features
-        hidden_features = hidden_features if hidden_features is not None else input_features
+        output_features = (
+            output_features if output_features is not None else input_features
+        )
+        hidden_features = (
+            hidden_features if hidden_features is not None else input_features
+        )
         initializer = keras.initializers.TruncatedNormal(stddev=0.02)
         self.fully_connected_layer_1 = keras.layers.Dense(
-            units=hidden_features, use_bias=bias, name="fully_connected_layer_1", kernel_initializer=initializer
+            units=hidden_features,
+            use_bias=use_bias,
+            name="fully_connected_layer_1",
+            kernel_initializer=initializer,
         )
-        self.activation = activation_layer if activation_layer is not None else keras.layers.Activation("gelu")
+        self.activation = (
+            activation_layer
+            if activation_layer is not None
+            else keras.layers.Activation("gelu")
+        )
         self.fully_connected_layer_2 = keras.layers.Dense(
-            units=output_features, use_bias=bias, name="fully_connected_layer_2", kernel_initializer=initializer
+            units=output_features,
+            use_bias=use_bias,
+            name="fully_connected_layer_2",
+            kernel_initializer=initializer,
         )
-        self.drop_layer = keras.layers.Dropout(rate=drop, name="drop")
+        self.drop_layer = keras.layers.Dropout(rate=drop_rate, name="drop")
 
     def call(self, x, training=None):
         x = self.fully_connected_layer_1(x)
