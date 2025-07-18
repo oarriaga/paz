@@ -41,7 +41,7 @@ def _draw_bar(now_arg, total, start_time, description, width):
     print_to_console(message)
 
 
-def progress_bar(iterable, total=None, description="progress", width=50):
+def bar(iterable, total=None, description="progress", width=50):
 
     def move_to_the_next_line():
         sys.stdout.write("\n")
@@ -60,10 +60,10 @@ def progress_bar(iterable, total=None, description="progress", width=50):
 
 if __name__ == "__main__":
     # Example 1: Looping over a range
-    for i in progress_bar(range(150), description="Downloading Data"):
+    for i in bar(range(150), description="Downloading Data"):
         time.sleep(0.02)
 
     # Example 2: Looping over a list of files
     files = ["file1.txt", "file2.img", "file3.mov", "file4.zip"]
-    for filename in progress_bar(files, description="Processing Files   "):
+    for filename in bar(files, description="Processing Files   "):
         time.sleep(0.5)
