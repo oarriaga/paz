@@ -90,16 +90,3 @@ class PatchEmbed(keras.layers.Layer):
             )
 
         return x
-
-    def flops(self) -> float:
-        Ho, Wo = self.patches_resolution
-        flops = (
-            Ho
-            * Wo
-            * self.embedding_dimension
-            * self.input_channels
-            * (self.patch_size[0] * self.patch_size[1])
-        )
-        if self.normalize is not None:
-            flops += Ho * Wo * self.embedding_dimension
-        return flops
