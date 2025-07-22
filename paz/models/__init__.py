@@ -12,6 +12,7 @@ from .detection import HaarCascadeEyeDetector
 from .detection import HaarCascadeFrontalFaceDetector
 from .classification.xception import MiniXception
 from .classification.xception import MiniXceptionFER
+from .classification.protonet import ProtoNet
 from .attention.stn import STN
 from .keypoint.keypointnet import KeypointNet2D
 from .keypoint.keypointnet import FaceKeypointNet2D32

@@ -127,6 +127,7 @@ def load(split="train", shape=(28, 28), flat=True):
         dictionary with class names as keys and image numpy arrays as values.
     """
     filepath = download(split)
+    print(filepath)
     language_filepaths = enumerate_filenames(filepath)
     languages = {}
     for language_filepath in language_filepaths:

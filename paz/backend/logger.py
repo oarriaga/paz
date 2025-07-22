@@ -62,7 +62,7 @@ def write_weights(model, directory, name=None):
         name: String or `None`. Weights filename.
     """
     name = model.name if name is None else name
-    weights_path = os.path.join(directory, name + "_weights.hdf5")
+    weights_path = os.path.join(directory, name + ".weights.h5")
     model.save_weights(weights_path)
 
 

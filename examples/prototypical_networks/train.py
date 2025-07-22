@@ -1,17 +1,15 @@
 import os
-
-os.environ["KERAS_BACKEND"] = "jax"
 import argparse
 from functools import partial
 
+os.environ["KERAS_BACKEND"] = "jax"
+
 import numpy as np
-import keras
 from keras.optimizers import Adam
 from keras.callbacks import LearningRateScheduler, CSVLogger, EarlyStopping
-
-from protonet import ProtoEmbedding, ProtoNet
-from logger import build_directory, write_dictionary, write_weights
-from omniglot import (
+import paz
+from paz.models.classification import ProtoEmbedding, ProtoNet
+from paz.datasets.omniglot import (
     load,
     remove_classes,
     split_data,
@@ -31,7 +29,7 @@ def schedule(period=20, rate=0.5):
     return apply
 
 
-description = "Train and evaluation of prototypical networks"
+description = "Train and evaluate prototypical networks"
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument("--seed", default=777, type=int)
 parser.add_argument("--root", default="experiments", type=str)
@@ -60,13 +58,8 @@ parser.add_argument("--test_queries", default=1, type=int)
 parser.add_argument("--stop_patience", default=100, type=int)
 parser.add_argument("--stop_delta", default=1e-3, type=int)
 args = parser.parse_args()
-
-
+directory, _ = paz.logger.setup(args)
 RNG = np.random.default_rng(args.seed)
-keras.utils.set_random_seed(args.seed)
-
-directory = build_directory(args.root, args.label)
-write_dictionary(args.__dict__, directory, "parameters.json")
 
 image_shape = (args.image_H, args.image_W, 1)
 train_args = (args.train_ways, args.train_shots, args.train_queries)
@@ -74,9 +67,7 @@ embed = ProtoEmbedding(image_shape, args.num_blocks)
 model = ProtoNet(embed, *train_args, image_shape)
 optimizer = Adam(args.learning_rate)
 metrics = [args.metric]
-model.compile(
-    Adam(args.learning_rate), loss=args.loss, metrics=metrics, jit_compile=True
-)
+model.compile(optimizer, loss=args.loss, metrics=metrics, jit_compile=True)
 
 callbacks = [
     LearningRateScheduler(schedule(args.period, args.rate), verbose=1),
@@ -123,5 +114,6 @@ for way in args.test_ways:
         results[f"{way}-way_{shot}-shot_between_alphabet"] = accuracy
         print(f"Between alphabet {way}-way {shot}-shot accuracy {accuracy} %")
 
-write_weights(embed, directory)
-write_dictionary(results, directory, "test_accuracies.json")
+paz.logger.write_weights(test_model, directory)
+test_model.save(os.path.join(directory, f"{test_model.name}.keras"))
+paz.logger.write_dictionary(results, os.path.join(directory, "results.json"))
