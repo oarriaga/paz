@@ -69,11 +69,13 @@ def meta_step(state, data, model, compute_loss, optimizer, fast_learning_rate):
 
 
 META_LEARNING_RATE = 1e-3
-FAST_LR = 0.01
-TRAIN_STEPS = 30_000
-TASKS_PER_BATCH = 16
-SHOTS_PER_TASK = 10
+FAST_LR = 0.1
+TRAIN_STEPS = 20_000
+# TASKS_PER_BATCH = 16
+TASKS_PER_BATCH = 32
+SHOTS_PER_TASK = 20
 seed = 777
+# (16, 10 ,1)
 
 RNG = np.random.default_rng(seed)
 model = MLP()
@@ -113,12 +115,9 @@ for train_step in range(TRAIN_STEPS):
     losses.append(float(loss))
     progress_bar.update(train_step + 1, [("loss", float(loss))])
 
-print("Training finished.")
-
 plt.plot(losses)
 plt.show()
 
-# Assign final learned parameters back to the Keras model for inspection
 theta, theta_static, optimizer_variables = state
 for variable, value in zip(model.trainable_variables, theta):
     variable.assign(value)
