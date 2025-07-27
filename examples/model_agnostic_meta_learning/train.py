@@ -101,14 +101,11 @@ for variable, value in zip(model.trainable_variables, theta):
 print("\nVisualizing model adaptation on new, unseen tasks...")
 
 
-# We need the stateless forward pass for prediction.
-# Let's define it globally to reuse it.
 def forward_pass(theta, theta_static, x, model):
     y_pred, _ = model.stateless_call(theta, theta_static, x)
     return y_pred
 
 
-# This function performs the inner-loop adaptation for a single task
 def adapt_step(state, support_data, model, compute_loss, fast_learning_rate):
     theta, theta_static = state
     support_x, support_y = support_data
@@ -127,29 +124,22 @@ def adapt_step(state, support_data, model, compute_loss, fast_learning_rate):
     return fast_weights
 
 
-# JIT-compile the functions for performance
 jitted_forward_pass = jax.jit(forward_pass, static_argnames=("model",))
 jitted_adapt_step = jax.jit(
     adapt_step, static_argnames=("model", "compute_loss", "fast_learning_rate")
 )
 
-# --- 2. Generate and Plot New Tasks ---
-
-# Get the final trained meta-parameters from the training loop
 trained_theta, trained_theta_static, _ = state
 trained_state = (trained_theta, trained_theta_static)
 
-# Generate a new batch of tasks for visualization with a new key
 key, viz_key = jax.random.split(key)
 (s_x, s_y, q_x, q_y), (amplitudes, phases) = sinusoidal.sample_batch(
     viz_key, TASKS_PER_BATCH, SHOTS_PER_TASK, min_x, max_x, min_y, max_y
 )
 
-# Create a 2x2 grid of subplots
 figure, axes = plt.subplots(2, 2, figsize=(16, 14))
 figure.suptitle("MAML Adaptation to New Sinusoid Tasks", fontsize=18)
 
-# Create a smooth range of x-values for plotting the curves
 x_curve = jp.linspace(min_x, max_x, 200).reshape(-1, 1)
 
 for i, axis in enumerate(axes.flat):
@@ -208,7 +198,7 @@ for i, axis in enumerate(axes.flat):
     )
 
     # Make it pretty
-    axis.set_title(f"Task {i+1}", fontsize=12)
+    axis.set_title(f"Task {i + 1}", fontsize=12)
     axis.set_xlabel("x")
     axis.set_ylabel("y")
     axis.legend()
