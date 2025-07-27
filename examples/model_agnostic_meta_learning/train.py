@@ -7,30 +7,7 @@ import keras
 import paz
 import jax.numpy as jp
 import matplotlib.pyplot as plt
-
-
-def sample_task(key, num_shots, min_x, max_x, min_y, max_y):
-    keys = jax.random.split(key, 3)
-    amplitude = jax.random.uniform(keys[0], (), jp.float32, min_y, max_y)
-    phase = jax.random.uniform(keys[1], (), jp.float32, 0.0, jp.pi)
-    x = jax.random.uniform(keys[2], (num_shots * 2,), jp.float32, min_x, max_x)
-    y = amplitude * jp.sin(x - phase)
-    x_support, x_queries = jp.split(x, 2)
-    y_support, y_queries = jp.split(y, 2)
-    x_support = jp.reshape(x_support, (num_shots, 1))
-    y_support = jp.reshape(y_support, (num_shots, 1))
-    x_queries = jp.reshape(x_queries, (num_shots, 1))
-    y_queries = jp.reshape(y_queries, (num_shots, 1))
-    return (x_support, y_support), (x_queries, y_queries)
-
-
-def sample_batch(key, batch_size, num_shots, min_x, max_x, min_y, max_y):
-    task_keys = jax.random.split(key, batch_size)
-    in_axes = (0, None, None, None, None, None)
-    _sample_batch = jax.vmap(sample_task, in_axes=in_axes)
-    batch = _sample_batch(task_keys, num_shots, min_x, max_x, min_y, max_y)
-    (x_support, y_support), (x_queries, y_queries) = batch
-    return x_support, y_support, x_queries, y_queries
+import sinusoidal
 
 
 def MLP(hidden_dimensions=[40, 40]):
@@ -97,7 +74,7 @@ state = (
 step = jax.jit(paz.lock(meta_step, model, compute_loss, optimizer, FAST_LR))
 batch = jax.jit(
     paz.lock(
-        sample_batch,
+        sinusoidal.sample_batch,
         TASKS_PER_BATCH,
         SHOTS_PER_TASK,
         min_x,
@@ -109,7 +86,7 @@ batch = jax.jit(
 
 losses, progress_bar = [], keras.utils.Progbar(TRAIN_STEPS)
 for step_arg, step_key in enumerate(jax.random.split(key, TRAIN_STEPS)):
-    loss, state = step(state, batch(step_key))
+    loss, state = step(state, batch(step_key)[0])
     losses.append(loss)
     progress_bar.update(step_arg + 1, [("loss", float(loss))])
 
