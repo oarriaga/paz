@@ -5,28 +5,32 @@ os.environ["KERAS_BACKEND"] = "jax"
 import jax
 import keras
 import paz
-import numpy as np
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 
 
-def Sinusoid(
-    RNG, num_shots, min_amplitude=0.1, max_amplitude=5.0, min_x=-5.0, max_x=5.0
-):
-    """Creates a sampler for a single sinusoid task."""
-    amplitude = RNG.uniform(min_amplitude, max_amplitude)
-    phase = RNG.uniform(0, np.pi)
+def sample_task(key, num_shots, min_x, max_x, min_y, max_y):
+    keys = jax.random.split(key, 3)
+    amplitude = jax.random.uniform(keys[0], (), jp.float32, min_y, max_y)
+    phase = jax.random.uniform(keys[1], (), jp.float32, 0.0, jp.pi)
+    x = jax.random.uniform(keys[2], (num_shots * 2,), jp.float32, min_x, max_x)
+    y = amplitude * jp.sin(x - phase)
+    x_support, x_queries = jp.split(x, 2)
+    y_support, y_queries = jp.split(y, 2)
+    x_support = jp.reshape(x_support, (num_shots, 1))
+    y_support = jp.reshape(y_support, (num_shots, 1))
+    x_queries = jp.reshape(x_queries, (num_shots, 1))
+    y_queries = jp.reshape(y_queries, (num_shots, 1))
+    return (x_support, y_support), (x_queries, y_queries)
 
-    def sample():
-        """Samples support and query sets for the task."""
-        x = RNG.uniform(min_x, max_x, num_shots * 2)
-        y = amplitude * np.sin(x - phase)
-        # Split the sampled points into support and query sets
-        support_x, query_x = np.split(x, 2)
-        support_y, query_y = np.split(y, 2)
-        return (support_x, support_y), (query_x, query_y)
 
-    return sample
+def sample_batch(key, batch_size, num_shots, min_x, max_x, min_y, max_y):
+    task_keys = jax.random.split(key, batch_size)
+    in_axes = (0, None, None, None, None, None)
+    _sample_batch = jax.vmap(sample_task, in_axes=in_axes)
+    batch = _sample_batch(task_keys, num_shots, min_x, max_x, min_y, max_y)
+    (x_support, y_support), (x_queries, y_queries) = batch
+    return x_support, y_support, x_queries, y_queries
 
 
 def MLP(hidden_dimensions=[40, 40]):
@@ -41,7 +45,6 @@ def meta_step(state, data, model, compute_loss, optimizer, fast_learning_rate):
 
     def compute_task_loss(theta, theta_static, x, y):
         y_pred, _ = model.stateless_call(theta, theta_static, x)
-        y_pred = jp.reshape(y_pred, y.shape)  # match loss function labels
         return compute_loss(y, y_pred)
 
     def gradient_step(theta, gradients):
@@ -69,15 +72,17 @@ def meta_step(state, data, model, compute_loss, optimizer, fast_learning_rate):
 
 
 META_LEARNING_RATE = 1e-3
-FAST_LR = 0.1
+FAST_LR = 0.01
 TRAIN_STEPS = 20_000
-# TASKS_PER_BATCH = 16
-TASKS_PER_BATCH = 32
+TASKS_PER_BATCH = 4
 SHOTS_PER_TASK = 20
 seed = 777
-# (16, 10 ,1)
+min_x = -5.0
+max_x = 5.0
+min_y = 0.1
+max_y = 5.0
 
-RNG = np.random.default_rng(seed)
+key = jax.random.PRNGKey(seed)
 model = MLP()
 compute_loss = keras.losses.MeanSquaredError()
 optimizer = keras.optimizers.Adam(learning_rate=META_LEARNING_RATE)
@@ -90,30 +95,23 @@ state = (
 )
 
 step = jax.jit(paz.lock(meta_step, model, compute_loss, optimizer, FAST_LR))
-losses, progress_bar = [], keras.utils.Progbar(TRAIN_STEPS)
-for train_step in range(TRAIN_STEPS):
-    # Generate a new batch of tasks for each step
-    task_samplers = [
-        Sinusoid(RNG, SHOTS_PER_TASK) for _ in range(TASKS_PER_BATCH)
-    ]
-    support_x, support_y, query_x, query_y = [], [], [], []
-    for sampler in task_samplers:
-        (sx, sy), (qx, qy) = sampler()
-        support_x.append(sx.reshape(SHOTS_PER_TASK, 1))
-        support_y.append(sy.reshape(SHOTS_PER_TASK, 1))
-        query_x.append(qx.reshape(SHOTS_PER_TASK, 1))
-        query_y.append(qy.reshape(SHOTS_PER_TASK, 1))
-
-    data_batch = (
-        np.array(support_x),
-        np.array(support_y),
-        np.array(query_x),
-        np.array(query_y),
+batch = jax.jit(
+    paz.lock(
+        sample_batch,
+        TASKS_PER_BATCH,
+        SHOTS_PER_TASK,
+        min_x,
+        max_x,
+        min_y,
+        max_y,
     )
+)
 
-    loss, state = step(state, data_batch)
-    losses.append(float(loss))
-    progress_bar.update(train_step + 1, [("loss", float(loss))])
+losses, progress_bar = [], keras.utils.Progbar(TRAIN_STEPS)
+for step_arg, step_key in enumerate(jax.random.split(key, TRAIN_STEPS)):
+    loss, state = step(state, batch(step_key))
+    losses.append(loss)
+    progress_bar.update(step_arg + 1, [("loss", float(loss))])
 
 plt.plot(losses)
 plt.show()
