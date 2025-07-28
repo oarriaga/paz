@@ -3,6 +3,12 @@ import jax
 import jax.numpy as jp
 
 
+def build_state(model, optimizer):
+    parameters = (model.trainable_variables, model.non_trainable_variables)
+    state = (parameters, optimizer.variables)
+    return state
+
+
 def call(model, parameters, x):
     y_pred, _ = model.stateless_call(*parameters, x)
     return y_pred
