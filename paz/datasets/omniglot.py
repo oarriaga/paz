@@ -20,11 +20,9 @@ def download(split):
     filename = split_to_name[split]
     URL = ROOT_URL + filename + ".zip?raw=true"
     directory = "paz/datasets/"
-    extract_name = "Omniglot"
+    extract_name = f"Omniglot-{split}"
     filepath = get_file(extract_name, URL, cache_subdir=directory, extract=True)
-    print(filepath)
     filepath = os.path.join(os.path.dirname(filepath), extract_name, filename)
-    print(filepath)
     return filepath
 
 
