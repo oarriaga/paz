@@ -110,7 +110,7 @@ class DinoVisionTransformer(Model):
         self.number_of_register_tokens = number_of_register_tokens
         self.interpolate_antialias = interpolate_antialias
         self.interpolate_offset = interpolate_offset
-
+        self.feedforward_network_layer = feedforward_network_layer
         self.patch_embedding = embedding_layer(
             img_size=img_size,
             patch_size=patch_size,
@@ -145,15 +145,6 @@ class DinoVisionTransformer(Model):
             else np.linspace(0.0, drop_path_rate, depth).tolist()
         )
 
-        if feedforward_network_layer == "mlp":
-            feedforward_network_layer_class = MLP
-        elif feedforward_network_layer in ["swiglu", "swiglufused"]:
-            feedforward_network_layer_class = SwiGLUFFNFused
-        elif feedforward_network_layer == "identity":
-            feedforward_network_layer_class = lambda *args, **kwargs: layers.Identity()
-        else:
-            raise NotImplementedError
-
         blocks_list = [
             block_function(
                 dimension=embedding_dimension,
@@ -165,7 +156,7 @@ class DinoVisionTransformer(Model):
                 drop_path=drop_path_rates[i],
                 normalization_layer=normalization_layer,
                 activation_layer=activation_layer,
-                feedforward_network_layer=feedforward_network_layer_class,
+                feedforward_network_layer=self.feedforward_network_layer,
                 init_values=init_values,
                 name=f"block_{i}",
             )
@@ -391,6 +382,7 @@ class DinoVisionTransformer(Model):
                 "number_of_register_tokens": self.number_of_register_tokens,
                 "interpolate_antialias": self.interpolate_antialias,
                 "interpolate_offset": self.interpolate_offset,
+                "feedforward_network_layer": self.feedforward_network_layer,
             }
         )
         return config

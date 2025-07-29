@@ -41,6 +41,11 @@ class Attention(Layer):
         self.attention_drop = Dropout(self.attention_drop_rate)
         self.projection_drop = Dropout(self.projection_drop_rate)
 
+    def build(self, input_shape):
+        self.predict_query_key_value.build(input_shape)
+        self.projection_layer.build((input_shape[0], input_shape[1], self.dimension))
+        self.built = True
+
     def call(self, x, attention_bias=None, training=None):
         batch_size, number_of_tokens, channels = ops.shape(x)
 

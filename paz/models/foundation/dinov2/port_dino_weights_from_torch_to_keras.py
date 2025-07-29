@@ -4,7 +4,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", ".."))
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import sys
 
 if project_root not in sys.path:
@@ -148,20 +148,20 @@ def port_weights_from_state_dict(keras_model, state_dict):
                 ]
             )
         else:
-            # Check for SwiGLU weights, using the new descriptive names for the Keras model
-            swiglu_w12_key = f"blocks.{i}.mlp.w12.weight"
-            swiglu_w3_key = f"blocks.{i}.mlp.w3.weight"
-            if swiglu_w12_key in state_dict:
-                # Porting to Keras layers with new descriptive names
+            swiglu_fused_gate_and_value_projection_key = f"blocks.{i}.mlp.w12.weight"
+            swiglu_output_projection_key = f"blocks.{i}.mlp.w3.weight"
+            if swiglu_fused_gate_and_value_projection_key in state_dict:
                 block.mlp.fused_gate_and_value_projection.set_weights(
                     [
-                        state_dict[swiglu_w12_key].T.numpy(),
+                        state_dict[
+                            swiglu_fused_gate_and_value_projection_key
+                        ].T.numpy(),
                         state_dict[f"blocks.{i}.mlp.w12.bias"].numpy(),
                     ]
                 )
                 block.mlp.output_projection.set_weights(
                     [
-                        state_dict[swiglu_w3_key].T.numpy(),
+                        state_dict[swiglu_output_projection_key].T.numpy(),
                         state_dict[f"blocks.{i}.mlp.w3.bias"].numpy(),
                     ]
                 )
@@ -170,7 +170,6 @@ def port_weights_from_state_dict(keras_model, state_dict):
                     f"Could not find FFN weights for block {i}. "
                     "Neither standard MLP nor SwiGLU keys were found."
                 )
-        # LayerScale parameters
         layer_scale_1_key = f"blocks.{i}.ls1.gamma"
         layer_scale_2_key = f"blocks.{i}.ls2.gamma"
         if layer_scale_1_key in state_dict and hasattr(block, "layer_scale_1"):
@@ -180,7 +179,6 @@ def port_weights_from_state_dict(keras_model, state_dict):
 
     logging.info("✓ Ported all transformer blocks.")
 
-    # --- Port final Layer Normalization ---
     final_normalization_layer = keras_model.get_layer("norm")
     if final_normalization_layer:
         final_normalization_layer.set_weights(
@@ -197,7 +195,7 @@ if __name__ == "__main__":
         "dinov2_vits14": vit_small,
         "dinov2_vitb14": vit_base,
         "dinov2_vitl14": vit_large,
-        # "dinov2_vitg14": vit_giant2
+        "dinov2_vitg14": vit_giant2,
     }
 
     output_dir = "weights"

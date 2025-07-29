@@ -4,6 +4,7 @@ from .attention import Attention
 from .drop_path import DropPath
 from .layer_scale import LayerScale
 from .mlp import MLP
+from paz.models.foundation.dinov2.layers import SwiGLUFFNFused
 
 
 def get_random_subset_of_indices(batch_size, drop_ratio):
@@ -603,7 +604,7 @@ class Block(keras.Layer):
         activation_layer=keras.activations.gelu,
         normalization_layer=keras.layers.LayerNormalization,
         attention_class=Attention,
-        feedforward_network_layer=MLP,
+        feedforward_network_layer="mlp",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -629,7 +630,15 @@ class Block(keras.Layer):
 
         self.normalization2 = normalization_layer(axis=-1, name="norm2")
         mlp_hidden_dimension = int(dimension * mlp_ratio)
-        self.mlp = feedforward_network_layer(
+        if feedforward_network_layer == "mlp":
+            feedforward_network_layer_class = MLP
+        elif feedforward_network_layer in ["swiglu", "swiglufused"]:
+            feedforward_network_layer_class = SwiGLUFFNFused
+        else:
+            raise ValueError(f"Unknown FFN layer: {feedforward_network_layer}")
+
+        mlp_hidden_dimension = int(dimension * mlp_ratio)
+        self.mlp = feedforward_network_layer_class(
             input_features=dimension,
             hidden_features=mlp_hidden_dimension,
             activation_layer=activation_layer,
@@ -650,26 +659,23 @@ class Block(keras.Layer):
         self.sample_drop_ratio = drop_path
 
     def call(self, x, training=None):
-        def apply_attention_residual(tensor):
-            tensor = self.normalization1(tensor)
-            tensor = self.attention(tensor, training=training)
-            tensor = self.layer_scale_1(tensor, training=training)
-            return tensor
-
-        def apply_feedforward_network_residual(tensor):
-            tensor = self.normalization2(tensor)
-            tensor = self.mlp(tensor, training=training)
-            tensor = self.layer_scale_2(tensor, training=training)
-            return tensor
+        normalized_x_1 = self.normalization1(x)
+        attention_output = self.attention(normalized_x_1, training=training)
+        scaled_attention = self.layer_scale_1(attention_output, training=training)
 
         if training and self.sample_drop_ratio > 0.0:
-            x = x + self.drop_path1(apply_attention_residual(x), training=training)
-            x = x + self.drop_path2(
-                apply_feedforward_network_residual(x), training=training
-            )
+            x = x + self.drop_path1(scaled_attention, training=training)
         else:
-            x = x + apply_attention_residual(x)
-            x = x + apply_feedforward_network_residual(x)
+            x = x + scaled_attention
+
+        normalized_x_2 = self.normalization2(x)
+        mlp_output = self.mlp(normalized_x_2, training=training)
+        scaled_mlp = self.layer_scale_2(mlp_output, training=training)
+
+        if training and self.sample_drop_ratio > 0.0:
+            x = x + self.drop_path2(scaled_mlp, training=training)
+        else:
+            x = x + scaled_mlp
 
         return x
 

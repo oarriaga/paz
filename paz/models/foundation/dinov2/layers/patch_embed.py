@@ -58,6 +58,15 @@ class PatchEmbed(keras.layers.Layer):
             else keras.layers.Identity()
         )
 
+    def build(self, input_shape):
+        """Build the internal layers."""
+        self.projection_layer.build(input_shape)
+        if hasattr(self.normalize, "build") and not self.normalize.built:
+            self.normalize.build(
+                (input_shape[0], self.number_of_patches, self.embedding_dimension)
+            )
+        self.built = True
+
     def call(self, x):
         batch_size = keras.ops.shape(x)[0]
         H = keras.ops.shape(x)[1]
