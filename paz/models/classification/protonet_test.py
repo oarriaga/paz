@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from protonet import (
+from paz.models.classification.protonet import (
     ProtoEmbedding,
     ProtoNet,
     compute_pairwise_distances,
