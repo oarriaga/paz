@@ -43,13 +43,13 @@ def adapt(model, loss_fn, step_size, num_steps, parameters, support_data):
 
 def train_step(model, loss_fn, optimizer, step_size, num_steps, state, data):
     _compute_task_loss = partial(compute_task_loss, model, loss_fn)
-    _predict = partial(adapt, model, loss_fn, step_size, num_steps)
+    _adapt = partial(adapt, model, loss_fn, step_size, num_steps)
 
     def compute_meta_loss(
         variables, static_parameters, x_support, y_support, x_queries, y_queries
     ):
         parameters = (variables, static_parameters)
-        params = _predict(parameters, (x_support, y_support))
+        params = _adapt(parameters, (x_support, y_support))
         meta_loss = _compute_task_loss(*params, x_queries, y_queries)
         return meta_loss
 
