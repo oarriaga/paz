@@ -19,6 +19,39 @@ from paz.datasets.fsclvr import (
 )
 
 
+description = "Train and evaluate prototypical networks"
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument("--seed", default=777, type=int)
+parser.add_argument("--root", default="experiments", type=str)
+parser.add_argument("--label", default="PROTONET", type=str)
+parser.add_argument("--image_H", default=480 // 3, type=int)
+parser.add_argument("--image_W", default=640 // 3, type=int)
+parser.add_argument("--num_channels", default=3, type=int)
+parser.add_argument("--num_blocks", default=4, type=int)
+parser.add_argument("--steps_per_epoch", default=100, type=int)
+parser.add_argument("--epochs", default=200, type=int)
+parser.add_argument("--period", default=10, type=int)
+parser.add_argument("--rate", default=0.5, type=int)
+parser.add_argument("--train_classes", default=30, type=int)
+parser.add_argument("--validation_split", default=0.20, type=float)
+parser.add_argument("--train_path", default="omniglot/images_background/")
+parser.add_argument("--tests_path", default="omniglot/images_evaluation/")
+parser.add_argument("--learning_rate", default=0.001, type=float)
+parser.add_argument("--loss", default="sparse_categorical_crossentropy")
+parser.add_argument("--metric", default="sparse_categorical_accuracy")
+parser.add_argument("--train_ways", default=5, type=int)
+parser.add_argument("--train_shots", default=5, type=int)
+parser.add_argument("--train_queries", default=1, type=int)
+parser.add_argument("--test_steps", default=1000, type=int)
+parser.add_argument("--test_ways", nargs="+", default=[5, 20])
+parser.add_argument("--test_shots", nargs="+", default=[1, 5])
+parser.add_argument("--test_queries", default=1, type=int)
+parser.add_argument("--stop_patience", default=20, type=int)
+parser.add_argument("--stop_delta", default=1e-3, type=int)
+parser.add_argument("--scene", default="plain", type=str)
+args = parser.parse_args()
+
+
 class Generator(Sequence):
     def __init__(
         self,
@@ -54,37 +87,6 @@ def schedule(period=20, rate=0.5):
     return apply
 
 
-description = "Train and evaluate prototypical networks"
-parser = argparse.ArgumentParser(description=description)
-parser.add_argument("--seed", default=777, type=int)
-parser.add_argument("--root", default="experiments", type=str)
-parser.add_argument("--label", default="PROTONET", type=str)
-parser.add_argument("--image_H", default=480 // 3, type=int)
-parser.add_argument("--image_W", default=640 // 3, type=int)
-parser.add_argument("--num_channels", default=3, type=int)
-parser.add_argument("--num_blocks", default=4, type=int)
-parser.add_argument("--steps_per_epoch", default=100, type=int)
-parser.add_argument("--epochs", default=200, type=int)
-parser.add_argument("--period", default=10, type=int)
-parser.add_argument("--rate", default=0.5, type=int)
-parser.add_argument("--train_classes", default=30, type=int)
-parser.add_argument("--validation_split", default=0.20, type=float)
-parser.add_argument("--train_path", default="omniglot/images_background/")
-parser.add_argument("--tests_path", default="omniglot/images_evaluation/")
-parser.add_argument("--learning_rate", default=0.001, type=float)
-parser.add_argument("--loss", default="sparse_categorical_crossentropy")
-parser.add_argument("--metric", default="sparse_categorical_accuracy")
-parser.add_argument("--train_ways", default=5, type=int)
-parser.add_argument("--train_shots", default=5, type=int)
-parser.add_argument("--train_queries", default=1, type=int)
-parser.add_argument("--test_steps", default=1000, type=int)
-parser.add_argument("--test_ways", nargs="+", default=[5, 20])
-parser.add_argument("--test_shots", nargs="+", default=[1, 5])
-parser.add_argument("--test_queries", default=1, type=int)
-parser.add_argument("--stop_patience", default=20, type=int)
-parser.add_argument("--stop_delta", default=1e-3, type=int)
-parser.add_argument("--scene", default="plain", type=str)
-args = parser.parse_args()
 directory, _ = paz.logger.setup(args)
 RNG = np.random.default_rng(args.seed)
 
