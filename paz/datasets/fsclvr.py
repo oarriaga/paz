@@ -8,6 +8,16 @@ from keras.utils import get_file
 from matplotlib.pyplot import imread
 
 
+def get_y_FOV():
+    return 0.742
+
+
+def get_intrinsics():
+    return jp.array(
+        [[616.94434, 0.0, 320.0], [0.0, 616.94434, 240.0], [0.0, 0.0, 1.0]]
+    )
+
+
 def download(scene):
     URL = (
         "https://github.com/oarriaga/bayesian-inverse-graphics/"
@@ -55,7 +65,7 @@ def load_paths(root_path):
     return directories
 
 
-def load(scene, split, shape=(224, 224)):
+def load(scene, split, shape=(480, 640)):
     root_path = download(scene)
     data_path = os.path.join(root_path, split)
     concepts = []

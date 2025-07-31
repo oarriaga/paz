@@ -3,6 +3,7 @@ import argparse
 from functools import partial
 
 os.environ["KERAS_BACKEND"] = "jax"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 
 import numpy as np
 from keras.utils import Sequence
@@ -58,8 +59,8 @@ parser = argparse.ArgumentParser(description=description)
 parser.add_argument("--seed", default=777, type=int)
 parser.add_argument("--root", default="experiments", type=str)
 parser.add_argument("--label", default="PROTONET", type=str)
-parser.add_argument("--image_H", default=480 // 2, type=int)
-parser.add_argument("--image_W", default=640 // 2, type=int)
+parser.add_argument("--image_H", default=480 // 3, type=int)
+parser.add_argument("--image_W", default=640 // 3, type=int)
 parser.add_argument("--num_channels", default=3, type=int)
 parser.add_argument("--num_blocks", default=4, type=int)
 parser.add_argument("--steps_per_epoch", default=100, type=int)
@@ -80,7 +81,7 @@ parser.add_argument("--test_steps", default=1000, type=int)
 parser.add_argument("--test_ways", nargs="+", default=[5, 20])
 parser.add_argument("--test_shots", nargs="+", default=[1, 5])
 parser.add_argument("--test_queries", default=1, type=int)
-parser.add_argument("--stop_patience", default=100, type=int)
+parser.add_argument("--stop_patience", default=20, type=int)
 parser.add_argument("--stop_delta", default=1e-3, type=int)
 parser.add_argument("--scene", default="plain", type=str)
 args = parser.parse_args()
@@ -109,7 +110,10 @@ train_data, validation_data = split_data(train_data, args.validation_split)
 sampler = partial(sample, RNG, train_data, *train_args)
 sequence = Generator(sampler, *train_args, image_shape, args.steps_per_epoch)
 sampler = partial(sample, RNG, validation_data, *valid_args)
-validation_data = Generator(sampler, *valid_args, image_shape, 100)
+if len(validation_data) == 0:
+    validation_data = None
+else:
+    validation_data = Generator(sampler, *valid_args, image_shape, 100)
 
 model.fit(
     sequence,
