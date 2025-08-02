@@ -37,12 +37,12 @@ parser.add_argument("--label", default="PROTONET", type=str)
 parser.add_argument("--image_H", default=28, type=int)
 parser.add_argument("--image_W", default=28, type=int)
 parser.add_argument("--num_blocks", default=4, type=int)
-parser.add_argument("--steps_per_epoch", default=100, type=int)
-parser.add_argument("--epochs", default=200, type=int)
-parser.add_argument("--period", default=10, type=int)
+parser.add_argument("--steps_per_epoch", default=2000, type=int)
+parser.add_argument("--epochs", default=5, type=int)
+parser.add_argument("--period", default=1, type=int)
 parser.add_argument("--rate", default=0.5, type=int)
 parser.add_argument("--train_classes", default=964, type=int)
-parser.add_argument("--validation_split", default=0.20, type=float)
+parser.add_argument("--validation_split", default=0.0, type=float)
 parser.add_argument("--train_path", default="omniglot/images_background/")
 parser.add_argument("--tests_path", default="omniglot/images_evaluation/")
 parser.add_argument("--learning_rate", default=0.001, type=float)
@@ -82,7 +82,12 @@ train_data, validation_data = split_data(train_data, args.validation_split)
 sampler = partial(sample_between_alphabet, RNG, train_data, *train_args)
 sequence = Generator(sampler, *train_args, image_shape, args.steps_per_epoch)
 sampler = partial(sample_between_alphabet, RNG, validation_data, *train_args)
-validation_data = Generator(sampler, *train_args, image_shape, 100)
+
+if len(validation_data) == 0:
+    validation_data = None
+else:
+    validation_data = Generator(sampler, *train_args, image_shape, 100)
+
 
 model.fit(
     sequence,
