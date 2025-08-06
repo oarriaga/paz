@@ -135,8 +135,12 @@ def plot_results(results, num_seeds, filepath=None):
 
 parser = argparse.ArgumentParser(description="Plot accuracies across classes.")
 parser.add_argument("--results_dir", type=str, default="experiments")
-parser.add_argument("--num_seeds", type=int, default=10)
-parser.add_argument("--output_file", type=str, default="accuracy_plot.pdf")
+parser.add_argument("--num_seeds", type=int, default=20)
+parser.add_argument(
+    "--output_file",
+    type=str,
+    default="fscvlr-plain_test-accuracy_vs_training-classes.pdf",
+)
 args = parser.parse_args()
 
 aggregated_data = collect_results(args.results_dir, args.num_seeds)
