@@ -294,3 +294,90 @@ def scaling(scaling_vector):
             [0.0, 0.0, 0.0, 1.0],
         ]
     )
+
+
+def view_transform(camera_origin, target_position, world_up):
+    camera_forward = target_position - camera_origin
+    camera_forward = camera_forward / jp.linalg.norm(camera_forward)
+    world_up = world_up / jp.linalg.norm(world_up)
+    camera_left = jp.cross(camera_forward, world_up)
+    left_x, left_y, left_z = camera_left
+    up_x, up_y, up_z = jp.cross(camera_left, camera_forward)
+    x_forward, y_forward, z_forward = camera_forward
+    orientation = jp.array(
+        [
+            [left_x, left_y, left_z, 0.0],
+            [up_x, up_y, up_z, 0.0],
+            [-x_forward, -y_forward, -z_forward, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    translate = translation(-camera_origin)
+    view_transform = jp.matmul(orientation, translate)
+    return view_transform
+
+
+def rotation_z(angle):
+    """Builds affine rotation matrix in Z axis.
+
+    # Arguments
+        angle: Float. Angle in radians.
+
+    # Return
+        Array (4, 4) rotation matrix in Z axis.
+    """
+    cos_angle = jp.cos(angle)
+    sin_angle = jp.sin(angle)
+    rotation_matrix_z = jp.array(
+        [
+            [+cos_angle, -sin_angle, 0.0, 0.0],
+            [+sin_angle, +cos_angle, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    return rotation_matrix_z
+
+
+def rotation_x(angle):
+    """Builds affine rotation matrix in X axis.
+
+    # Arguments
+        angle: Float. Angle in radians.
+
+    # Return
+        Array (4, 4) rotation matrix in Z axis.
+    """
+    cos_angle = jp.cos(angle)
+    sin_angle = jp.sin(angle)
+    rotation_matrix_x = jp.array(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, +cos_angle, -sin_angle, 0.0],
+            [0.0, +sin_angle, +cos_angle, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    return rotation_matrix_x
+
+
+def rotation_y(angle):
+    """Builds affine rotation matrix in Y axis.
+
+    # Arguments
+        angle: Float. Angle in radians.
+
+    # Return
+        Array (4, 4) rotation matrix in Z axis.
+    """
+    cos_angle = jp.cos(angle)
+    sin_angle = jp.sin(angle)
+    rotation_matrix_y = jp.array(
+        [
+            [+cos_angle, 0.0, +sin_angle, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [-sin_angle, 0.0, +cos_angle, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    return rotation_matrix_y
