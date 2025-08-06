@@ -83,7 +83,25 @@ def normalize_and_norm(x, axis=None):
     return x_normalized, norm
 
 
-def normalize(x, axis=None):
+def compute_norms(vectors, axis=-1, keepdims=True):
+    return jp.linalg.norm(vectors, axis=axis, keepdims=keepdims)
+
+
+def normalize(vectors, axis=-1, keepdims=True):
+    """Normalizes vectors across last dimension
+
+    # Arguments
+        vectors: Array (num_vectors, 3)
+
+    # Returns
+        normalized vectors: Array (num_vectors, 3)
+    """
+    norms = compute_norms(vectors, axis=axis, keepdims=keepdims)
+    vectors = vectors / (norms + 1e-8)
+    return vectors
+
+
+def normalize_old(x, axis=None):
     """Normalizes an array.
 
     # Arguments:
@@ -96,3 +114,73 @@ def normalize(x, axis=None):
     norm = safe_norm(x, axis=axis)
     x_normalized = x / (norm + 1e-6 * (norm == 0.0))
     return x_normalized
+
+
+def dot(vectors_A, vectors_B):
+    """Computes dot product between vectors_A and vectors_B
+
+    # Arguments
+        vectors_A: Array (num_vectors, 3)
+        vectors_B: Array (num_vectors, 3)
+
+    # Returns
+        Array (num_rays)
+    """
+    return jp.sum(vectors_A * vectors_B, axis=-1)
+
+
+def solve_quadratic(a, b, c):
+    """Solves quadratic equation
+
+    # Arguments
+        a: Array
+        b: Array
+        c: Array
+
+    # Returns
+        solution_A: Array
+        solution_B: Array
+        valid_mask: Boolean array
+    """
+    discriminator = (b**2) - (4.0 * a * c)
+    valid_mask = discriminator > 0  # >= is bad for automatic differentiation
+    # TODO check if 0.0 should be epislon. Scipy optimize complained.
+    discriminator = jp.where(valid_mask, discriminator, 1e-6)
+    sqrt_discriminator = jp.sqrt(discriminator)
+    solution_A = (-b - sqrt_discriminator) / (2.0 * a)
+    solution_B = (-b + sqrt_discriminator) / (2.0 * a)
+    return solution_A, solution_B, valid_mask
+
+
+def add_zeros(vectors):
+    """Adds zeros to vectors in R^3 across last dimension
+
+    # Arguments
+        vectors: Array (num_vectors, 3)
+
+    # Returns
+        vectors: Array (num_vectors, 4)
+    """
+    zeros = jp.zeros((len(vectors), 1))
+    vectors = jp.concatenate([vectors, zeros], axis=-1)
+    return vectors
+
+
+def transform_vectors(affine_matrix, vectors):
+    """Transform R^3 vectors with affine matrix
+
+    # Arguments
+        affine_matrix: (4, 4)
+        rays: (num_rays, 3)
+
+    # Returns
+        Transformed vectors (num_rays, 3)
+    """
+    vectors = add_zeros(vectors)
+    vectors = jp.matmul(affine_matrix, vectors.T).T
+    vectors = vectors[:, :3]
+    return vectors
+
+
+def to_column(vector):
+    return jp.reshape(vector, (-1, 1))
