@@ -16,6 +16,7 @@ from paz.backend.lie import SE3
 from paz.backend.lie import SO3
 from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
+from paz.backend import graphics
 from paz.backend import points2D
 from paz.backend import algebra
 from paz.backend import scene
@@ -34,7 +35,7 @@ from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz import message
 from paz import applications
-from paz.utils import time
+from paz.utils import time, assert_snapshot
 from paz.abstract import tree
 from paz import callbacks
 from paz import layers
