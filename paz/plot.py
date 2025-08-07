@@ -78,6 +78,14 @@ def hide_axes(axis):
 
 
 @matplotlib_required
+def hide_all_axes(axis):
+    axis.spines["top"].set_visible(False)
+    axis.spines["bottom"].set_visible(False)
+    axis.spines["right"].set_visible(False)
+    axis.spines["left"].set_visible(False)
+
+
+@matplotlib_required
 def set_minor_ticks(axis):
     axis.yaxis.set_minor_locator(ticker.AutoMinorLocator())
     axis.xaxis.set_minor_locator(ticker.AutoMinorLocator())
