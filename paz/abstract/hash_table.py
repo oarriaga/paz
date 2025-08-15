@@ -1,51 +1,29 @@
 from collections import namedtuple
+
 import jax
 import jax.numpy as jp
 
-
-def hash_fn(item, key):
-    hash_value = jp.uint32(key)
-    hash_value = (hash_value << 5) ^ item.id
-    if item.data.ndim == 2:
-        hash_value = (hash_value << 5) ^ item.data[:, 0]
-        hash_value = (hash_value << 5) ^ item.data[:, 1]
-        item_as_uint32 = jp.concatenate([item.id[:, None], item.data], axis=1)
-    else:
-        hash_value = (hash_value << 5) ^ item.data[0]
-        hash_value = (hash_value << 5) ^ item.data[1]
-        item_as_uint32 = jp.concatenate([jp.array([item.id]), item.data])
-    return hash_value, item_as_uint32
-
-
-def equals_fn(item1, item2):
-    id_match = jp.all(item1.id == item2.id)
-    data_match = jp.all(item1.data == item2.data)
-    return jp.logical_and(id_match, data_match)
-
-
-SIZE_DTYPE = jp.uint32
+TABLE_SIZE_DTYPE = jp.uint32
 TABLE_ARG_DTYPE = jp.uint8
-CuckooArg = namedtuple("CuckooArg", ["arg", "table_arg"])
-HashArg = namedtuple("HashArg", ["arg"])
-Item = namedtuple("Item", ["id", "data"])
+Counter = namedtuple("Counter", ["slot_arg", "table_arg"])
+Item = namedtuple("Item", ["arg", "data"])
 HashTable = namedtuple(
     "HashTable",
     [
         "key",
-        "capacity",
-        "hidden_capacity",
-        "cuckoo_table_n",
+        "num_slots",
+        "sub_table_size",
+        "num_tables",
         "size",
-        "item_ids",
-        "item_datas",
-        "table_arg",
-        # "hash_fn",
-        # "equals_fn",
+        "args",
+        "data",
+        "table_occupancy",
     ],
 )
 
 
 def xxhash(key, x):
+
     def rotate_left(x, num_steps):
         return (x << num_steps) | (x >> (32 - num_steps))
 
@@ -67,24 +45,61 @@ def xxhash(key, x):
     return accumulator
 
 
-def hash_array(key, array_uint32):
-    def scan_body(key, x):
+def array_uint32_to_hash(key, array_uint32):
+    def apply_xxhash(key, x):
         result = xxhash(key, x)
         return result, result
 
-    hash_value, _ = jax.lax.scan(scan_body, key, array_uint32)
+    hash_value, _ = jax.lax.scan(apply_xxhash, key, array_uint32)
     return hash_value
 
 
-def hash_to_arg(key, array_uint32, capacity):
-    hash_value = hash_array(key, array_uint32)
+def hash_to_slot_arg(key, array_uint32, capacity):
+    # TODO change name
+    hash_value = array_uint32_to_hash(key, array_uint32)
     arg = hash_value % capacity
     return arg
 
 
-def item_to_uint32_with_arg(table, item):
-    hash_value, item_uint32 = hash_fn(item, table.key)
-    return hash_value % table.capacity, item_uint32
+def byterize(pytree):
+    """Convert entire state tree to flattened byte array."""
+
+    def to_bytes(x):
+        """Convert input to byte array."""
+        if x.dtype == jp.bool_:  # if x is boolean array cast to uint8 if true
+            x = x.astype(jp.uint8)
+        return jax.lax.bitcast_convert_type(x, jp.uint8).reshape(-1)
+
+    pytree = jax.tree_util.tree_map(to_bytes, pytree)
+    pytree, _ = jax.tree_util.tree_flatten(pytree)
+    if len(pytree) == 0:
+        return jp.array([], dtype=jp.uint8)
+    return jp.concatenate(pytree)
+
+
+def bytes_to_uint32(byte_array):
+    bytes_length = byte_array.shape[0]
+    pad_length = (4 - bytes_length % 4) % 4
+    padded_array = jp.pad(byte_array, (0, pad_length), mode="constant")
+    reshaped_array = padded_array.reshape(-1, 4)  # Shape (N, 4), dtype=uint8
+    return jax.lax.bitcast_convert_type(reshaped_array, new_dtype=jp.uint32)
+
+
+def pytree_to_uint32(pytree):
+    byte_array = byterize(pytree)
+    return bytes_to_uint32(byte_array)
+
+
+def pytree_to_uint32_with_slot_arg(table, pytree):
+    item_uint32 = pytree_to_uint32(pytree)
+    slot_arg = hash_to_slot_arg(table.key, item_uint32, table.num_slots)
+    return slot_arg, item_uint32
+
+
+def are_equal(item_A, item_B):
+    args_match = jp.all(item_A.arg == item_B.arg)
+    data_match = jp.all(item_A.data == item_B.data)
+    return jp.logical_and(args_match, data_match)
 
 
 def get_batch_size(pytree):
@@ -92,300 +107,160 @@ def get_batch_size(pytree):
     return first_leaf.shape[0]
 
 
-def compute_flat_arg(cuckoo_arg, table):
-    return (cuckoo_arg.arg * table.cuckoo_table_n) + cuckoo_arg.table_arg
-
-
-def unique_mask(cuckoo_args):
-    batch_size = get_batch_size(cuckoo_args)
-    combined_args = (cuckoo_args.arg << 8) + cuckoo_args.table_arg
-    _, first_occurrence_indices = jp.unique(
-        combined_args, axis=0, size=batch_size, return_index=True
-    )
-    is_first_occurrence_mask = (
-        jp.zeros((batch_size,), dtype=jp.bool_)
-        .at[first_occurrence_indices]
-        .set(True)
-    )
-    is_padding_index = first_occurrence_indices >= batch_size
-    final_mask = jp.where(is_padding_index, False, is_first_occurrence_mask)
-    return final_mask
+def compute_flat_arg(counter, table):
+    return (counter.slot_arg * table.num_tables) + counter.table_arg
 
 
 def build(
-    key,
-    capacity,
-    example_item,
-    cuckoo_table_n=2,
-    hash_size_multiplier=2,
+    num_slots,
+    item_data_shape,
+    item_arg_dtype=jp.uint32,
+    item_data_dtype=jp.uint32,
+    num_tables=2,
+    capacity_multiplier=2,
+    key=777,
 ):
-    hidden_capacity = int(hash_size_multiplier * capacity / cuckoo_table_n)
-    table_size = (hidden_capacity + 1) * cuckoo_table_n
-
-    size = SIZE_DTYPE(0)
-    item_ids = jp.zeros((table_size,), dtype=example_item.id.dtype)
-    item_datas = jp.zeros(
-        (table_size,) + example_item.data.shape, dtype=example_item.data.dtype
-    )
-
-    table_arg = jp.zeros((hidden_capacity + 1,), dtype=TABLE_ARG_DTYPE)
+    sub_table_size = int(capacity_multiplier * num_slots / num_tables)
+    internal_num_slots = sub_table_size * num_tables
+    # TODO maybe just use an array of shape(sub_table_size, num_tables)
+    args = jp.zeros((internal_num_slots,), item_arg_dtype)
+    data = jp.zeros((internal_num_slots,) + item_data_shape, item_data_dtype)
+    table_occupancy = jp.zeros((sub_table_size), dtype=TABLE_ARG_DTYPE)
+    size = TABLE_SIZE_DTYPE(0)
     return HashTable(
-        key=key,
-        capacity=capacity,
-        hidden_capacity=hidden_capacity,
-        cuckoo_table_n=cuckoo_table_n,
-        size=size,
-        item_ids=item_ids,
-        item_datas=item_datas,
-        table_arg=table_arg,
-        # hash_fn=hash_function,
-        # equals_fn=equality_function,
+        key,
+        num_slots,
+        sub_table_size,
+        num_tables,
+        size,
+        args,
+        data,
+        table_occupancy,
     )
 
 
-def _lookup(key, table, item, item_uint32, cuckoo_arg, is_item_found):
-    def calculate_next_probing_slot(now_key, now_cuckoo_arg):
-        def move_to_next_hash_function(key, cuckoo_index):
-            new_key = key + 1
-            hash_arg = hash_to_arg(new_key, item_uint32, table.capacity)
-            return new_key, CuckooArg(hash_arg, TABLE_ARG_DTYPE(0))
+def _lookup(table, item):
+    # 1. if 1st slot is empty, no search
+    # 2. if 1st slot is not empty, check 1st table slot
+    # 3. if 1st slot is not empty, check 2nd table slot
+    # 4. if 1st slot is not empty, and table slot is full, check next slot
+    # 5. if 2nd slot is empty, no search
+    slot_arg, query_uint32 = pytree_to_uint32_with_slot_arg(table, item)
 
-        def move_to_next_cuckoo_slot(key, cuckoo_arg):
-            return key, CuckooArg(cuckoo_arg.arg, cuckoo_arg.table_arg + 1)
+    def _next_probe(key, counter):
 
-        last_hash_slot = now_cuckoo_arg.table_arg >= (table.cuckoo_table_n - 1)
-        return jax.lax.cond(
-            last_hash_slot,
-            move_to_next_hash_function,
-            move_to_next_cuckoo_slot,
-            now_key,
-            now_cuckoo_arg,
-        )
+        def next_slot(key, counter):
+            new_key, zero_table_arg = key + 1, TABLE_ARG_DTYPE(0)
+            slot_arg = hash_to_slot_arg(new_key, query_uint32, table.num_slots)
+            return new_key, Counter(slot_arg, zero_table_arg)
 
-    def check_next_slot(state):
-        key, cuckoo_arg, item_was_found = state
-        arg = compute_flat_arg(cuckoo_arg, table)
-        item_in_slot = Item(id=table.item_ids[arg], data=table.item_datas[arg])
-        slot_filled = cuckoo_arg.table_arg < table.table_arg[cuckoo_arg.arg]
-        is_item_found = jp.logical_and(
-            slot_filled, equals_fn(item_in_slot, item)
-        )
+        def next_table(key, counter):
+            return key, Counter(counter.slot_arg, counter.table_arg + 1)
 
-        def do_nothing(key, cuckoo_index):
-            return key, cuckoo_index
+        not_last_table = counter.table_arg < (table.num_tables - 1)
+        return jax.lax.cond(not_last_table, next_table, next_slot, key, counter)
 
-        new_key, new_cuckoo_arg = jax.lax.cond(
-            is_item_found,
-            do_nothing,
-            calculate_next_probing_slot,
-            key,
-            cuckoo_arg,
-        )
-        return new_key, new_cuckoo_arg, is_item_found
+    def next_probe(state):
+        key, counter, _ = state
+        flat_arg = compute_flat_arg(counter, table)
+        item_in_slot = Item(table.args[flat_arg], table.data[flat_arg])
+        filled = counter.table_arg < table.table_occupancy[counter.slot_arg]
+        found = jp.logical_and(filled, are_equal(item_in_slot, item))
 
-    def do_continue(state):
-        _, cuckoo_arg, item_was_found = state
-        is_in_bounds = cuckoo_arg.table_arg < table.table_arg[cuckoo_arg.arg]
-        return jp.logical_and(~item_was_found, is_in_bounds)
+        def identity(key, counter):
+            return key, counter
 
-    arg = compute_flat_arg(cuckoo_arg, table)
-    item_in_first_slot = Item(
-        id=table.item_ids[arg], data=table.item_datas[arg]
-    )
-    is_first_slot_filled = (
-        cuckoo_arg.table_arg < table.table_arg[cuckoo_arg.arg]
-    )
-    is_found_immediately = jp.logical_and(
-        is_first_slot_filled, equals_fn(item_in_first_slot, item)
-    )
-    is_item_found = jp.logical_or(is_item_found, is_found_immediately)
-    state = (key, cuckoo_arg, is_item_found)
-    return jax.lax.while_loop(do_continue, check_next_slot, state)
+        key, counter = jax.lax.cond(found, identity, _next_probe, key, counter)
+        return key, counter, found
+
+    def continue_search(state):
+        _, counter, item_was_found = state
+        num_occupants = table.table_occupancy[counter.slot_arg]
+        is_in_empty_slot = counter.table_arg >= num_occupants
+        return jp.logical_and(~item_was_found, ~is_in_empty_slot)
+
+    state = (table.key, Counter(slot_arg, TABLE_ARG_DTYPE(0)), False)
+    _, counter, found = jax.lax.while_loop(continue_search, next_probe, state)
+    return counter, found
 
 
 def lookup(table, item):
-    arg, item_uint32 = item_to_uint32_with_arg(table, item)
-    cuckoo_arg = CuckooArg(arg, TABLE_ARG_DTYPE(0))
-    _, final_cuckoo_arg, found = _lookup(
-        table.key, table, item, item_uint32, cuckoo_arg, False
-    )
-    return HashArg(compute_flat_arg(final_cuckoo_arg, table)), found
-
-
-def _lookup_parallel(table, items):
-    vectorized_item_to_arg = jax.vmap(
-        item_to_uint32_with_arg, in_axes=(None, 0)
-    )
-    initial_args, items_as_uint32 = vectorized_item_to_arg(table, items)
-
-    batch_size = get_batch_size(items)
-    cuckoo_args = CuckooArg(initial_args, jp.zeros(batch_size, TABLE_ARG_DTYPE))
-    keys = jp.full((batch_size,), table.key)
-    status = jp.zeros(batch_size, dtype=jp.bool)
-    vectorized_lookup = jax.vmap(_lookup, (0, None, 0, 0, 0, 0))
-    _, cuckoo_args, status = vectorized_lookup(
-        keys, table, items, items_as_uint32, cuckoo_args, status
-    )
-    return cuckoo_args, status
-    # flat_args = compute_flat_arg(cuckoo_args, table)
-    # return HashArg(flat_args), status
+    counter, found = _lookup(table, item)
+    return compute_flat_arg(counter, table), found
 
 
 def lookup_parallel(table, items):
-    vectorized_item_to_arg = jax.vmap(
-        item_to_uint32_with_arg, in_axes=(None, 0)
-    )
-    initial_args, items_as_uint32 = vectorized_item_to_arg(table, items)
-
-    batch_size = get_batch_size(items)
-    cuckoo_args = CuckooArg(initial_args, jp.zeros(batch_size, TABLE_ARG_DTYPE))
-    keys = jp.full((batch_size,), table.key)
-    status = jp.zeros(batch_size, dtype=jp.bool)
-    vectorized_lookup = jax.vmap(_lookup, (0, None, 0, 0, 0, 0))
-    _, cuckoo_args, status = vectorized_lookup(
-        keys, table, items, items_as_uint32, cuckoo_args, status
-    )
-    flat_args = compute_flat_arg(cuckoo_args, table)
-    return HashArg(flat_args), status
+    return jax.vmap(lookup, (None, 0))(table, items)
 
 
 def insert(table, item):
-    def _do_nothing(table, cuckoo_arg):
+    def do_nothing(table, cuckoo):
         return table
 
-    def _insert(table, cuckoo_arg):
-        flat_arg = compute_flat_arg(cuckoo_arg, table)
-        updated_ids = table.item_ids.at[flat_arg].set(item.id)
-        updated_datas = table.item_datas.at[flat_arg].set(item.data)
-        table_arg = table.table_arg.at[cuckoo_arg.arg].add(1)
+    def insert(table, cuckoo):
+        flat_arg = compute_flat_arg(cuckoo, table)
+        table_args = table.args.at[flat_arg].set(item.arg)
+        table_data = table.data.at[flat_arg].set(item.data)
+        table_occupancy = table.table_occupancy.at[cuckoo.slot_arg].add(1)
         size = table.size + 1
         return table._replace(
-            item_ids=updated_ids,
-            item_datas=updated_datas,
-            table_arg=table_arg,
+            args=table_args,
+            data=table_data,
+            table_occupancy=table_occupancy,
             size=size,
         )
 
-    arg, uint32_item = item_to_uint32_with_arg(table, item)
-    cuckoo_arg = CuckooArg(arg, TABLE_ARG_DTYPE(0))
-    _, cuckoo_arg, is_item_found = _lookup(
-        table.key, table, item, uint32_item, cuckoo_arg, False
+    counter, found = _lookup(table, item)
+    table = jax.lax.cond(found, do_nothing, insert, table, counter)
+    return table, jp.logical_not(found), compute_flat_arg(counter, table)
+
+
+def unique_mask(pytrees, key=None):
+    items_uint32 = jax.vmap(pytree_to_uint32)(pytrees)
+    batch_size = get_batch_size(items_uint32)
+    _, unique_args, inverse_args = jp.unique(
+        items_uint32,
+        axis=0,
+        size=batch_size,
+        return_index=True,
+        return_inverse=True,
     )
-    table = jax.lax.cond(is_item_found, _do_nothing, _insert, table, cuckoo_arg)
-    is_item_inserted = ~is_item_found
-    return table, is_item_inserted, HashArg(compute_flat_arg(cuckoo_arg, table))
+    mask = jp.zeros(batch_size, dtype=jp.bool_).at[unique_args].set(True)
+    return mask, unique_args, inverse_args
 
 
-def resolve_collisions(state, table):
-    keys, cuckoo_args, needs_placement, items_as_uint32, should_be_inserted = (
-        state
-    )
+def insert_parallel(table, items):
+    get_hash_and_slots = jax.vmap(pytree_to_uint32_with_slot_arg, (None, 0))
+    slot_arg, uint32eds = get_hash_and_slots(table, items)
+    batch_size = get_batch_size(items)
+    unique, unique_items_args, inverse_indices = unique_mask(items)
+    counter = Counter(slot_arg, jp.zeros((batch_size,), dtype=TABLE_ARG_DTYPE))
+    keys = jp.full((batch_size,), table.seed, dtype=jp.uint32)
 
-    def get_next_slot(key, cuckoo_arg, item_as_uint32):
-        def next_hash(key, _):
-            next_key = key + 1
-            hash_arg = hash_to_arg(next_key, item_as_uint32, table.capacity)
-            return next_key, CuckooArg(hash_arg, TABLE_ARG_DTYPE(0))
-
-        def next_cuckoo(key, current_cuckoo_arg):
-            table_arg = current_cuckoo_arg.table_arg + 1
-            next_cuckoo_arg = CuckooArg(current_cuckoo_arg.arg, table_arg)
-            return key, next_cuckoo_arg
-
-        last_slot = cuckoo_arg.table_arg >= (table.cuckoo_table_n - 1)
-        return jax.lax.cond(last_slot, next_hash, next_cuckoo, key, cuckoo_arg)
-
-    get_slots = jax.vmap(get_next_slot, in_axes=(0, 0, 0))
-    new_keys, new_cuckoo_args = get_slots(keys, cuckoo_args, items_as_uint32)
-    keys = jp.where(needs_placement, new_keys, keys)
-
-    def update(new_value, value):
-        return jp.where(needs_placement, new_value, value)
-
-    cuckoo_args = jax.tree_util.tree_map(update, new_cuckoo_args, cuckoo_args)
-    is_slot_unique_mask = unique_mask(cuckoo_args)
-    needs_placement = jp.logical_and(should_be_inserted, ~is_slot_unique_mask)
-    return (
-        keys,
-        cuckoo_args,
-        needs_placement,
-        items_as_uint32,
-        should_be_inserted,
+    # TODO should we add unique mask and keys?
+    counter, found = jax.vmap(_lookup, (None, 0))(table, items)
+    updatable = jp.logical_and(jp.logical_not(found), unique)
+    # Perform parallel insertion
+    table, inserted_idx = _insert_parallel(
+        table, items, uint32eds, keys, counter, updatable
     )
 
-
-def insert_at_resolved_slots(table, items, to_be_inserted, cuckoo_args):
-    def _filter_leaf(leaf):
-        return leaf[to_be_inserted]
-
-    items_to_insert = jax.tree_util.tree_map(_filter_leaf, items)
-    cuckoo_args_to_insert = jax.tree_util.tree_map(_filter_leaf, cuckoo_args)
-    flat_args = compute_flat_arg(cuckoo_args_to_insert, table)
-    updated_ids = table.item_ids.at[flat_args].set(items_to_insert.id)
-    updated_datas = table.item_datas.at[flat_args].set(items_to_insert.data)
-    num_inserts_per_bucket = (
-        jp.zeros_like(table.table_arg).at[cuckoo_args_to_insert.arg].add(1)
+    # Provisional index: found -> counter, inserted -> inserted_idx
+    provisional_index = jp.where(found, counter.slot_arg, inserted_idx.slot_arg)
+    provisional_table_index = jp.where(
+        found, counter.table_arg, inserted_idx.table_arg
     )
-    new_table_arg = table.table_arg + num_inserts_per_bucket
-    num_items_inserted = jp.sum(to_be_inserted, dtype=SIZE_DTYPE)
-    size = table.size + num_items_inserted
-    return table._replace(
-        item_ids=updated_ids,
-        item_datas=updated_datas,
-        table_arg=new_table_arg,
-        size=size,
+    provisional_idx = Counter(provisional_index, provisional_table_index)
+
+    # Only keep indices for unique elements
+    correct_indices_for_uniques = Counter(
+        provisional_idx.slot_arg[unique_items_args],
+        table_arg=provisional_idx.table_arg[unique_items_args],
     )
 
-
-def parallel_insert(table, items):
-    def do_nothing(table):
-        return table
-
-    def resolve_and_insert_batch(table):
-
-        def _get_item_as_uint32(item):
-            return item_to_uint32_with_arg(table, item)[1]
-
-        batch_size = get_batch_size(items)
-        keys = jp.full((batch_size,), table.key)
-        items_as_uint32 = jax.vmap(_get_item_as_uint32)(items)
-        needs_placement = jp.logical_and(
-            should_be_inserted, ~unique_mask(cuckoo_args)
-        )
-        loop_state = (
-            keys,
-            cuckoo_args,
-            needs_placement,
-            items_as_uint32,
-            should_be_inserted,
-        )
-
-        def loop_condition(current_state):
-            _, _, needs_placement_mask, _, _ = current_state
-            return jp.any(needs_placement_mask)
-
-        def loop_body(current_state):
-            return resolve_collisions(
-                current_state,
-                table,
-                # items_as_uint32,
-                # should_be_inserted,
-            )
-
-        _, final_cuckoo_args, _, _, _ = jax.lax.while_loop(
-            loop_condition, loop_body, loop_state
-        )
-        return insert_at_resolved_slots(
-            table, items, should_be_inserted, final_cuckoo_args
-        )
-
-    cuckoo_args, are_items_found = _lookup_parallel(table, items)
-    should_be_inserted = ~are_items_found
-    table = jax.lax.cond(
-        jp.any(should_be_inserted),
-        resolve_and_insert_batch,
-        do_nothing,
-        table,
+    # Broadcast to all batch elements using inverse_indices
+    final_idx = Counter(
+        correct_indices_for_uniques.slot_arg[inverse_indices],
+        correct_indices_for_uniques.table_arg[inverse_indices],
     )
-    hash_arg = HashArg(compute_flat_arg(cuckoo_args, table))
-    return table, should_be_inserted, hash_arg
+    return table, updatable, unique, compute_flat_arg(final_idx, table)
