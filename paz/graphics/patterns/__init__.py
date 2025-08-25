@@ -1,1 +1,1 @@
-from paz.backend.graphics.patterns import empty, spherical, planar, image
+from paz.graphics.patterns import empty, spherical, planar, image

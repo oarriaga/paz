@@ -1,5 +1,5 @@
-from paz.backend.graphics.abstract import PointLight, Material, Pattern, Shape
-from paz.backend.graphics.constants import (
+from paz.graphics.types import PointLight, Material, Pattern, Shape
+from paz.graphics.constants import (
     NO_PATTERN,
     SPHERICAL_PATTERN,
     PLANAR_PATTERN,
@@ -9,7 +9,7 @@ from paz.backend.graphics.constants import (
     CONE,
     PLANE,
 )
-from paz.backend.graphics import shapes
-from paz.backend.graphics import camera
-from paz.backend.graphics.render import Render
-from paz.backend.graphics import patterns
+from paz.graphics import shapes
+from paz.graphics import camera
+from paz.graphics.render import Render
+from paz.graphics import patterns

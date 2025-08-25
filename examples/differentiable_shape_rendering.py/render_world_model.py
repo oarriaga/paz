@@ -4,11 +4,10 @@ import matplotlib.pyplot as plt
 from matplotlib.image import imread
 
 from paz import SE3
-from paz.backend.graphics import PointLight, Material, Pattern, Shape
-
-from paz.backend.graphics.camera import build_rays
-from paz.backend.graphics.render import Render
-from paz.backend.graphics import (
+from paz.graphics import PointLight, Material, Pattern, Shape
+from paz.graphics.camera import build_rays
+from paz.graphics.render import Render
+from paz.graphics import (
     SPHERE,
     CUBE,
     CONE,
@@ -39,8 +38,10 @@ lights = [
     PointLight(jp.array([0.4, 0.4, 0.4]), jp.array([-10.0, 10.0, -10.0])),
     PointLight(jp.array([0.4, 0.4, 0.4]), jp.array([+10.0, 10.0, -10.0])),
 ]
+
+
 camera_pose = SE3.view_transform(
-    jp.array([0, 0.0, -3.0]),
+    jp.array([0, 4.0, -3.0]),
     jp.array([0.0, 0.0, 4.0]),
     jp.array([0.0, 1.0, 0.0]),
 )

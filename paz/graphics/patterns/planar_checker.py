@@ -1,6 +1,6 @@
 import jax.numpy as jp
 
-from paz.backend.graphics.patterns.checker import compute_checker_colors
+from paz.graphics.patterns.checker import compute_checker_colors
 
 
 def planar_map(points3D):

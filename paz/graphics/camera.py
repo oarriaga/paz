@@ -67,7 +67,7 @@ def build_ray_directions(H, W, pixel_size, half_W, half_H):
     z_grid = jp.repeat(-1.0, W * H)
     z_grid = jp.reshape(z_grid, [W * H, 1])
     ones = jp.ones([W * H, 1])
-    # x_grid = -x_grid  # make a left-handed coordinate system
+    x_grid = -x_grid  # make a left-handed coordinate system
     ray_directions = [x_grid, y_grid, z_grid, ones]
     ray_directions = jp.concatenate(ray_directions, axis=1)
     return ray_directions

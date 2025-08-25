@@ -39,7 +39,7 @@ def _merge(*leafs):
 
 
 def merge(*shapes):
-    return jax.tree.map(_merge, *shapes), jp.ones(len(shapes), dtype=bool)
+    return jax.tree.map(_merge, *shapes)
 
 
 def _expand_leafs(leaf):

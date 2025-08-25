@@ -16,11 +16,14 @@ from paz.backend.lie import SE3
 from paz.backend.lie import SO3
 from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
-from paz.backend import graphics
+
+# from paz.backend import graphics
+from paz import graphics
 from paz.backend import points2D
 from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
+from paz import pytree
 from paz.backend.standard import (
     lock,
     partial,

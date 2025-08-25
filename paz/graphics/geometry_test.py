@@ -3,7 +3,7 @@ import jax.numpy as jp
 from pytest import approx
 
 from paz.graphics import geometry
-from paz.backend.graphics.constants import FARAWAY
+from paz.graphics.constants import FARAWAY
 
 
 @pytest.fixture

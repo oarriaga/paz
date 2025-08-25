@@ -2,7 +2,7 @@ import jax.numpy as jp
 import jax
 import paz
 
-from paz.backend.graphics.constants import FARAWAY
+from paz.graphics.constants import FARAWAY
 
 
 def compute_quadratic_is_hit(depths_A, depths_B, is_valid):

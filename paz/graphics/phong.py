@@ -3,7 +3,7 @@ import jax.numpy as jp
 
 import paz
 
-from paz.backend.graphics.utils import (
+from paz.graphics.geometry import (
     compute_hits_to_light,
     compute_reflections_dot_eye,
 )
@@ -25,9 +25,9 @@ def compute_pattern_colors(shape, points):
     pattern_image = shape.pattern.image
     points = compute_colors_in_shape(pattern_transform, shape.transform, points)
     cases = [
-        paz.backend.graphics.patterns.empty.compute_colors,
-        paz.backend.graphics.patterns.spherical.compute_colors,
-        paz.backend.graphics.patterns.planar.compute_colors,
+        paz.graphics.patterns.empty.compute_colors,
+        paz.graphics.patterns.spherical.compute_colors,
+        paz.graphics.patterns.planar.compute_colors,
     ]
     pattern_colors = jax.lax.switch(
         shape.pattern.type, cases, points, pattern_image

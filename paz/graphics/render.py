@@ -4,15 +4,15 @@ from functools import partial
 import jax
 import jax.numpy as jp
 
-from paz.backend.graphics.constants import EPSILON
-from paz.backend.graphics.phong import (
+from paz.graphics.constants import EPSILON
+from paz.graphics.phong import (
     compute_colors,
     compute_colors_with_shadow,
 )
-from paz.backend.graphics.shapes import intersection_cases, normal_cases
+from paz.graphics.shapes import intersection_cases, normal_cases
 
 
-from paz.backend.graphics.utils import compute_points3D, transform_rays
+from paz.graphics.geometry import compute_points3D, transform_rays
 from paz.backend.algebra import dot, normalize, transform_points
 
 

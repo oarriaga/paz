@@ -4,9 +4,10 @@ import matplotlib.pyplot as plt
 import paz
 from paz import SE3
 import numpy as np
-from paz.backend.graphics import SPHERE
-from paz.backend.graphics import CUBE
-from paz.backend.graphics import PointLight
+from paz.graphics import SPHERE
+
+# from paz.graphics import CUBE
+from paz.graphics import PointLight
 
 import matplotlib.colors as mcolors
 from mpl_toolkits.axes_grid1 import make_axes_locatable

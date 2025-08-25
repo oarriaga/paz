@@ -23,7 +23,7 @@ world_to_camera_openGL = SE3.view_transform(
 )
 openGL_to_tamayo = jp.array(
     [
-        [-1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
         [0.0, 1.0, 0.0, 0.0],
         [0.0, 0.0, 1.0, 0.0],
         [0.0, 0.0, 0.0, 1.0],
@@ -62,10 +62,10 @@ shape_2 = paz.graphics.Shape(
     pattern,
     material,
 )
-scene_tamayo, masks = paz.graphics.shapes.merge(shape_1, shape_2)
+scene_tamayo = paz.graphics.shapes.merge(shape_1, shape_2)
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, world_to_camera_tamayo)
 render = paz.graphics.Render((H, W), world_to_camera_tamayo, rays, False)
-pred_image, pred_depth = render(scene_tamayo, masks, lights)
+pred_image, pred_depth = render(scene_tamayo, jp.ones(2), lights)
 pred_image = (255.0 * pred_image).astype("uint8")
 true_pred_image = jp.concatenate([true_image, pred_image], axis=1)
 plt.imshow(true_pred_image)
