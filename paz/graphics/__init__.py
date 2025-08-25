@@ -11,5 +11,5 @@ from paz.graphics.constants import (
 )
 from paz.graphics import shapes
 from paz.graphics import camera
-from paz.graphics.render import Render
+from paz.graphics.renderer import render, render_with_shadows
 from paz.graphics import patterns
