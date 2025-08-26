@@ -2,6 +2,7 @@ import jax.numpy as jp
 import matplotlib.pyplot as plt
 from paz import SE3
 
+import paz
 from paz.graphics.types import PointLight, Material, Shape, Pattern, Group
 from paz.graphics.constants import SPHERE, CYLINDER, CONE
 
@@ -110,7 +111,10 @@ shapes_list = [
 ]
 
 parent_array = jp.array([-1, 0, 0, 0, 0, 0, 0])
-scene_group = Group(shapes_list, parent_array)
+_axes = Group(shapes_list, parent_array)
+
+paz.graphics.save("axes.json", group=_axes)
+axes = paz.graphics.load("axes.json")
 
 camera_pose = SE3.view_transform(
     camera_origin=jp.array([0.0, 10.0, 10.0]),
@@ -132,7 +136,7 @@ image_data, _ = render(
     image_shape=(H, W),
     world_to_camera=camera_pose,
     rays=rays,
-    shapes=scene_group,
+    shapes=axes,
     lights=lights,
 )
 

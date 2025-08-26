@@ -1,4 +1,7 @@
 from typing import Any
+import jax.numpy as jp
+import json
+from paz.graphics.types import PointLight, Material, Pattern, Shape, Group
 
 
 # Define a color class for prettier output in terminals that support it
