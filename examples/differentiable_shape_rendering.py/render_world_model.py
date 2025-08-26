@@ -24,17 +24,6 @@ BLUE = jp.array([0.0, 0.0, 1.0])
 PINK = jp.array([2.0, 0.0, 1.0])
 
 
-def merge_leaf(*leafs):
-    concatenated_leafs = []
-    for leaf in leafs:
-        concatenated_leafs.append(leaf)
-    return jp.array(concatenated_leafs)
-
-
-def merge(*pytrees):
-    return jax.tree.map(merge_leaf, *pytrees)
-
-
 lights = [
     PointLight(jp.array([0.4, 0.4, 0.4]), jp.array([-10.0, 10.0, -10.0])),
     PointLight(jp.array([0.4, 0.4, 0.4]), jp.array([+10.0, 10.0, -10.0])),
@@ -84,28 +73,28 @@ floor_image = jp.array(imread("wood_uv.png"))
 floor_image = floor_image[:500, :1000, :]
 pattern_03 = Pattern(SE3.scaling(jp.full(3, 10.0)), PLANAR_PATTERN, floor_image)
 
-shape_01 = Shape(transform_01, SPHERE, pattern_02, material_01)
-shape_02 = Shape(transform_02, CUBE, pattern_01, material_02)
-shape_03 = Shape(transform_03, CYLINDER, pattern_01, material_03)
-shape_04 = Shape(transform_04, CONE, pattern_01, material_04)
-shape_05 = Shape(transform_05, PLANE, pattern_03, material_01)
+shape_01 = Shape(transform_01, SPHERE, material_01, pattern_02)
+shape_02 = Shape(transform_02, CUBE, material_02, pattern_01)
+shape_03 = Shape(transform_03, CYLINDER, material_03, pattern_01)
+shape_04 = Shape(transform_04, CONE, material_04, pattern_01)
+shape_05 = Shape(transform_05, PLANE, material_01, pattern_03)
 
-scene = merge(shape_01, shape_02, shape_03, shape_04, shape_05)
+scene = [shape_01, shape_02, shape_03, shape_04, shape_05]
 mask = jp.ones(shape=(5,), dtype=bool)
 shadows = True
 
 render = partial(render_with_shadows, (H, W), camera_pose, rays)
 fast_render = jax.jit(render)
-image, depth = fast_render(scene, mask, lights)
+image, depth = fast_render(scene, lights, mask)
 plt.imshow(image)
 plt.show()
 
 mask = jp.array([False, True, False, True, True])
-image, depth = fast_render(scene, mask, lights)
+image, depth = fast_render(scene, lights, mask)
 plt.imshow(image)
 plt.show()
 
 mask = jp.array([True, True, True, True, True])
-image, depth = fast_render(scene, mask, lights)
+image, depth = fast_render(scene, lights, mask)
 plt.imshow(image)
 plt.show()
