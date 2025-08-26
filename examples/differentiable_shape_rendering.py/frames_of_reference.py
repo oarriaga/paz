@@ -13,7 +13,7 @@ H, W = 480, 640
 y_FOV = jp.pi / 4.0
 
 grey_material = Material(
-    color=jp.array([0.5, 0.5, 0.5]),
+    color=jp.array([0.75, 0.75, 0.75]),
     ambient=0.4,
     diffuse=0.5,
     specular=0.1,
@@ -44,19 +44,17 @@ default_pattern = Pattern()
 
 # The sphere is the root of our group
 sphere = Shape(
-    transform=SE3.scaling(jp.array([0.25, 0.25, 0.25])),
+    transform=SE3.scaling(jp.array([1.0, 1.0, 1.0])),
     type=SPHERE,
     material=grey_material,
 )
 
-# FIX: Define a local translation to move the cylinder's base to its origin
-cylinder_base_translation = SE3.translation(jp.array([0.0, 1.0, 0.0]))
-# FIX: Define a transform to place the cone at the tip of the cylinder
-cone_tip_translation = SE3.translation(jp.array([0.0, 2.0, 0.0]))
+cylinder_base_translation = SE3.translation(jp.array([0.0, 2.0, 0.0]))
+cylinder_scaling = SE3.scaling(jp.array([0.25, 2.0, 0.25]))
 
-# Define common scaling for the axes
-cylinder_scaling = SE3.scaling(jp.array([0.05, 1.0, 0.05]))
-cone_scaling = SE3.scaling(jp.array([0.1, 0.2, 0.1]))
+cone_tip_translation = SE3.translation(jp.array([0.0, 5.0, 0.0]))
+cone_scaling = SE3.scaling(jp.array([0.5, 1.0, 0.5]))
+
 
 # Red X-Axis
 cylinder_x = Shape(
@@ -111,14 +109,11 @@ shapes_list = [
     cone_z,
 ]
 
-# The parent array remains the same: all axes are children of the sphere
 parent_array = jp.array([-1, 0, 0, 0, 0, 0, 0])
-
-# The group is now defined with all 7 shapes
-scene_group = Group(shapes=shapes_list, parent_array=parent_array)
+scene_group = Group(shapes_list, parent_array)
 
 camera_pose = SE3.view_transform(
-    camera_origin=jp.array([2.0, 2.5, 3.0]),
+    camera_origin=jp.array([0.0, 10.0, 10.0]),
     target_origin=jp.array([0.0, 0.0, 0.0]),
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
@@ -144,8 +139,6 @@ image_data, _ = render(
 print("Rendering complete. Displaying image...")
 
 image_data = jp.clip(image_data, 0, 1)
-
 plt.imshow(image_data)
-plt.title("Frame of Reference (Y-Up)")
 plt.axis("off")
 plt.show()
