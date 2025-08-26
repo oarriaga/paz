@@ -27,23 +27,29 @@ def build_transform(centers, scaling):
 
 
 def build_shapes(key, num_shapes, transforms):
-    shape_types = jp.full((num_shapes,), paz.graphics.CUBE)
+    keys = jax.random.split(key, num_shapes)
+    shapes = []
+    for shape_arg in range(num_shapes):
+        color = jax.random.uniform(keys[shape_arg], (3,), jp.float32, 0, 1)
+        material = paz.graphics.Material(
+            color=color, ambient=0.1, diffuse=0.9, specular=0.9, shininess=200.0
+        )
 
-    color = jax.random.uniform(key, (num_shapes, 3), jp.float32, 0, 1)
-    ambient = jp.full((num_shapes,), 0.1)
-    diffuse = jp.full((num_shapes,), 0.9)
-    specular = jp.full((num_shapes,), 0.9)
-    shininess = jp.full((num_shapes,), 200.0)
-    material = paz.graphics.Material(
-        color, ambient, diffuse, specular, shininess
-    )
+        pattern = paz.graphics.Pattern(
+            transform=jp.eye(4),
+            type=paz.graphics.NO_PATTERN,
+            image=jp.zeros((1, 1, 3)),
+        )
 
-    empty_image = jp.zeros((num_shapes, 1, 1, 3))
-    pattern_type = jp.full((num_shapes,), paz.graphics.NO_PATTERN)
-    pattern_transform = jp.array([jp.eye(4) for shape_arg in range(num_shapes)])
-    pattern = paz.graphics.Pattern(pattern_transform, pattern_type, empty_image)
+        shape = paz.graphics.Shape(
+            transform=transforms[shape_arg],
+            type=paz.graphics.CUBE,
+            pattern=pattern,
+            material=material,
+        )
+        shapes.append(shape)
 
-    return paz.graphics.Shape(transforms, shape_types, pattern, material)
+    return shapes
 
 
 def get_neighbor_indices(shape):
@@ -137,15 +143,25 @@ rays = paz.graphics.camera.build_rays(image_size, jp.pi / 3, camera_pose)
 
 num_shapes = jp.prod(shape)
 mask = jp.ones((num_shapes,), dtype=bool)
-render = jax.jit(paz.graphics.Render((H, W), world_to_camera, rays))
+
 shapes = build_shapes(key, num_shapes, transforms)
+
+render = jax.jit(
+    paz.partial(
+        paz.graphics.render,
+        image_shape=(H, W),
+        world_to_camera=world_to_camera,
+        rays=rays,
+        lights=lights,
+    )
+)
 
 indices, neighbor_indices = get_neighbor_indices(shape)
 
 for key in jax.random.split(key, 50):
     key, subkey = jax.random.split(key)
     mask = jax.random.randint(subkey, (num_shapes,), 0, 2)
-    image, depth = render(shapes, mask, lights)
+    image, depth = render(shapes=shapes, mask=mask)
     loss = jax.jit(calculate_loss)(indices, neighbor_indices, mask)
     active_cubes = jp.sum(mask)
     print(f"\nTotal rendered cubes: {active_cubes}")

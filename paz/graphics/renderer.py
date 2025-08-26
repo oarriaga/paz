@@ -5,6 +5,7 @@ import paz
 import jax
 import jax.numpy as jp
 
+from paz.graphics import PointLight, Shape
 from paz.graphics.constants import EPSILON
 from paz.graphics.phong import (
     compute_colors,
@@ -146,7 +147,63 @@ def postprocess(
     return image, depth
 
 
-def render(image_shape, world_to_camera, rays, shapes, mask, lights):
+def prepare_lights(lights):
+    is_single_light = isinstance(lights, PointLight)
+    is_light_list = isinstance(lights, list)
+
+    if is_single_light:
+        processed_lights = [lights]
+    elif is_light_list:
+        if not all(isinstance(light, PointLight) for light in lights):
+            raise TypeError("All elements must be PointLight objects.")
+        processed_lights = lights
+    else:
+        raise TypeError("'lights' must be a PointLight or list of PointLights.")
+    return processed_lights
+
+
+def prepare_shapes(shapes):
+    is_single_shape = isinstance(shapes, paz.graphics.Shape)
+    is_shape_list = isinstance(shapes, list)
+    if is_single_shape:
+        processed_shapes = paz.graphics.shapes.expand(shapes)
+    elif is_shape_list:
+        if not all(isinstance(shape, paz.graphics.Shape) for shape in shapes):
+            raise TypeError("All 'shapes' elements must be Shape objects.")
+        if len(shapes) == 1:
+            processed_shapes = paz.graphics.shapes.expand(shapes[0])
+        else:
+            processed_shapes = paz.graphics.shapes.merge(*shapes)
+    else:
+        raise TypeError("'shapes' must be a Shape or a list of Shapes.")
+    return processed_shapes
+
+
+def prepare_shapes(shapes):
+    is_single_shape = isinstance(shapes, Shape)
+    is_shape_list = isinstance(shapes, list)
+
+    if is_single_shape:
+        processed_shapes = paz.graphics.shapes.expand(shapes)
+    elif is_shape_list:
+        if not all(isinstance(shape, Shape) for shape in shapes):
+            raise TypeError("All elements must be Shape objects.")
+        processed_shapes = paz.graphics.shapes.merge(*shapes)
+    else:
+        raise TypeError("'shapes' must be a Shape or a list of Shapes.")
+
+    return processed_shapes
+
+
+def render(image_shape, world_to_camera, rays, shapes, lights, mask=None):
+    lights = prepare_lights(lights)
+    shapes = prepare_shapes(shapes)
+    if mask is None:
+        mask = jp.ones(paz.graphics.shapes.get_num_shapes(shapes))
+    return _render(image_shape, world_to_camera, rays, shapes, lights, mask)
+
+
+def _render(image_shape, world_to_camera, rays, shapes, lights, mask):
     render_shapes = jax.vmap(paz.lock(render_shape, lights, *rays))
     hit_masks, depths, colors = render_shapes(shapes)
     mask = jp.expand_dims(mask, 1)
@@ -201,9 +258,19 @@ def compute_shadow_mask(scene, masks, lights, rays, shape, mask):
 
 
 def render_with_shadows(
-    image_shape, world_to_camera, rays, shapes, mask, lights
+    image_shape, world_to_camera, rays, shapes, lights, mask=None
 ):
-    # def compute_shadow_mask(scene, masks, lights, rays, shape, mask):
+    lights = prepare_lights(lights)
+    shapes = prepare_shapes(shapes)
+    if mask is None:
+        mask = jp.ones(paz.graphics.shapes.get_num_shapes(shapes))
+    render_args = (image_shape, world_to_camera, rays, shapes, lights, mask)
+    return _render_with_shadows(*render_args)
+
+
+def _render_with_shadows(
+    image_shape, world_to_camera, rays, shapes, lights, mask
+):
     mask_args = (shapes, mask, lights, rays)
     compute_shadow_masks = jax.vmap(partial(compute_shadow_mask, *mask_args))
     mask = jp.expand_dims(mask, axis=1)

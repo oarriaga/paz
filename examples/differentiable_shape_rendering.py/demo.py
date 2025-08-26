@@ -67,7 +67,7 @@ rays = paz.graphics.camera.build_rays((H, W), y_FOV, world_to_camera_tamayo)
 # render = paz.graphics.Render((H, W), world_to_camera_tamayo, rays, False)
 # pred_image, pred_depth = render(scene_tamayo, jp.ones(2), lights)
 pred_image, pred_depth = paz.graphics.render(
-    (H, W), world_to_camera_tamayo, rays, scene_tamayo, jp.ones(2), lights
+    (H, W), world_to_camera_tamayo, rays, [shape_1, shape_2], lights
 )
 pred_image = (255.0 * pred_image).astype("uint8")
 true_pred_image = jp.concatenate([true_image, pred_image], axis=1)

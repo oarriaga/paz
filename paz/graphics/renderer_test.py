@@ -62,8 +62,8 @@ def floor_plane(white_floor_material, default_pattern):
 
 @pytest.fixture
 def simple_scene(red_sphere, floor_plane):
-    """A scene with a red sphere sitting on a white floor."""
-    return shapes.merge(red_sphere, floor_plane)
+    """A scene with a red sphere and a white floor, as a list."""
+    return [red_sphere, floor_plane]
 
 
 def test_select_colors():
@@ -102,26 +102,73 @@ def test_to_color_image_reshaping():
     assert image.dtype == jp.float32
 
 
+def test_prepare_lights_with_single_light(simple_light):
+    """Tests that a single PointLight is correctly wrapped in a list."""
+    processed = renderer.prepare_lights(simple_light)
+    assert isinstance(processed, list)
+    assert len(processed) == 1
+    assert processed[0] == simple_light
+
+
+def test_prepare_lights_with_list(simple_light):
+    """Tests that a list of PointLights is returned unchanged."""
+    light_list = [simple_light, simple_light]
+    processed = renderer.prepare_lights(light_list)
+    assert processed == light_list
+
+
+def test_prepare_lights_with_invalid_type():
+    """Tests that a non-list, non-PointLight input raises a TypeError."""
+    with pytest.raises(TypeError):
+        renderer.prepare_lights("not_a_light")
+
+
+def test_prepare_lights_with_invalid_list_contents(simple_light):
+    """Tests that a list with invalid contents raises a TypeError."""
+    with pytest.raises(TypeError):
+        renderer.prepare_lights([simple_light, "not_a_light"])
+
+
+def test_prepare_shapes_with_single_shape(red_sphere):
+    """Tests that a single Shape is expanded to a batched Shape."""
+    processed = renderer.prepare_shapes(red_sphere)
+    assert isinstance(processed, Shape)
+    assert processed.transform.shape[0] == 1
+
+
+def test_prepare_shapes_with_list(simple_scene):
+    """Tests that a list of Shapes is merged into a single batched Shape."""
+    processed = renderer.prepare_shapes(simple_scene)
+    assert isinstance(processed, Shape)
+    assert processed.transform.shape[0] == len(simple_scene)
+
+
+def test_prepare_shapes_with_invalid_type():
+    """Tests that an invalid input type raises a TypeError."""
+    with pytest.raises(TypeError):
+        renderer.prepare_shapes(123)
+
+
+def test_prepare_shapes_with_invalid_list_contents(red_sphere):
+    """Tests that a list with invalid contents raises a TypeError."""
+    with pytest.raises(TypeError):
+        renderer.prepare_shapes([red_sphere, 123])
+
+
 def test_render_without_shadows(simple_scene, simple_light):
-    """Tests the main renderer function with a simple scene and no shadows."""
+    """Tests the main renderer function using the flexible API."""
     image_shape = (1, 2)
     H, W = image_shape
     camera_transform = jp.eye(4).at[2, 3].set(-5.0)
     world_to_camera = jp.linalg.inv(camera_transform)
-
     rays = (
         jp.array([[0, 0, -5], [0, 0, -5]]),
         jp.array([[0, -0.5, 1], [0, 0, 1]]),
     )
 
-    # Call the new `renderer` function directly
+    # Call the renderer function without the mask, passing the list directly
     image, depth = renderer.render(
-        image_shape,
-        world_to_camera,
-        rays,
-        simple_scene,
-        jp.ones(2, dtype=bool),
-        [simple_light],
+        image_shape, world_to_camera, rays, simple_scene, [simple_light]
     )
 
     assert image.shape == (H, W, 3)
@@ -131,11 +178,10 @@ def test_render_without_shadows(simple_scene, simple_light):
 
 
 def test_render_with_shadows(simple_scene):
-    """Tests that a shadow is correctly cast from one object to another."""
+    """Tests the shadow renderer using the flexible API."""
     image_shape = (1, 2)
     H, W = image_shape
     light = PointLight(intensity=WHITE, position=jp.array([0.0, 5.0, 0.0]))
-
     camera_origin = jp.array([0.0, 2.0, -5.0])
     camera_transform = jp.eye(4).at[:3, 3].set(camera_origin)
     world_to_camera = jp.linalg.inv(camera_transform)
@@ -151,14 +197,9 @@ def test_render_with_shadows(simple_scene):
         jp.vstack([shadow_ray_dir, lit_ray_dir]),
     )
 
-    # Call the new `render_with_shadows` function directly
+    # Call the shadow renderer without the mask, passing the list directly
     image, _ = renderer.render_with_shadows(
-        image_shape,
-        world_to_camera,
-        rays,
-        simple_scene,
-        jp.ones(2, dtype=bool),
-        [light],
+        image_shape, world_to_camera, rays, simple_scene, [light]
     )
 
     pixel_in_shadow = image[0, 0]

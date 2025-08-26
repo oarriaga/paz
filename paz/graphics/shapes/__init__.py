@@ -48,3 +48,8 @@ def _expand_leafs(leaf):
 
 def expand(shape):
     return jax.tree.map(_expand_leafs, shape)
+
+
+def get_num_shapes(shapes):
+    """Computes the number of shapes from a merged or expanded Shape PyTree."""
+    return shapes.transform.shape[0]

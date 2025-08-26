@@ -81,7 +81,6 @@ def visualize_gradient_channels(gradients, cmap):
 
 
 def visualize_gradients(
-    # gradients, mode="magnitude", cmap_channels="RdBu_r", cmap_magnitude="magma"
     gradients,
     filename=None,
     mode="magnitude",
@@ -133,9 +132,11 @@ def build_renderer(shape_type, SE3_transform, render_arg=1):
     def _build_renderer(transform_args):
         transform = SE3_transform(transform_args)
         shape = paz.graphics.Shape(transform, shape_type, pattern, material)
-        render = paz.graphics.Render((H, W), jp.eye(4), rays, True)
-        shape = paz.graphics.shapes.expand(shape)
-        values = render(shape, jp.array([1]), light)
+        render = paz.partial(
+            paz.graphics.render_with_shadows, (H, W), jp.eye(4), rays
+        )
+        # shape = paz.graphics.shapes.expand(shape)
+        values = render(shape, light)
         x = values[render_arg]
         if render_arg == 0:
             x = paz.image.resize(x, (H // 2, W // 2), "bilinear")
