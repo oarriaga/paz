@@ -48,26 +48,20 @@ renderer = pyrender.OffscreenRenderer(W, H)
 true_image, true_depth = renderer.render(scene)
 
 # build tamayo scene
-pattern = paz.graphics.Pattern(
-    jp.eye(4), paz.graphics.NO_PATTERN, jp.ones((1, 1, 3))
-)
 material = paz.graphics.Material(jp.full((3,), 0.6), 0.1, 0.1, 0.0, 200.0)
-lights = [paz.graphics.PointLight(jp.full((3,), 3.0), camera_origin)]
+light = paz.graphics.PointLight(jp.full((3,), 3.0), camera_origin)
 shape_1 = paz.graphics.Shape(
-    SE3.rotation_x(jp.pi / 2.0), paz.graphics.PLANE, pattern, material
+    SE3.rotation_x(jp.pi / 2.0), paz.graphics.PLANE, material
 )
 shape_2 = paz.graphics.Shape(
     shape_pose @ SE3.scaling(jp.array([0.5, 1.0, 0.5])),
     paz.graphics.CUBE,
-    pattern,
     material,
 )
 scene_tamayo = paz.graphics.shapes.merge(shape_1, shape_2)
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, world_to_camera_tamayo)
-# render = paz.graphics.Render((H, W), world_to_camera_tamayo, rays, False)
-# pred_image, pred_depth = render(scene_tamayo, jp.ones(2), lights)
 pred_image, pred_depth = paz.graphics.render(
-    (H, W), world_to_camera_tamayo, rays, [shape_1, shape_2], lights
+    (H, W), world_to_camera_tamayo, rays, [shape_1, shape_2], light
 )
 pred_image = (255.0 * pred_image).astype("uint8")
 true_pred_image = jp.concatenate([true_image, pred_image], axis=1)
