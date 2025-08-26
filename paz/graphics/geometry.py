@@ -118,14 +118,3 @@ def sort_depths(depths):
     depths = jp.vstack(depths)
     depths = jp.sort(depths, axis=0)
     return depths
-
-
-def _merge(*leafs):
-    concatenated_leafs = []
-    for leaf in leafs:
-        concatenated_leafs.append(leaf)
-    return jp.array(concatenated_leafs)
-
-
-def merge_shapes(*shapes):
-    return jax.tree_map(_merge, *shapes), jp.ones(len(shapes), dtype=bool)

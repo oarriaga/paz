@@ -296,8 +296,8 @@ def scaling(scaling_vector):
     )
 
 
-def view_transform(camera_origin, target_position, world_up):
-    camera_forward = target_position - camera_origin
+def view_transform(camera_origin, target_origin, world_up):
+    camera_forward = target_origin - camera_origin
     camera_forward = camera_forward / jp.linalg.norm(camera_forward)
     world_up = world_up / jp.linalg.norm(world_up)
     camera_left = jp.cross(camera_forward, world_up)

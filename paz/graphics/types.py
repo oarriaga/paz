@@ -15,3 +15,6 @@ Pattern = namedtuple(
 Shape = namedtuple(
     "Shape", ["transform", "type", "material", "pattern"], defaults=(Pattern(),)
 )
+
+
+Group = namedtuple("Group", ["shapes", "parent_array"])

@@ -14,7 +14,7 @@ def compute_canonical_normals_sphere(points):
 
 
 def intersect_canonical_sphere(ray_origin, ray_directions):
-    origin_minus_center = ray_origin - jp.array([0.0, 0.0, 0.0])
+    origin_minus_center = ray_origin - jp.array([0.0, 0.0, 0.0])  # for clarity
     a = paz.algebra.dot(ray_directions, ray_directions)
     b = 2.0 * paz.algebra.dot(ray_directions, origin_minus_center)
     c = paz.algebra.dot(origin_minus_center, origin_minus_center) - 1.0

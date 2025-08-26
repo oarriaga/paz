@@ -115,3 +115,37 @@ class Tree:
             visited_nodes.append(first_in)
         difference_nodes = set(self.nodes).difference(set(visited_nodes))
         return True if len(difference_nodes) == 0 else False
+
+
+def sort_topologically(parent_array):
+    """Sorts a parent array topologically using breadth-first search.
+
+    # Arguments:
+        parent_array: list (N). parent_array[i] is the parent index of node i.
+
+    # Returns:
+        A list of indices sorted from root nodes downwards.
+
+    # Notes:
+        Root nodes are -1.
+    """
+    num_nodes = len(parent_array)
+    children = [[] for _ in range(num_nodes)]
+    queue = []
+
+    # Build the children lists and find the root nodes
+    for node_arg, parent_arg in enumerate(parent_array):
+        if parent_arg == -1:
+            queue.append(node_arg)
+        else:
+            children[parent_arg].append(node_arg)
+
+    # Perform breadth-first traversal
+    sorted_indices = []
+    head = 0
+    while head < len(queue):
+        node_arg = queue[head]
+        head = head + 1
+        sorted_indices.append(node_arg)
+        queue.extend(children[node_arg])
+    return sorted_indices

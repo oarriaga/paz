@@ -106,17 +106,17 @@ Z_UP = jp.array([0.0, 0.0, 1.0])
 camera_poses = {
     "Front View": SE3.view_transform(
         camera_origin=jp.array([0.0, -4.0, 2.0]),
-        target_position=jp.zeros(3),
+        target_origin=jp.zeros(3),
         world_up=Z_UP,
     ),
     "Side View": SE3.view_transform(
         camera_origin=jp.array([-4.0, 0.0, 1.0]),
-        target_position=jp.zeros(3),
+        target_origin=jp.zeros(3),
         world_up=Z_UP,
     ),
     "Top-Down View": SE3.view_transform(
         camera_origin=jp.array([0.0, 0.0, 5.0]),  # High on Z-axis
-        target_position=jp.zeros(3),
+        target_origin=jp.zeros(3),
         world_up=Z_UP,
     ),
 }
