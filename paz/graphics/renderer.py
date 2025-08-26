@@ -148,8 +148,6 @@ def postprocess(
 
 def render(image_shape, world_to_camera, rays, shapes, lights, mask=None):
     shapes, lights, mask = compile_scene(shapes, lights, mask)
-    print("mask down level", mask)
-    mask = jp.array([1, 1, 1, 1, 1, 1, 1], dtype=bool)
     return _render(image_shape, world_to_camera, rays, shapes, lights, mask)
 
 
@@ -210,10 +208,6 @@ def compute_shadow_mask(scene, masks, lights, rays, shape, mask):
 def render_with_shadows(
     image_shape, world_to_camera, rays, shapes, lights, mask=None
 ):
-    # lights = prepare_lights(lights)
-    # shapes = prepare_shapes(shapes)
-    # if mask is None:
-    #     mask = jp.ones(paz.graphics.shapes.get_num_shapes(shapes))
     shapes, lights, mask = paz.graphics.scene.compile(shapes, lights, mask)
     render_args = (image_shape, world_to_camera, rays, shapes, lights, mask)
     return _render_with_shadows(*render_args)

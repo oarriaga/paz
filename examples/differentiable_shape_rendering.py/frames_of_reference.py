@@ -111,10 +111,10 @@ shapes_list = [
 ]
 
 parent_array = jp.array([-1, 0, 0, 0, 0, 0, 0])
-_axes = Group(shapes_list, parent_array)
+axes = Group(shapes_list, parent_array)
 
-paz.graphics.save("axes.json", group=_axes)
-axes = paz.graphics.load("axes.json")
+paz.graphics.save("axes.json", group=axes)
+# axes = paz.graphics.load("axes.json")
 
 camera_pose = SE3.view_transform(
     camera_origin=jp.array([0.0, 10.0, 10.0]),

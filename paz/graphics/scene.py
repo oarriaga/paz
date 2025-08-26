@@ -34,10 +34,6 @@ def prepare_group(group):
         if not all(isinstance(x, paz.graphics.Shape) for x in group.shapes):
             raise TypeError("All group.shapes elements must be Shape objects.")
         batched_shapes = prepare_shapes(group.shapes)
-        # if len(group) == 1:
-        #     batched_shapes = paz.graphics.shapes.expand(group.shapes[0])
-        # else:
-        #     batched_shapes = paz.graphics.shapes.merge(group.shapes)
     else:
         raise TypeError("'group.shapes' must be a list of Shapes.")
 
@@ -79,6 +75,10 @@ def prepare_shapes(shapes):
 
 
 def prepare_mask(mask, scene_elements):
+    """
+    Prepares a user-provided mask to match the flattened scene structure.
+    If the mask is None, it creates an all-True mask.
+    """
     if not isinstance(scene_elements, list):
         scene_elements = [scene_elements]
 
@@ -89,8 +89,6 @@ def prepare_mask(mask, scene_elements):
                 total_shapes = total_shapes + 1
             elif isinstance(element, paz.graphics.Group):
                 total_shapes = total_shapes + len(element.parent_array)
-        print("EXPANDED MASK", jp.ones(total_shapes))
-        # return jp.ones(4)
         return jp.ones(total_shapes, dtype=bool)
 
     if len(mask) != len(scene_elements):
@@ -103,7 +101,6 @@ def prepare_mask(mask, scene_elements):
         elif isinstance(element, paz.graphics.Group):
             num_shapes_in_group = len(element.parent_array)
             expanded_mask.extend([mask_value] * num_shapes_in_group)
-    print("EXPANDED MASK", expanded_mask)
     return jp.array(expanded_mask, dtype=bool)
 
 
@@ -134,7 +131,14 @@ def prepare_scene(scene_elements):
 
 
 def compile(scene, lights, mask):
-    scene = prepare_scene(scene)
-    lights = prepare_lights(lights)
-    mask = prepare_mask(mask, scene)
-    return scene, lights, mask
+    """Prepares the entire scene, lights, and mask for the core renderer."""
+    processed_lights = prepare_lights(lights)
+    processed_mask = prepare_mask(mask, scene)
+    processed_scene = prepare_scene(scene)
+    num_shapes = paz.graphics.shapes.get_num_shapes(processed_scene)
+    if num_shapes != len(processed_mask):
+        raise ValueError(
+            f"Mismatch after compilation: Scene has {num_shapes} shapes, "
+            f"but mask has {len(processed_mask)} elements."
+        )
+    return processed_scene, processed_lights, processed_mask
