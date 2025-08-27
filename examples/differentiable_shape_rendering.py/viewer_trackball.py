@@ -23,11 +23,12 @@ def build_viewer(scene_elements, lights):
         """The lean, fast function that will be JIT-compiled."""
         H, W = 480, 640
         y_FOV = jp.pi / 4.0
-        world_to_camera = jp.linalg.inv(camera_pose)
-        rays = camera.build_rays((H, W), y_FOV, world_to_camera)
+        # world_to_camera = jp.linalg.inv(camera_pose)
+        # rays = camera.build_rays((H, W), y_FOV, world_to_camera)
+        rays = camera.build_rays((H, W), y_FOV, camera_pose)
 
         image_data, _ = core_render(
-            (H, W), world_to_camera, rays, flat_scene, processed_lights, mask
+            (H, W), camera_pose, rays, flat_scene, processed_lights, mask
         )
         return (jp.clip(image_data, 0, 1) * 255.0).astype(jp.uint8)
 
@@ -41,6 +42,9 @@ def main():
 
     print("Setting up the scene...")
     scene_group = load("axes.json")
+    print("Parent transform", scene_group.shapes[0].transform)
+    print("Parent transform", scene_group.parent_array)
+
     lights = [
         PointLight(
             intensity=jp.array([1.0, 1.0, 1.0]),
@@ -51,7 +55,7 @@ def main():
     render_function = build_viewer(scene_group, lights)
 
     initial_camera_pose = SE3.view_transform(
-        camera_origin=jp.array([2.0, 2.5, 3.0]),
+        camera_origin=jp.array([0.0, 10.0, 10.0]),
         target_origin=jp.array([0.0, 0.0, 0.0]),
         world_up=jp.array([0.0, 1.0, 0.0]),
     )
@@ -141,7 +145,7 @@ def main():
             elif key == 27:
                 break
 
-            new_pose = trackball_state.pose @ pose_update
+            new_pose = trackball_state.pose @ jp.linalg.inv(pose_update)
             trackball_state = trackball_state._replace(pose=new_pose)
             needs_render = True
 
