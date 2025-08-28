@@ -1,3 +1,6 @@
+import jax
+import jax.numpy as jp
+
 ROOT = NO_PARENT = -1
 
 
@@ -118,34 +121,51 @@ class Tree:
 
 
 def sort_topologically(parent_array):
-    """Sorts a parent array topologically using breadth-first search.
 
-    # Arguments:
-        parent_array: list (N). parent_array[i] is the parent index of node i.
+    def find_root_nodes(parent_array):
+        is_root, size = parent_array == ROOT, len(parent_array)
+        return jp.where(is_root, size=size, fill_value=-1)[0]
 
-    # Returns:
-        A list of indices sorted from root nodes downwards.
+    def find_non_root_nodes(parent_array):
+        is_non_root, size = parent_array != ROOT, len(parent_array)
+        return jp.where(is_non_root, size=size, fill_value=-1)[0]
 
-    # Notes:
-        Root nodes are -1.
-    """
-    num_nodes = len(parent_array)
-    children = [[] for _ in range(num_nodes)]
-    queue = []
+    def should_continue(state):
+        _, num_processed_nodes, _, now_arg = state
+        return now_arg < num_processed_nodes
 
-    # Build the children lists and find the root nodes
-    for node_arg, parent_arg in enumerate(parent_array):
-        if parent_arg == -1:
-            queue.append(node_arg)
-        else:
-            children[parent_arg].append(node_arg)
+    def set_to_sorted_nodes(sorted_nodes, now_arg, node_arg):
+        return sorted_nodes.at[now_arg].set(node_arg)
 
-    # Perform breadth-first traversal
-    sorted_indices = []
-    head = 0
-    while head < len(queue):
-        node_arg = queue[head]
-        head = head + 1
-        sorted_indices.append(node_arg)
-        queue.extend(children[node_arg])
-    return sorted_indices
+    def get_children(parent_array, node_arg):
+        is_child = parent_array == node_arg
+        size = len(parent_array)
+        return jp.where(is_child, size=size, fill_value=-1)[0]
+
+    def shift_to_the_left(array, num_shift):
+        return jp.roll(array, num_shift)
+
+    def add_children_to_queue(queue, now_children):
+        return -queue * now_children
+
+    def update_queue(queue, now_children, num_processed_nodes):
+        now_children = shift_to_the_left(now_children, num_processed_nodes)
+        queue = add_children_to_queue(queue, now_children)
+        return queue
+
+    queue = root_nodes = find_root_nodes(parent_array)
+    num_processed_nodes = jp.sum(root_nodes != -1)
+    sorted_nodes = jp.full(len(parent_array), -1, dtype=jp.int32)
+    state = (queue, num_processed_nodes, sorted_nodes, 0)
+
+    def traverse_level(state):
+        queue, num_processed_nodes, sorted_nodes, now_arg = state
+        now_node = queue[now_arg]
+        sorted_nodes = set_to_sorted_nodes(sorted_nodes, now_arg, now_node)
+        now_children = get_children(parent_array, now_node)
+        queue = update_queue(queue, now_children, num_processed_nodes)
+        num_children = jp.sum(now_children != -1)
+        num_processed_nodes = num_processed_nodes + num_children
+        return (queue, num_processed_nodes, sorted_nodes, now_arg + 1)
+
+    return jax.lax.while_loop(should_continue, traverse_level, state)[2]

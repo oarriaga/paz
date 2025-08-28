@@ -1,5 +1,8 @@
 import pytest
 
+import jax
+import jax.numpy as jp
+
 from paz.abstract.tree import Tree, NO_PARENT, sort_topologically
 
 
@@ -152,85 +155,202 @@ def test_node_constructor():
     assert tree_A.sort_topologically() == tree_B.sort_topologically()
 
 
-def test_sort_empty_tree():
-    """Tests that an empty parent array results in an empty list."""
-    parent_array = []
-    expected_order = []
-    assert sort_topologically(parent_array) == expected_order
-
-
 def test_sort_single_node_tree():
     """Tests a tree with only a single root node."""
-    parent_array = [-1]
-    expected_order = [0]
-    assert sort_topologically(parent_array) == expected_order
+    # 0
+    parent_array = jp.array([-1])
+    expected_order = jp.array([0])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
 
 
 def test_sort_simple_chain():
-    """Tests a linear tree structure (e.g., 0 -> 1 -> 2)."""
-    parent_array = [-1, 0, 1]
-    expected_order = [0, 1, 2]
-    assert sort_topologically(parent_array) == expected_order
+    """Tests a linear tree structure."""
+    #   0
+    #   |
+    #   1
+    #   |
+    #   2
+    parent_array = jp.array([-1, 0, 1])
+    expected_order = jp.array([0, 1, 2])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
 
 
 def test_sort_simple_fork():
-    """Tests a tree with one root and multiple direct children."""
+    """
+    Tests a tree with one root and multiple direct children.
+    """
     #   0
     #  / \
     # 1   2
-    parent_array = [-1, 0, 0]
-    expected_order = [0, 1, 2]
-    assert sort_topologically(parent_array) == expected_order
+    parent_array = jp.array([-1, 0, 0])
+    expected_order = jp.array([0, 1, 2])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
 
 
 def test_sort_forest_with_multiple_roots():
     """Tests a graph with multiple disconnected trees (a forest)."""
-    # 0 -> 1   and   2 -> 3
-    parent_array = [-1, 0, -1, 2]
-    expected_order = [0, 2, 1, 3]
-    assert sort_topologically(parent_array) == expected_order
+    #   0   2
+    #   |   |
+    #   1   3
+    parent_array = jp.array([-1, 0, -1, 2])
+    expected_order = jp.array([0, 2, 1, 3])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
 
 
 def test_sort_complex_tree():
     """Tests a deeper, more complex tree with multiple levels."""
-    #        0
-    #       / \
-    #      1   2
-    #     / \   \
-    #    3   4   5
-    #           /
-    #          6
-    parent_array = [-1, 0, 0, 1, 1, 2, 5]
-    expected_order = [0, 1, 2, 3, 4, 5, 6]
-    assert sort_topologically(parent_array) == expected_order
+    #      0
+    #     / \
+    #    1   2
+    #   / \   \
+    #  3   4   5
+    #         /
+    #        6
+    parent_array = jp.array([-1, 0, 0, 1, 1, 2, 5])
+    expected_order = jp.array([0, 1, 2, 3, 4, 5, 6])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
 
 
 def test_sort_unordered_parents():
     """Tests a tree where parent indices can be greater than child indices."""
-    # 3 -> 0 -> 2
-    #   -> 1
-    parent_array = [3, 3, 0, -1]
-    expected_order = [3, 0, 1, 2]
-    assert sort_topologically(parent_array) == expected_order
+    #      3
+    #     / \
+    #    0   1
+    #   /
+    #  2
+    parent_array = jp.array([3, 3, 0, -1])
+    expected_order = jp.array([3, 0, 1, 2])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
 
 
 def test_sort_returns_all_nodes_for_valid_tree():
     """Tests the property that the output contains all original nodes."""
-    parent_array = [-1, 0, 0, 1, 1, 2, 5]
+    #      0
+    #     / \
+    #    1   2
+    #   / \   \
+    #  3   4   5
+    #         /
+    #        6
+    parent_array = jp.array([-1, 0, 0, 1, 1, 2, 5])
     result = sort_topologically(parent_array)
-    assert len(result) == len(parent_array)
-    assert set(result) == set(range(len(parent_array)))
+    assert jp.allclose(jp.sort(result), jp.arange(len(parent_array)))
 
 
-def test_sort_handles_cycle_by_omitting_nodes():
+def test_sort_handles_cycle_by_padding_unreachable_nodes():
+    """Tests that cyclic nodes are not sorted and are left as the
+    initial padding value (-1).
     """
-    Tests how the function behaves with a cyclic graph.
-    The current implementation will fail to find a root for the cycle
-    and will therefore not include the cyclic nodes in the output.
-    """
-    # Cycle: 0 -> 1 -> 0.  Root: 2 -> 3
-    parent_array = [1, 0, -1, 2]
+    #  0 -> 1    2
+    #  ^----|    |
+    #            3
+    parent_array = jp.array([1, 0, -1, 2])
     result = sort_topologically(parent_array)
-    # It should only sort the valid tree part (2 -> 3)
-    assert result == [2, 3]
-    assert len(result) < len(parent_array)
+
+    expected_sorted_part = jp.array([2, 3])
+    assert jp.allclose(result[:2], expected_sorted_part)
+
+    expected_padding = jp.array([-1, -1])
+    assert jp.allclose(result[2:], expected_padding)
+
+
+def test_sort_vmap_batching():
+    batch_parent_array = jp.array(
+        [
+            [-1, 0, 0],
+            [-1, 0, 1],
+        ]
+    )
+    batch_expected_order = jp.array(
+        [
+            [0, 1, 2],
+            [0, 1, 2],
+        ]
+    )
+    vmapped_sort = jax.vmap(sort_topologically)
+    result = vmapped_sort(batch_parent_array)
+    assert jp.allclose(result, batch_expected_order)
+
+
+def test_jitted_sort_produces_correct_output():
+    """Tests that the sort function is JIT-compatible."""
+    parent_array = jp.array([-1, 0, 0, 1, 1, 2, 5])
+    expected_order = jp.array([0, 1, 2, 3, 4, 5, 6])
+
+    # JIT-compile the function
+    jitted_sort = jax.jit(sort_topologically)
+
+    # Call the jitted function
+    result = jitted_sort(parent_array)
+    assert jp.allclose(result, expected_order)
+
+
+def test_vmapped_sort_on_batch():
+    """Tests that the sort function is vmap-compatible."""
+    # A batch of two different parent arrays
+    batch_parent_array = jp.array(
+        [
+            [-1, 0, 0],  # Simple fork
+            [-1, 0, 1],  # Simple chain
+        ]
+    )
+
+    batch_expected_order = jp.array(
+        [
+            [0, 1, 2],
+            [0, 1, 2],
+        ]
+    )
+
+    # vmap the sort function
+    vmapped_sort = jax.vmap(sort_topologically)
+
+    # Call the vmapped function on the batch
+    result = vmapped_sort(batch_parent_array)
+    assert jp.allclose(result, batch_expected_order)
+
+
+def test_sort_with_large_array():
+    """Tests the sort with a large, procedurally generated binary tree."""
+    num_nodes = 127  # A complete binary tree of depth 6 has 127 nodes
+
+    # Generate the parent array for a complete binary tree
+    # parent of node `i` is `floor((i-1)/2)`
+    indices = jp.arange(num_nodes)
+    parent_array = jp.floor((indices - 1) / 2).astype(jp.int32)
+    parent_array = parent_array.at[0].set(-1)  # The root's parent is -1
+
+    # For a BFS, the expected order is just the natural order
+    expected_order = jp.arange(num_nodes)
+
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
+
+
+def test_sort_forest_with_multiple_roots():
+    """Tests a graph with multiple disconnected trees (a forest)."""
+    parent_array = jp.array([-1, 0, -1, 2])
+    expected_order = jp.array([0, 2, 1, 3])
+    result = sort_topologically(parent_array)
+    assert jp.allclose(result, expected_order)
+
+
+def test_sort_handles_cycle_gracefully():
+    """
+    Tests that a cycle is not processed, preventing an infinite loop.
+    The valid part of the graph should still be sorted.
+    """
+    # Cycle: 0 -> 1 -> 0.  Valid tree: 2 -> 3
+    parent_array = jp.array([1, 0, -1, 2])
+    result = sort_topologically(parent_array)
+
+    # The while_loop will finish after processing the valid tree part.
+    # The output array will contain the sorted part, padded with -1.
+    expected_result = jp.array([2, 3, -1, -1])
+    assert jp.allclose(result, expected_result)

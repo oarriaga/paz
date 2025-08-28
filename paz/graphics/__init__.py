@@ -1,4 +1,15 @@
-from paz.graphics.types import PointLight, Material, Pattern, Shape, Group
+from paz.graphics.types import (
+    PointLight,
+    Material,
+    Pattern,
+    Shape,
+    Group,
+    Sphere,
+    Cube,
+    Plane,
+    Cylinder,
+    Cone,
+)
 from paz.graphics.constants import (
     NO_PATTERN,
     SPHERICAL_PATTERN,
@@ -8,6 +19,11 @@ from paz.graphics.constants import (
     CYLINDER,
     CONE,
     PLANE,
+    RED,
+    GREEN,
+    BLUE,
+    WHITE,
+    BLACK,
 )
 from paz.graphics import shapes
 from paz.graphics import camera

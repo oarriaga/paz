@@ -8,8 +8,7 @@ GREEN = jp.array([0.0, 1.0, 0.0])
 BLUE = jp.array([0.0, 0.0, 1.0])
 BLACK = jp.array([0.0, 0.0, 0.0])
 WHITE = jp.array([1.0, 1.0, 1.0])
-GRAY = jp.array([0.5, 0.5, 0.5])
-PINK = jp.array([1.0, 0.078, 0.57])
+DEFAULT_COLOR = jp.array([1.0, 0.65, 0.0])
 
 NO_PATTERN = 0
 SPHERICAL_PATTERN = 1
