@@ -1,7 +1,6 @@
 import jax.numpy as jp
 import paz
 
-
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 10.0, 10.0]),
     target_origin=jp.array([0.0, 0.0, 0.0]),
