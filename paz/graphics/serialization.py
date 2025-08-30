@@ -1,33 +1,40 @@
-# paz/graphics/serialization.py
-
 import json
 import pathlib
+import jax
 import jax.numpy as jp
-from paz.graphics.types import PointLight, Material, Pattern, Shape, Group
+from paz.graphics.types import Material, Pattern, Shape, Group, Scene
 
 
-def serialize(obj):
-    if isinstance(obj, jp.ndarray):
-        return obj.tolist()
-    if isinstance(obj, tuple) and hasattr(obj, "_asdict"):
-        return {k: serialize(v) for k, v in obj._asdict().items()}
-    if isinstance(obj, list):
-        return [serialize(item) for item in obj]
-    return obj
+def to_json(scene_node_field):
+    if isinstance(scene_node_field, jp.ndarray):
+        return scene_node_field.tolist()
+    if isinstance(scene_node_field, tuple) and hasattr(
+        scene_node_field, "_asdict"
+    ):
+        return {k: to_json(v) for k, v in scene_node_field._asdict().items()}
+    if isinstance(scene_node_field, list):
+        return [to_json(item) for item in scene_node_field]
+    return scene_node_field
 
 
-def _reconstruct_light(data):
-    if data is None:
-        return None
-    return PointLight(
-        intensity=jp.array(data["intensity"]),
-        position=jp.array(data["position"]),
-    )
+def save(filepath, scene):
+    path = pathlib.Path(filepath)
+    if path.suffix.lower() != ".json":
+        raise ValueError("Filepath must have a .json extension.")
+    with open(filepath, "w") as f:
+        json.dump(to_json(scene), f, indent=4)
 
 
-def _reconstruct_material(data):
-    if data is None:
-        return None
+def to_array_if_vector(data):
+    def _to_array_if_vector(leaf):
+        if isinstance(leaf, (list, tuple)):
+            return jp.array(leaf)
+        return leaf
+
+    return jax.tree.map(_to_array_if_vector, data)
+
+
+def build_material(data):
     return Material(
         color=jp.array(data["color"]),
         ambient=data["ambient"],
@@ -37,9 +44,7 @@ def _reconstruct_material(data):
     )
 
 
-def _reconstruct_pattern(data):
-    if data is None:
-        return None
+def build_pattern(data):
     return Pattern(
         transform=jp.array(data["transform"]),
         type=data["type"],
@@ -47,70 +52,47 @@ def _reconstruct_pattern(data):
     )
 
 
-def _reconstruct_shape(data):
-    if data is None:
-        return None
+# def build_material(data):
+#     return Material(**to_array_if_vector(data))
+
+
+# def build_pattern(data):
+#     return Pattern(**to_array_if_vector(data))
+
+
+def build_shape(data):
     return Shape(
         transform=jp.array(data["transform"]),
         type=data["type"],
-        material=_reconstruct_material(data["material"]),
-        pattern=_reconstruct_pattern(data["pattern"]),
+        material=build_material(data.get("material")),
+        pattern=build_pattern(data.get("pattern")),
     )
 
 
-def _reconstruct_group(data):
-    if data is None:
-        return None
-    return Group(
-        shapes=[_reconstruct_shape(s) for s in data["shapes"]],
-        parent_array=jp.array(data["parent_array"]),
-    )
+def build_group(data):
+    shapes = [build_shape(shape) for shape in data["shapes"]]
+    return Group(shapes=shapes, transform=jp.array(data["transform"]))
 
 
-def _reconstruct_component(key, value):
-    """Helper to reconstruct a single component based on its key."""
-    if key in ["shapes", "group"]:
-        if isinstance(value, dict) and "parent_array" in value:
-            return _reconstruct_group(value)
-        elif isinstance(value, list):
-            return [_reconstruct_shape(s) for s in value]
-        else:
-            raise TypeError(f"Unknown structure for '{key}': {value}")
-    elif key == "lights":
-        return [_reconstruct_light(light) for light in value]
-    elif key == "camera_pose":
-        return jp.array(value)
+def build_node(node_data):
+    if not isinstance(node_data, dict):
+        raise TypeError(f"Data must be a dict, but got {type(node_data)}.")
+    # if node_type == "Group":
+    if "shapes" in node_data:
+        return build_group(node_data)
+    elif "material" in node_data:
+        return build_shape(node_data)
     else:
-        return value
+        raise TypeError(f"Node is not a valid Shape or Group: {node_data}")
 
 
-def save(filepath, **serializables):
-    """Serializes a complete scene setup to a single JSON file."""
-    path = pathlib.Path(filepath)
-    if path.suffix.lower() != ".json":
-        raise ValueError("Filepath must have a .json extension.")
-
-    json_compatible_data = {
-        key: serialize(value) for key, value in serializables.items()
-    }
-    with open(filepath, "w") as f:
-        json.dump(json_compatible_data, f, indent=4)
+def build_scene(data):
+    nodes = [build_node(node) for node in data.get("nodes", [])]
+    return Scene(nodes, jp.array(data.get("parent_array", [])))
 
 
 def load(filepath):
-    """
-    Deserializes a scene from a JSON file.
-    If the file contains a single object, it is returned directly.
-    If it contains multiple objects, a dictionary is returned.
-    """
-    with open(filepath, "r") as f:
-        data = json.load(f)
-
-    if len(data) == 1:
-        key, value = list(data.items())[0]
-        return _reconstruct_component(key, value)
-    else:
-        return {
-            key: _reconstruct_component(key, value)
-            for key, value in data.items()
-        }
+    """Deserializes a scene from a JSON file."""
+    with open(filepath, "r") as filedata:
+        data = json.load(filedata)
+    return build_scene(data)

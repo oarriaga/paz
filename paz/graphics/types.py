@@ -31,7 +31,10 @@ Shape = namedtuple(
 )
 
 
-Group = namedtuple("Group", ["shapes", "parent_array"])
+Scene = namedtuple("Scene", ["nodes", "parent_array"])
+
+
+Group = namedtuple("Group", ["shapes", "transform"])
 
 
 def Sphere(transform=jp.eye(4), material=Material(), pattern=Pattern()):

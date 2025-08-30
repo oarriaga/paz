@@ -7,5 +7,5 @@ camera_pose = paz.SE3.view_transform(
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
 
-scene = paz.graphics.load("axes.json")
+scene = paz.graphics.load("axes2.json")
 paz.graphics.viewer(scene, camera_pose)

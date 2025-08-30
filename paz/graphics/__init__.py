@@ -3,6 +3,7 @@ from paz.graphics.types import (
     Material,
     Pattern,
     Shape,
+    Scene,
     Group,
     Sphere,
     Cube,

@@ -1,4 +1,3 @@
-# TODO make logic to check that parent array has the same length as shapes
 # should be an inherit property of the shapes?
 # and transform by pose? an element of SE3
 # we should be able to do groups of groups (hierarchical models)
@@ -38,11 +37,11 @@ head_z = paz.graphics.Cone(rotate_in_x @ head_transform, B_material)
 
 sphere = paz.graphics.Sphere(paz.SE3.translation(jp.array([0.0, 2.0, 0.0])))
 
-shapes = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
-axes = paz.graphics.Group(shapes, jp.array([-1, 0, 0, 0, 0, 0, 0]))
-# axes = [axes, sphere]
+nodes = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
+scene = paz.graphics.Scene(nodes, jp.array([-1, 0, 0, 0, 0, 0, 0]))
 
-paz.graphics.save("axes.json", group=axes)
+paz.graphics.save("axes2.json", scene)
+scene = paz.graphics.load("axes2.json")
 
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 0.0, 10.0]),
@@ -56,5 +55,5 @@ light = paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 paz.partial(paz.graphics.render, (H, W))
 render = jax.jit(paz.graphics.render, static_argnums=(0,))
-image, depth = render((H, W), camera_pose, rays, axes, light)
+image, depth = render((H, W), camera_pose, rays, scene, light)
 paz.image.show(paz.image.denormalize(image))

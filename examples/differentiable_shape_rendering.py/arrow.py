@@ -32,7 +32,7 @@ head = paz.graphics.Cone(head_transform, G_material)
 arrow = paz.graphics.Group([line, head], jp.array([-1, -1]))
 paz.graphics.save("arrow.json", group=arrow)
 
-scene = [arrow, origin]
+scene = paz.graphics.Scene([arrow, origin], [-1, -1])
 
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 2.0, 5.0]),

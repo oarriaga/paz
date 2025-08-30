@@ -1,16 +1,16 @@
 import pytest
-import json
 import jax
 import jax.numpy as jp
+
+from paz.graphics import types
 from paz.graphics import serialization
-from paz.graphics.types import PointLight, Material, Pattern, Shape, Group
-from paz.graphics.constants import SPHERE, CUBE, NO_PATTERN
+from paz.graphics import constants
 
 
 def assert_pytrees_allclose(a, b):
-    a_leaves = jax.tree_util.tree_leaves(a)
-    b_leaves = jax.tree_util.tree_leaves(b)
-    assert len(a_leaves) == len(b_leaves)
+    a_leaves, a_treedef = jax.tree_util.tree_flatten(a)
+    b_leaves, b_treedef = jax.tree_util.tree_flatten(b)
+    assert a_treedef == b_treedef
     for leaf_a, leaf_b in zip(a_leaves, b_leaves):
         if isinstance(leaf_a, jp.ndarray):
             assert jp.allclose(leaf_a, leaf_b)
@@ -19,67 +19,59 @@ def assert_pytrees_allclose(a, b):
 
 
 @pytest.fixture
-def sample_group():
-    material = Material(jp.zeros(3), 0.1, 0.9, 0.3, 200.0)
-    pattern = Pattern(jp.eye(4), NO_PATTERN, jp.ones((1, 1, 3)))
-    shape1 = Shape(jp.eye(4), SPHERE, material, pattern)
-    shape2 = Shape(jp.eye(4), CUBE, material, pattern)
-    return Group(shapes=[shape1, shape2], parent_array=jp.array([-1, 0]))
+def sample_material():
+    return types.Material(color=jp.array([1.0, 0.5, 0.0]), ambient=0.2)
 
 
 @pytest.fixture
-def sample_light():
-    return PointLight(jp.ones(3), jp.ones(3) * 10)
+def sample_shape(sample_material):
+    return types.Sphere(transform=jp.eye(4), material=sample_material)
 
 
 @pytest.fixture
-def sample_camera_pose():
-    return jp.eye(4)
+def sample_group(sample_material):
+    cube = types.Cube(transform=jp.eye(4).at[0, 3].set(1.0))
+    plane = types.Plane(material=sample_material)
+    return types.Group(shapes=[cube, plane], transform=jp.eye(4))
 
 
-def test_save_raises_error_for_invalid_extension(tmp_path):
-    """Tests that save() fails if the filepath is not .json."""
-    filepath = tmp_path / "scene.txt"
-    with pytest.raises(ValueError, match="must have a .json extension"):
-        serialization.save(filepath, data="test")
+@pytest.fixture
+def sample_scene(sample_shape, sample_group):
+    nodes = [sample_shape, sample_group]
+    parent_array = jp.array([-1, 0])
+    return types.Scene(nodes=nodes, parent_array=parent_array)
 
 
-def test_save_writes_valid_json_file(tmp_path, sample_light):
-    """Tests that the output file is a well-formed JSON."""
-    filepath = tmp_path / "test.json"
-    serialization.save(filepath, light=sample_light)
-    # The test passes if this line doesn't raise a json.JSONDecodeError
-    with open(filepath, "r") as f:
-        json.load(f)
+def test_shape_factory_creates_correct_type():
+    sphere = types.Sphere()
+    cube = types.Cube()
+    assert isinstance(sphere, types.Shape)
+    assert sphere.type == constants.SPHERE
+    assert cube.type == constants.CUBE
 
 
-def test_load_returns_single_object_for_single_key_file(tmp_path, sample_group):
-    """Tests that load() returns a direct object when the JSON has one key."""
+def test_to_json_handles_nested_scene(sample_scene):
+    serialized = serialization.to_json(sample_scene)
+    assert isinstance(serialized, dict)
+    assert "nodes" in serialized
+    assert "parent_array" in serialized
+    assert isinstance(serialized["nodes"], list)
+    assert isinstance(serialized["nodes"][0]["transform"], list)
+
+
+def test_build_node_differentiates_shape_and_group(sample_scene):
+    scene_as_dict = serialization.to_json(sample_scene)
+    shape_data = scene_as_dict["nodes"][0]
+    group_data = scene_as_dict["nodes"][1]
+    reconstructed_shape = serialization.build_node(shape_data)
+    reconstructed_group = serialization.build_node(group_data)
+    assert isinstance(reconstructed_shape, types.Shape)
+    assert isinstance(reconstructed_group, types.Group)
+
+
+def test_full_scene_save_and_load_round_trip(tmp_path, sample_scene):
     filepath = tmp_path / "scene.json"
-    serialization.save(filepath, shapes=sample_group)
-
-    loaded_object = serialization.load(filepath)
-
-    assert isinstance(loaded_object, Group)
-    assert not isinstance(loaded_object, dict)
-    assert_pytrees_allclose(loaded_object, sample_group)
-
-
-def test_load_returns_dictionary_for_multiple_key_file(
-    tmp_path, sample_group, sample_light, sample_camera_pose
-):
-    """Tests that load() returns a dict when the JSON has multiple keys."""
-    filepath = tmp_path / "scene.json"
-    serialization.save(
-        filepath,
-        shapes=sample_group,
-        lights=[sample_light],
-        camera_pose=sample_camera_pose,
-    )
-    loaded_data = serialization.load(filepath)
-
-    assert isinstance(loaded_data, dict)
-    assert "shapes" in loaded_data
-    assert "lights" in loaded_data
-    assert "camera_pose" in loaded_data
-    assert_pytrees_allclose(loaded_data["shapes"], sample_group)
+    serialization.save(filepath, sample_scene)
+    loaded_scene = serialization.load(filepath)
+    assert isinstance(loaded_scene, types.Scene)
+    assert_pytrees_allclose(loaded_scene, sample_scene)
