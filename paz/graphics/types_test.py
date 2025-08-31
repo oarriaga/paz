@@ -34,6 +34,20 @@ def custom_pattern(sample_transform):
     )
 
 
+@pytest.fixture
+def valid_nodes(sample_material):
+    """Provides a valid list of nodes for Scene creation."""
+    shape_node = types.Sphere(material=sample_material)
+    group_node = types.Group(shapes=[types.Cube()], transform=jp.eye(4))
+    return [shape_node, group_node]
+
+
+@pytest.fixture
+def valid_parent_array():
+    """Provides a valid parent array for a 2-node scene."""
+    return jp.array([-1, 0])
+
+
 def test_point_light_creation():
     """Tests that a PointLight can be created with correct attributes."""
     light = types.PointLight(
@@ -153,3 +167,48 @@ def test_shape_is_immutable(sample_transform, sample_material):
     )
     with pytest.raises(AttributeError):
         shape.type = constants.SPHERE
+
+
+def test_scene_creation_success(valid_nodes, valid_parent_array):
+    """Tests that a Scene can be created with valid inputs."""
+    scene = types.Scene(nodes=valid_nodes, parent_array=valid_parent_array)
+    assert isinstance(scene, types.Scene)
+    assert len(scene.nodes) == 2
+    assert jp.allclose(scene.parent_array, valid_parent_array)
+
+
+def test_scene_raises_error_for_non_list_nodes(valid_parent_array):
+    """Tests that `nodes` must be a list."""
+    with pytest.raises(TypeError, match="`nodes` must be a list"):
+        types.Scene(nodes="not_a_list", parent_array=valid_parent_array)
+
+
+def test_scene_raises_error_for_invalid_node_content(valid_parent_array):
+    """Tests that all elements in `nodes` must be a Shape or Group."""
+    with pytest.raises(TypeError, match="All elements in `nodes` must be"):
+        types.Scene(
+            nodes=[types.Sphere(), 123], parent_array=valid_parent_array
+        )
+
+
+def test_scene_raises_error_for_mismatched_lengths(valid_nodes):
+    """Tests that `nodes` and `parent_array` must have the same length."""
+    with pytest.raises(
+        ValueError, match="Length of `nodes` and `parent_array`"
+    ):
+        types.Scene(nodes=valid_nodes, parent_array=jp.array([-1]))
+
+
+def test_scene_raises_error_for_invalid_parent_index(valid_nodes):
+    """Tests that all parent indices must be valid."""
+    # Index 5 is out of bounds for a 2-node scene
+    invalid_parent_array = jp.array([-1, 5])
+    with pytest.raises(ValueError, match="contains invalid indices"):
+        types.Scene(nodes=valid_nodes, parent_array=invalid_parent_array)
+
+
+def test_scene_is_immutable(valid_nodes, valid_parent_array):
+    """Tests that Scene attributes cannot be changed after creation."""
+    scene = types.Scene(nodes=valid_nodes, parent_array=valid_parent_array)
+    with pytest.raises(AttributeError):
+        scene.nodes = []

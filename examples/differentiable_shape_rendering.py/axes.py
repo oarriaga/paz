@@ -40,8 +40,7 @@ sphere = paz.graphics.Sphere(paz.SE3.translation(jp.array([0.0, 2.0, 0.0])))
 nodes = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
 scene = paz.graphics.Scene(nodes, jp.array([-1, 0, 0, 0, 0, 0, 0]))
 
-paz.graphics.save("axes2.json", scene)
-scene = paz.graphics.load("axes2.json")
+paz.graphics.save("axes.json", scene)
 
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 0.0, 10.0]),

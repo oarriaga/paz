@@ -105,16 +105,18 @@ def validate_scene(scene):
 
 
 def prepare_group(group):
-    if isinstance(group.shapes, list):
-        if not all(isinstance(x, paz.graphics.Shape) for x in group.shapes):
-            raise TypeError("All group.shapes elements must be Shape objects.")
-        batched_shapes = prepare_shapes(group.shapes)
-    else:
+    if not isinstance(group.shapes, list):
         raise TypeError("'group.shapes' must be a list of Shapes.")
-    return batched_shapes
 
-    # poses = relative_to_world(batched_shapes.transform, group.parent_array)
-    # return batched_shapes._replace(transform=poses)
+    transformed_shapes = []
+    for shape in group.shapes:
+        transform = group.transform @ shape.transform
+        transformed_shapes.append(shape._replace(transform=transform))
+
+    if not transformed_shapes:
+        return None
+
+    return prepare_shapes(transformed_shapes)
 
 
 def prepare_groups(groups):

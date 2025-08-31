@@ -31,7 +31,33 @@ Shape = namedtuple(
 )
 
 
-Scene = namedtuple("Scene", ["nodes", "parent_array"])
+_SceneBase = namedtuple("Scene", ["nodes", "parent_array"])
+
+
+class Scene(_SceneBase):
+    """A Scene graph containing nodes and their parent-child relationships."""
+
+    def __new__(cls, nodes, parent_array):
+        if not isinstance(nodes, list):
+            raise TypeError("`nodes` must be a list of Shape or Group objects.")
+        if not all(isinstance(node, (Shape, Group)) for node in nodes):
+            raise TypeError("All elements in `nodes` must be a Shape or Group.")
+
+        parent_array = jp.array(parent_array)
+        if parent_array.ndim != 1:
+            raise ValueError("`parent_array` must be a 1D array.")
+
+        if len(nodes) != len(parent_array):
+            raise ValueError(
+                "Length of `nodes` and `parent_array` must be the same."
+            )
+
+        is_root = parent_array == -1
+        is_valid_child = (parent_array >= 0) & (parent_array < len(nodes))
+        if not jp.all(is_root | is_valid_child):
+            raise ValueError("`parent_array` contains invalid indices.")
+
+        return super().__new__(cls, nodes, parent_array)
 
 
 Group = namedtuple("Group", ["shapes", "transform"])

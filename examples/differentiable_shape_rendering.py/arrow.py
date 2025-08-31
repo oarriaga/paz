@@ -29,10 +29,10 @@ origin_scale = paz.SE3.scaling(jp.full((3,), 2.0 * line_width))
 origin = paz.graphics.Sphere(origin_scale, O_material)
 line = paz.graphics.Cylinder(line_transform, G_material)
 head = paz.graphics.Cone(head_transform, G_material)
-arrow = paz.graphics.Group([line, head], jp.array([-1, -1]))
-paz.graphics.save("arrow.json", group=arrow)
-
+arrow = paz.graphics.Group([line, head], jp.eye(4))
 scene = paz.graphics.Scene([arrow, origin], [-1, -1])
+
+paz.graphics.save("arrow.json", scene)
 
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 2.0, 5.0]),
