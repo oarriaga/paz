@@ -37,30 +37,33 @@ _SceneBase = namedtuple("Scene", ["nodes", "parent_array"])
 class Scene(_SceneBase):
     """A Scene graph containing nodes and their parent-child relationships."""
 
-    def __new__(cls, nodes, parent_array):
+    def __new__(cls, nodes, parent_array=None):
         if not isinstance(nodes, list):
             raise TypeError("`nodes` must be a list of Shape or Group objects.")
         if not all(isinstance(node, (Shape, Group)) for node in nodes):
             raise TypeError("All elements in `nodes` must be a Shape or Group.")
 
-        parent_array = jp.array(parent_array)
-        if parent_array.ndim != 1:
-            raise ValueError("`parent_array` must be a 1D array.")
+        if parent_array is None:
+            parent_array = jp.full(len(nodes), -1)
+        else:
+            parent_array = jp.array(parent_array)
+            if parent_array.ndim != 1:
+                raise ValueError("`parent_array` must be a 1D array.")
 
-        if len(nodes) != len(parent_array):
-            raise ValueError(
-                "Length of `nodes` and `parent_array` must be the same."
-            )
+            if len(nodes) != len(parent_array):
+                raise ValueError(
+                    "Length of `nodes` and `parent_array` must equal."
+                )
 
-        is_root = parent_array == -1
-        is_valid_child = (parent_array >= 0) & (parent_array < len(nodes))
-        if not jp.all(is_root | is_valid_child):
-            raise ValueError("`parent_array` contains invalid indices.")
+            # is_root = parent_array == -1
+            # is_valid_child = (parent_array >= 0) & (parent_array < len(nodes))
+            # if not jp.all(is_root | is_valid_child):
+            #     raise ValueError("`parent_array` contains invalid indices.")
 
         return super().__new__(cls, nodes, parent_array)
 
 
-Group = namedtuple("Group", ["shapes", "transform"])
+Group = namedtuple("Group", ["shapes", "transform"], defaults=(jp.eye(4),))
 
 
 def Sphere(transform=jp.eye(4), material=Material(), pattern=Pattern()):

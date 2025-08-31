@@ -57,13 +57,29 @@ def compute_num_shapes(scene):
 def expand_mask(mask, scene):
     """Expands user mask to match flat scene."""
     expanded_mask = []
-    for mask_value, shape_or_group in zip(mask, scene):
+    for mask_value, shape_or_group in zip(mask, scene.nodes):
         if isinstance(shape_or_group, Shape):
             expanded_mask.append(mask_value)
         elif isinstance(shape_or_group, paz.graphics.Group):
             num_shapes_in_group = len(shape_or_group.shapes)
             expanded_mask.extend([mask_value] * num_shapes_in_group)
+        else:
+            raise TypeError(f"Node {shape_or_group} is not 'Shape' or 'Group'.")
     return jp.array(expanded_mask, dtype=bool)
+
+
+def expand_parent_array(parent_array, scene):
+    "Expands parent array to match flat scene."
+    expanded_parent_array = []
+    for parent_index, shape_or_group in zip(parent_array, scene.nodes):
+        if isinstance(shape_or_group, Shape):
+            expanded_parent_array.append(parent_index)
+        elif isinstance(shape_or_group, paz.graphics.Group):
+            num_shapes_in_group = len(shape_or_group.shapes)
+            expanded_parent_array.extend([parent_index] * num_shapes_in_group)
+        else:
+            raise TypeError(f"Node {shape_or_group} is not 'Shape' or 'Group'.")
+    return jp.array(expanded_parent_array, dtype=int)
 
 
 def prepare_mask(mask, scene):
@@ -115,8 +131,8 @@ def prepare_group(group):
 
     if not transformed_shapes:
         return None
-
     return prepare_shapes(transformed_shapes)
+    # return prepare_shapes(group.shapes)
 
 
 def prepare_groups(groups):
@@ -151,7 +167,11 @@ def compile(scene, lights, mask):
     """Prepares the entire scene, lights, and mask for the core renderer."""
     validate_scene(scene)
     flat_scene = flatten_scene(scene)
-    parent_array = jp.array(scene.parent_array)
+    parent_array = expand_parent_array(scene.parent_array, scene)
+    # parent_array = jp.array(scene.parent_array)
+    # print("before", flat_scene.transform)
+    # print("parent_array", parent_array)
     transforms = relative_to_world(flat_scene.transform, parent_array)
+    # print("after", transforms)
     flat_scene = flat_scene._replace(transform=transforms)
     return flat_scene, prepare_lights(lights), prepare_mask(mask, scene)

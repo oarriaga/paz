@@ -37,10 +37,13 @@ head_z = paz.graphics.Cone(rotate_in_x @ head_transform, B_material)
 
 sphere = paz.graphics.Sphere(paz.SE3.translation(jp.array([0.0, 2.0, 0.0])))
 
-nodes = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
-scene = paz.graphics.Scene(nodes, jp.array([-1, 0, 0, 0, 0, 0, 0]))
+axes = paz.graphics.Group(
+    [origin, line_x, head_x, line_y, head_y, line_z, head_z]
+)
 
-paz.graphics.save("axes.json", scene)
+paz.graphics.save("axes.json", axes)
+
+scene = paz.graphics.Scene([axes])
 
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 0.0, 10.0]),
@@ -52,7 +55,6 @@ H, W = 480, 640
 y_FOV = jp.pi / 4.0
 light = paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-paz.partial(paz.graphics.render, (H, W))
 render = jax.jit(paz.graphics.render, static_argnums=(0,))
 image, depth = render((H, W), camera_pose, rays, scene, light)
 paz.image.show(paz.image.denormalize(image))
