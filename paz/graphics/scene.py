@@ -1,11 +1,10 @@
 import jax.numpy as jp
-import jax
 import paz
-from paz.graphics import PointLight, Shape
+from paz.graphics import PointLight
 
 
 def prepare_lights(lights):
-    if isinstance(lights, PointLight):
+    if isinstance(lights, paz.graphics.PointLight):
         processed_lights = [lights]
     elif isinstance(lights, list):
         if not all(isinstance(light, PointLight) for light in lights):
@@ -16,70 +15,16 @@ def prepare_lights(lights):
     return processed_lights
 
 
-def relative_to_world(relative_transforms, parent_array):
-    """Converts a scene graph with relative transforms to world transforms."""
-
-    def compute_world_transform(world_transforms, node_arg):
-        parent_arg = parent_array[node_arg]
-        relative_transform = relative_transforms[node_arg]
-        parent_transform = jax.lax.cond(
-            parent_arg == -1,
-            lambda: jp.eye(4),
-            lambda: world_transforms[parent_arg],
-        )
-        world_transform = parent_transform @ relative_transform
-        updated_transforms = world_transforms.at[node_arg].set(world_transform)
-        return updated_transforms, None
-
-    sorted_indices = paz.abstract.tree.sort_topologically(parent_array)
-    initial_world_transforms = jp.zeros_like(relative_transforms)
-    world_transforms, _ = jax.lax.scan(
-        compute_world_transform,
-        initial_world_transforms,
-        jp.array(sorted_indices),
-    )
-    return world_transforms
-
-
 def compute_num_shapes(scene):
-    # TODO expand to count for multiple levels of groups
     total_shapes = 0
     for shape_or_group in scene.nodes:
-        if isinstance(shape_or_group, Shape):
+        if isinstance(shape_or_group, paz.graphics.Shape):
             total_shapes = total_shapes + 1
         elif isinstance(shape_or_group, paz.graphics.Group):
             total_shapes = total_shapes + len(shape_or_group.shapes)
         else:
             raise TypeError("Scene elements must be 'Shape' or 'Group' types.")
     return total_shapes
-
-
-def expand_mask(mask, scene):
-    """Expands user mask to match flat scene."""
-    expanded_mask = []
-    for mask_value, shape_or_group in zip(mask, scene.nodes):
-        if isinstance(shape_or_group, Shape):
-            expanded_mask.append(mask_value)
-        elif isinstance(shape_or_group, paz.graphics.Group):
-            num_shapes_in_group = len(shape_or_group.shapes)
-            expanded_mask.extend([mask_value] * num_shapes_in_group)
-        else:
-            raise TypeError(f"Node {shape_or_group} is not 'Shape' or 'Group'.")
-    return jp.array(expanded_mask, dtype=bool)
-
-
-def expand_parent_array(parent_array, scene):
-    "Expands parent array to match flat scene."
-    expanded_parent_array = []
-    for parent_index, shape_or_group in zip(parent_array, scene.nodes):
-        if isinstance(shape_or_group, Shape):
-            expanded_parent_array.append(parent_index)
-        elif isinstance(shape_or_group, paz.graphics.Group):
-            num_shapes_in_group = len(shape_or_group.shapes)
-            expanded_parent_array.extend([parent_index] * num_shapes_in_group)
-        else:
-            raise TypeError(f"Node {shape_or_group} is not 'Shape' or 'Group'.")
-    return jp.array(expanded_parent_array, dtype=int)
 
 
 def prepare_mask(mask, scene):
@@ -93,6 +38,28 @@ def prepare_mask(mask, scene):
         flat_mask = expand_mask(mask, scene)
 
     return flat_mask
+
+
+def validate_scene(scene):
+    if not isinstance(scene, paz.graphics.Scene):
+        raise TypeError("'scene' must be a paz.graphics.Scene type.")
+    for node in scene.nodes:
+        if not isinstance(node, (paz.graphics.Shape, paz.graphics.Group)):
+            raise TypeError("'scene' elements must be 'Shape' or 'Group' type.")
+
+
+def expand_mask(mask, scene):
+    """Expands user mask to match flat scene."""
+    expanded_mask = []
+    for mask_value, shape_or_group in zip(mask, scene.nodes):
+        if isinstance(shape_or_group, paz.graphics.Shape):
+            expanded_mask.append(mask_value)
+        elif isinstance(shape_or_group, paz.graphics.Group):
+            num_shapes_in_group = len(shape_or_group.shapes)
+            expanded_mask.extend([mask_value] * num_shapes_in_group)
+        else:
+            raise TypeError(f"Node {shape_or_group} is not 'Shape' or 'Group'.")
+    return jp.array(expanded_mask, dtype=bool)
 
 
 def get_groups(scene):
@@ -111,15 +78,6 @@ def get_shapes(scene):
     return shapes
 
 
-def validate_scene(scene):
-    if not isinstance(scene, paz.graphics.Scene):
-        raise TypeError("'scene' must be a paz.graphics.Scene type.")
-    for node in scene.nodes:
-        if not isinstance(node, (paz.graphics.Shape, paz.graphics.Group)):
-            raise TypeError("'scene' elements must be 'Shape' or 'Group' type.")
-    return True
-
-
 def prepare_group(group):
     if not isinstance(group.shapes, list):
         raise TypeError("'group.shapes' must be a list of Shapes.")
@@ -131,47 +89,44 @@ def prepare_group(group):
 
     if not transformed_shapes:
         return None
+
     return prepare_shapes(transformed_shapes)
-    # return prepare_shapes(group.shapes)
-
-
-def prepare_groups(groups):
-    return [prepare_group(group) for group in groups]
 
 
 def prepare_shapes(shapes):
     if isinstance(shapes, list):
         if not all(isinstance(shape, paz.graphics.Shape) for shape in shapes):
             raise TypeError("All elements must be Shape objects.")
-        if len(shapes) == 1:
-            batched_shapes = paz.graphics.shapes.expand(shapes[0])
-        else:
-            batched_shapes = paz.graphics.shapes.merge(*shapes)
     else:
         raise TypeError("'shapes' must be a Shape or a list of Shapes.")
 
-    return batched_shapes
+    return shapes
 
 
-def flatten_scene(scene):
-    batched_shapes = []
-    batched_shapes.extend(prepare_groups(get_groups(scene)))
-    shapes = get_shapes(scene)
-    if shapes:
-        merged_standalone_shapes = prepare_shapes(shapes)
-        batched_shapes.append(merged_standalone_shapes)
-    return paz.graphics.shapes.concatenate(*batched_shapes)
+def prepare_groups(groups):
+    return [prepare_group(group) for group in groups]
+
+
+def prepare_scene(scene):
+    validate_scene(scene)
+    flat_scene = []
+    for group in get_groups(scene):
+        shapes = prepare_group(group)
+        flat_scene.extend(shapes)
+
+    for shape in get_shapes(scene):
+        flat_scene.append(shape)
+
+    for flat_shape in flat_scene:
+        if not isinstance(flat_shape, paz.graphics.Shape):
+            raise TypeError("All elements in flat_scene must be Shape objects.")
+
+    return flat_scene
 
 
 def compile(scene, lights, mask):
-    """Prepares the entire scene, lights, and mask for the core renderer."""
-    validate_scene(scene)
-    flat_scene = flatten_scene(scene)
-    parent_array = expand_parent_array(scene.parent_array, scene)
-    # parent_array = jp.array(scene.parent_array)
-    # print("before", flat_scene.transform)
-    # print("parent_array", parent_array)
-    transforms = relative_to_world(flat_scene.transform, parent_array)
-    # print("after", transforms)
-    flat_scene = flat_scene._replace(transform=transforms)
-    return flat_scene, prepare_lights(lights), prepare_mask(mask, scene)
+    return (
+        prepare_scene(scene),
+        prepare_lights(lights),
+        prepare_mask(mask, scene),
+    )

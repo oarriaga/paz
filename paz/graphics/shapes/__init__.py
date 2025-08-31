@@ -71,3 +71,9 @@ def _concatenate(*leaves):
 
 def concatenate(*batched_shapes):
     return jax.tree.map(_concatenate, *batched_shapes)
+
+
+def split(shape):
+    """Splits a batched Shape object into a list of N shapes with batch 1."""
+    num = shape.transform.shape[0]
+    return [jax.tree.map(lambda x: x[i : (i + 1)], shape) for i in range(num)]

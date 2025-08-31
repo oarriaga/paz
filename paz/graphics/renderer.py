@@ -4,7 +4,8 @@ from functools import partial
 import paz
 import jax
 import jax.numpy as jp
-from paz.graphics.scene import compile as compile_scene
+
+# from paz.graphics.scene import compile as compile_scene
 from paz.graphics.constants import EPSILON
 from paz.graphics.phong import (
     compute_colors,
@@ -147,13 +148,24 @@ def postprocess(
 
 
 def render(image_shape, world_to_camera, rays, shapes, lights, mask=None):
-    shapes, lights, mask = compile_scene(shapes, lights, mask)
+    shapes, lights, mask = paz.graphics.scene.compile(shapes, lights, mask)
     return _render(image_shape, world_to_camera, rays, shapes, lights, mask)
 
 
+def render_shapes(shapes, lights, rays):
+    hit_masks, depths, colors = [], [], []
+    for shape in shapes:
+        hit_mask, depth, color = render_shape(shape, lights, *rays)
+        hit_masks.append(hit_mask)
+        depths.append(depth)
+        colors.append(color)
+    return jp.array(hit_masks), jp.array(depths), jp.array(colors)
+
+
 def _render(image_shape, world_to_camera, rays, shapes, lights, mask):
-    render_shapes = jax.vmap(paz.lock(render_shape, lights, *rays))
-    hit_masks, depths, colors = render_shapes(shapes)
+    # render_shapes = jax.vmap(paz.lock(render_shape, lights, *rays))
+    # hit_masks, depths, colors = render_shapes(shapes)
+    hit_masks, depths, colors = render_shapes(shapes, lights, rays)
     mask = jp.expand_dims(mask, 1)
     hit_masks = jp.where(mask, hit_masks, False)
     depths = jp.where(jp.expand_dims(mask, 1), depths, 1e6)
