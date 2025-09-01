@@ -1,8 +1,12 @@
+from jax.experimental.compilation_cache.compilation_cache import set_cache_dir
 import jax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 import paz
 from paz import SE3
+
+
+set_cache_dir(paz.logger.make_directory("cache"))
 
 
 def build_centers(shape, sizes, x_center=-1.0, y_center=1.0):
@@ -145,6 +149,7 @@ num_shapes = jp.prod(shape)
 mask = jp.ones((num_shapes,), dtype=bool)
 
 shapes = build_shapes(key, num_shapes, transforms)
+scene = paz.graphics.Scene(shapes)
 
 render = jax.jit(
     paz.partial(
@@ -161,7 +166,9 @@ indices, neighbor_indices = get_neighbor_indices(shape)
 for key in jax.random.split(key, 50):
     key, subkey = jax.random.split(key)
     mask = jax.random.randint(subkey, (num_shapes,), 0, 2)
-    image, depth = render(shapes=shapes, mask=mask)
+    print("rendering..")
+    image, depth = render(scene=scene, mask=mask)
+    print("show")
     loss = jax.jit(calculate_loss)(indices, neighbor_indices, mask)
     active_cubes = jp.sum(mask)
     print(f"\nTotal rendered cubes: {active_cubes}")

@@ -55,13 +55,13 @@ def viewer(scene, camera_pose=jp.eye(4), light=None, H=480, W=640, y_FOV=0.78):
     cv2.setMouseCallback(window_name, mouse_callback)
     do_render = True
     while True:
-        if do_render:
-            turn_rotation = paz.SE3.rotation_y(camera_rotation["turn"])
-            tilt_rotation = paz.SE3.rotation_x(camera_rotation["tilt"])
-            rotation = turn_rotation @ tilt_rotation
-            camera_pose = rotation.at[:3, 3].set(camera_position)
-            (image, _), do_render = render_pose(camera_pose), False
-            image = cv2.cvtColor(paz.to_numpy(image), cv2.COLOR_RGB2BGR)
+        # if do_render:
+        turn_rotation = paz.SE3.rotation_y(camera_rotation["turn"])
+        tilt_rotation = paz.SE3.rotation_x(camera_rotation["tilt"])
+        rotation = turn_rotation @ tilt_rotation
+        camera_pose = rotation.at[:3, 3].set(camera_position)
+        (image, _), do_render = paz.time(render_pose)(camera_pose), False
+        image = cv2.cvtColor(paz.to_numpy(image), cv2.COLOR_RGB2BGR)
 
         cv2.imshow(window_name, image)
 
@@ -70,7 +70,7 @@ def viewer(scene, camera_pose=jp.eye(4), light=None, H=480, W=640, y_FOV=0.78):
             break
         elif key != -1:
             camera_position = key_to_move(key, camera_pose, camera_position)
-            do_render = True
+            # do_render = True
 
         if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
             break

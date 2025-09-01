@@ -147,8 +147,8 @@ def postprocess(
     return image, depth
 
 
-def render(image_shape, world_to_camera, rays, shapes, lights, mask=None):
-    shapes, lights, mask = paz.graphics.scene.compile(shapes, lights, mask)
+def render(image_shape, world_to_camera, rays, scene, lights, mask=None):
+    shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)
     return _render(image_shape, world_to_camera, rays, shapes, lights, mask)
 
 
