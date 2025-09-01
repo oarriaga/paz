@@ -3,7 +3,7 @@ import jax.numpy as jp
 import jax
 import paz
 from paz import SE3
-from paz.graphics import PointLight, Material, Cylinder, Cone
+from paz.graphics import PointLight, Material, Cylinder, Cone, SPHERICAL_PATTERN
 import matplotlib.pyplot as plt
 
 set_cache_dir(paz.logger.make_directory("cache"))
@@ -32,6 +32,7 @@ blue_material = Material(jp.array([0.36, 0.77, 0.96]), 0.2, 0.9, 0.1, 50.0)
 gold_material = Material(jp.array([0.9, 0.7, 0.2]), 0.3, 0.8, 0.8, 200.0)
 base_material = Material(jp.array([0.6, 0.5, 0.5]), 0.1, 0.7, 0.1, 20.0)
 zero_material = Material(jp.zeros(3), 0.85, 0.1, 0.0, 100)
+ones_material = Material(jp.ones(3), 0.85, 0.1, 0.0, 100)
 
 
 def Base(transform, base_material, pattern):
@@ -59,15 +60,14 @@ def Base(transform, base_material, pattern):
 
     neck_shift = SE3.translation([0.0, 0.425, 0.0])
     neck_scale = SE3.scaling([0.2, 0.20, 0.2])
-    neck_curve = Cylinder(
-        neck_shift @ neck_scale,
-        base_material,
-        pattern._replace(
-            type=paz.graphics.SPHERICAL_PATTERN, transform=jp.eye(4)
-        ),
-    )
-    base_shapes.append(neck_curve)
 
+    squares = build_checkered_pattern(100, 10, 10, green, white)
+    pattern_scale = SE3.scaling(jp.array([1.0, 1.0, 1.0]))
+    new_pattern = paz.graphics.Pattern(
+        pattern_scale, SPHERICAL_PATTERN, squares
+    )
+    neck_curve = Cylinder(neck_shift @ neck_scale, base_material, new_pattern)
+    base_shapes.append(neck_curve)
     return paz.graphics.Group(shapes=base_shapes, transform=transform)
 
 
@@ -79,12 +79,15 @@ def Segment(segment_arg, scaling, num_segments, arc_radius, material, pattern):
     rotation = SE3.rotation_y(-angle + (jp.pi / 2.0)) @ SE3.rotation_z(
         jp.pi / 2.0
     )
-    return paz.graphics.Cylinder(position @ rotation @ scaling, material)
+    return paz.graphics.Cylinder(
+        position @ rotation @ scaling, material, pattern
+    )
 
 
 def Arc(
     radius, num_segments, segment_length, segment_radius, material, pattern
 ):
+    pattern = pattern._replace(type=paz.graphics.PLANAR_PATTERN)
     segment_size = SE3.scaling([segment_radius, segment_length, segment_radius])
     _segment = paz.lock(
         Segment, segment_size, num_segments, radius, material, pattern
@@ -99,8 +102,17 @@ squares = build_checkered_pattern(25, 20, 20, green, white)
 pattern_scale = SE3.scaling(jp.full(3, 1.05))
 pattern_transform = SE3.rotation_z(-jp.deg2rad(30)) @ pattern_scale
 checkboard_pattern = paz.graphics.Pattern(
-    pattern_transform, paz.graphics.SPHERICAL_PATTERN, squares
+    pattern_transform, SPHERICAL_PATTERN, squares
 )
+
+squares = build_checkered_pattern(25, 20, 20, green, white)
+pattern_scale = SE3.scaling(jp.full(3, 40.0))
+pattern_transform = SE3.rotation_z(-jp.deg2rad(30)) @ pattern_scale
+checkboard_pattern_planar = paz.graphics.Pattern(
+    pattern_transform, SPHERICAL_PATTERN, squares
+)
+
+
 checkboard_pattern_2 = paz.graphics.Pattern(
     SE3.scaling(jp.full(3, 4.1)), paz.graphics.PLANAR_PATTERN, squares
 )
@@ -108,13 +120,13 @@ zero_pattern = paz.graphics.Pattern()
 
 
 if checkboard:
-    arc = Arc(1.175, 20, 0.1, 0.06, zero_material, checkboard_pattern)
+    arc = Arc(1.175, 20, 0.1, 0.06, zero_material, checkboard_pattern_planar)
 else:
     arc = Arc(1.175, 20, 0.1, 0.06, gold_material, zero_pattern)
 
-# globe = paz.graphics.Sphere(SE3.scaling(jp.full(3, 1.05)), blue_material)
 
 globe_scale = SE3.scaling(jp.full(3, 1.05))
+
 if checkboard:
     globe = paz.graphics.Sphere(globe_scale, zero_material, checkboard_pattern)
 else:
@@ -129,8 +141,7 @@ else:
     base = Base(SE3.translation([0.0, -1.7, 0.0]), gold_material, zero_pattern)
 
 
-def Button(radius=1.1, angle=60, height=0.075, size=0.05):
-    material = Material(jp.array([0.3, 0.3, 0.3]))
+def Button(material, radius=1.1, angle=60, height=0.075, size=0.05):
     x = jp.cos(jp.deg2rad(angle))
     y = jp.sin(jp.deg2rad(angle))
     shift = SE3.translation(radius * jp.array([x, y, 0]))
@@ -142,8 +153,14 @@ def Button(radius=1.1, angle=60, height=0.075, size=0.05):
     return paz.graphics.Group([bottom, top], jp.eye(4))
 
 
-top_button = Button(angle=60)
-bottom_button = Button(angle=240)
+if checkboard:
+    button_material = ones_material
+else:
+    button_material = Material(jp.array([0.3, 0.3, 0.3]))
+
+top_button = Button(button_material, angle=60)
+bottom_button = Button(button_material, angle=240)
+
 scene = paz.graphics.Scene([base, globe, arc, top_button, bottom_button])
 
 camera_pose = SE3.view_transform(
