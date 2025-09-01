@@ -161,7 +161,20 @@ else:
 top_button = Button(button_material, angle=60)
 bottom_button = Button(button_material, angle=240)
 
-scene = paz.graphics.Scene([base, globe, arc, top_button, bottom_button])
+floor_image = build_checkered_pattern(
+    50, 8, 8, white, jp.array([0.75, 0.75, 0.75])
+)
+floor_pattern = paz.graphics.Pattern(
+    jp.eye(4), paz.graphics.PLANAR_PATTERN, floor_image
+)
+
+floor_shift = SE3.translation(jp.array([0.0, -1.725, 0.0]))
+floor_scale = SE3.scaling(jp.array([10.0, 0.05, 10.0]))
+floor = paz.graphics.Cube(
+    floor_shift @ floor_scale, zero_material, floor_pattern
+)
+
+scene = paz.graphics.Scene([base, globe, arc, top_button, bottom_button, floor])
 
 camera_pose = SE3.view_transform(
     jp.array([0.0, 4.0, 4.0]),
