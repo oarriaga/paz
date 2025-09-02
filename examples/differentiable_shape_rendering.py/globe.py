@@ -1,3 +1,6 @@
+import os
+
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 from jax.experimental.compilation_cache.compilation_cache import set_cache_dir
 import jax.numpy as jp
 import jax
@@ -5,6 +8,7 @@ import paz
 from paz import SE3
 from paz.graphics import (
     PointLight,
+    Sphere,
     Material,
     Cylinder,
     Pattern,
@@ -14,7 +18,6 @@ from paz.graphics import (
     Cube,
     WHITE,
     BLACK,
-    PLANAR_PATTERN,
 )
 
 set_cache_dir(paz.logger.make_directory("cache"))
@@ -40,7 +43,7 @@ def Button(material, radius=1.1, angle=60, height=0.075, size=0.05):
     angle = paz.SE3.rotation_z(-jp.deg2rad(30))
     bottom = paz.graphics.Cylinder(shift @ angle @ scale, material)
     top_shift = SE3.translation((radius + height) * jp.array([x, y, 0]))
-    top = paz.graphics.Sphere(top_shift @ angle @ scale, material)
+    top = Sphere(top_shift @ angle @ scale, material)
     return paz.graphics.Group([bottom, top], jp.eye(4))
 
 
@@ -95,66 +98,88 @@ def Arc(
 
 
 checkboard = True
-GREEN = (0.415, 0.749, 0.639)
-GRAY = (0.75, 0.75, 0.75)
 
-blue_material = Material(jp.array([0.36, 0.77, 0.96]), 0.2, 0.9, 0.1, 50.0)
-gold_material = Material(jp.array([0.9, 0.7, 0.2]), 0.3, 0.8, 0.8, 200.0)
-base_material = Material(jp.array([0.6, 0.5, 0.5]), 0.1, 0.7, 0.1, 20.0)
+GREEN = (85 / 255, 181 / 255, 103 / 255)  # YlGnL
+# GREEN = (239 / 255, 249 / 255, 179 / 255)  # YlGnD
+# GREEN = (0.415, 0.749, 0.639)
+GRAY = (0.662, 0.647, 0.576)
+# GRAY = (0.75, 0.75, 0.75)
 zero_material = Material(jp.zeros(3), 0.85, 0.1, 0.0, 100)
-ones_material = Material(jp.ones(3), 0.85, 0.1, 0.0, 100)
 
-
+# GLOBE
 squares = CheckeredImage(25, 20, 20, GREEN, WHITE)
-pattern_scale = SE3.scaling(jp.full(3, 1.05))
-pattern_transform = SE3.rotation_z(-jp.deg2rad(30)) @ pattern_scale
-checkboard_pattern = SphericalPattern(squares, pattern_transform)
+
+if checkboard:
+    pattern_scale = SE3.scaling(jp.full(3, 1.05))
+    pattern_transform = SE3.rotation_z(-jp.deg2rad(30)) @ pattern_scale
+    globe_pattern = SphericalPattern(squares, pattern_transform)
+    globe_material = zero_material
+else:
+    image = paz.image.normalize(paz.image.load("earthmap1k.jpg"))
+    image = paz.image.flip_left_right(image)
+    angle = SE3.rotation_y(jp.deg2rad(-10))
+    globe_pattern = SphericalPattern(image, angle)
+    globe_material = zero_material
+
+globe = Sphere(SE3.scaling(jp.full(3, 1.05)), globe_material, globe_pattern)
 
 
+# ARC
+zero_pattern = Pattern()
 pattern_scale = SE3.scaling(jp.full(3, 40.0))
 pattern_transform = SE3.rotation_z(-jp.deg2rad(30)) @ pattern_scale
 checkboard_pattern_planar = SphericalPattern(squares, pattern_transform)
-
-checkboard_pattern_2 = PlanarPattern(squares, SE3.scaling(jp.full(3, 4.1)))
-zero_pattern = Pattern()
-
-# ARC
+# gold_material = Material(jp.array([0.9, 0.7, 0.2]), 0.3, 0.8, 0.8, 200.0)
+gold_material = Material(jp.array([0.9, 0.7, 0.2]))
 if checkboard:
-    arc = Arc(1.175, 20, 0.1, 0.06, zero_material, checkboard_pattern_planar)
+    arc = Arc(1.175, 50, 0.1, 0.06, zero_material, checkboard_pattern_planar)
 else:
-    arc = Arc(1.175, 20, 0.1, 0.06, gold_material, zero_pattern)
+    gold_color = jp.array([255, 215, 0]) / 255.0
+    # gold_color = jp.array([168, 121, 56]) / 255.0
+    # gold_color = gold_color * 0.4
 
-# GLOBE
-globe_scale = SE3.scaling(jp.full(3, 1.05))
-
-if checkboard:
-    globe = paz.graphics.Sphere(globe_scale, zero_material, checkboard_pattern)
-else:
-    globe = paz.graphics.Sphere(globe_scale, blue_material)
+    gold_material = Material(gold_color, 0.2, 0.1, 0.0, 100)
+    # gold_material = Material(
+    #     color=gold_color,
+    #     ambient=0.25,
+    #     diffuse=0.7,
+    #     specular=0.9,
+    #     shininess=256.0,
+    # )
+    gold_pattern = PlanarPattern(
+        paz.image.normalize(paz.image.load("gold_uv.png")),
+        SE3.scaling(jp.full(3, 50.0)),
+    )
+    zero = Material(jp.zeros(3), 0.7, 0.1, 0.0, 100)
+    arc = Arc(1.175, 20, 0.1, 0.06, zero, gold_pattern)
 
 
 # BASE
 squares = CheckeredImage(100, 10, 10, GREEN, WHITE)
 pattern_scale = SE3.scaling(jp.array([1.0, 1.0, 1.0]))
-pattern_neck = SphericalPattern(squares, pattern_scale)
+
 if checkboard:
-    base = Base(
-        SE3.translation([0.0, -1.7, 0.0]),
-        zero_material,
-        checkboard_pattern_2,
-        pattern_neck,
-    )
+    neck_pattern = SphericalPattern(squares, pattern_scale)
+    base_pattern = PlanarPattern(squares, SE3.scaling(jp.full(3, 4.1)))
+    base_material = zero_material
 else:
-    base = Base(
-        SE3.translation([0.0, -1.7, 0.0]),
-        gold_material,
-        zero_pattern,
-        zero_pattern,
-    )
+    base_material = Material(BLACK, 0.3, 0.7, 0.1, 20.0)
+    image = paz.image.normalize(paz.image.load("wood_base.png"))[:800]
+    shift = SE3.translation(jp.array([1.0, 0.0, 0.0]))
+    base_pattern = PlanarPattern(image, shift)
+    neck_pattern = PlanarPattern(image)
+
+base = Base(
+    SE3.translation([0.0, -1.7, 0.0]),
+    base_material,
+    base_pattern,
+    neck_pattern,
+)
+
 
 # BUTTONS
 if checkboard:
-    button_material = ones_material
+    button_material = Material(jp.ones(3), 0.85, 0.1, 0.0, 100)
 else:
     button_material = Material(jp.array([0.3, 0.3, 0.3]))
 
@@ -162,42 +187,66 @@ top_button = Button(button_material, angle=60)
 bottom_button = Button(button_material, angle=240)
 
 # FLOOR
-floor_image = CheckeredImage(50, 8, 8, WHITE, GRAY)
-floor_pattern = paz.graphics.Pattern(jp.eye(4), PLANAR_PATTERN, floor_image)
+if checkboard:
+    floor_image = CheckeredImage(50, 8, 8, WHITE, GRAY)
+    floor_pattern = PlanarPattern(floor_image, jp.eye(4))
+    floor_material = zero_material
+else:
+    floor_image = paz.image.normalize(paz.image.load("wood_table.png"))
+    scale = SE3.scaling(jp.full(3, 1.0))
+    shift = SE3.translation(jp.array([-1.7, 0.0, 0.0]))
+    # scale = SE3.scaling(jp.full(3, 0.8))
+    # shift = SE3.translation(jp.array([0.8, 0.0, 0.0]))
+    floor_pattern = PlanarPattern(floor_image, shift @ scale)
+    floor_material = Material(BLACK, 0.3, 0.7, 0.1, 20.0)
+
 floor_shift = SE3.translation(jp.array([0.0, -1.725, 0.0]))
 floor_scale = SE3.scaling(jp.array([10.0, 0.05, 10.0]))
-floor = Cube(floor_shift @ floor_scale, zero_material, floor_pattern)
+floor = Cube(floor_shift @ floor_scale, floor_material, floor_pattern)
 
 # WALL
-wall_image = CheckeredImage(50, 8, 8, WHITE, GRAY)
-wall_pattern = PlanarPattern(wall_image, SE3.scaling(jp.array([1.0, 1.0, 1.0])))
+if checkboard:
+    wall_image = CheckeredImage(50, 8, 8, WHITE, GRAY)
+    wall_pattern = PlanarPattern(wall_image)
+    wall_material = zero_material
+else:
+    wall_image = paz.image.normalize(paz.image.load("wall_uv.jpg"))
+    wall_image = wall_image * 0.3
+    wall_pattern = PlanarPattern(wall_image, jp.eye(4))
+    wall_material = zero_material
+
 wall_scale = SE3.scaling(jp.array([10.0, 0.05, 10.0]))
 wall_angle = SE3.rotation_x(jp.pi / 2.0)
-wall_shift = SE3.translation(jp.array([1.25, 2.1, -5.0]))
+wall_shift = SE3.translation(jp.array([1.25, 1.9, -3.5]))
 wall_transform = wall_shift @ wall_angle @ wall_scale
-wall = paz.graphics.Cube(wall_transform, zero_material, wall_pattern)
+wall = paz.graphics.Cube(wall_transform, wall_material, wall_pattern)
 
 shapes = [base, globe, arc, top_button, bottom_button, floor, wall]
+# shapes = [floor]
 scene = paz.graphics.Scene(shapes)
 
 camera_pose = SE3.view_transform(
-    jp.array([0.0, 4.0, 4.0]),
-    jp.array([0.0, 0.0, 0.0]),
+    jp.array([1.1, 1.1, 4.0]),
+    jp.array([0.0, -0.5, 0.0]),
     jp.array([0.0, 1.0, 0.0]),
 )
 
-lights = PointLight(jp.array([1.5, 1.5, 1.5]), jp.array([5.0, 4.0, 8.0]))
+lights = PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([5.0, 4.0, 8.0]))
 
-H, W = 720 // 4, 1024 // 4
+H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 render = jax.jit(
     paz.partial(
         paz.graphics.render,
         image_shape=(H, W),
-        world_to_camera=camera_pose,
-        rays=rays,
+        # world_to_camera=camera_pose,
+        # rays=rays,
         lights=lights,
     )
 )
-paz.graphics.viewer(scene, camera_pose)
+image, depth = render(scene=scene, world_to_camera=camera_pose, rays=rays)
+image = paz.image.resize_opencv(paz.image.denormalize(image), (H // 2, W // 2))
+image_name = "globe_checkboard.png" if checkboard else "globe.png"
+paz.image.write(image_name, image)
+# paz.graphics.viewer(scene, camera_pose)
