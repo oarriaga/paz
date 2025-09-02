@@ -10,6 +10,8 @@ from paz.graphics.types import (
     Plane,
     Cylinder,
     Cone,
+    SphericalPattern,
+    PlanarPattern,
 )
 from paz.graphics.constants import (
     NO_PATTERN,
