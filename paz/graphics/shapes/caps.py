@@ -107,10 +107,16 @@ def intersect_cylinder_caps(origins, directions, minimum, maximum):
 
 def intersect_cone_caps(origins, directions, minimum, maximum):
     lower_depth, lower_points3D = intersect_plane(origins, directions, minimum)
-    upper_depth, upper_points3D = intersect_plane(origins, directions, maximum)
+    # upper_depth, upper_points3D = intersect_plane(origins, directions, maximum)
     lower_cap_mask = compute_inner_cone_cap_mask(lower_points3D)
-    upper_cap_mask = compute_inner_cone_cap_mask(upper_points3D)
+    valid_mask = jp.logical_and(
+        (lower_depth > EPSILON), (lower_depth < FARAWAY)
+    )
+    lower_cap_mask = jp.logical_and(lower_cap_mask, valid_mask)
+    # upper_cap_mask = compute_inner_cone_cap_mask(upper_points3D)
     lower_depth = replace_misses(lower_depth, lower_cap_mask)
-    upper_depth = replace_misses(upper_depth, upper_cap_mask)
-    caps_mask = jp.logical_or(upper_cap_mask, lower_cap_mask)
-    return intersect_canonical_caps(caps_mask, lower_depth, upper_depth)
+    # upper_depth = replace_misses(upper_depth, upper_cap_mask)
+    # caps_mask = jp.logical_or(upper_cap_mask, lower_cap_mask)
+    return intersect_canonical_caps(
+        lower_cap_mask, lower_depth, jp.full_like(lower_depth, FARAWAY)
+    )
