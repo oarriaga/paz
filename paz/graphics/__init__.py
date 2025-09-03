@@ -12,11 +12,13 @@ from paz.graphics.types import (
     Cone,
     SphericalPattern,
     PlanarPattern,
+    CylindricalPattern,
 )
 from paz.graphics.constants import (
     NO_PATTERN,
     SPHERICAL_PATTERN,
     PLANAR_PATTERN,
+    CYLINDRICAL_PATTERN,
     SPHERE,
     CUBE,
     CYLINDER,

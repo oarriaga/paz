@@ -28,6 +28,7 @@ def compute_pattern_colors(shape, points):
         paz.graphics.patterns.empty.compute_colors,
         paz.graphics.patterns.spherical.compute_colors,
         paz.graphics.patterns.planar.compute_colors,
+        paz.graphics.patterns.cylindrical.compute_colors,
     ]
     pattern_colors = jax.lax.switch(
         shape.pattern.type, cases, points, pattern_image

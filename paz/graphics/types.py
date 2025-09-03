@@ -10,6 +10,7 @@ from paz.graphics.constants import (
     DEFAULT_COLOR,
     SPHERICAL_PATTERN,
     PLANAR_PATTERN,
+    CYLINDRICAL_PATTERN,
 )
 
 PointLight = namedtuple("PointLight", ["intensity", "position"])
@@ -28,6 +29,10 @@ def SphericalPattern(image, transform=jp.eye(4)):
 
 def PlanarPattern(image, transform=jp.eye(4)):
     return Pattern(transform, PLANAR_PATTERN, image)
+
+
+def CylindricalPattern(image, transform=jp.eye(4)):
+    return Pattern(transform, CYLINDRICAL_PATTERN, image)
 
 
 Material = namedtuple(
