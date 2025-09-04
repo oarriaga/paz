@@ -68,11 +68,12 @@ shape_04 = paz.graphics.Cube(
 )
 
 images = []
-for shape in [shape_01, shape_02, shape_03, shape_04]:
+for shape_arg, shape in enumerate([shape_01, shape_02, shape_03, shape_04]):
     image, depth = render(scene=paz.graphics.Scene([shape]))
     image = paz.image.resize_opencv(
         paz.image.denormalize(jp.clip(image, 0.0, 1.0)), (H // 2, W // 2)
     )
+    paz.image.write(f"prototype_{shape_arg}.png", image)
     images.append(image)
 
 images = jp.array(images)
