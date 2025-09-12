@@ -53,23 +53,23 @@ cylindrical_pattern = paz.graphics.CylindricalPattern(
 zero_material = paz.graphics.Material(jp.zeros(3), 0.85, 0.1, 0.0, 100)
 
 shape_01 = paz.graphics.Sphere(
-    paz.SE3.translation(jp.array([0.0, 0.0, -3.0])),
+    paz.SE3.translation(jp.array([0.0, 1.0, -3.0])),
     zero_material,
     spherical_pattern,
 )
 shape_02 = paz.graphics.Cylinder(
-    paz.SE3.translation(jp.array([0.0, 0.0, -1.0]))
+    paz.SE3.translation(jp.array([0.0, 1.0, -1.0]))
     @ paz.SE3.scaling(jp.full(3, 1.0)),
     zero_material,
     cylindrical_pattern,
 )
 shape_03 = paz.graphics.Cone(
-    paz.SE3.translation(jp.array([0.0, 0.0, 1.0])),
+    paz.SE3.translation(jp.array([0.0, 1.0, 1.0])),
     zero_material,
     planar_pattern._replace(transform=paz.SE3.scaling(jp.full(3, 3.0))),
 )
 shape_04 = paz.graphics.Cube(
-    paz.SE3.translation(jp.array([0.0, 0.0, 3.0]))
+    paz.SE3.translation(jp.array([0.0, 1.0, 3.0]))
     @ paz.SE3.scaling(jp.full(3, 1.0)),
     zero_material,
     cylindrical_pattern._replace(transform=paz.SE3.scaling(jp.full(3, 4.0))),

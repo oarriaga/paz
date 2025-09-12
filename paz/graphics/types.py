@@ -1,5 +1,6 @@
 from collections import namedtuple
 import jax.numpy as jp
+import paz
 from paz.graphics.constants import (
     SPHERE,
     CUBE,
@@ -94,7 +95,10 @@ def Cube(transform=jp.eye(4), material=Material(), pattern=Pattern()):
 
 
 def Cone(transform=jp.eye(4), material=Material(), pattern=Pattern()):
-    return Shape(transform, CONE, material, pattern)
+    canonical_scale = paz.SE3.scaling(jp.array([1.0, 2.0, 1.0]))
+    canonical_shift = paz.SE3.translation(jp.array([0.0, 1.0, 0.0]))
+    canonical_transform = canonical_shift @ canonical_scale
+    return Shape(transform @ canonical_transform, CONE, material, pattern)
 
 
 def Cylinder(transform=jp.eye(4), material=Material(), pattern=Pattern()):
