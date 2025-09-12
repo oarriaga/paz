@@ -233,7 +233,7 @@ camera_pose = SE3.view_transform(
 
 lights = PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([5.0, 4.0, 8.0]))
 
-H, W = 1024, 1024
+H, W = 1024 // 2, 1024 // 2
 y_FOV = jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 render = jax.jit(
@@ -249,4 +249,4 @@ image, depth = render(scene=scene, world_to_camera=camera_pose, rays=rays)
 image = paz.image.resize_opencv(paz.image.denormalize(image), (H // 2, W // 2))
 image_name = "globe_checkboard.png" if checkboard else "globe.png"
 paz.image.write(image_name, image)
-# paz.graphics.viewer(scene, camera_pose)
+paz.graphics.viewer(scene, camera_pose)

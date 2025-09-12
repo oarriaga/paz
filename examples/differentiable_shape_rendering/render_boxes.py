@@ -163,7 +163,7 @@ render = jax.jit(
 
 indices, neighbor_indices = get_neighbor_indices(shape)
 
-for key in jax.random.split(key, 50):
+for key in jax.random.split(key, 5):
     key, subkey = jax.random.split(key)
     mask = jax.random.randint(subkey, (num_shapes,), 0, 2)
     print("rendering..")

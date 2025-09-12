@@ -1,11 +1,11 @@
 # TODO render should take as argument name shapes not scene
 # TODO check that depth information is computed properly when using mask
+from collections import defaultdict
 from functools import partial
 import paz
 import jax
 import jax.numpy as jp
 
-# from paz.graphics.scene import compile as compile_scene
 from paz.graphics.constants import EPSILON
 from paz.graphics.phong import (
     compute_colors,
@@ -16,6 +16,15 @@ from paz.graphics.shapes import intersection_cases, normal_cases
 
 from paz.graphics.geometry import compute_points3D, transform_rays
 from paz.backend.algebra import dot, normalize, transform_points
+
+
+def group_shapes_by_pattern_image_size(shapes_list):
+    """Groups a list of Shape objects by the size of their pattern's image."""
+    grouped_shapes = defaultdict(list)
+    for shape in shapes_list:
+        image_size_key = shape.pattern.image.shape[:2]
+        grouped_shapes[image_size_key].append(shape)
+    return dict(grouped_shapes)
 
 
 def to_color_image(hit_mask, colors, image_shape, background_color=1):
@@ -116,13 +125,6 @@ def compute_scene_colors(shape, lights, points, normals, eyes):
     return scene_colors
 
 
-def render_shape(shape, lights, ray_origins, ray_directions):
-    intersections = intersect_shape(shape, ray_origins, ray_directions)
-    hit_mask, depth, points, normals, eyes = intersections
-    colors = compute_scene_colors(shape, lights, points, normals, eyes)
-    return hit_mask, depth, colors
-
-
 def postprocess(
     hit_masks,
     depths,
@@ -152,14 +154,39 @@ def render(image_shape, world_to_camera, rays, scene, lights, mask=None):
     return _render(image_shape, world_to_camera, rays, shapes, lights, mask)
 
 
+# def render_shapes(shapes, lights, rays):
+#     hit_masks, depths, colors = [], [], []
+#     for shape in shapes:
+#         hit_mask, depth, color = render_shape(shape, lights, *rays)
+#         hit_masks.append(hit_mask)
+#         depths.append(depth)
+#         colors.append(color)
+#     return jp.array(hit_masks), jp.array(depths), jp.array(colors)
+
+
+def render_shape(shape, lights, ray_origins, ray_directions):
+    intersections = intersect_shape(shape, ray_origins, ray_directions)
+    hit_mask, depth, points, normals, eyes = intersections
+    colors = compute_scene_colors(shape, lights, points, normals, eyes)
+    return hit_mask, depth, colors
+
+
 def render_shapes(shapes, lights, rays):
     hit_masks, depths, colors = [], [], []
-    for shape in shapes:
-        hit_mask, depth, color = render_shape(shape, lights, *rays)
-        hit_masks.append(hit_mask)
-        depths.append(depth)
-        colors.append(color)
-    return jp.array(hit_masks), jp.array(depths), jp.array(colors)
+    grouped_shapes = group_shapes_by_pattern_image_size(shapes)
+    for image_size, shape_group in grouped_shapes.items():
+        shape_group = paz.graphics.shapes.merge(*shape_group)
+        render_shapes = jax.vmap(paz.lock(render_shape, lights, *rays))
+        group_hit_masks, group_depths, group_colors = render_shapes(shape_group)
+        hit_masks.append(group_hit_masks)
+        depths.append(group_depths)
+        colors.append(group_colors)
+    # return jp.array(hit_masks), jp.array(depths), jp.array(colors)
+    return (
+        jp.concatenate(hit_masks, axis=0),
+        jp.concatenate(depths, axis=0),
+        jp.concatenate(colors, axis=0),
+    )
 
 
 def _render(image_shape, world_to_camera, rays, shapes, lights, mask):

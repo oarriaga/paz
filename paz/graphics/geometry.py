@@ -1,5 +1,4 @@
 import jax.numpy as jp
-import jax
 import paz
 
 from paz.graphics.constants import FARAWAY
