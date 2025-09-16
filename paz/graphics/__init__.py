@@ -29,10 +29,15 @@ from paz.graphics.constants import (
     BLUE,
     WHITE,
     BLACK,
+    EPSILON,
+    FARAWAY,
 )
+from paz.graphics import geometry
 from paz.graphics import shapes
 from paz.graphics import camera
-from paz.graphics.renderer import render, render_with_shadows
+from paz.graphics import phong
+from paz.graphics.renderer import render
+
 from paz.graphics import patterns
 from paz.graphics import scene
 from paz.graphics.serialization import save, load
