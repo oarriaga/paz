@@ -1,7 +1,6 @@
 import jax.numpy as jp
 import paz
-
-from paz.graphics.constants import FARAWAY
+from paz.graphics.constants import FARAWAY, EPSILON
 
 
 def compute_quadratic_is_hit(depths_A, depths_B, is_valid):
