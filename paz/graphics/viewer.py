@@ -2,6 +2,7 @@ import jax.numpy as jp
 import cv2
 import jax
 import paz
+
 from paz.graphics.renderer import _render as render
 
 
