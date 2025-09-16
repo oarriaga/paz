@@ -124,3 +124,7 @@ def compute_bounding_volume(pointcloud):
     max_coords = jp.max(pointcloud, axis=0)
     volume = jp.prod(max_coords - min_coords)
     return volume
+
+
+def move_along_normals(pointcloud, normals, distance):
+    return pointcloud + (distance * normals)
