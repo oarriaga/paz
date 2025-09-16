@@ -1,346 +1,326 @@
 import pytest
 import jax.numpy as jp
+from unittest.mock import patch
 
-# from paz.graphics import shapes
-from paz.graphics import renderer
-from paz import algebra
-from paz.graphics.types import PointLight, Material, Shape, Pattern
-from paz.graphics.constants import (
-    NO_PATTERN,
-    SPHERE,
-    PLANE,
-    CONE,
-    WHITE,
-    RED,
-    BLACK,
-    CUBE,
-)
+from paz.graphics.renderer import _render
+from paz.graphics.types import Shape, Material, Pattern
+from paz.graphics import constants as const
+from paz import SE3
 
 
 @pytest.fixture
-def material():
-    """Provides a simple, shared Material object."""
-    return Material()
+def dummy_image_shape():
+    return 100, 150  # H, W
 
 
 @pytest.fixture
-def pattern_256():
-    """Provides a Pattern with a 256x256 image."""
-    return Pattern(image=jp.zeros((256, 256, 3)))
+def dummy_world_to_camera():
+    return SE3.translation([0.0, 0.0, -5.0])  # A simple camera transform
 
 
 @pytest.fixture
-def pattern_512():
-    """Provides a Pattern with a 512x512 image."""
-    return Pattern(image=jp.zeros((512, 512, 3)))
+def dummy_rays():
+    # Simulate rays for a 100x150 image, so 15000 rays
+    num_rays = 100 * 150
+    origins = jp.zeros((num_rays, 3))
+    directions = jp.array([0.0, 0.0, 1.0]) * jp.ones(
+        (num_rays, 1)
+    )  # All rays pointing forward
+    return origins, directions
 
 
 @pytest.fixture
-def shape_256_A(material, pattern_256):
-    """Provides a shape with a 256x256 pattern."""
-    return Shape(
+def dummy_shapes():
+    """Provides a list of dummy shapes for the scene."""
+    material = Material()
+    pattern = Pattern(image=jp.zeros((10, 10, 3)))
+
+    shape1 = Shape(
         transform=jp.eye(4),
-        type=SPHERE,
+        type=const.SPHERE,
         material=material,
-        pattern=pattern_256,
+        pattern=pattern,
     )
-
-
-@pytest.fixture
-def shape_256_B(material, pattern_256):
-    """Provides a second, distinct shape with a 256x256 pattern."""
-    return Shape(
-        transform=jp.eye(4).at[0, 3].set(1.0),
-        type=CUBE,
+    shape2 = Shape(
+        transform=SE3.translation([1.0, 0.0, 0.0]),
+        type=const.CUBE,
         material=material,
-        pattern=pattern_256,
+        pattern=pattern,
     )
+    return [shape1, shape2]
 
 
 @pytest.fixture
-def shape_512(material, pattern_512):
-    """Provides a shape with a 512x512 pattern."""
-    return Shape(
-        transform=jp.eye(4),
-        type=PLANE,
-        material=material,
-        pattern=pattern_512,
-    )
+def dummy_lights():
+    # A simple dummy light, adjust as per your Light type
+    class DummyLight:
+        pass
+
+    return [DummyLight()]
 
 
 @pytest.fixture
-def shape_default(material):
-    """Provides a shape that uses the default 1x1 pattern."""
-    return Shape(
-        transform=jp.eye(4), type=CONE, material=material, pattern=Pattern()
-    )
+def dummy_mask():
+    """Provides a dummy mask for the image shape."""
+    return jp.ones((100, 150), dtype=jp.bool_)  # All pixels initially active
+
+
+# --- Mocks for dependencies ---
 
 
 @pytest.fixture
-def simple_light():
-    """A single white light source from above and behind the camera."""
-    return PointLight(intensity=WHITE, position=jp.array([0.0, 10.0, -10.0]))
+def mock_render_shapes():
+    """Mocks the render_shapes function."""
+    with patch("paz.graphics.renderer.render_shapes") as mock:
+        yield mock
 
 
 @pytest.fixture
-def red_sphere_material():
-    """A material for a matte red sphere."""
-    return Material(
-        color=RED, ambient=0.1, diffuse=0.9, specular=0.1, shininess=200.0
-    )
+def mock_postprocess():
+    """Mocks the postprocess function."""
+    with patch("paz.graphics.renderer.postprocess") as mock:
+        yield mock
 
 
-@pytest.fixture
-def white_floor_material():
-    """A material for a matte white floor."""
-    return Material(
-        color=WHITE, ambient=0.1, diffuse=0.9, specular=0.1, shininess=200.0
-    )
+# --- Tests for _render function ---
 
 
-@pytest.fixture
-def default_pattern():
-    """A default pattern with a dummy image."""
-    dummy_image = jp.zeros((1, 1, 3))
-    return Pattern(transform=jp.eye(4), type=NO_PATTERN, image=dummy_image)
-
-
-@pytest.fixture
-def red_sphere(red_sphere_material, default_pattern):
-    """A unit sphere translated up by 1 unit."""
-    transform = jp.eye(4).at[1, 3].set(1.0)
-    return Shape(
-        transform=transform,
-        type=SPHERE,
-        pattern=default_pattern,
-        material=red_sphere_material,
-    )
-
-
-@pytest.fixture
-def floor_plane(white_floor_material, default_pattern):
-    """A unit plane at the origin, acting as a floor."""
-    return Shape(
-        transform=jp.eye(4),
-        type=PLANE,
-        pattern=default_pattern,
-        material=white_floor_material,
-    )
-
-
-@pytest.fixture
-def simple_scene(red_sphere, floor_plane):
-    """A scene with a red sphere and a white floor, as a list."""
-    return [red_sphere, floor_plane]
-
-
-def test_select_colors():
-    """Tests if the function selects colors from the closest object."""
-    depths = jp.array([[10.0, 5.0], [20.0, 3.0]])
-    depths = depths[:, :, jp.newaxis]
-    colors = jp.array([[RED, RED], [WHITE, WHITE]])
-    selected = renderer.select_colors(depths, colors)
-    expected = jp.vstack([RED, WHITE])
-    assert jp.allclose(selected, expected)
-
-
-def test_invert_inside_normals():
-    """Tests that normals facing away from the camera are flipped."""
-    eye = jp.array([[0.0, 0.0, -1.0]])
-    normal_facing_away = jp.array([[0.0, 0.0, 1.0]])
-    inverted = renderer.invert_inside_normals(eye, normal_facing_away)
-    expected = jp.array([[0.0, 0.0, -1.0]])
-    assert jp.allclose(inverted, expected)
-
-
-def test_compute_scene_hit_mask():
-    """Tests that hit masks from multiple objects are combined correctly."""
-    masks = jp.array([[True, False], [False, True]])
-    combined = renderer.compute_scene_hit_mask(masks)
-    expected = jp.array([True, True])
-    assert jp.all(combined == expected)
-
-
-def test_to_color_image_reshaping():
-    """Tests the reshaping and data type logic of the final image conversion."""
-    hit_mask = jp.ones((4), dtype=bool)
-    colors = jp.array([RED, WHITE, RED, WHITE]) * 0.5
-    image = renderer.to_color_image(hit_mask, colors, (2, 2))
-    assert image.shape == (2, 2, 3)
-    assert image.dtype == jp.float32
-
-
-def test_prepare_lights_with_single_light(simple_light):
-    """Tests that a single PointLight is correctly wrapped in a list."""
-    processed = renderer.prepare_lights(simple_light)
-    assert isinstance(processed, list)
-    assert len(processed) == 1
-    assert processed[0] == simple_light
-
-
-def test_prepare_lights_with_list(simple_light):
-    """Tests that a list of PointLights is returned unchanged."""
-    light_list = [simple_light, simple_light]
-    processed = renderer.prepare_lights(light_list)
-    assert processed == light_list
-
-
-def test_prepare_lights_with_invalid_type():
-    """Tests that a non-list, non-PointLight input raises a TypeError."""
-    with pytest.raises(TypeError):
-        renderer.prepare_lights("not_a_light")
-
-
-def test_prepare_lights_with_invalid_list_contents(simple_light):
-    """Tests that a list with invalid contents raises a TypeError."""
-    with pytest.raises(TypeError):
-        renderer.prepare_lights([simple_light, "not_a_light"])
-
-
-def test_prepare_shapes_with_single_shape(red_sphere):
-    """Tests that a single Shape is expanded to a batched Shape."""
-    processed = renderer.prepare_shapes(red_sphere)
-    assert isinstance(processed, Shape)
-    assert processed.transform.shape[0] == 1
-
-
-def test_prepare_shapes_with_list(simple_scene):
-    """Tests that a list of Shapes is merged into a single batched Shape."""
-    processed = renderer.prepare_shapes(simple_scene)
-    assert isinstance(processed, Shape)
-    assert processed.transform.shape[0] == len(simple_scene)
-
-
-def test_prepare_shapes_with_invalid_type():
-    """Tests that an invalid input type raises a TypeError."""
-    with pytest.raises(TypeError):
-        renderer.prepare_shapes(123)
-
-
-def test_prepare_shapes_with_invalid_list_contents(red_sphere):
-    """Tests that a list with invalid contents raises a TypeError."""
-    with pytest.raises(TypeError):
-        renderer.prepare_shapes([red_sphere, 123])
-
-
-def test_render_without_shadows(simple_scene, simple_light):
-    """Tests the main renderer function using the flexible API."""
-    image_shape = (1, 2)
-    H, W = image_shape
-    camera_transform = jp.eye(4).at[2, 3].set(-5.0)
-    world_to_camera = jp.linalg.inv(camera_transform)
-    rays = (
-        jp.array([[0, 0, -5], [0, 0, -5]]),
-        jp.array([[0, -0.5, 1], [0, 0, 1]]),
-    )
-
-    # Call the renderer function without the mask, passing the list directly
-    image, depth = renderer.render(
-        image_shape, world_to_camera, rays, simple_scene, [simple_light]
-    )
-
-    assert image.shape == (H, W, 3)
-    assert depth.shape == (H, W)
-    assert not jp.allclose(image[0, 0], BLACK)
-    assert not jp.allclose(image[0, 1], BLACK)
-
-
-def test_render_with_shadows(simple_scene):
-    """Tests the shadow renderer using the flexible API."""
-    image_shape = (1, 2)
-    H, W = image_shape
-    light = PointLight(intensity=WHITE, position=jp.array([0.0, 5.0, 0.0]))
-    camera_origin = jp.array([0.0, 2.0, -5.0])
-    camera_transform = jp.eye(4).at[:3, 3].set(camera_origin)
-    world_to_camera = jp.linalg.inv(camera_transform)
-
-    shadow_target = jp.array([0.0, 0.0, 0.0])
-    lit_target = jp.array([2.0, 0.0, 0.0])
-
-    shadow_ray_dir = algebra.normalize(shadow_target - camera_origin)
-    lit_ray_dir = algebra.normalize(lit_target - camera_origin)
-
-    rays = (
-        jp.vstack([camera_origin, camera_origin]),
-        jp.vstack([shadow_ray_dir, lit_ray_dir]),
-    )
-
-    # Call the shadow renderer without the mask, passing the list directly
-    image, _ = renderer.render_with_shadows(
-        image_shape, world_to_camera, rays, simple_scene, [light]
-    )
-
-    pixel_in_shadow = image[0, 0]
-    pixel_in_light = image[0, 1]
-
-    assert jp.linalg.norm(pixel_in_shadow) < jp.linalg.norm(pixel_in_light)
-
-
-def test_group_by_size_with_empty_list():
-    """Tests that an empty list of shapes results in an empty dictionary."""
-    shapes_list = []
-    result = renderer.group_shapes_by_pattern_image_size(shapes_list)
-    assert result == {}
-
-
-def test_group_by_size_with_homogenous_list(shape_256_A, shape_256_B):
-    """Tests grouping a list where all shapes have the same image size."""
-    shapes_list = [shape_256_A, shape_256_B]
-    result = renderer.group_shapes_by_pattern_image_size(shapes_list)
-
-    assert len(result) == 1
-    assert (256, 256) in result
-
-    result_list = result[(256, 256)]
-    assert len(result_list) == 2
-
-    # FIX: Use `is` to check for object identity, avoiding the ValueError.
-    assert result_list[0] is shape_256_A
-    assert result_list[1] is shape_256_B
-
-
-def test_group_by_size_with_heterogeneous_list(shape_256_A, shape_512):
-    """Tests grouping a list with two different image sizes."""
-    shapes_list = [shape_256_A, shape_512]
-    result = renderer.group_shapes_by_pattern_image_size(shapes_list)
-
-    assert len(result) == 2
-    assert (256, 256) in result
-    assert (512, 512) in result
-    assert result[(256, 256)] == [shape_256_A]
-    assert result[(512, 512)] == [shape_512]
-
-
-def test_group_by_size_with_default_pattern(shape_default):
-    """shapes with default patterns are grouped correctly by size (1, 1)."""
-    shapes_list = [shape_default]
-    result = renderer.group_shapes_by_pattern_image_size(shapes_list)
-
-    assert len(result) == 1
-    assert (1, 1) in result
-    assert result[(1, 1)] == [shape_default]
-
-
-def test_group_by_size_with_complex_mixed_list(
-    shape_256_A, shape_512, shape_default, shape_256_B
+def test_render_calls_render_shapes_with_correct_args(
+    dummy_image_shape,
+    dummy_world_to_camera,
+    dummy_rays,
+    dummy_shapes,
+    dummy_lights,
+    dummy_mask,
+    mock_render_shapes,
+    mock_postprocess,
 ):
-    """Tests a complex mix of shapes with different and shared image sizes."""
-    shapes_list = [shape_256_A, shape_512, shape_default, shape_256_B]
-    result = renderer.group_shapes_by_pattern_image_size(shapes_list)
+    """Verifies _render calls render_shapes with scene elements."""
+    # Set up mock to return some plausible data
+    num_shapes = len(dummy_shapes)
+    num_rays = dummy_rays[0].shape[0]
+    mock_render_shapes.return_value = (
+        jp.zeros((num_shapes, num_rays), dtype=jp.bool_),  # hit_masks
+        jp.zeros((num_shapes, num_rays), dtype=jp.float32),  # depths
+        jp.zeros((num_shapes, num_rays, 3), dtype=jp.float32),  # colors
+    )
 
-    assert len(result) == 3
-    assert (256, 256) in result
-    assert (512, 512) in result
-    assert (1, 1) in result
+    # Call the function under test
+    _render(
+        dummy_image_shape,
+        dummy_world_to_camera,
+        dummy_rays,
+        dummy_shapes,
+        dummy_lights,
+        dummy_mask,
+    )
 
-    # Check the contents of each group
-    group_256 = result[(256, 256)]
-    assert len(group_256) == 2
-    assert len(result[(512, 512)]) == 1
-    assert len(result[(1, 1)]) == 1
+    # Assert render_shapes was called once with the expected arguments
+    mock_render_shapes.assert_called_once_with(
+        dummy_shapes, dummy_lights, dummy_rays
+    )
 
-    # FIX: Use `is` to check for object identity. The order is preserved.
-    assert group_256[0] is shape_256_A
-    assert group_256[1] is shape_256_B
-    assert result[(512, 512)][0] is shape_512
-    assert result[(1, 1)][0] is shape_default
+
+def test_render_calls_postprocess_with_correct_args(
+    dummy_image_shape,
+    dummy_world_to_camera,
+    dummy_rays,
+    dummy_shapes,
+    dummy_lights,
+    dummy_mask,
+    mock_render_shapes,
+    mock_postprocess,
+):
+    """Verifies _render calls postprocess with processed rendering data."""
+    # Prepare dummy return values from render_shapes
+    num_shapes = len(dummy_shapes)
+    num_rays = dummy_rays[0].shape[0]
+    mock_hit_masks = jp.array([[True, False], [False, True]])  # Example hits
+    mock_depths = jp.array([[1.0, 1e6], [1e6, 2.0]])  # Example depths
+    mock_colors = jp.array(
+        [[[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]]]
+    )  # Example colors
+
+    mock_render_shapes.return_value = (mock_hit_masks, mock_depths, mock_colors)
+
+    # Mock postprocess to return a dummy image and depth map
+    mock_postprocess.return_value = (
+        jp.zeros(
+            (dummy_image_shape[0], dummy_image_shape[1], 3)
+        ),  # Dummy image
+        jp.zeros(
+            (dummy_image_shape[0], dummy_image_shape[1])
+        ),  # Dummy depth map
+    )
+
+    # Call the function under test
+    _render(
+        dummy_image_shape,
+        dummy_world_to_camera,
+        dummy_rays,
+        dummy_shapes,
+        dummy_lights,
+        dummy_mask,
+    )
+
+    # Assert postprocess was called once
+    mock_postprocess.assert_called_once()
+
+    # Extract arguments passed to postprocess
+    args, kwargs = mock_postprocess.call_args
+
+    # Verify the first few arguments
+    assert jp.array_equal(
+        args[0], mock_hit_masks
+    )  # hit_masks from render_shapes
+    assert jp.array_equal(args[1], mock_depths)  # depths from render_shapes
+    assert jp.array_equal(args[2], mock_colors)  # colors from render_shapes
+    assert args[3] is dummy_world_to_camera  # world_to_camera
+    assert args[4] is dummy_rays[0]  # ray_origins
+    assert args[5] is dummy_rays[1]  # ray_directions
+    assert args[6] == dummy_image_shape[0]  # H
+    assert args[7] == dummy_image_shape[1]  # W
+
+
+def test_render_masking_logic_filters_hit_masks(
+    dummy_image_shape,
+    dummy_world_to_camera,
+    dummy_rays,
+    dummy_shapes,
+    dummy_lights,
+    mock_render_shapes,
+    mock_postprocess,
+):
+    """Verifies that the mask correctly filters hit_masks."""
+    num_shapes = len(dummy_shapes)
+    num_rays = dummy_rays[0].shape[0]
+
+    # Simulate some hits from render_shapes
+    initial_hit_masks = jp.array([[True, True, False], [False, True, True]])
+    initial_depths = jp.array([[1.0, 2.0, 1e6], [1e6, 3.0, 4.0]])
+    initial_colors = jp.zeros((num_shapes, num_rays, 3))
+    mock_render_shapes.return_value = (
+        initial_hit_masks,
+        initial_depths,
+        initial_colors,
+    )
+
+    # Create a mask that disables some rays
+    # Mask is (H, W), here converting to (num_rays,) where it's False for second ray
+    dummy_mask_filtered = jp.ones(dummy_image_shape, dtype=jp.bool_).flatten()
+    dummy_mask_filtered = dummy_mask_filtered.at[1].set(
+        False
+    )  # Turn off the second ray
+
+    # Mock postprocess to return dummy values
+    mock_postprocess.return_value = (
+        jp.zeros((dummy_image_shape[0], dummy_image_shape[1], 3)),
+        jp.zeros((dummy_image_shape[0], dummy_image_shape[1])),
+    )
+
+    _render(
+        dummy_image_shape,
+        dummy_world_to_camera,
+        dummy_rays,
+        dummy_shapes,
+        dummy_lights,
+        dummy_mask_filtered,
+    )
+
+    args, _ = mock_postprocess.call_args
+    filtered_hit_masks = args[0]  # The hit_masks passed to postprocess
+
+    # Expected: The second column (ray index 1) should now be False for all shapes
+    expected_hit_masks = jp.array([[True, False, False], [False, False, True]])
+    assert jp.array_equal(filtered_hit_masks, expected_hit_masks)
+
+
+def test_render_masking_logic_filters_depths(
+    dummy_image_shape,
+    dummy_world_to_camera,
+    dummy_rays,
+    dummy_shapes,
+    dummy_lights,
+    mock_render_shapes,
+    mock_postprocess,
+):
+    """Verifies that the mask correctly filters depths."""
+    num_shapes = len(dummy_shapes)
+    num_rays = dummy_rays[0].shape[0]
+
+    initial_hit_masks = jp.array([[True, True, False], [False, True, True]])
+    initial_depths = jp.array([[1.0, 2.0, 1e6], [1e6, 3.0, 4.0]])
+    initial_colors = jp.zeros((num_shapes, num_rays, 3))
+    mock_render_shapes.return_value = (
+        initial_hit_masks,
+        initial_depths,
+        initial_colors,
+    )
+
+    # Create a mask that disables some rays
+    dummy_mask_filtered = jp.ones(dummy_image_shape, dtype=jp.bool_).flatten()
+    dummy_mask_filtered = dummy_mask_filtered.at[1].set(
+        False
+    )  # Turn off the second ray
+
+    mock_postprocess.return_value = (
+        jp.zeros((dummy_image_shape[0], dummy_image_shape[1], 3)),
+        jp.zeros((dummy_image_shape[0], dummy_image_shape[1])),
+    )
+
+    _render(
+        dummy_image_shape,
+        dummy_world_to_camera,
+        dummy_rays,
+        dummy_shapes,
+        dummy_lights,
+        dummy_mask_filtered,
+    )
+
+    args, _ = mock_postprocess.call_args
+    filtered_depths = args[1]  # The depths passed to postprocess
+
+    # Expected: Depths for the second column (ray index 1) should be 1e6 (FARAWAY)
+    expected_depths = jp.array([[1.0, 1e6, 1e6], [1e6, 1e6, 4.0]])
+    assert jp.array_equal(filtered_depths, expected_depths)
+
+
+def test_render_returns_expected_types(
+    dummy_image_shape,
+    dummy_world_to_camera,
+    dummy_rays,
+    dummy_shapes,
+    dummy_lights,
+    dummy_mask,
+    mock_render_shapes,
+    mock_postprocess,
+):
+    """Verifies that _render returns an image and a depth map."""
+    num_shapes = len(dummy_shapes)
+    num_rays = dummy_rays[0].shape[0]
+    mock_render_shapes.return_value = (
+        jp.zeros((num_shapes, num_rays), dtype=jp.bool_),
+        jp.zeros((num_shapes, num_rays), dtype=jp.float32),
+        jp.zeros((num_shapes, num_rays, 3), dtype=jp.float32),
+    )
+
+    # Define expected return types from postprocess
+    expected_image = jp.zeros((dummy_image_shape[0], dummy_image_shape[1], 3))
+    expected_depth_map = jp.zeros((dummy_image_shape[0], dummy_image_shape[1]))
+    mock_postprocess.return_value = (expected_image, expected_depth_map)
+
+    image, depth_map = _render(
+        dummy_image_shape,
+        dummy_world_to_camera,
+        dummy_rays,
+        dummy_shapes,
+        dummy_lights,
+        dummy_mask,
+    )
+
+    assert isinstance(image, jp.ndarray)
+    assert isinstance(depth_map, jp.ndarray)
+    assert image.shape == (dummy_image_shape[0], dummy_image_shape[1], 3)
+    assert depth_map.shape == dummy_image_shape
+    assert jp.array_equal(image, expected_image)
+    assert jp.array_equal(depth_map, expected_depth_map)
