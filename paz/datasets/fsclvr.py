@@ -83,7 +83,7 @@ def flatten(dataset):
             images.append(image)
             depths.append(depth)
             labels.append(label)
-    return np.array(images), depths, labels
+    return np.array(images), jp.array(depths), labels
 
 
 def sample(RNG, dataset, num_ways, num_shots, num_tests=1):
@@ -155,7 +155,7 @@ def parse_labels(labels, name_to_class, diffuse=0.9, ambient=0.1):
     for label in labels:
         label = list(label.values())[0]  # assumes single scenes
         shift, theta, scale, color, shape = parse_label(label, name_to_class)
-        sample = [shift, theta, scale, color, ambient, diffuse, shape]
+        sample = shift, theta, scale, color, ambient, diffuse, shape
         samples.append(sample)
     return samples
 
