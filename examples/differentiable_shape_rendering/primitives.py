@@ -24,7 +24,7 @@ def CheckeredImage(box_size=50, rows=8, cols=8, color_A=GREEN, color_B=WHITE):
 
 
 camera_pose = paz.SE3.view_transform(
-    jp.array([0.0, 5.0, 5.0]),
+    jp.array([0.0, 8.0, 8.0]),
     jp.array([0.0, 0.0, 0.0]),
     jp.array([0.0, 1.0, 0.0]),
 )
@@ -41,6 +41,7 @@ render = jax.jit(
         world_to_camera=camera_pose,
         rays=rays,
         lights=lights,
+        shadows=True,
     )
 )
 
@@ -76,6 +77,21 @@ shape_04 = paz.graphics.Cube(
 )
 floor = paz.graphics.Plane()
 
-# image, depth = render(scene=paz.graphics.Scene([shape]))
 scene = paz.graphics.Scene([shape_01, shape_02, shape_03, shape_04, floor])
-paz.graphics.viewer(scene, camera_pose)
+image, depth = render(scene=scene, mask=None)
+paz.image.show(paz.image.denormalize(image))
+
+key = jax.random.PRNGKey(0)
+for key in jax.random.split(key, 100):
+    mask = jax.random.randint(key, (4,), 0, 2)
+    mask = jp.append(mask, 1)
+    image, depth = render(scene=scene, mask=mask)
+    paz.image.show(paz.image.denormalize(image))
+
+# _scene, _lights, _mask = paz.graphics.scene.compile(scene, lights, None)
+
+# image, depth = paz.graphics.render(
+#     (H, W), camera_pose, rays, scene, lights, mask=None, shadows=True
+# )
+# paz.image.show(paz.image.denormalize(image))
+# paz.graphics.viewer(scene, camera_pose)
