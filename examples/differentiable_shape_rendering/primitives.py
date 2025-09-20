@@ -29,7 +29,10 @@ camera_pose = paz.SE3.view_transform(
     jp.array([0.0, 1.0, 0.0]),
 )
 
-lights = paz.graphics.PointLight(jp.ones(3), jp.array([5.0, 4.0, 8.0]))
+lights = [
+    paz.graphics.PointLight(jp.ones(3) / 5, jp.array([5.0, 4.0, 8.0])),
+    paz.graphics.PointLight(jp.ones(3) / 5, jp.array([5.0, 4.0, -8.0])),
+]
 
 H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
@@ -51,7 +54,7 @@ planar_pattern = paz.graphics.PlanarPattern(checkered_image)
 cylindrical_pattern = paz.graphics.CylindricalPattern(
     checkered_image, paz.SE3.scaling(jp.full(3, 3.0))
 )
-zero_material = paz.graphics.Material(jp.zeros(3), 0.85, 0.1, 0.0, 100)
+zero_material = paz.graphics.Material(jp.zeros(3), 0.3, 0.1, 0.0, 100)
 
 shape_01 = paz.graphics.Sphere(
     paz.SE3.translation(jp.array([0.0, 1.0, -3.0])),

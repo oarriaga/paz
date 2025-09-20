@@ -1,9 +1,7 @@
-from functools import partial
 import jax.numpy as jp
 import paz
 import jax
 from paz.graphics import EPSILON, FARAWAY
-from paz.graphics.phong import compute_colors_with_shadow
 
 
 def render_shapes(shapes, lights, rays):
@@ -191,7 +189,9 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
 
         shadow_masks.append(is_shadow.astype(jp.int32))
     shadow_masks = jp.array(shadow_masks)
-    shadow_mask = jp.sum(shadow_masks[0], axis=0).astype(bool)
+    print(shadow_masks.shape)
+    # shadow_mask = jp.sum(shadow_masks[0], axis=0).astype(bool)
+    shadow_mask = jp.sum(shadow_masks, axis=[0, 1]).astype(bool)
     hit_masks, depths, colors = _render_shapes(
         shapes, lights, rays, shadow_mask
     )
