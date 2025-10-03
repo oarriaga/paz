@@ -161,7 +161,7 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
     points = jp.where(jp.expand_dims(mask, axis=1), points, FARAWAY)
     points = paz.pointcloud.move_along_normals(points, normals, EPSILON)
     closest_points = get_closest_hit_points(depths, points)
-    shadow_masks = []
+    color_shapes = []
     for light in lights:
         points_to_light = light.position - closest_points
         points_to_light_norms = paz.algebra.compute_norms(points_to_light, 1)
@@ -169,8 +169,11 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
         shadows = intersect_groups(shapes, closest_points, points_to_light)[:2]
         points_to_light_hit_masks, points_to_light_depths = shadows
 
+        # points_to_light_hit_masks = jp.where(
+        #     jp.expand_dims(mask, axis=1), points_to_light_hit_masks, False
+        # )
         points_to_light_hit_masks = jp.where(
-            jp.expand_dims(mask, axis=1), points_to_light_hit_masks, False
+            mask, points_to_light_hit_masks, False
         )
         points_to_light_hit_mask = compute_scene_hit_mask(
             points_to_light_hit_masks
@@ -187,15 +190,22 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
             points_to_light_hit_mask, first_hit_light_source
         )
 
-        shadow_masks.append(is_shadow.astype(jp.int32))
-    shadow_masks = jp.array(shadow_masks)
-    print(shadow_masks.shape)
+        _, _, colors = _render_shapes(shapes, [light], rays, is_shadow)
+        color_shapes.append(colors)
+
+        # shadow_masks.append(is_shadow.astype(jp.int32))
+    # shadow_masks = jp.array(shadow_masks)
+    # print("shadow_masks", shadow_masks.shape)
     # shadow_mask = jp.sum(shadow_masks[0], axis=0).astype(bool)
-    shadow_mask = jp.sum(shadow_masks, axis=[0, 1]).astype(bool)
-    hit_masks, depths, colors = _render_shapes(
-        shapes, lights, rays, shadow_mask
-    )
+    # shadow_mask = jp.expand_dims(shadow_mask, axis=0)
+    # print("shadow_masks", shadow_masks.shape)
+    # # shadow_mask = jp.sum(shadow_masks, axis=[0, 1]).astype(bool)
+    # hit_masks, depths, colors = _render_shapes(
+    # shapes, lights, rays, shadow_mask
+    # )
     # mask = jp.expand_dims(mask, 1)
+    colors = jp.array(color_shapes)
+    colors = jp.sum(colors, axis=0)
     hit_masks = jp.where(mask, hit_masks, False)
     depths = jp.where(jp.expand_dims(mask, 1), depths, FARAWAY)  # use FARAWAY?
     args = (hit_masks, depths, colors, world_to_camera, rays, *img_size)
