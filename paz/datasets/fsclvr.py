@@ -121,8 +121,7 @@ def remove_classes(RNG, data, num_classes):
 
 
 def parse_shift(label):
-    # y -> x,  -x -> z
-    return jp.array([label["y"], -label["x"]])
+    return jp.array([-label["y"], -label["x"]])
 
 
 def parse_theta(label):
@@ -160,8 +159,9 @@ def parse_labels(labels, name_to_class, diffuse=0.9, ambient=0.1):
     return samples
 
 
-def parse_metadata(root="datasets", dataset="PRIMITIVES"):
-    metadata = os.path.join(root, dataset, "metadata.json")
+def parse_metadata(dataset="PRIMITIVES"):
+    root = download(dataset)
+    metadata = os.path.join(root, "metadata.json")
     metadata = json.load(open(metadata, "r"))
     return metadata
 
