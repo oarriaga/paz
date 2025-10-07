@@ -3,7 +3,6 @@ import sys
 import pytest
 import torch
 import numpy as np
-from typing import Tuple
 
 os.environ["KERAS_BACKEND"] = "jax"
 script_path = os.path.abspath(__file__)
@@ -13,13 +12,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
-
-from torch import nn, Tensor
-from typing import List
-import torch.nn.functional as F
-import math
-
 
 # ==============================================================================
 # Keras Layer Implementation
