@@ -63,6 +63,15 @@ def compute_diffuse(shape, material, light, points, normals):
     return base_color * material.diffuse * lambertian
 
 
+def compute_soft_diffuse(shape, material, light, points, normals, slope=10.0):
+    hits_to_light = compute_hits_to_light(light.position, points)
+    dot_product = paz.algebra.dot(hits_to_light, normals)
+    lambertian = jax.nn.softplus(dot_product * slope) / slope
+    lambertian = jp.expand_dims(lambertian, -1)
+    base_color = compute_base_color(shape, material, light, points)
+    return base_color * material.diffuse * lambertian
+
+
 def compute_specular(material, light, points, normals, eye):
     reflections = compute_reflections_dot_eye(light, points, normals, eye)
     factor = jp.power(reflections, material.shininess)
@@ -73,18 +82,20 @@ def compute_specular(material, light, points, normals, eye):
 
 def compute_colors(shape, material, points, normals, eye, light):
     ambient = compute_ambient(shape, material, light, points)
-    diffuse = compute_diffuse(shape, material, light, points, normals)
+    diffuse = compute_soft_diffuse(shape, material, light, points, normals)
     specular = compute_specular(material, light, points, normals, eye)
     return ambient + diffuse + specular
 
 
 def compute_colors_with_shadow(
-    shape, material, points, normals, eye, light, shadow_mask
+    shape, material, points, normals, eye, light, is_shadow
 ):
     ambient = compute_ambient(shape, material, light, points)
-    diffuse = compute_diffuse(shape, material, light, points, normals)
+    diffuse = compute_soft_diffuse(shape, material, light, points, normals)
     specular = compute_specular(material, light, points, normals, eye)
     colors = ambient + diffuse + specular
-    shadow_mask = jp.expand_dims(shadow_mask, 1)
-    color = jp.where(shadow_mask, ambient, colors)
+    is_shadow = jp.expand_dims(is_shadow, 1)
+    # color = jp.where(is_shadow, ambient, colors)
+    # Use the occlusion_factor to smoothly blend between the full color and ambient
+    color = (ambient * is_shadow) + (colors * (1.0 - is_shadow))
     return color
