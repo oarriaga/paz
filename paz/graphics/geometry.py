@@ -1,6 +1,6 @@
 import jax.numpy as jp
 import paz
-from paz.graphics.constants import FARAWAY, EPSILON
+from paz.graphics.constants import FARAWAY
 
 
 def compute_quadratic_is_hit(depths_A, depths_B, is_valid):
@@ -88,11 +88,8 @@ def compute_hits_to_light(light_position, hits):
 
 
 def reflect(light_directions, normals):
-    return light_directions - (
-        normals
-        * 2
-        * jp.expand_dims(paz.algebra.dot(light_directions, normals), -1)
-    )
+    dots = jp.expand_dims(paz.algebra.dot(light_directions, normals), -1)
+    return light_directions - (normals * 2 * dots)
 
 
 def compute_reflections_dot_eye(light, points, normals, eye):
