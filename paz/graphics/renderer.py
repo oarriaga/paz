@@ -167,13 +167,9 @@ def compute_soft_occlusion(
     points_to_light_hit_mask,
     slope=0.01,
 ):
-    # occlusion_value = points_to_light_norms - points_to_light_depth
     occlusion_value = points_to_light_depth - points_to_light_norms
-    # occlusion_value = jp.squeeze(occlusion_value, axis=1)
     occlusion_factor = jax.nn.sigmoid(-slope * occlusion_value)
     occlusion_factor = jp.where(points_to_light_hit_mask, occlusion_factor, 0.0)
-    jax.debug.print("min occlusion_value: {x}", x=jp.min(occlusion_value))
-    jax.debug.print("max occlusion_value: {y}", y=jp.max(occlusion_value))
     return occlusion_factor
 
 
