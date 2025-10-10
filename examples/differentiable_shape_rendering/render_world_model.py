@@ -4,10 +4,11 @@ import jax.numpy as jp
 import matplotlib.pyplot as plt
 from matplotlib.image import imread
 
+import paz
 from paz import SE3
 from paz.graphics import PointLight, Material, Pattern, Shape
 from paz.graphics.camera import build_rays
-from paz.graphics import render_with_shadows
+from paz.graphics import render
 from paz.graphics import (
     SPHERE,
     CUBE,
@@ -80,10 +81,11 @@ shape_04 = Shape(transform_04, CONE, material_04, pattern_01)
 shape_05 = Shape(transform_05, PLANE, material_01, pattern_03)
 
 scene = [shape_01, shape_02, shape_03, shape_04, shape_05]
+scene = paz.graphics.Scene(scene)
 mask = jp.ones(shape=(5,), dtype=bool)
 shadows = True
 
-render = partial(render_with_shadows, (H, W), camera_pose, rays)
+render = partial(render, (H, W), camera_pose, rays, shadows=shadows)
 fast_render = jax.jit(render)
 image, depth = fast_render(scene, lights, mask)
 plt.imshow(image)
