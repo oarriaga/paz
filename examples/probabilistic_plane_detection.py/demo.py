@@ -2,6 +2,7 @@ import jax
 import paz
 import jax.numpy as jp
 import optax
+
 import matplotlib.pyplot as plt
 
 
@@ -10,71 +11,117 @@ step_size = 0.1
 num_steps = 100
 DOF = 2.0
 scale = 0.2
-conept_arg = 0
 shot_arg = 0
+num_points = 100
+H = 480
+W = 640
+radius = 0.005
+camera_pose = jp.eye(4)
+class_arg = 3
+shot_arg = 0
+max_depth = 1.0
+dataset = "fewsol"
+y_FOV = paz.datasets.get_y_FOV(dataset)
+camera_intrinsics = paz.datasets.get_intrinsics(dataset)
+openCV_to_openGL = jp.array(
+    [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
 
-dataset = paz.datasets.fsclvr.load("plain", "train")
-image, depth, label = dataset[0][0]
-camera_intrinsics = paz.datasets.fsclvr.get_intrinsics()
-data = paz.pointcloud.from_depth(depth, camera_intrinsics)
-data = paz.pointcloud.sample(key, data, 10_000)
-plt.imshow(depth)
-plt.show()
 
+if dataset == "fewsol":
+    shot = paz.datasets.fewsol.load(
+        "/home/octavio/few-shot_scene_reconstruction/data/FEWSOL/", class_arg
+    )[shot_arg]
+    true_image, true_depth = shot.image.copy(), shot.depth.copy()
+elif dataset == "fsclvr":
+    dataset = paz.datasets.fsclvr.load("plain", "train")
+    true_image, true_depth, label = dataset[class_arg][shot_arg]
+else:
+    raise ValueError
+
+
+pointcloud = paz.pointcloud.from_depth(true_depth, camera_intrinsics)
+pointcloud = paz.algebra.transform_points(openCV_to_openGL, pointcloud)
+pointcloud = paz.pointcloud.bound(pointcloud, max_depth)
+pointcloud_sampled = paz.pointcloud.sample(key, pointcloud, num_points)
 
 optimizer = optax.adam(step_size)
-loss = paz.lock(paz.plane.student_t_loss, scale, DOF, data)
-_fit = paz.lock(paz.plane.fit, optimizer, loss, num_steps)
-(pred_normal, pred_centroid), losses = paz.time(_fit)(key, data)
+loss = paz.lock(paz.plane.student_t_loss, scale, DOF, pointcloud_sampled)
+fit = paz.lock(paz.plane.fit, optimizer, loss, num_steps)
+(pred_normal, pred_centroid), losses = paz.time(fit)(key, pointcloud_sampled)
 pred_offset = -jp.dot(pred_normal, pred_centroid)
 
+rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
+lights = [paz.graphics.PointLight(jp.ones(3), jp.ones(3))]
 
-def plot_results(inliers, normal, offset):
-    figure = plt.figure(figsize=(12, 10))
-    axis = figure.add_subplot(111, projection="3d")
+world_up = jp.array([0.0, 1.0, 0.0])
+y_axis = pred_normal / jp.linalg.norm(pred_normal)
 
-    axis.scatter(
-        inliers[:, 0],
-        inliers[:, 1],
-        inliers[:, 2],
-        c="blue",
-        label="Inliers",
-        s=10,
-        alpha=0.6,
-    )
-    xlim = axis.get_xlim()
-    ylim = axis.get_ylim()
-    x_plane, y_plane = jp.meshgrid(
-        jp.linspace(xlim[0], xlim[1], 10), jp.linspace(ylim[0], ylim[1], 10)
-    )
-
-    n = normal
-    d = offset
-    z_plane = (-n[0] * x_plane - n[1] * y_plane - d) / n[2]
-
-    axis.plot_surface(
-        x_plane,
-        y_plane,
-        z_plane,
-        alpha=0.3,
-        color="green",
-        rstride=100,
-        cstride=100,
-        label="Fitted Plane",
-    )
-
-    axis.set_xlabel("X axis")
-    axis.set_ylabel("Y axis")
-    axis.set_zlabel("Z axis")
-    axis.set_title("Robust 3D Plane Fitting")
-    axis.legend(
-        handles=[
-            plt.Line2D([0], [0], linestyle="none", c="b", marker="o"),
-            plt.Line2D([0], [0], linestyle="-", c="g", alpha=0.3, lw=4),
-        ],
-        labels=["Pointcloud", "Fitted Plane"],
-    )
-    plt.show()
+x_axis = jp.cross(world_up, y_axis)
+x_axis = x_axis / jp.linalg.norm(x_axis)
+z_axis = jp.cross(y_axis, x_axis)
+rotation = jp.stack([x_axis, y_axis, z_axis], axis=1)
 
 
-plot_results(data, pred_normal, pred_offset)
+plane_pose = jp.eye(4)
+plane_pose = plane_pose.at[:3, :3].set(rotation)
+plane_pose = plane_pose.at[:3, 3].set(pred_centroid)
+
+rotate = paz.SE3.rotation_y(jp.pi / 2)
+scale = paz.SE3.scaling(jp.full(3, radius))
+# nodes = [
+#     paz.graphics.Sphere(
+#         paz.SE3.translation(pred_centroid) @ scale,
+#         paz.graphics.Material(paz.graphics.RED),
+#     )
+# ]
+
+# A = pred_centroid + (0.05 * (pred_normal / jp.linalg.norm(pred_normal)))
+# nodes.append(
+#     paz.graphics.Sphere(
+#         paz.SE3.translation(A) @ scale,
+#         paz.graphics.Material(paz.graphics.BLUE),
+#     )
+# )
+# nodes.append(
+#     paz.graphics.Plane(plane_pose, paz.graphics.Material(jp.full(3, 0.7)))
+# )
+
+
+# for position in pointcloud:
+#     pose = paz.SE3.translation(position) @ scale
+#     nodes.append(paz.graphics.Sphere(pose))
+
+pointcloud_plane = paz.algebra.transform_points(
+    jp.linalg.inv(plane_pose), pointcloud
+)
+mask = pointcloud_plane[:, 1] > 0.01
+nodes = [paz.graphics.Plane(plane_pose, paz.graphics.Material(jp.full(3, 0.7)))]
+positions = paz.pointcloud.sample(key, pointcloud[mask], 50)
+for position in positions:
+    pose = paz.SE3.translation(position) @ scale
+    nodes.append(paz.graphics.Sphere(pose))
+
+scene = paz.graphics.Scene(nodes)
+
+render = paz.partial(
+    paz.graphics.render,
+    (H, W),
+    camera_pose,
+    rays,
+    lights=lights,
+    mask=None,
+    shadows=False,
+)
+pred_image, pred_depth = jax.jit(render)(scene=scene)
+pred_image = paz.image.denormalize(pred_image)
+true_image = (
+    true_image if dataset == "fewsol" else paz.image.denormalize(true_image)
+)
+mosaic = paz.draw.mosaic(jp.array([true_image, pred_image]))
+paz.image.show(mosaic.astype(jp.uint8))

@@ -52,3 +52,23 @@ def class_map(name):
     else:
         raise ValueError
     return build_arg_to_name(class_names)
+
+
+def get_intrinsics(name):
+    if name.lower() == "fewsol":
+        intrinsics = fewsol.get_intrinsics()
+    elif name.lower() == "fsclvr":
+        intrinsics = fsclvr.get_intrinsics()
+    else:
+        raise ValueError
+    return intrinsics
+
+
+def get_y_FOV(name):
+    if name.lower() == "fewsol":
+        y_FOV = fewsol.get_y_FOV()
+    elif name.lower() == "fsclvr":
+        y_FOV = fsclvr.get_y_FOV()
+    else:
+        raise ValueError
+    return y_FOV

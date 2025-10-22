@@ -26,8 +26,8 @@ def download(scene):
     directory = "paz/datasets/"
     extract_name = "FS-CLVR"
     filepath = get_file(extract_name, URL, cache_subdir=directory, extract=True)
-    x = ["dark", "wood", "ood", "plain"]
-    y = ["DARK_PRIMITIVES", "WOOD_PRIMITIVES", "YCB_PRIMITIVES", "PRIMITIVES"]
+    x = ["dark", "room", "ood", "plain"]
+    y = ["DARK_PRIMITIVES", "WOOD_PRIMITIVES", "YCB_OOD", "PRIMITIVES"]
     name = dict(zip(x, y))[scene]
     return os.path.join(filepath, "datasets", name)
 
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import paz
 
-    filepath = load("wood", "train")
+    filepath = load("room", "train")
 
     RNG = np.random.default_rng(777)
     root = "datasets"
