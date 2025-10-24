@@ -2,6 +2,8 @@ import pytest
 import jax
 import jax.numpy as jp
 import json
+import paz
+import numpy as np
 
 from paz.graphics import types
 from paz.graphics import serialization
@@ -40,6 +42,59 @@ def sample_group(sample_material):
 def sample_scene(sample_shape, sample_group):
     nodes = [sample_shape, sample_group]
     parent_array = jp.array([-1, 0])
+    return types.Scene(nodes=nodes, parent_array=parent_array)
+
+
+@pytest.fixture
+def pattern_with_image():
+    """Provides a Pattern with actual image data."""
+    image = jp.ones((64, 64, 3))
+    return types.Pattern(image=image, type=constants.PLANAR_PATTERN)
+
+
+@pytest.fixture
+def pattern_no_image():
+    """Provides a Pattern that doesn't need image saving."""
+    return types.Pattern(type=constants.NO_PATTERN)
+
+
+@pytest.fixture
+def shape_with_image(sample_material, pattern_with_image):
+    """Provides a Shape using the pattern_with_image."""
+    return types.Sphere(
+        transform=jp.eye(4),
+        material=sample_material,
+        pattern=pattern_with_image,
+    )
+
+
+@pytest.fixture
+def shape_no_image(sample_material, pattern_no_image):
+    """Provides a Shape using the pattern_no_image."""
+    return types.Cube(
+        transform=jp.eye(4), material=sample_material, pattern=pattern_no_image
+    )
+
+
+@pytest.fixture
+def sample_group_with_images(shape_with_image, shape_no_image):
+    """
+    A Group containing both a shape with an image pattern and one without.
+    Useful for testing multiple assets in one save.
+    """
+    return types.Group(
+        shapes=[shape_with_image, shape_no_image], transform=jp.eye(4)
+    )
+
+
+@pytest.fixture
+def sample_scene_with_images(shape_with_image, sample_group_with_images):
+    """
+    A Scene containing a shape with an image pattern and a group that also has
+    images. Tests nested asset saving.
+    """
+    nodes = [shape_with_image, sample_group_with_images]
+    parent_array = jp.array([-1, 0])  # Example parent array
     return types.Scene(nodes=nodes, parent_array=parent_array)
 
 
@@ -132,3 +187,141 @@ def test_load_raises_error_for_unknown_top_level_type(tmp_path):
         TypeError, match="Data is not a valid Scene, Group or Shape"
     ):
         serialization.load(filepath)
+
+
+def test_save_creates_asset_file_and_json_path(tmp_path, shape_with_image):
+    """
+    Tests saving a shape with an image:
+    1. Creates the image file in the same directory as the JSON.
+    2. JSON contains the correct filename (string) for the image pattern.
+    """
+    json_filepath = tmp_path / "test_image_shape.json"
+    serialization.save(str(json_filepath), shape_with_image)
+
+    # 1. Verify JSON file content
+    assert json_filepath.is_file()
+    with open(json_filepath, "r") as f:
+        data = json.load(f)
+
+    pattern_data = data["pattern"]
+    assert isinstance(
+        pattern_data["image"], str
+    )  # Should be a filename string, not a list/array
+
+    # Expected filename based on `filepath_base_name_pattern_X.png` convention
+    expected_filename = "test_image_shape_pattern_0.png"
+    assert pattern_data["image"] == expected_filename
+
+    # 2. Verify image file exists in the same directory
+    image_filepath = tmp_path / expected_filename
+    assert image_filepath.is_file(), f"Image file not found at {image_filepath}"
+
+    # Optional: Load and verify the image content (requires paz.image.load to work)
+    loaded_image = paz.image.load(str(image_filepath))
+    # Denormalize the original fixture image to compare with saved uint8
+    original_image_denormalized = paz.image.denormalize(
+        shape_with_image.pattern.image
+    )
+    assert np.allclose(loaded_image, original_image_denormalized)
+
+
+def test_save_handles_multiple_image_patterns(
+    tmp_path, shape_with_image, pattern_with_image
+):
+    """
+    Tests that multiple shapes/patterns with image data within a single
+    save operation result in uniquely named image files.
+    """
+    # Create a second shape with a unique image (or just reuse the fixture's image)
+    # The counter in `serialization.py` should handle uniqueness.
+    shape2 = types.Cube(
+        transform=jp.eye(4),
+        material=types.Material(color=jp.array([0.0, 1.0, 0.0])),
+        pattern=pattern_with_image,  # Reusing the image data, but it'll be saved separately
+    )
+
+    scene = types.Scene(
+        nodes=[shape_with_image, shape2], parent_array=jp.array([-1, 0])
+    )
+
+    json_filepath = tmp_path / "multi_pattern_scene.json"
+    serialization.save(str(json_filepath), scene)
+
+    assert json_filepath.is_file()
+    with open(json_filepath, "r") as f:
+        data = json.load(f)
+
+    # Verify first pattern's image filename
+    pattern1_data = data["nodes"][0]["pattern"]
+    expected_filename1 = "multi_pattern_scene_pattern_0.png"
+    assert pattern1_data["image"] == expected_filename1
+    assert (tmp_path / expected_filename1).is_file()
+
+    # Verify second pattern's image filename
+    pattern2_data = data["nodes"][1]["pattern"]
+    expected_filename2 = "multi_pattern_scene_pattern_1.png"
+    assert pattern2_data["image"] == expected_filename2
+    assert (tmp_path / expected_filename2).is_file()
+
+
+def test_save_handles_no_image_pattern(tmp_path, shape_no_image):
+    """
+    Tests that a Pattern without image data (e.g., NO_PATTERN type)
+    does NOT create an image file, and its 'image' field remains a list (default value).
+    """
+    json_filepath = tmp_path / "no_image_pattern_shape.json"
+    serialization.save(str(json_filepath), shape_no_image)
+
+    assert json_filepath.is_file()
+    with open(json_filepath, "r") as f:
+        data = json.load(f)
+
+    pattern_data = data["pattern"]
+    # For NO_PATTERN, the default image is usually a 1x1 white image array
+    # which gets converted to a list by `jp.ndarray.tolist()`.
+    assert isinstance(pattern_data["image"], list)
+    assert len(pattern_data["image"]) > 0  # Should not be an empty list
+
+    # Crucially, verify no image file was created for this pattern
+    assert not any(
+        f.name.startswith(json_filepath.stem + "_pattern_")
+        for f in tmp_path.iterdir()
+    )
+
+
+def test_full_scene_save_and_load_round_trip_with_images(
+    tmp_path, sample_scene_with_images
+):
+    """
+    Comprehensive round-trip test for a Scene containing nested shapes and groups,
+    including those with image patterns, verifying full reconstruction.
+    """
+    json_filepath = tmp_path / "full_scene_test.json"
+    serialization.save(str(json_filepath), sample_scene_with_images)
+    loaded_scene = serialization.load(str(json_filepath))
+
+    assert isinstance(loaded_scene, types.Scene)
+    # assert_pytrees_allclose will recursively compare all fields, including loaded images
+    assert_pytrees_allclose(loaded_scene, sample_scene_with_images)
+
+
+def test_load_raises_error_if_asset_missing(tmp_path, shape_with_image):
+    """
+    Tests that `load` raises a FileNotFoundError if an expected image asset
+    file (referenced in the JSON) is missing from the directory.
+    """
+    json_filepath = tmp_path / "missing_asset_test.json"
+    serialization.save(str(json_filepath), shape_with_image)
+
+    # Get the expected image filename from the saved JSON
+    with open(json_filepath, "r") as f:
+        data = json.load(f)
+    image_filename = data["pattern"]["image"]
+
+    # Delete the image asset file
+    image_filepath = tmp_path / image_filename
+    assert image_filepath.is_file()  # Ensure it was created
+    image_filepath.unlink()
+
+    with pytest.raises(FileNotFoundError):
+        serialization.load(str(json_filepath))

@@ -366,6 +366,39 @@ def _resolve_insert_conflicts(
     return final_counters
 
 
+def _find_unique_items(items):
+    unique_item_mask, unique_indices, inverse_indices = unique_mask(items)
+    unique_items = jax.tree_util.tree_map(lambda x: x[unique_indices], items)
+    # num_unique_items = get_batch_size(unique_items)
+    return unique_items
+
+
+def new_insert_parallel(table, items):
+    items = _find_unique_items(items)
+    flat_args, found_mask = lookup_parallel(table, items)
+    which_items_to_insert = jp.logical_not(found_mask)
+    items_uint32 = jax.vmap(pytree_to_uint32)(items)
+    keys_for_items = jp.full((get_batch_size(items),), table.key, jp.uint32)
+    to_slot_args = jax.vmap(hash_to_slot_arg, in_axes=(None, 0, None))
+    slot_args_for_items = to_slot_args(table.key, items_uint32, table.num_slots)
+    table_args_for_items = table.table_occupancy[slot_args_for_items]
+    counters_for_items = Counter(slot_args_for_items, table_args_for_items)
+    counters_for_items = _resolve_insert_conflicts(
+        table,
+        keys_for_items,
+        counters_for_items,
+        items_uint32,
+        which_items_to_insert,
+    )
+
+    def mask(x):
+        return x[which_items_to_insert]
+
+    items_to_insert = jax.tree_util.tree_map(mask, items)
+    counters_for_insert = jax.tree_util.tree_map(mask, counters_for_items)
+    new_table = _batch_update_table(table, items_to_insert, counters_for_insert)
+
+
 def insert_parallel(table, items):
     """
     Inserts a batch of items into the hash table in parallel.
@@ -373,6 +406,7 @@ def insert_parallel(table, items):
     """
     # 1. Isolate unique items to work with a smaller, duplicate-free set.
     unique_item_mask, unique_indices, inverse_indices = unique_mask(items)
+    # print(unique_item_mask)
     unique_items = jax.tree_util.tree_map(lambda x: x[unique_indices], items)
     num_unique_items = get_batch_size(unique_items)
 
@@ -410,15 +444,28 @@ def insert_parallel(table, items):
 
     # 6. Update the table with ONLY the items that were actually inserted.
     # THIS IS THE KEY FIX: We filter the items and counters *before* the update call.
+    # print("unique_inserted_mask", unique_inserted_mask)
+    # print("unique_items", unique_items)
+    which_items_to_insert = jp.logical_and(
+        unique_inserted_mask, unique_item_mask
+    )
     items_to_insert = jax.tree_util.tree_map(
-        lambda x: x[unique_inserted_mask], unique_items
+        lambda x: x[which_items_to_insert], unique_items
     )
     counters_for_insert = jax.tree_util.tree_map(
-        lambda x: x[unique_inserted_mask], final_counters_for_uniques
+        lambda x: x[which_items_to_insert], final_counters_for_uniques
     )
+    # items_to_insert = jax.tree_util.tree_map(
+    #     lambda x: x[unique_inserted_mask], unique_items
+    # )
+    # counters_for_insert = jax.tree_util.tree_map(
+    #     lambda x: x[unique_inserted_mask], final_counters_for_uniques
+    # )
+    # print("items_to_insert")
     new_table = _batch_update_table(table, items_to_insert, counters_for_insert)
 
     # 7. Construct the final results for the original full batch by broadcasting.
+    # print(items_to_insert)
     inserted_mask = jp.logical_and(
         unique_item_mask, unique_inserted_mask[inverse_indices]
     )

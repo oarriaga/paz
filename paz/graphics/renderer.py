@@ -153,6 +153,26 @@ def _compute_scene_colors(shape, lights, points, normals, eyes, shadow_mask):
     return scene_colors
 
 
+def compute_occlusion(
+    points_to_light_norms, points_to_light_depth, points_to_light_hit_mask
+):
+    first_hit_light_source = points_to_light_norms > points_to_light_depth
+    is_shadow = jp.logical_and(points_to_light_hit_mask, first_hit_light_source)
+    return is_shadow
+
+
+def compute_soft_occlusion(
+    points_to_light_norms,
+    points_to_light_depth,
+    points_to_light_hit_mask,
+    slope=0.01,
+):
+    occlusion_value = points_to_light_depth - points_to_light_norms
+    occlusion_factor = jax.nn.sigmoid(-slope * occlusion_value)
+    occlusion_factor = jp.where(points_to_light_hit_mask, occlusion_factor, 0.0)
+    return occlusion_factor
+
+
 def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
     hit_masks, depths, points, normals, eyes = intersect_groups(shapes, *rays)
     mask = jp.expand_dims(mask, 1)
@@ -181,10 +201,22 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
         points_to_light_depth = jp.min(points_to_light_depths, axis=0)
         points_to_light_depth = jp.squeeze(points_to_light_depth, axis=1)
         points_to_light_norms = jp.squeeze(points_to_light_norms, axis=1)
-        first_hit_light_source = points_to_light_norms > points_to_light_depth
+        # first_hit_light_source = points_to_light_norms > points_to_light_depth
+        # is_shadow = jp.logical_and(
+        #     points_to_light_hit_mask, first_hit_light_source
+        # )
+        # print("is_shadow", is_shadow.shape)
 
-        is_shadow = jp.logical_and(
-            points_to_light_hit_mask, first_hit_light_source
+        # is_shadow = compute_occlusion(
+        #     points_to_light_norms,
+        #     points_to_light_depth,
+        #     points_to_light_hit_mask,
+        # )
+
+        is_shadow = compute_soft_occlusion(
+            points_to_light_norms,
+            points_to_light_depth,
+            points_to_light_hit_mask,
         )
 
         _, _, colors = _render_shapes(shapes, [light], rays, is_shadow)
