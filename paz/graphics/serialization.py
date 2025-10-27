@@ -35,7 +35,9 @@ def to_json(scene_node_field, counter=[0], filepath=None):
         if pattern_contains_image(scene_node_field):
             image = paz.image.denormalize(scene_node_field.image)
             if filepath is not None:
-                image_filename = f"{filepath.stem}_pattern_{counter[0]}.png"
+                image_filename = (
+                    f"{filepath.parent.name}_pattern_{counter[0]}.png"
+                )
                 image_path = filepath.with_name(image_filename)
             else:
                 image_filename = f"image_pattern_{counter[0]}.png"
@@ -59,10 +61,12 @@ def to_json(scene_node_field, counter=[0], filepath=None):
 
 def save(filepath, component):
     path = pathlib.Path(filepath)
-    if path.suffix.lower() != ".json":
-        raise ValueError("Filepath must have a .json extension.")
-    with open(filepath, "w") as f:
-        json.dump(to_json(component, counter=[0], filepath=path), f, indent=4)
+    path.mkdir(parents=True, exist_ok=True)
+    json_path = path / "configuration.json"
+    with open(json_path, "w") as f:
+        json.dump(
+            to_json(component, counter=[0], filepath=json_path), f, indent=4
+        )
 
 
 def build_material(data):
@@ -73,14 +77,6 @@ def build_material(data):
         specular=data["specular"],
         shininess=data["shininess"],
     )
-
-
-# def build_pattern(data):
-#     return Pattern(
-#         transform=jp.array(data["transform"]),
-#         type=data["type"],
-#         image=jp.array(data["image"]),
-#     )
 
 
 def build_pattern(data, base_path=None):
@@ -116,26 +112,30 @@ def build_group(data, base_path=None):
 
 
 def build_node(node_data, base_path=None):
-    if not isinstance(node_data, dict):
-        raise TypeError(f"Data must be a dict, but got {type(node_data)}.")
-    if is_group(node_data):
-        return build_group(node_data, base_path)
-    elif is_shape(node_data):
-        return build_shape(node_data, base_path)
+    if is_shape(node_data):
+        return [build_shape(node_data, base_path)]
+    elif is_group(node_data):
+        nodes = []
+        for shape_or_group_data in node_data["shapes"]:
+            nodes.extend(build_node(shape_or_group_data, base_path))
+        return [Group(nodes, jp.array(node_data["transform"]))]
     else:
-        raise TypeError(f"Node is not a valid Shape or Group: {node_data}")
+        raise ValueError(f"Invalid node type {type(node_data)}")
 
 
 def build_scene(data, base_path=None):
-    nodes = [build_node(node, base_path) for node in data.get("nodes", [])]
+    nodes = []
+    for node in data.get("nodes", []):
+        nodes.extend(build_node(node, base_path))
     return Scene(nodes, jp.array(data.get("parent_array", [])))
 
 
 def load(filepath):
-    """Deserializes a scene from a JSON file."""
+    """Deserializes a scene from a directory."""
     path = pathlib.Path(filepath)
-    base_path = path.parent
-    with open(filepath, "r") as filedata:
+    json_path = path / "configuration.json"
+    base_path = path
+    with open(json_path, "r") as filedata:
         json_data = json.load(filedata)
     if is_scene(json_data):
         data = build_scene(json_data, base_path)

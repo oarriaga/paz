@@ -86,12 +86,14 @@ def split(shape):
 
 def intersect(shape, ray_origins, ray_directions):
     world_to_shape = jp.linalg.inv(shape.transform)
+    # world_to_shape = paz.SE3.invert(shape.transform)
     rays_shape = transform_rays(world_to_shape, ray_origins, ray_directions)
     intersections = jax.lax.switch(shape.type, intersection_cases, *rays_shape)
     hit_mask, sorted_depths, depth = intersections
     # transform world points
     world_points = compute_points3D(ray_origins, ray_directions, depth)
-    world_to_shape = jp.linalg.inv(shape.transform)
+    # world_to_shape = jp.linalg.inv(shape.transform)
+    # world_to_shape = paz.SE3.invert(shape.transform)
     shape_points = transform_points(world_to_shape, world_points)
     # transform world normals
     shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points)
