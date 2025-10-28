@@ -51,15 +51,15 @@ H, W = 240, 320
 rays = camera.build_rays((H, W), jp.pi / 3.0, camera_pose)
 # import jax
 # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    image, depth = render(
-        (H, W),
-        camera_pose,
-        rays,
-        paz.graphics.Scene([floor, cube]),
-        lights,
-        None,
-        False,
-    )
+image, depth = render(
+    (H, W),
+    camera_pose,
+    rays,
+    paz.graphics.Scene([floor, cube]),
+    lights,
+    None,
+    False,
+)
 
 image = paz.image.denormalize(image)
 figure, axes = plt.subplots(1, 2)
