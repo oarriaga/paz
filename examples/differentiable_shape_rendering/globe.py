@@ -1,6 +1,6 @@
 import os
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".90"
 from jax.experimental.compilation_cache.compilation_cache import set_cache_dir
 import jax.numpy as jp
 import jax
@@ -97,7 +97,7 @@ def Arc(
     return paz.graphics.Group(segments, rotate @ standup)
 
 
-checkboard = True
+checkboard = False
 
 GREEN = (85 / 255, 181 / 255, 103 / 255)  # YlGnL
 # GREEN = (239 / 255, 249 / 255, 179 / 255)  # YlGnD
@@ -222,8 +222,10 @@ wall_transform = wall_shift @ wall_angle @ wall_scale
 wall = paz.graphics.Cube(wall_transform, wall_material, wall_pattern)
 
 shapes = [base, globe, arc, top_button, bottom_button, floor, wall]
+# shapes = [base, globe, top_button, bottom_button, floor, wall]
+shapes = paz.graphics.Group(shapes)
 # shapes = [floor]
-scene = paz.graphics.Scene(shapes)
+scene = paz.graphics.Scene([shapes])
 
 camera_pose = SE3.view_transform(
     jp.array([1.1, 1.1, 4.0]),
@@ -243,10 +245,34 @@ render = jax.jit(
         # world_to_camera=camera_pose,
         # rays=rays,
         lights=lights,
+        shadows=False,
+        mask=None,
     )
 )
 image, depth = render(scene=scene, world_to_camera=camera_pose, rays=rays)
 image = paz.image.resize_opencv(paz.image.denormalize(image), (H // 2, W // 2))
 image_name = "globe_checkboard.png" if checkboard else "globe.png"
 paz.image.write(image_name, image)
-paz.graphics.viewer(scene, camera_pose)
+# paz.graphics.viewer(scene, camera_pose)
+paz.graphics.save("globe", scene)
+reloaded_scene = paz.graphics.load("globe")
+
+node = reloaded_scene.nodes[0]._replace(
+    transform=paz.SE3.rotation_y(jp.pi / 2.0)
+)
+reloded_scene = reloaded_scene._replace(nodes=[node])
+reloaded_image, _ = render(
+    scene=reloded_scene, world_to_camera=camera_pose, rays=rays
+)
+
+
+reloaded_image = paz.image.resize_opencv(
+    paz.image.denormalize(reloaded_image), (H // 2, W // 2)
+)
+
+import matplotlib.pyplot as plt
+
+figure, axes = plt.subplots(1, 2)
+axes[0].imshow(image)
+axes[1].imshow(reloaded_image)
+plt.show()

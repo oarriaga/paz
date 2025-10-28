@@ -2,6 +2,7 @@ import jax.numpy as jp
 
 
 def add_one(point):
+    # TODO should not convert to column vector
     return jp.concatenate([point, jp.ones(1)]).reshape(-1, 1)
 
 
@@ -16,6 +17,14 @@ def transform_points(affine_transform, points):
     points = add_ones(points)
     points = jp.matmul(affine_transform, points.T).T
     return points[:, :dimension]
+
+
+def transform(affine_trasnform, point):
+    dimension = len(point)
+    point = add_one(point)
+    point = jp.squeeze(jp.matmul(affine_trasnform, point).T)
+    point = point[:dimension]
+    return point
 
 
 def dehomogenize_coordinates(homogenous_point):
@@ -97,7 +106,7 @@ def normalize(vectors, axis=-1, keepdims=True):
         normalized vectors: Array (num_vectors, 3)
     """
     norms = compute_norms(vectors, axis=axis, keepdims=keepdims)
-    vectors = vectors / (norms + 1e-8)
+    vectors = vectors / (norms + 1e-5)
     return vectors
 
 
@@ -145,7 +154,7 @@ def solve_quadratic(a, b, c):
     discriminator = (b**2) - (4.0 * a * c)
     valid_mask = discriminator > 0  # >= is bad for automatic differentiation
     # TODO check if 0.0 should be epislon. Scipy optimize complained.
-    discriminator = jp.where(valid_mask, discriminator, 1e-6)
+    discriminator = jp.where(valid_mask, discriminator, 1e-4)
     sqrt_discriminator = jp.sqrt(discriminator)
     solution_A = (-b - sqrt_discriminator) / (2.0 * a)
     solution_B = (-b + sqrt_discriminator) / (2.0 * a)

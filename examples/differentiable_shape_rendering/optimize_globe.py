@@ -175,7 +175,8 @@ camera_pose = SE3.view_transform(
 
 lights = PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([5.0, 4.0, 8.0]))
 
-H, W = 1024 // 2, 1024 // 2
+ratio = 8
+H, W = 1024 // ratio, 1024 // ratio
 y_FOV = jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 render = jax.jit(
@@ -185,6 +186,8 @@ render = jax.jit(
         lights=lights,
         world_to_camera=camera_pose,
         rays=rays,
+        mask=None,
+        shadows=False,
     )
 )
 image, depth = render(scene=scene)

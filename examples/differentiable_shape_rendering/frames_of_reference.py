@@ -110,10 +110,11 @@ shapes_list = [
     cone_z,
 ]
 
-parent_array = jp.array([-1, 0, 0, 0, 0, 0, 0])
-axes = Group(shapes_list, parent_array)
+# parent_array = jp.array([-1, 0, 0, 0, 0, 0, 0])
+# axes = Group(shapes_list, parent_array)
+axes = paz.graphics.Scene(shapes_list)
 
-paz.graphics.save("axes.json", group=axes)
+paz.graphics.save("axes.json", axes)
 axes = paz.graphics.load("axes.json")
 
 camera_pose = SE3.view_transform(
@@ -136,8 +137,10 @@ image_data, _ = render(
     image_shape=(H, W),
     world_to_camera=camera_pose,
     rays=rays,
-    shapes=axes,
+    scene=axes,
     lights=lights,
+    mask=None,
+    shadows=True,
 )
 
 print("Rendering complete. Displaying image...")

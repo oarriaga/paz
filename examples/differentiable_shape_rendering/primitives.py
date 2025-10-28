@@ -84,12 +84,20 @@ scene = paz.graphics.Scene([shape_01, shape_02, shape_03, shape_04, floor])
 image, depth = render(scene=scene, mask=None)
 paz.image.show(paz.image.denormalize(image))
 
+
+def compute_loss(true_image, parameters):
+    pred_image = render(parameters)
+    return jp.mean((true_image - pred_image) ** 2)
+
+
 key = jax.random.PRNGKey(0)
-for key in jax.random.split(key, 100):
+for key in jax.random.split(key, 3):
     mask = jax.random.randint(key, (4,), 0, 2)
     mask = jp.append(mask, 1)
     image, depth = render(scene=scene, mask=mask)
     paz.image.show(paz.image.denormalize(image))
+
+paz.graphics.viewer(scene, camera_pose, True)
 
 # _scene, _lights, _mask = paz.graphics.scene.compile(scene, lights, None)
 

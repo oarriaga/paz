@@ -131,12 +131,18 @@ def build_renderer(shape_type, SE3_transform, render_arg=1):
 
     def _build_renderer(transform_args):
         transform = SE3_transform(transform_args)
-        shape = paz.graphics.Shape(transform, shape_type, pattern, material)
+        shape = paz.graphics.Shape(transform, shape_type, material, pattern)
         render = paz.partial(
-            paz.graphics.render_with_shadows, (H, W), jp.eye(4), rays
+            paz.graphics.render,
+            (H, W),
+            jp.eye(4),
+            rays,
+            mask=None,
+            shadows=False,
         )
         # shape = paz.graphics.shapes.expand(shape)
-        values = render(shape, light)
+        scene = paz.graphics.Scene([shape])
+        values = render(scene, light)
         x = values[render_arg]
         if render_arg == 0:
             x = paz.image.resize(x, (H // 2, W // 2), "bilinear")
