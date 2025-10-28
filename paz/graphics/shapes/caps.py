@@ -86,7 +86,7 @@ def intersect_plane(origins, directions, y_translation):
 
 def intersect_canonical_caps(caps_mask, lower_cap_depth, upper_cap_depth):
     # TODO missing sort
-    caps_depths = jp.hstack([lower_cap_depth, upper_cap_depth])
+    caps_depths = jp.vstack([lower_cap_depth[:, 0], upper_cap_depth[:, 0]])
     caps_depth = compute_quadratic_depths(lower_cap_depth, upper_cap_depth)
 
     caps_depth = replace_misses(caps_depth, caps_mask)

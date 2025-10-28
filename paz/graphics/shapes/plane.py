@@ -1,3 +1,4 @@
+import paz
 import jax.numpy as jp
 
 from paz.graphics.geometry import apply_hit_mask
@@ -11,8 +12,11 @@ def intersect_canonical_plane(ray_origins, ray_directions):
     # TODO check why jp.abs is not providing expected results for hit mask
     hit_mask = jp.logical_and((depths > EPSILON), (depths < FARAWAY))
     depths = apply_hit_mask(hit_mask, depths)
-    # sorted_depths = jp.expand_dims(depths, 0)
-    return hit_mask, None, jp.expand_dims(depths, -1)
+    return (
+        hit_mask,
+        paz.graphics.shapes.pad_depths(depths, hit_mask, 3),
+        jp.expand_dims(depths, -1),
+    )
 
 
 def compute_canonical_normals_plane(shape_points):

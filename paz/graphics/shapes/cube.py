@@ -1,5 +1,5 @@
 import jax.numpy as jp
-
+import paz
 from paz.graphics.geometry import apply_hit_mask
 from paz.graphics.constants import EPSILON, FARAWAY
 
@@ -30,19 +30,20 @@ def intersect_canonical_cube(ray_origins, ray_directions):
     depth_max = jp.minimum(x_depth_max, jp.minimum(y_depth_max, z_depth_max))
 
     hit_mask = jp.logical_and((depth_min > EPSILON), (depth_min < FARAWAY))
-
     max_bigger_than_min = depth_max > depth_min
     hit_mask = jp.logical_and(hit_mask, max_bigger_than_min)
 
     depth = depth_min
-    # sorted_depths = jp.vstack([depth_min, depth_max])
     hit_mask = jp.squeeze(hit_mask, 1)
 
     depth = jp.squeeze(depth, axis=1)
     depth = apply_hit_mask(hit_mask, depth)
     depth = jp.expand_dims(depth, axis=-1)
+
+    depths = jp.vstack([depth_min[:, 0], depth_max[:, 0]])
+    depths = paz.graphics.shapes.pad_depths(depths, hit_mask, 2)
     # TODO do apply_hit_mask for sorted depths as well
-    return hit_mask, None, depth
+    return hit_mask, depths, depth
 
 
 def compute_canonical_normals_cube(points):

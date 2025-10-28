@@ -129,3 +129,13 @@ def group_by_pattern_size(shapes_list):
         image_size_key = shape.pattern.image.shape[:2]
         grouped_shapes[image_size_key].append(shape)
     return dict(grouped_shapes)
+
+
+def pad_depths(depths, hit_mask, num_pad_rows):
+    hit_mask = jp.expand_dims(hit_mask, axis=0)  # (2, N)
+    depths = jp.where(hit_mask, depths, paz.graphics.FARAWAY)
+    if num_pad_rows != 0:
+        mask_shape = (num_pad_rows, depths.shape[1])
+        mask = jp.full(mask_shape, paz.graphics.FARAWAY)
+        depths = jp.vstack([depths, mask])
+    return depths

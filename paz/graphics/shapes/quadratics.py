@@ -66,7 +66,7 @@ def intersect_quadratic(a, b, c, origins, directions, minimum, maximum):
     mask = jp.logical_or(bounding_mask_A, bounding_mask_B)
     depths = compute_quadratic_depths(bounded_depth_A, bounded_depth_B)
     depths = replace_misses(depths, mask)
-    sorted_depths = jp.hstack([depth_A, depth_B])  # TODO SORT
+    sorted_depths = jp.vstack([depth_A[:, 0], depth_B[:, 0]])
     return jp.squeeze(mask, -1), sorted_depths, depths
 
 
@@ -80,12 +80,10 @@ def intersect_caped_quadratic(body_intersections, caps_intersections):
     depth = jp.min(depths, axis=1, keepdims=True)
     depth = replace_misses(depth, hit_mask)
 
-    sorted_depths = jp.hstack([body_depths, caps_depths])
-    sorted_depths = jp.sort(sorted_depths, axis=1)
-    # TODO fix having to squeeze hit_masks for the render function
     hit_mask = jp.squeeze(hit_mask, axis=1)
-    # print(hit_mask.shape, sorted_depths.shape, depth.shape)
-    return hit_mask, None, depth
+    depths = jp.vstack([body_depths, caps_depths])
+    paz.graphics.shapes.pad_depths(depths, hit_mask, 0)
+    return hit_mask, depths, depth
 
 
 def intersect_canonical_cylinder(origins, directions):
