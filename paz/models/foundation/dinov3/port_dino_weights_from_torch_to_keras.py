@@ -25,6 +25,7 @@ from paz.models.foundation.dinov3.models.vision_transformer import (
     vit_base,
     vit_large,
 )
+from paz.models.foundation.dinov3.models import convnext
 
 # ==============================================================================
 # PyTorch to Keras Weight Porting Function (Adapted for DINOv3)
@@ -188,6 +189,102 @@ def transfer_weights_from_pt_to_keras(pt_state_dict, keras_model):
     return keras_model
 
 
+def transfer_weights_convnext(pt_state_dict, keras_model):
+    """
+    Loads weights from a PyTorch DINOv3 ConvNeXt state_dict into a
+    native Keras DINOv3 ConvNeXt model.
+
+    Args:
+        pt_state_dict: The state_dict from the pretrained PyTorch model.
+        keras_model: An instance of a Keras ConvNeXt model.
+    """
+    print("Starting by-name weight transfer for ConvNeXt...")
+    pt_sd = pt_state_dict  # Use the state_dict directly
+
+    try:
+        keras_model.downsample_layers[0].layers[0].set_weights(
+            [
+                pt_sd["downsample_layers.0.0.weight"].permute(2, 3, 1, 0).numpy(),
+                pt_sd["downsample_layers.0.0.bias"].numpy(),
+            ]
+        )
+        keras_model.downsample_layers[0].layers[1].set_weights(
+            [
+                pt_sd["downsample_layers.0.1.weight"].numpy(),
+                pt_sd["downsample_layers.0.1.bias"].numpy(),
+            ]
+        )
+
+        # 3 Downsampling layers (downsample_layers[1, 2, 3])
+        for i in range(1, 4):
+            keras_model.downsample_layers[i].layers[0].set_weights(
+                [
+                    pt_sd[f"downsample_layers.{i}.0.weight"].numpy(),
+                    pt_sd[f"downsample_layers.{i}.0.bias"].numpy(),
+                ]
+            )
+            keras_model.downsample_layers[i].layers[1].set_weights(
+                [
+                    pt_sd[f"downsample_layers.{i}.1.weight"]
+                    .permute(2, 3, 1, 0)
+                    .numpy(),
+                    pt_sd[f"downsample_layers.{i}.1.bias"].numpy(),
+                ]
+            )
+
+        # 4 Stages
+        for i in range(4):
+            for j in range(len(keras_model.stages[i].layers)):
+                block = keras_model.stages[i].layers[j]
+                pt_prefix = f"stages.{i}.{j}"
+                block.dwconv.set_weights(
+                    [
+                        pt_sd[f"{pt_prefix}.dwconv.weight"].permute(2, 3, 0, 1).numpy(),
+                        pt_sd[f"{pt_prefix}.dwconv.bias"].numpy(),
+                    ]
+                )
+                block.norm.set_weights(
+                    [
+                        pt_sd[f"{pt_prefix}.norm.weight"].numpy(),
+                        pt_sd[f"{pt_prefix}.norm.bias"].numpy(),
+                    ]
+                )
+                block.pwconv1.set_weights(
+                    [
+                        pt_sd[f"{pt_prefix}.pwconv1.weight"].T.numpy(),
+                        pt_sd[f"{pt_prefix}.pwconv1.bias"].numpy(),
+                    ]
+                )
+                block.pwconv2.set_weights(
+                    [
+                        pt_sd[f"{pt_prefix}.pwconv2.weight"].T.numpy(),
+                        pt_sd[f"{pt_prefix}.pwconv2.bias"].numpy(),
+                    ]
+                )
+                if block.gamma is not None:
+                    block.gamma.assign(pt_sd[f"{pt_prefix}.gamma"].numpy())
+
+        keras_model.norm.set_weights(
+            [pt_sd["norm.weight"].numpy(), pt_sd["norm.bias"].numpy()]
+        )
+
+        print("By-name weight transfer complete.")
+        return keras_model  # Return the model
+
+    except KeyError as e:
+        print(f"❌ [FAIL] Weight transfer failed. Missing key: {e}")
+        print(
+            "This often means the Keras and PyTorch model structures are out of sync."
+        )
+        raise e
+    except Exception as e:
+        print(f"❌ [FAIL] Weight transfer failed with an unexpected error: {e}")
+        raise e
+
+
+# ==============================================================================
+# Execution Script
+# ==============================================================================
 # ==============================================================================
 # Execution Script
 # ==============================================================================
@@ -200,19 +297,19 @@ if __name__ == "__main__":
     MODELS_WEIGHTS_DIR_PATH = (
         r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3/"
     )
-    MODEL_CONSTRUCTORS = {
+
+    # --- ViT Model Definitions ---
+    VIT_MODEL_CONSTRUCTORS = {
         "dinov3_vits16": vit_small,
         "dinov3_vitb16": vit_base,
         "dinov3_vitl16": vit_large,
     }
-
-    MODEL_WEIGHTS_PATHS = {
+    VIT_MODEL_WEIGHTS_PATHS = {
         "dinov3_vits16": r"dinov3_vits16_pretrain_lvd1689m-08c60483.pth",
         "dinov3_vitb16": r"dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
         "dinov3_vitl16": r"dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
     }
-
-    model_kwargs = {
+    vit_model_kwargs = {
         "img_size": 224,
         "patch_size": 16,
         "ffn_layer": "mlp",
@@ -222,6 +319,29 @@ if __name__ == "__main__":
         "n_storage_tokens": 4,
         "pos_embed_rope_dtype": "float32",
     }
+
+    # --- ConvNeXt Model Definitions ---
+    CONVNEXT_MODEL_CONSTRUCTORS = {
+        "dinov3_convnext_tiny": convnext.get_convnext_arch("convnext_tiny"),
+        "dinov3_convnext_small": convnext.get_convnext_arch("convnext_small"),
+        "dinov3_convnext_base": convnext.get_convnext_arch("convnext_base"),
+        "dinov3_convnext_large": convnext.get_convnext_arch("convnext_large"),
+    }
+    CONVNEXT_MODEL_WEIGHTS_PATHS = {
+        "dinov3_convnext_tiny": r"dinov3_convnext_tiny_pretrain_lvd1689m-21b726bb.pth",
+        "dinov3_convnext_small": r"dinov3_convnext_small_pretrain_lvd1689m-296db49d.pth",
+        "dinov3_convnext_base": r"dinov3_convnext_base_pretrain_lvd1689m-801f2ba9.pth",
+        "dinov3_convnext_large": r"dinov3_convnext_large_pretrain_lvd1689m-61fa432d.pth",
+    }
+    convnext_model_kwargs = {
+        "img_size": 224,  # Used for dummy input
+        "patch_size": 16,  # Passed to constructor
+        "layer_scale_init_value": 1e-6,  # Passed to constructor
+    }
+
+    # --- Combine All Model Configs ---
+    MODEL_CONSTRUCTORS = {**VIT_MODEL_CONSTRUCTORS, **CONVNEXT_MODEL_CONSTRUCTORS}
+    MODEL_WEIGHTS_PATHS = {**VIT_MODEL_WEIGHTS_PATHS, **CONVNEXT_MODEL_WEIGHTS_PATHS}
 
     output_dir = "weights_dinov3"
     os.makedirs(output_dir, exist_ok=True)
@@ -233,23 +353,24 @@ if __name__ == "__main__":
             "constructor": constructor,
             "weight_filename": MODEL_WEIGHTS_PATHS[name],
             "keras_name": f"dino_{name}",
-            "kwargs": model_kwargs,
+            # Select the correct kwargs dict based on model type
+            "kwargs": vit_model_kwargs if "vit" in name else convnext_model_kwargs,
         }
 
+    # --- Main Processing Loop ---
     for model_key, config in MODEL_CONFIGS.items():
         print("-" * 80)
         logging.info(f"Processing model: {model_key}")
 
         # --- Load PyTorch Weights ---
-        # Safely join the weights directory path and the specific filename
         weight_path = os.path.join(MODELS_WEIGHTS_DIR_PATH, config["weight_filename"])
-
         if not os.path.isfile(weight_path):
-            logging.error(f"PyTorch weight file not found at: {weight_path}. Skipping.")
+            logging.warning(
+                f"PyTorch weight file not found at: {weight_path}. Skipping."
+            )
             continue
 
         logging.info(f"Loading PyTorch state dict from: {weight_path}...")
-        # Map to CPU to avoid GPU memory issues if unnecessary
         pytorch_state_dict = torch.load(weight_path, map_location=torch.device("cpu"))
         logging.info("✓ PyTorch weights loaded successfully.")
 
@@ -262,15 +383,30 @@ if __name__ == "__main__":
         # --- Build Keras Model ---
         logging.info("Building Keras model to initialize weights...")
         img_size = config["kwargs"]["img_size"]
-        dummy_input = np.zeros((1, img_size, img_size, 3), dtype="float32")
-        # Call the model in inference mode to ensure all layers are built
+
+        # *** IMPORTANT: Use correct input shape for model type ***
+        if "convnext" in model_key:
+            # ConvNeXt expects channels_first: (N, C, H, W)
+            dummy_input = np.zeros((1, 3, img_size, img_size), dtype="float32")
+        else:
+            # ViT expects channels_last: (N, H, W, C)
+            dummy_input = np.zeros((1, img_size, img_size, 3), dtype="float32")
+
         _ = keras_dinov3_model(dummy_input, training=False)
         logging.info("✓ Keras model built.")
 
         # --- Port Weights ---
-        keras_dinov3_model_with_weights = transfer_weights_from_pt_to_keras(
-            pytorch_state_dict, keras_dinov3_model
-        )
+        # *** IMPORTANT: Call the correct porting function ***
+        if "convnext" in model_key:
+            logging.info("Using ConvNeXt weight porting logic...")
+            keras_dinov3_model_with_weights = transfer_weights_convnext(
+                pytorch_state_dict, keras_dinov3_model
+            )
+        else:
+            logging.info("Using ViT weight porting logic...")
+            keras_dinov3_model_with_weights = transfer_weights_from_pt_to_keras(
+                pytorch_state_dict, keras_dinov3_model
+            )
 
         # --- Save Keras Model ---
         final_keras_model_path = os.path.join(output_dir, f"{model_key}_ported.keras")
