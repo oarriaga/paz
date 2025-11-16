@@ -105,7 +105,3 @@ def Cone(transform=jp.eye(4), material=Material(), pattern=Pattern()):
 
 def Cylinder(transform=jp.eye(4), material=Material(), pattern=Pattern()):
     return Shape(transform, CYLINDER, material, pattern)
-
-
-def CSG(transform=jp.eye(4), material=Material(), pattern=Pattern()):
-    return Shape(transform, CONSTRUCTIVE_SOLID_GEOMETRY, material, pattern)

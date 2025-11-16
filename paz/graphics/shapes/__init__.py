@@ -106,6 +106,22 @@ def intersect(shape, ray_origins, ray_directions):
     return hit_mask, depth, world_points, world_normals, eyes
 
 
+def intersect_all(shape, ray_origins, ray_directions):
+    world_to_shape = jp.linalg.inv(shape.transform)
+    rays_shape = transform_rays(world_to_shape, ray_origins, ray_directions)
+    intersections = jax.lax.switch(shape.type, intersection_cases, *rays_shape)
+    hit_mask, depths, depth = intersections
+    world_points = compute_points3D(ray_origins, ray_directions, depth)
+    shape_points = transform_points(world_to_shape, world_points)
+    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points)
+    world_normals = transform_points(world_to_shape.T, shape_normals)
+    world_normals = paz.algebra.normalize(world_normals)
+    eyes = compute_eyes(ray_directions)
+    world_normals = invert_inside_normals(eyes, world_normals)
+    world_points = move_toward_normals(world_points, world_normals)
+    return hit_mask, depths, world_points, world_normals, eyes
+
+
 def compute_eyes(ray_directions):
     eyes = -ray_directions
     return eyes
