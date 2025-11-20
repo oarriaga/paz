@@ -5,7 +5,7 @@
 !.gitignore
 !*.py
 !*.sh
-!requirements.txt
+!pyproject.toml
 
 # extend exceptions to subdirectories
 !*/

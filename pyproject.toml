@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paz"
+version = "0.1.0"
+description = "Perception for Autonomous Systems (JAX branch)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Octavio Arriaga"}
+]
+# JAX requires manual installation (CPU / GPU)
+dependencies = [
+    "numpy",
+    "opencv-python",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["paz*"]
