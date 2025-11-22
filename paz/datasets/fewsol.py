@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from keras.utils import get_file
 from glob import glob
 from functools import partial
 from collections import namedtuple
@@ -10,6 +12,13 @@ from scipy.io import loadmat
 
 ShotFields = ["image", "depth", "masks", "boxes", "pointcloud", "label"]
 Shot = namedtuple("Shot", ShotFields)
+
+
+def download():
+    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.20/"
+    URL = URL + "real_objects.zip"
+    path = get_file("FEWSOL", URL, cache_subdir="paz/datasets/", extract=True)
+    return Path(path) / "real_objects"
 
 
 def get_markers():
@@ -156,7 +165,8 @@ def masks_to_boxes(masks):
     return jp.expand_dims(jp.array(boxes), axis=1)
 
 
-def load(root_path, concept_arg):
+def load(concept_arg):
+    root_path = download()
     concept_path = load_wildcard(os.path.join(root_path, "*"))[concept_arg]
     labels = load_labels(concept_path, get_markers())
     images = load_images(concept_path)
