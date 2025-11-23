@@ -63,6 +63,8 @@ class SelfAttentionBlock(layers.Layer):
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
+        self.proj_bias = proj_bias
+        self.ffn_bias = ffn_bias
         self.drop = drop
         self.attn_drop = attn_drop
         self.drop_path_rate = drop_path
@@ -142,6 +144,25 @@ class SelfAttentionBlock(layers.Layer):
             return self._forward_list(x, rope_list=rope, training=training)
         else:
             return self._forward_tensor(x, rope=rope, training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "num_heads": self.num_heads,
+                "mlp_ratio": self.mlp_ratio,
+                "qkv_bias": self.qkv_bias,
+                "proj_bias": self.proj_bias,
+                "ffn_bias": self.ffn_bias,
+                "drop": self.drop,
+                "attn_drop": self.attn_drop,
+                "drop_path": self.drop_path_rate,
+                "init_values": self.init_values,
+                "act_layer": self.act_layer,
+            }
+        )
+        return config
 
 
 class CausalSelfAttentionBlock(layers.Layer):
