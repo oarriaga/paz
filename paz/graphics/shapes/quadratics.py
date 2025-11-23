@@ -66,7 +66,7 @@ def intersect_quadratic(a, b, c, origins, directions, minimum, maximum):
     mask = jp.logical_or(bounding_mask_A, bounding_mask_B)
     depths = compute_quadratic_depths(bounded_depth_A, bounded_depth_B)
     depths = replace_misses(depths, mask)
-    sorted_depths = jp.vstack([depth_A[:, 0], depth_B[:, 0]])
+    sorted_depths = jp.vstack([bounded_depth_A[:, 0], bounded_depth_B[:, 0]])
     return jp.squeeze(mask, -1), sorted_depths, depths
 
 
@@ -94,6 +94,20 @@ def intersect_canonical_cylinder(origins, directions):
     body_intersections = intersect_quadratic(a, b, c, *args)
     caps_intersections = intersect_cylinder_caps(*args)
     return intersect_caped_quadratic(body_intersections, caps_intersections)
+
+
+# def intersect_canonical_cylinder(origins, directions):
+#     minimum, maximum = -1.0, 1.0
+#     a, b, c = get_ring_quadratic_coefficients(origins, directions)
+#     args = (origins, directions, minimum, maximum)
+#     body_intersections = intersect_quadratic(a, b, c, *args)
+#     body_hit_mask, body_depths, body_depth = body_intersections
+#     caps_intersections = intersect_cylinder_caps(*args)
+#     caps_hit_mask, caps_depths, caps_depth = caps_intersections
+#     hit_mask = jp.logical_or(body_hit_mask, caps_hit_mask)
+#     depths = jp.concatenate([body_depths, caps_depths], axis=0)
+#     depth = jp.expand_dims(jp.min(depths, axis=0), axis=1)
+#     return hit_mask, depths, depth
 
 
 def intersect_canonical_cone(origins, directions):

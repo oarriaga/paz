@@ -6,7 +6,6 @@
 !*.py
 !*.sh
 !requirements.txt
-!*.md
 
 # extend exceptions to subdirectories
 !*/
