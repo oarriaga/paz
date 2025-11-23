@@ -86,28 +86,28 @@ def intersect_caped_quadratic(body_intersections, caps_intersections):
     return hit_mask, depths, depth
 
 
-# def intersect_canonical_cylinder(origins, directions):
-#     minimum = -1.0
-#     maximum = 1.0
-#     a, b, c = get_ring_quadratic_coefficients(origins, directions)
-#     args = (origins, directions, minimum, maximum)
-#     body_intersections = intersect_quadratic(a, b, c, *args)
-#     caps_intersections = intersect_cylinder_caps(*args)
-#     return intersect_caped_quadratic(body_intersections, caps_intersections)
-
-
 def intersect_canonical_cylinder(origins, directions):
-    minimum, maximum = -1.0, 1.0
+    minimum = -1.0
+    maximum = 1.0
     a, b, c = get_ring_quadratic_coefficients(origins, directions)
     args = (origins, directions, minimum, maximum)
     body_intersections = intersect_quadratic(a, b, c, *args)
-    body_hit_mask, body_depths, body_depth = body_intersections
     caps_intersections = intersect_cylinder_caps(*args)
-    caps_hit_mask, caps_depths, caps_depth = caps_intersections
-    hit_mask = jp.logical_or(body_hit_mask, caps_hit_mask)
-    depths = jp.concatenate([body_depths, caps_depths], axis=0)
-    depth = jp.expand_dims(jp.min(depths, axis=0), axis=1)
-    return hit_mask, depths, depth
+    return intersect_caped_quadratic(body_intersections, caps_intersections)
+
+
+# def intersect_canonical_cylinder(origins, directions):
+#     minimum, maximum = -1.0, 1.0
+#     a, b, c = get_ring_quadratic_coefficients(origins, directions)
+#     args = (origins, directions, minimum, maximum)
+#     body_intersections = intersect_quadratic(a, b, c, *args)
+#     body_hit_mask, body_depths, body_depth = body_intersections
+#     caps_intersections = intersect_cylinder_caps(*args)
+#     caps_hit_mask, caps_depths, caps_depth = caps_intersections
+#     hit_mask = jp.logical_or(body_hit_mask, caps_hit_mask)
+#     depths = jp.concatenate([body_depths, caps_depths], axis=0)
+#     depth = jp.expand_dims(jp.min(depths, axis=0), axis=1)
+#     return hit_mask, depths, depth
 
 
 def intersect_canonical_cone(origins, directions):
