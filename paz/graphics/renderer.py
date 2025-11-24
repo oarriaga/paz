@@ -5,19 +5,39 @@ from paz.graphics import EPSILON, FARAWAY
 
 
 def render_shapes(shapes, lights, rays):
-    hit_masks, depths, colors = [], [], []
+    shape_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
+    hit_masks, depths, colors, indices = [], [], [], []
     grouped_shapes = paz.graphics.shapes.group_by_pattern_size(shapes)
     for image_size, shape_group in grouped_shapes.items():
+        group_indices = [shape_to_arg[id(shape)] for shape in shape_group]
+        indices.append(jp.array(group_indices))
         shape_group = paz.graphics.shapes.merge(*shape_group)
-        render_shapes = jax.vmap(paz.lock(render_shape, lights, rays))
-        group_hit_masks, group_depths, group_colors = render_shapes(shape_group)
+        vmap_render = jax.vmap(paz.lock(render_shape, lights, rays))
+        group_hit_masks, group_depths, group_colors = vmap_render(shape_group)
         hit_masks.append(group_hit_masks)
         depths.append(group_depths)
         colors.append(group_colors)
     hit_masks = jp.concatenate(hit_masks, axis=0)
     depths = jp.concatenate(depths, axis=0)
     colors = jp.concatenate(colors, axis=0)
-    return hit_masks, depths, colors
+    indices = jp.concatenate(indices, axis=0)
+    return hit_masks, depths, colors, indices
+
+
+# def render_shapes(shapes, lights, rays):
+#     hit_masks, depths, colors = [], [], []
+#     grouped_shapes = paz.graphics.shapes.group_by_pattern_size(shapes)
+#     for image_size, shape_group in grouped_shapes.items():
+#         shape_group = paz.graphics.shapes.merge(*shape_group)
+#         render_shapes = jax.vmap(paz.lock(render_shape, lights, rays))
+#         group_hit_masks, group_depths, group_colors = render_shapes(shape_group)
+#         hit_masks.append(group_hit_masks)
+#         depths.append(group_depths)
+#         colors.append(group_colors)
+#     hit_masks = jp.concatenate(hit_masks, axis=0)
+#     depths = jp.concatenate(depths, axis=0)
+#     colors = jp.concatenate(colors, axis=0)
+#     return hit_masks, depths, colors
 
 
 def render_shape(shape, lights, rays):
@@ -82,7 +102,8 @@ def to_depth_image(hit_mask, depths, world_to_camera, rays, H, W, faraway=0):
 
 
 def _render(image_shape, world_to_camera, rays, shapes, lights, mask):
-    hit_masks, depths, colors = render_shapes(shapes, lights, rays)
+    hit_masks, depths, colors, indices = render_shapes(shapes, lights, rays)
+    mask = mask[indices]
     mask = jp.expand_dims(mask, 1)
     hit_masks = jp.where(mask, hit_masks, False)
     depths = jp.where(jp.expand_dims(mask, 1), depths, 1e6)  # use FARAWAY?
@@ -91,10 +112,13 @@ def _render(image_shape, world_to_camera, rays, shapes, lights, mask):
 
 
 def intersect_groups(shapes, origins, directions):
+    shape_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
     grouped_shapes = paz.graphics.shapes.group_by_pattern_size(shapes)
-    hit_masks, depths, points, normals, eyes = [], [], [], [], []
+    hit_masks, depths, points, normals, eyes, indices = [], [], [], [], [], []
     intersect = paz.lock(paz.graphics.shapes.intersect, origins, directions)
     for image_size, group in grouped_shapes.items():
+        group_indices = [shape_to_arg[id(shape)] for shape in group]
+        indices.append(jp.array(group_indices))
         group = paz.graphics.shapes.merge(*group)
         intersections = jax.vmap(intersect)(group)
         hit_masks.append(intersections[0])
@@ -107,7 +131,8 @@ def intersect_groups(shapes, origins, directions):
     points = jp.concatenate(points, axis=0)
     normals = jp.concatenate(normals, axis=0)
     eyes = jp.concatenate(eyes, axis=0)
-    return hit_masks, depths, points, normals, eyes
+    indices = jp.concatenate(indices, axis=0)
+    return hit_masks, depths, points, normals, eyes, indices
 
 
 def get_closest_hit_points(depths, points):
@@ -173,10 +198,19 @@ def compute_soft_occlusion(
     return occlusion_factor
 
 
-def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
-    hit_masks, depths, points, normals, eyes = intersect_groups(shapes, *rays)
+def _render_with_shadows(
+    img_size, world_to_camera, rays, shapes, lights, mask, shadow_mask
+):
+    # hit_masks, depths, points, normals, eyes = intersect_groups(shapes, *rays)
+    hit_masks, depths, points, normals, eyes, indices = intersect_groups(
+        shapes, *rays
+    )
+    mask = mask[indices]
+    shadow_mask = shadow_mask[indices]
     mask = jp.expand_dims(mask, 1)
     hit_masks = jp.where(mask, hit_masks, False)
+    shadow_mask = jp.expand_dims(shadow_mask, 1)
+
     depths = jp.where(jp.expand_dims(mask, axis=1), depths, FARAWAY)
     points = jp.where(jp.expand_dims(mask, axis=1), points, FARAWAY)
     points = paz.pointcloud.move_along_normals(points, normals, EPSILON)
@@ -192,6 +226,10 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
         points_to_light_hit_masks = jp.where(
             mask, points_to_light_hit_masks, False
         )
+        points_to_light_hit_masks = jp.where(
+            shadow_mask, points_to_light_hit_masks, False
+        )
+
         points_to_light_hit_mask = compute_scene_hit_mask(
             points_to_light_hit_masks
         )
@@ -201,24 +239,11 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
         points_to_light_depth = jp.min(points_to_light_depths, axis=0)
         points_to_light_depth = jp.squeeze(points_to_light_depth, axis=1)
         points_to_light_norms = jp.squeeze(points_to_light_norms, axis=1)
-        # first_hit_light_source = points_to_light_norms > points_to_light_depth
-        # is_shadow = jp.logical_and(
-        #     points_to_light_hit_mask, first_hit_light_source
-        # )
-        # print("is_shadow", is_shadow.shape)
-
-        # is_shadow = compute_occlusion(
-        #     points_to_light_norms,
-        #     points_to_light_depth,
-        #     points_to_light_hit_mask,
-        # )
-
         is_shadow = compute_soft_occlusion(
             points_to_light_norms,
             points_to_light_depth,
             points_to_light_hit_mask,
         )
-
         _, _, colors = _render_shapes(shapes, [light], rays, is_shadow)
         color_shapes.append(colors)
 
@@ -230,7 +255,23 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
     return postprocess(*args)
 
 
-def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows):
+def render(
+    image_shape,
+    world_to_camera,
+    rays,
+    scene,
+    lights,
+    mask,
+    shadows,
+    shadow_mask=None,
+):
     shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)
     args = (image_shape, world_to_camera, rays, shapes, lights, mask)
-    return _render_with_shadows(*args) if shadows else _render(*args)
+    if shadows:
+        shadow_mask = paz.graphics.scene.prepare_mask(
+            shadow_mask, len(shapes), scene
+        )
+        renderer = _render_with_shadows(*args, shadow_mask)
+    else:
+        renderer = _render(*args)
+    return renderer

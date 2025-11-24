@@ -15,31 +15,35 @@ def prepare_lights(lights):
     return processed_lights
 
 
-def prepare_mask(mask, num_shapes):
+def prepare_mask(mask, num_shapes, scene):
     """Prepares user mask to match flat scene."""
 
     if mask is None:
         flat_mask = jp.ones(num_shapes, dtype=bool)
     else:
-        if len(mask) != num_shapes:
+        if len(mask) != len(scene.nodes):
             raise ValueError("Mask length must match top-level scene elements.")
-        flat_mask = mask  # TODO expand_mask using recursion
-
+        flat_mask = expand_mask(mask, scene)
     return flat_mask
 
 
+def expand_mask_node(mask_value, node):
+    if isinstance(node, paz.graphics.Shape):
+        return [mask_value]
+    elif isinstance(node, paz.graphics.Group):
+        group_mask = []
+        for shape_or_group in node.shapes:
+            group_mask.extend(expand_mask_node(mask_value, shape_or_group))
+        return group_mask
+    else:
+        raise ValueError(f"Invalid node type: {type(node)}")
+
+
 def expand_mask(mask, scene):
-    """Expands user mask to match flat scene."""
     expanded_mask = []
-    for mask_value, shape_or_group in zip(mask, scene.nodes):
-        if isinstance(shape_or_group, paz.graphics.Shape):
-            expanded_mask.append(mask_value)
-        elif isinstance(shape_or_group, paz.graphics.Group):
-            num_shapes_in_group = len(shape_or_group.shapes)
-            expanded_mask.extend([mask_value] * num_shapes_in_group)
-        else:
-            raise TypeError(f"Node {shape_or_group} is not 'Shape' or 'Group'.")
-    return jp.array(expanded_mask, dtype=bool)
+    for mask_value, node in zip(mask, scene.nodes):
+        expanded_mask.extend(expand_mask_node(mask_value, node))
+    return jp.array(expanded_mask)
 
 
 def flatten(node, accumulated_transform):
@@ -64,8 +68,7 @@ def flatten_scene(scene):
 def compile(scene, lights, mask):
     flat_scene = flatten_scene(scene)
     return (
-        # prepare_scene(scene),
         flat_scene,
         prepare_lights(lights),
-        prepare_mask(mask, len(flat_scene)),
+        prepare_mask(mask, len(flat_scene), scene),
     )
