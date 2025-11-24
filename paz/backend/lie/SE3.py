@@ -276,7 +276,7 @@ def sample(key, min_value, max_value):
     return to_affine_matrix(rotation, position)
 
 
-def scaling(scaling_vector):
+def scaling(scaling_factor):
     """Builds scaling translation matrix
 
     # Arguments
@@ -285,6 +285,7 @@ def scaling(scaling_vector):
     # Return
         Array (4, 4) scale matrix.
     """
+    scaling_vector = jp.array(scaling_factor) * jp.ones(3)
     x, y, z = scaling_vector
     return jp.array(
         [

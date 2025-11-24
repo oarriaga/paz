@@ -30,7 +30,10 @@ def viewer(
 
     scene, light, mask = paz.graphics.scene.compile(scene, light, mask=None)
     identity_rays = paz.graphics.camera.build_rays((H, W), y_FOV, jp.eye(4))
-    render = _render_with_shadows if shadows else _render
+    if shadows:
+        render = paz.lock(_render_with_shadows, mask)
+    else:
+        render = _render
 
     @jax.jit
     def render_pose(camera_pose):
