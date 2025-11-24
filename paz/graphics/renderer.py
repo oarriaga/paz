@@ -173,10 +173,15 @@ def compute_soft_occlusion(
     return occlusion_factor
 
 
-def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
+def _render_with_shadows(
+    img_size, world_to_camera, rays, shapes, lights, mask, shadow_mask
+):
     hit_masks, depths, points, normals, eyes = intersect_groups(shapes, *rays)
     mask = jp.expand_dims(mask, 1)
     hit_masks = jp.where(mask, hit_masks, False)
+
+    shadow_mask = jp.expand_dims(shadow_mask, 1)
+
     depths = jp.where(jp.expand_dims(mask, axis=1), depths, FARAWAY)
     points = jp.where(jp.expand_dims(mask, axis=1), points, FARAWAY)
     points = paz.pointcloud.move_along_normals(points, normals, EPSILON)
@@ -192,6 +197,11 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
         points_to_light_hit_masks = jp.where(
             mask, points_to_light_hit_masks, False
         )
+        points_to_light_hit_masks = jp.where(
+            shadow_mask, points_to_light_hit_masks, False
+        )
+        print("points_to_light_hit_masks", points_to_light_hit_masks.shape)
+
         points_to_light_hit_mask = compute_scene_hit_mask(
             points_to_light_hit_masks
         )
@@ -201,24 +211,12 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
         points_to_light_depth = jp.min(points_to_light_depths, axis=0)
         points_to_light_depth = jp.squeeze(points_to_light_depth, axis=1)
         points_to_light_norms = jp.squeeze(points_to_light_norms, axis=1)
-        # first_hit_light_source = points_to_light_norms > points_to_light_depth
-        # is_shadow = jp.logical_and(
-        #     points_to_light_hit_mask, first_hit_light_source
-        # )
-        # print("is_shadow", is_shadow.shape)
-
-        # is_shadow = compute_occlusion(
-        #     points_to_light_norms,
-        #     points_to_light_depth,
-        #     points_to_light_hit_mask,
-        # )
-
         is_shadow = compute_soft_occlusion(
             points_to_light_norms,
             points_to_light_depth,
             points_to_light_hit_mask,
         )
-
+        print(is_shadow.shape, shadow_mask.shape)
         _, _, colors = _render_shapes(shapes, [light], rays, is_shadow)
         color_shapes.append(colors)
 
@@ -230,7 +228,24 @@ def _render_with_shadows(img_size, world_to_camera, rays, shapes, lights, mask):
     return postprocess(*args)
 
 
-def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows):
+def render(
+    image_shape,
+    world_to_camera,
+    rays,
+    scene,
+    lights,
+    mask,
+    shadows,
+    shadow_mask=None,
+):
     shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)
     args = (image_shape, world_to_camera, rays, shapes, lights, mask)
-    return _render_with_shadows(*args) if shadows else _render(*args)
+    if shadows:
+        shadow_mask = paz.graphics.scene.prepare_mask(
+            shadow_mask, len(shapes), scene
+        )
+        jax.debug.print("shadow_mask: {}", shadow_mask)
+        renderer = _render_with_shadows(*args, shadow_mask)
+    else:
+        renderer = _render(*args)
+    return renderer
