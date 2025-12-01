@@ -214,7 +214,6 @@ class DinoVisionTransformer(keras.Model):
     def init_weights(self):
         if hasattr(self.rope_embed, "_init_weights"):
             self.rope_embed._init_weights()
-        # FIX: Use random.normal to match PyTorch's nn.init.normal_
         self.cls_token.assign(random.normal(self.cls_token.shape, stddev=0.02))
         if self.storage_tokens is not None:
             self.storage_tokens.assign(
@@ -357,12 +356,10 @@ class DinoVisionTransformer(keras.Model):
     def call(self, x, masks=None, training: bool = False):
         ret = self.forward_features(x, masks=masks, training=training)
         if training:
-            # When training, the model expects a dictionary for loss calculation
             return {
                 "x_norm_clstoken": ret["x_norm_clstoken"],
                 "x_norm_patchtokens": ret["x_norm_patchtokens"],
             }
-        # In inference, just return the final class token representation
         return self.head(ret["x_norm_clstoken"])
 
 

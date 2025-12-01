@@ -14,7 +14,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from keras.layers import LayerNormalization
-
+from torch import nn
 
 # ==============================================================================
 # Keras Layer Implementation

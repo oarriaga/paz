@@ -1,8 +1,8 @@
-from paz.models.foundation.dinov3.layers.attention import (
+from .attention import (
     CausalSelfAttention,
     SelfAttention,
 )
-from paz.models.foundation.dinov3.layers.layer_scale import LayerScale
+from .layer_scale import LayerScale
 from paz.models.foundation.dinov3.layers.patch_embed import PatchEmbed
 from paz.models.foundation.dinov3.layers.rope_position_encoding import (
     RopePositionEmbedding,
