@@ -1,6 +1,5 @@
 import pytest
 import jax.numpy as jp
-
 from paz.graphics import camera
 from pytest import approx
 
@@ -23,6 +22,12 @@ def portrait_setup():
     return {"H": 200, "W": 100, "y_FOV": jp.pi / 2}
 
 
+def test_compute_focal_length_90_degrees():
+    """Tests focal length for a 90-degree FOV."""
+    y_FOV = jp.pi / 2.0
+    assert camera.compute_focal_length(y_FOV) == approx(1.0)
+
+
 def test_compute_aspect_ratio_square(square_setup):
     """Tests aspect ratio for a square image."""
     H, W = square_setup["H"], square_setup["W"]
@@ -41,72 +46,28 @@ def test_compute_aspect_ratio_portrait(portrait_setup):
     assert camera.compute_aspect_ratio(H, W) == 0.5
 
 
-def test_compute_focal_length_90_degrees():
-    """Tests focal length for a 90-degree FOV."""
+def test_compute_image_sizes_square():
     y_FOV = jp.pi / 2.0
-    assert camera.compute_focal_length(y_FOV) == approx(1.0)
-
-
-def test_compute_half_view_square_aspect():
-    """Tests half_view with a square aspect ratio."""
     aspect_ratio = 1.0
+    H, W = camera.compute_image_sizes(y_FOV, aspect_ratio)
+    assert H == approx(2.0)
+    assert W == approx(2.0)
+
+
+def test_compute_image_sizes_landscape():
     y_FOV = jp.pi / 2.0
-    assert camera.compute_half_view(y_FOV, aspect_ratio) == approx(1.0)
-
-
-def test_compute_half_view_landscape_aspect():
-    """Tests half_view with a landscape aspect ratio."""
     aspect_ratio = 2.0
-    y_FOV = jp.pi / 2.0
-    assert camera.compute_half_view(y_FOV, aspect_ratio) == approx(2.0)
-
-
-def test_compute_half_W_for_landscape_aspect(landscape_setup):
-    """Tests half_W calculation for landscape images."""
-    aspect_ratio = camera.compute_aspect_ratio(
-        landscape_setup["H"], landscape_setup["W"]
-    )
-    half_view = camera.compute_half_view(landscape_setup["y_FOV"], aspect_ratio)
-    assert camera.compute_half_W(aspect_ratio, half_view) == approx(half_view)
-
-
-def test_compute_half_H_for_landscape_aspect(landscape_setup):
-    """Tests half_H calculation for landscape images."""
-    aspect_ratio = camera.compute_aspect_ratio(
-        landscape_setup["H"], landscape_setup["W"]
-    )
-    half_view = camera.compute_half_view(landscape_setup["y_FOV"], aspect_ratio)
-    assert camera.compute_half_H(aspect_ratio, half_view) == approx(
-        half_view / aspect_ratio
-    )
-
-
-def test_compute_half_W_for_portrait_aspect(portrait_setup):
-    """Tests half_W calculation for portrait images."""
-    aspect_ratio = camera.compute_aspect_ratio(
-        portrait_setup["H"], portrait_setup["W"]
-    )
-    half_view = camera.compute_half_view(portrait_setup["y_FOV"], aspect_ratio)
-    assert camera.compute_half_W(aspect_ratio, half_view) == approx(
-        half_view * aspect_ratio
-    )
-
-
-def test_compute_half_H_for_portrait_aspect(portrait_setup):
-    """Tests half_H calculation for portrait images."""
-    aspect_ratio = camera.compute_aspect_ratio(
-        portrait_setup["H"], portrait_setup["W"]
-    )
-    half_view = camera.compute_half_view(portrait_setup["y_FOV"], aspect_ratio)
-    assert camera.compute_half_H(aspect_ratio, half_view) == approx(half_view)
+    H, W = camera.compute_image_sizes(y_FOV, aspect_ratio)
+    assert H == approx(2.0)
+    assert W == approx(4.0)
 
 
 def test_compute_pixel_size():
     """Tests the pixel size calculation."""
-    half_W = 1.0
+    width_in_world = 2.0
     width_in_pixels = 200
-    expected_pixel_size = 1.0 * 2.0 / 200
-    assert camera.compute_pixel_size(half_W, width_in_pixels) == approx(
+    expected_pixel_size = 2.0 / 200
+    assert camera.compute_pixel_size(width_in_world, width_in_pixels) == approx(
         expected_pixel_size
     )
 
@@ -116,19 +77,14 @@ def ray_directions_square(square_setup):
     """Pre-calculates ray directions for a square image."""
     p = square_setup
     aspect_ratio = camera.compute_aspect_ratio(p["H"], p["W"])
-    half_view = camera.compute_half_view(p["y_FOV"], aspect_ratio)
-    half_W = camera.compute_half_W(aspect_ratio, half_view)
-    half_H = camera.compute_half_H(aspect_ratio, half_view)
-    pixel_size = camera.compute_pixel_size(half_W, p["W"])
-    return camera.build_ray_directions(
-        p["H"], p["W"], pixel_size, half_W, half_H
-    )
+    H_world, W_world = camera.compute_image_sizes(p["y_FOV"], aspect_ratio)
+    return camera.build_ray_directions(p["H"], p["W"], H_world, W_world)
 
 
 def test_build_ray_directions_output_shape(ray_directions_square, square_setup):
     """Tests the output shape of ray directions."""
     H, W = square_setup["H"], square_setup["W"]
-    assert ray_directions_square.shape == (H * W, 4)
+    assert ray_directions_square.shape == (H * W, 3)
 
 
 def test_build_ray_directions_z_coordinate(ray_directions_square):
@@ -137,63 +93,51 @@ def test_build_ray_directions_z_coordinate(ray_directions_square):
     assert jp.all(z_coords == -1.0)
 
 
-def test_build_ray_directions_w_coordinate(ray_directions_square):
-    """Tests the W component of ray directions is 1."""
-    w_coords = ray_directions_square[:, 3]
-    assert jp.all(w_coords == 1.0)
-
-
 def test_build_ray_origins_shape(square_setup):
     """Tests the output shape of ray origins."""
     H, W = square_setup["H"], square_setup["W"]
     origins = camera.build_ray_origins(H, W)
-    assert origins.shape == (H * W, 4)
+    assert origins.shape == (H * W, 3)
 
 
 def test_build_ray_origins_values(square_setup):
-    """Tests that all ray origins are [0, 0, 0, 1]."""
+    """Tests that all ray origins are [0, 0, 0]."""
     H, W = square_setup["H"], square_setup["W"]
     origins = camera.build_ray_origins(H, W)
-    expected_origin = jp.array([0.0, 0.0, 0.0, 1.0])
+    expected_origin = jp.array([0.0, 0.0, 0.0])
     assert jp.all(origins == expected_origin)
 
 
-def test_transform_rays_with_identity_matrix():
-    """Tests transform_rays with an identity matrix."""
-    origin = jp.array([[0.0, 0.0, 0.0, 1.0]])
-    direction = jp.array([[0.5, 0.5, -1.0, 1.0]])
-    identity_matrix = jp.eye(4)
+def test_build_rays_identity():
+    """Test build_rays with identity camera matrix."""
+    size = (10, 10)
+    y_FOV = jp.pi / 2.0
+    origins, directions = camera.build_rays(size, y_FOV, jp.eye(4))
 
-    expected_direction_vec = jp.array([0.5, 0.5, -1.0])
-    expected_norm_direction = expected_direction_vec / jp.linalg.norm(
-        expected_direction_vec
-    )
-
-    out_origin, out_dir = camera.transform_rays(
-        identity_matrix, origin, direction
-    )
-
-    assert jp.allclose(out_origin, jp.array([[0.0, 0.0, 0.0]]))
-    assert jp.allclose(out_dir, expected_norm_direction.reshape(1, 3))
+    assert origins.shape == (100, 3)
+    assert directions.shape == (100, 3)
+    assert jp.all(origins == 0.0)
+    # Directions should have z = -1 (normalized? no, build_ray_directions doesn't normalize, but transform_vectors might?)
+    # Wait, camera.build_rays calls algebra.transform_rays
+    # algebra.transform_rays calls transform_vectors for directions.
+    # transform_vectors does matmul. It does NOT normalize.
+    # So directions should be roughly [x, y, -1].
+    assert jp.all(directions[:, 2] == -1.0)
 
 
-def test_transform_rays_origin_with_translation():
-    """Tests ray origin transformation with a translation matrix."""
-    origin = jp.array([[0.0, 0.0, 0.0, 1.0]])
-    direction = jp.array([[0.0, 0.0, -1.0, 1.0]])
-    world_to_camera = jp.eye(4).at[2, 3].set(-5)
-    expected_origin = jp.array([[0.0, 0.0, -5.0]])
+def test_compute_intrinsics():
+    y_FOV = jp.pi / 2.0
+    H, W = 100, 200
+    K = camera.compute_intrinsics(y_FOV, H, W)
 
-    out_origin, _ = camera.transform_rays(world_to_camera, origin, direction)
-    assert jp.allclose(out_origin, expected_origin)
+    # Focal length y = 1/tan(45) = 1.
+    # fy in pixels = 1 * H/2 = 50.
+    # fx = fy (square pixels) = 50.
+    # cx = W/2 = 100.
+    # cy = H/2 = 50.
 
-
-def test_transform_rays_direction_with_translation():
-    """Tests ray direction transformation with a translation matrix."""
-    origin = jp.array([[0.0, 0.0, 0.0, 1.0]])
-    direction = jp.array([[0.0, 0.0, -1.0, 1.0]])
-    world_to_camera = jp.eye(4).at[2, 3].set(-5)
-    expected_direction = jp.array([[0.0, 0.0, -1.0]])
-
-    _, out_dir = camera.transform_rays(world_to_camera, origin, direction)
-    assert jp.allclose(out_dir, expected_direction, rtol=1e-4)
+    assert K[0, 0] == approx(50.0)
+    assert K[1, 1] == approx(50.0)
+    assert K[0, 2] == approx(100.0)
+    assert K[1, 2] == approx(50.0)
+    assert K[2, 2] == 1.0

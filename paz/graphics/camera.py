@@ -11,11 +11,8 @@ def compute_aspect_ratio(H, W):
 
 
 def compute_image_sizes(y_field_of_view, aspect_ratio):
-    if aspect_ratio >= 1.0:
-        H = 2 * jp.tan(y_field_of_view / 2.0)
-        W = 2 * jp.tan(y_field_of_view / 2.0) * aspect_ratio
-    else:
-        raise NotImplementedError
+    H = 2 * jp.tan(y_field_of_view / 2.0)
+    W = 2 * jp.tan(y_field_of_view / 2.0) * aspect_ratio
     return H, W
 
 
@@ -42,7 +39,7 @@ def build_rays(size, y_FOV, world_to_camera=jp.eye(4)):
     H_pixel, W_pixel = size[:2]
     aspect_ratio = compute_aspect_ratio(H_pixel, W_pixel)
     H_world, W_world = compute_image_sizes(y_FOV, aspect_ratio)
-    directions = build_rays(H_pixel, W_pixel, H_world, W_world)
+    directions = build_ray_directions(H_pixel, W_pixel, H_world, W_world)
     origins = build_ray_origins(H_pixel, W_pixel)
     camera_to_world = jp.linalg.inv(world_to_camera)
     return paz.algebra.transform_rays(camera_to_world, origins, directions)
