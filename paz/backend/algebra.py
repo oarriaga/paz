@@ -12,11 +12,33 @@ def add_ones(points):
     return points
 
 
+def transform_vectors(affine_matrix, vectors):
+    """Transform R^3 vectors with affine matrix
+
+    # Arguments
+        affine_matrix: (4, 4)
+        rays: (num_rays, 3)
+
+    # Returns
+        Transformed vectors (num_rays, 3)
+    """
+    vectors = add_zeros(vectors)
+    vectors = jp.matmul(affine_matrix, vectors.T).T
+    vectors = vectors[:, :3]
+    return vectors
+
+
 def transform_points(affine_transform, points):
     dimension = points.shape[-1]
     points = add_ones(points)
     points = jp.matmul(affine_transform, points.T).T
     return points[:, :dimension]
+
+
+def transform_rays(affine_transform, ray_origins, ray_directions):
+    ray_origins = transform_points(affine_transform, ray_origins)
+    ray_directions = transform_vectors(affine_transform, ray_directions)
+    return ray_origins, ray_directions
 
 
 def transform(affine_trasnform, point):
@@ -172,22 +194,6 @@ def add_zeros(vectors):
     """
     zeros = jp.zeros((len(vectors), 1))
     vectors = jp.concatenate([vectors, zeros], axis=-1)
-    return vectors
-
-
-def transform_vectors(affine_matrix, vectors):
-    """Transform R^3 vectors with affine matrix
-
-    # Arguments
-        affine_matrix: (4, 4)
-        rays: (num_rays, 3)
-
-    # Returns
-        Transformed vectors (num_rays, 3)
-    """
-    vectors = add_zeros(vectors)
-    vectors = jp.matmul(affine_matrix, vectors.T).T
-    vectors = vectors[:, :3]
     return vectors
 
 

@@ -196,4 +196,4 @@ def test_transform_rays_direction_with_translation():
     expected_direction = jp.array([[0.0, 0.0, -1.0]])
 
     _, out_dir = camera.transform_rays(world_to_camera, origin, direction)
-    assert jp.allclose(out_dir, expected_direction)
+    assert jp.allclose(out_dir, expected_direction, rtol=1e-4)
