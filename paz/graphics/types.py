@@ -38,8 +38,17 @@ def CylindricalPattern(image, transform=jp.eye(4)):
 
 Material = namedtuple(
     "Material",
-    ["color", "ambient", "diffuse", "specular", "shininess"],
-    defaults=(DEFAULT_COLOR, 0.1, 0.9, 0.9, 200),
+    [
+        "color",
+        "ambient",
+        "diffuse",
+        "specular",
+        "shininess",
+        "reflective",
+        "refractive",
+        "refractive_index",
+    ],
+    defaults=(DEFAULT_COLOR, 0.1, 0.9, 0.9, 200.0, 0.0, 0.0, 1.0),
 )
 
 Shape = namedtuple(

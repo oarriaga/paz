@@ -92,6 +92,32 @@ def reflect(light_directions, normals):
     return light_directions - (normals * 2 * dots)
 
 
+def refract(incident, normals, n1, n2):
+    # n1: current refractive index (scalar or array)
+    # n2: target refractive index (scalar or array)
+    # incident: (N, 3)
+    # normals: (N, 3) - assumed to be pointing against incident (cos_theta > 0)
+
+    eta = n1 / n2
+    # Expand dims for broadcasting if n1/n2 are scalars vs arrays
+    # Actually usually they will be arrays matching incident length in the renderer loop
+    eta = jp.expand_dims(eta, -1)
+
+    dot_ni = paz.algebra.dot(incident, normals)
+    cos_i = -dot_ni
+    cos_i = jp.expand_dims(cos_i, -1)
+
+    sin2_t = eta * eta * (1.0 - cos_i * cos_i)
+    discriminant = 1.0 - sin2_t
+    is_tir = discriminant < 0.0
+
+    sqrt_discriminant = jp.sqrt(jp.where(is_tir, 0.0, discriminant))
+    refracted = (eta * incident) + ((eta * cos_i - sqrt_discriminant) * normals)
+
+    reflected = reflect(incident, normals)
+    return jp.where(is_tir, reflected, refracted)
+
+
 def compute_reflections_dot_eye(light, points, normals, eye):
     hits_to_light = compute_hits_to_light(light.position, points)
     reflections = reflect(-hits_to_light, normals)
