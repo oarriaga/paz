@@ -58,7 +58,12 @@ def select_colors(depths, colors):
     depths = jp.array(depths)
     arg_depths = jp.argmin(depths, axis=0)
     arg_depths = jp.expand_dims(arg_depths, 0)
+    
     colors = jp.array(colors)
+    ndim = colors.ndim
+    while arg_depths.ndim < ndim:
+        arg_depths = jp.expand_dims(arg_depths, -1)
+        
     colors = jp.take_along_axis(colors, arg_depths, axis=0)
     colors = jp.squeeze(colors, axis=0)
     return colors
