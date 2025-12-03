@@ -4,6 +4,9 @@ import jax
 
 
 def postprocess(hit_masks, depths, colors, world_to_camera, rays, H, W):
+    hit_masks = jp.expand_dims(hit_masks, 0)
+    depths = jp.expand_dims(depths, 0)
+    colors = jp.expand_dims(colors, 0)
     scene_hit_mask = compute_scene_hit_mask(hit_masks)
     scene_colors = select_colors(depths, colors)
     image = to_color_image(scene_hit_mask, scene_colors, H, W)
@@ -80,8 +83,8 @@ def process_group(group, origins, directions, shape_to_arg):
     return (*intersections, group_indices)
 
 
-def concatenate(results):
-    return tuple(jp.concatenate(items, axis=0) for items in zip(*results))
+def concatenate(intersections):
+    return tuple(jp.concatenate(items, axis=0) for items in zip(*intersections))
 
 
 def get_closest_hit_points(depths, points):
@@ -144,25 +147,6 @@ def compute_soft_occlusion(light_length, closest_depth, scene_hit_mask, slope):
     return occlusion_factor
 
 
-def _compute_bounce_intersections(shapes, rays, mask):
-    intersections = intersect_groups(shapes, *rays)
-    hit_masks, depths, points, normals, eyes, indices = intersections
-    bounce_mask = jp.expand_dims(mask[indices], 1)
-    hit_masks = jp.where(bounce_mask, hit_masks, False)
-    return hit_masks, depths, points, normals, eyes, indices
-
-
-def take_closest(candidates, closest_indices):
-    # candidates (num_shapes, num_rays, *features), closest_indices (num_rays,)
-    # reshape indices to (1, num_rays, 1, ..., 1) for broadcasting
-    num_feature_dims = candidates.ndim - 2
-    broadcast_shape = (1, -1) + (1,) * num_feature_dims
-    indices = closest_indices.reshape(broadcast_shape)
-    # select closest candidate per ray
-    selected = jp.take_along_axis(candidates, indices, axis=0)
-    return jp.squeeze(selected, axis=0)
-
-
 def _initialize_render_state(rays):
     num_rays = rays[0].shape[0]
     return {
@@ -177,6 +161,44 @@ def _initialize_render_state(rays):
     }
 
 
+def _resolve_shadow_masks(mask, shadow_mask, intersections):
+    sh_masks, indices = intersections[0], intersections[5]
+    sh_masks = jp.where(jp.expand_dims(mask[indices], 1), sh_masks, False)
+    if shadow_mask is not None:
+        cast_mask = jp.expand_dims(shadow_mask[indices], 1)
+        sh_masks = jp.where(cast_mask, sh_masks, False)
+    return sh_masks
+
+
+def _compute_bounce_intersections(shapes, rays, mask):
+    intersections = intersect_groups(shapes, *rays)
+    hit_masks, depths, points, normals, eyes, indices = intersections
+    bounce_mask = jp.expand_dims(mask[indices], 1)
+    hit_masks = jp.where(bounce_mask, hit_masks, False)
+    return hit_masks, depths, points, normals, eyes, indices
+
+
+def _find_closest_intersection(hit_masks, depths):
+    # Ensure depths and hit_masks are broadcast compatible
+    # If depths is (T, N, 1) and hit_masks is (T, N), squeeze depths
+    if depths.ndim > hit_masks.ndim:
+        depths = jp.squeeze(depths, axis=-1)
+    depths_masked = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
+    closest_args = jp.argmin(depths_masked, axis=0)
+    return closest_args
+
+
+def take_closest(candidates, closest_indices):
+    # candidates (num_shapes, num_rays, *features), closest_indices (num_rays,)
+    # reshape as (1, num_rays, 1, ..., 1) for broadcasting
+    num_feature_dims = candidates.ndim - 2
+    broadcast_shape = (1, -1) + (1,) * num_feature_dims
+    indices = closest_indices.reshape(broadcast_shape)
+    # select closest candidate per ray
+    selected = jp.take_along_axis(candidates, indices, axis=0)
+    return jp.squeeze(selected, axis=0)
+
+
 def _gather_closest(closest_args, hit_masks, depths, points, normals, shapes):
     return {
         "hit_mask": take_closest(hit_masks, closest_args),
@@ -185,21 +207,6 @@ def _gather_closest(closest_args, hit_masks, depths, points, normals, shapes):
         "normal": take_closest(normals, closest_args),
         "shape_idx": shapes[closest_args],
     }
-
-
-def _compute_simple_lighting(rays, shapes, lights, indices):
-    dummy_shadow = jp.zeros((rays[0].shape[0],), dtype=float)
-    _, _, colors = render_shapes(shapes, lights, rays, dummy_shadow)
-    return take_closest(colors, indices)
-
-
-def _resolve_shadow_masks(mask, shadow_mask, intersections):
-    sh_masks, indices = intersections[0], intersections[5]
-    sh_masks = jp.where(jp.expand_dims(mask[indices], 1), sh_masks, False)
-    if shadow_mask is not None:
-        cast_mask = jp.expand_dims(shadow_mask[indices], 1)
-        sh_masks = jp.where(cast_mask, sh_masks, False)
-    return sh_masks
 
 
 def _compute_light_colors(light, shapes, mask, shadow_mask, point, rays, indices):  # fmt: skip
@@ -225,6 +232,12 @@ def _compute_shadows(rays, shapes, lights, indices, mask, shadow_mask, points):
     return colors
 
 
+def _compute_simple_lighting(rays, shapes, lights, indices):
+    dummy_shadow = jp.zeros((rays[0].shape[0],), dtype=float)
+    _, _, colors = render_shapes(shapes, lights, rays, dummy_shadow)
+    return take_closest(colors, indices)
+
+
 def _compute_lighting(rays, shapes, lights, closest_args, closest_points, shadows, mask, shadow_mask):   # fmt: skip
     args = (rays, shapes, lights, closest_args)
     if shadows:
@@ -232,32 +245,6 @@ def _compute_lighting(rays, shapes, lights, closest_args, closest_points, shadow
     else:
         colors = _compute_simple_lighting(*args)
     return colors
-
-
-def _find_closest_intersection(hit_masks, depths):
-    # Ensure depths and hit_masks are broadcast compatible
-    # If depths is (T, N, 1) and hit_masks is (T, N), squeeze depths
-    if depths.ndim > hit_masks.ndim:
-        depths = jp.squeeze(depths, axis=-1)
-    depths_masked = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
-    closest_args = jp.argmin(depths_masked, axis=0)
-    return closest_args
-
-
-def _bounce(state, bounce, shapes, lights, mask, shadows, shadow_mask):
-    rays = (state["current_origins"], state["current_directions"])
-    intersections = _compute_bounce_intersections(shapes, rays, mask)
-    hit_masks, depths, points, normals, eyes, indices = intersections
-    closest_args = _find_closest_intersection(hit_masks, depths)
-    closest = _gather_closest(closest_args, hit_masks, depths, points, normals, indices)  # fmt: skip
-
-    if bounce == 0:
-        state["accumulated_depth"] = closest["depth"]
-        state["accumulated_hit_mask"] = closest["hit_mask"]
-
-    state["active_mask"] &= closest["hit_mask"]
-    colors = _compute_lighting(rays, shapes, lights, closest_args, closest["point"], shadows, mask, shadow_mask) # fmt: skip
-    return _update_bounce_state(state, shapes, closest, colors)
 
 
 def _update_bounce_state(state, shapes, closest, local_color):
@@ -285,6 +272,22 @@ def _accumulate_local_color(state, local_color, materials):
     contribution = local_color * jp.expand_dims(weight, -1)
     state["accumulated_color"] += ( state["throughput"] * contribution * jp.expand_dims(state["active_mask"], -1))  # fmt: skip
     return state
+
+
+def _bounce(state, bounce, shapes, lights, mask, shadows, shadow_mask):
+    rays = (state["current_origins"], state["current_directions"])
+    intersections = _compute_bounce_intersections(shapes, rays, mask)
+    hit_masks, depths, points, normals, eyes, indices = intersections
+    closest_args = _find_closest_intersection(hit_masks, depths)
+    closest = _gather_closest(closest_args, hit_masks, depths, points, normals, indices)  # fmt: skip
+
+    if bounce == 0:
+        state["accumulated_depth"] = closest["depth"]
+        state["accumulated_hit_mask"] = closest["hit_mask"]
+
+    state["active_mask"] &= closest["hit_mask"]
+    colors = _compute_lighting(rays, shapes, lights, closest_args, closest["point"], shadows, mask, shadow_mask) # fmt: skip
+    return _update_bounce_state(state, shapes, closest, colors)
 
 
 def _determine_bounce_actions(materials):
@@ -333,19 +336,15 @@ def _apply_bounce_update(state, point, next_dir, next_ior, materials, actions):
     return state
 
 
-def _postprocess_render(state, world_to_camera, rays, H, W):
-    hit_mask = jp.expand_dims(state["accumulated_hit_mask"], 0)
-    depths = jp.expand_dims(state["accumulated_depth"], 0)
-    colors = jp.expand_dims(state["accumulated_color"], 0)
-    return postprocess(hit_mask, depths, colors, world_to_camera, rays, H, W)
-
-
 def _render_bounced(H, W, world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, max_bounces=3):  # fmt: skip
     state = _initialize_render_state(rays)
     bounce = paz.lock(_bounce, shapes, lights, mask, shadows, shadow_mask)
     for step_arg in range(max_bounces):
         state = bounce(state, step_arg)
-    return _postprocess_render(state, world_to_camera, rays, H, W)
+    hit_masks = state["accumulated_hit_mask"]
+    depths = state["accumulated_depth"]
+    colors = state["accumulated_color"]
+    return postprocess(hit_masks, depths, colors, world_to_camera, rays, H, W)
 
 
 def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None):  # fmt: skip
