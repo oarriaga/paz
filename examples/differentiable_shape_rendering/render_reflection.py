@@ -38,8 +38,11 @@ floor_material = Material(
     color=jp.array([0.5, 0.5, 0.5]),
     ambient=0.1,
     diffuse=0.9,
-    specular=0.1,
-    shininess=50.0,
+    specular=0.0,
+    shininess=200.0,
+    reflective=0.0,
+    refractive=0.0,
+    refractive_index=0.0,
 )
 
 # Objects
@@ -60,7 +63,7 @@ wall_pose = SE3.translation(jp.array([0.0, 2.0, -4.0])) @ SE3.rotation_x(
 
 # Camera
 camera_pose = SE3.view_transform(
-    camera_origin=jp.array([0.0, 3.0, 6.0]),
+    camera_origin=jp.array([0.0, 3.0, 3.0]),
     target_origin=jp.array([0.0, 0.0, 0.0]),
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
@@ -85,6 +88,7 @@ image, depth = render(
 )
 
 image = paz.image.denormalize(image)
-paz.image.write("reflection_and_refraction.png", image)
+paz.image.write("reflection_and_refraction_cube.png", image)
+paz.image.show(image)
 print("Rendered reflection_test.png")
 paz.graphics.viewer(scene, camera_pose, True, lights)
