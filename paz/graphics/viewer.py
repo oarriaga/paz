@@ -3,7 +3,7 @@ import cv2
 import jax
 import paz
 
-from paz.graphics.renderer import _render, _render_with_shadows
+# from paz.graphics.renderer import _render, _render_with_shadows
 
 
 def clamp_tilt(tilt, limit=jp.pi / 2 - 0.01):
@@ -30,10 +30,10 @@ def viewer(
 
     scene, light, mask = paz.graphics.scene.compile(scene, light, mask=None)
     identity_rays = paz.graphics.camera.build_rays((H, W), y_FOV, jp.eye(4))
-    if shadows:
-        render = paz.lock(_render_with_shadows, mask)
-    else:
-        render = _render
+
+    def render(image_shape, camera_pose, rays, scene, light, mask):
+        args = (H, W, camera_pose, rays, scene, light, mask, shadows, None, 3)
+        return paz.graphics.renderer._render_bounced(*args)
 
     @jax.jit
     def render_pose(camera_pose):

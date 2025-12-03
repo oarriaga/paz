@@ -1,9 +1,8 @@
-import matplotlib.pyplot as plt
 import jax.numpy as jp
 import paz
 from paz import SE3
 from paz.graphics.types import PointLight, Material, Shape
-from paz.graphics.constants import CUBE, PLANE, SPHERE
+from paz.graphics.constants import CUBE, PLANE, SPHERE, CONE
 from paz.graphics import camera
 from paz.graphics.renderer import render
 
@@ -51,6 +50,8 @@ sphere = Shape(sphere_pose, SPHERE, mirror_material)
 
 cube_pose = SE3.translation(jp.array([1.5, 1.0, 0.0]))
 cube = Shape(cube_pose, CUBE, glass_material)
+# cube_pose = SE3.translation(jp.array([1.5, 1.0, 0.0]))
+# cube = paz.graphics.Cone(cube_pose, glass_material)
 
 wall_pose = SE3.translation(jp.array([0.0, 2.0, -4.0])) @ SE3.rotation_x(
     jp.pi / 2
@@ -65,13 +66,11 @@ camera_pose = SE3.view_transform(
 )
 
 lights = [
-    PointLight(
-        jp.array([1.0, 1.0, 1.0]),
-        jp.array([0.0, 10.0, 5.0]),
-    )
+    PointLight(1.0 * jp.ones(3), jp.array([0.0, 10.0, 5.0])),
+    # PointLight(0.6 * jp.ones(3), jp.array([-4.0, 10.0, 5.0])),
 ]
 
-H, W = 120, 160
+H, W = 480, 640
 rays = camera.build_rays((H, W), jp.pi / 3.0, camera_pose)
 
 # Render
@@ -79,14 +78,13 @@ image, depth = render(
     (H, W),
     camera_pose,
     rays,
-    paz.graphics.Scene([floor, sphere, cube]),
+    scene := paz.graphics.Scene([floor, sphere, cube]),
     lights,
     mask=None,
     shadows=True,  # Shadows off for speed/simplicity first
 )
 
 image = paz.image.denormalize(image)
-plt.imshow(image)
-plt.savefig("reflection_test.png")
+paz.image.write("reflection_and_refraction.png", image)
 print("Rendered reflection_test.png")
-paz.graphics.viewer
+paz.graphics.viewer(scene, camera_pose, True, lights)

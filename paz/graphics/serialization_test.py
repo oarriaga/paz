@@ -23,7 +23,13 @@ def assert_pytrees_allclose(a, b):
 
 @pytest.fixture
 def sample_material():
-    return types.Material(color=jp.array([1.0, 0.5, 0.0]), ambient=0.2)
+    return types.Material(
+        color=jp.array([1.0, 0.5, 0.0]),
+        ambient=0.2,
+        reflective=0.5,
+        refractive=0.8,
+        refractive_index=1.33,
+    )
 
 
 @pytest.fixture
@@ -144,8 +150,8 @@ def test_build_node_differentiates_shape_and_group(sample_scene):
     scene_as_dict = serialization.to_json(sample_scene)
     shape_data = scene_as_dict["nodes"][0]
     group_data = scene_as_dict["nodes"][1]
-    reconstructed_shape = serialization.build_node(shape_data)
-    reconstructed_group = serialization.build_node(group_data)
+    reconstructed_shape = serialization.build_node(shape_data)[0]
+    reconstructed_group = serialization.build_node(group_data)[0]
     assert isinstance(reconstructed_shape, types.Shape)
     assert isinstance(reconstructed_group, types.Group)
 
@@ -331,3 +337,20 @@ def test_load_raises_error_if_asset_missing(tmp_path, shape_with_image):
 
     with pytest.raises(FileNotFoundError):
         serialization.load(str(scene_dir))
+
+
+def test_material_save_and_load_round_trip(tmp_path, sample_material):
+    """
+    Tests a round-trip for a standalone Material object, ensuring all properties,
+    including new ones, are correctly serialized and deserialized.
+    """
+    filepath = tmp_path / "material_test"
+    # To save a Material, it needs to be part of a Shape or a similar structure
+    # that `serialization.save` knows how to handle.
+    # We can wrap it in a dummy Shape for this test.
+    dummy_shape = types.Sphere(material=sample_material)
+    serialization.save(filepath, dummy_shape)
+
+    loaded_shape = serialization.load(filepath)
+    assert isinstance(loaded_shape, types.Shape)
+    assert_pytrees_allclose(loaded_shape.material, sample_material)
