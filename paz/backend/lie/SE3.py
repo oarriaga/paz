@@ -382,3 +382,7 @@ def rotation_y(angle):
         ]
     )
     return rotation_matrix_y
+
+
+def identity():
+    return jp.eye(4)
