@@ -219,7 +219,7 @@ def _update_bounce_state(state, shapes, closest, local_color):
     state = _accumulate_local_color(state, local_color, materials)
     actions = _determine_bounce_actions(materials)
     next_dir, next_ior = _calculate_next_bounce_vectors(state, closest["normal"], materials, actions)  # fmt: skip
-    return _apply_bounce_update(state, closest["point"], next_dir, next_ior, materials, actions)  # fmt: skip
+    return _apply_bounce_update(state, closest["point"], next_dir, next_ior, materials, actions, closest["normal"])  # fmt: skip
 
 
 def _extract_material_properties(shapes, shape_args):
@@ -272,7 +272,9 @@ def _calculate_next_bounce_vectors(state, normal, materials, actions):
     return next_dir, next_ior
 
 
-def _apply_bounce_update(state, point, next_dir, next_ior, materials, actions):
+def _apply_bounce_update(
+    state, point, next_dir, next_ior, materials, actions, normal
+):
     do_refract, do_reflect = actions
     factor = jp.where(
         do_refract,
@@ -283,7 +285,11 @@ def _apply_bounce_update(state, point, next_dir, next_ior, materials, actions):
     state["active_mask"] &= do_refract | do_reflect
     state["current_IoR"] = next_ior
     state["current_directions"] = next_dir
-    state["current_origins"] = point + next_dir * paz.graphics.EPSILON
+    # state["current_origins"] = point + next_dir * paz.graphics.EPSILON
+    # Acne Fix: Offset along Normal
+    dot = jp.sum(next_dir * normal, axis=-1, keepdims=True)
+    offset = jp.sign(dot) * normal * paz.graphics.EPSILON
+    state["current_origins"] = point + offset
     return state
 
 
