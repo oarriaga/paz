@@ -32,7 +32,7 @@ def viewer(
     identity_rays = paz.graphics.camera.build_rays((H, W), y_FOV, jp.eye(4))
 
     def render(image_shape, camera_pose, rays, scene, light, mask):
-        args = (H, W, camera_pose, rays, scene, light, mask, shadows, None, 3)
+        args = (H, W, camera_pose, rays, scene, light, mask, shadows, None, 5)
         return paz.graphics.renderer._render_bounced(*args)
 
     @jax.jit
