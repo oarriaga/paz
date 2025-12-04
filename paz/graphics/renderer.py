@@ -32,7 +32,7 @@ def _render_bounced(
     mask,
     shadows,
     shadow_mask,
-    max_bounces=3,
+    max_bounces=5,
 ):
     state = _initialize_render_state(rays)
     bounce = paz.lock(_bounce, shapes, lights, mask, shadows, shadow_mask)
@@ -159,6 +159,11 @@ def _compute_lighting(
 
 def _compute_shadows(rays, shapes, lights, indices, mask, shadow_mask, points):
 
+    # Pre-extract transparency for all shapes to use in shadow resolution
+    shape_transparencies = jp.array(
+        [shape.material.transparency for shape in shapes]
+    )
+
     def _calculate_occlusion(masks, depths, light_length):
         scene_mask = compute_scene_hit_mask(masks)
         depths = jp.where(masks, depths[..., 0], paz.graphics.FARAWAY)
@@ -170,7 +175,12 @@ def _compute_shadows(rays, shapes, lights, indices, mask, shadow_mask, points):
     def _compute_light_colors(light):
         direction, distance = _compute_light_vectors(light, points)
         intersections = intersect_groups(shapes, points, direction)
-        shadow_masks = _resolve_shadow_masks(mask, shadow_mask, intersections)
+
+        # Pass shape_transparencies to resolve shadows
+        shadow_masks = _resolve_shadow_masks(
+            mask, shadow_mask, intersections, shape_transparencies
+        )
+
         occlusion = _calculate_occlusion(
             shadow_masks, intersections[1], distance
         )
@@ -178,7 +188,6 @@ def _compute_shadows(rays, shapes, lights, indices, mask, shadow_mask, points):
         return take_closest(colors, indices)
 
     colors = jp.zeros((len(rays[0]), 3))
-    args = (shapes, mask, shadow_mask, points, rays, indices)
     for light in lights:
         colors = colors + _compute_light_colors(light)
     return colors
@@ -190,13 +199,24 @@ def _compute_light_vectors(light, points):
     return vector / norm, jp.squeeze(norm, axis=1)
 
 
-def _resolve_shadow_masks(mask, shadow_mask, intersections):
-    sh_masks, indices = intersections[0], intersections[5]
-    sh_masks = jp.where(jp.expand_dims(mask[indices], 1), sh_masks, False)
+def _resolve_shadow_masks(
+    mask, shadow_mask, intersections, shape_transparencies
+):
+    shadow_masks, indices = intersections[0], intersections[5]
+    shadow_masks = jp.where(
+        jp.expand_dims(mask[indices], 1), shadow_masks, False
+    )
+
+    # Ignore shadows if the occluding object is transparent
+    is_transparent = shape_transparencies[indices] > 0.0
+    shadow_masks = jp.where(
+        jp.expand_dims(is_transparent, 1), False, shadow_masks
+    )
+
     if shadow_mask is not None:
         cast_mask = jp.expand_dims(shadow_mask[indices], 1)
-        sh_masks = jp.where(cast_mask, sh_masks, False)
-    return sh_masks
+        shadow_masks = jp.where(cast_mask, shadow_masks, False)
+    return shadow_masks
 
 
 def compute_occlusion(light_length, closest_depth, scene_hit_mask):
@@ -295,11 +315,20 @@ def _prepare_computations(state, closest, materials):
     eyev = -state["current_directions"]
     normalv = closest["normal"]
 
-    inside = jp.sum(normalv * eyev, axis=-1) < 0.0
+    # Check if we are hitting the surface from the inside
+    dot = jp.sum(normalv * eyev, axis=-1)
+    inside = dot < 0.0
+
+    # Flip normal if inside so it points against the ray
     normalv = jp.where(jp.expand_dims(inside, -1), -normalv, normalv)
 
     n1 = state["current_refractive_index"]
-    n2 = jp.where(inside, materials["refractive_index"], 1.0)
+
+    # FIX:
+    # If entering (inside=False), n2 is material's index.
+    # If exiting (inside=True), n2 is 1.0 (Air).
+    n2 = jp.where(inside, 1.0, materials["refractive_index"])
+
     n_ratio = n1 / n2
 
     over_point = closest["point"] + normalv * paz.graphics.EPSILON
@@ -317,38 +346,67 @@ def _prepare_computations(state, closest, materials):
     }
 
 
-def _schlick(comps):
-    cos_i = jp.sum(comps["eyev"] * comps["normalv"], axis=-1)
+# def _prepare_computations(state, closest, materials):
+#     eyev = -state["current_directions"]
+#     normalv = closest["normal"]
 
-    sin2_t = (comps["n_ratio"] ** 2) * (1.0 - cos_i**2)
+#     inside = jp.sum(normalv * eyev, axis=-1) < 0.0
+#     normalv = jp.where(jp.expand_dims(inside, -1), -normalv, normalv)
+
+#     n1 = state["current_refractive_index"]
+#     n2 = jp.where(inside, materials["refractive_index"], 1.0)
+#     n_ratio = n1 / n2
+
+#     over_point = closest["point"] + normalv * paz.graphics.EPSILON
+#     under_point = closest["point"] - normalv * paz.graphics.EPSILON
+
+#     return {
+#         "eyev": eyev,
+#         "normalv": normalv,
+#         "inside": inside,
+#         "n1": n1,
+#         "n2": n2,
+#         "n_ratio": n_ratio,
+#         "over_point": over_point,
+#         "under_point": under_point,
+#     }
+
+
+def _schlick(computations):
+    cos_i = jp.sum(computations["eyev"] * computations["normalv"], axis=-1)
+
+    sin2_t = (computations["n_ratio"] ** 2) * (1.0 - cos_i**2)
     is_total_internal_reflection = sin2_t > 1.0
 
     cos_t = jp.sqrt(1.0 - sin2_t)
-    cos = jp.where(comps["n1"] > comps["n2"], cos_t, cos_i)
+    cos = jp.where(computations["n1"] > computations["n2"], cos_t, cos_i)
 
-    r0 = ((comps["n1"] - comps["n2"]) / (comps["n1"] + comps["n2"])) ** 2
+    r0 = (
+        (computations["n1"] - computations["n2"])
+        / (computations["n1"] + computations["n2"])
+    ) ** 2
     reflectance = r0 + (1.0 - r0) * (1.0 - cos) ** 5
 
     return jp.where(is_total_internal_reflection, 1.0, reflectance)
 
 
-def _determine_next_bounce(comps, materials, reflectance):
+def _determine_next_bounce(computations, materials, reflectance):
     is_transparent = materials["transparency"] > 0.0
     is_total_internal_reflection = reflectance >= 1.0
 
     should_reflect = (~is_transparent) | is_total_internal_reflection
 
     reflect_dir = paz.graphics.geometry.reflect(
-        -comps["eyev"], comps["normalv"]
+        -computations["eyev"], computations["normalv"]
     )
 
-    cos_i = jp.sum(comps["eyev"] * comps["normalv"], axis=-1)
-    sin2_t = (comps["n_ratio"] ** 2) * (1.0 - cos_i**2)
+    cos_i = jp.sum(computations["eyev"] * computations["normalv"], axis=-1)
+    sin2_t = (computations["n_ratio"] ** 2) * (1.0 - cos_i**2)
     cos_t = jp.sqrt(1.0 - sin2_t)
 
-    direction = comps["normalv"] * jp.expand_dims(
-        (comps["n_ratio"] * cos_i - cos_t), -1
-    ) - comps["eyev"] * jp.expand_dims(comps["n_ratio"], -1)
+    direction = computations["normalv"] * jp.expand_dims(
+        (computations["n_ratio"] * cos_i - cos_t), -1
+    ) - computations["eyev"] * jp.expand_dims(computations["n_ratio"], -1)
 
     refract_dir = direction
 
@@ -357,21 +415,18 @@ def _determine_next_bounce(comps, materials, reflectance):
     )
     next_origin = jp.where(
         jp.expand_dims(should_reflect, -1),
-        comps["over_point"],
-        comps["under_point"],
+        computations["over_point"],
+        computations["under_point"],
     )
 
     return next_dir, next_origin
 
 
 def _apply_bounce_update(
-    state, next_origin, next_dir, comps, materials, reflectance
+    state, next_origin, next_dir, computations, materials, reflectance
 ):
     is_transparent = materials["transparency"] > 0.0
     is_reflective = materials["reflective"] > 0.0
-
-    # If transparent, we refract, but must account for the reflected energy via Fresnel (1 - reflectance)
-    # If purely reflective (mirror), we use materials["reflective"]
 
     factor = jp.where(
         is_transparent,
@@ -379,22 +434,13 @@ def _apply_bounce_update(
         jp.where(is_reflective, materials["reflective"], 0.0),
     )
 
-    # If Total Internal Reflection occurred (reflectance == 1.0 for transparent), factor becomes 0 above.
-    # We must fix this: if TIR, we reflect with full transparency weight?
-    # The book implies TIR returns black in refracted_color [cite: 531], but Schlick returns 1.0[cite: 681].
-    # Physically, TIR means 100% reflection.
-
-    factor = jp.where(
-        is_transparent & (reflectance >= 1.0),
-        1.0,  # Full reflection for TIR
-        factor,
-    )
+    factor = jp.where(is_transparent & (reflectance >= 1.0), 1.0, factor)
 
     state["throughput"] *= jp.expand_dims(factor, -1)
     state["active_mask"] &= is_transparent | is_reflective
     state["current_refractive_index"] = jp.where(
         is_transparent & (reflectance < 1.0),
-        comps["n2"],
+        computations["n2"],
         state["current_refractive_index"],
     )
     state["current_directions"] = next_dir
@@ -403,14 +449,18 @@ def _apply_bounce_update(
     return state
 
 
-def postprocess(hit_masks, depths, colors, world_to_camera, rays, H, W):
+def postprocess(
+    hit_masks, depths, colors, world_to_camera, rays, height, width
+):
     hit_masks = jp.expand_dims(hit_masks, 0)
     depths = jp.expand_dims(depths, 0)
     colors = jp.expand_dims(colors, 0)
     scene_hit_mask = compute_scene_hit_mask(hit_masks)
     scene_colors = select_colors(depths, colors)
-    image = to_color_image(scene_hit_mask, scene_colors, H, W)
-    depth = to_depth_image(scene_hit_mask, depths, world_to_camera, rays, H, W)
+    image = to_color_image(scene_hit_mask, scene_colors, height, width)
+    depth = to_depth_image(
+        scene_hit_mask, depths, world_to_camera, rays, height, width
+    )
     return image, depth
 
 
@@ -436,19 +486,19 @@ def select_colors(depths, colors):
     return colors
 
 
-def to_color_image(hit_mask, colors, H, W, background_color=1):
+def to_color_image(hit_mask, colors, height, width, background_color=1):
     image = jp.where(hit_mask, colors.T, background_color)
-    image = image.reshape((3, H, W))
+    image = image.reshape((3, height, width))
     image = jp.clip(image[:], 0, 1)
     image = jp.rollaxis(image, 0, 3)
     return image
 
 
-def to_depth_image(hit_mask, depths, world_to_camera, rays, H, W):
+def to_depth_image(hit_mask, depths, world_to_camera, rays, height, width):
     min_depths = jp.min(jp.array(depths), axis=0)
     world_depths = calculate_world_depth(min_depths, world_to_camera, rays)
     masked_depths = apply_hit_mask_to_depth(hit_mask, world_depths)
-    return reshape_depth_image(masked_depths, H, W)
+    return reshape_depth_image(masked_depths, height, width)
 
 
 def calculate_world_depth(min_depths, world_to_camera, rays):
@@ -461,7 +511,7 @@ def apply_hit_mask_to_depth(hit_mask, depths, faraway=0):
     return jp.where(hit_mask, depths, faraway)
 
 
-def reshape_depth_image(depths, H, W):
-    image = depths.reshape((1, H, W))
+def reshape_depth_image(depths, height, width):
+    image = depths.reshape((1, height, width))
     image = jp.rollaxis(image, 0, 3)
     return image[:, :, 0]
