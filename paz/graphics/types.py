@@ -45,7 +45,7 @@ Material = namedtuple(
         "specular",
         "shininess",
         "reflective",
-        "refractive",
+        "transparency",
         "refractive_index",
     ],
     defaults=(DEFAULT_COLOR, 0.1, 0.9, 0.9, 200.0, 0.0, 0.0, 1.0),
