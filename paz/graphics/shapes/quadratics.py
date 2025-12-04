@@ -1,6 +1,7 @@
 import jax.numpy as jp
 import paz
 
+from paz.graphics.constants import EPSILON
 from paz.graphics.geometry import (
     compute_points3D,
     replace_misses,
@@ -46,7 +47,9 @@ def compute_bounding_mask(points3D, minimum, maximum):
 def bound_depth(depth, origins, directions, valid_mask, minimum, maximum):
     points3D = compute_points3D(origins, directions, depth)
     bounding_mask = compute_bounding_mask(points3D, minimum, maximum)
-    bounding_mask = jp.logical_and(valid_mask, bounding_mask)
+    # bounding_mask = jp.logical_and(valid_mask, bounding_mask)
+    valid_depth_mask = jp.logical_and(valid_mask, depth > EPSILON)
+    bounding_mask = jp.logical_and(valid_depth_mask, bounding_mask)
     bounded_depth = replace_misses(depth, bounding_mask)
     return bounding_mask, bounded_depth
 
