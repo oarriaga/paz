@@ -52,9 +52,9 @@ sphere_pose = SE3.translation(jp.array([-1.5, 1.0, 0.0]))
 sphere = Shape(sphere_pose, SPHERE, mirror_material)
 
 cube_pose = SE3.translation(jp.array([1.5, 1.0, 0.0]))
-cube = Shape(cube_pose, CUBE, glass_material)
-# cube_pose = SE3.translation(jp.array([1.5, 1.0, 0.0]))
-# cube = paz.graphics.Cone(cube_pose, glass_material)
+cube = Shape(cube_pose, CONE, glass_material)
+cube_pose = SE3.translation(jp.array([1.5, 1.0, 0.0]))
+cube = paz.graphics.Cylinder(cube_pose, glass_material)
 
 wall_pose = SE3.translation(jp.array([0.0, 2.0, -4.0])) @ SE3.rotation_x(
     jp.pi / 2
