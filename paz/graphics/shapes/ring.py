@@ -1,5 +1,6 @@
 import jax.numpy as jp
 
+from paz.graphics.constants import EPSILON
 from paz.graphics.geometry import (
     replace_misses,
     compute_points3D,
@@ -33,8 +34,13 @@ def intersect_canonical_ring(ray_origins, ray_directions, minimum, maximum):
     args = (ray_origins, ray_directions, minimum, maximum)
     finite_ring_mask_A = bound_infinite_ring(infinite_ring_depth_A, *args)
     finite_ring_mask_B = bound_infinite_ring(infinite_ring_depth_B, *args)
-    finite_ring_mask_A = jp.logical_and(valid_mask, finite_ring_mask_A)
-    finite_ring_mask_B = jp.logical_and(valid_mask, finite_ring_mask_B)
+
+    valid_A = jp.logical_and(valid_mask, infinite_ring_depth_A > EPSILON)
+    valid_B = jp.logical_and(valid_mask, infinite_ring_depth_B > EPSILON)
+
+    finite_ring_mask_A = jp.logical_and(valid_A, finite_ring_mask_A)
+    finite_ring_mask_B = jp.logical_and(valid_B, finite_ring_mask_B)
+
     ring_depth_A = replace_misses(infinite_ring_depth_A, finite_ring_mask_A)
     ring_depth_B = replace_misses(infinite_ring_depth_B, finite_ring_mask_B)
     sorted_depths = jp.hstack([ring_depth_A, ring_depth_B])  # TODO SORT
