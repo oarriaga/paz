@@ -46,6 +46,31 @@ glass_material = paz.graphics.Material(
     refractive_index=1.5,
 )
 
+mirror_material = paz.graphics.Material(
+    color=jp.array([0.0, 0.0, 0.0]),
+    ambient=0.0,
+    diffuse=0.0,
+    specular=1.0,
+    shininess=300.0,
+    reflective=1.0,
+    transparency=0.0,
+    refractive_index=1.0,
+)
+
+clear_glass_material = paz.graphics.Material(
+    color=jp.array([0.0, 0.0, 0.0]),  # Black: Don't add surface pigment
+    ambient=0.0,  # 0.0: No background glow
+    diffuse=0.0,  # 0.0: No "chalky" scattering
+    specular=1.0,  # 1.0: Sharp, bright highlights from lights
+    shininess=300.0,  # 300+: Very tight, small highlights
+    reflective=1.0,  # 1.0: Let the Fresnel effect control reflection
+    transparency=1.0,  # 1.0: Fully transparent
+    refractive_index=1.0,  # 1.5: Glass (causes the bending/lensing)
+)
+
+
+shape_material = clear_glass_material
+
 # Cornell Box Materials
 white_wall_material = paz.graphics.Material(
     color=jp.array([0.73, 0.73, 0.73]),
@@ -130,7 +155,7 @@ right_wall = paz.graphics.Plane(
 shape_sphere = paz.graphics.Sphere(
     paz.SE3.translation(jp.array([-2.0, 1.5, -2.0]))
     @ paz.SE3.scaling(jp.full(3, 1.5)),
-    glass_material,
+    shape_material,
 )
 
 # Cube
@@ -138,21 +163,21 @@ shape_cube = paz.graphics.Cube(
     paz.SE3.translation(jp.array([2.0, 1.5, -2.0]))
     @ paz.SE3.rotation_y(jp.pi / 6)
     @ paz.SE3.scaling(jp.full(3, 1.5)),
-    glass_material,
+    shape_material,
 )
 
 # Cylinder
 shape_cylinder = paz.graphics.Cylinder(
     paz.SE3.translation(jp.array([-2.0, 1.5, 2.0]))
     @ paz.SE3.scaling(jp.full(3, 1.0)),
-    glass_material,
+    shape_material,
 )
 
 # Cone
 shape_cone = paz.graphics.Cone(
     paz.SE3.translation(jp.array([2.0, 1.5, 2.0]))
     @ paz.SE3.scaling(jp.full(3, 1.5)),
-    glass_material,
+    shape_material,
 )
 
 scene_objects = [
