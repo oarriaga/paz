@@ -102,7 +102,6 @@ def intersect(shape, ray_origins, ray_directions):
     # postprocess normals
     eyes = compute_eyes(ray_directions)
     world_normals = invert_inside_normals(eyes, world_normals)
-    world_points = move_toward_normals(world_points, world_normals)
     return hit_mask, depth, world_points, world_normals, eyes
 
 
@@ -118,7 +117,6 @@ def intersect_all(shape, ray_origins, ray_directions):
     world_normals = paz.algebra.normalize(world_normals)
     eyes = compute_eyes(ray_directions)
     world_normals = invert_inside_normals(eyes, world_normals)
-    world_points = move_toward_normals(world_points, world_normals)
     return hit_mask, depths, world_points, world_normals, eyes
 
 
@@ -132,10 +130,6 @@ def invert_inside_normals(eyes, normals):
     inside_mask = jp.expand_dims(inside_mask, 1)
     normals = jp.where(inside_mask, -normals, normals)
     return normals
-
-
-def move_toward_normals(points, normals):
-    return points + (normals * EPSILON)  # fix pattern noise
 
 
 def group_by_pattern_size(shapes_list):
