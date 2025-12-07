@@ -47,7 +47,7 @@ def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
     state["active_mask"] &= closest["hit_mask"]
 
     if shadows:
-        colors = color_with_shadows(rays, shapes, lights, closest_args, mask, shadow_mask, closest["point"])  # fmt: skip
+        colors = color_with_shadows(rays, shapes, lights, closest_args, mask, shadow_mask, closest["point"], points, normals, eyes,)  # fmt: skip
     else:
         colors = color_without_shadows(lights, shapes, points, normals, eyes, closest_args)  # fmt: skip
     return update_state(state, shapes, closest, colors)
@@ -128,34 +128,31 @@ def color_without_shadows(lights, shapes, points, normals, eyes, closest_args):
     return take_closest(jp.concatenate(colors, axis=0), closest_args)
 
 
-def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, points):  # fmt: skip
+def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest_point, points, normals, eyes):  # fmt: skip
     transparencies = jp.array([shape.material.transparency for shape in shapes])
 
     def compute_light_colors(light):
-        light_directions, distance = compute_light_directions(light, points)
-        intersections = intersect_groups(shapes, points, light_directions)
+        light_directions, distance = compute_light_directions(light, closest_point)  # fmt: skip
+        intersections = intersect_groups(shapes, closest_point, light_directions)  # fmt:skip
         hit_masks, depths, _, _, _, _indices = intersections
         shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, _indices, transparencies)  # fmt: skip
         is_shadow = calculate_occlusion(shadow_masks, depths, distance)
-        _, _, colors = render_shapes(shapes, [light], rays, is_shadow)  # TODO
+        colors = compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow)  # fmt: skip
         return take_closest(colors, indices)
-
-    def resolve_shadow_masks(mask, shadow_mask, hit_masks, indices, transparencies): # fmt: skip
-        # shadow_masks, indices = intersections[0], intersections[5]
-        shadow_masks = jp.where(jp.expand_dims(mask[indices], 1), hit_masks, False)  # fmt: skip
-        # ignore shadows if occluding object is transparent
-        is_transparent = transparencies[indices] > 0.0
-        shadow_masks = jp.where(jp.expand_dims(is_transparent, 1), False, shadow_masks) # fmt: skip
-
-        if shadow_mask is not None:
-            cast_mask = jp.expand_dims(shadow_mask[indices], 1)
-            shadow_masks = jp.where(cast_mask, shadow_masks, False)
-        return shadow_masks
 
     def compute_light_directions(light, points):
         vector = light.position - points
         norm = paz.algebra.compute_norms(vector, 1)
         return vector / norm, jp.squeeze(norm, axis=1)
+
+    def resolve_shadow_masks(mask, shadow_mask, hit_masks, indices, transparencies): # fmt: skip
+        shadow_masks = jp.where(jp.expand_dims(mask[indices], 1), hit_masks, False)  # fmt: skip
+        is_transparent = transparencies[indices] > 0.0  # ignore if transparent
+        shadow_masks = jp.where(jp.expand_dims(is_transparent, 1), False, shadow_masks) # fmt: skip
+        if shadow_mask is not None:
+            cast_mask = jp.expand_dims(shadow_mask[indices], 1)
+            shadow_masks = jp.where(cast_mask, shadow_masks, False)
+        return shadow_masks
 
     def calculate_occlusion(masks, depths, light_length):
         scene_hit_mask = compute_scene_hit_mask(masks)
@@ -164,40 +161,26 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, points)
         is_shadow = jp.logical_and(scene_hit_mask, light_length > closest_depth)
         return is_shadow
 
-    colors = jp.zeros((len(rays[0]), 3))
+    def compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow):  # fmt: skip
+
+        def split(points, normal, eyes, arg_0, arg_1):
+            return points[arg_0:arg_1], normals[arg_0:arg_1], eyes[arg_0:arg_1]
+
+        colors, start_arg = [], 0
+        for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
+            final_arg = start_arg + len(group)
+            group = paz.graphics.shapes.merge(*group)
+            data = split(points, normals, eyes, start_arg, final_arg)
+            args, axes = (group, group.material, *data), ( 0, 0, 0, 0, 0, None, None)  # fmt: skip
+            color = jax.vmap(paz.graphics.phong.compute_colors_with_shadow, axes)  # fmt: skip
+            colors.append(color(*args, light, is_shadow))
+            start_arg = final_arg
+        return jp.concatenate(colors, axis=0)
+
+    colors = jp.zeros((len(points[0]), 3))
     for light in lights:
         colors = colors + compute_light_colors(light)
     return colors
-
-
-def render_shapes(shapes, lights, rays, shadow_mask):
-
-    def render_shape(shape, lights, rays, shadow_mask):
-        intersections = paz.graphics.shapes.intersect(shape, *rays)
-        hit_mask, depth, points, normals, eyes = intersections
-        args = (shape, lights, points, normals, eyes, shadow_mask)
-        colors = compute_scene_colors(*args)
-        return hit_mask, depth, colors
-
-    def compute_scene_colors(shape, lights, points, normals, eyes, shadow_mask):
-        arg = (shape, shape.material, points, normals, eyes)
-        color = paz.partial(paz.graphics.phong.compute_colors_with_shadow, *arg)
-        scene_colors = jp.array([color(light, shadow_mask) for light in lights])
-        return jp.sum(scene_colors, axis=0)
-
-    hit_masks, depths, colors = [], [], []
-    grouped_shapes = paz.graphics.shapes.group_by_pattern_size(shapes)
-    render_shapes = jax.vmap(paz.lock(render_shape, lights, rays, shadow_mask))
-    for image_size, shape_group in grouped_shapes.items():
-        shape_group = paz.graphics.shapes.merge(*shape_group)
-        group_hit_masks, group_depths, group_colors = render_shapes(shape_group)
-        hit_masks.append(group_hit_masks)
-        depths.append(group_depths)
-        colors.append(group_colors)
-    hit_masks = jp.concatenate(hit_masks, axis=0)
-    depths = jp.concatenate(depths, axis=0)
-    colors = jp.concatenate(colors, axis=0)
-    return hit_masks, depths, colors
 
 
 def update_state(state, shapes, closest, local_color):

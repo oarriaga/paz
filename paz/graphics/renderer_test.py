@@ -346,7 +346,7 @@ def test_max_bounces_effect(small_image_shape, camera_pose, rays):
         mask_c,
         False,
         None,
-        max_bounces=1,
+        num_bounces=1,
     )
     img_2b, _ = renderer.render_bounced(
         *small_image_shape,
@@ -357,7 +357,7 @@ def test_max_bounces_effect(small_image_shape, camera_pose, rays):
         mask_c,
         False,
         None,
-        max_bounces=2,
+        num_bounces=2,
     )
     assert not jp.array_equal(img_1b, img_2b)
     assert not jp.all(img_1b == 1.0)
