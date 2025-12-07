@@ -70,7 +70,8 @@ clear_glass_material = paz.graphics.Material(
 )
 
 
-shape_material = mirror_material
+# shape_material = mirror_material
+shape_material = glass_material
 
 # Cornell Box Materials
 white_wall_material = paz.graphics.Material(
@@ -176,7 +177,8 @@ shape_cylinder = paz.graphics.Cylinder(
 
 # Cone
 shape_cone = paz.graphics.Cone(
-    paz.SE3.translation(jp.array([2.0, 1.50, 2.0]))
+    # paz.SE3.translation(jp.array([2.0, 1.50, 2.0]))
+    paz.SE3.translation(jp.array([2.0, 1.51, 2.0]))
     @ paz.SE3.scaling(jp.full(3, 1.5)),
     shape_material,
 )
@@ -211,7 +213,7 @@ lights = [
         jp.ones(3) * 0.8, jp.array([0.0, BOX_SIZE - 1.0, 0.0])
     ),
     # Optional fill light
-    paz.graphics.PointLight(jp.ones(3) * 0.2, jp.array([0.0, HALF_SIZE, 10.0])),
+    # paz.graphics.PointLight(jp.ones(3) * 0.2, jp.array([0.0, HALF_SIZE, 10.0])),
 ]
 
 H, W = 1024 // 2, 1024 // 2
