@@ -57,9 +57,7 @@ def show(scene):
 
     print("\n" + "=" * 50)
     BOLD, YELLOW, RESET = "\033[1m", "\033[93m", "\033[0m"
-    print(
-        f"      SCENE HIERARCHY ({BOLD}{YELLOW}Total Shapes:{RESET} {total_nodes})"
-    )
+    print(f"      SCENE HIERARCHY ({BOLD}{YELLOW}Total Shapes:{RESET} {total_nodes})")  # fmt: skip
     print("=" * 50)
     for line in all_lines:
         print(line)
@@ -126,6 +124,13 @@ def flatten_scene(scene):
     for node in scene.nodes:
         flat_scene.extend(flatten(node, jp.eye(4)))
     return flat_scene
+
+
+def compute_bounces(shapes):
+    for shape in shapes:
+        if shape.material.reflective > 0.0 or shape.material.transparency > 0.0:
+            return 5
+    return 1
 
 
 def compile(scene, lights, mask):

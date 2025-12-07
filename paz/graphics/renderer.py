@@ -3,19 +3,19 @@ import paz
 import jax
 
 
-def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None):  # fmt: skip
-    shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)
+def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None, num_bounces=1):  # fmt: skip
+    shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)  # fmt:skip
     if shadows and shadow_mask is not None:
         shadow_mask_args = (shadow_mask, len(shapes), scene)
         shadow_mask = paz.graphics.scene.prepare_mask(*shadow_mask_args)
-    args = (world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask)
+    args = (world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, num_bounces)  # fmt: skip
     return render_bounced(*image_shape, *args)
 
 
-def render_bounced(H, W, world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, max_bounces=5):  # fmt: skip
+def render_bounced(H, W, world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, num_bounces):  # fmt: skip
     state = initialize_state(rays)
     bounce = paz.lock(bounce_step, shapes, lights, mask, shadows, shadow_mask)
-    for step_arg in range(max_bounces):
+    for step_arg in range(num_bounces):
         state = bounce(state, step_arg)
     hit_mask, depth, color = state["hit_mask"], state["depth"], state["color"]
     return postprocess(hit_mask, depth, color, world_to_camera, rays, H, W)
@@ -33,17 +33,6 @@ def initialize_state(rays):
         "current_origins": rays[0],
         "current_directions": rays[1],
     }
-
-
-def color_without_shadows(lights, shapes, points, normals, eyes, closest_args):
-    # this requires grouping and computing colors individually.
-    shapes = paz.graphics.shapes.merge(*shapes)
-    args = (shapes, shapes.material, points, normals, eyes)
-    color = jax.vmap(paz.graphics.phong.compute_colors, in_axes=(0, 0, 0, 0, 0, None))  # fmt: skip
-    color_per_light = jp.array([color(*args, light) for light in lights])
-    colors = jp.sum(color_per_light, axis=0)
-    colors = take_closest(colors, closest_args)
-    return colors
 
 
 def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
@@ -119,6 +108,24 @@ def gather_closest(closest_args, hit_masks, depths, points, normals, indices, ey
         "normal": take_closest(normals, closest_args),
         "shape_idx": indices[closest_args],
     }
+
+
+def color_without_shadows(lights, shapes, points, normals, eyes, closest_args):
+
+    def split(points, normal, eyes, arg_0, arg_1):
+        return points[arg_0:arg_1], normals[arg_0:arg_1], eyes[arg_0:arg_1]
+
+    colors, start_arg = [], 0
+    for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
+        final_arg = start_arg + len(group)
+        group = paz.graphics.shapes.merge(*group)
+        data = split(points, normals, eyes, start_arg, final_arg)
+        args, axes = (group, group.material, *data), (0, 0, 0, 0, 0, None)
+        color = jax.vmap(paz.graphics.phong.compute_colors, axes)
+        color_per_light = jp.array([color(*args, light) for light in lights])
+        colors.append(jp.sum(color_per_light, axis=0))
+        start_arg = final_arg
+    return take_closest(jp.concatenate(colors, axis=0), closest_args)
 
 
 def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, points):  # fmt: skip

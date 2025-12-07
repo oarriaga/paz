@@ -77,7 +77,7 @@ def build_material(data):
         specular=data["specular"],
         shininess=data["shininess"],
         reflective=data["reflective"],
-        refractive=data["refractive"],
+        transparency=data["transparency"],
         refractive_index=data["refractive_index"],
     )
 

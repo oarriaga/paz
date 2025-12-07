@@ -97,7 +97,7 @@ for key in jax.random.split(key, 3):
     image, depth = render(scene=scene, mask=mask)
     paz.image.show(paz.image.denormalize(image))
 
-paz.graphics.viewer(scene, camera_pose, True)
+paz.graphics.viewer(scene, camera_pose, False)
 
 # _scene, _lights, _mask = paz.graphics.scene.compile(scene, lights, None)
 

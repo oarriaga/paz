@@ -229,6 +229,7 @@ render = jax.jit(
         lights=lights,
         shadows=True,
         # shadows=False,
+        num_bounces=5,
     )
 )
 
@@ -241,4 +242,4 @@ paz.image.show(image)
 paz.image.write("cornell_box_mirror.png", image)
 
 # Interactive Viewer
-paz.graphics.viewer(scene, camera_pose, False, lights)
+paz.graphics.viewer(scene, camera_pose, True, lights)

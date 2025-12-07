@@ -42,6 +42,7 @@ def viewer(
 
     scene, light, mask = paz.graphics.scene.compile(scene, light, mask=None)
     identity_rays = paz.graphics.camera.build_rays((H, W), y_FOV, jp.eye(4))
+    num_bounces = paz.graphics.scene.compute_bounces(scene)
 
     # --- Setup Renderer ---
     def render_core(
@@ -62,7 +63,7 @@ def viewer(
             mask_data,
             shadows,
             None,
-            5,
+            num_bounces,
         )
         return paz.graphics.renderer.render_bounced(*args)
 

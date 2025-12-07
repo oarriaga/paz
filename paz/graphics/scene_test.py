@@ -69,14 +69,14 @@ def shape_default(material):
 def test_group_by_size_with_empty_list():
     """Tests that an empty list of shapes results in an empty dictionary."""
     shapes_list = []
-    result = paz.graphics.scene.group_shapes_by_pattern_image_size(shapes_list)
+    result = paz.graphics.shapes.group_by_pattern_size(shapes_list)
     assert result == {}
 
 
 def test_group_by_size_with_homogenous_list(shape_256_A, shape_256_B):
     """Tests grouping a list where all shapes have the same image size."""
     shapes_list = [shape_256_A, shape_256_B]
-    result = paz.graphics.scene.group_shapes_by_pattern_image_size(shapes_list)
+    result = paz.graphics.shapes.group_by_pattern_size(shapes_list)
 
     assert len(result) == 1
     assert (256, 256) in result
@@ -92,7 +92,7 @@ def test_group_by_size_with_homogenous_list(shape_256_A, shape_256_B):
 def test_group_by_size_with_heterogeneous_list(shape_256_A, shape_512):
     """Tests grouping a list with two different image sizes."""
     shapes_list = [shape_256_A, shape_512]
-    result = paz.graphics.scene.group_shapes_by_pattern_image_size(shapes_list)
+    result = paz.graphics.shapes.group_by_pattern_size(shapes_list)
 
     assert len(result) == 2
     assert (256, 256) in result
@@ -104,7 +104,7 @@ def test_group_by_size_with_heterogeneous_list(shape_256_A, shape_512):
 def test_group_by_size_with_default_pattern(shape_default):
     """shapes with default patterns are grouped correctly by size (1, 1)."""
     shapes_list = [shape_default]
-    result = paz.graphics.scene.group_shapes_by_pattern_image_size(shapes_list)
+    result = paz.graphics.shapes.group_by_pattern_size(shapes_list)
 
     assert len(result) == 1
     assert (1, 1) in result
@@ -116,7 +116,7 @@ def test_group_by_size_with_complex_mixed_list(
 ):
     """Tests a complex mix of shapes with different and shared image sizes."""
     shapes_list = [shape_256_A, shape_512, shape_default, shape_256_B]
-    result = paz.graphics.scene.group_shapes_by_pattern_image_size(shapes_list)
+    result = paz.graphics.shapes.group_by_pattern_size(shapes_list)
 
     assert len(result) == 3
     assert (256, 256) in result
@@ -134,3 +134,31 @@ def test_group_by_size_with_complex_mixed_list(
     assert group_256[1] is shape_256_B
     assert result[(512, 512)][0] is shape_512
     assert result[(1, 1)][0] is shape_default
+
+
+def test_compute_bounces_default(shape_256_A):
+    """Tests that compute_bounces returns 1 for default materials."""
+    shapes = [shape_256_A]
+    assert paz.graphics.scene.compute_bounces(shapes) == 1
+
+
+def test_compute_bounces_reflective():
+    """Tests that compute_bounces returns 5 for reflective materials."""
+    material = Material(reflective=0.5)
+    shape = Shape(jp.eye(4), paz.graphics.SPHERE, material)
+    assert paz.graphics.scene.compute_bounces([shape]) == 5
+
+
+def test_compute_bounces_transparent():
+    """Tests that compute_bounces returns 5 for transparent materials."""
+    material = Material(transparency=0.5)
+    shape = Shape(jp.eye(4), paz.graphics.SPHERE, material)
+    assert paz.graphics.scene.compute_bounces([shape]) == 5
+
+
+def test_compute_bounces_mixed(shape_256_A):
+    """Tests that compute_bounces returns 5 if any material is reflective or transparent."""
+    material_ref = Material(reflective=0.5)
+    shape_ref = Shape(jp.eye(4), paz.graphics.SPHERE, material_ref)
+    shapes = [shape_256_A, shape_ref]
+    assert paz.graphics.scene.compute_bounces(shapes) == 5

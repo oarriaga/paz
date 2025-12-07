@@ -27,7 +27,7 @@ def sample_material():
         color=jp.array([1.0, 0.5, 0.0]),
         ambient=0.2,
         reflective=0.5,
-        refractive=0.8,
+        transparency=0.8,
         refractive_index=1.33,
     )
 
