@@ -64,7 +64,7 @@ def viewer(
             None,
             5,
         )
-        return paz.graphics.renderer._render_bounced(*args)
+        return paz.graphics.renderer.render_bounced(*args)
 
     @jax.jit
     def render_frame(pose_matrix):

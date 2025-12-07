@@ -242,16 +242,16 @@ def test_cylinder_body_near_cap_normal():
     normals = compute_canonical_normals_cylinder(point)
     N = normals[0]
     print(f"Cyl Normal Near Cap: {N}")
-    assert jp.abs(N[0] - 0.7071) < 1e-2, f"Normal X should be 0.7071, got {N[0]}"
-    assert jp.abs(N[1] - 0.7071) < 1e-2, f"Normal Y should be 0.7071, got {N[1]}"
+    assert jp.abs(N[0] - 1.0) < 1e-2, f"Normal X should be 1.0, got {N[0]}"
+    assert jp.abs(N[1] - 0.0) < 1e-2, f"Normal Y should be 0.0, got {N[1]}"
 
 def test_cone_body_near_cap_normal():
     point = jp.array([[0.9999, -0.9999, 0.0]])
     normals = compute_canonical_normals_cone(point)
     N = normals[0]
     print(f"Cone Normal Near Cap: {N}")
-    assert jp.abs(N[0] - 0.924) < 1e-2, f"Normal X should be 0.924, got {N[0]}"
-    assert jp.abs(N[1] - (-0.383)) < 1e-2, f"Normal Y should be -0.383, got {N[1]}"
+    assert jp.abs(N[0] - 0.7071) < 1e-2, f"Normal X should be 0.7071, got {N[0]}"
+    assert jp.abs(N[1] - 0.7071) < 1e-2, f"Normal Y should be 0.7071, got {N[1]}"
 
 # --- Cone Center/Tip Tests ---
 

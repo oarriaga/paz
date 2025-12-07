@@ -1,6 +1,6 @@
 import jax.numpy as jp
 import paz
-from paz.graphics.constants import FARAWAY
+from paz.graphics.constants import FARAWAY, EPSILON
 
 
 def compute_quadratic_is_hit(depths_A, depths_B, is_valid):
@@ -17,7 +17,7 @@ def compute_quadratic_is_hit(depths_A, depths_B, is_valid):
     # Notes
         TODO: check if it should not be >= instead of just >
     """
-    is_positive = jp.logical_or(depths_A > 0, depths_B > 0)
+    is_positive = jp.logical_or(depths_A > EPSILON, depths_B > EPSILON)
     is_hit = jp.logical_and(is_valid, is_positive)
     return is_hit
 
@@ -47,7 +47,7 @@ def compute_quadratic_depths(depths_A, depths_B):
     # Returns
         depth: Array
     """
-    choose_A = jp.logical_and((depths_A > 0), (depths_A < depths_B))
+    choose_A = jp.logical_and((depths_A > EPSILON), (depths_A < depths_B))
     depth = jp.where(choose_A, depths_A, depths_B)
     return depth
 

@@ -1,3 +1,4 @@
+# shadows (262144, 3)
 import os
 
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".90"
@@ -49,7 +50,7 @@ glass_material = paz.graphics.Material(
 mirror_material = paz.graphics.Material(
     color=jp.array([0.0, 0.0, 0.0]),
     ambient=0.0,
-    diffuse=0.0,
+    diffuse=0.8,
     specular=1.0,
     shininess=300.0,
     reflective=1.0,
@@ -69,15 +70,15 @@ clear_glass_material = paz.graphics.Material(
 )
 
 
-shape_material = clear_glass_material
+shape_material = mirror_material
 
 # Cornell Box Materials
 white_wall_material = paz.graphics.Material(
-    color=jp.array([0.73, 0.73, 0.73]),
-    ambient=0.1,
+    color=0.8 * jp.array([0.73, 0.73, 0.73]),
+    ambient=0.3,
     diffuse=0.9,
     specular=0.0,
-    shininess=10.0,
+    shininess=0.0,
 )
 
 red_wall_material = paz.graphics.Material(
@@ -168,14 +169,14 @@ shape_cube = paz.graphics.Cube(
 
 # Cylinder
 shape_cylinder = paz.graphics.Cylinder(
-    paz.SE3.translation(jp.array([-2.0, 1.5, 2.0]))
+    paz.SE3.translation(jp.array([-2.0, 1.0, 2.0]))
     @ paz.SE3.scaling(jp.full(3, 1.0)),
     shape_material,
 )
 
 # Cone
 shape_cone = paz.graphics.Cone(
-    paz.SE3.translation(jp.array([2.0, 1.5, 2.0]))
+    paz.SE3.translation(jp.array([2.0, 1.50, 2.0]))
     @ paz.SE3.scaling(jp.full(3, 1.5)),
     shape_material,
 )
@@ -210,7 +211,7 @@ lights = [
         jp.ones(3) * 0.8, jp.array([0.0, BOX_SIZE - 1.0, 0.0])
     ),
     # Optional fill light
-    # paz.graphics.PointLight(jp.ones(3) * 0.2, jp.array([0.0, HALF_SIZE, 10.0])),
+    paz.graphics.PointLight(jp.ones(3) * 0.2, jp.array([0.0, HALF_SIZE, 10.0])),
 ]
 
 H, W = 1024 // 2, 1024 // 2
@@ -227,6 +228,7 @@ render = jax.jit(
         rays=rays,
         lights=lights,
         shadows=True,
+        # shadows=False,
     )
 )
 
@@ -236,7 +238,7 @@ print(
 image, depth = render(scene=scene, mask=None)
 image = paz.image.denormalize(image)
 paz.image.show(image)
-paz.image.write("cornell_box_glass.png", image)
+paz.image.write("cornell_box_mirror.png", image)
 
 # Interactive Viewer
-paz.graphics.viewer(scene, camera_pose, True)
+paz.graphics.viewer(scene, camera_pose, False, lights)
