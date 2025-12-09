@@ -44,7 +44,7 @@ render = jax.jit(
         world_to_camera=camera_pose,
         rays=rays,
         lights=lights,
-        shadows=True,
+        shadows=False,
     )
 )
 
