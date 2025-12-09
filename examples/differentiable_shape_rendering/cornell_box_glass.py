@@ -69,9 +69,21 @@ clear_glass_material = paz.graphics.Material(
     refractive_index=1.0,  # 1.5: Glass (causes the bending/lensing)
 )
 
+gold_material = paz.graphics.Material(
+    color=jp.array([1.0, 0.77, 0.34]),
+    ambient=0.3,
+    diffuse=0.3,
+    specular=1.0,
+    shininess=200.0,
+    reflective=0.7,
+    transparency=0.0,
+    refractive_index=1.0,
+)
+
 
 # shape_material = mirror_material
-shape_material = glass_material
+# shape_material = glass_material
+shape_material = gold_material
 
 # Cornell Box Materials
 white_wall_material = paz.graphics.Material(
