@@ -1,10 +1,12 @@
+# TODO consider that the acne could be inside the renderer
+# i.e. rays from scene to lights being tiny (floor hitting base).
 import jax.numpy as jp
 import paz
 import jax
 
 
 def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None, num_bounces=1):  # fmt: skip
-    shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)  # fmt:skip
+    shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)
     if shadows and shadow_mask is not None:
         shadow_mask_args = (shadow_mask, len(shapes), scene)
         shadow_mask = paz.graphics.scene.prepare_mask(*shadow_mask_args)
@@ -39,15 +41,15 @@ def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
     rays = (state["current_origins"], state["current_directions"])
     intersections = intersect(shapes, rays, mask)
     hit_masks, depths, points, normals, indices, eyes = intersections
-    closest_args = find_closest_intersection(hit_masks, depths)
-    closest = gather_closest(closest_args, *intersections)
+    closest_args = find_closest_intersection_args(hit_masks, depths)
+    closest = gather_closest(*intersections)
     if bounce == 0:
         state["depth"] = closest["depth"]
         state["hit_mask"] = closest["hit_mask"]
     state["active_mask"] &= closest["hit_mask"]
 
     if shadows:
-        colors = color_with_shadows(rays, shapes, lights, closest_args, mask, shadow_mask, closest["point"], points, normals, eyes,)  # fmt: skip
+        colors = color_with_shadows(rays, shapes, lights, closest_args, mask, shadow_mask, closest["point"], points, normals, eyes)  # fmt: skip
     else:
         colors = color_without_shadows(lights, shapes, points, normals, eyes, closest_args)  # fmt: skip
     return update_state(state, shapes, closest, colors)
@@ -84,7 +86,7 @@ def intersect_groups(shapes, origins, directions):
     return concatenate(intersections)
 
 
-def find_closest_intersection(hit_masks, depths):
+def find_closest_intersection_args(hit_masks, depths):
     if depths.ndim > hit_masks.ndim:
         depths = jp.squeeze(depths, axis=-1)
     depths_masked = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
@@ -100,7 +102,8 @@ def take_closest(candidates, closest_indices):
     return jp.squeeze(selected, axis=0)
 
 
-def gather_closest(closest_args, hit_masks, depths, points, normals, indices, eyes):  # fmt: skip
+def gather_closest(hit_masks, depths, points, normals, indices, eyes):
+    closest_args = find_closest_intersection_args(hit_masks, depths)
     return {
         "hit_mask": take_closest(hit_masks, closest_args),
         "depth": take_closest(depths, closest_args),
@@ -119,6 +122,7 @@ def color_without_shadows(lights, shapes, points, normals, eyes, closest_args):
     for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
         final_arg = start_arg + len(group)
         group = paz.graphics.shapes.merge(*group)
+        print(points.shape, normals.shape, eyes.shape)
         data = split(points, normals, eyes, start_arg, final_arg)
         args, axes = (group, group.material, *data), (0, 0, 0, 0, 0, None)
         color = jax.vmap(paz.graphics.phong.compute_colors, axes)
@@ -188,18 +192,14 @@ def update_state(state, shapes, closest, local_color):
     state = accumulate_local_color(state, local_color, materials)
     computations = _prepare_computations(state, closest, materials)
     reflectance = schlick(computations)
-    next_dir, next_origin = determine_next_bounce(
-        computations, materials, reflectance
-    )
+    next_dir, next_origin = determine_next_bounce(computations, materials, reflectance)  # fmt: skip
     return _apply_bounce_update(state, next_origin, next_dir, computations, materials, reflectance)  # fmt: skip
 
 
 def get_material_properties(shapes, shape_args):
     reflective = jp.array([shape.material.reflective for shape in shapes])
     transparency = jp.array([shape.material.transparency for shape in shapes])
-    refractive_index = jp.array(
-        [shape.material.refractive_index for shape in shapes]
-    )
+    refractive_index = jp.array([shape.material.refractive_index for shape in shapes])  # fmt: skip
     return {
         "reflective": reflective[shape_args],
         "transparency": transparency[shape_args],

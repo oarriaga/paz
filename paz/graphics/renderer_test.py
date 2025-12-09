@@ -81,10 +81,10 @@ def test_initialize_render_state():
     assert state["hit_mask"].dtype == bool
 
 
-def test_find_closest_intersection():
+def test_find_closest_intersection_args():
     hit_masks = jp.array([[True, False], [False, True]])
     depths = jp.array([[1.0, 10.0], [10.0, 2.0]])
-    indices = renderer.find_closest_intersection(hit_masks, depths)
+    indices = renderer.find_closest_intersection_args(hit_masks, depths)
     assert jp.array_equal(indices, jp.array([0, 1]))
 
 
