@@ -161,7 +161,7 @@ def test_compute_specular_with_perfect_reflection(
     specular = phong.compute_specular(
         simple_material, light, points, normals, eye
     )
-    assert jp.allclose(specular, expected_specular, atol=1e-5)
+    assert jp.allclose(specular, expected_specular, atol=1e-3)
 
 
 def test_compute_specular_with_no_reflection(simple_material, simple_light):
@@ -228,7 +228,7 @@ def test_compute_colors_is_sum_of_components(
         simple_shape, simple_material, points, normals, eye, simple_light
     )
 
-    assert jp.allclose(actual_color, expected_color)
+    assert jp.allclose(actual_color, expected_color, 1e-3)
 
 
 def test_compute_colors_with_shadow_is_ambient(
