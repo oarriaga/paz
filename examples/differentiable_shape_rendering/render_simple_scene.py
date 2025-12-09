@@ -21,7 +21,7 @@ grey_material = Material(
     color=jp.array([0.5, 0.5, 0.5]),  # Grey
     ambient=0.1,
     diffuse=0.9,
-    specular=0.1,
+    specular=0.0,
     shininess=50.0,
 )
 
@@ -29,9 +29,8 @@ floor_pose = SE3.rotation_x(jp.pi / 2.0)
 floor_pose = jp.eye(4)
 
 floor = Shape(floor_pose, PLANE, grey_material)
-# cube_rotation = SE3.rotation_z(jp.pi / 4.0)
-cube_pose = SE3.translation(jp.array([0.0, 1.0, 0.0]))
-cube = Shape(cube_pose, CUBE, red_material)
+shape_pose = SE3.translation(jp.array([0.0, 1.0, 0.0]))
+shape = paz.graphics.Sphere(shape_pose, red_material)
 
 
 camera_pose = SE3.view_transform(
@@ -43,7 +42,7 @@ camera_pose = SE3.view_transform(
 lights = [
     PointLight(
         jp.array([1.0, 1.0, 1.0]),
-        jp.array([-5.0, 5.0, -5.0]),
+        jp.array([-5.0, 5.0, 5.0]),
     )
 ]
 
@@ -55,7 +54,7 @@ image, depth = render(
     (H, W),
     camera_pose,
     rays,
-    paz.graphics.Scene([floor, cube]),
+    paz.graphics.Scene([floor, shape]),
     lights,
     None,
     False,
