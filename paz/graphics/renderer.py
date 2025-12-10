@@ -187,8 +187,8 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
 
 def update_state(state, shapes, closest, local_color):
     reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
-    state = accumulate_local_color(state, local_color, reflectivities, transparencies)  # fmt:skip
-    computations = _prepare_computations(state, closest, refractivities)  # fmt: skip
+    state["color"] = accumulate_local_color(state["color"], state["throughput"], state["active_mask"], local_color, reflectivities, transparencies)  # fmt:skip
+    computations = _prepare_computations(state["current_directions"], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
     reflectance = schlick(computations)
     next_dir, next_origin = determine_next_bounce(computations, transparencies, reflectance)  # fmt: skip
     return _apply_bounce_update(state, next_origin, next_dir, computations, reflectivities, transparencies, reflectance)  # fmt: skip
@@ -206,16 +206,15 @@ def get_material_properties(shapes, hit_shape_args):
     return reflectivities, transparencies, refractivities
 
 
-def accumulate_local_color(state, local_color, reflectivities, transparancies):
+def accumulate_local_color(color, throughput, active_mask, local_color, reflectivities, transparancies):  # fmt: skip
     weight = jp.maximum(1.0 - reflectivities - transparancies, 0.0)
     contribution = local_color * jp.expand_dims(weight, -1)
-    state["color"] += ( state["throughput"] * contribution * jp.expand_dims(state["active_mask"], -1))  # fmt: skip
-    return state
+    return color + (throughput * contribution * jp.expand_dims(active_mask, -1))
 
 
-def _prepare_computations(state, closest, refractive_indices):
-    eyev = -state["current_directions"]
-    normalv = closest["normal"]
+def _prepare_computations(current_directions, current_refractive_index, closest_point, closest_normal, refractive_indices):   # fmt: skip
+    eyev = -current_directions
+    normalv = closest_normal
 
     # Check if we are hitting the surface from the inside
     dot = jp.sum(normalv * eyev, axis=-1)
@@ -224,7 +223,7 @@ def _prepare_computations(state, closest, refractive_indices):
     # Flip normal if inside so it points against the ray
     normalv = jp.where(jp.expand_dims(inside, -1), -normalv, normalv)
 
-    n1 = state["current_refractive_index"]
+    n1 = current_refractive_index
 
     # FIX:
     # If entering (inside=False), n2 is material's index.
@@ -233,8 +232,8 @@ def _prepare_computations(state, closest, refractive_indices):
 
     n_ratio = n1 / n2
 
-    upper_point = closest["point"] + normalv * (paz.graphics.EPSILON / 2.0)
-    lower_point = closest["point"] - normalv * (paz.graphics.EPSILON / 2.0)
+    upper_point = closest_point + normalv * (paz.graphics.EPSILON / 2.0)
+    lower_point = closest_point - normalv * (paz.graphics.EPSILON / 2.0)
     return {
         "eyev": eyev,
         "normalv": normalv,
