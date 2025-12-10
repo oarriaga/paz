@@ -34,6 +34,7 @@ lights = [
     paz.graphics.PointLight(jp.ones(3) / 5, jp.array([5.0, 4.0, -8.0])),
 ]
 
+# H, W = 8, 8
 H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
@@ -47,6 +48,16 @@ render = jax.jit(
         shadows=False,
     )
 )
+
+# render = paz.partial(
+#     paz.graphics.render,
+#     image_shape=(H, W),
+#     world_to_camera=camera_pose,
+#     rays=rays,
+#     lights=lights,
+#     shadows=False,
+# )
+
 
 checkered_image = CheckeredImage()
 spherical_pattern = paz.graphics.SphericalPattern(checkered_image)
