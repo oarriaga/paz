@@ -141,7 +141,7 @@ def sort_by_group(shapes, mask, shadow_mask):
         sorted_shapes.extend(group)
     ID_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
     order = jp.array([ID_to_arg[id(shape)] for shape in sorted_shapes])
-    
+
     mask = mask[order]
     if shadow_mask is not None:
         shadow_mask = shadow_mask[order]
@@ -152,7 +152,7 @@ def compile(scene, lights, mask, shadow_mask=None):
     flat_scene = flatten_scene(scene)
     lights = prepare_lights(lights)
     mask = prepare_mask(mask, len(flat_scene), scene)
-    
+
     if shadow_mask is not None:
         shadow_mask = prepare_mask(shadow_mask, len(flat_scene), scene)
 
