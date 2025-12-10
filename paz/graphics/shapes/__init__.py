@@ -1,3 +1,4 @@
+from collections import namedtuple
 from collections import defaultdict
 import jax
 import paz
@@ -35,6 +36,15 @@ normal_cases = [
     compute_canonical_normals_cone,
     compute_canonical_normals_plane,
 ]
+
+
+def field_merge(list_of_shapes, fields):
+    ShapeSubset = namedtuple("FieldMerge", fields)
+    merged_data = {}
+    for field in fields:
+        values = [getattr(shape, field) for shape in list_of_shapes]
+        merged_data[field] = jp.stack(values)
+    return ShapeSubset(**merged_data)
 
 
 def _merge(*leafs):

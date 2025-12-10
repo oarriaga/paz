@@ -3,14 +3,10 @@
 import jax.numpy as jp
 import paz
 import jax
-from paz.graphics.types import Shape, Material, Pattern
 
 
 def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None, num_bounces=1):  # fmt: skip
-    shapes, lights, mask = paz.graphics.scene.compile(scene, lights, mask)
-    if shadows and shadow_mask is not None:
-        shadow_mask_args = (shadow_mask, len(shapes), scene)
-        shadow_mask = paz.graphics.scene.prepare_mask(*shadow_mask_args)
+    shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(scene, lights, mask, shadow_mask)  # fmt:skip
     args = (world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, num_bounces)  # fmt: skip
     return render_bounced(*image_shape, *args)
 
@@ -52,40 +48,21 @@ def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
     if shadows:
         colors = color_with_shadows(rays, shapes, lights, closest_args, mask, shadow_mask, closest["point"], points, normals, eyes)  # fmt: skip
     else:
-        colors = color_without_shadows(lights, shapes, closest["point"], closest["normal"], closest["eye"], closest["shape_idx"])   # fmt: skip
+        colors = color_without_shadow(lights, shapes, closest["point"], closest["normal"], closest["eye"], closest["shape_idx"])   # fmt: skip
     return update_state(state, shapes, closest, colors)
 
 
-def hide_shapes(mask, hit_masks, shape_order):
-    mask = jp.expand_dims(mask[shape_order], 1)
-    return jp.where(mask, hit_masks, False)
-
-
 def intersect(shapes, rays, mask):
-    intersections = intersect_groups(shapes, *rays)
-    hit_masks, depths, points, normals, eyes, indices = intersections
-    hit_masks = hide_shapes(mask, hit_masks, indices)
+
+    def hide_shapes(mask, hit_masks):
+        return jp.where(jp.expand_dims(mask, 1), hit_masks, False)
+
+    merge = paz.graphics.shapes.field_merge(shapes, ["transform", "type"])
+    indices = jp.arange(len(shapes))
+    intersect_fun = paz.lock(paz.graphics.shapes.intersect, *rays)
+    hit_masks, depths, points, normals, eyes = jax.vmap(intersect_fun)(merge)
+    hit_masks = hide_shapes(mask, hit_masks)
     return hit_masks, depths, points, normals, indices, eyes
-
-
-def intersect_groups(shapes, origins, directions):
-
-    def process_group(group, rays, ID_to_arg):
-        indices = jp.array([ID_to_arg[id(shape)] for shape in group])
-        # shape_order = indices
-        merged_group = paz.graphics.shapes.merge(*group)
-        intersect = paz.lock(paz.graphics.shapes.intersect, *rays)
-        intersections = jax.vmap(intersect)(merged_group)
-        return (*intersections, indices)
-
-    def concatenate(x):
-        return tuple(jp.concatenate(items, axis=0) for items in zip(*x))
-
-    groups = paz.graphics.shapes.group_by_pattern_size(shapes)
-    ID_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
-    args = ((origins, directions), ID_to_arg)
-    intersections = [process_group(group, *args) for group in groups.values()]
-    return concatenate(intersections)
 
 
 def find_closest_intersection_args(hit_masks, depths):
@@ -116,49 +93,59 @@ def gather_closest(hit_masks, depths, points, normals, indices, eyes):
     }
 
 
-def color_without_shadows(lights, shapes, points, normals, eyes, shape_order):
+def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
+    # Computes colors per pattern size group to deal with varying sizes in scene
 
-    def expand_last(*args):
-        return [jp.expand_dims(arg, 1) for arg in args]
+    def color_pixel(shape, material, points, normals, eyes, active):
 
-    def batch(group, args, subtype):
-        Type = {"material": Material, "pattern": Pattern}[subtype]
-        type_data = {}
-        for field in Type._fields:
-            data = [getattr(getattr(shape, subtype), field) for shape in group]
-            type_data[field] = jp.array(data)
-        return Type(**{field: data[args] for field, data in type_data.items()})
+        def apply():
+            color, args = 0, (shape, material, points, normals, eyes)
+            for light in lights:
+                color = color + paz.graphics.phong.compute_colors(*args, light)
+            return color
 
-    def gather(group, args):
-        material = batch(group, args, "material")
-        patterns = batch(group, args, "pattern")
-        transform = jp.array([shape.transform for shape in group])[args]
-        shapetype = jp.array([shape.type for shape in group])[args]
-        return Shape(transform, shapetype, material, patterns)
+        def zero():
+            return jp.zeros((1, 3))
 
-    def build_local_map(shapes, group_indices):
-        local_map = jp.zeros(len(shapes), int)
-        return local_map.at[group_indices].set(jp.arange(len(group_indices)))
+        return jax.lax.cond(active, apply, zero)  # no performance gain due vmap
 
-    def compute(group, ID_to_arg):
-        group_indices = jp.array([ID_to_arg[id(shape)] for shape in group])
-        local_map = build_local_map(shapes, group_indices)
-        args_to_gather = local_map[shape_order]
-        shape = gather(group, args_to_gather)
-        args = (shape, shape.material, *expand_last(points, normals, eyes))
-        axes = (0, 0, 0, 0, 0, None)
-        color = jax.vmap(paz.graphics.phong.compute_colors, axes)
+    def compute_group_mask(start_arg, group, shape_args):
+        return (shape_args >= start_arg) & (shape_args < start_arg + len(group))
 
-        mask = jp.any(shape_order[:, None] == group_indices[None, :], 1, keepdims=True)  # fmt: skip
+    def gather_shapes(group, arg):
+        return jax.tree.map(lambda x: x[arg], paz.graphics.shapes.merge(*group))
 
-        return sum(jp.squeeze(color(*args, light), 1) for light in lights), mask
-
-    ID_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
-    colors = jp.zeros((len(points), 3))
+    geometry = [jp.expand_dims(x, 1) for x in [points, normals, eyes]]
+    start_arg, colors = 0, jp.zeros((len(points), 3))
     for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
-        group_colors, mask = compute(group, ID_to_arg)
-        colors = jp.where(mask, group_colors, colors)
+        # At each loop the color computation is done for all rays.
+        group_mask = compute_group_mask(start_arg, group, hit_shape_args)
+        local_args = jp.where(group_mask, hit_shape_args - start_arg, 0)
+        group_shapes = gather_shapes(group, local_args)
+        args = (group_shapes, group_shapes.material, *geometry, group_mask)
+        group_colors = jp.squeeze(jax.vmap(color_pixel)(*args), 1)
+        colors = jp.where(jp.expand_dims(group_mask, 1), group_colors, colors)
+        start_arg = start_arg + len(group)
     return colors
+
+
+def intersect_groups(shapes, origins, directions):
+
+    def process_group(group, rays, start_arg):
+        indices = jp.arange(start_arg, start_arg + len(group))
+        merged_group = paz.graphics.shapes.merge(*group)
+        intersect = paz.lock(paz.graphics.shapes.intersect, *rays)
+        intersections = jax.vmap(intersect)(merged_group)
+        return (*intersections, indices)
+
+    def concatenate(x):
+        return tuple(jp.concatenate(items, axis=0) for items in zip(*x))
+
+    intersections, start_arg, rays = [], 0, (origins, directions)
+    for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
+        intersections.append(process_group(group, rays, start_arg))
+        start_arg = start_arg + len(group)
+    return concatenate(intersections)
 
 
 def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest_point, points, normals, eyes):  # fmt: skip
@@ -168,7 +155,7 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
         light_directions, distance = compute_light_directions(light, closest_point)  # fmt: skip
         intersections = intersect_groups(shapes, closest_point, light_directions)  # fmt:skip
         hit_masks, depths, _, _, _, _indices = intersections
-        shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, _indices, transparencies)  # fmt: skip
+        shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies)  # fmt: skip
         is_shadow = calculate_occlusion(shadow_masks, depths, distance)
         colors = compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow)  # fmt: skip
         return take_closest(colors, indices)
@@ -178,12 +165,12 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
         norm = paz.algebra.compute_norms(vector, 1)
         return vector / norm, jp.squeeze(norm, axis=1)
 
-    def resolve_shadow_masks(mask, shadow_mask, hit_masks, indices, transparencies): # fmt: skip
-        shadow_masks = jp.where(jp.expand_dims(mask[indices], 1), hit_masks, False)  # fmt: skip
-        is_transparent = transparencies[indices] > 0.0  # ignore if transparent
+    def resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies): # fmt: skip
+        shadow_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)  # fmt: skip
+        is_transparent = transparencies > 0.0  # ignore if transparent
         shadow_masks = jp.where(jp.expand_dims(is_transparent, 1), False, shadow_masks) # fmt: skip
         if shadow_mask is not None:
-            cast_mask = jp.expand_dims(shadow_mask[indices], 1)
+            cast_mask = jp.expand_dims(shadow_mask, 1)
             shadow_masks = jp.where(cast_mask, shadow_masks, False)
         return shadow_masks
 

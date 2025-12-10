@@ -336,7 +336,7 @@ def test_max_bounces_effect(small_image_shape, camera_pose, rays):
     )
     scene = Scene([mirror, red_obj])
     lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, 5.0]))]
-    shapes, lights_c, mask_c = paz.graphics.scene.compile(scene, lights, None)
+    shapes, mask_c, _, lights_c = paz.graphics.scene.compile(scene, lights, None)
     img_1b, _ = renderer.render_bounced(
         *small_image_shape,
         camera_pose_back,

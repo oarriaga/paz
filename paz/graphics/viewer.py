@@ -40,7 +40,7 @@ def viewer(
             paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
         ]
 
-    scene, light, mask = paz.graphics.scene.compile(scene, light, mask=None)
+    scene, mask, _, light = paz.graphics.scene.compile(scene, light, mask=None)
     identity_rays = paz.graphics.camera.build_rays((H, W), y_FOV, jp.eye(4))
     num_bounces = paz.graphics.scene.compute_bounces(scene)
 

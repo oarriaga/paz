@@ -133,10 +133,27 @@ def compute_bounces(shapes):
     return 1
 
 
-def compile(scene, lights, mask):
+def sort_by_group(shapes, mask, shadow_mask):
+    """Sorts shapes, mask and shadow_mask to make groups contiguous."""
+    groups = paz.graphics.shapes.group_by_pattern_size(shapes)
+    sorted_shapes = []
+    for group in groups.values():
+        sorted_shapes.extend(group)
+    ID_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
+    order = jp.array([ID_to_arg[id(shape)] for shape in sorted_shapes])
+    
+    mask = mask[order]
+    if shadow_mask is not None:
+        shadow_mask = shadow_mask[order]
+    return sorted_shapes, mask, shadow_mask
+
+
+def compile(scene, lights, mask, shadow_mask=None):
     flat_scene = flatten_scene(scene)
-    return (
-        flat_scene,
-        prepare_lights(lights),
-        prepare_mask(mask, len(flat_scene), scene),
-    )
+    lights = prepare_lights(lights)
+    mask = prepare_mask(mask, len(flat_scene), scene)
+    
+    if shadow_mask is not None:
+        shadow_mask = prepare_mask(shadow_mask, len(flat_scene), scene)
+
+    return (*sort_by_group(flat_scene, mask, shadow_mask), lights)
