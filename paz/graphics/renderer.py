@@ -98,7 +98,7 @@ def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
     def split(points, normal, eyes, arg_0, arg_1):
         return points[arg_0:arg_1], normals[arg_0:arg_1], eyes[arg_0:arg_1]
 
-    colors, start_arg, merged_lights = [], 0, paz.graphics.merge(*lights)
+    colors, start_arg, merged_lights = [], 0, paz.graphics.shapes.merge(*lights)
     for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
         final_arg = start_arg + len(group)
         group = paz.graphics.shapes.merge(*group)
@@ -186,38 +186,34 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
 
 
 def update_state(state, shapes, closest, local_color):
-    materials = get_material_properties(shapes, closest["shape_idx"])
-    state = accumulate_local_color(state, local_color, materials)
-    computations = _prepare_computations(state, closest, materials)
+    reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
+    state = accumulate_local_color(state, local_color, reflectivities, transparencies)  # fmt:skip
+    computations = _prepare_computations(state, closest, refractivities)  # fmt: skip
     reflectance = schlick(computations)
-    next_dir, next_origin = determine_next_bounce(computations, materials, reflectance)  # fmt: skip
-    return _apply_bounce_update(state, next_origin, next_dir, computations, materials, reflectance)  # fmt: skip
+    next_dir, next_origin = determine_next_bounce(computations, transparencies, reflectance)  # fmt: skip
+    return _apply_bounce_update(state, next_origin, next_dir, computations, reflectivities, transparencies, reflectance)  # fmt: skip
 
 
-def get_material_properties(shapes, shape_args):
-    reflective = jp.array([shape.material.reflective for shape in shapes])
-    transparency = jp.array([shape.material.transparency for shape in shapes])
-    refractive_index = jp.array([shape.material.refractive_index for shape in shapes])  # fmt: skip
-    return {
-        "reflective": reflective[shape_args],
-        "transparency": transparency[shape_args],
-        "refractive_index": refractive_index[shape_args],
-    }
+def get_material_properties(shapes, hit_shape_args):
+    reflectivities, transparencies, refractivities = [], [], []
+    for shape in shapes:
+        reflectivities.append(shape.material.reflective)
+        transparencies.append(shape.material.transparency)
+        refractivities.append(shape.material.refractive_index)
+    reflectivities = jp.array(reflectivities)[hit_shape_args]
+    transparencies = jp.array(transparencies)[hit_shape_args]
+    refractivities = jp.array(refractivities)[hit_shape_args]
+    return reflectivities, transparencies, refractivities
 
 
-def accumulate_local_color(state, local_color, materials):
-    weight = 1.0 - materials["reflective"] - materials["transparency"]
-    weight = jp.maximum(weight, 0.0)
+def accumulate_local_color(state, local_color, reflectivities, transparancies):
+    weight = jp.maximum(1.0 - reflectivities - transparancies, 0.0)
     contribution = local_color * jp.expand_dims(weight, -1)
-    state["color"] += (
-        state["throughput"]
-        * contribution
-        * jp.expand_dims(state["active_mask"], -1)
-    )
+    state["color"] += ( state["throughput"] * contribution * jp.expand_dims(state["active_mask"], -1))  # fmt: skip
     return state
 
 
-def _prepare_computations(state, closest, materials):
+def _prepare_computations(state, closest, refractive_indices):
     eyev = -state["current_directions"]
     normalv = closest["normal"]
 
@@ -233,15 +229,12 @@ def _prepare_computations(state, closest, materials):
     # FIX:
     # If entering (inside=False), n2 is material's index.
     # If exiting (inside=True), n2 is 1.0 (Air).
-    n2 = jp.where(inside, 1.0, materials["refractive_index"])
+    n2 = jp.where(inside, 1.0, refractive_indices)
 
     n_ratio = n1 / n2
 
-    # over_point = closest["point"] + normalv * (paz.graphics.EPSILON / 2.0)
-    # under_point = closest["point"] - normalv * (paz.graphics.EPSILON / 2.0)
-    over_point = closest["point"] + normalv * (paz.graphics.EPSILON)
-    under_point = closest["point"] - normalv * (paz.graphics.EPSILON)
-
+    upper_point = closest["point"] + normalv * (paz.graphics.EPSILON / 2.0)
+    lower_point = closest["point"] - normalv * (paz.graphics.EPSILON / 2.0)
     return {
         "eyev": eyev,
         "normalv": normalv,
@@ -249,8 +242,8 @@ def _prepare_computations(state, closest, materials):
         "n1": n1,
         "n2": n2,
         "n_ratio": n_ratio,
-        "over_point": over_point,
-        "under_point": under_point,
+        "over_point": upper_point,
+        "under_point": lower_point,
     }
 
 
@@ -272,8 +265,8 @@ def schlick(computations):
     return jp.where(is_total_internal_reflection, 1.0, reflectance)
 
 
-def determine_next_bounce(computations, materials, reflectance):
-    is_transparent = materials["transparency"] > 0.0
+def determine_next_bounce(computations, transparancies, reflectance):
+    is_transparent = transparancies > 0.0
     is_total_internal_reflection = reflectance >= 1.0
 
     should_reflect = (~is_transparent) | is_total_internal_reflection
@@ -304,16 +297,14 @@ def determine_next_bounce(computations, materials, reflectance):
     return next_dir, next_origin
 
 
-def _apply_bounce_update(
-    state, next_origin, next_dir, computations, materials, reflectance
-):
-    is_transparent = materials["transparency"] > 0.0
-    is_reflective = materials["reflective"] > 0.0
+def _apply_bounce_update(state, next_origin, next_dir, computations, reflectivities, transparencies, reflectance):   # fmt: skip
+    is_transparent = transparencies > 0.0
+    is_reflective = reflectivities > 0.0
 
     factor = jp.where(
         is_transparent,
-        materials["transparency"] * (1.0 - reflectance),
-        jp.where(is_reflective, materials["reflective"], 0.0),
+        transparencies * (1.0 - reflectance),
+        jp.where(is_reflective, reflectivities, 0.0),
     )
 
     factor = jp.where(is_transparent & (reflectance >= 1.0), 1.0, factor)
