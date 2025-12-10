@@ -216,17 +216,15 @@ def _prepare_computations(current_directions, current_refractive_index, closest_
     eyev = -current_directions
     normalv = closest_normal
     # Check if we are hitting the surface from the inside
-    dot = jp.sum(normalv * eyev, axis=-1)
-    inside = dot < 0.0
+    inside = jp.sum(normalv * eyev, axis=-1) < 0.0
     # Flip normal if inside so it points against the ray
     normalv = jp.where(jp.expand_dims(inside, -1), -normalv, normalv)
     n1 = current_refractive_index
     n2 = jp.where(inside, 1.0, refractive_indices)
     n_ratio = n1 / n2
-    upper_point = closest_point + normalv * (paz.graphics.EPSILON / 2.0)
-    lower_point = closest_point - normalv * (paz.graphics.EPSILON / 2.0)
+    upper_point = closest_point + normalv * (paz.graphics.EPSILON * 1e-1)
+    lower_point = closest_point - normalv * (paz.graphics.EPSILON * 1e-1)
     return normalv, eyev, n1, n2, n_ratio, inside, lower_point, upper_point
-    # return {"eyev": eyev, "normalv": normalv, "inside": inside, "n1": n1, "n2": n2, "n_ratio": n_ratio, "over_point": upper_point, "under_point": lower_point}  # fmt: skip
 
 
 def schlick(normalv, eyev, n1, n2, n_ratio):
