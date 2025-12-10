@@ -29,12 +29,13 @@ def initialize_state(rays):
         "throughput": jp.ones((num_rays, 3)),
         "active_mask": jp.ones((num_rays,), dtype=bool),
         "current_refractive_index": jp.ones((num_rays,)),
-        "rays": rays,
+        "current_origins": rays[0],
+        "current_directions": rays[1],
     }
 
 
 def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
-    rays = state["rays"]
+    rays = (state["current_origins"], state["current_directions"])
     intersections = intersect(shapes, rays, mask)
     hit_masks, depths, points, normals, indices, eyes = intersections
     hit_shape_args = find_closest_intersection_args(hit_masks, depths)
@@ -251,10 +252,10 @@ def reshape_depth_image(depths, height, width):
 def update_state(state, shapes, closest, intersected_colors):
     reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
     state["color"] = accumulate_color(state["color"], state["throughput"], state["active_mask"], intersected_colors, reflectivities, transparencies)  # fmt:skip
-    normalv, eyev, n1, n2, n_ratio, inside, lower_point, upper_point = _prepare_computations(state["rays"][1], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
+    normalv, eyev, n1, n2, n_ratio, inside, lower_point, upper_point = _prepare_computations(state["current_directions"], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
     reflectance = schlick(normalv, eyev, n1, n1, n_ratio)
     new_rays = compute_new_rays(normalv, eyev, n_ratio, lower_point, upper_point, transparencies, reflectance)  # fmt: skip
-    return _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, reflectance)  # fmt: skip
+    return _apply_bounce_update(state, *new_rays, n2, reflectivities, transparencies, reflectance)  # fmt: skip
 
 
 def get_material_properties(shapes, hit_shape_args):
@@ -278,16 +279,16 @@ def accumulate_color(colors, throughput, active_mask, intersected_colors, reflec
 def _prepare_computations(current_directions, now_refractive_index, point, normal, refractive_indices):   # fmt: skip
     eyev = -current_directions
     # Check if we are hitting the surface from the inside
-    inside = jp.sum(normal * eyev, axis=-1) < 0.0
-    # Flip normal if inside so it points against the ray
-    normal = jp.where(jp.expand_dims(inside, -1), -normal, normal)
+    is_inside = jp.sum(normal * eyev, axis=-1) < 0.0
+    # Flip normal if is_inside so it points against the ray
+    normal = jp.where(jp.expand_dims(is_inside, -1), -normal, normal)
 
     n1 = now_refractive_index
-    n2 = jp.where(inside, 1.0, refractive_indices)
+    n2 = jp.where(is_inside, 1.0, refractive_indices)
     n_ratio = n1 / n2
     upper_point = point + normal * (paz.graphics.EPSILON * 1e-1)
     lower_point = point - normal * (paz.graphics.EPSILON * 1e-1)
-    return normal, eyev, n1, n2, n_ratio, inside, lower_point, upper_point
+    return normal, eyev, n1, n2, n_ratio, is_inside, lower_point, upper_point
 
 
 def schlick(normalv, eyev, n1, n2, n_ratio):
@@ -316,23 +317,24 @@ def compute_reflection_direction(eyev, normalv):
     return paz.graphics.geometry.reflect(-eyev, normalv)
 
 
-def compute_refractive_direction(eyev, normalv, n_ratio):
+def compute_refraction_direction(eyev, normalv, n_ratio):
     cos_i = jp.sum(eyev * normalv, axis=-1)
     sin2_t = (n_ratio**2) * (1.0 - cos_i**2)
     cos_t = jp.sqrt(1.0 - sin2_t)
-    return normalv * jp.expand_dims((n_ratio * cos_i - cos_t), -1) - eyev * jp.expand_dims(n_ratio, -1)  # fmt: skip
+    n_ratio = jp.expand_dims(n_ratio, -1)
+    return normalv * jp.expand_dims((n_ratio * cos_i - cos_t), -1) - eyev * n_ratio  # fmt: skip
 
 
 def compute_new_rays(normalv, eyev, n_ratio, lower_point, upper_point, transparancies, reflectance):  # fmt: skip
     do_reflect = reflect_or_refract(transparancies, reflectance)
+    refraction_direction = compute_refraction_direction(eyev, normalv, n_ratio)
     reflection_direction = compute_reflection_direction(eyev, normalv)
-    refractive_direction = compute_refractive_direction(eyev, normalv, n_ratio)
-    direction = jp.where(do_reflect, reflection_direction, refractive_direction)
+    direction = jp.where(do_reflect, reflection_direction, refraction_direction)
     origin = jp.where(do_reflect, upper_point, lower_point)
     return origin, direction
 
 
-def _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, reflectance):   # fmt: skip
+def _apply_bounce_update(state, next_origin, next_dir, n2, reflectivities, transparencies, reflectance):   # fmt: skip
     is_transparent = transparencies > 0.0
     is_reflective = reflectivities > 0.0
     factor = jp.where(is_transparent, transparencies * (1.0 - reflectance), jp.where(is_reflective, reflectivities, 0.0))  # fmt: skip
@@ -340,5 +342,6 @@ def _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, re
     state["throughput"] *= jp.expand_dims(factor, -1)
     state["active_mask"] &= is_transparent | is_reflective
     state["current_refractive_index"] = jp.where(is_transparent & (reflectance < 1.0), n2, state["current_refractive_index"])  # fmt: skip
-    state["rays"] = new_rays
+    state["current_directions"] = next_dir
+    state["current_origins"] = next_origin
     return state
