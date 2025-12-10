@@ -189,8 +189,10 @@ def update_state(state, shapes, closest, local_color):
     reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
     state["color"] = accumulate_local_color(state["color"], state["throughput"], state["active_mask"], local_color, reflectivities, transparencies)  # fmt:skip
     computations = _prepare_computations(state["current_directions"], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
-    reflectance = schlick(computations)
-    next_dir, next_origin = determine_next_bounce(computations, transparencies, reflectance)  # fmt: skip
+    normalv, eyev, n1, n2, n_ratio = computations["normalv"], computations["eyev"], computations["n1"], computations["n2"], computations["n_ratio"]  # fmt:skip
+    under_point, over_point = computations["under_point"], computations["over_point"] # fmt: skip
+    reflectance = schlick(normalv, eyev, n1, n1, n_ratio)
+    next_dir, next_origin = determine_next_bounce(normalv, eyev, n_ratio, over_point, under_point, transparencies, reflectance)  # fmt: skip
     return _apply_bounce_update(state, next_origin, next_dir, computations, reflectivities, transparencies, reflectance)  # fmt: skip
 
 
@@ -215,84 +217,55 @@ def accumulate_local_color(color, throughput, active_mask, local_color, reflecti
 def _prepare_computations(current_directions, current_refractive_index, closest_point, closest_normal, refractive_indices):   # fmt: skip
     eyev = -current_directions
     normalv = closest_normal
-
     # Check if we are hitting the surface from the inside
     dot = jp.sum(normalv * eyev, axis=-1)
     inside = dot < 0.0
-
     # Flip normal if inside so it points against the ray
     normalv = jp.where(jp.expand_dims(inside, -1), -normalv, normalv)
-
     n1 = current_refractive_index
-
-    # FIX:
-    # If entering (inside=False), n2 is material's index.
-    # If exiting (inside=True), n2 is 1.0 (Air).
     n2 = jp.where(inside, 1.0, refractive_indices)
-
     n_ratio = n1 / n2
-
     upper_point = closest_point + normalv * (paz.graphics.EPSILON / 2.0)
     lower_point = closest_point - normalv * (paz.graphics.EPSILON / 2.0)
-    return {
-        "eyev": eyev,
-        "normalv": normalv,
-        "inside": inside,
-        "n1": n1,
-        "n2": n2,
-        "n_ratio": n_ratio,
-        "over_point": upper_point,
-        "under_point": lower_point,
-    }
+    data = normalv, eyev, n1, n2, n_ratio, inside, upper_point, lower_point
+    return {"eyev": eyev, "normalv": normalv, "inside": inside, "n1": n1, "n2": n2, "n_ratio": n_ratio, "over_point": upper_point, "under_point": lower_point}  # fmt: skip
 
 
-def schlick(computations):
-    cos_i = jp.sum(computations["eyev"] * computations["normalv"], axis=-1)
+def schlick(normalv, eyev, n1, n2, n_ratio):
+    cos_i = jp.sum(eyev * normalv, axis=-1)
 
-    sin2_t = (computations["n_ratio"] ** 2) * (1.0 - cos_i**2)
+    sin2_t = (n_ratio**2) * (1.0 - cos_i**2)
     is_total_internal_reflection = sin2_t > 1.0
 
     cos_t = jp.sqrt(1.0 - sin2_t)
-    cos = jp.where(computations["n1"] > computations["n2"], cos_t, cos_i)
+    cos = jp.where(n1 > n2, cos_t, cos_i)
 
-    r0 = (
-        (computations["n1"] - computations["n2"])
-        / (computations["n1"] + computations["n2"])
-    ) ** 2
+    r0 = ((n1 - n2) / (n1 + n2)) ** 2
     reflectance = r0 + (1.0 - r0) * (1.0 - cos) ** 5
 
     return jp.where(is_total_internal_reflection, 1.0, reflectance)
 
 
-def determine_next_bounce(computations, transparancies, reflectance):
+def determine_next_bounce(normalv, eyev, n_ratio, over_point, under_point, transparancies, reflectance):  # fmt: skip
     is_transparent = transparancies > 0.0
     is_total_internal_reflection = reflectance >= 1.0
 
     should_reflect = (~is_transparent) | is_total_internal_reflection
 
-    reflect_dir = paz.graphics.geometry.reflect(
-        -computations["eyev"], computations["normalv"]
-    )
+    reflect_dir = paz.graphics.geometry.reflect(-eyev, normalv)
 
-    cos_i = jp.sum(computations["eyev"] * computations["normalv"], axis=-1)
-    sin2_t = (computations["n_ratio"] ** 2) * (1.0 - cos_i**2)
+    cos_i = jp.sum(eyev * normalv, axis=-1)
+    sin2_t = (n_ratio**2) * (1.0 - cos_i**2)
     cos_t = jp.sqrt(1.0 - sin2_t)
 
-    direction = computations["normalv"] * jp.expand_dims(
-        (computations["n_ratio"] * cos_i - cos_t), -1
-    ) - computations["eyev"] * jp.expand_dims(computations["n_ratio"], -1)
+    direction = normalv * jp.expand_dims(
+        (n_ratio * cos_i - cos_t), -1
+    ) - eyev * jp.expand_dims(n_ratio, -1)
 
     refract_dir = direction
 
-    next_dir = jp.where(
-        jp.expand_dims(should_reflect, -1), reflect_dir, refract_dir
-    )
-    next_origin = jp.where(
-        jp.expand_dims(should_reflect, -1),
-        computations["over_point"],
-        computations["under_point"],
-    )
-
+    next_dir = jp.where(jp.expand_dims(should_reflect, -1), reflect_dir, refract_dir)  # fmt: skip
+    next_origin = jp.where(jp.expand_dims(should_reflect, -1), over_point, under_point)  # fmt: skip
     return next_dir, next_origin
 
 
