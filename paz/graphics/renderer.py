@@ -188,12 +188,10 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
 def update_state(state, shapes, closest, local_color):
     reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
     state["color"] = accumulate_local_color(state["color"], state["throughput"], state["active_mask"], local_color, reflectivities, transparencies)  # fmt:skip
-    computations = _prepare_computations(state["current_directions"], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
-    normalv, eyev, n1, n2, n_ratio = computations["normalv"], computations["eyev"], computations["n1"], computations["n2"], computations["n_ratio"]  # fmt:skip
-    under_point, over_point = computations["under_point"], computations["over_point"] # fmt: skip
+    normalv, eyev, n1, n2, n_ratio, inside, lower_point, upper_point = _prepare_computations(state["current_directions"], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
     reflectance = schlick(normalv, eyev, n1, n1, n_ratio)
-    next_dir, next_origin = determine_next_bounce(normalv, eyev, n_ratio, over_point, under_point, transparencies, reflectance)  # fmt: skip
-    return _apply_bounce_update(state, next_origin, next_dir, computations, reflectivities, transparencies, reflectance)  # fmt: skip
+    next_dir, next_origin = determine_next_bounce(normalv, eyev, n_ratio, lower_point, upper_point, transparencies, reflectance)  # fmt: skip
+    return _apply_bounce_update(state, next_origin, next_dir, n2, reflectivities, transparencies, reflectance)  # fmt: skip
 
 
 def get_material_properties(shapes, hit_shape_args):
@@ -227,8 +225,8 @@ def _prepare_computations(current_directions, current_refractive_index, closest_
     n_ratio = n1 / n2
     upper_point = closest_point + normalv * (paz.graphics.EPSILON / 2.0)
     lower_point = closest_point - normalv * (paz.graphics.EPSILON / 2.0)
-    data = normalv, eyev, n1, n2, n_ratio, inside, upper_point, lower_point
-    return {"eyev": eyev, "normalv": normalv, "inside": inside, "n1": n1, "n2": n2, "n_ratio": n_ratio, "over_point": upper_point, "under_point": lower_point}  # fmt: skip
+    return normalv, eyev, n1, n2, n_ratio, inside, lower_point, upper_point
+    # return {"eyev": eyev, "normalv": normalv, "inside": inside, "n1": n1, "n2": n2, "n_ratio": n_ratio, "over_point": upper_point, "under_point": lower_point}  # fmt: skip
 
 
 def schlick(normalv, eyev, n1, n2, n_ratio):
@@ -269,28 +267,16 @@ def determine_next_bounce(normalv, eyev, n_ratio, over_point, under_point, trans
     return next_dir, next_origin
 
 
-def _apply_bounce_update(state, next_origin, next_dir, computations, reflectivities, transparencies, reflectance):   # fmt: skip
+def _apply_bounce_update(state, next_origin, next_dir, n2, reflectivities, transparencies, reflectance):   # fmt: skip
     is_transparent = transparencies > 0.0
     is_reflective = reflectivities > 0.0
-
-    factor = jp.where(
-        is_transparent,
-        transparencies * (1.0 - reflectance),
-        jp.where(is_reflective, reflectivities, 0.0),
-    )
-
+    factor = jp.where(is_transparent, transparencies * (1.0 - reflectance), jp.where(is_reflective, reflectivities, 0.0))  # fmt: skip
     factor = jp.where(is_transparent & (reflectance >= 1.0), 1.0, factor)
-
     state["throughput"] *= jp.expand_dims(factor, -1)
     state["active_mask"] &= is_transparent | is_reflective
-    state["current_refractive_index"] = jp.where(
-        is_transparent & (reflectance < 1.0),
-        computations["n2"],
-        state["current_refractive_index"],
-    )
+    state["current_refractive_index"] = jp.where(is_transparent & (reflectance < 1.0), n2, state["current_refractive_index"])  # fmt: skip
     state["current_directions"] = next_dir
     state["current_origins"] = next_origin
-
     return state
 
 
