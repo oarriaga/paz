@@ -251,9 +251,9 @@ def reshape_depth_image(depths, height, width):
 def update_state(state, shapes, closest, intersected_colors):
     reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
     state["color"] = accumulate_color(state["color"], state["throughput"], state["active_mask"], intersected_colors, reflectivities, transparencies)  # fmt:skip
-    normalv, eyev, n1, n2, n_ratio, inside, lower_point, upper_point = _prepare_computations(state["rays"][1], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
-    reflectance = schlick(normalv, eyev, n1, n1, n_ratio)
-    new_rays = compute_new_rays(normalv, eyev, n_ratio, lower_point, upper_point, transparencies, reflectance)  # fmt: skip
+    normal, eye, n1, n2, n_ratio, = _prepare_computations(state["rays"][1], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
+    reflectance = schlick(normal, eye, n1, n2)
+    new_rays = compute_new_rays(normal, eye, n_ratio, closest["point"], transparencies, reflectance)  # fmt: skip
     return _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, reflectance)  # fmt: skip
 
 
@@ -271,63 +271,76 @@ def get_material_properties(shapes, hit_shape_args):
 
 def accumulate_color(colors, throughput, active_mask, intersected_colors, reflectivities, transparancies):  # fmt: skip
     weights = jp.maximum(1.0 - reflectivities - transparancies, 0.0)
-    weights, active_mask = [jp.expand_dims(x, -1) for x in [weights, active_mask]]   # fmt: skip
+    weights = jp.expand_dims(weights, -1)
+    active_mask = jp.expand_dims(active_mask, -1)
+    # TODO why throughput
+    # TODO why active mask
     return colors + (throughput * active_mask * weights * intersected_colors)
 
 
+def flip_normal_if_inside(eye, normal):
+    is_inside = jp.sum(normal * eye, axis=-1) < 0.0
+    return jp.where(jp.expand_dims(is_inside, -1), -normal, normal), is_inside
+
+
+def displace_by_normal(point, normal):
+    # upper_point = point + normal * (paz.graphics.EPSILON * 1e-1)
+    # lower_point = point - normal * (paz.graphics.EPSILON * 1e-1)
+    upper_point = point + normal * (paz.graphics.EPSILON / 2.0)
+    lower_point = point - normal * (paz.graphics.EPSILON / 2.0)
+    return lower_point, upper_point
+
+
 def _prepare_computations(current_directions, now_refractive_index, point, normal, refractive_indices):   # fmt: skip
-    eyev = -current_directions
-    # Check if we are hitting the surface from the inside
-    inside = jp.sum(normal * eyev, axis=-1) < 0.0
-    # Flip normal if inside so it points against the ray
-    normal = jp.where(jp.expand_dims(inside, -1), -normal, normal)
-
+    eye = -current_directions
+    normal, is_inside = flip_normal_if_inside(eye, normal)
     n1 = now_refractive_index
-    n2 = jp.where(inside, 1.0, refractive_indices)
+    n2 = jp.where(is_inside, 1.0, refractive_indices)  # TODO why 1.0 hardcoded
+    n_ratio = n1 / (n2)
+    return normal, eye, n1, n2, n_ratio
+
+
+def schlick(normal, eye, n1, n2):
     n_ratio = n1 / n2
-    upper_point = point + normal * (paz.graphics.EPSILON * 1e-1)
-    lower_point = point - normal * (paz.graphics.EPSILON * 1e-1)
-    return normal, eyev, n1, n2, n_ratio, inside, lower_point, upper_point
+    cos_incident = jp.sum(eye * normal, axis=-1)
+    sin_transmit_squared = (n_ratio**2) * (1.0 - (cos_incident**2))
+    cos_transmit = jp.sqrt(jp.maximum(0.0, 1.0 - sin_transmit_squared))
 
-
-def schlick(normalv, eyev, n1, n2, n_ratio):
-    cos_i = jp.sum(eyev * normalv, axis=-1)
-
-    sin2_t = (n_ratio**2) * (1.0 - cos_i**2)
-    is_total_internal_reflection = sin2_t > 1.0
-
-    cos_t = jp.sqrt(1.0 - sin2_t)
-    cos = jp.where(n1 > n2, cos_t, cos_i)
+    is_total_internal_reflection = sin_transmit_squared > 1.0
+    cos = jp.where(n1 > n2, cos_transmit, cos_incident)
 
     r0 = ((n1 - n2) / (n1 + n2)) ** 2
     reflectance = r0 + (1.0 - r0) * (1.0 - cos) ** 5
-
     return jp.where(is_total_internal_reflection, 1.0, reflectance)
 
 
 def reflect_or_refract(transparancies, reflectance):
     is_transparent = transparancies > 0.0
-    is_total_internal_reflection = reflectance >= 1.0
-    do_reflect = (~is_transparent) | is_total_internal_reflection
+    # is_total_internal_reflection = reflectance >= 1.0
+    # do_reflect = (~is_transparent) | is_total_internal_reflection
+    do_reflect = ~is_transparent
     return jp.expand_dims(do_reflect, -1)
 
 
-def compute_reflection_direction(eyev, normalv):
-    return paz.graphics.geometry.reflect(-eyev, normalv)
+def compute_refractive_direction(eye, normal, n_ratio):
+    cos_incident = jp.sum(eye * normal, axis=-1)
+    sin_transmit_squared = (n_ratio**2) * (1.0 - (cos_incident**2))
+    cos_transmit = jp.sqrt(jp.maximum(0.0, 1.0 - sin_transmit_squared))
+    inside_vector = -eye * jp.expand_dims(n_ratio, -1)
+    up_weight = jp.expand_dims((n_ratio * cos_incident - cos_transmit), -1)
+    return up_weight * normal + inside_vector
 
 
-def compute_refractive_direction(eyev, normalv, n_ratio):
-    cos_i = jp.sum(eyev * normalv, axis=-1)
-    sin2_t = (n_ratio**2) * (1.0 - cos_i**2)
-    cos_t = jp.sqrt(1.0 - sin2_t)
-    return normalv * jp.expand_dims((n_ratio * cos_i - cos_t), -1) - eyev * jp.expand_dims(n_ratio, -1)  # fmt: skip
+def compute_reflection_direction(eye, normal):
+    return paz.graphics.geometry.reflect(-eye, normal)
 
 
-def compute_new_rays(normalv, eyev, n_ratio, lower_point, upper_point, transparancies, reflectance):  # fmt: skip
+def compute_new_rays(normal, eye, n_ratio, point, transparancies, reflectance):
     do_reflect = reflect_or_refract(transparancies, reflectance)
-    reflection_direction = compute_reflection_direction(eyev, normalv)
-    refractive_direction = compute_refractive_direction(eyev, normalv, n_ratio)
+    reflection_direction = compute_reflection_direction(eye, normal)
+    refractive_direction = compute_refractive_direction(eye, normal, n_ratio)
     direction = jp.where(do_reflect, reflection_direction, refractive_direction)
+    lower_point, upper_point = displace_by_normal(point, normal)
     origin = jp.where(do_reflect, upper_point, lower_point)
     return origin, direction
 
