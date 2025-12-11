@@ -17,13 +17,14 @@ render_args = ((H, W), camera_pose, rays)
 
 glass_material = paz.graphics.Material(
     color=jp.array([0.9, 0.9, 1.0]),
-    ambient=0.0,
-    diffuse=0.0,
-    specular=0.0,
-    shininess=10.0,
+    ambient=0.1,
+    diffuse=0.1,
+    specular=0.9,
+    shininess=200.0,
     transparency=0.9,
     refractive_index=1.5,
 )
+
 
 gold_material = paz.graphics.Material(
     color=jp.array([1.0, 0.77, 0.34]),

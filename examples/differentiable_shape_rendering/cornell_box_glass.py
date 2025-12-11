@@ -81,10 +81,10 @@ gold_material = paz.graphics.Material(
 )
 
 
-# shape_material = mirror_material
+shape_material = mirror_material
 # shape_material = glass_material
 # shape_material = clear_glass_material
-shape_material = gold_material
+# shape_material = gold_material
 
 # Cornell Box Materials
 white_wall_material = paz.graphics.Material(
