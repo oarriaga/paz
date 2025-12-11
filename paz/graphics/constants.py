@@ -1,7 +1,7 @@
 import jax.numpy as jp
 
 FARAWAY = 1000.0
-EPSILON = 1e-3
+EPSILON = 1e-4
 
 RED = jp.array([1.0, 0.0, 0.0])
 GREEN = jp.array([0.0, 1.0, 0.0])
