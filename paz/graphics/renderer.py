@@ -45,7 +45,7 @@ def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
     state["active_mask"] &= closest["hit_mask"]
 
     if shadows:
-        colors = color_with_shadows(rays, shapes, lights, hit_shape_args, mask, shadow_mask, closest["point"], points, normals, eyes)  # fmt: skip
+        colors = color_with_shadows(rays, shapes, lights, hit_shape_args, mask, shadow_mask, closest["point"], closest["normal"], points, normals, eyes)  # fmt: skip
     else:
         colors = color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args)  # fmt: skip
     return update_state(state, shapes, closest, colors)
@@ -129,12 +129,18 @@ def intersect_groups(shapes, origins, directions):
     return concatenate(intersections)
 
 
-def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest_point, points, normals, eyes):  # fmt: skip
+def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest_point, closest_normal, points, normals, eyes):  # fmt: skip
     transparencies = jp.array([shape.material.transparency for shape in shapes])
 
     def compute_light_colors(light):
+        # avoid casting shadow rays directly from surface so object doesn't shadow itself (self-intersection) due to floating-point rounding errors.
         light_directions, distance = compute_light_directions(light, closest_point)  # fmt: skip
-        intersections = intersect_groups(shapes, closest_point, light_directions)  # fmt:skip
+        dot_light = jp.sum(
+            light_directions * closest_normal, axis=-1, keepdims=True
+        )
+        offset = jp.sign(dot_light) * closest_normal * paz.graphics.EPSILON
+        shadow_ray_origins = closest_point + offset
+        intersections = intersect_groups(shapes, shadow_ray_origins, light_directions)  # fmt:skip
         hit_masks, depths, _, _, _, _indices = intersections
         shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies)  # fmt: skip
         is_shadow = calculate_occlusion(shadow_masks, depths, distance)
