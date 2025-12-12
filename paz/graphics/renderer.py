@@ -135,15 +135,13 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
     def compute_light_colors(light):
         # avoid casting shadow rays directly from surface so object doesn't shadow itself (self-intersection) due to floating-point rounding errors.
         light_directions, distance = compute_light_directions(light, closest_point)  # fmt: skip
-        dot_light = jp.sum(
-            light_directions * closest_normal, axis=-1, keepdims=True
-        )
-        offset = jp.sign(dot_light) * closest_normal * paz.graphics.EPSILON
+        offset = closest_normal * paz.graphics.EPSILON
         shadow_ray_origins = closest_point + offset
         intersections = intersect_groups(shapes, shadow_ray_origins, light_directions)  # fmt:skip
         hit_masks, depths, _, _, _, _indices = intersections
         shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies)  # fmt: skip
-        is_shadow = calculate_occlusion(shadow_masks, depths, distance)
+        # is_shadow = calculate_occlusion(shadow_masks, depths, distance)
+        is_shadow = compute_soft_occlusion(shadow_masks, depths, distance)
         colors = compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow)  # fmt: skip
         return take_closest(colors, indices)
 
@@ -160,6 +158,16 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
             cast_mask = jp.expand_dims(shadow_mask, 1)
             shadow_masks = jp.where(cast_mask, shadow_masks, False)
         return shadow_masks
+
+    def compute_soft_occlusion(hit_masks, depths, light_length, slope=0.01):
+        # depths: (num_shapes, num_rays, 1)
+        # hit_masks: (num_shapes, num_rays)
+        # light_length: (num_rays,)
+        # larger difference means the intersection was closer (more occlusion)
+        difference = light_length - depths[..., 0]
+        occlusion_factor = jax.nn.sigmoid(slope * difference)
+        occlusion_factor = jp.where(hit_masks, occlusion_factor, 0.0)
+        return jp.max(occlusion_factor, axis=0)
 
     def calculate_occlusion(masks, depths, light_length):
         scene_hit_mask = compute_scene_hit_mask(masks)
