@@ -4,6 +4,8 @@ import jax
 import paz
 import numpy as np
 import time
+import json
+import datetime
 
 
 def clamp_tilt(tilt, limit=jp.pi / 2 - 0.01):
@@ -85,6 +87,8 @@ def viewer(
     print(" [A, D]       : Move Right / Left")
     print(" [Q, E]       : Move Up / Down")
     print(" [Shift]      : Move Faster")
+    print(" [C]          : Save Camera Pose")
+    print(" [P]          : Take Screenshot")
     print(" [Mouse]      : Look around")
     print(" [Esc]        : Quit")
     print("------------------------------------------------")
@@ -179,6 +183,22 @@ def viewer(
 
         image_jax = render_frame(final_pose)
         image_bgr = cv2.cvtColor(np.array(image_jax), cv2.COLOR_RGB2BGR)
+
+        if key == ord("c"):
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            pose_np = np.array(final_pose)
+            print(f"Camera Pose at {timestamp}:")
+            print(pose_np)
+            filename = f"camera_pose_{timestamp}.json"
+            with open(filename, "w") as f:
+                json.dump(pose_np.tolist(), f, indent=4)
+            print(f"Saved camera pose to {filename}")
+
+        if key == ord("p"):
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            filename = f"capture_{timestamp}.png"
+            paz.image.write(filename, image_jax)
+            print(f"Saved screenshot to {filename}")
 
         # Draw Crosshair
         ch_x, ch_y = W // 2, H // 2
