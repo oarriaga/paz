@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import os
 from functools import partial
 from typing import Any, Dict, List, Literal, Sequence, Union
 
@@ -97,6 +98,7 @@ def init_weights_vit(module, name: str = ""):
         layer.reset_parameters()
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class DinoVisionTransformer(keras.Model):
     def __init__(
         self,
@@ -132,6 +134,33 @@ class DinoVisionTransformer(keras.Model):
         super().__init__()
         if len(ignored_kwargs) > 0:
             print(f"Keras model ignored kwargs: {ignored_kwargs}")
+
+        self.img_size_config = img_size
+        self.patch_size_config = patch_size
+        self.in_chans_config = in_chans
+        self.pos_embed_rope_base_config = pos_embed_rope_base
+        self.pos_embed_rope_min_period_config = pos_embed_rope_min_period
+        self.pos_embed_rope_max_period_config = pos_embed_rope_max_period
+        self.pos_embed_rope_normalize_coords_config = pos_embed_rope_normalize_coords
+        self.pos_embed_rope_shift_coords_config = pos_embed_rope_shift_coords
+        self.pos_embed_rope_jitter_coords_config = pos_embed_rope_jitter_coords
+        self.pos_embed_rope_rescale_coords_config = pos_embed_rope_rescale_coords
+        self.pos_embed_rope_dtype_config = pos_embed_rope_dtype
+        self.embed_dim_config = embed_dim
+        self.depth_config = depth
+        self.num_heads_config = num_heads
+        self.ffn_ratio_config = ffn_ratio
+        self.qkv_bias_config = qkv_bias
+        self.proj_bias_config = proj_bias
+        self.ffn_bias_config = ffn_bias
+        self.drop_path_rate_config = drop_path_rate
+        self.norm_layer_config = norm_layer
+        self.ffn_layer_config = ffn_layer
+        self.layerscale_init_config = layerscale_init
+        self.n_storage_tokens_config = n_storage_tokens
+        self.mask_k_bias_config = mask_k_bias
+        self.untie_cls_and_patch_norms_config = untie_cls_and_patch_norms
+        self.untie_global_and_local_cls_norm_config = untie_global_and_local_cls_norm
 
         if norm_layer == "layernorm":
             norm_layer_cls = partial(StableLayerNormalization, epsilon=1e-6)
@@ -362,89 +391,175 @@ class DinoVisionTransformer(keras.Model):
             }
         return self.head(ret["x_norm_clstoken"])
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "img_size": self.img_size_config,
+            "patch_size": self.patch_size_config,
+            "in_chans": self.in_chans_config,
+            "pos_embed_rope_base": self.pos_embed_rope_base_config,
+            "pos_embed_rope_min_period": self.pos_embed_rope_min_period_config,
+            "pos_embed_rope_max_period": self.pos_embed_rope_max_period_config,
+            "pos_embed_rope_normalize_coords": self.pos_embed_rope_normalize_coords_config,
+            "pos_embed_rope_shift_coords": self.pos_embed_rope_shift_coords_config,
+            "pos_embed_rope_jitter_coords": self.pos_embed_rope_jitter_coords_config,
+            "pos_embed_rope_rescale_coords": self.pos_embed_rope_rescale_coords_config,
+            "pos_embed_rope_dtype": self.pos_embed_rope_dtype_config,
+            "embed_dim": self.embed_dim_config,
+            "depth": self.depth_config,
+            "num_heads": self.num_heads_config,
+            "ffn_ratio": self.ffn_ratio_config,
+            "qkv_bias": self.qkv_bias_config,
+            "proj_bias": self.proj_bias_config,
+            "ffn_bias": self.ffn_bias_config,
+            "drop_path_rate": self.drop_path_rate_config,
+            "norm_layer": self.norm_layer_config,
+            "ffn_layer": self.ffn_layer_config,
+            "layerscale_init": self.layerscale_init_config,
+            "n_storage_tokens": self.n_storage_tokens_config,
+            "mask_k_bias": self.mask_k_bias_config,
+            "untie_cls_and_patch_norms": self.untie_cls_and_patch_norms_config,
+            "untie_global_and_local_cls_norm": self.untie_global_and_local_cls_norm_config,
+        })
+        return config
 
-def vit_small(patch_size=16, **kwargs):
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        ffn_ratio=4,
-        **kwargs,
-    )
+
+def load_pretrained_weights(model, model_name):
+    weights_path = os.path.expanduser(f"~/.keras/paz/models/{model_name}.keras")
+    if os.path.exists(weights_path):
+        print(f"Loading weights from {weights_path}")
+        # Build the model first with a dummy input
+        img_size = model.img_size_config
+        dummy_input = np.zeros((1, img_size, img_size, 3), dtype="float32")
+        model(dummy_input, training=False)
+        model.load_weights(weights_path)
+    else:
+        print(f"Weights file not found at {weights_path}. Model initialized with random weights.")
+
+
+def vit_small(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
+    defaults = {
+        "embed_dim": 384,
+        "depth": 12,
+        "num_heads": 6,
+        "ffn_ratio": 4,
+        "n_storage_tokens": 4,
+        "layerscale_init": 1e-6,
+        "pos_embed_rope_dtype": "float32",
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
+    if weights == "paz":
+        load_pretrained_weights(model, "dinov3_vits16_ported")
     return model
 
 
-def vit_base(patch_size=16, **kwargs):
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        ffn_ratio=4,
-        **kwargs,
-    )
+def vit_base(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
+    defaults = {
+        "embed_dim": 768,
+        "depth": 12,
+        "num_heads": 12,
+        "ffn_ratio": 4,
+        "n_storage_tokens": 4,
+        "layerscale_init": 1e-6,
+        "pos_embed_rope_dtype": "float32",
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
+    if weights == "paz":
+        load_pretrained_weights(model, "dinov3_vitb16_ported")
     return model
 
 
-def vit_large(patch_size=16, **kwargs):
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=1024,
-        depth=24,
-        num_heads=16,
-        ffn_ratio=4,
-        **kwargs,
-    )
+def vit_large(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
+    defaults = {
+        "embed_dim": 1024,
+        "depth": 24,
+        "num_heads": 16,
+        "ffn_ratio": 4,
+        "n_storage_tokens": 4,
+        "layerscale_init": 1e-6,
+        "pos_embed_rope_dtype": "float32",
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
+    if weights == "paz":
+        load_pretrained_weights(model, "dinov3_vitl16_ported")
     return model
 
 
-def vit_so400m(patch_size=16, **kwargs):
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=1152,
-        depth=27,
-        num_heads=18,
-        ffn_ratio=3.777777778,
-        **kwargs,
-    )
+def vit_so400m(patch_size=16, input_shape=(224, 224, 3), **kwargs):
+    defaults = {
+        "embed_dim": 1152,
+        "depth": 27,
+        "num_heads": 18,
+        "ffn_ratio": 3.777777778,
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
     return model
 
 
-def vit_huge2(patch_size=16, **kwargs):
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=1280,
-        depth=32,
-        num_heads=20,
-        ffn_ratio=4,
-        **kwargs,
-    )
+def vit_huge2(patch_size=16, input_shape=(224, 224, 3), **kwargs):
+    defaults = {
+        "embed_dim": 1280,
+        "depth": 32,
+        "num_heads": 20,
+        "ffn_ratio": 4,
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
     return model
 
 
-def vit_giant2(patch_size=16, **kwargs):
+def vit_giant2(patch_size=16, input_shape=(224, 224, 3), **kwargs):
     """
     Close to ViT-giant, with embed-dim 1536 and 24 heads => embed-dim per head 64
     """
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=1536,
-        depth=40,
-        num_heads=24,
-        ffn_ratio=4,
-        **kwargs,
-    )
+    defaults = {
+        "embed_dim": 1536,
+        "depth": 40,
+        "num_heads": 24,
+        "ffn_ratio": 4,
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
     return model
 
 
-def vit_7b(patch_size=16, **kwargs):
-    model = DinoVisionTransformer(
-        patch_size=patch_size,
-        embed_dim=4096,
-        depth=40,
-        num_heads=32,
-        ffn_ratio=3,
-        **kwargs,
-    )
+def vit_7b(patch_size=16, input_shape=(224, 224, 3), **kwargs):
+    defaults = {
+        "embed_dim": 4096,
+        "depth": 40,
+        "num_heads": 32,
+        "ffn_ratio": 3,
+        "img_size": input_shape[0],
+        "patch_size": patch_size,
+    }
+    defaults.update(kwargs)
+    model = DinoVisionTransformer(**defaults)
     return model
+
+
+def DINOV3VITS(input_shape=(224, 224, 3), **kwargs):
+    return vit_small(weights="paz", input_shape=input_shape, **kwargs)
+
+
+def DINOV3VITB(input_shape=(224, 224, 3), **kwargs):
+    return vit_base(weights="paz", input_shape=input_shape, **kwargs)
+
+
+def DINOV3VITL(input_shape=(224, 224, 3), **kwargs):
+    return vit_large(weights="paz", input_shape=input_shape, **kwargs)

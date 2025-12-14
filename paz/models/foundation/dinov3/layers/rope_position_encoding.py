@@ -36,6 +36,7 @@ class RopePeriodsInitializer(Initializer):
         }
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class RopePositionEmbedding(keras.Layer):
     def __init__(
         self,

@@ -76,6 +76,7 @@ def process_causal_attention_block(x, attention_norm, attention, ls1, ffn_norm, 
     return x
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class StochasticDepth(layers.Layer):
     def __init__(self, drop_rate, **kwargs):
         super().__init__(**kwargs)
@@ -90,11 +91,13 @@ class StochasticDepth(layers.Layer):
         return config
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class _Identity(layers.Layer):
     def call(self, x, training=None):
         return x
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class SelfAttentionBlock(layers.Layer):
     def __init__(
         self,
@@ -205,6 +208,7 @@ class SelfAttentionBlock(layers.Layer):
         return config
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class CausalSelfAttentionBlock(layers.Layer):
     def __init__(
         self,

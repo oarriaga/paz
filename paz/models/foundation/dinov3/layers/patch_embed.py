@@ -10,6 +10,7 @@ def make_2tuple(x):
     return (x, x)
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class PatchEmbed(keras.layers.Layer):
     def __init__(
         self,
@@ -28,7 +29,9 @@ class PatchEmbed(keras.layers.Layer):
         self.patch_size = make_2tuple(patch_size)
         self.in_channels = in_channels
         self.embed_dim = embed_dim
+        self.norm_layer = norm_layer
         self.flatten_embedding = flatten_embedding
+        self.use_bias = use_bias
         self.grid_size = (
             self.img_size[0] // self.patch_size[0],
             self.img_size[1] // self.patch_size[1],
@@ -53,3 +56,15 @@ class PatchEmbed(keras.layers.Layer):
         if not self.flatten_embedding:
             x = keras.ops.reshape(x, (B, H_new, W_new, C_new))
         return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "img_size": self.img_size,
+            "patch_size": self.patch_size,
+            "in_channels": self.in_channels,
+            "embed_dim": self.embed_dim,
+            "flatten_embedding": self.flatten_embedding,
+            "use_bias": self.use_bias,
+        })
+        return config

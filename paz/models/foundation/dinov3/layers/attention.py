@@ -125,6 +125,7 @@ def rotate_half_hidden_dimensions(x):
     return keras.ops.concatenate([-second_half, first_half], axis=-1)
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class SelfAttention(keras.Layer):
     """Keras implementation of DINOv3's SelfAttention layer."""
 
@@ -142,6 +143,9 @@ class SelfAttention(keras.Layer):
         self.dim = dim
         self.num_heads = num_heads
         self.attn_drop = attn_drop
+        self.qkv_bias = qkv_bias
+        self.proj_bias = proj_bias
+        self.proj_drop = proj_drop
         if self.dim % self.num_heads != 0:
             raise ValueError(
                 f"dim ({dim}) must be divisible by num_heads ({num_heads})."
@@ -195,7 +199,20 @@ class SelfAttention(keras.Layer):
         else:
             return self.forward_tensor(x, rope=rope, training=training)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "dim": self.dim,
+            "num_heads": self.num_heads,
+            "qkv_bias": self.qkv_bias,
+            "proj_bias": self.proj_bias,
+            "attn_drop": self.attn_drop,
+            "proj_drop": self.proj_drop,
+        })
+        return config
 
+
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class CausalSelfAttention(keras.Layer):
     """Keras implementation of DINOv3's CausalSelfAttention layer."""
 
@@ -213,6 +230,9 @@ class CausalSelfAttention(keras.Layer):
         self.dim = dim
         self.num_heads = num_heads
         self.attn_drop = attn_drop
+        self.qkv_bias = qkv_bias
+        self.proj_bias = proj_bias
+        self.proj_drop = proj_drop
         if dim % num_heads != 0:
             raise ValueError(
                 f"dim ({dim}) must be divisible by num_heads ({num_heads})."
@@ -233,3 +253,15 @@ class CausalSelfAttention(keras.Layer):
         return apply_projection_with_dropout(
             attention_output, self.proj, self.proj_drop_layer, training
         )
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "dim": self.dim,
+            "num_heads": self.num_heads,
+            "qkv_bias": self.qkv_bias,
+            "proj_bias": self.proj_bias,
+            "attn_drop": self.attn_drop,
+            "proj_drop": self.proj_drop,
+        })
+        return config

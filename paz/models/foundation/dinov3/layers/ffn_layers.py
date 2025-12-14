@@ -19,6 +19,7 @@ class ListForwardMixin:
         return uncat_with_shapes(x_flat_out, shapes, num_tokens)
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class Mlp(layers.Layer, ListForwardMixin):
     def __init__(
         self,
@@ -33,12 +34,14 @@ class Mlp(layers.Layer, ListForwardMixin):
         super().__init__(**kwargs)
         self.hidden_features_config = hidden_features
         self.out_features_config = out_features
+        self.act_layer_name = act_layer
         if act_layer == "gelu":
             self.act = lambda x: keras.activations.gelu(x, approximate=approximate_gelu)
         else:
             self.act = keras.activations.get(act_layer)
         self.drop_rate = drop
         self.use_bias = bias
+        self.approximate_gelu = approximate_gelu
 
     def build(self, input_shape: tuple):
         in_features = input_shape[-1]
@@ -70,7 +73,20 @@ class Mlp(layers.Layer, ListForwardMixin):
         else:
             return self._forward_tensor(x, training=training)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "hidden_features": self.hidden_features_config,
+            "out_features": self.out_features_config,
+            "act_layer": self.act_layer_name,
+            "drop": self.drop_rate,
+            "bias": self.use_bias,
+            "approximate_gelu": self.approximate_gelu,
+        })
+        return config
 
+
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class SwiGLUFFN(layers.Layer, ListForwardMixin):
     """Keras implementation of the SwiGLUFFN module."""
 
@@ -124,3 +140,13 @@ class SwiGLUFFN(layers.Layer, ListForwardMixin):
             return self.call_list(x, training=training)
         else:
             return self._forward_tensor(x, training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "hidden_features": self.hidden_features_config,
+            "out_features": self.out_features_config,
+            "bias": self.use_bias,
+            "align_to": self.align_to,
+        })
+        return config

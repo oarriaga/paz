@@ -2,6 +2,7 @@ import keras
 import keras.ops as ops
 
 
+@keras.saving.register_keras_serializable(package="paz.dinov3")
 class LayerScale(keras.layers.Layer):
     def __init__(
         self, dimension, init_values=1e-5, inplace=False, data_type=None, **kwargs
