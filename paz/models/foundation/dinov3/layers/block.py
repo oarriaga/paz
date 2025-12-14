@@ -10,22 +10,79 @@ from paz.models.foundation.dinov3.layers.ffn_layers import Mlp
 from paz.models.foundation.dinov3.layers.layer_scale import LayerScale
 
 
+def apply_stochastic_depth(x, drop_rate, training):
+    if drop_rate == 0.0 or not training:
+        return x
+
+    keep_prob = 1.0 - drop_rate
+    shape = (ops.shape(x)[0],) + (1,) * (len(ops.shape(x)) - 1)
+    random_tensor = keras.random.uniform(shape, 0, 1, dtype=x.dtype)
+    keep_mask = random_tensor >= drop_rate
+    return (x / keep_prob) * ops.cast(keep_mask, x.dtype)
+
+
+def apply_attention_with_residual(x, norm_layer, attn_layer, layer_scale, drop_path, rope, training):
+    x_normalized = norm_layer(x)
+    attention_output = attn_layer(x_normalized, rope=rope, training=training)
+    scaled_output = layer_scale(attention_output, training=training)
+    dropped_output = drop_path(scaled_output, training=training)
+    return x + dropped_output
+
+
+def apply_mlp_with_residual(x, norm_layer, mlp_layer, layer_scale, drop_path, training):
+    x_normalized = norm_layer(x)
+    mlp_output = mlp_layer(x_normalized, training=training)
+    scaled_output = layer_scale(mlp_output, training=training)
+    dropped_output = drop_path(scaled_output, training=training)
+    return x + dropped_output
+
+
+def process_attention_block_tensor(x, norm1, attn, ls1, drop_path1, norm2, mlp, ls2, drop_path2, rope, training):
+    x = apply_attention_with_residual(x, norm1, attn, ls1, drop_path1, rope, training)
+    x = apply_mlp_with_residual(x, norm2, mlp, ls2, drop_path2, training)
+    return x
+
+
+def process_attention_block_list(x_list, norm1, attn, ls1, drop_path1, norm2, mlp, ls2, drop_path2, rope_list, training):
+    if rope_list is None:
+        rope_list = [None] * len(x_list)
+
+    x_norm1_list = [norm1(x) for x in x_list]
+    attn_out_list = attn(x_norm1_list, rope=rope_list, training=training)
+    x_res1_list = [
+        x + drop_path1(ls1(attn_out), training=training)
+        for x, attn_out in zip(x_list, attn_out_list)
+    ]
+
+    x_norm2_list = [norm2(x) for x in x_res1_list]
+    mlp_out_list = mlp(x_norm2_list, training=training)
+    x_res2_list = [
+        x + drop_path2(ls2(mlp_out), training=training)
+        for x, mlp_out in zip(x_res1_list, mlp_out_list)
+    ]
+
+    return x_res2_list
+
+
+def process_causal_attention_block(x, attention_norm, attention, ls1, ffn_norm, feed_forward, ls2, is_causal, training):
+    attn_input = attention_norm(x)
+    attn_output = attention(attn_input, is_causal=is_causal, training=training)
+    x = x + ls1(attn_output)
+
+    ffn_input = ffn_norm(x)
+    ffn_output = feed_forward(ffn_input, training=training)
+    x = x + ls2(ffn_output)
+
+    return x
+
+
 class StochasticDepth(layers.Layer):
     def __init__(self, drop_rate, **kwargs):
         super().__init__(**kwargs)
         self.drop_rate = drop_rate
 
     def call(self, x, training=None):
-        if self.drop_rate == 0.0 or not training:
-            return x
-
-        keep_prob = 1.0 - self.drop_rate
-        shape = (ops.shape(x)[0],) + (1,) * (len(ops.shape(x)) - 1)
-
-        random_tensor = keras.random.uniform(shape, 0, 1, dtype=x.dtype)
-        keep_mask = random_tensor >= self.drop_rate
-
-        return (x / keep_prob) * ops.cast(keep_mask, x.dtype)
+        return apply_stochastic_depth(x, self.drop_rate, training)
 
     def get_config(self):
         config = super().get_config()
@@ -34,7 +91,7 @@ class StochasticDepth(layers.Layer):
 
 
 class _Identity(layers.Layer):
-    def call(self, x):
+    def call(self, x, training=None):
         return x
 
 
@@ -109,37 +166,20 @@ class SelfAttentionBlock(layers.Layer):
         self.drop_path2 = StochasticDepth(drop_path) if drop_path > 0.0 else _Identity()
 
     def _forward_tensor(self, x, rope=None, training=None):
-        """Handles a single tensor input."""
-        x_norm1 = self.norm1(x)
-        attn_out = self.attn(x_norm1, rope=rope, training=training)
-        x = x + self.drop_path1(self.ls1(attn_out), training=training)
-        x_norm2 = self.norm2(x)
-        mlp_out = self.mlp(x_norm2, training=training)
-        x = x + self.drop_path2(self.ls2(mlp_out), training=training)
-        return x
+        return process_attention_block_tensor(
+            x, self.norm1, self.attn, self.ls1, self.drop_path1,
+            self.norm2, self.mlp, self.ls2, self.drop_path2,
+            rope, training
+        )
 
     def _forward_list(self, x_list, rope_list=None, training=None):
-        """Handles a list of tensors, as required by the main model."""
-        if rope_list is None:
-            rope_list = [None] * len(x_list)
-        x_norm1_list = [self.norm1(x) for x in x_list]
-        attn_out_list = self.attn(x_norm1_list, rope=rope_list, training=training)
-        x_res1_list = [
-            x + self.drop_path1(self.ls1(attn_out), training=training)
-            for x, attn_out in zip(x_list, attn_out_list)
-        ]
-        x_norm2_list = [self.norm2(x) for x in x_res1_list]
-        mlp_out_list = self.mlp(x_norm2_list, training=training)
-        x_res2_list = [
-            x + self.drop_path2(self.ls2(mlp_out), training=training)
-            for x, mlp_out in zip(x_res1_list, mlp_out_list)
-        ]
-        return x_res2_list
+        return process_attention_block_list(
+            x_list, self.norm1, self.attn, self.ls1, self.drop_path1,
+            self.norm2, self.mlp, self.ls2, self.drop_path2,
+            rope_list, training
+        )
 
     def call(self, x, rope=None, training=None):
-        """
-        Handles both a single tensor and a list of tensors.
-        """
         if isinstance(x, list):
             return self._forward_list(x, rope_list=rope, training=training)
         else:
@@ -223,17 +263,11 @@ class CausalSelfAttentionBlock(layers.Layer):
         )
 
     def call(self, x, training=None):
-        attn_input = self.attention_norm(x)
-        attn_output = self.attention(
-            attn_input, is_causal=self.is_causal, training=training
+        return process_causal_attention_block(
+            x, self.attention_norm, self.attention, self.ls1,
+            self.ffn_norm, self.feed_forward, self.ls2,
+            self.is_causal, training
         )
-        x_attn = x + self.ls1(attn_output)
-
-        ffn_input = self.ffn_norm(x_attn)
-        ffn_output = self.feed_forward(ffn_input, training=training)
-        x_ffn = x_attn + self.ls2(ffn_output)
-
-        return x_ffn
 
     def get_config(self):
         config = super().get_config()

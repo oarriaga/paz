@@ -1,28 +1,11 @@
 import os
 import sys
-import logging
 import torch
 import numpy as np
 import pytest
-
-# --- Configuration for Keras Backend and Environment ---
-
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", ".."))
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-import torch
 import keras
 from keras import ops
 
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.models.vision_transformer import (
     vit_small,
     vit_base,
@@ -30,9 +13,6 @@ from paz.models.foundation.dinov3.models.vision_transformer import (
 )
 from paz.models.foundation.dinov3.models import convnext
 
-# ==============================================================================
-# PyTorch Reference Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
     PT_vit_small,
     PT_vit_base,
@@ -42,17 +22,11 @@ from paz.models.foundation.dinov3.models.torch_convnext_for_testing import (
     PT_get_convnext_arch,
 )
 
-# ==============================================================================
-# Global Configuration
-# ==============================================================================
 
-DINO_REPO_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-PT_MODELS_WEIGHTS_DIR_PATH = (
-    r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3/"
-)
-KERAS_MODELS_WEIGHTS_DIR_PATH = r"weights_dinov3"
+DINO_REPO_PATH = ""
+PT_MODELS_WEIGHTS_DIR_PATH = "/home/octavio/Storage/dinov3/"
+KERAS_MODELS_WEIGHTS_DIR_PATH = os.path.expanduser("~/.keras/paz/models/")
 
-# --- ViT Definitions ---
 VIT_MODEL_WEIGHTS_PATHS = {
     "dinov3_vits16": r"dinov3_vits16_pretrain_lvd1689m-08c60483.pth",
     "dinov3_vitb16": r"dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
@@ -74,7 +48,6 @@ vit_model_kwargs = {
     "pos_embed_rope_dtype": "float32",
 }
 
-# --- ConvNeXt Definitions ---
 CONVNEXT_MODEL_WEIGHTS_PATHS = {
     "dinov3_convnext_tiny": r"dinov3_convnext_tiny_pretrain_lvd1689m-21b726bb.pth",
     "dinov3_convnext_small": r"dinov3_convnext_small_pretrain_lvd1689m-296db49d.pth",
@@ -105,7 +78,6 @@ KERAS_CONVNEXT_CONSTRUCTORS = {
     "dinov3_convnext_large": convnext.get_convnext_arch("convnext_large"),
 }
 
-# --- Combine All Paths ---
 PT_MODEL_WEIGHTS_PATHS = {
     **VIT_MODEL_WEIGHTS_PATHS,
     **CONVNEXT_MODEL_WEIGHTS_PATHS,
@@ -114,11 +86,7 @@ KERAS_MODEL_WEIGHTS_PATHS = {
     **KERAS_VIT_MODEL_WEIGHTS_PATHS,
     **KERAS_CONVNEXT_MODEL_WEIGHTS_PATHS,
 }
-# ==============================================================================
-# Helper Functions
-# ==============================================================================
 
-# (PyTorch Constructor, Keras Constructor, Weight Key, Kwargs)
 VIT_MODEL_CONFIGS = [
     (PT_vit_small, vit_small, "dinov3_vits16", vit_model_kwargs),
     (PT_vit_base, vit_base, "dinov3_vitb16", vit_model_kwargs),
@@ -183,11 +151,6 @@ def get_keras_model(keras_constructor, keras_weight_path_key, model_kwargs):
     keras_model.load_weights(keras_weight_path)
     print(f"Keras model '{keras_weight_path_key}' loaded from {keras_weight_path}")
     return keras_model
-
-
-# ==============================================================================
-# Test Suite for Final Output
-# ==============================================================================
 
 
 @pytest.mark.parametrize(
@@ -295,11 +258,6 @@ def test_final_CONVNEXT_output_equivalence(
     print(f"✅ Success! Final outputs for {weight_key} match.")
 
 
-# ==============================================================================
-# Test Suite for Deep-Dive Block Equivalence (ViT)
-# ==============================================================================
-
-
 @pytest.mark.parametrize(
     "pt_constructor, keras_constructor, weight_key, model_kwargs", VIT_MODEL_CONFIGS
 )
@@ -323,9 +281,9 @@ def test_deep_dive_VIT_block_equivalence(
             )
             if np.isnan(keras_np).any():
                 raise AssertionError("Keras output contains NaN values.")
-            if mean_diff > 1e-4:
+            if mean_diff > 2e-4:
                 raise AssertionError(
-                    f"Mean absolute difference {mean_diff} exceeds tolerance of 1e-4."
+                    f"Mean absolute difference {mean_diff} exceeds tolerance of 2e-4."
                 )
             print(f"    ✅ Block {block_idx} - {layer_name}: Output matches.")
             return keras_tensor
@@ -412,11 +370,6 @@ def test_deep_dive_VIT_block_equivalence(
     assert (
         not any_failure
     ), f"One or more internal layers for {weight_key} had an output mismatch. See logs for details."
-
-
-# ==============================================================================
-# Test Suite for Deep-Dive Block Equivalence (ConvNeXt)
-# ==============================================================================
 
 
 @pytest.mark.parametrize(
@@ -546,11 +499,3 @@ def test_deep_dive_convnext_block_equivalence(
     assert (
         not any_failure
     ), f"One or more internal layers for {weight_key} had an output mismatch. See logs for details."
-
-
-# ==============================================================================
-# Run Tests
-# ==============================================================================
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

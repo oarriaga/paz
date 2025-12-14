@@ -1,17 +1,6 @@
 import os
 import torch
 import numpy as np
-import sys
-
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 from torch import nn
 from functools import partial
 import keras
@@ -20,18 +9,11 @@ import jax.numpy as jnp
 from keras import layers
 import pytest
 
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.block import (
     SelfAttentionBlock,
     CausalSelfAttentionBlock,
 )
 
-# ==============================================================================
-# PyTorch Reference Implementation (unchangeable)
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
     PT_SelfAttention,
     PT_CausalSelfAttention,
@@ -39,11 +21,6 @@ from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
     PT_SelfAttentionBlock,
     PT_CausalSelfAttentionBlock,
 )
-
-
-# ==============================================================================
-# TESTING HELPER FUNCTIONS
-# ==============================================================================
 
 
 def transfer_weights_pt_to_pt_causal(pt_ref_block, pt_causal_block):
@@ -140,14 +117,8 @@ def transfer_weights_generic(keras_block, pt_block, layer_name_map):
             keras_layer.set_weights(weights_to_set)
 
 
-# ==============================================================================
-# tests
-# ==============================================================================
-
-# Define paths to your local DINOv3 repository and the downloaded weights
-DINO_REPO_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-DINO_WEIGHT_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-dinov3_files_exist = os.path.isdir(DINO_REPO_PATH) and os.path.isfile(DINO_WEIGHT_PATH)
+DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
+dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
 
 
 @pytest.mark.parametrize(
@@ -306,9 +277,23 @@ def test_block_training_mode(block_class, dim, num_heads, drop_rate):
 @pytest.mark.skipif(not dinov3_files_exist, reason="DINOv3 model/weights not found.")
 def test_dinov3_block_pretrained_weights_match():
     """Validates the Keras SelfAttentionBlock against pre-trained DINOv3 weights."""
-    dinov3_model = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
+    from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+        PT_vit_small,
     )
+
+    model_kwargs = {
+        "img_size": 224,
+        "patch_size": 16,
+        "ffn_layer": "mlp",
+        "untie_cls_and_patch_norms": False,
+        "norm_layer": "layernorm",
+        "layerscale_init": 1e-6,
+        "n_storage_tokens": 4,
+        "pos_embed_rope_dtype": "float32",
+    }
+    dinov3_model = PT_vit_small(**model_kwargs)
+    state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
+    dinov3_model.load_state_dict(state_dict, strict=False)
     dinov3_model.eval()
     torch_block = dinov3_model.blocks[0]
 
@@ -365,9 +350,23 @@ def test_dinov3_block_pretrained_weights_match():
 @pytest.mark.skipif(not dinov3_files_exist, reason="DINOv3 model/weights not found.")
 def test_dinov3_causal_block_pretrained_weights_match():
     """Validates the Keras CausalSelfAttentionBlock against pre-trained DINOv3 weights."""
-    dinov3_model = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
+    from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+        PT_vit_small,
     )
+
+    model_kwargs = {
+        "img_size": 224,
+        "patch_size": 16,
+        "ffn_layer": "mlp",
+        "untie_cls_and_patch_norms": False,
+        "norm_layer": "layernorm",
+        "layerscale_init": 1e-6,
+        "n_storage_tokens": 4,
+        "pos_embed_rope_dtype": "float32",
+    }
+    dinov3_model = PT_vit_small(**model_kwargs)
+    state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
+    dinov3_model.load_state_dict(state_dict, strict=False)
     dinov3_model.eval()
     ref_block = dinov3_model.blocks[0]
 
@@ -605,7 +604,3 @@ def test_gradients_consistency(dim, num_heads, qkv_bias):
     print(
         f"Gradient consistency test passed for dim={dim}, heads={num_heads}, bias={qkv_bias}"
     )
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

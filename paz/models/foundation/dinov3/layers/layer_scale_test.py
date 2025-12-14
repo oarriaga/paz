@@ -1,45 +1,17 @@
 import os
-import sys
 import pytest
 import torch
 import numpy as np
 
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
-
 from paz.models.foundation.dinov3.layers.layer_scale import LayerScale
-
-# ==============================================================================
-# PyTorch Reference Implementation
-# ==============================================================================
-
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_LayerScale
 
 
-# ==============================================================================
-# Helper Functions and Fixtures
-# ==============================================================================
 def port_weights(torch_model, keras_model):
     """Copies the gamma weight from the PyTorch model to the Keras model."""
     keras_model.gamma.assign(torch_model.gamma.detach().cpu().numpy())
 
 
-# ==============================================================================
-# Test Suite for LayerScale
-# ==============================================================================
-
-
-# --- Pytest Fixtures ---
 @pytest.fixture(scope="module")
 def params():
     """Provides common parameters for the tests and sets random seeds."""
@@ -48,7 +20,6 @@ def params():
     return {"DIM": 128, "BATCH": 4, "SEQ_LEN": 64}
 
 
-# --- Test Cases ---
 def test_basic_functionality(params):
     """Tests if the Keras LayerScale output matches the PyTorch equivalent."""
     # 1. Initialize models
@@ -127,10 +98,9 @@ def test_keras_trainability(params):
     ), f"Trainable weight name should be 'gamma', but got '{keras_ls.trainable_weights[0].name}'"
 
 
-# --- DINOv3 Pre-trained Weights Test ---
-DINO_REPO_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-DINO_WEIGHT_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-dinov3_files_exist = os.path.isdir(DINO_REPO_PATH) and os.path.isfile(DINO_WEIGHT_PATH)
+DINO_REPO_PATH = ""  # Not needed
+DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
+dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
 
 
 @pytest.mark.skipif(
@@ -174,7 +144,3 @@ def test_dinov3_pretrained_weights_match(params):
         atol=1e-6,
         err_msg="Pre-trained DINOv3 weights test failed.",
     )
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

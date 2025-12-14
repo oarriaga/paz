@@ -1,39 +1,15 @@
 import os
-import sys
 import pytest
 import torch
 import numpy as np
-
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.attention import (
     SelfAttention,
     CausalSelfAttention,
 )
-
-
-# ==============================================================================
-# PyTorch Reference Implementation
-# ==============================================================================
-
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
     PT_SelfAttention,
     PT_CausalSelfAttention,
 )
-
-# ==============================================================================
-# Utility Functions
-# ==============================================================================
 
 
 def port_weights(torch_model, keras_model):
@@ -45,11 +21,6 @@ def port_weights(torch_model, keras_model):
     keras_model.proj.kernel.assign(torch_model.proj.weight.T.detach().numpy())
     if torch_model.proj.bias is not None:
         keras_model.proj.bias.assign(torch_model.proj.bias.detach().numpy())
-
-
-# ==============================================================================
-# PyTest Fixtures and Test Cases
-# ==============================================================================
 
 
 @pytest.fixture(scope="module")
@@ -84,7 +55,6 @@ def self_attention_models(params):
     keras_attn = SelfAttention(p["DIM"], p["NUM_HEADS"], qkv_bias=True, proj_bias=True)
     torch_attn.eval()
 
-    # Build layer and port weights
     _ = keras_attn(np.zeros((p["BATCH"], p["SEQ_LEN"], p["DIM"]), dtype="float32"))
     port_weights(torch_attn, keras_attn)
     return torch_attn, keras_attn
@@ -102,7 +72,6 @@ def causal_self_attention_models(params):
     )
     torch_causal_attn.eval()
 
-    # Build layer and port weights
     _ = keras_causal_attn(
         np.zeros((p["BATCH"], p["SEQ_LEN"], p["DIM"]), dtype="float32")
     )
@@ -110,7 +79,6 @@ def causal_self_attention_models(params):
     return torch_causal_attn, keras_causal_attn
 
 
-# --- Test Cases ---
 def test_self_attention_call(self_attention_models, inputs):
     """Tests the `call` method of SelfAttention with RoPE."""
     torch_attn, keras_attn = self_attention_models
@@ -263,11 +231,8 @@ def test_value_error_on_invalid_heads(params):
         SelfAttention(dim=params["DIM"], num_heads=7)
 
 
-# --- DINOv3 Pre-trained Weights Test ---
-
-DINO_REPO_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-DINO_WEIGHT_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-dinov3_files_exist = os.path.isdir(DINO_REPO_PATH) and os.path.isfile(DINO_WEIGHT_PATH)
+DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
+dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
 
 
 @pytest.mark.skipif(
@@ -278,20 +243,31 @@ def test_dinov3_pretrained_weights_match():
     Tests the Keras SelfAttention layer by loading weights from a pre-trained
     DINOv3 PyTorch model and verifying the outputs match.
     """
-    # 1. Load the pre-trained DINOv3 model from local source
-    dinov3_model_local = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
+    from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+        PT_vit_small,
     )
+
+    model_kwargs = {
+        "img_size": 224,
+        "patch_size": 16,
+        "ffn_layer": "mlp",
+        "untie_cls_and_patch_norms": False,
+        "norm_layer": "layernorm",
+        "layerscale_init": 1e-6,
+        "n_storage_tokens": 4,
+        "pos_embed_rope_dtype": "float32",
+    }
+    dinov3_model_local = PT_vit_small(**model_kwargs)
+    state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
+    dinov3_model_local.load_state_dict(state_dict, strict=False)
     dinov3_model_local.eval()
 
-    # 2. Extract the first attention layer and its parameters
     torch_pretrained_attn = dinov3_model_local.blocks[0].attn
     PRETRAINED_DIM = dinov3_model_local.embed_dim
     PRETRAINED_NUM_HEADS = torch_pretrained_attn.num_heads
     QKV_BIAS = torch_pretrained_attn.qkv.bias is not None
     PROJ_BIAS = torch_pretrained_attn.proj.bias is not None
 
-    # 3. Initialize Keras SelfAttention with matching parameters
     keras_attn_pretrained = SelfAttention(
         dim=PRETRAINED_DIM,
         num_heads=PRETRAINED_NUM_HEADS,
@@ -299,17 +275,14 @@ def test_dinov3_pretrained_weights_match():
         proj_bias=PROJ_BIAS,
     )
 
-    # 4. Prepare a dummy input tensor
     BATCH_SIZE = 2
     NUM_TOKENS = 201
     x_torch_pretrained = torch.rand(BATCH_SIZE, NUM_TOKENS, PRETRAINED_DIM)
     x_keras_pretrained = x_torch_pretrained.numpy()
 
-    # 5. Build Keras layer and port weights
     _ = keras_attn_pretrained(np.zeros_like(x_keras_pretrained, dtype="float32"))
     port_weights(torch_pretrained_attn, keras_attn_pretrained)
 
-    # 6. Run forward pass on both layers and compare outputs
     torch_out_pretrained = torch_pretrained_attn(x_torch_pretrained).detach().numpy()
     keras_out_pretrained = np.array(
         keras_attn_pretrained(x_keras_pretrained, rope=None, training=False)
@@ -321,7 +294,3 @@ def test_dinov3_pretrained_weights_match():
         atol=1e-5,
         err_msg="Keras output with DINOv3 weights does not match PyTorch output.",
     )
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

@@ -109,8 +109,18 @@ class SwiGLUFFN(layers.Layer, ListForwardMixin):
 
         super().build(input_shape)
 
-    def call(self, x: keras.KerasTensor) -> keras.KerasTensor:
+    def _forward_tensor(
+        self, x: keras.KerasTensor, training: bool = False
+    ) -> keras.KerasTensor:
+        """Processes a single tensor input."""
         x1 = self.w1(x)
         x2 = self.w2(x)
         hidden = keras.activations.silu(x1) * x2
         return self.w3(hidden)
+
+    def call(self, x: keras.KerasTensor, training: bool = False) -> keras.KerasTensor:
+        """Handles both a single tensor and a list of tensors."""
+        if isinstance(x, list):
+            return self.call_list(x, training=training)
+        else:
+            return self._forward_tensor(x, training=training)

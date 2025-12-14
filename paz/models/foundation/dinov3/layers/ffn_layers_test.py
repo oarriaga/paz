@@ -1,50 +1,19 @@
 import os
 import torch
 import numpy as np
-import sys
-
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-import numpy as np
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-
-import torch
 import torch.nn as nn
 import jax.numpy as jnp
-
 import pytest
-
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 
 from paz.models.foundation.dinov3.layers.ffn_layers import (
     Mlp,
     SwiGLUFFN,
 )
 
-# ==============================================================================
-# PyTorch Reference Implementation
-# ==============================================================================
-
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
     PT_Mlp,
     PT_SwiGLUFFN,
 )
-
-# ==============================================================================
-# Helper Functions for Creating and Testing Layer Pairs
-# ==============================================================================
 
 
 def create_mlp_pair(
@@ -129,11 +98,6 @@ def create_swiglu_pair(
     return pt_model, keras_model
 
 
-# ==============================================================================
-# Test Fixtures and Cases
-# ==============================================================================
-
-
 @pytest.fixture(scope="module")
 def params():
     """Provides a dictionary of common parameters for tests."""
@@ -149,7 +113,6 @@ def params():
     }
 
 
-# --- Test Cases for Mlp ---
 def test_mlp_basic(params):
     """🧪 Test Mlp: Basic case with specified dimensions."""
     pt_mlp, keras_mlp = create_mlp_pair(
@@ -207,13 +170,11 @@ def test_mlp_dropout_inference(params):
 def test_mlp_with_pretrained_dinov3_weights(params):
     """🧪 Test Mlp by loading real DINOv3 ViT-S/16 pretrained weights."""
     try:
-        DINO_REPO_PATH = (
-            r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-        )
-        DINO_WEIGHT_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+        DINO_REPO_PATH = ""
+        DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
 
-        if not os.path.isdir(DINO_REPO_PATH) or not os.path.isfile(DINO_WEIGHT_PATH):
-            raise FileNotFoundError("DINOv3 repository or weight file not found.")
+        if not os.path.isfile(DINO_WEIGHT_PATH):
+            raise FileNotFoundError("DINOv3 weight file not found.")
 
         # Load the full DINOv3 model from the local repository
         full_dinov3_model = torch.hub.load(
@@ -276,7 +237,6 @@ def test_mlp_with_pretrained_dinov3_weights(params):
     ), f"Mean absolute difference {mean_abs_diff} exceeds tolerance."
 
 
-# --- Test Cases for swiglu ---
 def test_swiglu_basic(params):
     """🧪 Test SwiGLUFFN: Basic case with specified dimensions."""
     pt_swiglu, keras_swiglu = create_swiglu_pair(
@@ -358,7 +318,3 @@ def test_swiglu_with_pretrained_dinov3_weights(params):
     output_pt = torch_model(input_tensor).detach().numpy()
     output_keras = keras_model(jnp.array(input_tensor.numpy()))
     np.testing.assert_allclose(output_pt, output_keras, atol=1e-6)
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

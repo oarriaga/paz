@@ -1,15 +1,4 @@
 import os
-import sys
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 import pytest
 import numpy as np
 import jax
@@ -17,20 +6,8 @@ import keras
 import torch
 from keras import ops
 
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.rms_norm import RMSNorm
-
-# ==============================================================================
-# PyTorch Reference Implementation (unchangeable)
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_RMSNorm
-
-# ==============================================================================
-# Test Suite
-# ==============================================================================
 
 
 @pytest.fixture
@@ -59,9 +36,6 @@ def run_and_compare(keras_model, torch_model, input_np, atol=1e-5):
     assert output_keras_np.shape == output_torch_np.shape
     np.testing.assert_allclose(output_keras_np, output_torch_np, atol=atol)
     return output_keras_np, output_torch_np
-
-
-# === Main Equivalence Tests ===
 
 
 def test_basic_equivalence(params):
@@ -125,9 +99,6 @@ def test_gradients(params):
     np.testing.assert_allclose(np.array(grad_jax), grad_torch, atol=1e-5)
 
 
-# === Edge Case Tests ===
-
-
 def test_zero_input(params):
     """Tests that an all-zero input produces an all-zero output."""
     shape = (params["batch_size"], params["dim"])
@@ -154,12 +125,9 @@ def test_nan_propagation(params):
     assert np.isnan(output_torch[0, 5])
 
 
-# === Pre-trained Weights Tests ===
-
-# Define paths to local model files. Update these to match your system.
-DINO_REPO_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-DINO_WEIGHT_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-dinov3_files_exist = os.path.isdir(DINO_REPO_PATH) and os.path.isfile(DINO_WEIGHT_PATH)
+DINO_REPO_PATH = ""  # Not needed
+DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
+dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
 
 
 @pytest.mark.skipif(
@@ -201,7 +169,3 @@ def test_dinov3_real_pretrained_weights(params):
 
     # 6. Run forward pass and compare outputs
     run_and_compare(keras_model, torch_pretrained_norm, input_np, atol=1e-5)
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

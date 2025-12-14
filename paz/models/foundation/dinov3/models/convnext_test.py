@@ -1,25 +1,15 @@
 import numpy as np
-import numpy.testing as npt
 import torch
 import os
 import pytest
-
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import keras
 from keras import ops
 import convnext
 import torch_convnext_for_testing
 
-# --- Constants ---
 TOLERANCE = 1e-5
 DINO_WEIGHTS_DIR = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\paz/"
 
-# --- Test Configurations ---
 MODEL_PARAMS = [
     (
         "tiny",
@@ -46,9 +36,6 @@ MODEL_PARAMS = [
         r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_convnext_large_pretrain_lvd1689m-61fa432d.pth",
     ),
 ]
-
-
-# --- Helper Functions (Unchanged) ---
 
 
 def port_weights(pt_model, keras_model):
@@ -223,9 +210,6 @@ def transfer_weights_convnext(pt_model, keras_model):
         raise e
 
 
-# --- PyTest Fixtures ---
-
-
 @pytest.fixture(scope="module", params=MODEL_PARAMS, ids=[p[0] for p in MODEL_PARAMS])
 def setup_models(request):
     """
@@ -290,7 +274,6 @@ def setup_models(request):
     }
 
 
-# --- Test Functions ---
 def test_final_output_equivalence(setup_models):
     """
     Test 1: Compare the final model output (inference mode)
@@ -425,7 +408,3 @@ def test_deep_dive_block_equivalence(setup_models):
     assert (
         not any_failure
     ), f"One or more internal layers for {arch_name} had an output mismatch. See logs for details."
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

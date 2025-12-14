@@ -1,38 +1,17 @@
 import os
-import sys
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 import torch
 import pytest
 import numpy as np
 
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.rope_position_encoding import (
     RopePositionEmbedding,
 )
 
-
-# ==============================================================================
-# PyTorch Reference Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
     PT_RopePositionEmbedding,
 )
 
 
-# ==============================================================================
-# Test fixtures, helper, and test cases functions
-# ==============================================================================
 @pytest.fixture
 def params():
     """Provides common parameters for tests."""
@@ -161,9 +140,9 @@ def test_training_augmentations_are_different(params):
     assert cos_train_keras.shape == cos_eval_keras.shape
 
 
-DINO_REPO_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-DINO_WEIGHT_PATH = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-dinov3_files_exist = os.path.isdir(DINO_REPO_PATH) and os.path.isfile(DINO_WEIGHT_PATH)
+DINO_REPO_PATH = ""  # Not needed
+DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
+dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
 
 
 @pytest.mark.skipif(
@@ -200,7 +179,3 @@ def test_dinov3_real_pretrained_weights(params):
         training=False,
         atol=1e-5,
     )
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

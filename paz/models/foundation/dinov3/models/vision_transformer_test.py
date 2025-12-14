@@ -1,39 +1,20 @@
 import os
-import sys
 import pytest
 import torch
 import numpy as np
-
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", ".."))
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-import torch
+import keras
 
 from paz.models.foundation.dinov3.layers import (
     Mlp,
     SwiGLUFFN,
 )
 
-import keras
-
-# ==============================================================================
-# Keras Layer Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.models.vision_transformer import (
     vit_small,
     vit_base,
     vit_large,
 )
 
-# ==============================================================================
-# PyTorch Reference Implementation
-# ==============================================================================
 from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
     PT_vit_small,
     PT_vit_base,
@@ -41,9 +22,6 @@ from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing im
 )
 
 
-# ==============================================================================
-# Test Suite
-# ==============================================================================
 def transfer_weights_from_pt_to_keras(pt_model, keras_model):
     pt_state_dict = pt_model.state_dict()
 
@@ -144,11 +122,6 @@ def transfer_weights_from_pt_to_keras(pt_model, keras_model):
     if "rope_embed.periods" in pt_state_dict:
         rope_periods = pt_state_dict["rope_embed.periods"].numpy()
         keras_model.rope_embed.set_weights([rope_periods])
-
-
-# ==============================================================================
-# Test Suite for small-Large (ViT-L/16)
-# ==============================================================================
 
 
 def test_final_output_equivalence_with_vitsmall():
@@ -394,11 +367,6 @@ def test_deep_dive_block_equivalence_vitsmall():
     assert (
         not any_failure
     ), "One or more internal layers had an output mismatch. See logs for details."
-
-
-# ==============================================================================
-# Test Suite for ViT-Base (ViT-B/16)
-# ==============================================================================
 
 
 def test_final_output_equivalence_with_vitbase():
@@ -654,11 +622,6 @@ def test_deep_dive_block_equivalence_vitbase():
     ), "One or more internal layers for ViT-Base had an output mismatch. See logs for details."
 
 
-# ==============================================================================
-# Test Suite for ViT-Large (ViT-L/16)
-# ==============================================================================
-
-
 def test_final_output_equivalence_with_vitlarge():
     # --- 1. Define paths and model config ---
     DINO_REPO_PATH = (
@@ -912,7 +875,3 @@ def test_deep_dive_block_equivalence_vitlarge():
     assert (
         not any_failure
     ), "One or more internal layers for ViT-Large had an output mismatch. See logs for details."
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])

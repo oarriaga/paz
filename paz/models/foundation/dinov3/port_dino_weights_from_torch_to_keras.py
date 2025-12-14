@@ -291,12 +291,8 @@ def transfer_weights_convnext(pt_state_dict, keras_model):
 
 if __name__ == "__main__":
 
-    DINO_REPO_PATH = (
-        r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\dinov3"
-    )
-    MODELS_WEIGHTS_DIR_PATH = (
-        r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3/"
-    )
+    DINO_REPO_PATH = ""  # Not needed for this porting
+    MODELS_WEIGHTS_DIR_PATH = "/home/octavio/Storage/dinov3/"
 
     # --- ViT Model Definitions ---
     VIT_MODEL_CONSTRUCTORS = {
@@ -343,7 +339,7 @@ if __name__ == "__main__":
     MODEL_CONSTRUCTORS = {**VIT_MODEL_CONSTRUCTORS, **CONVNEXT_MODEL_CONSTRUCTORS}
     MODEL_WEIGHTS_PATHS = {**VIT_MODEL_WEIGHTS_PATHS, **CONVNEXT_MODEL_WEIGHTS_PATHS}
 
-    output_dir = "weights_dinov3"
+    output_dir = os.path.expanduser("~/.keras/paz/models/")
     os.makedirs(output_dir, exist_ok=True)
     logging.info(f"Output directory set to: '{output_dir}'")
 
