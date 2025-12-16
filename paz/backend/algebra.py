@@ -174,7 +174,7 @@ def solve_quadratic(a, b, c):
         valid_mask: Boolean array
     """
     discriminator = (b**2) - (4.0 * a * c)
-    valid_mask = discriminator > 0  # >= is bad for automatic differentiation
+    valid_mask = discriminator > 0  # TODO why is >= bad for auto-diff
     discriminator = jp.where(valid_mask, discriminator, 1e-4)
     sqrt_discriminator = jp.sqrt(discriminator)
     solution_A = (-b - sqrt_discriminator) / (2.0 * a)
