@@ -26,6 +26,8 @@ max_depth = 1.0
 dataset = "fewsol"
 y_FOV = paz.datasets.get_y_FOV(dataset)
 camera_intrinsics = paz.datasets.get_intrinsics(dataset)
+world_to_camera = jp.eye(4)
+size = paz.SE3.scaling(radius)
 openCV_to_openGL = jp.array(
     [
         [1.0, 0.0, 0.0, 0.0],
@@ -46,7 +48,7 @@ else:
     raise ValueError
 
 
-def preprocess(depth, camera_intrinsics, max_depth, num_points, transform):
+def preprocess_depth(depth, camera_intrinsics, max_depth, transform):
     pointcloud = paz.pointcloud.from_depth(depth, camera_intrinsics)
     pointcloud = paz.algebra.transform_points(transform, pointcloud)
     return paz.pointcloud.bound(pointcloud, max_depth)
@@ -59,38 +61,45 @@ def predict(key, x, step_size, scale, DOF):
     return pred_normal, pred_centroid
 
 
-pointcloud = preprocess(true_depth, camera_intrinsics, max_depth, num_points,openCV_to_openGL)  # fmt: skip
+def build_plane_to_world(world_up, normal, position):
+    y_axis = normal / jp.linalg.norm(normal)
+    x_axis = jp.cross(world_up, y_axis)
+    x_axis = x_axis / jp.linalg.norm(x_axis)
+    z_axis = jp.cross(y_axis, x_axis)
+    rotation = jp.stack([x_axis, y_axis, z_axis], axis=1)
+    return paz.SE3.to_affine_matrix(rotation, position)
+
+
+def filter_above_height(plane_to_world, pointcloud, height=0.01):
+    world_to_plane = jp.linalg.inv(plane_to_world)
+    pointcloud_plane = paz.algebra.transform_points(world_to_plane, pointcloud)
+    mask = pointcloud_plane[:, 1] > height
+    return pointcloud[mask]
+
+
+def build_plane(plane_to_world):
+    floor_material = paz.graphics.Material(jp.full(3, 0.7), 0.1, 0.9, 0.0)
+    return paz.graphics.Plane(plane_to_world, floor_material)
+
+
+pointcloud = preprocess_depth(true_depth, camera_intrinsics, max_depth, openCV_to_openGL)  # fmt: skip
 samples = paz.pointcloud.sample(key, pointcloud, num_points)
-pred_normal, pred_centroid = predict(key, samples, step_size, scale, DOF)
+normal, centroid = predict(key, samples, step_size, scale, DOF)
+plane_to_world = build_plane_to_world(jax.nn.one_hot(1, 3), normal, centroid)
+pointcloud_filtered = filter_above_height(plane_to_world, pointcloud, 0.01)
 
-camera_pose = jp.eye(4)
-world_up = jp.array([0.0, 1.0, 0.0])
-y_axis = pred_normal / jp.linalg.norm(pred_normal)
-
-x_axis = jp.cross(world_up, y_axis)
-x_axis = x_axis / jp.linalg.norm(x_axis)
-z_axis = jp.cross(y_axis, x_axis)
-rotation = jp.stack([x_axis, y_axis, z_axis], axis=1)
-
-plane_pose = paz.SE3.to_affine_matrix(rotation, pred_centroid)
-
-pointcloud_plane = paz.algebra.transform_points(jp.linalg.inv(plane_pose), pointcloud)  # fmt: skip
-mask = pointcloud_plane[:, 1] > 0.01
-
-floor_material = paz.graphics.Material(jp.full(3, 0.7), 0.1, 0.9, 0.0)
-nodes = [paz.graphics.Plane(plane_pose, floor_material)]
-positions = paz.pointcloud.sample(key, pointcloud[mask], num_spheres)
-scale = paz.SE3.scaling(radius)
-for position in positions:
-    nodes.append(paz.graphics.Sphere(paz.SE3.translation(position) @ scale))
+nodes = [build_plane(plane_to_world)]
+for position in paz.pointcloud.sample(key, pointcloud_filtered, num_spheres):
+    nodes.append(paz.graphics.Sphere(paz.SE3.translation(position) @ size))
 scene = paz.graphics.Scene(nodes)
 
 lights = [paz.graphics.PointLight(jp.ones(3), jp.ones(3))]
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-render_args = ((H, W), camera_pose, rays)
+rays = paz.graphics.camera.build_rays((H, W), y_FOV, world_to_camera)
+render_args = ((H, W), world_to_camera, rays)
 render_karg = {"lights": lights, "mask": None, "shadows": False}
 render = jax.jit(paz.partial(paz.graphics.render, *render_args, **render_karg))
 pred_image, pred_depth = render(scene=scene)
+
 pred_image = paz.image.denormalize(pred_image)
 true_image = true_image if dataset == "fewsol" else paz.image.denormalize(true_image)  # fmt: skip
 mosaic = paz.draw.mosaic(jp.array([true_image, pred_image]), (1, 2))
