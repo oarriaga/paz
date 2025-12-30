@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jp
-
-from paz.backend import algebra
+import paz
 
 
 def split(pointcloud):
@@ -24,11 +23,19 @@ def merge(list_of_pointclouds):
 
 
 def transform(pointcloud, affine_transform):
-    return algebra.transform_points(affine_transform, pointcloud)
+    return paz.algebra.transform_points(affine_transform, pointcloud)
 
 
 def color(pointcloud, color=[0, 255, 0]):
     return jp.repeat(jp.array([color]), len(pointcloud), axis=0)
+
+
+def mean(pointcloud):
+    return jp.mean(pointcloud, axis=0)
+
+
+def stdv(pointcloud):
+    return jp.std(pointcloud, axis=0)
 
 
 def mask(pointcloud, mask, max_depth):
@@ -107,6 +114,14 @@ def to_camera_coordinates(pointcloud, camera_intrinsics):
     return jp.vstack([u, v]).T
 
 
+def compute_bounding_box(pointcloud):
+    bbox_min = jp.min(pointcloud, axis=0)
+    bbox_max = jp.max(pointcloud, axis=0)
+    x_min, y_min, z_min = bbox_min[0], bbox_min[1], bbox_min[2]
+    x_max, y_max, z_max = bbox_max[0], bbox_max[1], bbox_max[2]
+    return x_min, y_min, z_min, x_max, y_max, z_max
+
+
 def remove_outliers(pointcloud, num_stdvs=3.0):
     data_mean = jp.mean(pointcloud, axis=0)
     data_stdv = jp.std(pointcloud, axis=0)
@@ -128,3 +143,10 @@ def compute_bounding_volume(pointcloud):
 
 def move_along_normals(pointcloud, normals, distance):
     return pointcloud + (distance * normals)
+
+
+def filter_above_plane(pointcloud, plane_to_world, min_height=0.01):
+    world_to_plane = paz.SE3.invert(plane_to_world)
+    pointcloud_plane = paz.algebra.transform_points(world_to_plane, pointcloud)
+    mask = pointcloud_plane[:, 1] > min_height
+    return pointcloud[mask]
