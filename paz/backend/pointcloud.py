@@ -1,6 +1,10 @@
+from collections import namedtuple
+
 import jax
 import jax.numpy as jp
 import paz
+
+FScoreMetrics = namedtuple("FScoreMetrics", ["precision", "recall", "f_score"])
 
 
 def split(pointcloud):
@@ -36,6 +40,70 @@ def mean(pointcloud):
 
 def stdv(pointcloud):
     return jp.std(pointcloud, axis=0)
+
+
+def compute_pairwise_squared_distances(points_a, points_b):
+    diffs = points_a[:, None, :] - points_b[None, :, :]
+    return jp.sum(diffs * diffs, axis=-1)
+
+
+def compute_nearest_squared_distances(points_a, points_b):
+    squared_distances = compute_pairwise_squared_distances(points_a, points_b)
+    return jp.min(squared_distances, axis=1)
+
+
+def compute_centroid(pointcloud):
+    return jp.mean(pointcloud, axis=0)
+
+
+def centroid_distance(points_a, points_b):
+    centroid_a = compute_centroid(points_a)
+    centroid_b = compute_centroid(points_b)
+    return jp.linalg.norm(centroid_a - centroid_b)
+
+
+def mean_nearest_neighbor_distance(points_a, points_b):
+    nearest_squared = compute_nearest_squared_distances(points_a, points_b)
+    return jp.mean(jp.sqrt(nearest_squared))
+
+
+def chamfer_distance(points_a, points_b):
+    a_to_b = mean_nearest_neighbor_distance(points_a, points_b)
+    b_to_a = mean_nearest_neighbor_distance(points_b, points_a)
+    return a_to_b + b_to_a
+
+
+def hausdorff_distance(points_a, points_b):
+    a_to_b = compute_nearest_squared_distances(points_a, points_b)
+    b_to_a = compute_nearest_squared_distances(points_b, points_a)
+    return jp.sqrt(jp.maximum(jp.max(a_to_b), jp.max(b_to_a)))
+
+
+def compute_precision_recall_fscore(points_a, points_b, threshold):
+    threshold_squared = threshold * threshold
+    a_to_b = compute_nearest_squared_distances(points_a, points_b)
+    b_to_a = compute_nearest_squared_distances(points_b, points_a)
+    recall = jp.mean(a_to_b <= threshold_squared)
+    precision = jp.mean(b_to_a <= threshold_squared)
+    f_score = 2.0 * precision * recall / (precision + recall + 1e-8)
+    return FScoreMetrics(precision=precision, recall=recall, f_score=f_score)
+
+
+def compute_fscore(points_a, points_b, threshold):
+    metrics = compute_precision_recall_fscore(points_a, points_b, threshold)
+    return metrics.f_score
+
+
+def compute_approx_emd(points_a, points_b):
+    num_points = min(points_a.shape[0], points_b.shape[0])
+    norms_a = jp.linalg.norm(points_a, axis=1)
+    norms_b = jp.linalg.norm(points_b, axis=1)
+    order_a = jp.argsort(norms_a)[:num_points]
+    order_b = jp.argsort(norms_b)[:num_points]
+    points_a_sorted = points_a[order_a]
+    points_b_sorted = points_b[order_b]
+    distances = jp.linalg.norm(points_a_sorted - points_b_sorted, axis=1)
+    return jp.mean(distances)
 
 
 def mask(pointcloud, mask, max_depth):
