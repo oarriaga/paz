@@ -16,9 +16,20 @@ Shot = namedtuple("Shot", ShotFields)
 
 
 def download():
-    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.20/"
-    URL = URL + "real_objects.zip"
-    path = get_file("FEWSOL", URL, cache_subdir="paz/datasets/", extract=True)
+    dataset_root = get_dataset_root()
+    return ensure_dataset(dataset_root)
+
+
+def get_dataset_root():
+    return Path.home() / ".keras" / "paz" / "datasets" / "FEWSOL" / "real_objects"
+
+
+def ensure_dataset(dataset_root):
+    if dataset_root.exists():
+        return dataset_root
+    url = "https://github.com/oarriaga/altamira-data/releases/download/v0.20/"
+    url = url + "real_objects.zip"
+    path = get_file("FEWSOL", url, cache_subdir="paz/datasets/", extract=True)
     return Path(path) / "real_objects"
 
 
