@@ -142,3 +142,11 @@ def build_plane_to_world(world_up, normal, position):
     z_axis = jp.cross(y_axis, x_axis)
     rotation = jp.stack([x_axis, y_axis, z_axis], axis=1)
     return paz.SE3.to_affine_matrix(rotation, position)
+
+
+def intersect_ray(plane_center, plane_normal, ray_origin, ray_direction):
+    numerator = jp.dot(plane_center - ray_origin, plane_normal)
+    denominator = jp.dot(ray_direction, plane_normal)
+    denominator = jp.where(jp.abs(denominator) < 1e-6, 1e-6, denominator)
+    t = numerator / denominator
+    return ray_origin + t * ray_direction
