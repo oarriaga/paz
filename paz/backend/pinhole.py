@@ -14,6 +14,16 @@ def project_to_3D(camera_intrinsics, point2D, depth):
     return point3D
 
 
+def get_image_size(camera_intrinsics):
+    W = int(camera_intrinsics[0, 2] * 2.0)
+    H = int(camera_intrinsics[1, 2] * 2.0)
+    return H, W
+
+
+def resize_intrinsics(camera_intrinsics, scale):
+    return camera_intrinsics.copy().at[:2, :].mul(scale)
+
+
 def project_to_2D(camera_matrix, point3D):
     homogenous_point3D = algebra.add_one(point3D)
     homogenous_point2D = jp.matmul(camera_matrix, homogenous_point3D)
