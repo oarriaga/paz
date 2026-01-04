@@ -5,6 +5,7 @@ from glob import glob
 from functools import partial
 from collections import namedtuple
 
+import jax
 import jax.numpy as jp
 import paz
 from scipy.io import loadmat
@@ -159,8 +160,11 @@ def load_masks(concept_path):
 
 
 def masks_to_boxes(masks):
-    boxes = [paz.mask.to_box(mask.astype("float32"), 1.0) for mask in masks]
-    boxes = jp.array(boxes)
+    masks = jp.array(masks).astype("float32")
+    if masks.ndim == 4 and masks.shape[-1] == 1:
+        masks = masks[..., 0]
+    vectorized_to_box = jax.vmap(paz.mask.to_box, in_axes=(0, None))
+    boxes = vectorized_to_box(masks, 1.0)
     boxes = paz.boxes.xyxy_to_xywh(boxes)
     return jp.expand_dims(jp.array(boxes), axis=1)
 
