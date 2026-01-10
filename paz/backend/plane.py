@@ -150,3 +150,17 @@ def intersect_ray(plane_center, plane_normal, ray_origin, ray_direction):
     denominator = jp.where(jp.abs(denominator) < 1e-6, 1e-6, denominator)
     t = numerator / denominator
     return ray_origin + t * ray_direction
+
+
+def compute_depth(rays, floor_to_world, max_depth):
+    def compute_intersection_depths(rays, plane_center, plane_normal):
+        ray_origins, ray_directions = rays
+        numerator = jp.sum((plane_center - ray_origins) * plane_normal, axis=-1)
+        denominator = jp.sum(ray_directions * plane_normal, axis=-1)
+        denominator = jp.where(jp.abs(denominator) < 1e-6, 1e-6, denominator)
+        return numerator / denominator
+
+    plane_center = floor_to_world[:3, 3]
+    plane_normal = floor_to_world[:3, 1]
+    depths = compute_intersection_depths(rays, plane_center, plane_normal)
+    return jp.where(depths > 0.0, depths, max_depth)
