@@ -9,7 +9,10 @@ from paz.backend import pointcloud
 from paz.backend import detection
 from paz.backend import standard
 from paz.backend import depth
-from paz.backend import logger
+from paz.backend import logger  # DEPRECATED - use directory, file, message
+from paz.backend import directory
+from paz.backend import file
+from paz.backend import message
 from paz.backend import log
 from paz.backend import cache
 from paz.backend.camera import Camera, VideoPlayer
@@ -36,7 +39,6 @@ from paz.backend.standard import (
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
-from paz import message
 from paz import applications
 from paz.utils import time, assert_snapshot
 from paz.abstract import tree

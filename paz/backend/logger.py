@@ -1,86 +1,45 @@
+"""
+DEPRECATED: This module is deprecated and will be removed in a future version.
+
+Please use the new specialized modules instead:
+- paz.directory (make, make_timestamped, find_latest)
+- paz.file (write_json, write_weights, load_csv, load_latest)
+- paz.message (warn)
+
+For now, all functions remain accessible through paz.logger for backward
+compatibility, but you should migrate to the new modules.
+
+Migration guide:
+    paz.logger.make_directory → paz.directory.make
+    paz.logger.make_timestamped_directory → paz.directory.make_timestamped
+    paz.logger.find_path → paz.directory.find_latest
+    paz.logger.write_dictionary → paz.file.write_json
+    paz.logger.write_weights → paz.file.write_weights
+    paz.logger.load_csv → paz.file.load_csv
+    paz.logger.load_latest → paz.file.load_latest
+    paz.logger.warn → paz.message.warn
+"""
 import os
-import csv
 import json
-import glob
-from pathlib import Path
-from datetime import datetime
+import warnings
 
 import keras
 import jax
 
+from paz.backend.directory import make as make_directory
+from paz.backend.directory import make_timestamped as make_timestamped_directory
+from paz.backend.directory import find_latest as find_path
+from paz.backend.file import write_json as write_dictionary
+from paz.backend.file import write_weights, load_latest, load_csv
+from paz.backend.message import warn
 
-def make_timestamped_directory(root="experiments", label=None):
-    """Builds and makes directory with time date and user given label.
-
-    # Arguments:
-        root: String with partial or full path.
-        label: String user label.
-
-    # Returns
-        Full directory path
-    """
-
-    def timestamp_directory(root, label=None):
-        directory_name = [datetime.now().strftime("%d-%m-%Y_%H-%M-%S")]
-        if label is not None:
-            directory_name.extend([label])
-        directory_name = "_".join(directory_name)
-        return os.path.join(root, directory_name)
-
-    directory_name = timestamp_directory(root, label)
-    return make_directory(directory_name)
-
-
-def make_directory(directory_name):
-    """Makes directory.
-
-    # Arguments:
-        directory_name: String. Directory name.
-    """
-    Path(directory_name).mkdir(parents=True, exist_ok=True)
-    return directory_name
-
-
-def write_dictionary(dictionary, filepath, indent=4):
-    """Writes a dictionary to a JSON file.
-
-    Args:
-        dictionary: The dictionary to write to the file.
-        filepath: The full path to the output file.
-        indent: The number of spaces to use for indentation in the JSON file.
-    """
-    with open(filepath, "w") as filedata:
-        json.dump(dictionary, filedata, indent=indent)
-
-
-def write_weights(model, directory, name=None):
-    """Writes Keras weights in memory.
-
-    # Arguments:
-        model: Keras model.
-        directory: String. Directory name.
-        name: String or `None`. Weights filename.
-    """
-    name = model.name if name is None else name
-    weights_path = os.path.join(directory, name + ".weights.h5")
-    model.save_weights(weights_path)
-
-
-def find_path(wildcard):
-    filenames = glob.glob(wildcard)
-    filepaths = []
-    for filename in filenames:
-        if os.path.isdir(filename):
-            filepaths.append(filename)
-    return max(filepaths, key=os.path.getmtime)
-
-
-def load_latest(wildcard, filename):
-    filepath = find_path(wildcard)
-    filepath = os.path.join(filepath, filename)
-    filedata = open(filepath, "r")
-    parameters = json.load(filedata)
-    return parameters
+warnings.warn(
+    "paz.logger is deprecated and will be removed in a future version. "
+    "Please use paz.directory, paz.file, or paz.message instead. "
+    "See module docstring for migration guide.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 # def setup(args, model=None, label=None, root="experiments"):
@@ -90,10 +49,6 @@ def load_latest(wildcard, filename):
 #     keras.utils.set_random_seed(args.seed)
 #     key = jax.random.PRNGKey(args.seed)
 #     return root, key
-
-
-def warn(message):
-    print("\033[93m" + message + "\033[0m")
 
 
 def setup(args):
@@ -110,34 +65,3 @@ def setup(args):
     filepath = os.path.join(experiment_root, "parameters.json")
     write_dictionary(args.__dict__, filepath)
     return experiment_root, jax.random.PRNGKey(args.seed)
-
-
-def load_csv(filepath):
-
-    def check_column_size(row_arg, row_values, num_columns):
-        if len(row_values) != num_columns:
-            raise ValueError(f"Invalid column size at row {row_arg + 1}")
-
-    def initialize_data(header):
-        return {column_name: [] for column_name in header}
-
-    def process_row_value(value_str, column_arg, column_name):
-        return int(value_str) if column_name == "epoch" else float(value_str)
-
-    def build_header_names(header):
-        return [column_name.strip() for column_name in header]
-
-    try:
-        with open(filepath, mode="r", newline="") as filedata:
-            reader = csv.reader(filedata)
-            header = build_header_names(next(reader, None))
-            data = initialize_data(header)
-            for row_arg, row_values in enumerate(reader, 1):
-                check_column_size(row_arg, row_values, len(header))
-                for column_arg, value in enumerate(row_values):
-                    column_name = header[column_arg]
-                    value = process_row_value(value, column_arg, column_name)
-                    data[column_name].append(value)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"The log file '{filepath}' was not found.")
-    return data
