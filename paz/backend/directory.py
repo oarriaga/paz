@@ -77,6 +77,7 @@ def list_files(path, pattern=None):
 
 
 def remove(path):
+    path = Path(path)
     shutil.rmtree(path)
 
 

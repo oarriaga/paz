@@ -9,21 +9,7 @@ import paz
 import optax
 import matplotlib.pyplot as plt
 
-from paz.graphics import (
-    PointLight,
-    Material,
-    Pattern,
-    Shape,
-    NO_PATTERN,
-    PLANAR_PATTERN,
-    PLANE,
-    SPHERE,
-    CUBE,
-    CYLINDER,
-)
-
-
-# from primitives import load, flatten, parse_metadata, parse_label
+from paz.graphics import PLANE, SPHERE, CUBE, CYLINDER
 
 
 def write_losses(losses, directory, filename):
@@ -49,28 +35,6 @@ def write_image(image, directory, filename):
     paz.image.write(
         str(filepath), paz.image.denormalize(jp.clip(image, 0.0, 1.0))
     )
-
-
-# def label_to_shape(label):
-#     TYPES = [paz.graphics.SPHERE, paz.graphics.CUBE, paz.graphics.CYLINDER]
-#     NAME_TO_TYPE = dict(zip(["sphere", "cube", "cylinder"], TYPES))
-
-#     def build_label(label):
-#         return paz.standard.NamedTuple("label", **list(label.values())[0])
-
-#     def build_transform(x, y, theta, scale):
-#         shift = paz.SE3.translation(jp.array([x, scale, y]))
-#         angle = paz.SE3.rotation_y(theta)
-#         scale = paz.SE3.scaling(jp.full((3,), scale))
-#         return shift @ angle @ scale
-
-#     def build_material(color):
-#         return paz.graphics.Material(jp.array(label.RGB) / 255.0)
-
-#     label = build_label(label)
-#     transform = build_transform(label.x, label.y, label.theta_z, label.scale)
-#     material = build_material(label.color)
-#     return paz.graphics.Shape(transform, NAME_TO_TYPE[label.mesh], material)
 
 
 SHAPE_TYPES = [SPHERE, CUBE, CYLINDER]
@@ -130,18 +94,23 @@ def build_render(camera_origin, size, y_FOV, shadows):
         rays=rays,
         shadows=shadows,
     )
-    # return Render(ray_origins, ray_directions, *size, shadows)
 
 
 def build_floor(floor):
-    pattern = Pattern(jp.eye(4), PLANAR_PATTERN, floor.image)
-    material = Material(floor.color, floor.ambient, floor.diffuse, 0.0, 200.0)
-    return Shape(jp.eye(4), PLANE, material, pattern)
+    pattern = paz.graphics.Pattern(
+        jp.eye(4), paz.graphics.PLANAR_PATTERN, floor.image
+    )
+    material = paz.graphics.Material(
+        floor.color, floor.ambient, floor.diffuse, 0.0, 200.0
+    )
+    return paz.graphics.Shape(jp.eye(4), PLANE, material, pattern)
 
 
 def build_shape(shape, label):
-    material = Material(**shape._asdict())
-    return Shape(label.transform, label.type, material, label.pattern)
+    material = paz.graphics.Material(**shape._asdict())
+    return paz.graphics.Shape(
+        label.transform, label.type, material, label.pattern
+    )
 
 
 def SceneLoss(render):
@@ -158,8 +127,6 @@ def Scene(size, y_FOV, camera_origin, shadows):
 
     def render_scene(shape, scene):
         floor = build_floor(scene.floor)
-        # shapes, mask = paz.graphics.shapes.merge(shape, floor)
-        # shapes = paz.graphics.shapes.merge(shape, floor)
         shapes = paz.graphics.Scene([shape, floor])
         image, depth = render(scene=shapes, mask=None, lights=scene.lights)
         return jp.clip(image, 0.0, 1.0), depth
@@ -176,10 +143,14 @@ def label_to_shape(name_to_type, pattern_shape, label):
     rotate = paz.SE3.rotation_y(theta)
     scale = paz.SE3.scaling(jp.array(scale))
     transform = shifts @ rotate @ scale
-    material = Material(jp.array(color), 0.1, 0.9, 0.5, 4.0)
-    pattern = Pattern(jp.eye(4), NO_PATTERN, jp.zeros(pattern_shape))
+    material = paz.graphics.Material(jp.array(color), 0.1, 0.9, 0.5, 4.0)
+    pattern = paz.graphics.Pattern(
+        jp.eye(4), paz.graphics.NO_PATTERN, jp.zeros(pattern_shape)
+    )
     arg_type = jp.argmax(shape_type).tolist()
-    return Shape(transform, ARG_TO_TYPE[arg_type], material, pattern)
+    return paz.graphics.Shape(
+        transform, ARG_TO_TYPE[arg_type], material, pattern
+    )
 
 
 def parse_color(label):
@@ -224,7 +195,7 @@ def initialize_landscape(optimizer, key, num_lights, pattern_shape):
         key, subkey_0, subkey_1 = jax.random.split(key, 3)
         positions = jax.random.uniform(subkey_0, (3,), minval=-5.0, maxval=5.0)
         intensity = jax.random.uniform(subkey_1, (3,), minval=0.10, maxval=0.50)
-        lights.append(PointLight(intensity, positions))
+        lights.append(paz.graphics.PointLight(intensity, positions))
     floor = FLOOR(jp.array([0.5, 0.5, 0.5]), 0.1, 0.9, jp.zeros(pattern_shape))
     variable = LANDSCAPE_VARIABLE(floor, lights)
     optimizer_state = optimizer.init(variable)

@@ -32,6 +32,14 @@ def test_make_is_idempotent():
         assert result == test_path
 
 
+def test_make_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_path = Path(tmpdir) / "test_dir"
+        result = directory.make(test_path)
+        assert os.path.exists(test_path)
+        assert result == str(test_path)
+
+
 def test_make_timestamped_creates_directory_with_timestamp():
     with tempfile.TemporaryDirectory() as tmpdir:
         result = directory.make_timestamped(tmpdir, None)
@@ -49,6 +57,12 @@ def test_make_timestamped_includes_label():
         assert "experiment" in dirname
 
 
+def test_make_timestamped_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = directory.make_timestamped(Path(tmpdir), "experiment")
+        assert os.path.exists(result)
+
+
 def test_find_latest_returns_most_recent_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         dir1 = os.path.join(tmpdir, "test_01")
@@ -64,6 +78,23 @@ def test_find_latest_returns_most_recent_directory():
         wildcard = os.path.join(tmpdir, "test_*")
         result = directory.find_latest(wildcard)
         assert result == dir3
+
+
+def test_find_latest_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dir1 = Path(tmpdir) / "test_01"
+        dir2 = Path(tmpdir) / "test_02"
+        dir3 = Path(tmpdir) / "test_03"
+
+        dir1.mkdir()
+        time.sleep(0.01)
+        dir2.mkdir()
+        time.sleep(0.01)
+        dir3.mkdir()
+
+        wildcard = Path(tmpdir) / "test_*"
+        result = directory.find_latest(wildcard)
+        assert result == str(dir3)
 
 
 def test_find_latest_ignores_files():
@@ -84,6 +115,11 @@ def test_exists_returns_true_for_existing_directory():
         assert directory.exists(tmpdir)
 
 
+def test_exists_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        assert directory.exists(Path(tmpdir))
+
+
 def test_exists_returns_false_for_nonexistent_directory():
     assert not directory.exists("/nonexistent/path/to/directory")
 
@@ -99,6 +135,13 @@ def test_is_empty_returns_true_for_empty_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = os.path.join(tmpdir, "empty")
         os.makedirs(test_dir)
+        assert directory.is_empty(test_dir)
+
+
+def test_is_empty_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_dir = Path(tmpdir) / "empty"
+        test_dir.mkdir()
         assert directory.is_empty(test_dir)
 
 
@@ -131,6 +174,19 @@ def test_list_subdirectories_returns_all_subdirectories():
         assert dir1 in result
         assert dir2 in result
         assert dir3 in result
+
+
+def test_list_subdirectories_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dir1 = Path(tmpdir) / "dir1"
+        dir2 = Path(tmpdir) / "dir2"
+
+        dir1.mkdir()
+        dir2.mkdir()
+
+        result = directory.list_subdirectories(Path(tmpdir))
+        assert str(dir1) in result
+        assert str(dir2) in result
 
 
 def test_list_subdirectories_ignores_files():
@@ -167,6 +223,19 @@ def test_list_files_returns_all_files():
         assert file1 in result
         assert file2 in result
         assert file3 in result
+
+
+def test_list_files_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        file1 = Path(tmpdir) / "file1.txt"
+        file2 = Path(tmpdir) / "file2.txt"
+
+        file1.touch()
+        file2.touch()
+
+        result = directory.list_files(Path(tmpdir))
+        assert str(file1) in result
+        assert str(file2) in result
 
 
 def test_list_files_filters_by_pattern():
@@ -214,6 +283,15 @@ def test_remove_deletes_empty_directory():
         assert not os.path.exists(test_dir)
 
 
+def test_remove_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_dir = Path(tmpdir) / "to_remove"
+        test_dir.mkdir()
+
+        directory.remove(test_dir)
+        assert not test_dir.exists()
+
+
 def test_remove_deletes_directory_with_files():
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = os.path.join(tmpdir, "to_remove")
@@ -241,6 +319,15 @@ def test_size_returns_zero_for_empty_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = os.path.join(tmpdir, "empty")
         os.makedirs(test_dir)
+
+        result = directory.size(test_dir)
+        assert result == 0
+
+
+def test_size_accepts_path_object():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_dir = Path(tmpdir) / "empty"
+        test_dir.mkdir()
 
         result = directory.size(test_dir)
         assert result == 0
