@@ -1,6 +1,6 @@
-import os
 import pickle
 import argparse
+from pathlib import Path
 from collections import namedtuple
 
 import jax.numpy as jp
@@ -34,19 +34,21 @@ def write_losses(losses, directory, filename):
     axis.set_xlabel("step")
     axis.spines["top"].set_visible(False)
     axis.spines["right"].set_visible(False)
-    fullpath = os.path.join(directory, filename)
+    fullpath = Path(directory) / filename
     figure.savefig(fullpath, bbox_inches="tight")
     plt.close()
 
 
 def write_pytree(x, directory, filename):
-    fullpath = os.path.join(directory, filename)
+    fullpath = Path(directory) / filename
     pickle.dump(x, open(fullpath, "wb"))
 
 
 def write_image(image, directory, filename):
-    filepath = os.path.join(directory, filename)
-    paz.image.write(filepath, paz.image.denormalize(jp.clip(image, 0.0, 1.0)))
+    filepath = Path(directory) / filename
+    paz.image.write(
+        str(filepath), paz.image.denormalize(jp.clip(image, 0.0, 1.0))
+    )
 
 
 # def label_to_shape(label):
@@ -260,19 +262,17 @@ def write_images(render, labels, materials, landscape, directory):
 
 
 key = jax.random.PRNGKey(args.seed)
-root = paz.logger.make_timestamped_directory(
-    os.path.join(args.root, args.dataset_name), args.label
+root = paz.directory.make_timestamped(
+    str(Path(args.root) / args.dataset_name), args.label
 )
-paz.logger.write_dictionary(
-    args.__dict__, os.path.join(root, "parameters.json")
-)
+paz.file.write_json(args.__dict__, str(Path(root) / "parameters.json"))
 
 dataset_metadata = paz.datasets.fsclvr.parse_metadata(args.dataset_name)
 camera_origin = jp.array(dataset_metadata["camera_origin"])
 H, W = dataset_metadata["image_shape"]
 y_FOV = dataset_metadata["y_FOV"]
 image_shape = [int(H * args.viewport_factor), int(W * args.viewport_factor)]
-dataset_path = os.path.join(args.dataset_path, args.dataset_name)
+dataset_path = str(Path(args.dataset_path) / args.dataset_name)
 dataset = paz.datasets.fsclvr.load(args.dataset_name, args.split, image_shape)
 images, depths, labels = paz.datasets.fsclvr.flatten(dataset)
 render = Scene(image_shape, y_FOV, camera_origin, args.shadow)
@@ -299,10 +299,8 @@ for material_type in materials.keys():
     materials_losses[material_type] = []
 
 fast_render = jax.jit(render)
-images_directory = os.path.join(root, args.images_directory)
-epoch_directory = paz.logger.make_directory(
-    os.path.join(images_directory, "epoch_00")
-)
+images_directory = Path(root) / args.images_directory
+epoch_directory = paz.directory.make(str(images_directory / "epoch_00"))
 write_images(fast_render, labels, materials, landscape, epoch_directory)
 for outer_epoch in range(1, args.outer_epochs + 1):
     print(f"Outer epoch {outer_epoch} / {args.outer_epochs}")
@@ -327,16 +325,14 @@ for outer_epoch in range(1, args.outer_epochs + 1):
             landscape_losses.append(loss)
 
     epoch_directory = f"epoch_{outer_epoch:02d}"
-    epoch_directory = os.path.join(images_directory, epoch_directory)
-    paz.logger.make_directory(epoch_directory)
+    epoch_directory = images_directory / epoch_directory
+    paz.directory.make(str(epoch_directory))
     write_images(fast_render, labels, materials, landscape, epoch_directory)
 
 write_pytree(landscape.variable.lights, root, "lights.pkl")
 write_pytree(build_floor(landscape.variable.floor), root, "floor.pkl")
 
-shapes_directory = paz.logger.make_directory(
-    os.path.join(root, args.shapes_directory)
-)
+shapes_directory = paz.directory.make(str(Path(root) / args.shapes_directory))
 for label_arg, label in enumerate(labels):
     material = materials[label_to_material_type(label)]
     label = label_to_shape(NAME_TO_TYPE, args.pattern_shape, label)
@@ -355,12 +351,12 @@ def write_materials(material_variables, path):
         variable = jax.tree_util.tree_map(leaf_to_list, variable)
         variable = variable._asdict()
         materials[material_type] = variable
-    paz.logger.write_dictionary(materials, os.path.join(path, "materials.json"))
+    paz.file.write_json(materials, str(Path(path) / "materials.json"))
 
 
 write_materials(materials, root)
 
-losses_directory = paz.logger.make_directory(os.path.join(root, "losses"))
+losses_directory = paz.directory.make(str(Path(root) / "losses"))
 write_pytree(landscape_losses, losses_directory, "landscape_losses.pkl")
 write_losses(landscape_losses, losses_directory, "landscape_losses.pdf")
 for material_type, losses in materials_losses.items():
