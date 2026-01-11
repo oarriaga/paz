@@ -1,3 +1,4 @@
+import math
 import jax.numpy as jp
 import cv2
 import jax
@@ -8,8 +9,10 @@ import json
 import datetime
 
 
-def clamp_tilt(tilt, limit=jp.pi / 2 - 0.01):
+def clamp_tilt(tilt, limit=None):
     """Prevents the camera from flipping upside down."""
+    if limit is None:
+        limit = math.pi / 2 - 0.01
     return jp.clip(tilt, -limit, limit)
 
 
@@ -29,7 +32,7 @@ def get_camera_basis(rotation_matrix):
 
 def viewer(
     scene,
-    camera_pose=jp.eye(4),
+    camera_pose=None,
     shadows=False,
     light=None,
     H=480,
@@ -37,6 +40,8 @@ def viewer(
     y_FOV=0.78,
 ):
     # --- Setup Scene ---
+    if camera_pose is None:
+        camera_pose = jp.eye(4)
     if light is None:
         light = [
             paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
