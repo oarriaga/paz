@@ -1,4 +1,3 @@
-import pickle
 import argparse
 from pathlib import Path
 from collections import namedtuple
@@ -25,9 +24,11 @@ def write_losses(losses, directory, filename):
     plt.close()
 
 
-def write_pytree(x, directory, filename):
-    fullpath = Path(directory) / filename
-    pickle.dump(x, open(fullpath, "wb"))
+def write_pytree_files(tree, directory, filename):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    paz.pytree.to_pickle(tree, directory / f"{filename}.pkl")
+    # paz.pytree.to_json(tree, directory / f"{filename}.json")
 
 
 def write_image(image, directory, filename):
@@ -80,12 +81,10 @@ args = parser.parse_args()
 
 
 def build_render(camera_origin, size, y_FOV, shadows):
-    camera_origin = jp.array(camera_origin)
-    camera_target = jp.array([0.0, 0.0, 0.0])
-    camera_upward = jp.array([0.0, 1.0, 0.0])
-    transform = paz.SE3.view_transform(
-        camera_origin, camera_target, camera_upward
-    )
+    origin = jp.array(camera_origin)
+    target = jp.array([0.0, 0.0, 0.0])
+    upward = jp.array([0.0, 1.0, 0.0])
+    transform = paz.SE3.view_transform(origin, target, upward)
     rays = paz.graphics.camera.build_rays(size, y_FOV, transform)
     return paz.partial(
         paz.graphics.render,
@@ -300,15 +299,15 @@ for outer_epoch in range(1, args.outer_epochs + 1):
     paz.directory.make(str(epoch_directory))
     write_images(fast_render, labels, materials, landscape, epoch_directory)
 
-write_pytree(landscape.variable.lights, root, "lights.pkl")
-write_pytree(build_floor(landscape.variable.floor), root, "floor.pkl")
+write_pytree_files(landscape.variable.lights, root, "lights")
+write_pytree_files(build_floor(landscape.variable.floor), root, "floor")
 
 shapes_directory = paz.directory.make(str(Path(root) / args.shapes_directory))
 for label_arg, label in enumerate(labels):
     material = materials[label_to_material_type(label)]
     label = label_to_shape(NAME_TO_TYPE, args.pattern_shape, label)
     shape = build_shape(material.variable, label)
-    write_pytree(shape, shapes_directory, f"shape_{label_arg:03d}.pkl")
+    write_pytree_files(shape, shapes_directory, f"shape_{label_arg:03d}")
 
 
 def leaf_to_list(leaf):
@@ -322,15 +321,15 @@ def write_materials(material_variables, path):
         variable = jax.tree_util.tree_map(leaf_to_list, variable)
         variable = variable._asdict()
         materials[material_type] = variable
-    paz.file.write_json(materials, str(Path(path) / "materials.json"))
+    write_pytree_files(materials, path, "materials")
 
 
 write_materials(materials, root)
 
 losses_directory = paz.directory.make(str(Path(root) / "losses"))
-write_pytree(landscape_losses, losses_directory, "landscape_losses.pkl")
+write_pytree_files(landscape_losses, losses_directory, "landscape_losses")
 write_losses(landscape_losses, losses_directory, "landscape_losses.pdf")
 for material_type, losses in materials_losses.items():
     losses = jp.array(losses)
-    write_pytree(losses, losses_directory, f"{material_type}_losses.pkl")
+    write_pytree_files(losses, losses_directory, f"{material_type}_losses")
     write_losses(losses, losses_directory, f"{material_type}_losses.pdf")
