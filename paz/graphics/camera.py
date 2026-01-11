@@ -35,7 +35,9 @@ def build_ray_origins(H, W):
     return jp.repeat(jp.array([[0.0, 0.0, 0.0]]), repeats=H * W, axis=0)
 
 
-def build_rays(size, y_FOV, world_to_camera=jp.eye(4)):
+def build_rays(size, y_FOV, world_to_camera=None):
+    if world_to_camera is None:
+        world_to_camera = jp.eye(4)
     H_pixel, W_pixel = size[:2]
     aspect_ratio = compute_aspect_ratio(H_pixel, W_pixel)
     H_world, W_world = compute_image_sizes(y_FOV, aspect_ratio)
