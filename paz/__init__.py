@@ -27,6 +27,7 @@ from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
 from paz import pytree
+from paz import environment
 from paz.backend.standard import (
     lock,
     partial,
