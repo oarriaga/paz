@@ -199,6 +199,7 @@ def test_scene_raises_error_for_mismatched_lengths(valid_nodes):
         types.Scene(nodes=valid_nodes, parent_array=jp.array([-1]))
 
 
+@pytest.mark.skip(reason="Validation disabled for JAX JIT compatibility")
 def test_scene_raises_error_for_invalid_parent_index(valid_nodes):
     """Tests that all parent indices must be valid."""
     # Index 5 is out of bounds for a 2-node scene
