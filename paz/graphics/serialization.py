@@ -29,6 +29,8 @@ def pattern_contains_image(pattern_node):
 
 
 def to_json(scene_node_field, counter=[0], filepath=None):
+    if filepath is not None:
+        filepath = pathlib.Path(filepath)
     if isinstance(scene_node_field, jp.ndarray):
         return scene_node_field.tolist()
     if isinstance(scene_node_field, Pattern):
@@ -42,7 +44,7 @@ def to_json(scene_node_field, counter=[0], filepath=None):
             else:
                 image_filename = f"image_pattern_{counter[0]}.png"
                 image_path = image_filename
-            paz.image.write(str(image_path), image)
+            paz.image.write(image_path, image)
             scene_node_field = scene_node_field._replace(image=image_filename)
             counter[0] += 1
         return {
@@ -87,12 +89,13 @@ def build_pattern(data, base_path=None):
     image_data = data["image"]
     if isinstance(image_data, str):
         if base_path:
+            base_path = pathlib.Path(base_path)
             image_path = base_path / image_data
         else:
             image_path = image_data
         if not pathlib.Path(image_path).exists():
             raise FileNotFoundError(f"Image not found at {image_path}")
-        image = paz.image.load(str(image_path))
+        image = paz.image.load(image_path)
         image = paz.image.normalize(image)
     else:
         image = jp.array(image_data)

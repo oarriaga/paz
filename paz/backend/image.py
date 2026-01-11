@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import cv2
 import numpy as np
 import jax
@@ -53,6 +55,7 @@ def RGB_to_BGR(image_RGB):
 
 
 def load(filepath, flag=COLOR):
+    filepath = str(Path(filepath))
     image = jp.array(cv2.imread(filepath, flag))
     if flag == COLOR:
         image = BGR_to_RGB(image)
@@ -66,6 +69,7 @@ def load(filepath, flag=COLOR):
 
 
 def write(filepath, image):
+    filepath = str(Path(filepath))
     image = RGB_to_BGR(image)
     image = np.ascontiguousarray(paz.to_numpy(image))
     return cv2.imwrite(filepath, image)

@@ -183,6 +183,13 @@ def test_save_and_load_standalone_shape(tmp_path, sample_shape):
     assert_pytrees_allclose(loaded_shape, sample_shape)
 
 
+def test_save_and_load_accepts_path_objects(tmp_path, shape_with_image):
+    scene_dir = tmp_path / "path_scene"
+    serialization.save(scene_dir, shape_with_image)
+    loaded_shape = serialization.load(scene_dir)
+    assert isinstance(loaded_shape, types.Shape)
+
+
 def test_load_raises_error_for_unknown_top_level_type(tmp_path):
     """Tests that load fails gracefully for an unknown JSON structure."""
     dir_path = tmp_path / "invalid_dir"
