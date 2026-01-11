@@ -125,7 +125,8 @@ def parse_shift(label):
 
 
 def parse_theta(label):
-    return -label["theta_z"]
+    # return -label["theta_z"]
+    return label["theta_z"]
 
 
 def parse_scale(label):
