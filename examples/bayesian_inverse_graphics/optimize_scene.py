@@ -1,64 +1,12 @@
 import argparse
+import os
 from pathlib import Path
 from collections import namedtuple
 
-import jax.numpy as jp
-import jax
-import paz
-import optax
-import matplotlib.pyplot as plt
-
-from paz.graphics import PLANE, SPHERE, CUBE, CYLINDER
-
-
-def write_losses(losses, directory, filename):
-    DANDELION = [0.992, 0.737, 0.258]
-    figure, axis = plt.subplots()
-    axis.plot(losses, color=DANDELION)
-    axis.set_ylabel("loss")
-    axis.set_xlabel("step")
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    fullpath = Path(directory) / filename
-    figure.savefig(fullpath, bbox_inches="tight")
-    plt.close()
-
-
-def write_pytree_files(tree, directory, filename):
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    paz.pytree.to_pickle(tree, directory / f"{filename}.pkl")
-    # paz.pytree.to_json(tree, directory / f"{filename}.json")
-
-
-def write_image(image, directory, filename):
-    filepath = Path(directory) / filename
-    paz.image.write(
-        str(filepath), paz.image.denormalize(jp.clip(image, 0.0, 1.0))
-    )
-
-
-SHAPE_TYPES = [SPHERE, CUBE, CYLINDER]
-NAME_TO_TYPE = dict(zip(["sphere", "cube", "cylinder"], SHAPE_TYPES))
-ARG_TO_TYPE = dict(zip([0, 1, 2], SHAPE_TYPES))
-NAME_TO_RGB = {
-    "gray": [87, 87, 87],
-    "red": [173, 35, 35],
-    "blue": [42, 75, 215],
-    "green": [29, 105, 20],
-    "brown": [129, 74, 25],
-    "purple": [129, 38, 192],
-    "cyan": [41, 208, 208],
-    "yellow": [255, 238, 51],
-}
-FLOOR = namedtuple("FLOOR", ["color", "ambient", "diffuse", "image"])
-LANDSCAPE_VARIABLE = namedtuple("SCENE", ["floor", "lights"])
-MATERIAL_FIELDS = ["color", "ambient", "diffuse", "specular", "shininess"]
-MATERIAL_VARIABLE = namedtuple("MATERIAL_VARIABLE", MATERIAL_FIELDS)
-VARIABLE_STATE = namedtuple("VARIABLE_STATE", ["optimizer_state", "variable"])
-
 parser = argparse.ArgumentParser(description="scene optimization")
 parser.add_argument("--seed", default=777, type=int)
+parser.add_argument("--memory", default=0.90, type=float)
+parser.add_argument("--device", default="gpu", type=str)
 parser.add_argument("--dataset_name", default="plain", type=str)
 parser.add_argument("--dataset_path", default="datasets", type=str)
 parser.add_argument("--shapes_directory", default="shapes", type=str)
@@ -78,6 +26,48 @@ parser.add_argument("--diffuse", default=0.9, type=float)
 parser.add_argument("--specular", default=0.5, type=float)
 parser.add_argument("--shininess", default=4.0, type=float)
 args = parser.parse_args()
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(args.memory)
+
+import jax
+import paz
+import optax
+import jax.numpy as jp
+import matplotlib.pyplot as plt
+
+
+def write_losses(losses, directory, filename):
+    DANDELION = [0.992, 0.737, 0.258]
+    figure, axis = plt.subplots()
+    axis.plot(losses, color=DANDELION)
+    axis.set_ylabel("loss")
+    axis.set_xlabel("step")
+    axis.spines["top"].set_visible(False)
+    axis.spines["right"].set_visible(False)
+    fullpath = Path(directory) / filename
+    figure.savefig(fullpath, bbox_inches="tight")
+    plt.close()
+
+
+def write_pytree_files(tree, directory, filename):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    paz.pytree.to_pickle(tree, directory / f"{filename}.pkl")
+    paz.graphics.save(directory / f"{filename}", tree)
+
+
+def write_image(image, directory, filename):
+    filepath = Path(directory) / filename
+    paz.image.write(filepath, paz.image.denormalize(jp.clip(image, 0.0, 1.0)))
+
+
+SHAPE_TYPES = [paz.graphics.SPHERE, paz.graphics.CUBE, paz.graphics.CYLINDER]
+NAME_TO_TYPE = dict(zip(["sphere", "cube", "cylinder"], SHAPE_TYPES))
+ARG_TO_TYPE = dict(zip([0, 1, 2], SHAPE_TYPES))
+FLOOR = namedtuple("FLOOR", ["color", "ambient", "diffuse", "image"])
+LANDSCAPE_VARIABLE = namedtuple("SCENE", ["floor", "lights"])
+MATERIAL_FIELDS = ["color", "ambient", "diffuse", "specular", "shininess"]
+MATERIAL_VARIABLE = namedtuple("MATERIAL_VARIABLE", MATERIAL_FIELDS)
+VARIABLE_STATE = namedtuple("VARIABLE_STATE", ["optimizer_state", "variable"])
 
 
 def build_render(camera_origin, size, y_FOV, shadows):
@@ -96,20 +86,17 @@ def build_render(camera_origin, size, y_FOV, shadows):
 
 
 def build_floor(floor):
-    pattern = paz.graphics.Pattern(
-        jp.eye(4), paz.graphics.PLANAR_PATTERN, floor.image
-    )
-    material = paz.graphics.Material(
-        floor.color, floor.ambient, floor.diffuse, 0.0, 200.0
-    )
-    return paz.graphics.Shape(jp.eye(4), PLANE, material, pattern)
+    pattern_type = paz.graphics.PLANAR_PATTERN
+    pattern = paz.graphics.Pattern(jp.eye(4), pattern_type, floor.image)
+    material = (floor.color, floor.ambient, floor.diffuse, 0.0, 200.0)
+    material = paz.graphics.Material(*material)
+    return paz.graphics.Shape(jp.eye(4), paz.graphics.PLANE, material, pattern)
 
 
 def build_shape(shape, label):
     material = paz.graphics.Material(**shape._asdict())
-    return paz.graphics.Shape(
-        label.transform, label.type, material, label.pattern
-    )
+    shape = (label.transform, label.type, material, label.pattern)
+    return paz.graphics.Shape(*shape)
 
 
 def SceneLoss(render):
@@ -135,21 +122,16 @@ def Scene(size, y_FOV, camera_origin, shadows):
 
 def label_to_shape(name_to_type, pattern_shape, label):
     label = list(label.values())[0]
-    shift, theta, scale, color, shape_type = paz.datasets.fsclvr.parse_label(
-        label, name_to_type
-    )
+    label_data = paz.datasets.fsclvr.parse_label(label, name_to_type)
+    shift, theta, scale, color, shape_type = label_data
     shifts = paz.SE3.translation(jp.array([shift[0], scale[1], shift[1]]))
     rotate = paz.SE3.rotation_y(theta)
     scale = paz.SE3.scaling(jp.array(scale))
     transform = shifts @ rotate @ scale
     material = paz.graphics.Material(jp.array(color), 0.1, 0.9, 0.5, 4.0)
-    pattern = paz.graphics.Pattern(
-        jp.eye(4), paz.graphics.NO_PATTERN, jp.zeros(pattern_shape)
-    )
-    arg_type = jp.argmax(shape_type).tolist()
-    return paz.graphics.Shape(
-        transform, ARG_TO_TYPE[arg_type], material, pattern
-    )
+    pattern = paz.graphics.Pattern()
+    shape_type = ARG_TO_TYPE[jp.argmax(shape_type).tolist()]
+    return paz.graphics.Shape(transform, shape_type, material, pattern)
 
 
 def parse_color(label):
@@ -177,13 +159,11 @@ def build_MATERIAL(optimizer, color, ambient, diffuse, specular, shininess):
     return VARIABLE_STATE(optimizer_state, variable)
 
 
-def initialize_materials(
-    optimizer, labels, ambient, diffuse, specular, shininess
-):
+def initialize_materials(optimizer, labels, ambient, diffuse, specular, shiny):
     material_types = build_material_types(labels)
     materials = {}
     for material_type, color in material_types.items():
-        args = (optimizer, color, ambient, diffuse, specular, shininess)
+        args = (optimizer, color, ambient, diffuse, specular, shiny)
         materials[material_type] = build_MATERIAL(*args)
     return materials
 
@@ -231,18 +211,30 @@ def write_images(render, labels, materials, landscape, directory):
         write_image(image, directory, f"image_{label_arg:03d}.png")
 
 
+def leaf_to_list(leaf):
+    return leaf.tolist() if isinstance(leaf, jp.ndarray) else leaf
+
+
+def write_materials(material_variables, path):
+    materials = {}
+    for material_type in material_variables.keys():
+        variable = material_variables[material_type].variable
+        variable = jax.tree_util.tree_map(leaf_to_list, variable)
+        variable = variable._asdict()
+        materials[material_type] = variable
+    write_pytree_files(materials, path, "materials")
+
+
 key = jax.random.PRNGKey(args.seed)
-root = paz.directory.make_timestamped(
-    str(Path(args.root) / args.dataset_name), args.label
-)
-paz.file.write_json(args.__dict__, str(Path(root) / "parameters.json"))
+root = Path(args.root) / args.dataset_name
+root = paz.directory.make_timestamped(root, args.label)
+paz.file.write_json(args.__dict__, Path(root) / "parameters.json")
 
 dataset_metadata = paz.datasets.fsclvr.parse_metadata(args.dataset_name)
 camera_origin = jp.array(dataset_metadata["camera_origin"])
 H, W = dataset_metadata["image_shape"]
 y_FOV = dataset_metadata["y_FOV"]
 image_shape = [int(H * args.viewport_factor), int(W * args.viewport_factor)]
-dataset_path = str(Path(args.dataset_path) / args.dataset_name)
 dataset = paz.datasets.fsclvr.load(args.dataset_name, args.split, image_shape)
 images, depths, labels = paz.datasets.fsclvr.flatten(dataset)
 render = Scene(image_shape, y_FOV, camera_origin, args.shadow)
@@ -263,8 +255,7 @@ materials = initialize_materials(
     args.shininess,
 )
 
-landscape_losses = []
-materials_losses = {}
+landscape_losses, materials_losses = [], {}
 for material_type in materials.keys():
     materials_losses[material_type] = []
 
@@ -273,7 +264,7 @@ images_directory = Path(root) / args.images_directory
 epoch_directory = paz.directory.make(str(images_directory / "epoch_00"))
 write_images(fast_render, labels, materials, landscape, epoch_directory)
 for outer_epoch in range(1, args.outer_epochs + 1):
-    print(f"Outer epoch {outer_epoch} / {args.outer_epochs}")
+    paz.message.info(f"Outer epoch {outer_epoch} / {args.outer_epochs}")
     for inner_epoch in range(args.inner_epochs):
         for label_arg, (label, image) in enumerate(zip(labels, images)):
             material_type = label_to_material_type(label)
@@ -296,37 +287,22 @@ for outer_epoch in range(1, args.outer_epochs + 1):
 
     epoch_directory = f"epoch_{outer_epoch:02d}"
     epoch_directory = images_directory / epoch_directory
-    paz.directory.make(str(epoch_directory))
+    paz.directory.make(epoch_directory)
     write_images(fast_render, labels, materials, landscape, epoch_directory)
 
 write_pytree_files(landscape.variable.lights, root, "lights")
 write_pytree_files(build_floor(landscape.variable.floor), root, "floor")
 
-shapes_directory = paz.directory.make(str(Path(root) / args.shapes_directory))
+shapes_directory = paz.directory.make(Path(root) / args.shapes_directory)
 for label_arg, label in enumerate(labels):
     material = materials[label_to_material_type(label)]
     label = label_to_shape(NAME_TO_TYPE, args.pattern_shape, label)
     shape = build_shape(material.variable, label)
     write_pytree_files(shape, shapes_directory, f"shape_{label_arg:03d}")
 
-
-def leaf_to_list(leaf):
-    return leaf.tolist() if isinstance(leaf, jp.ndarray) else leaf
-
-
-def write_materials(material_variables, path):
-    materials = {}
-    for material_type in material_variables.keys():
-        variable = material_variables[material_type].variable
-        variable = jax.tree_util.tree_map(leaf_to_list, variable)
-        variable = variable._asdict()
-        materials[material_type] = variable
-    write_pytree_files(materials, path, "materials")
-
-
 write_materials(materials, root)
 
-losses_directory = paz.directory.make(str(Path(root) / "losses"))
+losses_directory = paz.directory.make(Path(root) / "losses")
 write_pytree_files(landscape_losses, losses_directory, "landscape_losses")
 write_losses(landscape_losses, losses_directory, "landscape_losses.pdf")
 for material_type, losses in materials_losses.items():
