@@ -1,3 +1,8 @@
+import json
+import pickle
+from pathlib import Path
+
+
 class COLORS:
     HEADER = "\033[95m"
     OKBLUE = "\033[94m"
@@ -84,3 +89,31 @@ def print(tree):
     for child_arg, (key, value) in enumerate(children):
         is_child_last = child_arg == num_children - 1
         _traverse_and_print(str(key), value, prefix="", is_last=is_child_last)
+
+
+def to_pickle(tree, filepath):
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, "wb") as filedata:
+        pickle.dump(tree, filedata)
+
+
+def to_json(tree, filepath, indent=4):
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, "w") as filedata:
+        json.dump(_to_serializable(tree), filedata, indent=indent)
+
+
+def _to_serializable(tree):
+    if hasattr(tree, "_asdict"):
+        return {
+            key: _to_serializable(value) for key, value in tree._asdict().items()
+        }
+    if isinstance(tree, dict):
+        return {key: _to_serializable(value) for key, value in tree.items()}
+    if isinstance(tree, (list, tuple)):
+        return [_to_serializable(value) for value in tree]
+    if hasattr(tree, "tolist"):
+        return tree.tolist()
+    return tree
