@@ -4,11 +4,11 @@ from paz.abstract.tree import Tree
 
 
 def search_nodes(output_nodes):
-    tree_nodes, queue = [], output_nodes
+    tree_nodes, queue = [], list(output_nodes)
     while len(queue) != 0:
         node = queue.pop(0)
         queue.extend(node.edges)
-        if node not in [tree_nodes]:
+        if node not in tree_nodes:
             tree_nodes.append(node)
     return tree_nodes
 
@@ -23,13 +23,10 @@ def get_edges(nodes):
     return edges
 
 
-def get_non_root_nodes(nodes, node_names, prior_names):
-    non_prior_names = list(set(node_names) - set(prior_names))
-    non_prior_nodes = []
-    for node in nodes:
-        if node.name in non_prior_names:
-            non_prior_nodes.append(node)
-    return non_prior_nodes
+def get_non_root_nodes(nodes, sorted_names, prior_names):
+    non_prior_names = set(sorted_names) - set(prior_names)
+    name_to_node = {node.name: node for node in nodes}
+    return [name_to_node[name] for name in sorted_names if name in non_prior_names]
 
 
 def get_non_leaf_names(node_names, leaf_names):
@@ -67,8 +64,10 @@ def get_node_inputs(node, dictionary):
 def _sample_inverse(prior_nodes, non_root_nodes, key, num_samples):
     key_prior, key_node = jax.random.split(key)
     samples = _sample_inverse_priors(prior_nodes, key_prior, num_samples)
-    keys = jax.random.split(key_node, len(non_root_nodes))
-    for key, node in zip(keys, non_root_nodes):
+    prior_names = {prior.name for prior in prior_nodes}
+    non_prior_latents = [n for n in non_root_nodes if n.name not in prior_names]
+    keys = jax.random.split(key_node, len(non_prior_latents))
+    for key, node in zip(keys, non_prior_latents):
         node_inputs = get_node_inputs(node, samples)
         node_inverse_sample = node.sample_inverse(key, 1, *node_inputs)
         samples[node.name] = node_inverse_sample
@@ -114,22 +113,19 @@ def _apply_priors(priors, inverse_samples):
     return samples, log_prob
 
 
-def _get_node_inputs(node, namedtuple, default=None):
-    node_inputs = []
-    for edge in node.edges:
-        node_inputs.append(getattr(namedtuple, edge.name, default))
-    return node_inputs
-
-
 def _apply(priors, non_priors, inverse_samples):
     samples, log_prob = _apply_priors(priors, inverse_samples)
     for node in non_priors:
-        node_inputs = _get_node_inputs(node, inverse_samples)
+        node_inputs = [samples[edge.name] for edge in node.edges]
         node_sample = get_namedtuple_value(node.name, inverse_samples)
         state = node.apply(node_sample, *node_inputs)
         log_prob[node.name] = state.log_prob.sum()
         samples[node.name] = get_namedtuple_value(node.name, state.sample)
     return samples, log_prob
+
+
+def get_latent_nodes(nodes):
+    return [node for node in nodes if node.sample_inverse is not None]
 
 
 def PGM(inputs, outputs, name):
@@ -138,8 +134,8 @@ def PGM(inputs, outputs, name):
     sorted_names = tree.sort_topologically()
     Sample = SampleType(sorted_names)
     non_priors = get_non_root_nodes(nodes, sorted_names, tree.root_nodes())
-    latent_nodes = get_non_leaf_nodes(nodes, sorted_names, tree.leaves())
-    latent_names = get_non_leaf_names(sorted_names, tree.leaves())
+    latent_nodes = get_latent_nodes(nodes)
+    latent_names = [node.name for node in latent_nodes]
     Latent = SampleType(latent_names)
 
     def sample_inverse(key, num_samples=1):

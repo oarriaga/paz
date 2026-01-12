@@ -1,7 +1,5 @@
 import paz
 import jax
-
-import optax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
@@ -37,44 +35,48 @@ plt.xlim(0, 1)
 plt.ylim(-4, 4)
 plt.show()
 
-parameters = line.sample_inverse(key)
-states = line.apply(parameters)
+log_density_fn = lambda params: line.apply(params).log_prob_sum
 
+num_chains = 4
+num_samples = 5000
+sigma = 0.01
 
-# def compute_loss(parameters):
-#     return -line.apply(parameters).log_prob_sum
+key = jax.random.PRNGKey(888)
+key, init_key = jax.random.split(key)
+positions = line.sample_inverse(init_key, num_chains)
 
-
-# learning_rate = 0.001
-# optimizer = optax.adam(learning_rate)
-# opt_state = optimizer.init(parameters)
-
-
-# @jax.jit
-# def update_step(parameters, opt_state):
-#     loss, grads = jax.value_and_grad(compute_loss)(parameters)
-#     updates, new_opt_state = optimizer.update(grads, opt_state)
-#     new_params = optax.apply_updates(parameters, updates)
-#     return new_params, new_opt_state, loss
-
-
-# num_steps = 20_000
-# for step in range(num_steps):
-#     parameters, opt_state, loss = update_step(parameters, opt_state)
-#     print(f"Step {step:3d}, Loss: {loss:.4f}")
-
-# print(f"Final optimized parameters: {parameters}")
-# state = line.apply(parameters)
-
-# key = jax.random.PRNGKey(888)
-# for key in jax.random.split(key, num_samples := 100):
-#     plt.plot(X, state.sample.y_pred.sample(seed=key), color="blue", alpha=0.2)
-# plt.plot(X, observations, color="red", alpha=0.8)
-# plt.xlim(0, 1)
-# plt.ylim(-4, 4)
-# plt.show()
-
-# paz.inference.metropolis_hastings
-paz.inference.metropolis_hastings.sample(
+samples, infos = paz.metropolis_hastings.sample(
     key, log_density_fn, positions, sigma, num_samples, num_chains
 )
+
+burn_in = 1000
+posterior = jax.tree.map(lambda x: x[burn_in:], samples)
+
+print(f"Mean acceptance rate: {infos.acceptance_rate[burn_in:].mean():.3f}")
+print(f"Posterior mean: {posterior.position.mean.mean():.4f} (true: 0.5)")
+print(f"Posterior bias: {posterior.position.bias.mean():.4f} (true: 0.1)")
+print(f"Posterior stdv: {bijector(posterior.position.stdv).mean():.4f} (true: ~0.05)")
+
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+for chain in range(num_chains):
+    plt.scatter(posterior.position.mean[:, chain], posterior.position.bias[:, chain],
+                alpha=0.1, s=1)
+plt.xlabel("mean")
+plt.ylabel("bias")
+plt.title("Posterior samples (unconstrained)")
+
+plt.subplot(1, 2, 2)
+key, plot_key = jax.random.split(key)
+for i, k in enumerate(jax.random.split(plot_key, 50)):
+    idx = jax.random.randint(k, (), 0, posterior.position.mean.size)
+    m = posterior.position.mean.flatten()[idx]
+    b = posterior.position.bias.flatten()[idx]
+    plt.plot(X, m * X + b, color="blue", alpha=0.1)
+plt.plot(X, observations, color="red", alpha=0.8, label="observations")
+plt.xlabel("X")
+plt.ylabel("y")
+plt.title("Posterior predictive")
+plt.legend()
+plt.tight_layout()
+plt.show()
