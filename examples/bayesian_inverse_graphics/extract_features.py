@@ -96,6 +96,12 @@ def compute_feature_error(true_features, pred_features):
     return np.mean((true_features - pred_features) ** 2, axis=(2, 3))
 
 
+def compute_sparsity(features, threshold=1e-6):
+    sparsity = np.mean(np.abs(features) < threshold)
+    magnitude = np.mean(np.abs(features))
+    return sparsity, magnitude
+
+
 def flatten_layer_errors(layer_to_results):
     layer_to_errors, layer_to_features = [], []
     for featuremap, errors in layer_to_results:
@@ -162,12 +168,8 @@ def find_dataset_name(root_path, dataset_name, parameters_wildcard):
 
 def setup_output_directory(root_path, dataset_name, model_name, label, args):
     full_label = "-".join([model_name, label])
-    root = paz.directory.make_timestamped(
-        str(root_path / dataset_name), full_label
-    )
-    paz.file.write_json(
-        args.__dict__, str(Path(root) / args.parameters_filename)
-    )
+    root = paz.directory.make_timestamped(root_path / dataset_name, full_label)
+    paz.file.write_json(args.__dict__, Path(root) / args.parameters_filename)
     return root
 
 
@@ -221,7 +223,8 @@ parser.add_argument("--num_images", default=50, type=int)
 parser.add_argument("--num_samples", default=None, type=int)
 parser.add_argument("--shadows", default=True, type=bool)
 parser.add_argument("--model", default="VGG16", type=str)
-parser.add_argument("--weights", default="none", type=str)
+parser.add_argument("--weights", default="imagenet", type=str)
+parser.add_argument("--sparsity_threshold", default=0.5, type=float)
 args = parser.parse_args()
 keras.utils.set_random_seed(args.seed)
 RNG = np.random.default_rng(args.seed)
@@ -282,6 +285,16 @@ for layer_arg, layer_name in enumerate(layer_names):
     feature_model = build_feature_model(model, layer_name)
     true_features = extract_features(true_images, feature_model, preprocess)
     pred_features = extract_features(pred_images, feature_model, preprocess)
+    true_sparsity, true_magnitude = compute_sparsity(true_features)
+    pred_sparsity, pred_magnitude = compute_sparsity(pred_features)
+    large_true_sparsity = true_sparsity > args.sparsity_threshold
+    large_pred_sparsity = pred_sparsity > args.sparsity_threshold
+    if large_true_sparsity or large_pred_sparsity:
+        paz.message.warn(
+            f"{layer_name}: true_sparsity={true_sparsity:.1%}, "
+            f"pred_sparsity={pred_sparsity:.1%}, "
+            f"true_mag={true_magnitude:.4f}, pred_mag={pred_magnitude:.4f}"
+        )
     dataset_error = compute_feature_error(true_features, pred_features)
     error_per_featuremap = np.mean(dataset_error, axis=0)
     invariant_indices = np.argsort(error_per_featuremap)[: args.top_k]

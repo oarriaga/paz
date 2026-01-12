@@ -49,3 +49,24 @@ def test_debug_prints_gray_message(capsys):
     assert "This is debug" in captured.out
     assert "\033[90m" in captured.out
     assert "\033[0m" in captured.out
+
+
+def test_info_with_multiple_arguments(capsys):
+    message.info("value:", 42, "percent:", 0.5)
+
+    captured = capsys.readouterr()
+    assert "value: 42 percent: 0.5" in captured.out
+
+
+def test_warn_with_multiple_arguments(capsys):
+    message.warn("sparsity=", 0.95, "magnitude=", 0.001)
+
+    captured = capsys.readouterr()
+    assert "sparsity= 0.95 magnitude= 0.001" in captured.out
+
+
+def test_error_with_mixed_types(capsys):
+    message.error("count:", 10, "items:", ["a", "b"])
+
+    captured = capsys.readouterr()
+    assert "count: 10 items: ['a', 'b']" in captured.out

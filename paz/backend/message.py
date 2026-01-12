@@ -6,25 +6,26 @@ GRAY = "90"
 RESET = "0"
 
 
-def print_colored(message, color):
+def print_colored(*args, color):
+    message = " ".join(str(arg) for arg in args)
     print(f"\033[{color}m{message}\033[{RESET}m")
 
 
-def info(message):
-    print_colored(message, CYAN)
+def info(*args):
+    print_colored(*args, color=CYAN)
 
 
-def success(message):
-    print_colored(message, GREEN)
+def success(*args):
+    print_colored(*args, color=GREEN)
 
 
-def error(message):
-    print_colored(message, RED)
+def error(*args):
+    print_colored(*args, color=RED)
 
 
-def warn(message):
-    print_colored(message, YELLOW)
+def warn(*args):
+    print_colored(*args, color=YELLOW)
 
 
-def debug(message):
-    print_colored(message, GRAY)
+def debug(*args):
+    print_colored(*args, color=GRAY)
