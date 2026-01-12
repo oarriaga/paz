@@ -277,7 +277,7 @@ layer_names_file = Path(root) / "layer_names.json"
 paz.file.write_json(layer_map, str(layer_names_file))
 
 image_args = RNG.integers(0, len(true_images), args.num_images)
-layer_to_results, results = [], []
+layer_to_results, results, kept_layer_names = [], [], []
 num_layers = len(layer_names)
 for layer_arg, layer_name in enumerate(layer_names):
     layer_num = layer_arg + 1
@@ -295,13 +295,16 @@ for layer_arg, layer_name in enumerate(layer_names):
             f"pred_sparsity={pred_sparsity:.1%}, "
             f"true_mag={true_magnitude:.4f}, pred_mag={pred_magnitude:.4f}"
         )
+        continue
+    kept_layer_names.append(layer_name)
     dataset_error = compute_feature_error(true_features, pred_features)
     error_per_featuremap = np.mean(dataset_error, axis=0)
     invariant_indices = np.argsort(error_per_featuremap)[: args.top_k]
     invariant_errors = error_per_featuremap[invariant_indices]
     invariant_true_features = true_features[:, invariant_indices]
     invariant_pred_features = pred_features[:, invariant_indices]
-    layer_path = Path(root) / f"layer_{layer_arg:02d}"
+    kept_layer_arg = len(kept_layer_names) - 1
+    layer_path = Path(root) / f"layer_{kept_layer_arg:02d}"
     paz.directory.make(str(layer_path))
 
     errors = invariant_errors.tolist()
@@ -332,11 +335,17 @@ for layer_arg, layer_name in enumerate(layer_names):
             write_featuremap(pred_featuremap, image_path, pred_filename)
 
 
-invariances = extract_invariances(layer_to_results, layer_names, args.top_k)
+kept_layer_map = {f"layer_{i:02d}": n for i, n in enumerate(kept_layer_names)}
+kept_layers_file = Path(root) / "kept_layer_names.json"
+paz.file.write_json(kept_layer_map, str(kept_layers_file))
+
+invariances = extract_invariances(
+    layer_to_results, kept_layer_names, args.top_k
+)
 invariances_file = Path(root) / args.invariance_filename
 paz.file.write_json(invariances, str(invariances_file))
 layer_labels, label_names = [], []
-for layer_arg in range(len(layer_names)):
+for layer_arg in range(len(kept_layer_names)):
     layer_label = f"layer_{layer_arg:02d}"
     layer_labels.extend([layer_label, layer_label])
     label_names.extend(["featuremap", "error"])
