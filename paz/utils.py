@@ -1,9 +1,150 @@
 import os
 import shutil
 import functools
+import hashlib
 import time as pytime
+from pathlib import Path
+
 import jax
 import jax.numpy as jp
+
+
+# Cache configuration
+CACHE_PATH = Path("/tmp/jax_aot_cache")
+
+
+def _extract_shape(value):
+    """Extract shapes from arbitrary pytrees."""
+
+    def get_shape(leaf):
+        return leaf.shape if hasattr(leaf, "shape") else leaf
+
+    return jax.tree.map(get_shape, value)
+
+
+def _cache_key(*args):
+    """Build cache key from argument shapes and values."""
+    shapes = tuple(_extract_shape(arg) for arg in args)
+    digest = hashlib.sha256(str(shapes).encode()).hexdigest()
+    return digest[:16]
+
+
+def _load_cached(path):
+    """Load exported function from disk."""
+    with open(path, "rb") as filedata:
+        return jax.export.deserialize(filedata.read()).call
+
+
+def _save_cached(exported, path):
+    """Save exported function to disk."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as filedata:
+        filedata.write(exported.serialize())
+
+
+def _extract_non_static_args(args, static_argnums):
+    """Extract non-static arguments for calling exported functions."""
+    if static_argnums:
+        return tuple(
+            arg for i, arg in enumerate(args) if i not in static_argnums
+        )
+    return args
+
+
+def clear_cache(cache_dir=None):
+    """Delete all cached functions."""
+    cache_dir = CACHE_PATH if cache_dir is None else Path(cache_dir)
+    if cache_dir.exists():
+        for cached_file in cache_dir.glob("*.bin"):
+            cached_file.unlink()
+
+
+def cache(func=None, static_argnums=(), cache_dir=None):
+    """
+    Caches a pre-jitted function to disk.
+
+    Use this when you have already jitted your function and want to add
+    persistent disk caching. The function must already be jitted with jax.jit.
+
+    Usage:
+        @jax.jit
+        @cache
+        def compute(x, y):
+            return x + y
+
+        @jax.jit(static_argnums=(1,))
+        @cache(static_argnums=(1,))
+        def process(data, config):
+            return transform(data, config)
+    """
+    cache_dir = CACHE_PATH if cache_dir is None else Path(cache_dir)
+
+    def decorator(fn):
+        func_name = fn.__name__
+        module_name = fn.__module__.replace(".", "_")
+
+        def wrapper(*args):
+            cache_key = _cache_key(*args)
+            filename = f"{module_name}_{func_name}_{cache_key}.bin"
+            cache_path = cache_dir / filename
+            non_static_args = _extract_non_static_args(args, static_argnums)
+
+            if cache_path.exists():
+                cached_fn = _load_cached(cache_path)
+                return cached_fn(*non_static_args)
+
+            exported = jax.export.export(fn)(*args)
+            _save_cached(exported, cache_path)
+            return exported.call(*non_static_args)
+
+        return wrapper
+
+    if func is None:
+        return decorator
+    return decorator(func)
+
+
+def jit_and_cache(func=None, static_argnums=(), cache_dir=None, **jit_kwargs):
+    """
+    JIT compiles and caches a function to disk.
+
+    Combines jax.jit with persistent disk caching for faster subsequent loads.
+
+    Usage:
+        @jit_and_cache
+        def compute(x, y):
+            return x + y
+
+        @jit_and_cache(static_argnums=(1,))
+        def process(data, config):
+            return transform(data, config)
+    """
+    cache_dir = CACHE_PATH if cache_dir is None else Path(cache_dir)
+
+    def decorator(fn):
+        jitted = jax.jit(fn, static_argnums=static_argnums, **jit_kwargs)
+        func_name = fn.__name__
+        module_name = fn.__module__.replace(".", "_")
+
+        def wrapper(*args):
+            cache_key = _cache_key(*args)
+            filename = f"{module_name}_{func_name}_{cache_key}.bin"
+            cache_path = cache_dir / filename
+            non_static_args = _extract_non_static_args(args, static_argnums)
+
+            if cache_path.exists():
+                cached_fn = _load_cached(cache_path)
+                return cached_fn(*non_static_args)
+
+            exported = jax.export.export(jitted)(*args)
+            _save_cached(exported, cache_path)
+            return exported.call(*non_static_args)
+
+        return wrapper
+
+    if func is None:
+        return decorator
+    return decorator(func)
 
 
 def time(function, jax_fn=True, name=None):
