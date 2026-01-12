@@ -1,5 +1,5 @@
 import jax
-from paz.inference import NodeState, Variable, SampleType, Distribution
+from paz.inference.types import NodeState, SampleType, Variable, Distribution
 from paz.abstract.tree import Tree
 
 
@@ -132,7 +132,7 @@ def _apply(priors, non_priors, inverse_samples):
     return samples, log_prob
 
 
-def Model(inputs, outputs, name):
+def PGM(inputs, outputs, name):
     nodes = search_nodes(outputs)
     tree = Tree([node.name for node in nodes], get_edges(nodes), name)
     sorted_names = tree.sort_topologically()

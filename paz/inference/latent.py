@@ -1,6 +1,6 @@
 from typing import Callable
 import jax.numpy as jp
-from paz.inference import NodeState, SampleType, Variable
+from paz.inference.types import NodeState, SampleType, Variable
 from tensorflow_probability.substrates import jax as tfp
 
 tfb = tfp.bijectors
