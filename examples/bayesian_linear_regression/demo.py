@@ -55,20 +55,26 @@ posterior = jax.tree.map(lambda x: x[burn_in:], samples)
 print(f"Mean acceptance rate: {infos.acceptance_rate[burn_in:].mean():.3f}")
 print(f"Posterior mean: {posterior.position.mean.mean():.4f} (true: 0.5)")
 print(f"Posterior bias: {posterior.position.bias.mean():.4f} (true: 0.1)")
-print(f"Posterior stdv: {bijector(posterior.position.stdv).mean():.4f} (true: ~0.05)")
+print(
+    f"Posterior stdv: {bijector(posterior.position.stdv).mean():.4f} (true: ~0.05)"
+)
 
 plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
 for chain in range(num_chains):
-    plt.scatter(posterior.position.mean[:, chain], posterior.position.bias[:, chain],
-                alpha=0.1, s=1)
+    plt.scatter(
+        posterior.position.mean[:, chain],
+        posterior.position.bias[:, chain],
+        alpha=0.1,
+        s=1,
+    )
 plt.xlabel("mean")
 plt.ylabel("bias")
 plt.title("Posterior samples (unconstrained)")
 
 plt.subplot(1, 2, 2)
 key, plot_key = jax.random.split(key)
-for i, k in enumerate(jax.random.split(plot_key, 50)):
+for i, k in enumerate(jax.random.split(plot_key, int(num_samples * 0.2))):
     idx = jax.random.randint(k, (), 0, posterior.position.mean.size)
     m = posterior.position.mean.flatten()[idx]
     b = posterior.position.bias.flatten()[idx]

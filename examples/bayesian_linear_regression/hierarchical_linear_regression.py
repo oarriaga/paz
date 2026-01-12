@@ -1,9 +1,11 @@
-import paz
+from collections import namedtuple
+
 import jax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
+import paz
 tfd = tfp.distributions
 tfb = tfp.bijectors
 
@@ -13,16 +15,15 @@ def generate_hierarchical_data(key, num_groups, num_per_group, true_params):
     mu_intercept, sigma_intercept = true_params["mu_intercept"], true_params["sigma_intercept"]
     sigma_obs = true_params["sigma_obs"]
 
-    keys = jax.random.split(key, 4)
-    true_slopes = jax.random.normal(keys[0], (num_groups,)) * sigma_slope + mu_slope
-    true_intercepts = jax.random.normal(keys[1], (num_groups,)) * sigma_intercept + mu_intercept
+    data_key, slopes_key, intercepts_key = jax.random.split(key, 3)
+    true_slopes = jax.random.normal(slopes_key, (num_groups,)) * sigma_slope + mu_slope
+    true_intercepts = jax.random.normal(intercepts_key, (num_groups,)) * sigma_intercept + mu_intercept
 
     X, y, group_idx = [], [], []
     for j in range(num_groups):
-        x_j = jax.random.uniform(keys[2], (num_per_group,), minval=0, maxval=1)
-        keys = jax.random.split(keys[2], 2)
-        noise = jax.random.normal(keys[3], (num_per_group,)) * sigma_obs
-        keys = jax.random.split(keys[3], 2)
+        data_key, x_key, noise_key = jax.random.split(data_key, 3)
+        x_j = jax.random.uniform(x_key, (num_per_group,), minval=0, maxval=1)
+        noise = jax.random.normal(noise_key, (num_per_group,)) * sigma_obs
         y_j = true_slopes[j] * x_j + true_intercepts[j] + noise
         X.append(x_j)
         y.append(y_j)
@@ -57,6 +58,153 @@ def InterceptPrior(num_groups):
             reinterpreted_batch_ndims=1
         )
     return apply
+
+
+Parameters = namedtuple(
+    "Parameters",
+    [
+        "mu_slope",
+        "mu_intercept",
+        "sigma_slope",
+        "sigma_intercept",
+        "sigma_obs",
+        "slopes",
+        "intercepts",
+    ],
+)
+
+
+def apply_prior(prior, inverse_sample):
+    state = prior.apply(inverse_sample)
+    return getattr(state.sample, prior.name), state.log_prob
+
+
+def apply_latent(latent, inverse_sample, *args):
+    state = latent.apply(inverse_sample, *args)
+    return getattr(state.sample, latent.name), state.log_prob
+
+
+def sample_initial_positions(
+    key,
+    num_samples,
+    mu_slope,
+    mu_intercept,
+    sigma_slope,
+    sigma_intercept,
+    sigma_obs,
+    slopes,
+    intercepts,
+):
+    keys = jax.random.split(key, 7)
+    mu_slope_inverse = mu_slope.sample_inverse(keys[0], num_samples)
+    mu_intercept_inverse = mu_intercept.sample_inverse(keys[1], num_samples)
+    sigma_slope_inverse = sigma_slope.sample_inverse(keys[2], num_samples)
+    sigma_intercept_inverse = sigma_intercept.sample_inverse(keys[3], num_samples)
+    sigma_obs_inverse = sigma_obs.sample_inverse(keys[4], num_samples)
+
+    mu_slope_forward, _ = apply_prior(mu_slope, mu_slope_inverse)
+    mu_intercept_forward, _ = apply_prior(mu_intercept, mu_intercept_inverse)
+    sigma_slope_forward, _ = apply_prior(sigma_slope, sigma_slope_inverse)
+    sigma_intercept_forward, _ = apply_prior(sigma_intercept, sigma_intercept_inverse)
+
+    def sample_latent_inverse(latent, key, mu_value, sigma_value):
+        return latent.sample_inverse(key, 1, mu_value, sigma_value)
+
+    slope_keys = jax.random.split(keys[5], num_samples)
+    intercept_keys = jax.random.split(keys[6], num_samples)
+    slopes_inverse = jax.vmap(sample_latent_inverse, in_axes=(None, 0, 0, 0))(
+        slopes, slope_keys, mu_slope_forward, sigma_slope_forward
+    )
+    intercepts_inverse = jax.vmap(sample_latent_inverse, in_axes=(None, 0, 0, 0))(
+        intercepts, intercept_keys, mu_intercept_forward, sigma_intercept_forward
+    )
+
+    return Parameters(
+        mu_slope_inverse,
+        mu_intercept_inverse,
+        sigma_slope_inverse,
+        sigma_intercept_inverse,
+        sigma_obs_inverse,
+        slopes_inverse,
+        intercepts_inverse,
+    )
+
+
+def log_density_fn(
+    position,
+    mu_slope,
+    mu_intercept,
+    sigma_slope,
+    sigma_intercept,
+    sigma_obs,
+    slopes,
+    intercepts,
+    X,
+    y,
+    group_idx,
+):
+    mu_slope_forward, mu_slope_log_prob = apply_prior(mu_slope, position.mu_slope)
+    mu_intercept_forward, mu_intercept_log_prob = apply_prior(
+        mu_intercept, position.mu_intercept
+    )
+    sigma_slope_forward, sigma_slope_log_prob = apply_prior(
+        sigma_slope, position.sigma_slope
+    )
+    sigma_intercept_forward, sigma_intercept_log_prob = apply_prior(
+        sigma_intercept, position.sigma_intercept
+    )
+    sigma_obs_forward, sigma_obs_log_prob = apply_prior(
+        sigma_obs, position.sigma_obs
+    )
+
+    slopes_forward, slopes_log_prob = apply_latent(
+        slopes, position.slopes, mu_slope_forward, sigma_slope_forward
+    )
+    intercepts_forward, intercepts_log_prob = apply_latent(
+        intercepts, position.intercepts, mu_intercept_forward, sigma_intercept_forward
+    )
+
+    likelihood = HierarchicalLikelihood(X, group_idx)(
+        slopes_forward, intercepts_forward, sigma_obs_forward
+    )
+    log_likelihood = likelihood.log_prob(y).sum()
+
+    return (
+        mu_slope_log_prob
+        + mu_intercept_log_prob
+        + sigma_slope_log_prob
+        + sigma_intercept_log_prob
+        + sigma_obs_log_prob
+        + slopes_log_prob
+        + intercepts_log_prob
+        + log_likelihood
+    )
+
+
+def sample_prior_predictive(
+    key,
+    mu_slope,
+    mu_intercept,
+    sigma_slope,
+    sigma_intercept,
+    sigma_obs,
+    slopes,
+    intercepts,
+):
+    keys = jax.random.split(key, 7)
+    mu_slope_forward = mu_slope.sample(keys[0])
+    mu_intercept_forward = mu_intercept.sample(keys[1])
+    sigma_slope_forward = sigma_slope.sample(keys[2])
+    sigma_intercept_forward = sigma_intercept.sample(keys[3])
+    sigma_obs_forward = sigma_obs.sample(keys[4])
+
+    slopes_forward = slopes.sample(
+        keys[5], 1, mu_slope_forward, sigma_slope_forward
+    )
+    intercepts_forward = intercepts.sample(
+        keys[6], 1, mu_intercept_forward, sigma_intercept_forward
+    )
+    return slopes_forward, intercepts_forward, sigma_obs_forward
 
 
 true_params = {
@@ -97,25 +245,27 @@ obs_low, obs_high = 0.01, 0.5
 obs_bijector = tfb.Chain([tfb.Shift(obs_low), tfb.Scale(obs_high - obs_low), tfb.Sigmoid()])
 sigma_obs = paz.Prior("sigma_obs", tfd.Uniform(obs_low, obs_high), bijector=obs_bijector)
 
-y_obs = paz.Observable("y_obs", HierarchicalLikelihood(X, group_idx), y)(
-    slopes, intercepts, sigma_obs
-)
-
-priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs]
-model = paz.PGM(priors, [y_obs], "hierarchical_regression")
-
 print("\nSampling from prior predictive...")
 key, prior_key = jax.random.split(key)
 colors = plt.cm.tab10(jp.arange(num_groups))
 plt.figure(figsize=(10, 4))
 plt.subplot(1, 2, 1)
 for key_i in jax.random.split(prior_key, 20):
-    sample = model.sample(key_i)
+    slopes_forward, intercepts_forward, _ = sample_prior_predictive(
+        key_i,
+        mu_slope,
+        mu_intercept,
+        sigma_slope,
+        sigma_intercept,
+        sigma_obs,
+        slopes,
+        intercepts,
+    )
     for j in range(num_groups):
         mask = group_idx == j
         x_j = X[mask]
         sort_idx = jp.argsort(x_j)
-        y_pred = sample.slopes[j] * x_j + sample.intercepts[j]
+        y_pred = slopes_forward[j] * x_j + intercepts_forward[j]
         plt.plot(x_j[sort_idx], y_pred[sort_idx], color=colors[j], alpha=0.1)
 plt.title("Prior predictive")
 plt.xlabel("X")
@@ -132,19 +282,44 @@ plt.ylabel("y")
 plt.tight_layout()
 plt.show()
 
-log_density_fn = lambda params: model.apply(params).log_prob_sum
-
 num_chains = 4
 num_samples = 3000
 sigma = 0.02
 
 key, init_key = jax.random.split(key)
-positions = model.sample_inverse(init_key, num_chains)
+positions = sample_initial_positions(
+    init_key,
+    num_chains,
+    mu_slope,
+    mu_intercept,
+    sigma_slope,
+    sigma_intercept,
+    sigma_obs,
+    slopes,
+    intercepts,
+)
 
 print(f"\nRunning MCMC with {num_samples} samples, {num_chains} chains...")
 key, mcmc_key = jax.random.split(key)
 samples, infos = paz.metropolis_hastings.sample(
-    mcmc_key, log_density_fn, positions, sigma, num_samples, num_chains
+    mcmc_key,
+    lambda params: log_density_fn(
+        params,
+        mu_slope,
+        mu_intercept,
+        sigma_slope,
+        sigma_intercept,
+        sigma_obs,
+        slopes,
+        intercepts,
+        X,
+        y,
+        group_idx,
+    ),
+    positions,
+    sigma,
+    num_samples,
+    num_chains,
 )
 
 burn_in = 1000
