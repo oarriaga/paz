@@ -1,3 +1,32 @@
+"""
+Hierarchical Bayesian Linear Regression
+
+Demonstrates hierarchical modeling with group-level varying slopes and intercepts.
+Supports both CENTERED and NON-CENTERED parameterizations.
+
+PARAMETERIZATION FLAG:
+  Set PARAMETERIZATION = "centered" or "non-centered" (line ~184)
+
+CENTERED PARAMETERIZATION (standard):
+  slopes[g] ~ Normal(mu_slope, sigma_slope)
+  intercepts[g] ~ Normal(mu_intercept, sigma_intercept)
+
+  Good for: strongly informed groups (large n per group)
+  Risk: Neal's funnel pathology when sigma is small
+
+NON-CENTERED PARAMETERIZATION (reparameterized):
+  z_slopes[g] ~ Normal(0, 1)
+  slopes[g] = mu_slope + sigma_slope * z_slopes[g]
+
+  z_intercepts[g] ~ Normal(0, 1)
+  intercepts[g] = mu_intercept + sigma_intercept * z_intercepts[g]
+
+  Good for: weakly informed groups (small n per group, small sigma)
+  Avoids: Neal's funnel by decorrelating sigma from group effects
+
+Reference: https://twiecki.io/blog/2017/02/08/bayesian-hierchical-non-centered/
+"""
+
 from collections import namedtuple
 
 import jax
@@ -77,10 +106,114 @@ def InterceptPrior(num_groups):
     return apply
 
 
-def sample_prior_predictive(key, model):
-    inverse_sample = model.sample_inverse(key, 1)
-    state = model.apply(inverse_sample)
-    return state.sample
+def build_centered_model(
+    X, y, group_idx, num_groups, sigma_bijector, obs_bijector
+):
+    """
+    Centered parameterization (standard hierarchical model).
+    slopes ~ Normal(mu_slope, sigma_slope)
+    intercepts ~ Normal(mu_intercept, sigma_intercept)
+    """
+    mu_slope = paz.Prior("mu_slope", tfd.Normal(0.0, 1.0))
+    mu_intercept = paz.Prior("mu_intercept", tfd.Normal(0.0, 1.0))
+
+    sigma_slope = paz.Prior(
+        "sigma_slope", tfd.Uniform(0.01, 1.0), bijector=sigma_bijector
+    )
+    sigma_intercept = paz.Prior(
+        "sigma_intercept", tfd.Uniform(0.01, 1.0), bijector=sigma_bijector
+    )
+
+    slopes = paz.Latent("slopes", SlopePrior(num_groups))(mu_slope, sigma_slope)
+    intercepts = paz.Latent("intercepts", InterceptPrior(num_groups))(
+        mu_intercept, sigma_intercept
+    )
+
+    sigma_obs = paz.Prior(
+        "sigma_obs", tfd.Uniform(0.01, 0.5), bijector=obs_bijector
+    )
+
+    y_obs = paz.Observable("y_obs", HierarchicalLikelihood(X, group_idx), y)(
+        slopes, intercepts, sigma_obs
+    )
+
+    priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs]
+    return paz.PGM(priors, [y_obs], "hierarchical_centered")
+
+
+def build_noncentered_model(
+    X, y, group_idx, num_groups, sigma_bijector, obs_bijector
+):
+    """
+    Non-centered parameterization (avoids Neal's funnel).
+    z_slopes ~ Normal(0, 1)
+    slopes = mu_slope + sigma_slope * z_slopes
+    z_intercepts ~ Normal(0, 1)
+    intercepts = mu_intercept + sigma_intercept * z_intercepts
+    """
+    mu_slope = paz.Prior("mu_slope", tfd.Normal(0.0, 1.0))
+    mu_intercept = paz.Prior("mu_intercept", tfd.Normal(0.0, 1.0))
+
+    sigma_slope = paz.Prior(
+        "sigma_slope", tfd.Uniform(0.01, 1.0), bijector=sigma_bijector
+    )
+    sigma_intercept = paz.Prior(
+        "sigma_intercept", tfd.Uniform(0.01, 1.0), bijector=sigma_bijector
+    )
+
+    # Non-centered: sample standard normal offsets
+    z_slopes = paz.Prior(
+        "z_slopes",
+        tfd.Independent(
+            tfd.Normal(jp.zeros(num_groups), 1.0), reinterpreted_batch_ndims=1
+        ),
+    )
+    z_intercepts = paz.Prior(
+        "z_intercepts",
+        tfd.Independent(
+            tfd.Normal(jp.zeros(num_groups), 1.0), reinterpreted_batch_ndims=1
+        ),
+    )
+
+    sigma_obs = paz.Prior(
+        "sigma_obs", tfd.Uniform(0.01, 0.5), bijector=obs_bijector
+    )
+
+    # Reparameterization happens inside likelihood
+    def likelihood_noncentered(
+        z_slopes,
+        z_intercepts,
+        mu_slope,
+        sigma_slope,
+        mu_intercept,
+        sigma_intercept,
+        sigma_obs,
+    ):
+        slopes = mu_slope + sigma_slope * z_slopes
+        intercepts = mu_intercept + sigma_intercept * z_intercepts
+        means = slopes[group_idx] * X + intercepts[group_idx]
+        return tfd.Normal(means, sigma_obs)
+
+    y_obs = paz.Observable("y_obs", likelihood_noncentered, y)(
+        z_slopes,
+        z_intercepts,
+        mu_slope,
+        sigma_slope,
+        mu_intercept,
+        sigma_intercept,
+        sigma_obs,
+    )
+
+    priors = [
+        mu_slope,
+        mu_intercept,
+        sigma_slope,
+        sigma_intercept,
+        sigma_obs,
+        z_slopes,
+        z_intercepts,
+    ]
+    return paz.PGM(priors, [y_obs], "hierarchical_noncentered")
 
 
 true_params = TrueParams(
@@ -92,16 +225,19 @@ true_params = TrueParams(
 )
 
 num_groups = 5
-num_per_group = 20
+num_per_group = 50
 PLOT = True
+PARAMETERIZATION = "non-centered"  # "centered" or "non-centered"
+# PARAMETERIZATION = "centered"  # "centered" or "non-centered"
 if PLOT:
     colors = plt.cm.tab10(jp.arange(num_groups))
-key = jax.random.PRNGKey(42)
+key = jax.random.PRNGKey(7)
 key, data_key = jax.random.split(key)
 X, y, group_idx, true_slopes, true_intercepts = generate_hierarchical_data(
     data_key, num_groups, num_per_group, true_params
 )
 
+print(f"Parameterization: {PARAMETERIZATION.upper()}")
 print("True parameters:")
 print(
     f"  mu_slope: {true_params.mu_slope}, sigma_slope: {true_params.sigma_slope}"
@@ -114,39 +250,27 @@ print(f"  sigma_obs: {true_params.sigma_obs}")
 print(f"  true_slopes: {true_slopes}")
 print(f"  true_intercepts: {true_intercepts}")
 
-mu_slope = paz.Prior("mu_slope", tfd.Normal(0.0, 1.0))
-mu_intercept = paz.Prior("mu_intercept", tfd.Normal(0.0, 1.0))
-
+# Define bijectors for constrained parameters
 low, high = 0.01, 1.0
 sigma_bijector = tfb.Chain(
     [tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()]
 )
-sigma_slope = paz.Prior(
-    "sigma_slope", tfd.Uniform(low, high), bijector=sigma_bijector
-)
-sigma_intercept = paz.Prior(
-    "sigma_intercept", tfd.Uniform(low, high), bijector=sigma_bijector
-)
-
-slopes = paz.Latent("slopes", SlopePrior(num_groups))(mu_slope, sigma_slope)
-intercepts = paz.Latent("intercepts", InterceptPrior(num_groups))(
-    mu_intercept, sigma_intercept
-)
-
 obs_low, obs_high = 0.01, 0.5
 obs_bijector = tfb.Chain(
     [tfb.Shift(obs_low), tfb.Scale(obs_high - obs_low), tfb.Sigmoid()]
 )
-sigma_obs = paz.Prior(
-    "sigma_obs", tfd.Uniform(obs_low, obs_high), bijector=obs_bijector
-)
 
-y_obs = paz.Observable("y_obs", HierarchicalLikelihood(X, group_idx), y)(
-    slopes, intercepts, sigma_obs
-)
-
-priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs]
-model = paz.PGM(priors, [y_obs], "hierarchical_regression")
+# Build model based on parameterization flag
+if PARAMETERIZATION == "centered":
+    model = build_centered_model(
+        X, y, group_idx, num_groups, sigma_bijector, obs_bijector
+    )
+elif PARAMETERIZATION == "non-centered":
+    model = build_noncentered_model(
+        X, y, group_idx, num_groups, sigma_bijector, obs_bijector
+    )
+else:
+    raise ValueError(f"Unknown parameterization: {PARAMETERIZATION}")
 
 print("\nSampling from prior predictive...")
 key, prior_key = jax.random.split(key)
@@ -154,13 +278,26 @@ if PLOT:
     plt.figure(figsize=(10, 4))
     plt.subplot(1, 2, 1)
     for key_i in jax.random.split(prior_key, 20):
-        # sample = sample_prior_predictive(key_i, model)
         sample = model.sample(key_i)
+        # Extract slopes and intercepts (handle both parameterizations)
+        if PARAMETERIZATION == "centered":
+            slopes_sample = sample.slopes
+            intercepts_sample = sample.intercepts
+        else:  # non-centered
+            # Transform z to actual parameters
+            slopes_sample = (
+                sample.mu_slope + sample.sigma_slope * sample.z_slopes
+            )
+            intercepts_sample = (
+                sample.mu_intercept
+                + sample.sigma_intercept * sample.z_intercepts
+            )
+
         for j in range(num_groups):
             mask = group_idx == j
             x_j = X[mask]
             sort_idx = jp.argsort(x_j)
-            y_pred = sample.slopes[j] * x_j + sample.intercepts[j]
+            y_pred = slopes_sample[j] * x_j + intercepts_sample[j]
             plt.plot(
                 x_j[sort_idx], y_pred[sort_idx], color=colors[j], alpha=0.1
             )
@@ -224,8 +361,27 @@ print(
     f"(true: {true_params.sigma_obs})"
 )
 
-posterior_slopes = posterior.position.slopes.reshape(-1, num_groups)
-posterior_intercepts = posterior.position.intercepts.reshape(-1, num_groups)
+# Extract slopes and intercepts (handle both parameterizations)
+if PARAMETERIZATION == "centered":
+    posterior_slopes = posterior.position.slopes.reshape(-1, num_groups)
+    posterior_intercepts = posterior.position.intercepts.reshape(-1, num_groups)
+else:  # non-centered
+    # Transform z to actual parameters
+    mu_slope_expanded = posterior.position.mu_slope.reshape(-1, 1)
+    sigma_slope_expanded = sigma_bijector(
+        posterior.position.sigma_slope
+    ).reshape(-1, 1)
+    z_slopes = posterior.position.z_slopes.reshape(-1, num_groups)
+    posterior_slopes = mu_slope_expanded + sigma_slope_expanded * z_slopes
+
+    mu_intercept_expanded = posterior.position.mu_intercept.reshape(-1, 1)
+    sigma_intercept_expanded = sigma_bijector(
+        posterior.position.sigma_intercept
+    ).reshape(-1, 1)
+    z_intercepts = posterior.position.z_intercepts.reshape(-1, num_groups)
+    posterior_intercepts = (
+        mu_intercept_expanded + sigma_intercept_expanded * z_intercepts
+    )
 
 print("\nGroup-level estimates:")
 for j in range(num_groups):
