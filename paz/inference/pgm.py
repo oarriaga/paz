@@ -64,8 +64,10 @@ def get_node_inputs(node, dictionary):
 
 
 def sample_inverse_latent(node, key, num_samples, node_inputs):
+    # Samples inverse values for Latent nodes with parent dependencies.
     # When num_samples > 1, node_inputs are batched with leading dimension.
-    # Sample per chain to avoid broadcasting batched parents into scalar latents.
+    # Uses vmap to sample per chain, avoiding broadcasting batched parents into
+    # scalar distributions (which would create incorrect extra dimensions).
     if num_samples == 1:
         return node.sample_inverse(key, 1, *node_inputs)
     subkeys = jax.random.split(key, num_samples)
@@ -77,11 +79,15 @@ def sample_inverse_latent(node, key, num_samples, node_inputs):
     return jax.vmap(sample_latent, in_axes=in_axes)(subkeys, *node_inputs)
 
 
-def _sample_inverse(prior_nodes, non_root_nodes, key, num_samples):
+def _sample_inverse(prior_nodes, latent_nodes, key, num_samples):
+    # Samples latent variables (for MCMC initialization).
+    # latent_nodes includes ALL nodes with sample_inverse: Priors + Latents.
+    # Must filter to avoid double-sampling priors (already sampled in first step).
+    # Returns: {node_name: inverse_sample} for all latent variables.
     key_prior, key_node = jax.random.split(key)
     samples = _sample_inverse_priors(prior_nodes, key_prior, num_samples)
     prior_names = {prior.name for prior in prior_nodes}
-    non_prior_latents = [n for n in non_root_nodes if n.name not in prior_names]
+    non_prior_latents = [n for n in latent_nodes if n.name not in prior_names]
     keys = jax.random.split(key_node, len(non_prior_latents))
     for key, node in zip(keys, non_prior_latents):
         node_inputs = get_node_inputs(node, samples)
@@ -100,13 +106,35 @@ def _sample_forward_priors(prior_nodes, key, num_samples):
     return samples
 
 
-def _sample_forward(prior_nodes, non_root_nodes, key, num_samples):
+def sample_forward_node(node, key, num_samples, node_inputs):
+    # Samples forward values for nodes with parent dependencies (Latent/Observable).
+    # When num_samples > 1 and node has parents, node_inputs are batched.
+    # Uses vmap to sample per chain, avoiding broadcasting batched parents into
+    # batched distributions (which would create shape (num_samples, num_samples, ...)).
+    if num_samples == 1 or len(node_inputs) == 0:
+        return node.sample(key, num_samples, *node_inputs)
+    subkeys = jax.random.split(key, num_samples)
+
+    def sample_node(subkey, *inputs):
+        return node.sample(subkey, 1, *inputs)
+
+    in_axes = (0,) + (0,) * len(node_inputs)
+    return jax.vmap(sample_node, in_axes=in_axes)(subkeys, *node_inputs)
+
+
+def _sample_forward(prior_nodes, non_prior_nodes, key, num_samples):
+    # Samples all variables (for prior/posterior predictive sampling).
+    # non_prior_nodes excludes Priors (pre-filtered by get_non_root_nodes).
+    # Includes: Latents + Observables.
+    # No filtering needed - priors already excluded from input.
+    # Returns: {node_name: forward_sample} for all nodes (priors + latents + observables).
     key_prior, key_node = jax.random.split(key)
     samples = _sample_forward_priors(prior_nodes, key_prior, num_samples)
-    keys = jax.random.split(key_node, len(non_root_nodes))
-    for key, node in zip(keys, non_root_nodes):
+    keys = jax.random.split(key_node, len(non_prior_nodes))
+    for key, node in zip(keys, non_prior_nodes):
         node_inputs = get_node_inputs(node, samples)
-        node_sample = node.sample(key, num_samples, *node_inputs)
+        # Nodes with parents need vmapping when batched to avoid shape issues.
+        node_sample = sample_forward_node(node, key, num_samples, node_inputs)
         samples[node.name] = node_sample
     return samples
 
