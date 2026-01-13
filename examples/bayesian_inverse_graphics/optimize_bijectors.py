@@ -165,16 +165,17 @@ def plot_inverse_samples(inverse_samples, normals_samples, name, output_director
 
 
 def plot_prior(key, prior_node, output_directory, num_samples=10_000):
-    key_0, key_1 = jax.random.split(key)
+    key_0, key_1, key_2 = jax.random.split(key, 3)
     forward_samples = prior_node.sample(key_0, num_samples)
-    normals_samples = tfd.Normal(0.0, 1.0).sample(num_samples, seed=key_1)
+    inverse_samples = prior_node.sample_inverse(key_1, num_samples)
+    normals_samples = tfd.Normal(0.0, 1.0).sample(num_samples, seed=key_2)
     name = prior_node.name
 
     if name == "shift":
         for arg, shift_name in enumerate(["x-translation", "y-translation"]):
             plot_forward_samples(forward_samples[:, arg], shift_name, output_directory)
             plot_inverse_samples(
-                forward_samples[:, arg], normals_samples, shift_name, output_directory
+                inverse_samples[:, arg], normals_samples, shift_name, output_directory
             )
     elif name == "color":
         for arg, channel_name in enumerate(["R-color", "G-color", "B-color"]):
@@ -182,17 +183,17 @@ def plot_prior(key, prior_node, output_directory, num_samples=10_000):
                 forward_samples[:, arg], channel_name, output_directory
             )
             plot_inverse_samples(
-                forward_samples[:, arg], normals_samples, channel_name, output_directory
+                inverse_samples[:, arg], normals_samples, channel_name, output_directory
             )
     elif name == "scale":
         for arg, scale_name in enumerate(["x-scale", "y-scale", "z-scale"]):
             plot_forward_samples(forward_samples[:, arg], scale_name, output_directory)
             plot_inverse_samples(
-                forward_samples[:, arg], normals_samples, scale_name, output_directory
+                inverse_samples[:, arg], normals_samples, scale_name, output_directory
             )
     else:
         plot_forward_samples(forward_samples, name, output_directory)
-        plot_inverse_samples(forward_samples, normals_samples, name, output_directory)
+        plot_inverse_samples(inverse_samples, normals_samples, name, output_directory)
 
 
 def plot_priors(key, priors, output_directory, num_samples=10_000):
