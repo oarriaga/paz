@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 import jax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
@@ -8,14 +10,19 @@ import paz
 tfd = tfp.distributions
 tfb = tfp.bijectors
 
+TrueParams = namedtuple(
+    "TrueParams",
+    ["mu_slope", "sigma_slope", "mu_intercept", "sigma_intercept", "sigma_obs"],
+)
+
 
 def generate_hierarchical_data(key, num_groups, num_per_group, true_params):
-    mu_slope, sigma_slope = true_params["mu_slope"], true_params["sigma_slope"]
+    mu_slope, sigma_slope = true_params.mu_slope, true_params.sigma_slope
     mu_intercept, sigma_intercept = (
-        true_params["mu_intercept"],
-        true_params["sigma_intercept"],
+        true_params.mu_intercept,
+        true_params.sigma_intercept,
     )
-    sigma_obs = true_params["sigma_obs"]
+    sigma_obs = true_params.sigma_obs
 
     data_key, slopes_key, intercepts_key = jax.random.split(key, 3)
     true_slopes = (
@@ -76,13 +83,13 @@ def sample_prior_predictive(key, model):
     return state.sample
 
 
-true_params = {
-    "mu_slope": 0.8,
-    "sigma_slope": 0.3,
-    "mu_intercept": 0.2,
-    "sigma_intercept": 0.2,
-    "sigma_obs": 0.1,
-}
+true_params = TrueParams(
+    mu_slope=0.8,
+    sigma_slope=0.3,
+    mu_intercept=0.2,
+    sigma_intercept=0.2,
+    sigma_obs=0.1,
+)
 
 num_groups = 5
 num_per_group = 20
@@ -97,13 +104,13 @@ X, y, group_idx, true_slopes, true_intercepts = generate_hierarchical_data(
 
 print("True parameters:")
 print(
-    f"  mu_slope: {true_params['mu_slope']}, sigma_slope: {true_params['sigma_slope']}"
+    f"  mu_slope: {true_params.mu_slope}, sigma_slope: {true_params.sigma_slope}"
 )
 print(
-    f"  mu_intercept: {true_params['mu_intercept']}, "
-    f"sigma_intercept: {true_params['sigma_intercept']}"
+    f"  mu_intercept: {true_params.mu_intercept}, "
+    f"sigma_intercept: {true_params.sigma_intercept}"
 )
-print(f"  sigma_obs: {true_params['sigma_obs']}")
+print(f"  sigma_obs: {true_params.sigma_obs}")
 print(f"  true_slopes: {true_slopes}")
 print(f"  true_intercepts: {true_intercepts}")
 
@@ -147,7 +154,8 @@ if PLOT:
     plt.figure(figsize=(10, 4))
     plt.subplot(1, 2, 1)
     for key_i in jax.random.split(prior_key, 20):
-        sample = sample_prior_predictive(key_i, model)
+        # sample = sample_prior_predictive(key_i, model)
+        sample = model.sample(key_i)
         for j in range(num_groups):
             mask = group_idx == j
             x_j = X[mask]
@@ -196,24 +204,24 @@ print(f"\nMean acceptance rate: {infos.acceptance_rate[burn_in:].mean():.3f}")
 print("\nPosterior estimates vs true values:")
 print(
     f"  mu_slope: {posterior.position.mu_slope.mean():.3f} "
-    f"(true: {true_params['mu_slope']})"
+    f"(true: {true_params.mu_slope})"
 )
 print(
     f"  mu_intercept: {posterior.position.mu_intercept.mean():.3f} "
-    f"(true: {true_params['mu_intercept']})"
+    f"(true: {true_params.mu_intercept})"
 )
 print(
     f"  sigma_slope: {sigma_bijector(posterior.position.sigma_slope).mean():.3f} "
-    f"(true: {true_params['sigma_slope']})"
+    f"(true: {true_params.sigma_slope})"
 )
 print(
     f"  sigma_intercept: "
     f"{sigma_bijector(posterior.position.sigma_intercept).mean():.3f} "
-    f"(true: {true_params['sigma_intercept']})"
+    f"(true: {true_params.sigma_intercept})"
 )
 print(
     f"  sigma_obs: {obs_bijector(posterior.position.sigma_obs).mean():.3f} "
-    f"(true: {true_params['sigma_obs']})"
+    f"(true: {true_params.sigma_obs})"
 )
 
 posterior_slopes = posterior.position.slopes.reshape(-1, num_groups)
@@ -235,7 +243,7 @@ if PLOT:
         posterior.position.mu_slope.flatten(), bins=50, density=True, alpha=0.7
     )
     axes[0, 0].axvline(
-        true_params["mu_slope"], color="red", linestyle="--", label="True"
+        true_params.mu_slope, color="red", linestyle="--", label="True"
     )
     axes[0, 0].set_xlabel("mu_slope")
     axes[0, 0].legend()
@@ -247,7 +255,7 @@ if PLOT:
         alpha=0.7,
     )
     axes[0, 1].axvline(
-        true_params["mu_intercept"], color="red", linestyle="--", label="True"
+        true_params.mu_intercept, color="red", linestyle="--", label="True"
     )
     axes[0, 1].set_xlabel("mu_intercept")
     axes[0, 1].legend()
@@ -259,7 +267,7 @@ if PLOT:
         alpha=0.7,
     )
     axes[0, 2].axvline(
-        true_params["sigma_slope"], color="red", linestyle="--", label="True"
+        true_params.sigma_slope, color="red", linestyle="--", label="True"
     )
     axes[0, 2].set_xlabel("sigma_slope")
     axes[0, 2].legend()
@@ -271,7 +279,7 @@ if PLOT:
         alpha=0.7,
     )
     axes[1, 0].axvline(
-        true_params["sigma_intercept"],
+        true_params.sigma_intercept,
         color="red",
         linestyle="--",
         label="True",
@@ -286,7 +294,7 @@ if PLOT:
         alpha=0.7,
     )
     axes[1, 1].axvline(
-        true_params["sigma_obs"], color="red", linestyle="--", label="True"
+        true_params.sigma_obs, color="red", linestyle="--", label="True"
     )
     axes[1, 1].set_xlabel("sigma_obs")
     axes[1, 1].legend()
