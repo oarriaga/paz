@@ -1,6 +1,6 @@
 import jax
 from paz.inference.types import NodeState, SampleType, Variable, Distribution
-from paz.abstract.tree import Tree
+from paz.abstract.dag import DAG
 
 
 def search_nodes(output_nodes):
@@ -26,7 +26,9 @@ def get_edges(nodes):
 def get_non_root_nodes(nodes, sorted_names, prior_names):
     non_prior_names = set(sorted_names) - set(prior_names)
     name_to_node = {node.name: node for node in nodes}
-    return [name_to_node[name] for name in sorted_names if name in non_prior_names]
+    return [
+        name_to_node[name] for name in sorted_names if name in non_prior_names
+    ]
 
 
 def get_non_leaf_names(node_names, leaf_names):
@@ -61,6 +63,20 @@ def get_node_inputs(node, dictionary):
     return get_values_by_key(get_edge_names(node), dictionary)
 
 
+def sample_inverse_latent(node, key, num_samples, node_inputs):
+    # When num_samples > 1, node_inputs are batched with leading dimension.
+    # Sample per chain to avoid broadcasting batched parents into scalar latents.
+    if num_samples == 1:
+        return node.sample_inverse(key, 1, *node_inputs)
+    subkeys = jax.random.split(key, num_samples)
+
+    def sample_latent(subkey, *inputs):
+        return node.sample_inverse(subkey, 1, *inputs)
+
+    in_axes = (0,) + (0,) * len(node_inputs)
+    return jax.vmap(sample_latent, in_axes=in_axes)(subkeys, *node_inputs)
+
+
 def _sample_inverse(prior_nodes, non_root_nodes, key, num_samples):
     key_prior, key_node = jax.random.split(key)
     samples = _sample_inverse_priors(prior_nodes, key_prior, num_samples)
@@ -69,7 +85,10 @@ def _sample_inverse(prior_nodes, non_root_nodes, key, num_samples):
     keys = jax.random.split(key_node, len(non_prior_latents))
     for key, node in zip(keys, non_prior_latents):
         node_inputs = get_node_inputs(node, samples)
-        node_inverse_sample = node.sample_inverse(key, 1, *node_inputs)
+        # Latents depend on parent values, so sample per chain when batched.
+        node_inverse_sample = sample_inverse_latent(
+            node, key, num_samples, node_inputs
+        )
         samples[node.name] = node_inverse_sample
     return samples
 
@@ -130,10 +149,10 @@ def get_latent_nodes(nodes):
 
 def PGM(inputs, outputs, name):
     nodes = search_nodes(outputs)
-    tree = Tree([node.name for node in nodes], get_edges(nodes), name)
-    sorted_names = tree.sort_topologically()
+    dag = DAG([node.name for node in nodes], get_edges(nodes), name)
+    sorted_names = dag.sort_topologically()
     Sample = SampleType(sorted_names)
-    non_priors = get_non_root_nodes(nodes, sorted_names, tree.root_nodes())
+    non_priors = get_non_root_nodes(nodes, sorted_names, dag.root_nodes())
     latent_nodes = get_latent_nodes(nodes)
     latent_names = [node.name for node in latent_nodes]
     Latent = SampleType(latent_names)

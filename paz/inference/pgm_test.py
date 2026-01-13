@@ -109,6 +109,51 @@ def build_two_observables_model():
     return PGM([mean, stdv], [y1, y2], "two_observables"), bijector, (low, high)
 
 
+def build_vector_latent_model(num_groups):
+    """Model: Vector latent depends on scalar parents."""
+    observation = jp.zeros((num_groups,))
+
+    mu = Prior("mu", tfd.Normal(0.0, 1.0))
+    sigma = Prior("sigma", tfd.Normal(1.0, 0.2))
+
+    def x_distribution(mu, sigma):
+        return tfd.Independent(
+            tfd.Normal(jp.full(num_groups, mu), sigma),
+            reinterpreted_batch_ndims=1,
+        )
+
+    x = Latent("x", x_distribution)(mu, sigma)
+
+    def y_distribution(x):
+        return tfd.Normal(x, 1.0)
+
+    y = Observable("y", y_distribution, observation)(x)
+    return PGM([mu, sigma], [y], "vector_latent")
+
+
+def build_multi_parent_observable_model():
+    """Model: Observable depends on two latent parents."""
+    observation = jp.array(0.0)
+
+    mu1 = Prior("mu1", tfd.Normal(0.0, 1.0))
+    mu2 = Prior("mu2", tfd.Normal(0.0, 1.0))
+
+    def x_distribution(mu1):
+        return tfd.Normal(mu1, 1.0)
+
+    def z_distribution(mu2):
+        return tfd.Normal(mu2, 1.0)
+
+    x = Latent("x", x_distribution)(mu1)
+    z = Latent("z", z_distribution)(mu2)
+
+    def y_distribution(x, z):
+        return tfd.Normal(x + z, 1.0)
+
+    y = Observable("y", y_distribution, observation)(x, z)
+    return PGM([mu1, mu2], [y], "multi_parent")
+
+
 # =============================================================================
 # Tests: sample_inverse shapes
 # =============================================================================
@@ -358,6 +403,17 @@ def test_apply_no_nan_two_observables():
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
+def test_apply_no_nan_multi_parent_observable():
+    model = build_multi_parent_observable_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = model.apply(params)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"log_prob_sum is not finite: {state.log_prob_sum}"
+
+
 # =============================================================================
 # Tests: vmap over apply works (required for MCMC)
 # =============================================================================
@@ -512,6 +568,38 @@ def test_sample_inverse_hierarchical_batch_preserved():
         assert samples.mu.shape == (n,), f"mu shape {samples.mu.shape} != ({n},)"
         assert samples.sigma.shape == (n,), f"sigma shape {samples.sigma.shape} != ({n},)"
         assert samples.x.shape == (n,), f"x shape {samples.x.shape} != ({n},)"
+
+
+def test_sample_inverse_multi_parent_batch_preserved():
+    model = build_multi_parent_observable_model()
+    key = jax.random.PRNGKey(0)
+    for n in [2, 4, 8]:
+        samples = model.sample_inverse(key, num_samples=n)
+        assert samples.mu1.shape == (n,), f"mu1 shape {samples.mu1.shape} != ({n},)"
+        assert samples.mu2.shape == (n,), f"mu2 shape {samples.mu2.shape} != ({n},)"
+        assert samples.x.shape == (n,), f"x shape {samples.x.shape} != ({n},)"
+        assert samples.z.shape == (n,), f"z shape {samples.z.shape} != ({n},)"
+
+
+def test_sample_inverse_vector_latent_batch_preserved():
+    model = build_vector_latent_model(num_groups=5)
+    key = jax.random.PRNGKey(0)
+    for n in [2, 4, 8]:
+        samples = model.sample_inverse(key, num_samples=n)
+        assert samples.mu.shape == (n,), f"mu shape {samples.mu.shape} != ({n},)"
+        assert samples.sigma.shape == (n,), f"sigma shape {samples.sigma.shape} != ({n},)"
+        assert samples.x.shape == (n, 5), (
+            f"x shape {samples.x.shape} != ({n}, 5)"
+        )
+
+
+def test_sample_inverse_vector_latent_single_sample_shape():
+    model = build_vector_latent_model(num_groups=3)
+    key = jax.random.PRNGKey(0)
+    samples = model.sample_inverse(key, num_samples=1)
+    assert samples.mu.shape == (), f"mu shape {samples.mu.shape} != ()"
+    assert samples.sigma.shape == (), f"sigma shape {samples.sigma.shape} != ()"
+    assert samples.x.shape == (3,), f"x shape {samples.x.shape} != (3,)"
 
 
 # =============================================================================
