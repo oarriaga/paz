@@ -88,7 +88,7 @@ def sample(key, log_density_fn, positions, sigma, num_samples, num_chains):
 
     def step_chain(step_state, sample_arg):
         jax.debug.callback(
-            paz.lock(draw_bar, num_samples, start_time, "sampling", 50),
+            paz.lock(draw_bar, num_samples, start_time, "sampling", 30),
             sample_arg + 1,
         )
         old_key, states = step_state
