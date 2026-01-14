@@ -54,3 +54,4 @@ from paz.inference.prior import Prior
 from paz.inference.observable import Observable
 from paz.inference.latent import Latent
 from paz.inference.pgm import PGM
+from paz.inference.tuner import Tuner
