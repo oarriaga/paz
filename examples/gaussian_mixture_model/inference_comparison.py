@@ -54,18 +54,18 @@ tfd = tfp.distributions
 
 
 def build_mixture_model(prior_p, mean0, mean1, likelihood_stdv, observations):
-    p = paz.Prior("p", prior_p)
+    p = paz.Prior(prior_p, name="p")
 
     def z_distribution(p):
         return tfd.Bernoulli(probs=p, dtype=jp.float32)
 
-    z = paz.Latent("z", z_distribution)(p)
+    z = paz.Latent(z_distribution, name="z")(p)
 
     def y_distribution(z):
         mean = jp.where(z == 1.0, mean1, mean0)
         return tfd.Normal(mean, likelihood_stdv)
 
-    y_obs = paz.Observable("y", y_distribution, observations)(z)
+    y_obs = paz.Observable(y_distribution, observations, name="y")(z)
     return paz.PGM([p], [y_obs], "gaussian_mixture")
 
 

@@ -277,13 +277,13 @@ def build_shift_prior(mean, scale):
     lower, upper = jp.array([-0.14, -0.14]), jp.array([0.14, 0.14])
     distribution = tfd.TruncatedNormal(mean, scale, lower, upper)
     bijector = tfb.Chain([tfb.Shift(mean), tfb.Scale(scale)])
-    return paz.Prior("shift", distribution, bijector=bijector)
+    return paz.Prior(distribution, name="shift", bijector=bijector)
 
 
 def build_theta_prior(mean, concentration):
     distribution = tfd.VonMises(mean, concentration)
     bijector = tfb.Chain([tfb.Sigmoid(-jp.pi, jp.pi), tfb.Scale(jp.pi / 2.0)])
-    return paz.Prior("theta", distribution, bijector=bijector)
+    return paz.Prior(distribution, name="theta", bijector=bijector)
 
 
 def build_scale_prior(mean, variance):
@@ -293,19 +293,19 @@ def build_scale_prior(mean, variance):
     scale = jp.sqrt(variance)
     distribution = tfd.LogNormal(mean, scale)
     bijector = tfb.Chain([tfb.Softplus(), tfb.Shift(mean), tfb.Scale(scale)])
-    return paz.Prior("scale", distribution, bijector=bijector)
+    return paz.Prior(distribution, name="scale", bijector=bijector)
 
 
 def build_classes_prior(probabilities, temperature):
     distribution = tfd.RelaxedOneHotCategorical(temperature, probs=probabilities)
     bijector = tfb.Chain([tfb.SoftmaxCentered(), tfb.Scale(3.0)])
-    return paz.Prior("classes", distribution, bijector=bijector)
+    return paz.Prior(distribution, name="classes", bijector=bijector)
 
 
 def build_material_prior(name, mixture_params, bijector_params):
     mixture_dist = build_gmm(**mixture_params)
     bijector = tfb.Invert(build_affine_bijector(BijectorParams(**bijector_params)))
-    return paz.Prior(name, mixture_dist, bijector=bijector)
+    return paz.Prior(mixture_dist, name=name, bijector=bijector)
 
 
 def load_material_priors(wildcard, filename):

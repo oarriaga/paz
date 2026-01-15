@@ -10,21 +10,24 @@ tfd = tfp.distributions
 def build_gaussian_mixture_model(
     mu0_value, mu1_value, sigma_value, p_value, y_value
 ):
-    mu0 = paz.Prior("mu0", tfd.Deterministic(mu0_value))
-    mu1 = paz.Prior("mu1", tfd.Deterministic(mu1_value))
-    sigma = paz.Prior("sigma", tfd.Deterministic(sigma_value))
-    p = paz.Prior("p", tfd.Deterministic(p_value))
+    # Names are optional; omit name= to auto-generate names like prior_normal_0.
+    mu0 = paz.Prior(tfd.Deterministic(mu0_value), name="mu0")
+    mu1 = paz.Prior(tfd.Deterministic(mu1_value), name="mu1")
+    sigma = paz.Prior(tfd.Deterministic(sigma_value), name="sigma")
+    p = paz.Prior(tfd.Deterministic(p_value), name="p")
 
     def z_distribution(p):
         return tfd.Bernoulli(probs=p)
 
-    z = paz.Latent("z", z_distribution)(p)
+    z = paz.Latent(z_distribution, name="z")(p)
 
     def y_distribution(z, mu0, mu1, sigma):
         mean = jp.where(z == 1, mu1, mu0)
         return tfd.Normal(mean, sigma)
 
-    y_obs = paz.Observable("y", y_distribution, y_value)(z, mu0, mu1, sigma)
+    y_obs = paz.Observable(y_distribution, y_value, name="y")(
+        z, mu0, mu1, sigma
+    )
     return paz.PGM([mu0, mu1, sigma, p], [y_obs], "gaussian_mixture")
 
 

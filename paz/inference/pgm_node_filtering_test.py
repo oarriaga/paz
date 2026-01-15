@@ -10,18 +10,18 @@ tfd = tfp.distributions
 
 def test_latent_nodes_includes_priors():
     """Verify that get_latent_nodes returns nodes with sample_inverse, including Priors."""
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
 
     def latent_prior(mu_val, sigma_val):
         return tfd.Normal(mu_val, jp.abs(sigma_val))
 
-    latent = paz.Latent("latent", latent_prior)(mu, sigma)
+    latent = paz.Latent(latent_prior, name="latent")(mu, sigma)
 
     def likelihood(latent_val):
         return tfd.Normal(latent_val, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, 0.0)(latent)
+    y_obs = paz.Observable(likelihood, 0.0, name="y_obs")(latent)
 
     nodes = search_nodes([y_obs])
     latent_nodes = get_latent_nodes(nodes)
@@ -40,18 +40,18 @@ def test_latent_nodes_includes_priors():
 
 def test_non_priors_excludes_priors():
     """Verify that get_non_root_nodes excludes root nodes (Priors)."""
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
 
     def latent_prior(mu_val, sigma_val):
         return tfd.Normal(mu_val, jp.abs(sigma_val))
 
-    latent = paz.Latent("latent", latent_prior)(mu, sigma)
+    latent = paz.Latent(latent_prior, name="latent")(mu, sigma)
 
     def likelihood(latent_val):
         return tfd.Normal(latent_val, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, 0.0)(latent)
+    y_obs = paz.Observable(likelihood, 0.0, name="y_obs")(latent)
 
     nodes = search_nodes([y_obs])
     edges = get_edges(nodes)
@@ -83,14 +83,14 @@ def test_sample_inverse_no_double_sampling():
             reinterpreted_batch_ndims=1
         )
 
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
-    groups = paz.Latent("groups", group_prior)(mu, sigma)
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(num_groups))(groups)
+    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
 
     key = jax.random.PRNGKey(0)
@@ -120,14 +120,14 @@ def test_sample_forward_all_nodes():
             reinterpreted_batch_ndims=1
         )
 
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
-    groups = paz.Latent("groups", group_prior)(mu, sigma)
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(num_groups))(groups)
+    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
 
     key = jax.random.PRNGKey(0)
@@ -159,14 +159,14 @@ def test_filtering_consistency_batched():
             reinterpreted_batch_ndims=1
         )
 
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
-    groups = paz.Latent("groups", group_prior)(mu, sigma)
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(num_groups))(groups)
+    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
 
     key = jax.random.PRNGKey(0)
@@ -204,13 +204,15 @@ def test_hierarchical_regression_filtering():
             reinterpreted_batch_ndims=1
         )
 
-    mu_slope = paz.Prior("mu_slope", tfd.Normal(0.0, 1.0))
-    mu_intercept = paz.Prior("mu_intercept", tfd.Normal(0.0, 1.0))
-    sigma_slope = paz.Prior("sigma_slope", tfd.Normal(0.0, 1.0))
-    sigma_intercept = paz.Prior("sigma_intercept", tfd.Normal(0.0, 1.0))
+    mu_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_slope")
+    mu_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_intercept")
+    sigma_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_slope")
+    sigma_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_intercept")
 
-    slopes = paz.Latent("slopes", slope_prior)(mu_slope, sigma_slope)
-    intercepts = paz.Latent("intercepts", intercept_prior)(mu_intercept, sigma_intercept)
+    slopes = paz.Latent(slope_prior, name="slopes")(mu_slope, sigma_slope)
+    intercepts = paz.Latent(intercept_prior, name="intercepts")(
+        mu_intercept, sigma_intercept
+    )
 
     X = jp.linspace(0, 1, 50)
     group_idx = jp.repeat(jp.arange(num_groups), 10)
@@ -219,7 +221,9 @@ def test_hierarchical_regression_filtering():
         means = slopes_val[group_idx] * X + intercepts_val[group_idx]
         return tfd.Normal(means, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(50))(slopes, intercepts)
+    y_obs = paz.Observable(likelihood, jp.zeros(50), name="y_obs")(
+        slopes, intercepts
+    )
 
     priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept]
     model = paz.PGM(priors, [y_obs], "hierarchical")

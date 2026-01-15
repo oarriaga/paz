@@ -13,6 +13,19 @@ def search_nodes(output_nodes):
     return tree_nodes
 
 
+def _validate_unique_names(nodes):
+    name_counts = {}
+    for node in nodes:
+        name_counts[node.name] = name_counts.get(node.name, 0) + 1
+    duplicates = [name for name, count in name_counts.items() if count > 1]
+    if duplicates:
+        duplicates.sort()
+        raise ValueError(
+            "PGM node names must be unique. "
+            f"Duplicates: {', '.join(duplicates)}"
+        )
+
+
 def get_edges(nodes):
     edges = []
     for node in nodes:
@@ -29,19 +42,6 @@ def get_non_root_nodes(nodes, sorted_names, prior_names):
     return [
         name_to_node[name] for name in sorted_names if name in non_prior_names
     ]
-
-
-def get_non_leaf_names(node_names, leaf_names):
-    return list(set(node_names) - set(leaf_names))
-
-
-def get_non_leaf_nodes(sorted_nodes, node_names, leaf_names):
-    non_leaf_names = get_non_leaf_names(node_names, leaf_names)
-    non_leaf_nodes = []
-    for node in sorted_nodes:
-        if node.name in non_leaf_names:
-            non_leaf_nodes.append(node)
-    return non_leaf_nodes
 
 
 def _sample_inverse_priors(prior_nodes, key, num_samples):
@@ -177,6 +177,7 @@ def get_latent_nodes(nodes):
 
 def PGM(inputs, outputs, name):
     nodes = search_nodes(outputs)
+    _validate_unique_names(nodes)
     dag = DAG([node.name for node in nodes], get_edges(nodes), name)
     sorted_names = dag.sort_topologically()
     Sample = SampleType(sorted_names)

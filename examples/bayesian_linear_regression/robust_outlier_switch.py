@@ -41,21 +41,23 @@ CaseResult = namedtuple(
 
 
 def build_switch_model(x, observations, sigma_in, sigma_out):
-    slope = paz.Prior("slope", tfd.Normal(0.0, 1.0))
-    bias = paz.Prior("bias", tfd.Normal(0.0, 1.0))
-    p = paz.Prior("p", tfd.Beta(2.0, 2.0), bijector=tfb.Sigmoid())
+    slope = paz.Prior(tfd.Normal(0.0, 1.0), name="slope")
+    bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
+    p = paz.Prior(tfd.Beta(2.0, 2.0), name="p", bijector=tfb.Sigmoid())
 
     def z_distribution(p):
         return tfd.Bernoulli(probs=p, dtype=jp.float32)
 
-    z = paz.Latent("z", z_distribution)(p)
+    z = paz.Latent(z_distribution, name="z")(p)
 
     def y_distribution(slope, bias, z):
         mean = slope * x + bias
         sigma = jp.where(z == 1.0, sigma_out, sigma_in)
         return tfd.Normal(mean, sigma)
 
-    y_obs = paz.Observable("y", y_distribution, observations)(slope, bias, z)
+    y_obs = paz.Observable(y_distribution, observations, name="y")(
+        slope, bias, z
+    )
     return paz.PGM([slope, bias, p], [y_obs], "robust_outlier_switch")
 
 

@@ -22,11 +22,13 @@ def build_model(inputs, observations, low, high):
 
         return apply
 
-    mean = paz.Prior("mean", tfd.Normal(0.0, 1.0))
-    bias = paz.Prior("bias", tfd.Normal(0.0, 1.0))
+    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
+    bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = paz.Prior("stdv", tfd.Uniform(low, high), bijector=bijector)
-    y_pred = paz.Observable("y_pred", likelihood(inputs), observations)(
+    stdv = paz.Prior(
+        tfd.Uniform(low, high), name="stdv", bijector=bijector
+    )
+    y_pred = paz.Observable(likelihood(inputs), observations, name="y_pred")(
         mean, bias, stdv
     )
     return paz.PGM([mean, bias, stdv], [y_pred], "line"), bijector

@@ -18,12 +18,12 @@ def Likelihood(X):
 X = jp.linspace(0, 1, 200)
 observations = 0.5 * X + 0.1 + 0.05 * jp.sin(50 * X)
 
-mean = paz.Prior("mean", tfd.Normal(0.0, 1.0))
-bias = paz.Prior("bias", tfd.Normal(0.0, 1.0))
+mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
+bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
 low, high = 0.001, 0.3
 bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-stdv = paz.Prior("stdv", tfd.Uniform(low, high), bijector=bijector)
-y = paz.Observable("y_pred", Likelihood(X), observations)(mean, bias, stdv)
+stdv = paz.Prior(tfd.Uniform(low, high), name="stdv", bijector=bijector)
+y = paz.Observable(Likelihood(X), observations, name="y_pred")(mean, bias, stdv)
 line = paz.PGM([mean, bias, stdv], [y], "line")
 
 key = jax.random.PRNGKey(888)

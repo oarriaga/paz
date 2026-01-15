@@ -1,16 +1,17 @@
-from typing import Callable
 import jax.numpy as jp
+from paz.inference.naming import build_latent_name
 from paz.inference.types import NodeState, SampleType, Variable
 from tensorflow_probability.substrates import jax as tfp
 
 tfb = tfp.bijectors
 
 
-def Latent(name, distribution_fn, bijector=None):
-    if not isinstance(distribution_fn, Callable):
+def Latent(distribution_fn, bijector=None, name=None):
+    if not callable(distribution_fn):
         raise ValueError(f"Input {distribution_fn} must be a callable")
+    node_name = name if name is not None else build_latent_name(distribution_fn)
 
-    Sample = SampleType([name])
+    Sample = SampleType([node_name])
     bijector = tfb.Identity() if bijector is None else bijector
     edges = []
 
@@ -38,6 +39,6 @@ def Latent(name, distribution_fn, bijector=None):
     def call(*args):
         for arg in args:
             edges.append(arg)
-        return Variable(apply, sample, sample_inverse, name, edges, None)
+        return Variable(apply, sample, sample_inverse, node_name, edges, None)
 
     return call

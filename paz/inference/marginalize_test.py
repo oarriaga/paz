@@ -14,21 +14,21 @@ tfb = tfp.bijectors
 
 
 def build_scalar_mixture_model(mu0_value, mu1_value, sigma_value, p_value, y_value):
-    mu0 = Prior("mu0", tfd.Deterministic(mu0_value))
-    mu1 = Prior("mu1", tfd.Deterministic(mu1_value))
-    sigma = Prior("sigma", tfd.Deterministic(sigma_value))
-    p = Prior("p", tfd.Deterministic(p_value))
+    mu0 = Prior(tfd.Deterministic(mu0_value), name="mu0")
+    mu1 = Prior(tfd.Deterministic(mu1_value), name="mu1")
+    sigma = Prior(tfd.Deterministic(sigma_value), name="sigma")
+    p = Prior(tfd.Deterministic(p_value), name="p")
 
     def z_distribution(p):
         return tfd.Bernoulli(probs=p)
 
-    z = Latent("z", z_distribution)(p)
+    z = Latent(z_distribution, name="z")(p)
 
     def y_distribution(z, mu0, mu1, sigma):
         mean = jp.where(z == 1, mu1, mu0)
         return tfd.Normal(mean, sigma)
 
-    y_obs = Observable("y_obs", y_distribution, jp.array(y_value))(
+    y_obs = Observable(y_distribution, jp.array(y_value), name="y_obs")(
         z, mu0, mu1, sigma
     )
     return PGM([mu0, mu1, sigma, p], [y_obs], "scalar_mixture")
@@ -131,21 +131,21 @@ def test_marginalize_multiple_names_raises():
 
 
 def test_marginalize_nonfinite_discrete_raises():
-    z = Prior("z", tfd.Poisson(1.0))
+    z = Prior(tfd.Poisson(1.0), name="z")
     pgm = PGM([z], [z], "poisson")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
 
 
 def test_marginalize_vector_discrete_raises():
-    z = Prior("z", tfd.Bernoulli(logits=jp.zeros((2,))))
+    z = Prior(tfd.Bernoulli(logits=jp.zeros((2,))), name="z")
     pgm = PGM([z], [z], "vector_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
 
 
 def test_marginalize_discrete_non_identity_bijector_raises():
-    z = Prior("z", tfd.Bernoulli(0.5), bijector=tfb.Sigmoid())
+    z = Prior(tfd.Bernoulli(0.5), name="z", bijector=tfb.Sigmoid())
     pgm = PGM([z], [z], "bijected_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])

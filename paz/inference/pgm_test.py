@@ -19,7 +19,7 @@ tfb = tfp.bijectors
 
 def build_single_prior_model():
     """Model: x ~ Normal(0, 1)"""
-    x = Prior("x", tfd.Normal(0.0, 1.0))
+    x = Prior(tfd.Normal(0.0, 1.0), name="x")
     return PGM([x], [x], "single_prior")
 
 
@@ -27,7 +27,7 @@ def build_single_prior_with_bijector_model():
     """Model: x ~ Uniform(0.1, 1.0) with sigmoid bijector"""
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    x = Prior("x", tfd.Uniform(low, high), bijector=bijector)
+    x = Prior(tfd.Uniform(low, high), bijector=bijector, name="x")
     return PGM([x], [x], "single_prior_bijector"), bijector, (low, high)
 
 
@@ -46,12 +46,12 @@ def build_three_priors_one_observable_model():
             return tfd.Normal(jax.vmap(lambda x: mean * x + bias)(X), stdv)
         return apply
 
-    mean = Prior("mean", tfd.Normal(0.0, 1.0))
-    bias = Prior("bias", tfd.Normal(0.0, 1.0))
+    mean = Prior(tfd.Normal(0.0, 1.0), name="mean")
+    bias = Prior(tfd.Normal(0.0, 1.0), name="bias")
     low, high = 0.001, 0.3
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = Prior("stdv", tfd.Uniform(low, high), bijector=bijector)
-    y = Observable("y_pred", Likelihood(X), observations)(mean, bias, stdv)
+    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    y = Observable(Likelihood(X), observations, name="y_pred")(mean, bias, stdv)
     return PGM([mean, bias, stdv], [y], "linear_regression"), bijector, (low, high)
 
 
@@ -67,18 +67,18 @@ def build_hierarchical_model():
     low, high = 0.1, 2.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
 
-    mu = Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = Prior("sigma", tfd.Uniform(low, high), bijector=bijector)
+    mu = Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = Prior(tfd.Uniform(low, high), bijector=bijector, name="sigma")
 
     def x_distribution(mu, sigma):
         return tfd.Normal(mu, sigma)
 
-    x = Latent("x", x_distribution)(mu, sigma)
+    x = Latent(x_distribution, name="x")(mu, sigma)
 
     def y_distribution(x):
         return tfd.Normal(x, 0.1)
 
-    y = Observable("y", y_distribution, observation)(x)
+    y = Observable(y_distribution, observation, name="y")(x)
     return PGM([mu, sigma], [y], "hierarchical"), bijector, (low, high)
 
 
@@ -95,8 +95,8 @@ def build_two_observables_model():
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
 
-    mean = Prior("mean", tfd.Normal(0.0, 1.0))
-    stdv = Prior("stdv", tfd.Uniform(low, high), bijector=bijector)
+    mean = Prior(tfd.Normal(0.0, 1.0), name="mean")
+    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
 
     def likelihood1(mean, stdv):
         return tfd.Normal(mean, stdv)
@@ -104,8 +104,8 @@ def build_two_observables_model():
     def likelihood2(mean, stdv):
         return tfd.Normal(mean + 1, stdv)
 
-    y1 = Observable("y1", likelihood1, obs1)(mean, stdv)
-    y2 = Observable("y2", likelihood2, obs2)(mean, stdv)
+    y1 = Observable(likelihood1, obs1, name="y1")(mean, stdv)
+    y2 = Observable(likelihood2, obs2, name="y2")(mean, stdv)
     return PGM([mean, stdv], [y1, y2], "two_observables"), bijector, (low, high)
 
 
@@ -113,8 +113,8 @@ def build_vector_latent_model(num_groups):
     """Model: Vector latent depends on scalar parents."""
     observation = jp.zeros((num_groups,))
 
-    mu = Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = Prior("sigma", tfd.Normal(1.0, 0.2))
+    mu = Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = Prior(tfd.Normal(1.0, 0.2), name="sigma")
 
     def x_distribution(mu, sigma):
         return tfd.Independent(
@@ -122,12 +122,12 @@ def build_vector_latent_model(num_groups):
             reinterpreted_batch_ndims=1,
         )
 
-    x = Latent("x", x_distribution)(mu, sigma)
+    x = Latent(x_distribution, name="x")(mu, sigma)
 
     def y_distribution(x):
         return tfd.Normal(x, 1.0)
 
-    y = Observable("y", y_distribution, observation)(x)
+    y = Observable(y_distribution, observation, name="y")(x)
     return PGM([mu, sigma], [y], "vector_latent")
 
 
@@ -135,8 +135,8 @@ def build_multi_parent_observable_model():
     """Model: Observable depends on two latent parents."""
     observation = jp.array(0.0)
 
-    mu1 = Prior("mu1", tfd.Normal(0.0, 1.0))
-    mu2 = Prior("mu2", tfd.Normal(0.0, 1.0))
+    mu1 = Prior(tfd.Normal(0.0, 1.0), name="mu1")
+    mu2 = Prior(tfd.Normal(0.0, 1.0), name="mu2")
 
     def x_distribution(mu1):
         return tfd.Normal(mu1, 1.0)
@@ -144,13 +144,13 @@ def build_multi_parent_observable_model():
     def z_distribution(mu2):
         return tfd.Normal(mu2, 1.0)
 
-    x = Latent("x", x_distribution)(mu1)
-    z = Latent("z", z_distribution)(mu2)
+    x = Latent(x_distribution, name="x")(mu1)
+    z = Latent(z_distribution, name="z")(mu2)
 
     def y_distribution(x, z):
         return tfd.Normal(x + z, 1.0)
 
-    y = Observable("y", y_distribution, observation)(x, z)
+    y = Observable(y_distribution, observation, name="y")(x, z)
     return PGM([mu1, mu2], [y], "multi_parent")
 
 
@@ -459,7 +459,7 @@ def test_apply_includes_jacobian_correction():
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
     distribution = tfd.Uniform(low, high)
-    x = Prior("x", distribution, bijector=bijector)
+    x = Prior(distribution, bijector=bijector, name="x")
     model = PGM([x], [x], "test")
 
     key = jax.random.PRNGKey(42)
@@ -495,8 +495,8 @@ def test_observable_receives_constrained_stdv():
 
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = Prior("stdv", tfd.Uniform(low, high), bijector=bijector)
-    y = Observable("y", Likelihood(X), observations)(stdv)
+    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    y = Observable(Likelihood(X), observations, name="y")(stdv)
     model = PGM([stdv], [y], "test")
 
     key = jax.random.PRNGKey(42)
@@ -521,8 +521,8 @@ def test_observable_scale_is_positive():
 
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = Prior("stdv", tfd.Uniform(low, high), bijector=bijector)
-    y = Observable("y", Likelihood(X), observations)(stdv)
+    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    y = Observable(Likelihood(X), observations, name="y")(stdv)
     model = PGM([stdv], [y], "test")
 
     key = jax.random.PRNGKey(42)

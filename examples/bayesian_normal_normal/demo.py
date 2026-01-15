@@ -58,8 +58,10 @@ def build_normal_normal_model(prior_mean, prior_stdv, likelihood_stdv, observati
 
         return apply
 
-    mu = paz.Prior("mu", tfd.Normal(prior_mean, prior_stdv))
-    x = paz.Observable("x", Likelihood(likelihood_stdv, observations), observations)(mu)
+    mu = paz.Prior(tfd.Normal(prior_mean, prior_stdv), name="mu")
+    x = paz.Observable(
+        Likelihood(likelihood_stdv, observations), observations, name="x"
+    )(mu)
     return paz.PGM([mu], [x], "normal_normal")
 
 

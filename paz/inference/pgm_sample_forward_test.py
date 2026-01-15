@@ -8,13 +8,13 @@ tfd = tfp.distributions
 
 def test_sample_forward_simple_model():
     """Test sample_forward with a simple model (no Latent nodes)."""
-    mean = paz.Prior("mean", tfd.Normal(0.0, 1.0))
-    stdv = paz.Prior("stdv", tfd.Normal(0.0, 1.0))
+    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
+    stdv = paz.Prior(tfd.Normal(0.0, 1.0), name="stdv")
 
     def likelihood(mu, sigma):
         return tfd.Normal(mu, jp.abs(sigma))
 
-    y_obs = paz.Observable("y_obs", likelihood, 0.5)(mean, stdv)
+    y_obs = paz.Observable(likelihood, 0.5, name="y_obs")(mean, stdv)
     model = paz.PGM([mean, stdv], [y_obs], "simple")
 
     key = jax.random.PRNGKey(0)
@@ -31,13 +31,13 @@ def test_sample_forward_simple_model():
 
 def test_sample_forward_simple_model_batched():
     """Test sample_forward with batched sampling (no Latent nodes)."""
-    mean = paz.Prior("mean", tfd.Normal(0.0, 1.0))
-    stdv = paz.Prior("stdv", tfd.Normal(0.0, 1.0))
+    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
+    stdv = paz.Prior(tfd.Normal(0.0, 1.0), name="stdv")
 
     def likelihood(mu, sigma):
         return tfd.Normal(mu, jp.abs(sigma))
 
-    y_obs = paz.Observable("y_obs", likelihood, 0.5)(mean, stdv)
+    y_obs = paz.Observable(likelihood, 0.5, name="y_obs")(mean, stdv)
     model = paz.PGM([mean, stdv], [y_obs], "simple")
 
     key = jax.random.PRNGKey(0)
@@ -64,14 +64,14 @@ def test_sample_forward_hierarchical_single_sample():
             reinterpreted_batch_ndims=1
         )
 
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
-    groups = paz.Latent("groups", group_prior)(mu, sigma)
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(num_groups))(groups)
+    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "hierarchical")
 
     key = jax.random.PRNGKey(0)
@@ -99,14 +99,14 @@ def test_sample_forward_hierarchical_batched():
             reinterpreted_batch_ndims=1
         )
 
-    mu = paz.Prior("mu", tfd.Normal(0.0, 1.0))
-    sigma = paz.Prior("sigma", tfd.Normal(0.0, 1.0))
-    groups = paz.Latent("groups", group_prior)(mu, sigma)
+    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(num_groups))(groups)
+    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "hierarchical")
 
     key = jax.random.PRNGKey(0)
@@ -150,13 +150,15 @@ def test_sample_forward_hierarchical_regression():
             reinterpreted_batch_ndims=1
         )
 
-    mu_slope = paz.Prior("mu_slope", tfd.Normal(0.0, 1.0))
-    mu_intercept = paz.Prior("mu_intercept", tfd.Normal(0.0, 1.0))
-    sigma_slope = paz.Prior("sigma_slope", tfd.Normal(0.0, 1.0))
-    sigma_intercept = paz.Prior("sigma_intercept", tfd.Normal(0.0, 1.0))
+    mu_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_slope")
+    mu_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_intercept")
+    sigma_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_slope")
+    sigma_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_intercept")
 
-    slopes = paz.Latent("slopes", slope_prior)(mu_slope, sigma_slope)
-    intercepts = paz.Latent("intercepts", intercept_prior)(mu_intercept, sigma_intercept)
+    slopes = paz.Latent(slope_prior, name="slopes")(mu_slope, sigma_slope)
+    intercepts = paz.Latent(intercept_prior, name="intercepts")(
+        mu_intercept, sigma_intercept
+    )
 
     X = jp.linspace(0, 1, 50)
     group_idx = jp.repeat(jp.arange(num_groups), 10)
@@ -165,7 +167,9 @@ def test_sample_forward_hierarchical_regression():
         means = slopes[group_idx] * X + intercepts[group_idx]
         return tfd.Normal(means, 0.1)
 
-    y_obs = paz.Observable("y_obs", likelihood, jp.zeros(50))(slopes, intercepts)
+    y_obs = paz.Observable(likelihood, jp.zeros(50), name="y_obs")(
+        slopes, intercepts
+    )
 
     priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept]
     model = paz.PGM(priors, [y_obs], "hierarchical_regression")

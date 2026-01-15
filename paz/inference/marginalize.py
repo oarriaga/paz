@@ -167,6 +167,8 @@ def _build_distribution(pgm, node, inverse_samples):
     freevars = _get_freevars(node.apply)
     distribution_fn = freevars.get("distribution_fn")
     if distribution_fn is None:
+        distribution_fn = freevars.get("distribution_fn_value")
+    if distribution_fn is None:
         raise ValueError("Latent node missing distribution_fn.")
     parent_samples = _get_parent_samples(pgm, node, inverse_samples)
     return distribution_fn(*parent_samples)

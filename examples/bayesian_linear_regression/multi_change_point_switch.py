@@ -251,17 +251,23 @@ def build_switch_model(x, observations, sigma, switch_table, num_switches):
     bias_priors = []
     for segment_index in range(num_segments):
         slope_priors.append(
-            paz.Prior(f"slope_segment_{segment_index}", tfd.Normal(0.0, 1.0))
+            paz.Prior(
+                tfd.Normal(0.0, 1.0),
+                name=f"slope_segment_{segment_index}",
+            )
         )
         bias_priors.append(
-            paz.Prior(f"bias_segment_{segment_index}", tfd.Normal(0.0, 1.0))
+            paz.Prior(
+                tfd.Normal(0.0, 1.0),
+                name=f"bias_segment_{segment_index}",
+            )
         )
 
     switch_index = paz.Prior(
-        "switch_index",
         tfd.Categorical(
             logits=jp.zeros(switch_table.shape[0]), dtype=jp.float32
         ),
+        name="switch_index",
     )
 
     def y_distribution(switch_index, *segment_params):
@@ -272,7 +278,7 @@ def build_switch_model(x, observations, sigma, switch_table, num_switches):
         mean = compute_piecewise_mean(x, slopes, biases, switch_indices)
         return tfd.Normal(mean, sigma)
 
-    y_obs = paz.Observable("y", y_distribution, observations)(
+    y_obs = paz.Observable(y_distribution, observations, name="y")(
         switch_index, *slope_priors, *bias_priors
     )
 
