@@ -207,8 +207,8 @@ def run_case(
     Theta = SampleType(["slope", "bias", "p"])
     theta_samples = Theta(slope_samples, bias_samples, p_inverse_samples)
     posterior_z = paz.recover_discrete_posterior(
-        model_marg, "z", theta_samples, timed=True
-    )["posterior"].mean(axis=0)
+        model_marg, "z", theta_samples
+    ).posterior.mean(axis=0)
     posterior_seconds = time.perf_counter() - start_time
 
     return CaseResult(

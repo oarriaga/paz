@@ -171,8 +171,8 @@ def run_inference(
     print("Recovering switch posterior...")
     start_time = time.perf_counter()
     posterior_configs = paz.recover_discrete_posterior(
-        model_marg, "switch_index", theta_samples, timed=True
-    )["posterior"].mean(axis=0)
+        model_marg, "switch_index", theta_samples
+    ).posterior.mean(axis=0)
     posterior_seconds = time.perf_counter() - start_time
     print(f"switch posterior: {posterior_seconds:.3f}s")
 

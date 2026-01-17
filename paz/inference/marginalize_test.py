@@ -81,7 +81,7 @@ def test_recover_discrete_posterior_matches_analytic():
     theta = make_theta_inverse_samples(
         mu0_value, mu1_value, sigma_value, p_value
     )
-    posterior = recover_discrete_posterior(pgm_marg, "z", theta)["posterior"]
+    posterior = recover_discrete_posterior(pgm_marg, "z", theta).posterior
     expected = compute_analytic_posterior(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
@@ -120,7 +120,7 @@ def test_recover_discrete_posterior_batched_shape():
         jp.full((num_samples,), sigma_value),
         jp.full((num_samples,), p_value),
     )
-    posterior = recover_discrete_posterior(pgm_marg, "z", theta)["posterior"]
+    posterior = recover_discrete_posterior(pgm_marg, "z", theta).posterior
     assert posterior.shape == (num_samples, 2)
 
 

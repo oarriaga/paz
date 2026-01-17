@@ -1,5 +1,12 @@
 import jax
-from paz.inference.types import NodeState, SampleType, Variable, Distribution
+
+from paz.inference.types import (
+    Distribution,
+    NodeState,
+    PGMMetadata,
+    SampleType,
+    Variable,
+)
 from paz.abstract.dag import DAG
 
 
@@ -196,4 +203,7 @@ def PGM(inputs, outputs, name):
         sample, log_prob = _apply(inputs, non_priors, inverse_samples)
         return NodeState(Sample(**sample), log_prob, sum_log_probs(log_prob))
 
-    return Variable(apply, sample_forward, sample_inverse, name, [], None)
+    metadata = PGMMetadata(nodes, inputs, non_priors, latent_nodes)
+    return Variable(
+        apply, sample_forward, sample_inverse, name, [], None, metadata
+    )

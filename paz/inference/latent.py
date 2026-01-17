@@ -1,6 +1,7 @@
 import jax.numpy as jp
+
 from paz.inference.naming import build_latent_name
-from paz.inference.types import NodeState, SampleType, Variable
+from paz.inference.types import NodeMetadata, NodeState, SampleType, Variable
 from tensorflow_probability.substrates import jax as tfp
 
 tfb = tfp.bijectors
@@ -13,6 +14,7 @@ def Latent(distribution_fn, bijector=None, name=None):
 
     Sample = SampleType([node_name])
     bijector = tfb.Identity() if bijector is None else bijector
+    metadata = NodeMetadata(distribution_fn, bijector)
     edges = []
 
     def apply(inverse_sample, *args):
@@ -39,6 +41,8 @@ def Latent(distribution_fn, bijector=None, name=None):
     def call(*args):
         for arg in args:
             edges.append(arg)
-        return Variable(apply, sample, sample_inverse, node_name, edges, None)
+        return Variable(
+            apply, sample, sample_inverse, node_name, edges, None, metadata
+        )
 
     return call

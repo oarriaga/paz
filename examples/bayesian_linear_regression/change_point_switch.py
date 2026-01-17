@@ -230,8 +230,8 @@ def main():
     switch_posterior = paz.recover_discrete_posterior(
         model_marg, "switch_index", theta_samples
     )
-    switch_support = switch_posterior["support"]
-    switch_probs = switch_posterior["posterior"].mean(axis=0)
+    switch_support = switch_posterior.support
+    switch_probs = switch_posterior.posterior.mean(axis=0)
 
     posterior_lines = LineSet(
         LineParameters(slope_left_mean, bias_left_mean),

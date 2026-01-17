@@ -85,7 +85,7 @@ def main():
 
     posterior = paz.recover_discrete_posterior(
         model_marg, "z", theta_samples
-    )["posterior"]
+    ).posterior
     print(f"p(z=0 | y): {posterior[0]:.6f}")
     print(f"p(z=1 | y): {posterior[1]:.6f}")
 

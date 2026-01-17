@@ -117,7 +117,7 @@ def compute_posterior_z_from_marginal(
     Theta = SampleType(["p"])
     posterior_z_given_p = paz.recover_discrete_posterior(
         model_marg, "z", Theta(p_grid)
-    )["posterior"]
+    ).posterior
     posterior_z = (posterior_p[:, None] * posterior_z_given_p).sum(axis=0)
     return posterior_z / posterior_z.sum()
 
@@ -262,7 +262,7 @@ def main():
     Theta = SampleType(["p"])
     posterior_z_given_p = paz.recover_discrete_posterior(
         model_marg, "z", Theta(p_samples)
-    )["posterior"]
+    ).posterior
     posterior_z_mcmc = posterior_z_given_p.mean(axis=0)
     posterior_z_mcmc = posterior_z_mcmc / posterior_z_mcmc.sum()
 

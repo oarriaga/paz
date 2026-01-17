@@ -1,7 +1,14 @@
-import jax.numpy as jp
 import jax
+import jax.numpy as jp
+
 from paz.inference.naming import build_prior_name
-from paz.inference.types import Distribution, NodeState, Variable, SampleType
+from paz.inference.types import (
+    Distribution,
+    NodeMetadata,
+    NodeState,
+    SampleType,
+    Variable,
+)
 from tensorflow_probability.substrates import jax as tfp
 
 tfb = tfp.bijectors
@@ -24,6 +31,7 @@ def Prior(distribution, bijector=None, name=None):
 
     Sample = SampleType([node_name])
     bijector = tfb.Identity() if bijector is None else bijector
+    metadata = NodeMetadata(None, bijector)
 
     def apply(inverse_sample):
         forward_sample = bijector(inverse_sample)
@@ -45,4 +53,6 @@ def Prior(distribution, bijector=None, name=None):
             forward_samples = squeeze_pytree(forward_samples)
         return forward_samples
 
-    return Variable(apply, sample, sample_inverse, node_name, [], distribution)
+    return Variable(
+        apply, sample, sample_inverse, node_name, [], distribution, metadata
+    )
