@@ -1,8 +1,6 @@
-from functools import partial
 from collections import namedtuple
 
 import jax
-import paz
 from jax import flatten_util
 import jax.numpy as jp
 
@@ -15,27 +13,19 @@ Proposal = namedtuple(
 )
 
 
-@partial(jax.jit, static_argnames=("precision",), inline=True)
-def linear_map(diagonal_or_dense_A, x, *, precision="highest"):
-    """Perform a linear map of the form y = Ax."""
-    dtype = jp.result_type(diagonal_or_dense_A.dtype, x.dtype)
-    diagonal_or_dense_A = diagonal_or_dense_A.astype(dtype)
-    x = x.astype(dtype)
-    ndim = jp.ndim(diagonal_or_dense_A)
-
-    if ndim <= 1:
-        return jax.lax.mul(diagonal_or_dense_A, x)
-    else:
-        return jax.lax.dot(diagonal_or_dense_A, x, precision=precision)
-
-
 def apply_gaussian_noise(key, position, mu=0.0, sigma=1.0):
-    """Generate N(mu, sigma) noise with structure that matches a PyTree."""
     flat_pytree, unravel = flatten_util.ravel_pytree(position)
     flat_shape = flat_pytree.shape
     flat_dtype = flat_pytree.dtype
     sample = jax.random.normal(key, shape=flat_shape, dtype=flat_dtype)
-    return unravel(mu + linear_map(sigma, sample))
+    dtype = jp.result_type(sigma, sample)
+    sigma = jp.asarray(sigma, dtype=dtype)
+    sample = sample.astype(dtype)
+    if jp.ndim(sigma) <= 1:
+        mapped = jax.lax.mul(sigma, sample)
+    else:
+        mapped = jax.lax.dot(sigma, sample, precision="highest")
+    return unravel(mu + mapped)
 
 
 def choose_proposal(key, now_proposal, new_proposal):
@@ -49,8 +39,15 @@ def choose_proposal(key, now_proposal, new_proposal):
     )
 
 
-def symmetric_proposal_log_density_fn(old_state, new_state):
-    return -new_state.log_density
+def build_now_proposal(state):
+    return Proposal(state, 0.0, 0.0, -jp.inf)
+
+
+def build_new_proposal(old_state, new_state):
+    new_energy = -new_state.log_density
+    delta_energy = new_state.log_density - old_state.log_density
+    sum_log_p_accept = jp.minimum(delta_energy, 0.0)
+    return Proposal(new_state, new_energy, delta_energy, sum_log_p_accept)
 
 
 def propose_additively(key, position, sigma):
@@ -75,16 +72,6 @@ def sample(
         new_position = propose_additively(key, position, sigma)
         return Samples(new_position, log_density_fn(new_position))
 
-    def build_now_proposal(state):
-        return Proposal(state, 0.0, 0.0, -jp.inf)
-
-    def build_new_proposal(old_state, new_state):
-        new_energy = symmetric_proposal_log_density_fn(old_state, new_state)
-        old_energy = symmetric_proposal_log_density_fn(new_state, old_state)
-        delta_energy = old_energy - new_energy
-        sum_log_p_accept = jp.minimum(delta_energy, 0.0)
-        return Proposal(new_state, new_energy, delta_energy, sum_log_p_accept)
-
     def step_kernel(key, state):
         keys = jax.random.split(key)
         end_state = build_trajectory(keys[0], state)
@@ -94,16 +81,7 @@ def sample(
         return sample.proposal.state, sample
 
     def step_chain_with_progress(step_state, sample_arg):
-        jax.debug.callback(
-            paz.lock(
-                progress_module.draw_bar,
-                num_samples,
-                start_time,
-                "sampling",
-                30,
-            ),
-            sample_arg + 1,
-        )
+        jax.debug.callback(progress_callback, sample_arg + 1)
         old_key, states = step_state
         new_key, now_key = jax.random.split(old_key)
         keys = jax.random.split(now_key, num_chains)
@@ -119,6 +97,9 @@ def sample(
 
     args = jp.arange(num_samples)
     state = Samples(positions, jax.vmap(log_density_fn)(positions))
+    progress_callback = progress_module.build_bar_callback(
+        num_samples, start_time, "sampling", 30
+    )
     scan_step = step_chain_with_progress if progress else step_chain
     _, (states, infos) = jax.lax.scan(scan_step, (key, state), args)
     if progress:

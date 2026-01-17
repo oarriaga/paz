@@ -14,28 +14,23 @@ from paz.inference.latent_space import (
     to_inverse_samples,
 )
 from paz.inference.types import Distribution, NodeState
+from paz.inference.utils import validate_space
 
 
 def build_sample_inverse(context):
-    Latent = context.Latent
-    inputs = context.inputs
-    latent_nodes = context.latent_nodes
-
-    def sample_inverse(key, num_samples=1):
-        return Latent(**_sample_inverse(inputs, latent_nodes, key, num_samples))
-
-    return sample_inverse
+    return lambda key, num_samples=1: context.Latent(
+        **_sample_inverse(
+            context.inputs, context.latent_nodes, key, num_samples
+        )
+    )
 
 
 def build_sample_forward(context):
-    Sample = context.Sample
-    inputs = context.inputs
-    non_priors = context.non_priors
-
-    def sample_forward(key, num_samples=1):
-        return Sample(**_sample_forward(inputs, non_priors, key, num_samples))
-
-    return sample_forward
+    return lambda key, num_samples=1: context.Sample(
+        **_sample_forward(
+            context.inputs, context.non_priors, key, num_samples
+        )
+    )
 
 
 def build_apply(context):
@@ -47,12 +42,12 @@ def build_apply(context):
 
     def apply(inverse_samples, data=None):
         data_mapping = build_data_mapping(data, output_nodes)
-        observable_name_set = set(observable_names)
-        _validate_observations(data_mapping, observable_name_set)
+        _validate_observations(data_mapping, observable_names)
         sample, log_prob = _apply(
-            inputs, non_priors, inverse_samples, data_mapping, observable_name_set
+            inputs, non_priors, inverse_samples, data_mapping, observable_names
         )
-        return NodeState(Sample(**sample), log_prob, sum_log_probs(log_prob))
+        log_prob_sum = sum(log_prob.values(), jp.array(0.0))
+        return NodeState(Sample(**sample), log_prob, log_prob_sum)
 
     return apply
 
@@ -61,7 +56,7 @@ def build_prior_sample(context, sample_inverse):
     latent_space = context.latent_space
 
     def prior_sample(key, num_samples=1, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         inverse_samples = sample_inverse(key, num_samples)
         inverse_samples = as_latent_samples(latent_space, inverse_samples)
         if space == "inv":
@@ -76,36 +71,29 @@ def build_prior_log_prob(context):
     latent_space = context.latent_space
 
     def prior_log_prob(samples, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         if space == "inv":
             inverse_samples = as_latent_samples(latent_space, samples)
             forward_samples = to_forward_samples(latent_space, inverse_samples)
-            log_prob = _compute_latent_log_probs(
-                latent_nodes_sorted,
-                forward_samples,
-                inverse_samples,
-                latent_space.bijectors,
-                include_jacobian=True,
-            )
         else:
+            inverse_samples = None
             forward_samples = as_latent_samples(latent_space, samples)
-            log_prob = _compute_latent_log_probs(
-                latent_nodes_sorted,
-                forward_samples,
-                None,
-                latent_space.bijectors,
-                include_jacobian=False,
-            )
-        return sum(log_prob.values()) if log_prob else jp.array(0.0)
+        log_prob = _compute_latent_log_probs(
+            latent_nodes_sorted,
+            forward_samples,
+            inverse_samples,
+            latent_space.bijectors,
+            include_jacobian=space == "inv",
+        )
+        return sum(log_prob.values(), jp.array(0.0))
 
     return prior_log_prob
 
 
 def build_prior_prob(prior_log_prob):
-    def prior_prob(samples, space="inv"):
-        return jp.exp(prior_log_prob(samples, space=space))
-
-    return prior_prob
+    return lambda samples, space="inv": jp.exp(
+        prior_log_prob(samples, space=space)
+    )
 
 
 def build_likelihood_log_prob(context, apply):
@@ -114,17 +102,18 @@ def build_likelihood_log_prob(context, apply):
     latent_space = context.latent_space
 
     def likelihood_log_prob(samples, data, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         data_mapping = build_data_mapping(data, output_nodes)
-        _validate_observations(data_mapping, set(observable_names))
+        _validate_observations(data_mapping, observable_names)
         if space == "fwd":
             inverse_samples = to_inverse_samples(latent_space, samples)
         else:
             inverse_samples = as_latent_samples(latent_space, samples)
         state = apply(inverse_samples, data_mapping)
-        if len(observable_names) == 0:
-            return jp.array(0.0)
-        return sum(state.log_prob[name] for name in observable_names)
+        return sum(
+            (state.log_prob[name] for name in observable_names),
+            jp.array(0.0),
+        )
 
     return likelihood_log_prob
 
@@ -138,14 +127,13 @@ def build_tune(pgm_prior, pgm_likelihood, inference_defaults):
         progress=True,
         **method_kwargs,
     ):
-        method_name = "mh"
-        defaults = inference_defaults.setdefault(method_name, {})
+        defaults = inference_defaults.setdefault("mh", {})
         defaults["tuner"] = tuner
         if num_chains is not None:
             defaults["num_chains"] = num_chains
         defaults["progress"] = progress
         defaults.update(method_kwargs)
-        inference_defaults["_last_method"] = method_name
+        inference_defaults["_last_method"] = "mh"
         sigma = defaults.get("sigma", 0.1)
         num_chains = defaults.get("num_chains", 1)
         init = defaults.get("init", None)
@@ -194,9 +182,11 @@ def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
         method=None,
         **overrides,
     ):
-        method_name = method
-        if method_name is None:
-            method_name = inference_defaults.get("_last_method", "mh")
+        method_name = (
+            method
+            if method is not None
+            else inference_defaults.get("_last_method", "mh")
+        )
         method_name = method_name.lower()
         resolved = dict(inference_defaults.get(method_name, {}))
         resolved.update(overrides)
@@ -228,119 +218,95 @@ def build_data_mapping(data, output_nodes):
     )
 
 
-def get_edge_names(node):
-    return [edge.name for edge in node.edges]
-
-
-def get_values_by_key(keys, dictionary):
-    return [dictionary[key] for key in keys]
-
-
-def get_node_inputs(node, dictionary):
-    return get_values_by_key(get_edge_names(node), dictionary)
-
-
 def get_namedtuple_value(field, named_tuple, default=None):
     if isinstance(named_tuple, Distribution):
         return named_tuple
     return getattr(named_tuple, field, default)
 
 
-def sum_log_probs(log_prob_dict):
-    return sum(log_prob_dict.values())
-
-
-def _validate_space(space):
-    if space not in ("inv", "fwd"):
-        raise ValueError("space must be 'inv' or 'fwd'")
-
-
 def _validate_observations(data_mapping, observable_names):
-    if len(observable_names) == 0:
-        return
-    missing = [name for name in observable_names if name not in data_mapping]
+    missing = sorted(
+        name for name in observable_names if name not in data_mapping
+    )
     if missing:
-        missing.sort()
         raise ValueError(
             "Missing observations for: " + ", ".join(missing)
         )
 
 
-def _sample_inverse_priors(prior_nodes, key, num_samples):
+def _sample_priors(prior_nodes, key, num_samples, sample_fn):
     samples, keys = {}, jax.random.split(key, len(prior_nodes))
     for key, prior in zip(keys, prior_nodes):
-        samples[prior.name] = prior.sample_inverse(key, num_samples)
+        samples[prior.name] = sample_fn(prior, key, num_samples)
     return samples
 
 
-def sample_inverse_latent(node, key, num_samples, node_inputs):
-    if num_samples == 1:
-        return node.sample_inverse(key, 1, *node_inputs)
-    subkeys = jax.random.split(key, num_samples)
-
-    def sample_latent(subkey, *inputs):
-        return node.sample_inverse(subkey, 1, *inputs)
-
-    in_axes = (0,) + (0,) * len(node_inputs)
-    return jax.vmap(sample_latent, in_axes=in_axes)(subkeys, *node_inputs)
-
-
-def _sample_inverse(prior_nodes, latent_nodes, key, num_samples):
-    key_prior, key_node = jax.random.split(key)
-    samples = _sample_inverse_priors(prior_nodes, key_prior, num_samples)
-    prior_names = {prior.name for prior in prior_nodes}
-    non_prior_latents = [n for n in latent_nodes if n.name not in prior_names]
-    keys = jax.random.split(key_node, len(non_prior_latents))
-    for key, node in zip(keys, non_prior_latents):
-        node_inputs = get_node_inputs(node, samples)
-        node_inverse_sample = sample_inverse_latent(
-            node, key, num_samples, node_inputs
-        )
-        samples[node.name] = node_inverse_sample
-    return samples
-
-
-def _sample_forward_priors(prior_nodes, key, num_samples):
-    samples, keys = {}, jax.random.split(key, len(prior_nodes))
-    for key, prior in zip(keys, prior_nodes):
-        samples[prior.name] = prior.sample(key, num_samples)
-    return samples
-
-
-def sample_forward_node(node, key, num_samples, node_inputs):
+def _sample_with_inputs(node, sample_fn, key, num_samples, node_inputs):
     if num_samples == 1 or len(node_inputs) == 0:
-        return node.sample(key, num_samples, *node_inputs)
+        return sample_fn(node, key, num_samples, *node_inputs)
     subkeys = jax.random.split(key, num_samples)
 
     def sample_node(subkey, *inputs):
-        return node.sample(subkey, 1, *inputs)
+        return sample_fn(node, subkey, 1, *inputs)
 
     in_axes = (0,) + (0,) * len(node_inputs)
     return jax.vmap(sample_node, in_axes=in_axes)(subkeys, *node_inputs)
 
 
-def _sample_forward(prior_nodes, non_prior_nodes, key, num_samples):
+def _sample_nodes(
+    prior_nodes,
+    non_prior_nodes,
+    key,
+    num_samples,
+    prior_sample_fn,
+    node_sample_fn,
+):
     key_prior, key_node = jax.random.split(key)
-    samples = _sample_forward_priors(prior_nodes, key_prior, num_samples)
+    samples = _sample_priors(
+        prior_nodes, key_prior, num_samples, prior_sample_fn
+    )
     keys = jax.random.split(key_node, len(non_prior_nodes))
     for key, node in zip(keys, non_prior_nodes):
-        node_inputs = get_node_inputs(node, samples)
-        node_sample = sample_forward_node(node, key, num_samples, node_inputs)
+        node_inputs = [samples[edge.name] for edge in node.edges]
+        node_sample = _sample_with_inputs(
+            node, node_sample_fn, key, num_samples, node_inputs
+        )
         samples[node.name] = node_sample
     return samples
 
 
-def _apply_priors(priors, inverse_samples):
+def _sample_inverse(prior_nodes, latent_nodes, key, num_samples):
+    prior_names = {prior.name for prior in prior_nodes}
+    non_prior_latents = [n for n in latent_nodes if n.name not in prior_names]
+    return _sample_nodes(
+        prior_nodes,
+        non_prior_latents,
+        key,
+        num_samples,
+        lambda prior, subkey, num: prior.sample_inverse(subkey, num),
+        lambda node, subkey, num, *inputs: node.sample_inverse(
+            subkey, num, *inputs
+        ),
+    )
+
+
+def _sample_forward(prior_nodes, non_prior_nodes, key, num_samples):
+    return _sample_nodes(
+        prior_nodes,
+        non_prior_nodes,
+        key,
+        num_samples,
+        lambda prior, subkey, num: prior.sample(subkey, num),
+        lambda node, subkey, num, *inputs: node.sample(subkey, num, *inputs),
+    )
+
+
+def _apply(priors, non_priors, inverse_samples, data_mapping, observable_names):
     samples, log_prob = {}, {}
     for prior in priors:
         state = prior.apply(get_namedtuple_value(prior.name, inverse_samples))
         samples[prior.name] = get_namedtuple_value(prior.name, state.sample)
         log_prob[prior.name] = state.log_prob.sum()
-    return samples, log_prob
-
-
-def _apply(priors, non_priors, inverse_samples, data_mapping, observable_names):
-    samples, log_prob = _apply_priors(priors, inverse_samples)
     for node in non_priors:
         node_inputs = [samples[edge.name] for edge in node.edges]
         if node.name in observable_names:

@@ -31,240 +31,142 @@ from paz.inference.pgm_ops import (
     build_tune,
     get_namedtuple_value,
 )
+from paz.inference.utils import (
+    get_leading_batch_size,
+    slice_batch,
+    validate_space,
+)
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
 DiscreteUniform = getattr(tfd, "DiscreteUniform", None)
 
 
-def _get_node_by_name(nodes, name):
-    for node in nodes:
-        if node.name == name:
-            return node
-    return None
-
-
-def _check_identity_bijector(node):
-    bijector = get_bijector(node)
-    if bijector is None or not isinstance(bijector, tfb.Identity):
-        raise NotImplementedError(
-            "Discrete latent variables must use the identity bijector."
-        )
-
-
-def _shape_length(value):
-    if hasattr(value, "ndim"):
-        return value.ndim
-    if hasattr(value, "ndims"):
-        return value.ndims
-    if hasattr(value, "shape"):
-        return len(value.shape)
-    if isinstance(value, tuple):
-        return len(value)
-    return 0
-
-
-def _ensure_scalar_distribution(distribution):
-    if _shape_length(distribution.batch_shape) != 0:
+def finite_support(distribution):
+    if len(distribution.batch_shape) != 0 or len(distribution.event_shape) != 0:
         raise NotImplementedError("Only scalar discrete variables are supported.")
-    if _shape_length(distribution.event_shape) != 0:
-        raise NotImplementedError("Only scalar discrete variables are supported.")
-
-
-def _get_support_dtype(distribution):
     support_dtype = distribution.dtype
     if jp.issubdtype(support_dtype, jp.integer) or support_dtype == jp.bool_:
         support_dtype = jp.float32
-    return support_dtype
-
-
-def _bernoulli_support(distribution):
-    support_dtype = _get_support_dtype(distribution)
-    return jp.array([0, 1], dtype=support_dtype)
-
-
-def _categorical_support(distribution):
-    support_dtype = _get_support_dtype(distribution)
-    logits = distribution.logits_parameter()
-    probs = distribution.probs_parameter()
-    if logits is None and probs is None:
-        raise NotImplementedError("Categorical distribution needs logits or probs.")
-    num_categories = probs.shape[-1] if logits is None else logits.shape[-1]
-    return jp.arange(num_categories, dtype=support_dtype)
-
-
-def _discrete_uniform_support(distribution):
-    support_dtype = _get_support_dtype(distribution)
-    low = distribution.low
-    high = distribution.high
-    if hasattr(low, "shape") and low.shape != ():
-        raise NotImplementedError("Only scalar discrete variables are supported.")
-    if hasattr(high, "shape") and high.shape != ():
-        raise NotImplementedError("Only scalar discrete variables are supported.")
-    return jp.arange(low, high + 1, dtype=support_dtype)
-
-
-def finite_support(distribution):
-    _ensure_scalar_distribution(distribution)
     if isinstance(distribution, tfd.Bernoulli):
-        return _bernoulli_support(distribution)
+        return jp.array([0, 1], dtype=support_dtype)
     if isinstance(distribution, tfd.Categorical):
-        return _categorical_support(distribution)
+        logits = distribution.logits_parameter()
+        probs = distribution.probs_parameter()
+        if logits is None and probs is None:
+            raise NotImplementedError(
+                "Categorical distribution needs logits or probs."
+            )
+        num_categories = probs.shape[-1] if logits is None else logits.shape[-1]
+        return jp.arange(num_categories, dtype=support_dtype)
     if DiscreteUniform is not None and isinstance(distribution, DiscreteUniform):
-        return _discrete_uniform_support(distribution)
+        low = distribution.low
+        high = distribution.high
+        if hasattr(low, "shape") and low.shape != ():
+            raise NotImplementedError(
+                "Only scalar discrete variables are supported."
+            )
+        if hasattr(high, "shape") and high.shape != ():
+            raise NotImplementedError(
+                "Only scalar discrete variables are supported."
+            )
+        return jp.arange(low, high + 1, dtype=support_dtype)
     raise NotImplementedError("Only Bernoulli, Categorical, DiscreteUniform supported.")
 
 
-def _inject_inverse_samples(inverse_samples, name, value):
-    if isinstance(inverse_samples, dict):
-        updated = dict(inverse_samples)
-        updated[name] = value
-        return updated
-    if hasattr(inverse_samples, "_asdict"):
-        updated = inverse_samples._asdict()
-        updated[name] = value
-        Sample = SampleType(list(updated.keys()))
-        return Sample(**updated)
-    raise TypeError("inverse_samples must be a dict or namedtuple.")
+_MISSING = object()
 
 
-def _remove_sample_field(samples, name):
+def _update_samples(samples, name, value=_MISSING):
     if samples is None:
-        return None
+        if value is _MISSING:
+            return None
+        raise TypeError("samples must be a dict or namedtuple.")
     if isinstance(samples, dict):
         updated = dict(samples)
-        updated.pop(name, None)
+        if value is _MISSING:
+            updated.pop(name, None)
+        else:
+            updated[name] = value
         return updated
     if hasattr(samples, "_asdict"):
         updated = samples._asdict()
-        updated.pop(name, None)
+        if value is _MISSING:
+            updated.pop(name, None)
+        else:
+            updated[name] = value
         Sample = SampleType(list(updated.keys()))
         return Sample(**updated)
     raise TypeError("samples must be a dict or namedtuple.")
 
 
-def _select_latent_samples(latent_space, samples):
-    if isinstance(samples, dict):
-        data = samples
-    elif hasattr(samples, "_asdict"):
-        data = samples._asdict()
-    else:
-        raise TypeError("samples must be a dict or namedtuple.")
-    return latent_space.Sample(
-        **{name: data[name] for name in latent_space.names}
-    )
-
-
-def _build_latent_space_without_z(base_latent_space, z_name):
-    names = [name for name in base_latent_space.names if name != z_name]
-    bijectors = {name: base_latent_space.bijectors[name] for name in names}
-    Sample = SampleType(names)
-    return LatentSpace(names, bijectors, Sample)
-
-
-def _validate_space(space):
-    if space not in ("inv", "fwd"):
-        raise ValueError("space must be 'inv' or 'fwd'")
-
-
-def _get_parent_samples(pgm, node, inverse_samples):
-    inputs = get_inputs(pgm)
-    non_priors = get_non_priors(pgm)
-    samples = {}
-    for prior in inputs:
-        inverse_sample = get_namedtuple_value(prior.name, inverse_samples)
-        state = prior.apply(inverse_sample)
-        samples[prior.name] = get_namedtuple_value(prior.name, state.sample)
-    if _get_node_by_name(inputs, node.name) is not None:
-        return [samples[edge.name] for edge in node.edges]
-    found = False
-    for current in non_priors:
-        if current.name == node.name:
-            found = True
-            break
-        node_inputs = [samples[edge.name] for edge in current.edges]
-        node_sample = get_namedtuple_value(current.name, inverse_samples)
-        state = current.apply(node_sample, *node_inputs)
-        samples[current.name] = get_namedtuple_value(
-            current.name, state.sample
-        )
-    if not found:
-        raise ValueError(f"Node {node.name} not found in PGM.")
-    return [samples[edge.name] for edge in node.edges]
-
-
-def _build_distribution(pgm, node, inverse_samples):
-    if node.distribution is not None:
-        return node.distribution
-    distribution_fn = get_distribution_fn(node)
-    if distribution_fn is None:
-        raise ValueError("Latent node missing distribution_fn.")
-    parent_samples = _get_parent_samples(pgm, node, inverse_samples)
-    return distribution_fn(*parent_samples)
-
-
-def _get_leading_batch_size(inverse_samples):
-    leaves = jax.tree_util.tree_leaves(inverse_samples)
-    shaped = [leaf for leaf in leaves if hasattr(leaf, "shape")]
-    if len(shaped) == 0:
-        return None
-    if any(len(leaf.shape) == 0 for leaf in shaped):
-        return None
-    first_dim = shaped[0].shape[0]
-    if any(leaf.shape[0] != first_dim for leaf in shaped):
-        return None
-    return first_dim
-
-
-def _slice_batch(inverse_samples, batch_index):
-    return jax.tree_util.tree_map(
-        lambda value: value[batch_index], inverse_samples
-    )
-
-
-def _get_support_for_batch(pgm, node, inverse_samples):
-    distribution = _build_distribution(pgm, node, inverse_samples)
-    return finite_support(distribution)
+def _map_batches(theta_inverse_samples, data_mapping, batch_log_prob):
+    num_batches = get_leading_batch_size(theta_inverse_samples)
+    data_batch = get_leading_batch_size(data_mapping)
+    if num_batches is None:
+        return batch_log_prob(theta_inverse_samples, data_mapping)
+    if data_batch == num_batches:
+        return jax.vmap(batch_log_prob)(theta_inverse_samples, data_mapping)
+    return jax.vmap(
+        lambda batch_theta: batch_log_prob(batch_theta, data_mapping)
+    )(theta_inverse_samples)
 
 
 def _validate_supports(pgm, node, inverse_samples):
-    num_batches = _get_leading_batch_size(inverse_samples)
-    if num_batches is None:
-        return _get_support_for_batch(pgm, node, inverse_samples)
-    first_batch = _slice_batch(inverse_samples, 0)
-    distribution = _build_distribution(pgm, node, first_batch)
+    inputs = get_inputs(pgm)
+    non_priors = get_non_priors(pgm)
+    input_names = {prior.name for prior in inputs}
+
+    def build_distribution(samples):
+        if node.distribution is not None:
+            return node.distribution
+        distribution_fn = get_distribution_fn(node)
+        if distribution_fn is None:
+            raise ValueError("Latent node missing distribution_fn.")
+        sample_map = {}
+        for prior in inputs:
+            inverse_sample = get_namedtuple_value(prior.name, samples)
+            state = prior.apply(inverse_sample)
+            sample_map[prior.name] = get_namedtuple_value(
+                prior.name, state.sample
+            )
+        if node.name not in input_names:
+            for current in non_priors:
+                if current.name == node.name:
+                    break
+                node_inputs = [
+                    sample_map[edge.name] for edge in current.edges
+                ]
+                node_sample = get_namedtuple_value(current.name, samples)
+                state = current.apply(node_sample, *node_inputs)
+                sample_map[current.name] = get_namedtuple_value(
+                    current.name, state.sample
+                )
+            else:
+                raise ValueError(f"Node {node.name} not found in PGM.")
+        parent_samples = [sample_map[edge.name] for edge in node.edges]
+        return distribution_fn(*parent_samples)
+
+    num_batches = get_leading_batch_size(inverse_samples)
+    first_batch = (
+        inverse_samples
+        if num_batches is None
+        else slice_batch(inverse_samples, 0)
+    )
+    distribution = build_distribution(first_batch)
     support = finite_support(distribution)
+    if num_batches is None:
+        return support
     if DiscreteUniform is None or not isinstance(distribution, DiscreteUniform):
         return support
     for batch_index in range(1, num_batches):
-        batch_samples = _slice_batch(inverse_samples, batch_index)
-        batch_support = _get_support_for_batch(pgm, node, batch_samples)
+        batch_samples = slice_batch(inverse_samples, batch_index)
+        batch_support = finite_support(build_distribution(batch_samples))
         if support.shape != batch_support.shape:
             raise NotImplementedError("Discrete support must be consistent.")
         if not bool(jp.all(batch_support == support)):
             raise NotImplementedError("Discrete support must be consistent.")
     return support
-
-
-def _compute_log_joint(pgm, z_name, support, theta_inverse_samples, data):
-    log_joint = []
-    for value in support:
-        full_inverse = _inject_inverse_samples(
-            theta_inverse_samples, z_name, value
-        )
-        state = pgm.apply(full_inverse, data)
-        log_joint.append(state.log_prob_sum)
-    return jp.stack(log_joint)
-
-
-def _compute_log_prior(pgm, z_name, support, theta_inverse_samples):
-    log_prior = []
-    for value in support:
-        full_inverse = _inject_inverse_samples(
-            theta_inverse_samples, z_name, value
-        )
-        log_prior.append(pgm.prior.log_prob(full_inverse, space="inv"))
-    return logsumexp(jp.stack(log_prior))
 
 
 def marginalize(pgm, names):
@@ -273,109 +175,121 @@ def marginalize(pgm, names):
         raise NotImplementedError("v1 supports marginalizing exactly one name.")
     z_name = names[0]
     latent_nodes = get_latent_nodes(pgm)
-    z_node = _get_node_by_name(latent_nodes, z_name)
+    z_node = next(
+        (node for node in latent_nodes if node.name == z_name), None
+    )
     if z_node is None:
         raise ValueError(f"Latent node {z_name} not found.")
     if z_node.sample_inverse is None:
         raise NotImplementedError("Only latent/prior nodes can be marginalized.")
-    _check_identity_bijector(z_node)
+    bijector = get_bijector(z_node)
+    if bijector is None or not isinstance(bijector, tfb.Identity):
+        raise NotImplementedError(
+            "Discrete latent variables must use the identity bijector."
+        )
     if z_node.distribution is not None:
         finite_support(z_node.distribution)
 
     base_latent_space = pgm.prior.latent_space
-    latent_space = _build_latent_space_without_z(base_latent_space, z_name)
+    names = [name for name in base_latent_space.names if name != z_name]
+    bijectors = {name: base_latent_space.bijectors[name] for name in names}
+    Sample = SampleType(names)
+    latent_space = LatentSpace(names, bijectors, Sample)
     output_nodes = get_output_nodes(pgm)
+
+    def select_latent(samples):
+        if isinstance(samples, dict):
+            data = samples
+        elif hasattr(samples, "_asdict"):
+            data = samples._asdict()
+        else:
+            raise TypeError("samples must be a dict or namedtuple.")
+        return latent_space.Sample(
+            **{name: data[name] for name in latent_space.names}
+        )
 
     def apply(theta_inverse_samples, data=None):
         theta_inverse_samples = as_latent_samples(
             latent_space, theta_inverse_samples
         )
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
-        num_batches = _get_leading_batch_size(theta_inverse_samples)
         data_mapping = build_data_mapping(data, output_nodes)
-        data_batch = _get_leading_batch_size(data_mapping)
 
         def batch_log_prob(batch_theta, batch_data):
-            log_joint = _compute_log_joint(
-                pgm, z_name, support, batch_theta, batch_data
-            )
-            return logsumexp(log_joint)
-
-        if num_batches is None:
-            log_prob_sum = batch_log_prob(theta_inverse_samples, data_mapping)
-        else:
-            if data_batch == num_batches:
-                log_prob_sum = jax.vmap(batch_log_prob)(
-                    theta_inverse_samples, data_mapping
-                )
-            else:
-                log_prob_sum = jax.vmap(
-                    lambda batch_theta: batch_log_prob(
-                        batch_theta, data_mapping
-                    )
-                )(theta_inverse_samples)
+            log_joint = [
+                pgm.apply(
+                    _update_samples(batch_theta, z_name, value), batch_data
+                ).log_prob_sum
+                for value in support
+            ]
+            return logsumexp(jp.stack(log_joint))
+        log_prob_sum = _map_batches(
+            theta_inverse_samples, data_mapping, batch_log_prob
+        )
 
         return NodeState(None, {"marginalized": log_prob_sum}, log_prob_sum)
 
     def sample_inverse(key, num_samples=1):
         samples = pgm.sample_inverse(key, num_samples)
-        return _select_latent_samples(latent_space, samples)
+        return select_latent(samples)
 
     def sample(key, num_samples=1):
         samples = pgm.sample(key, num_samples)
-        return _remove_sample_field(samples, z_name)
+        return _update_samples(samples, z_name)
 
     def prior_sample(key, num_samples=1, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         samples = pgm.prior.sample(key, num_samples, space=space)
-        return _select_latent_samples(latent_space, samples)
+        return select_latent(samples)
 
     def prior_log_prob(samples, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         if space == "fwd":
             theta_inverse_samples = to_inverse_samples(latent_space, samples)
         else:
             theta_inverse_samples = as_latent_samples(latent_space, samples)
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
-        num_batches = _get_leading_batch_size(theta_inverse_samples)
 
-        def batch_log_prob(batch_theta):
-            return _compute_log_prior(pgm, z_name, support, batch_theta)
+        def batch_log_prob(batch_theta, _):
+            log_prior = [
+                pgm.prior.log_prob(
+                    _update_samples(batch_theta, z_name, value), space="inv"
+                )
+                for value in support
+            ]
+            return logsumexp(jp.stack(log_prior))
 
-        if num_batches is None:
-            return batch_log_prob(theta_inverse_samples)
-        return jax.vmap(batch_log_prob)(theta_inverse_samples)
+        return _map_batches(theta_inverse_samples, None, batch_log_prob)
 
     prior_prob = build_prior_prob(prior_log_prob)
 
     def likelihood_log_prob(samples, data, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         data_mapping = build_data_mapping(data, output_nodes)
         if space == "fwd":
             theta_inverse_samples = to_inverse_samples(latent_space, samples)
         else:
             theta_inverse_samples = as_latent_samples(latent_space, samples)
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
-        num_batches = _get_leading_batch_size(theta_inverse_samples)
-        data_batch = _get_leading_batch_size(data_mapping)
 
         def batch_log_prob(batch_theta, batch_data):
-            log_joint = _compute_log_joint(
-                pgm, z_name, support, batch_theta, batch_data
-            )
-            log_joint = logsumexp(log_joint)
-            log_prior = _compute_log_prior(pgm, z_name, support, batch_theta)
-            return log_joint - log_prior
-
-        if num_batches is None:
-            return batch_log_prob(theta_inverse_samples, data_mapping)
-        if data_batch == num_batches:
-            return jax.vmap(batch_log_prob)(
-                theta_inverse_samples, data_mapping
-            )
-        return jax.vmap(
-            lambda batch_theta: batch_log_prob(batch_theta, data_mapping)
-        )(theta_inverse_samples)
+            log_joint = [
+                pgm.apply(
+                    _update_samples(batch_theta, z_name, value), batch_data
+                ).log_prob_sum
+                for value in support
+            ]
+            log_joint = logsumexp(jp.stack(log_joint))
+            log_prior = [
+                pgm.prior.log_prob(
+                    _update_samples(batch_theta, z_name, value), space="inv"
+                )
+                for value in support
+            ]
+            return log_joint - logsumexp(jp.stack(log_prior))
+        return _map_batches(
+            theta_inverse_samples, data_mapping, batch_log_prob
+        )
 
     apply._marginalize_base_pgm = pgm
     apply._marginalize_z_node = z_node
@@ -407,45 +321,31 @@ def marginalize(pgm, names):
     )
 
 
-def _get_marginalize_metadata(pgm):
-    apply = pgm.apply
-    base_pgm = getattr(apply, "_marginalize_base_pgm", None)
-    z_node = getattr(apply, "_marginalize_z_node", None)
-    z_name = getattr(apply, "_marginalize_z_name", None)
-    if base_pgm is None or z_node is None or z_name is None:
-        raise ValueError("PGM does not appear to be marginalized.")
-    return base_pgm, z_node, z_name
-
-
 def recover_discrete_posterior(
     pgm_marg, z_name, theta_inverse_samples, data=None
 ):
-    base_pgm, z_node, stored_name = _get_marginalize_metadata(pgm_marg)
+    apply = pgm_marg.apply
+    base_pgm = getattr(apply, "_marginalize_base_pgm", None)
+    z_node = getattr(apply, "_marginalize_z_node", None)
+    stored_name = getattr(apply, "_marginalize_z_name", None)
+    if base_pgm is None or z_node is None or stored_name is None:
+        raise ValueError("PGM does not appear to be marginalized.")
     if z_name != stored_name:
         raise ValueError("z_name does not match marginalized PGM.")
     support = _validate_supports(base_pgm, z_node, theta_inverse_samples)
-    num_batches = _get_leading_batch_size(theta_inverse_samples)
     data_mapping = build_data_mapping(data, get_output_nodes(base_pgm))
-    data_batch = _get_leading_batch_size(data_mapping)
 
     def batch_log_joint(batch_theta, batch_data):
-        return _compute_log_joint(
-            base_pgm, z_name, support, batch_theta, batch_data
-        )
-
-    if num_batches is None:
-        log_joint = batch_log_joint(theta_inverse_samples, data_mapping)
-    else:
-        if data_batch == num_batches:
-            log_joint = jax.vmap(batch_log_joint)(
-                theta_inverse_samples, data_mapping
-            )
-        else:
-            log_joint = jax.vmap(
-                lambda batch_theta: batch_log_joint(
-                    batch_theta, data_mapping
-                )
-            )(theta_inverse_samples)
+        log_joint = [
+            base_pgm.apply(
+                _update_samples(batch_theta, z_name, value), batch_data
+            ).log_prob_sum
+            for value in support
+        ]
+        return jp.stack(log_joint)
+    log_joint = _map_batches(
+        theta_inverse_samples, data_mapping, batch_log_joint
+    )
 
     log_posterior = log_joint - logsumexp(log_joint, axis=-1, keepdims=True)
     posterior = jp.exp(log_posterior)

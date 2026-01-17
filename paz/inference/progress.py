@@ -12,10 +12,20 @@ def move_to_next_line():
 
 
 def draw_bar(now_arg, total, start_time, description, width):
-    percent_complete = _safe_divide(now_arg, total)
-    bar = _make_bar(percent_complete, width)
+    total = float(total)
+    now_arg = float(now_arg)
+    if total == 0:
+        percent_complete = 0.0
+    else:
+        percent_complete = min(max(now_arg / total, 0.0), 1.0)
+    filled_width = int(width * percent_complete)
+    bar = "#" * filled_width + "-" * (width - filled_width)
     elapsed_time = time.perf_counter() - start_time
-    iters_per_sec, eta = _compute_rates(now_arg, total, elapsed_time)
+    if now_arg > 0 and elapsed_time > 0:
+        iters_per_sec = now_arg / elapsed_time
+        eta = (total - now_arg) / iters_per_sec
+    else:
+        iters_per_sec, eta = 0.0, float("inf")
     message = (
         f"\r{description}: |{bar}| {int(now_arg)}/{int(total)} "
         f"({percent_complete:.0%}) "
@@ -25,24 +35,7 @@ def draw_bar(now_arg, total, start_time, description, width):
     sys.stdout.flush()
 
 
-def _safe_divide(numerator, denominator):
-    numerator = float(numerator)
-    denominator = float(denominator)
-    if denominator == 0:
-        return 0.0
-    return min(max(numerator / denominator, 0.0), 1.0)
-
-
-def _make_bar(percent_complete, width):
-    filled_width = int(width * percent_complete)
-    return "#" * filled_width + "-" * (width - filled_width)
-
-
-def _compute_rates(now_arg, total, elapsed_time):
-    now_arg = float(now_arg)
-    total = float(total)
-    if now_arg > 0 and elapsed_time > 0:
-        iters_per_sec = now_arg / elapsed_time
-        eta = (total - now_arg) / iters_per_sec
-        return iters_per_sec, eta
-    return 0.0, float("inf")
+def build_bar_callback(total, start_time, description, width):
+    return lambda now_arg: draw_bar(
+        now_arg, total, start_time, description, width
+    )

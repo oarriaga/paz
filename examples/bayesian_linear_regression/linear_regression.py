@@ -18,7 +18,6 @@ def Likelihood(X):
 X = jp.linspace(0, 1, 200)
 data = 0.5 * X + 0.1 + 0.05 * jp.sin(50 * X)
 
-
 mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
 bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
 low, high = 0.001, 0.3

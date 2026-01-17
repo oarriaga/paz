@@ -9,19 +9,10 @@ from paz.inference.types import (
     SampleType,
     Variable,
 )
+from paz.inference.utils import squeeze_pytree
 from tensorflow_probability.substrates import jax as tfp
 
 tfb = tfp.bijectors
-
-
-def squeeze_pytree(pytree):
-    def squeeze_leaf(leaf):  # Squeeze if array has leading dimension of 1
-        has_shape = hasattr(leaf, "shape")
-        if has_shape and len(leaf.shape) > 0 and leaf.shape[0] == 1:
-            return jp.squeeze(leaf, axis=0)
-        return leaf
-
-    return jax.tree.map(squeeze_leaf, pytree)
 
 
 def Prior(distribution, bijector=None, name=None):

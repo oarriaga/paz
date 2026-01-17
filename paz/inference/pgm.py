@@ -1,3 +1,26 @@
+from paz.inference.pgm_builder import (
+    build_pgm_context,
+    get_latent_nodes,
+    get_non_root_nodes,
+    get_observable_nodes,
+    search_nodes,
+)
+from paz.inference.pgm_ops import (
+    build_apply,
+    build_data_mapping,
+    build_infer,
+    build_likelihood_log_prob,
+    build_prior_log_prob,
+    build_prior_prob,
+    build_prior_sample,
+    build_sample_forward,
+    build_sample_inverse,
+    build_tune,
+    get_namedtuple_value,
+)
+from paz.inference.types import Density, Likelihood, Variable
+
+
 def PGM(inputs, outputs, name):
     context = build_pgm_context(inputs, outputs, name)
     sample_inverse = build_sample_inverse(context)
@@ -30,26 +53,9 @@ def PGM(inputs, outputs, name):
         infer,
         inference_defaults,
     )
-from paz.inference.pgm_builder import (
-    build_pgm_context,
-    get_edges,
-    get_latent_nodes,
-    get_non_root_nodes,
-    get_observable_nodes,
-    search_nodes,
-)
-from paz.inference.pgm_ops import (
-    build_apply,
-    build_data_mapping,
-    build_infer,
-    build_likelihood_log_prob,
-    build_prior_log_prob,
-    build_prior_prob,
-    build_prior_sample,
-    build_sample_forward,
-    build_sample_inverse,
-    build_tune,
-    get_namedtuple_value,
-    sum_log_probs,
-)
-from paz.inference.types import Density, Likelihood, Variable
+
+
+def get_edges(nodes):
+    return [
+        [edge.name, node.name] for node in nodes for edge in node.edges
+    ]

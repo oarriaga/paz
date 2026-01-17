@@ -4,8 +4,17 @@ from jax import flatten_util
 from jax.scipy.special import logsumexp
 from tensorflow_probability.substrates import jax as tfp
 
-from paz.inference.latent_space import as_latent_samples, to_forward_samples, to_inverse_samples
+from paz.inference.latent_space import (
+    as_latent_samples,
+    to_forward_samples,
+    to_inverse_samples,
+)
 from paz.inference.types import Density
+from paz.inference.utils import (
+    get_leading_batch_size,
+    squeeze_pytree,
+    validate_space,
+)
 
 tfd = tfp.distributions
 
@@ -27,7 +36,7 @@ def build_gaussian_density(
         if covariance == "lowrank":
             cov = _lowrank_covariance(cov, rank, regularization)
         distribution = tfd.MultivariateNormalFullCovariance(mean, cov)
-    return _build_density(distribution, latent_space, unravel)
+    return _build_distribution_density(distribution, latent_space, unravel)
 
 
 def build_gmm_density(
@@ -56,7 +65,7 @@ def build_gmm_density(
     distribution = tfd.MixtureSameFamily(
         tfd.Categorical(probs=weights), components
     )
-    return _build_density(distribution, latent_space, unravel)
+    return _build_distribution_density(distribution, latent_space, unravel)
 
 
 def build_kde_density(samples, latent_space, bw_method="scott"):
@@ -67,57 +76,64 @@ def build_kde_density(samples, latent_space, bw_method="scott"):
     return _build_kde_density(kde, latent_space, unravel)
 
 
-def _build_density(distribution, latent_space, unravel):
-    def sample(key, num_samples=1, space="inv"):
-        _validate_space(space)
-        flat = distribution.sample(num_samples, seed=key)
-        structured = _unflatten_samples(unravel, flat)
-        if num_samples == 1:
-            structured = _squeeze_pytree(structured)
-        if space == "fwd":
-            structured = to_forward_samples(latent_space, structured)
-        return structured
+def _build_distribution_density(distribution, latent_space, unravel):
+    def sample_flat(key, num_samples):
+        return distribution.sample(num_samples, seed=key)
 
-    def log_prob(samples, space="inv"):
-        _validate_space(space)
-        if space == "fwd":
-            samples = to_inverse_samples(latent_space, samples)
-        samples = as_latent_samples(latent_space, samples)
-        flat = _flatten_for_log_prob(samples)
+    def log_prob_flat(flat):
         return distribution.log_prob(flat)
 
-    def prob(samples, space="inv"):
-        return jp.exp(log_prob(samples, space=space))
-
-    return Density(sample, log_prob, prob, latent_space, {"distribution": distribution})
+    return _build_density_from_flat(
+        sample_flat,
+        log_prob_flat,
+        latent_space,
+        unravel,
+        {"distribution": distribution},
+    )
 
 
 def _build_kde_density(kde, latent_space, unravel):
-    def sample(key, num_samples=1, space="inv"):
-        _validate_space(space)
+    def sample_flat(key, num_samples):
         flat = kde.resample(key, (num_samples,))
-        flat = jp.swapaxes(flat, 0, 1)
+        return jp.swapaxes(flat, 0, 1)
+
+    def log_prob_flat(flat):
+        return kde.logpdf(flat) if flat.ndim == 1 else kde.logpdf(flat.T)
+
+    return _build_density_from_flat(
+        sample_flat,
+        log_prob_flat,
+        latent_space,
+        unravel,
+        {"kde": kde},
+    )
+
+
+def _build_density_from_flat(
+    sample_flat, log_prob_flat, latent_space, unravel, metadata
+):
+    def sample(key, num_samples=1, space="inv"):
+        validate_space(space)
+        flat = sample_flat(key, num_samples)
         structured = _unflatten_samples(unravel, flat)
         if num_samples == 1:
-            structured = _squeeze_pytree(structured)
+            structured = squeeze_pytree(structured)
         if space == "fwd":
             structured = to_forward_samples(latent_space, structured)
         return structured
 
     def log_prob(samples, space="inv"):
-        _validate_space(space)
+        validate_space(space)
         if space == "fwd":
             samples = to_inverse_samples(latent_space, samples)
         samples = as_latent_samples(latent_space, samples)
         flat = _flatten_for_log_prob(samples)
-        if flat.ndim == 1:
-            return kde.logpdf(flat)
-        return kde.logpdf(flat.T)
+        return log_prob_flat(flat)
 
     def prob(samples, space="inv"):
         return jp.exp(log_prob(samples, space=space))
 
-    return Density(sample, log_prob, prob, latent_space, {"kde": kde})
+    return Density(sample, log_prob, prob, latent_space, metadata)
 
 
 def _fit_gmm(key, flat_samples, k, covariance, num_iters, regularization):
@@ -153,7 +169,9 @@ def _fit_gmm(key, flat_samples, k, covariance, num_iters, regularization):
             diff = flat_samples[None, :, :] - means[:, None, :]
             cov = jp.einsum("kn,kni,knj->kij", responsibilities, diff, diff)
             covariances = cov / nk[:, None, None]
-            covariances = _regularize_covariance(covariances, regularization)
+            covariances = covariances + regularization * jp.eye(
+                covariances.shape[-1]
+            )
     return weights, means, covariances
 
 
@@ -184,24 +202,11 @@ def _flatten_samples(samples, latent_space):
 
 
 def _flatten_for_log_prob(samples):
-    batch_size = _get_leading_batch_size(samples)
+    batch_size = get_leading_batch_size(samples)
     if batch_size is None:
         flat, _ = flatten_util.ravel_pytree(samples)
         return flat
     return jax.vmap(lambda s: flatten_util.ravel_pytree(s)[0])(samples)
-
-
-def _get_leading_batch_size(samples):
-    leaves = jax.tree_util.tree_leaves(samples)
-    shaped = [leaf for leaf in leaves if hasattr(leaf, "shape")]
-    if len(shaped) == 0:
-        return None
-    if any(len(leaf.shape) == 0 for leaf in shaped):
-        return None
-    first_dim = shaped[0].shape[0]
-    if any(leaf.shape[0] != first_dim for leaf in shaped):
-        return None
-    return first_dim
 
 
 def _unflatten_samples(unravel, flat):
@@ -216,12 +221,6 @@ def _compute_covariance(flat_samples, regularization):
     return cov + regularization * jp.eye(flat_samples.shape[1])
 
 
-def _regularize_covariance(covariances, regularization):
-    num_components, num_dims, _ = covariances.shape
-    identity = regularization * jp.eye(num_dims)
-    return covariances + identity[None, :, :]
-
-
 def _lowrank_covariance(covariance, rank, regularization):
     num_dims = covariance.shape[0]
     if rank is None:
@@ -231,17 +230,3 @@ def _lowrank_covariance(covariance, rank, regularization):
     vals = eigvals[-rank:]
     approx = (top * vals) @ top.T
     return approx + regularization * jp.eye(num_dims)
-
-
-def _squeeze_pytree(pytree):
-    def squeeze_leaf(leaf):
-        if hasattr(leaf, "shape") and len(leaf.shape) > 0 and leaf.shape[0] == 1:
-            return jp.squeeze(leaf, axis=0)
-        return leaf
-
-    return jax.tree.map(squeeze_leaf, pytree)
-
-
-def _validate_space(space):
-    if space not in ("inv", "fwd"):
-        raise ValueError("space must be 'inv' or 'fwd'")

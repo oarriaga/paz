@@ -106,7 +106,9 @@ def InterceptPrior(num_groups):
     return apply
 
 
-def build_centered_model(X, group_idx, num_groups, sigma_bijector, obs_bijector):
+def build_centered_model(
+    X, group_idx, num_groups, sigma_bijector, obs_bijector
+):
     """
     Centered parameterization (standard hierarchical model).
     slopes ~ Normal(mu_slope, sigma_slope)
@@ -135,9 +137,9 @@ def build_centered_model(X, group_idx, num_groups, sigma_bijector, obs_bijector)
         tfd.Uniform(0.01, 0.5), name="sigma_obs", bijector=obs_bijector
     )
 
-    y_obs = paz.Observable(
-        HierarchicalLikelihood(X, group_idx), name="y_obs"
-    )(slopes, intercepts, sigma_obs)
+    y_obs = paz.Observable(HierarchicalLikelihood(X, group_idx), name="y_obs")(
+        slopes, intercepts, sigma_obs
+    )
 
     priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs]
     return paz.PGM(priors, [y_obs], "hierarchical_centered")
@@ -330,9 +332,9 @@ def main():
         plt.show()
 
     num_chains = 10
-    num_samples = 50_000
+    num_samples = 70_000
     sigma = 0.02
-    burn_in = 5000
+    burn_in = 0.20
 
     print(f"\nRunning MCMC with {num_samples} samples, {num_chains} chains...")
     key, tune_key, mcmc_key = jax.random.split(key, 3)
@@ -341,10 +343,11 @@ def main():
         data,
         num_chains=num_chains,
         sigma=sigma,
-        warmup=burn_in,
         num_samples=num_samples,
     )
-    posterior = model.infer(mcmc_key, data, num_samples=num_samples)
+    posterior = model.infer(
+        mcmc_key, data, num_samples=num_samples, warmup=burn_in
+    )
     samples, infos = posterior.samples, posterior.infos
     posterior_forward = posterior.samples_forward
 
@@ -377,8 +380,8 @@ def main():
     # Extract slopes and intercepts (handle both parameterizations)
     if PARAMETERIZATION == "centered":
         posterior_slopes = samples.position.slopes.reshape(-1, num_groups)
-        posterior_intercepts = (
-            samples.position.intercepts.reshape(-1, num_groups)
+        posterior_intercepts = samples.position.intercepts.reshape(
+            -1, num_groups
         )
     else:  # non-centered
         # Transform z to actual parameters
@@ -523,9 +526,7 @@ def main():
 
         axes[1, 2].set_xlabel("slope")
         axes[1, 2].set_ylabel("intercept")
-        axes[1, 2].set_title(
-            "Group parameters (circle=posterior, x=true)"
-        )
+        axes[1, 2].set_title("Group parameters (circle=posterior, x=true)")
         axes[1, 2].legend(loc="upper left", fontsize=8)
 
         plt.tight_layout()
@@ -567,7 +568,6 @@ def main():
         plt.suptitle("Posterior predictive by group", y=1.02)
         plt.tight_layout()
         plt.show()
-
 
     print("\nShrinkage effect (group estimates pulled toward global mean):")
     pooled_slope = samples.position.mu_slope.mean()

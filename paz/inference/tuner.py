@@ -4,15 +4,13 @@ from functools import partial
 import jax
 import jax.numpy as jp
 
-import paz
-
 from paz.inference import progress as progress_module
 from .metropolis_hastings import (
-    Proposal,
     Samples,
-    apply_gaussian_noise,
+    build_new_proposal,
+    build_now_proposal,
     choose_proposal,
-    symmetric_proposal_log_density_fn,
+    propose_additively,
 )
 
 
@@ -29,7 +27,7 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
 
     def tune_episode(tuner_state, key, num_steps):
         sigma = tuner_state.factor * tuner_state.sigma
-        propose = partial(propose_with_sigma, sigma=sigma)
+        propose = partial(propose_additively, sigma=sigma)
 
         def kernel_step(kernel_state, key):
             key_propose, key_accept = jax.random.split(key)
@@ -44,26 +42,20 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
         kernel_state, infos = jax.lax.scan(
             kernel_step, tuner_state.kernel_state, keys
         )
-        acceptance_rate = compute_acceptance_rate(infos)
+        acceptance_rate = jp.mean(infos.is_accepted, axis=0)
         rate = compute_rate(acceptance_rate)
         new_state = TunerState(kernel_state, sigma, rate)
         return new_state, TunerInfo(sigma, rate, acceptance_rate)
 
     @partial(jax.jit, static_argnums=(1, 2))
     def tune(key, num_steps, num_episodes, sigma):
+        progress_callback = progress_module.build_bar_callback(
+            num_episodes, start_time, "tuning", 30
+        )
 
         def one_episode(episode_state, sample_arg):
             if progress:
-                jax.debug.callback(
-                    paz.lock(
-                        progress_module.draw_bar,
-                        num_episodes,
-                        start_time,
-                        "tuning",
-                        30,
-                    ),
-                    sample_arg + 1,
-                )
+                jax.debug.callback(progress_callback, sample_arg + 1)
             now_key, tune_states = episode_state
             new_key, key = jax.random.split(now_key)
             keys = jax.random.split(key, num_chains)
@@ -89,31 +81,4 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
 
 def AcceptanceToVariance(acceptance_rates, variance_factors):
     coefficients = jp.polyfit(acceptance_rates, variance_factors, deg=5)
-
-    def apply(acceptance_rate):
-        variance_factor = jp.polyval(coefficients, acceptance_rate)
-        return variance_factor
-
-    return apply
-
-
-def compute_acceptance_rate(infos):
-    return jp.mean(infos.is_accepted, axis=0)
-
-
-def propose_with_sigma(key, position, sigma):
-    move_proposal = apply_gaussian_noise(key, position, 0.0, sigma)
-    new_position = jax.tree_util.tree_map(jp.add, position, move_proposal)
-    return new_position
-
-
-def build_now_proposal(state):
-    return Proposal(state, 0.0, 0.0, -jp.inf)
-
-
-def build_new_proposal(old_state, new_state):
-    new_energy = symmetric_proposal_log_density_fn(old_state, new_state)
-    old_energy = symmetric_proposal_log_density_fn(new_state, old_state)
-    delta_energy = old_energy - new_energy
-    sum_log_p_accept = jp.minimum(delta_energy, 0.0)
-    return Proposal(new_state, new_energy, delta_energy, sum_log_p_accept)
+    return lambda acceptance_rate: jp.polyval(coefficients, acceptance_rate)

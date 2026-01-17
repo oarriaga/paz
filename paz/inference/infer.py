@@ -2,9 +2,10 @@ import jax
 import jax.numpy as jp
 
 from paz.inference.metropolis_hastings import sample as mh_sample
-from paz.inference.posterior_api import MCMCPosterior
+from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
 from paz.inference.tuner import Tuner
+from paz.inference.utils import validate_space
 
 
 def infer(key, data, prior, likelihood, method, **kwargs):
@@ -29,7 +30,7 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
     space = kwargs.get("space", "inv")
     tuner = kwargs.get("tuner", None)
     progress = kwargs.get("progress", True)
-    _validate_space(space)
+    validate_space(space)
 
     key_init, key_tune, key_sample = jax.random.split(key, 3)
     positions = _get_initial_positions(key_init, prior, init, num_chains, space)
@@ -64,7 +65,8 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         progress=progress,
     )
     if num_warmup > 0:
-        states, infos = _discard_warmup(states, infos, num_warmup)
+        states = jax.tree.map(lambda x: x[num_warmup:], states)
+        infos = jax.tree.map(lambda x: x[num_warmup:], infos)
 
     config = {
         "method": "mh",
@@ -77,11 +79,6 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         "progress": progress,
     }
     return MCMCPosterior(states, infos, config, prior.latent_space, "inv")
-
-
-def _validate_space(space):
-    if space not in ("inv", "fwd"):
-        raise ValueError("space must be 'inv' or 'fwd'")
 
 
 def _resolve_num_warmup(num_samples, warmup):
@@ -104,10 +101,7 @@ def _get_initial_positions(key, prior, init, num_chains, space):
     init = as_latent_samples(prior.latent_space, init)
     if space == "fwd":
         init = to_inverse_samples(prior.latent_space, init)
-    return _ensure_chain_dimension(init, num_chains)
 
-
-def _ensure_chain_dimension(samples, num_chains):
     def ensure(value):
         if not hasattr(value, "shape"):
             return value
@@ -117,13 +111,7 @@ def _ensure_chain_dimension(samples, num_chains):
             return value
         return jp.broadcast_to(value, (num_chains,) + value.shape)
 
-    return jax.tree.map(ensure, samples)
-
-
-def _discard_warmup(states, infos, num_warmup):
-    states = jax.tree.map(lambda x: x[num_warmup:], states)
-    infos = jax.tree.map(lambda x: x[num_warmup:], infos)
-    return states, infos
+    return jax.tree.map(ensure, init)
 
 
 def _run_tuner(
