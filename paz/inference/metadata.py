@@ -24,6 +24,14 @@ def get_latent_nodes(pgm):
     return get_pgm_metadata(pgm).latent_nodes
 
 
+def get_output_nodes(pgm):
+    return get_pgm_metadata(pgm).output_nodes
+
+
+def get_observable_nodes(pgm):
+    return get_pgm_metadata(pgm).observable_nodes
+
+
 def get_nodes(pgm):
     return get_pgm_metadata(pgm).nodes
 

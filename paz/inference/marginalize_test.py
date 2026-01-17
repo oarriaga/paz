@@ -13,7 +13,9 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 
-def build_scalar_mixture_model(mu0_value, mu1_value, sigma_value, p_value, y_value):
+def build_scalar_mixture_model(
+    mu0_value, mu1_value, sigma_value, p_value, y_value
+):
     mu0 = Prior(tfd.Deterministic(mu0_value), name="mu0")
     mu1 = Prior(tfd.Deterministic(mu1_value), name="mu1")
     sigma = Prior(tfd.Deterministic(sigma_value), name="sigma")
@@ -28,10 +30,11 @@ def build_scalar_mixture_model(mu0_value, mu1_value, sigma_value, p_value, y_val
         mean = jp.where(z == 1, mu1, mu0)
         return tfd.Normal(mean, sigma)
 
-    y_obs = Observable(y_distribution, jp.array(y_value), name="y_obs")(
+    y_obs = Observable(y_distribution, name="y_obs")(
         z, mu0, mu1, sigma
     )
-    return PGM([mu0, mu1, sigma, p], [y_obs], "scalar_mixture")
+    data = {"y_obs": jp.array(y_value)}
+    return PGM([mu0, mu1, sigma, p], [y_obs], "scalar_mixture"), data
 
 
 def make_theta_inverse_samples(mu0_value, mu1_value, sigma_value, p_value):
@@ -57,14 +60,14 @@ def compute_analytic_posterior(mu0_value, mu1_value, sigma_value, p_value, y_val
 def test_marginalize_log_prob_matches_analytic():
     mu0_value, mu1_value = 0.0, 2.0
     sigma_value, p_value, y_value = 1.0, 0.3, 1.5
-    pgm = build_scalar_mixture_model(
+    pgm, data = build_scalar_mixture_model(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
     pgm_marg = marginalize(pgm, ["z"])
     theta = make_theta_inverse_samples(
         mu0_value, mu1_value, sigma_value, p_value
     )
-    state = pgm_marg.apply(theta)
+    state = pgm_marg.apply(theta, data)
     expected = compute_analytic_log_marginal(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
@@ -74,14 +77,16 @@ def test_marginalize_log_prob_matches_analytic():
 def test_recover_discrete_posterior_matches_analytic():
     mu0_value, mu1_value = 0.0, 2.0
     sigma_value, p_value, y_value = 1.0, 0.3, 1.5
-    pgm = build_scalar_mixture_model(
+    pgm, data = build_scalar_mixture_model(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
     pgm_marg = marginalize(pgm, ["z"])
     theta = make_theta_inverse_samples(
         mu0_value, mu1_value, sigma_value, p_value
     )
-    posterior = recover_discrete_posterior(pgm_marg, "z", theta).posterior
+    posterior = recover_discrete_posterior(
+        pgm_marg, "z", theta, data
+    ).posterior
     expected = compute_analytic_posterior(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
@@ -92,7 +97,7 @@ def test_marginalize_batched_log_prob_shape():
     num_samples = 4
     mu0_value, mu1_value = 0.0, 2.0
     sigma_value, p_value, y_value = 1.0, 0.3, 1.5
-    pgm = build_scalar_mixture_model(
+    pgm, data = build_scalar_mixture_model(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
     pgm_marg = marginalize(pgm, ["z"])
@@ -102,7 +107,7 @@ def test_marginalize_batched_log_prob_shape():
         jp.full((num_samples,), sigma_value),
         jp.full((num_samples,), p_value),
     )
-    state = pgm_marg.apply(theta)
+    state = pgm_marg.apply(theta, data)
     assert state.log_prob_sum.shape == (num_samples,)
 
 
@@ -110,7 +115,7 @@ def test_recover_discrete_posterior_batched_shape():
     num_samples = 4
     mu0_value, mu1_value = 0.0, 2.0
     sigma_value, p_value, y_value = 1.0, 0.3, 1.5
-    pgm = build_scalar_mixture_model(
+    pgm, data = build_scalar_mixture_model(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
     pgm_marg = marginalize(pgm, ["z"])
@@ -120,12 +125,14 @@ def test_recover_discrete_posterior_batched_shape():
         jp.full((num_samples,), sigma_value),
         jp.full((num_samples,), p_value),
     )
-    posterior = recover_discrete_posterior(pgm_marg, "z", theta).posterior
+    posterior = recover_discrete_posterior(
+        pgm_marg, "z", theta, data
+    ).posterior
     assert posterior.shape == (num_samples, 2)
 
 
 def test_marginalize_multiple_names_raises():
-    pgm = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
+    pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z", "x"])
 

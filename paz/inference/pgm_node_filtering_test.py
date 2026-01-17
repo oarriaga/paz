@@ -21,7 +21,7 @@ def test_latent_nodes_includes_priors():
     def likelihood(latent_val):
         return tfd.Normal(latent_val, 0.1)
 
-    y_obs = paz.Observable(likelihood, 0.0, name="y_obs")(latent)
+    y_obs = paz.Observable(likelihood, name="y_obs")(latent)
 
     nodes = search_nodes([y_obs])
     latent_nodes = get_latent_nodes(nodes)
@@ -51,7 +51,7 @@ def test_non_priors_excludes_priors():
     def likelihood(latent_val):
         return tfd.Normal(latent_val, 0.1)
 
-    y_obs = paz.Observable(likelihood, 0.0, name="y_obs")(latent)
+    y_obs = paz.Observable(likelihood, name="y_obs")(latent)
 
     nodes = search_nodes([y_obs])
     edges = get_edges(nodes)
@@ -90,7 +90,7 @@ def test_sample_inverse_no_double_sampling():
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
+    y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
 
     key = jax.random.PRNGKey(0)
@@ -127,7 +127,7 @@ def test_sample_forward_all_nodes():
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
+    y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
 
     key = jax.random.PRNGKey(0)
@@ -166,7 +166,7 @@ def test_filtering_consistency_batched():
     def likelihood(group_params):
         return tfd.Normal(group_params, 0.1)
 
-    y_obs = paz.Observable(likelihood, jp.zeros(num_groups), name="y_obs")(groups)
+    y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
 
     key = jax.random.PRNGKey(0)
@@ -221,7 +221,7 @@ def test_hierarchical_regression_filtering():
         means = slopes_val[group_idx] * X + intercepts_val[group_idx]
         return tfd.Normal(means, 0.1)
 
-    y_obs = paz.Observable(likelihood, jp.zeros(50), name="y_obs")(
+    y_obs = paz.Observable(likelihood, name="y_obs")(
         slopes, intercepts
     )
 

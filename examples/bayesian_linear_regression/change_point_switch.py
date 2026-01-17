@@ -32,7 +32,7 @@ SwitchPlotArgs = namedtuple(
 )
 
 
-def build_switch_model(x, observations, sigma):
+def build_switch_model(x, sigma):
     slope_left = paz.Prior(tfd.Normal(0.0, 1.0), name="slope_left")
     bias_left = paz.Prior(tfd.Normal(0.0, 1.0), name="bias_left")
     slope_right = paz.Prior(tfd.Normal(0.0, 1.0), name="slope_right")
@@ -56,7 +56,7 @@ def build_switch_model(x, observations, sigma):
         mean = jp.where(use_left, mean_left, mean_right)
         return tfd.Normal(mean, sigma)
 
-    y_obs = paz.Observable(y_distribution, observations, name="y")(
+    y_obs = paz.Observable(y_distribution, name="y")(
         slope_left, bias_left, slope_right, bias_right, switch_index
     )
     return paz.PGM(
@@ -66,13 +66,25 @@ def build_switch_model(x, observations, sigma):
     )
 
 
-def run_mcmc(model_marg, key, num_samples, num_chains, step_sigma):
-    log_density_fn = lambda params: model_marg.apply(params).log_prob_sum
-    key, init_key = jax.random.split(key)
-    positions = model_marg.sample_inverse(init_key, num_chains)
-    return paz.metropolis_hastings.sample(
-        key, log_density_fn, positions, step_sigma, num_samples, num_chains
+def run_mcmc(
+    model_marg,
+    key,
+    data,
+    num_samples,
+    num_chains,
+    step_sigma,
+    warmup,
+):
+    tune_key, infer_key = jax.random.split(key)
+    model_marg.tune(
+        tune_key,
+        data,
+        num_chains=num_chains,
+        sigma=step_sigma,
+        warmup=warmup,
+        num_samples=num_samples,
     )
+    return model_marg.infer(infer_key, data, num_samples=num_samples)
 
 
 def plot_switch_results(
@@ -81,6 +93,7 @@ def plot_switch_results(
     posterior_lines,
     true_lines,
     plot_args,
+    density_lines=None,
 ):
     fig, axes = plt.subplots(2, 1, figsize=(11, 8))
     x_grid = jp.linspace(x.min(), x.max(), 300)
@@ -134,6 +147,23 @@ def plot_switch_results(
         linestyle="--",
         label="true line",
     )
+    if density_lines is not None:
+        density_left = (
+            density_lines.left.slope * x_grid + density_lines.left.bias
+        )
+        density_right = (
+            density_lines.right.slope * x_grid + density_lines.right.bias
+        )
+        density_piecewise = jp.where(
+            x_grid <= switch_map_x, density_left, density_right
+        )
+        axes[0].plot(
+            x_grid,
+            density_piecewise,
+            color="tab:purple",
+            linestyle="--",
+            label="gaussian approx",
+        )
     axes[0].axvline(
         switch_map_x,
         color="black",
@@ -198,27 +228,29 @@ def main():
         noise_key, (num_observations,)
     )
 
-    model = build_switch_model(x, observations, sigma)
+    model = build_switch_model(x, sigma)
     model_marg = paz.marginalize(model, ["switch_index"])
+    data = {"y": observations}
 
     num_samples = 10_000
     num_chains = 10
     burn_in = 2000
     step_sigma = 0.25
 
-    samples, infos = run_mcmc(
-        model_marg, key, num_samples, num_chains, step_sigma
+    posterior = run_mcmc(
+        model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
     )
-    slope_left_samples = samples.position.slope_left[burn_in:].reshape(-1)
-    bias_left_samples = samples.position.bias_left[burn_in:].reshape(-1)
-    slope_right_samples = samples.position.slope_right[burn_in:].reshape(-1)
-    bias_right_samples = samples.position.bias_right[burn_in:].reshape(-1)
+    samples, infos = posterior.samples, posterior.infos
+    slope_left_samples = samples.position.slope_left.reshape(-1)
+    bias_left_samples = samples.position.bias_left.reshape(-1)
+    slope_right_samples = samples.position.slope_right.reshape(-1)
+    bias_right_samples = samples.position.bias_right.reshape(-1)
 
     slope_left_mean = slope_left_samples.mean()
     bias_left_mean = bias_left_samples.mean()
     slope_right_mean = slope_right_samples.mean()
     bias_right_mean = bias_right_samples.mean()
-    acceptance_rate = infos.acceptance_rate[burn_in:].mean()
+    acceptance_rate = infos.acceptance_rate.mean()
 
     Theta = SampleType(["slope_left", "bias_left", "slope_right", "bias_right"])
     theta_samples = Theta(
@@ -228,7 +260,7 @@ def main():
         bias_right_samples,
     )
     switch_posterior = paz.recover_discrete_posterior(
-        model_marg, "switch_index", theta_samples
+        model_marg, "switch_index", theta_samples, data
     )
     switch_support = switch_posterior.support
     switch_probs = switch_posterior.posterior.mean(axis=0)
@@ -236,6 +268,13 @@ def main():
     posterior_lines = LineSet(
         LineParameters(slope_left_mean, bias_left_mean),
         LineParameters(slope_right_mean, bias_right_mean),
+    )
+    density = posterior.as_density(method="gaussian")
+    key, density_key = jax.random.split(key)
+    density_sample = density.sample(density_key, num_samples=1)
+    density_lines = LineSet(
+        LineParameters(density_sample.slope_left, density_sample.bias_left),
+        LineParameters(density_sample.slope_right, density_sample.bias_right),
     )
     true_lines = LineSet(
         LineParameters(slope_left_true, bias_left_true),
@@ -257,7 +296,14 @@ def main():
     print(f"posterior switch index={switch_map_index}, x={switch_map_x:.3f}")
     print(f"acceptance rate={acceptance_rate:.3f}")
 
-    plot_switch_results(x, observations, posterior_lines, true_lines, plot_args)
+    plot_switch_results(
+        x,
+        observations,
+        posterior_lines,
+        true_lines,
+        plot_args,
+        density_lines,
+    )
     plt.show()
 
 

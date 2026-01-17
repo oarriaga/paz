@@ -1,5 +1,3 @@
-import time
-import sys
 from functools import partial
 from collections import namedtuple
 
@@ -8,6 +6,7 @@ import paz
 from jax import flatten_util
 import jax.numpy as jp
 
+from paz.inference import progress as progress_module
 
 Samples = namedtuple("Samples", ["position", "log_density"])
 State = namedtuple("State", ["proposal", "is_accepted", "acceptance_rate"])
@@ -60,8 +59,16 @@ def propose_additively(key, position, sigma):
     return new_position
 
 
-def sample(key, log_density_fn, positions, sigma, num_samples, num_chains):
-    start_time = time.time()
+def sample(
+    key,
+    log_density_fn,
+    positions,
+    sigma,
+    num_samples,
+    num_chains,
+    progress=False,
+):
+    start_time = progress_module.now()
 
     def build_trajectory(key, initial_state):
         position, log_density = initial_state
@@ -86,9 +93,15 @@ def sample(key, log_density_fn, positions, sigma, num_samples, num_chains):
         sample = choose_proposal(keys[1], now_proposal, new_proposal)
         return sample.proposal.state, sample
 
-    def step_chain(step_state, sample_arg):
+    def step_chain_with_progress(step_state, sample_arg):
         jax.debug.callback(
-            paz.lock(draw_bar, num_samples, start_time, "sampling", 30),
+            paz.lock(
+                progress_module.draw_bar,
+                num_samples,
+                start_time,
+                "sampling",
+                30,
+            ),
             sample_arg + 1,
         )
         old_key, states = step_state
@@ -97,52 +110,17 @@ def sample(key, log_density_fn, positions, sigma, num_samples, num_chains):
         states, infos = jax.vmap(step_kernel)(keys, states)
         return (new_key, states), (states, infos)
 
+    def step_chain(step_state, sample_arg):
+        old_key, states = step_state
+        new_key, now_key = jax.random.split(old_key)
+        keys = jax.random.split(now_key, num_chains)
+        states, infos = jax.vmap(step_kernel)(keys, states)
+        return (new_key, states), (states, infos)
+
     args = jp.arange(num_samples)
     state = Samples(positions, jax.vmap(log_density_fn)(positions))
-    _, (states, infos) = jax.lax.scan(step_chain, (key, state), args)
-    jax.debug.callback(move_to_the_next_line)
+    scan_step = step_chain_with_progress if progress else step_chain
+    _, (states, infos) = jax.lax.scan(scan_step, (key, state), args)
+    if progress:
+        jax.debug.callback(progress_module.move_to_next_line)
     return states, infos
-
-
-def move_to_the_next_line():
-    sys.stdout.write("\n")
-    sys.stdout.flush()
-
-
-def draw_bar(now_arg, total, start_time, description, width):
-
-    def make_progress_bar_string(percent_complete, width):
-        filled_width = int(width * percent_complete)
-        return "█" * filled_width + "-" * (width - filled_width)
-
-    def compute_ETA(now_arg, total, iterations_per_second):
-        remaining_iterations = total - now_arg
-        if iterations_per_second > 0:
-            ETA = remaining_iterations / iterations_per_second
-        else:
-            ETA = 0
-        return ETA
-
-    def format_string(bar, percent_complete, elapsed_time, ETA, iters_per_sec):
-        return (
-            f"\r{description}: |{bar}| {now_arg}/{total} "
-            f"({percent_complete:.0%}) "
-            f"[{elapsed_time:.2f}s<{ETA:.2f}s, {iters_per_sec:.2f}it/s]"
-        )
-
-    def print_to_console(message):
-        sys.stdout.write(message)
-        sys.stdout.flush()
-
-    percent_complete = now_arg / total
-    bar = make_progress_bar_string(percent_complete, width)
-    elapsed_time = time.time() - start_time
-    if now_arg > 0:
-        iterations_per_second = now_arg / elapsed_time
-        ETA = compute_ETA(now_arg, iterations_per_second, total)
-    else:
-        iterations_per_second = 0
-        ETA = float("inf")
-    message_args = (percent_complete, elapsed_time, ETA, iterations_per_second)
-    message = format_string(bar, *message_args)
-    print_to_console(message)

@@ -53,7 +53,7 @@ from paz.inference.types import SampleType
 tfd = tfp.distributions
 
 
-def build_mixture_model(prior_p, mean0, mean1, likelihood_stdv, observations):
+def build_mixture_model(prior_p, mean0, mean1, likelihood_stdv):
     p = paz.Prior(prior_p, name="p")
 
     def z_distribution(p):
@@ -65,7 +65,7 @@ def build_mixture_model(prior_p, mean0, mean1, likelihood_stdv, observations):
         mean = jp.where(z == 1.0, mean1, mean0)
         return tfd.Normal(mean, likelihood_stdv)
 
-    y_obs = paz.Observable(y_distribution, observations, name="y")(z)
+    y_obs = paz.Observable(y_distribution, name="y")(z)
     return paz.PGM([p], [y_obs], "gaussian_mixture")
 
 
@@ -87,11 +87,15 @@ def compute_log_joint_over_grid(
     return log_joint_z0, log_joint_z1
 
 
-def compute_log_marginal_pgm(model_marg, p_grid):
+def compute_log_marginal_pgm(model_marg, data, p_grid):
     Theta = SampleType(["p"])
 
     def log_prob_for_p(p_value):
-        return model_marg.apply(Theta(p_value)).log_prob_sum
+        log_prior = model_marg.prior.log_prob(Theta(p_value), space="inv")
+        log_like = model_marg.likelihood.log_prob(
+            Theta(p_value), data, space="inv"
+        )
+        return log_prior + log_like
 
     return jax.vmap(log_prob_for_p)(p_grid)
 
@@ -111,12 +115,10 @@ def compute_posterior_z_from_grid(log_joint_z0, log_joint_z1):
     return jp.array([joint_z0.sum(), joint_z1.sum()]) / normalization
 
 
-def compute_posterior_z_from_marginal(
-    model_marg, p_grid, posterior_p
-):
+def compute_posterior_z_from_marginal(model_marg, data, p_grid, posterior_p):
     Theta = SampleType(["p"])
     posterior_z_given_p = paz.recover_discrete_posterior(
-        model_marg, "z", Theta(p_grid)
+        model_marg, "z", Theta(p_grid), data
     ).posterior
     posterior_z = (posterior_p[:, None] * posterior_z_given_p).sum(axis=0)
     return posterior_z / posterior_z.sum()
@@ -137,6 +139,7 @@ def plot_results(
     posterior_z_marg,
     p_samples,
     posterior_z_mcmc,
+    posterior_p_density=None,
 ):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
@@ -166,6 +169,13 @@ def plot_results(
     axes[1, 0].plot(
         p_grid, posterior_p_marg, "--", label="posterior p density (marg)"
     )
+    if posterior_p_density is not None:
+        axes[1, 0].plot(
+            p_grid,
+            posterior_p_density,
+            ":",
+            label="posterior p density (gaussian fit)",
+        )
     axes[1, 0].set_title("Posterior over p")
     axes[1, 0].legend()
 
@@ -215,9 +225,8 @@ def main():
         y_key, (num_observations,)
     )
 
-    model = build_mixture_model(
-        prior_p, mean0, mean1, likelihood_stdv, observations
-    )
+    model = build_mixture_model(prior_p, mean0, mean1, likelihood_stdv)
+    data = {"y": observations}
     model_marg = paz.marginalize(model, ["z"])
 
     p_grid = jp.linspace(0.01, 0.99, 200)
@@ -227,7 +236,7 @@ def main():
     log_marginal_enum = logsumexp(
         jp.stack([log_joint_z0, log_joint_z1]), axis=0
     )
-    log_marginal_pgm = compute_log_marginal_pgm(model_marg, p_grid)
+    log_marginal_pgm = compute_log_marginal_pgm(model_marg, data, p_grid)
 
     posterior_p_enum = normalize_log_density(log_marginal_enum, p_grid)
     posterior_p_marg = normalize_log_density(log_marginal_pgm, p_grid)
@@ -236,7 +245,7 @@ def main():
         log_joint_z0, log_joint_z1
     )
     posterior_z_marg = compute_posterior_z_from_marginal(
-        model_marg, p_grid, posterior_p_marg
+        model_marg, data, p_grid, posterior_p_marg
     )
 
     num_samples = 1200
@@ -244,13 +253,20 @@ def main():
     burn_in = 300
     sigma = 0.2
 
-    log_density_fn = lambda params: model_marg.apply(params).log_prob_sum
-    key, init_key = jax.random.split(key)
-    positions = model_marg.sample_inverse(init_key, num_chains)
-    samples, infos = paz.metropolis_hastings.sample(
-        key, log_density_fn, positions, sigma, num_samples, num_chains
+    key, tune_key, infer_key = jax.random.split(key, 3)
+    model_marg.tune(
+        tune_key,
+        data,
+        num_chains=num_chains,
+        sigma=sigma,
+        warmup=burn_in,
+        num_samples=num_samples,
     )
-    p_samples = samples.position.p[burn_in:].reshape(-1)
+    posterior = model_marg.infer(infer_key, data, num_samples=num_samples)
+    p_samples = posterior.samples.position.p.reshape(-1)
+    posterior_density = posterior.as_density(method="gaussian")
+    Theta = SampleType(["p"])
+    posterior_p_density = posterior_density.prob(Theta(p_grid))
     mcmc_mean = p_samples.mean()
     mcmc_stdv = p_samples.std()
 
@@ -259,9 +275,8 @@ def main():
     exact_var = (posterior_p_enum * (p_grid - exact_mean) ** 2).sum() * delta
     exact_stdv = jp.sqrt(exact_var)
 
-    Theta = SampleType(["p"])
     posterior_z_given_p = paz.recover_discrete_posterior(
-        model_marg, "z", Theta(p_samples)
+        model_marg, "z", Theta(p_samples), data
     ).posterior
     posterior_z_mcmc = posterior_z_given_p.mean(axis=0)
     posterior_z_mcmc = posterior_z_mcmc / posterior_z_mcmc.sum()
@@ -302,6 +317,7 @@ def main():
         posterior_z_marg,
         p_samples,
         posterior_z_mcmc,
+        posterior_p_density,
     )
     plt.show()
 

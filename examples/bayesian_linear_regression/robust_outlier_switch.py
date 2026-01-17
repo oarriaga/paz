@@ -40,7 +40,7 @@ CaseResult = namedtuple(
 )
 
 
-def build_switch_model(x, observations, sigma_in, sigma_out):
+def build_switch_model(x, sigma_in, sigma_out):
     slope = paz.Prior(tfd.Normal(0.0, 1.0), name="slope")
     bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
     p = paz.Prior(tfd.Beta(2.0, 2.0), name="p", bijector=tfb.Sigmoid())
@@ -55,19 +55,21 @@ def build_switch_model(x, observations, sigma_in, sigma_out):
         sigma = jp.where(z == 1.0, sigma_out, sigma_in)
         return tfd.Normal(mean, sigma)
 
-    y_obs = paz.Observable(y_distribution, observations, name="y")(
-        slope, bias, z
-    )
+    y_obs = paz.Observable(y_distribution, name="y")(slope, bias, z)
     return paz.PGM([slope, bias, p], [y_obs], "robust_outlier_switch")
 
 
-def run_mcmc(model_marg, key, num_samples, num_chains, sigma):
-    log_density_fn = lambda params: model_marg.apply(params).log_prob_sum
-    key, init_key = jax.random.split(key)
-    positions = model_marg.sample_inverse(init_key, num_chains)
-    return paz.metropolis_hastings.sample(
-        key, log_density_fn, positions, sigma, num_samples, num_chains
+def run_mcmc(model_marg, key, data, num_samples, num_chains, sigma, warmup):
+    tune_key, infer_key = jax.random.split(key)
+    model_marg.tune(
+        tune_key,
+        data,
+        num_chains=num_chains,
+        sigma=sigma,
+        warmup=warmup,
+        num_samples=num_samples,
     )
+    return model_marg.infer(infer_key, data, num_samples=num_samples)
 
 
 def plot_switch_results(
@@ -82,6 +84,7 @@ def plot_switch_results(
     slope_true,
     bias_true,
     z_true,
+    density_params=None,
 ):
     axis_top, axis_bottom = axes
     x_grid = jp.linspace(x.min(), x.max(), 200)
@@ -106,9 +109,17 @@ def plot_switch_results(
         alt_label = f"alt band (sigma={sigma_out})"
 
     axis_top.scatter(x, observations, color="tab:gray", alpha=0.8, label="data")
-    axis_top.plot(
-        x_grid, mean_line, color="black", label="posterior mean line"
-    )
+    axis_top.plot(x_grid, mean_line, color="black", label="posterior mean line")
+    if density_params is not None:
+        density_slope, density_bias = density_params
+        density_line = density_slope * x_grid + density_bias
+        axis_top.plot(
+            x_grid,
+            density_line,
+            color="tab:purple",
+            linestyle="--",
+            label="gaussian approx",
+        )
     true_line = slope_true * x_grid + bias_true
     axis_top.plot(
         x_grid, true_line, color="tab:green", linestyle="--", label="true line"
@@ -184,8 +195,9 @@ def run_case(
     sigma_out,
     z_true,
 ):
-    model = build_switch_model(x, observations, sigma_in, sigma_out)
+    model = build_switch_model(x, sigma_in, sigma_out)
     model_marg = paz.marginalize(model, ["z"])
+    data = {"y": observations}
 
     num_samples = 600
     num_chains = 2
@@ -193,34 +205,46 @@ def run_case(
     sigma = 0.25
 
     start_time = time.perf_counter()
-    samples, infos = run_mcmc(model_marg, key, num_samples, num_chains, sigma)
+    posterior = run_mcmc(
+        model_marg, key, data, num_samples, num_chains, sigma, burn_in
+    )
+    samples, infos = posterior.samples, posterior.infos
     mcmc_seconds = time.perf_counter() - start_time
-    slope_samples = samples.position.slope[burn_in:].reshape(-1)
-    bias_samples = samples.position.bias[burn_in:].reshape(-1)
-    p_inverse_samples = samples.position.p[burn_in:].reshape(-1)
+    slope_samples = samples.position.slope.reshape(-1)
+    bias_samples = samples.position.bias.reshape(-1)
+    p_inverse_samples = samples.position.p.reshape(-1)
 
     slope_mean = slope_samples.mean()
     bias_mean = bias_samples.mean()
-    acceptance_rate = infos.acceptance_rate[burn_in:].mean()
+    acceptance_rate = infos.acceptance_rate.mean()
 
     start_time = time.perf_counter()
     Theta = SampleType(["slope", "bias", "p"])
     theta_samples = Theta(slope_samples, bias_samples, p_inverse_samples)
     posterior_z = paz.recover_discrete_posterior(
-        model_marg, "z", theta_samples
+        model_marg, "z", theta_samples, data
     ).posterior.mean(axis=0)
     posterior_seconds = time.perf_counter() - start_time
 
-    return CaseResult(
-        observations,
-        slope_mean,
-        bias_mean,
-        posterior_z,
-        acceptance_rate,
-        mcmc_seconds,
-        posterior_seconds,
-        z_true,
-    ), key
+    density = posterior.as_density(method="gaussian")
+    key, density_key = jax.random.split(key)
+    density_sample = density.sample(density_key, num_samples=1)
+    density_params = (density_sample.slope, density_sample.bias)
+
+    return (
+        CaseResult(
+            observations,
+            slope_mean,
+            bias_mean,
+            posterior_z,
+            acceptance_rate,
+            mcmc_seconds,
+            posterior_seconds,
+            z_true,
+        ),
+        density_params,
+        key,
+    )
 
 
 def main():
@@ -241,7 +265,7 @@ def main():
             + bias_true
             + sigma_true * jax.random.normal(noise_key, (num_observations,))
         )
-        result, key = run_case(
+        result, density_params, key = run_case(
             key,
             x,
             observations,
@@ -249,7 +273,7 @@ def main():
             sigma_out,
             jp.array(z_value),
         )
-        case_results.append(result)
+        case_results.append((result, density_params))
 
         print("=" * 60)
         print("Robust linear regression with outlier switch")
@@ -269,18 +293,20 @@ def main():
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 8))
     for column, result in enumerate(case_results):
+        case_result, density_params = result
         plot_switch_results(
             (axes[0, column], axes[1, column]),
             x,
-            result.observations,
-            result.slope_mean,
-            result.bias_mean,
+            case_result.observations,
+            case_result.slope_mean,
+            case_result.bias_mean,
             sigma_in,
             sigma_out,
-            result.posterior_z,
+            case_result.posterior_z,
             slope_true,
             bias_true,
-            result.z_true,
+            case_result.z_true,
+            density_params,
         )
     plt.tight_layout()
     plt.show()

@@ -16,13 +16,30 @@ Variable = namedtuple(
         "edges",
         "distribution",
         "metadata",
+        "prior",
+        "likelihood",
+        "tune",
+        "infer",
+        "inference_defaults",
     ],
-    defaults=[None],
+    defaults=[None, None, None, None, None, None],
 )
 NodeMetadata = namedtuple("NodeMetadata", ["distribution_fn", "bijector"])
 PGMMetadata = namedtuple(
-    "PGMMetadata", ["nodes", "inputs", "non_priors", "latent_nodes"]
+    "PGMMetadata",
+    [
+        "nodes",
+        "inputs",
+        "non_priors",
+        "latent_nodes",
+        "output_nodes",
+        "observable_nodes",
+    ],
 )
+Density = namedtuple(
+    "Density", ["sample", "log_prob", "prob", "latent_space", "metadata"]
+)
+Likelihood = namedtuple("Likelihood", ["log_prob", "latent_space", "metadata"])
 DiscretePosterior = namedtuple(
     "DiscretePosterior",
     ["support", "log_posterior", "posterior", "z_map", "z_map_value"],

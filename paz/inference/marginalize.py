@@ -3,19 +3,33 @@ import jax.numpy as jp
 from jax.scipy.special import logsumexp
 from tensorflow_probability.substrates import jax as tfp
 
-from paz.inference import pgm as pgm_module
 from paz.inference.metadata import (
     get_bijector,
     get_distribution_fn,
     get_inputs,
     get_latent_nodes,
     get_non_priors,
+    get_output_nodes,
+)
+from paz.inference.latent_space import (
+    LatentSpace,
+    as_latent_samples,
+    to_inverse_samples,
 )
 from paz.inference.types import (
     DiscretePosterior,
+    Density,
+    Likelihood,
     NodeState,
     SampleType,
     Variable,
+)
+from paz.inference.pgm_ops import (
+    build_data_mapping,
+    build_infer,
+    build_prior_prob,
+    build_tune,
+    get_namedtuple_value,
 )
 
 tfd = tfp.distributions
@@ -129,18 +143,38 @@ def _remove_sample_field(samples, name):
     raise TypeError("samples must be a dict or namedtuple.")
 
 
+def _select_latent_samples(latent_space, samples):
+    if isinstance(samples, dict):
+        data = samples
+    elif hasattr(samples, "_asdict"):
+        data = samples._asdict()
+    else:
+        raise TypeError("samples must be a dict or namedtuple.")
+    return latent_space.Sample(
+        **{name: data[name] for name in latent_space.names}
+    )
+
+
+def _build_latent_space_without_z(base_latent_space, z_name):
+    names = [name for name in base_latent_space.names if name != z_name]
+    bijectors = {name: base_latent_space.bijectors[name] for name in names}
+    Sample = SampleType(names)
+    return LatentSpace(names, bijectors, Sample)
+
+
+def _validate_space(space):
+    if space not in ("inv", "fwd"):
+        raise ValueError("space must be 'inv' or 'fwd'")
+
+
 def _get_parent_samples(pgm, node, inverse_samples):
     inputs = get_inputs(pgm)
     non_priors = get_non_priors(pgm)
     samples = {}
     for prior in inputs:
-        inverse_sample = pgm_module.get_namedtuple_value(
-            prior.name, inverse_samples
-        )
+        inverse_sample = get_namedtuple_value(prior.name, inverse_samples)
         state = prior.apply(inverse_sample)
-        samples[prior.name] = pgm_module.get_namedtuple_value(
-            prior.name, state.sample
-        )
+        samples[prior.name] = get_namedtuple_value(prior.name, state.sample)
     if _get_node_by_name(inputs, node.name) is not None:
         return [samples[edge.name] for edge in node.edges]
     found = False
@@ -149,11 +183,9 @@ def _get_parent_samples(pgm, node, inverse_samples):
             found = True
             break
         node_inputs = [samples[edge.name] for edge in current.edges]
-        node_sample = pgm_module.get_namedtuple_value(
-            current.name, inverse_samples
-        )
+        node_sample = get_namedtuple_value(current.name, inverse_samples)
         state = current.apply(node_sample, *node_inputs)
-        samples[current.name] = pgm_module.get_namedtuple_value(
+        samples[current.name] = get_namedtuple_value(
             current.name, state.sample
         )
     if not found:
@@ -214,15 +246,25 @@ def _validate_supports(pgm, node, inverse_samples):
     return support
 
 
-def _compute_log_joint(pgm, z_name, support, theta_inverse_samples):
+def _compute_log_joint(pgm, z_name, support, theta_inverse_samples, data):
     log_joint = []
     for value in support:
         full_inverse = _inject_inverse_samples(
             theta_inverse_samples, z_name, value
         )
-        state = pgm.apply(full_inverse)
+        state = pgm.apply(full_inverse, data)
         log_joint.append(state.log_prob_sum)
     return jp.stack(log_joint)
+
+
+def _compute_log_prior(pgm, z_name, support, theta_inverse_samples):
+    log_prior = []
+    for value in support:
+        full_inverse = _inject_inverse_samples(
+            theta_inverse_samples, z_name, value
+        )
+        log_prior.append(pgm.prior.log_prob(full_inverse, space="inv"))
+    return logsumexp(jp.stack(log_prior))
 
 
 def marginalize(pgm, names):
@@ -240,35 +282,129 @@ def marginalize(pgm, names):
     if z_node.distribution is not None:
         finite_support(z_node.distribution)
 
-    def apply(theta_inverse_samples):
+    base_latent_space = pgm.prior.latent_space
+    latent_space = _build_latent_space_without_z(base_latent_space, z_name)
+    output_nodes = get_output_nodes(pgm)
+
+    def apply(theta_inverse_samples, data=None):
+        theta_inverse_samples = as_latent_samples(
+            latent_space, theta_inverse_samples
+        )
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
         num_batches = _get_leading_batch_size(theta_inverse_samples)
+        data_mapping = build_data_mapping(data, output_nodes)
+        data_batch = _get_leading_batch_size(data_mapping)
 
-        def batch_log_prob(batch_theta):
-            log_joint = _compute_log_joint(pgm, z_name, support, batch_theta)
+        def batch_log_prob(batch_theta, batch_data):
+            log_joint = _compute_log_joint(
+                pgm, z_name, support, batch_theta, batch_data
+            )
             return logsumexp(log_joint)
 
         if num_batches is None:
-            log_prob_sum = batch_log_prob(theta_inverse_samples)
+            log_prob_sum = batch_log_prob(theta_inverse_samples, data_mapping)
         else:
-            log_prob_sum = jax.vmap(batch_log_prob)(theta_inverse_samples)
+            if data_batch == num_batches:
+                log_prob_sum = jax.vmap(batch_log_prob)(
+                    theta_inverse_samples, data_mapping
+                )
+            else:
+                log_prob_sum = jax.vmap(
+                    lambda batch_theta: batch_log_prob(
+                        batch_theta, data_mapping
+                    )
+                )(theta_inverse_samples)
 
         return NodeState(None, {"marginalized": log_prob_sum}, log_prob_sum)
 
     def sample_inverse(key, num_samples=1):
         samples = pgm.sample_inverse(key, num_samples)
-        return _remove_sample_field(samples, z_name)
+        return _select_latent_samples(latent_space, samples)
 
     def sample(key, num_samples=1):
         samples = pgm.sample(key, num_samples)
         return _remove_sample_field(samples, z_name)
 
+    def prior_sample(key, num_samples=1, space="inv"):
+        _validate_space(space)
+        samples = pgm.prior.sample(key, num_samples, space=space)
+        return _select_latent_samples(latent_space, samples)
+
+    def prior_log_prob(samples, space="inv"):
+        _validate_space(space)
+        if space == "fwd":
+            theta_inverse_samples = to_inverse_samples(latent_space, samples)
+        else:
+            theta_inverse_samples = as_latent_samples(latent_space, samples)
+        support = _validate_supports(pgm, z_node, theta_inverse_samples)
+        num_batches = _get_leading_batch_size(theta_inverse_samples)
+
+        def batch_log_prob(batch_theta):
+            return _compute_log_prior(pgm, z_name, support, batch_theta)
+
+        if num_batches is None:
+            return batch_log_prob(theta_inverse_samples)
+        return jax.vmap(batch_log_prob)(theta_inverse_samples)
+
+    prior_prob = build_prior_prob(prior_log_prob)
+
+    def likelihood_log_prob(samples, data, space="inv"):
+        _validate_space(space)
+        data_mapping = build_data_mapping(data, output_nodes)
+        if space == "fwd":
+            theta_inverse_samples = to_inverse_samples(latent_space, samples)
+        else:
+            theta_inverse_samples = as_latent_samples(latent_space, samples)
+        support = _validate_supports(pgm, z_node, theta_inverse_samples)
+        num_batches = _get_leading_batch_size(theta_inverse_samples)
+        data_batch = _get_leading_batch_size(data_mapping)
+
+        def batch_log_prob(batch_theta, batch_data):
+            log_joint = _compute_log_joint(
+                pgm, z_name, support, batch_theta, batch_data
+            )
+            log_joint = logsumexp(log_joint)
+            log_prior = _compute_log_prior(pgm, z_name, support, batch_theta)
+            return log_joint - log_prior
+
+        if num_batches is None:
+            return batch_log_prob(theta_inverse_samples, data_mapping)
+        if data_batch == num_batches:
+            return jax.vmap(batch_log_prob)(
+                theta_inverse_samples, data_mapping
+            )
+        return jax.vmap(
+            lambda batch_theta: batch_log_prob(batch_theta, data_mapping)
+        )(theta_inverse_samples)
+
     apply._marginalize_base_pgm = pgm
     apply._marginalize_z_node = z_node
     apply._marginalize_z_name = z_name
+    apply._marginalize_latent_space = latent_space
 
     name = f"{pgm.name}_marg_{z_name}"
-    return Variable(apply, sample, sample_inverse, name, [], None)
+    prior_density = Density(
+        prior_sample, prior_log_prob, prior_prob, latent_space, None
+    )
+    likelihood_density = Likelihood(likelihood_log_prob, latent_space, None)
+    inference_defaults = {}
+    tune = build_tune(prior_density, likelihood_density, inference_defaults)
+    infer = build_infer(prior_density, likelihood_density, inference_defaults)
+
+    return Variable(
+        apply,
+        sample,
+        sample_inverse,
+        name,
+        [],
+        None,
+        None,
+        prior_density,
+        likelihood_density,
+        tune,
+        infer,
+        inference_defaults,
+    )
 
 
 def _get_marginalize_metadata(pgm):
@@ -281,20 +417,35 @@ def _get_marginalize_metadata(pgm):
     return base_pgm, z_node, z_name
 
 
-def recover_discrete_posterior(pgm_marg, z_name, theta_inverse_samples):
+def recover_discrete_posterior(
+    pgm_marg, z_name, theta_inverse_samples, data=None
+):
     base_pgm, z_node, stored_name = _get_marginalize_metadata(pgm_marg)
     if z_name != stored_name:
         raise ValueError("z_name does not match marginalized PGM.")
     support = _validate_supports(base_pgm, z_node, theta_inverse_samples)
     num_batches = _get_leading_batch_size(theta_inverse_samples)
+    data_mapping = build_data_mapping(data, get_output_nodes(base_pgm))
+    data_batch = _get_leading_batch_size(data_mapping)
 
-    def batch_log_joint(batch_theta):
-        return _compute_log_joint(base_pgm, z_name, support, batch_theta)
+    def batch_log_joint(batch_theta, batch_data):
+        return _compute_log_joint(
+            base_pgm, z_name, support, batch_theta, batch_data
+        )
 
     if num_batches is None:
-        log_joint = batch_log_joint(theta_inverse_samples)
+        log_joint = batch_log_joint(theta_inverse_samples, data_mapping)
     else:
-        log_joint = jax.vmap(batch_log_joint)(theta_inverse_samples)
+        if data_batch == num_batches:
+            log_joint = jax.vmap(batch_log_joint)(
+                theta_inverse_samples, data_mapping
+            )
+        else:
+            log_joint = jax.vmap(
+                lambda batch_theta: batch_log_joint(
+                    batch_theta, data_mapping
+                )
+            )(theta_inverse_samples)
 
     log_posterior = log_joint - logsumexp(log_joint, axis=-1, keepdims=True)
     posterior = jp.exp(log_posterior)

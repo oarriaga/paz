@@ -47,40 +47,43 @@ def compute_analytical_posterior(prior_mean, prior_stdv, likelihood_stdv, observ
     return AnalyticalPosterior(posterior_mean, posterior_stdv)
 
 
-def build_normal_normal_model(prior_mean, prior_stdv, likelihood_stdv, observations):
+def build_normal_normal_model(
+    prior_mean, prior_stdv, likelihood_stdv, num_observations
+):
     """Build the Normal-Normal PGM."""
 
-    def Likelihood(likelihood_stdv, observations):
-        n = len(observations)
-
+    def Likelihood(likelihood_stdv, num_observations):
         def apply(mu):
-            return tfd.Normal(loc=jp.full(n, mu), scale=likelihood_stdv)
+            return tfd.Normal(
+                loc=jp.full(num_observations, mu), scale=likelihood_stdv
+            )
 
         return apply
 
     mu = paz.Prior(tfd.Normal(prior_mean, prior_stdv), name="mu")
     x = paz.Observable(
-        Likelihood(likelihood_stdv, observations), observations, name="x"
+        Likelihood(likelihood_stdv, num_observations), name="x"
     )(mu)
     return paz.PGM([mu], [x], "normal_normal")
 
 
-def run_mcmc(model, key, num_samples, num_chains, sigma):
+def run_mcmc(model, key, data, num_samples, num_chains, sigma, warmup):
     """Run MCMC sampling."""
-    log_density_fn = lambda params: model.apply(params).log_prob_sum
-
-    key, init_key = jax.random.split(key)
-    positions = model.sample_inverse(init_key, num_chains)
-
-    samples, infos = paz.metropolis_hastings.sample(
-        key, log_density_fn, positions, sigma, num_samples, num_chains
+    tune_key, infer_key = jax.random.split(key)
+    model.tune(
+        tune_key,
+        data,
+        num_chains=num_chains,
+        sigma=sigma,
+        warmup=warmup,
+        num_samples=num_samples,
     )
-    return samples, infos
+    return model.infer(infer_key, data, num_samples=num_samples)
 
 
-def compute_mcmc_statistics(samples, burn_in):
-    """Compute mean and std from MCMC samples after burn-in."""
-    posterior_samples = samples.position.mu[burn_in:].flatten()
+def compute_mcmc_statistics(samples):
+    """Compute mean and std from MCMC samples."""
+    posterior_samples = samples.position.mu.flatten()
     return posterior_samples.mean(), posterior_samples.std()
 
 
@@ -95,16 +98,15 @@ def verify_posterior(analytical, mcmc_mean, mcmc_stdv, tolerance_mean=0.05, tole
     return mean_ok, stdv_ok, mean_error, stdv_error
 
 
-def plot_results(samples, burn_in, analytical, prior_mean, prior_stdv):
+def plot_results(samples, analytical, prior_mean, prior_stdv, density=None):
     """Plot MCMC samples against analytical posterior."""
-    posterior_samples = samples.position.mu[burn_in:].flatten()
+    posterior_samples = samples.position.mu.flatten()
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 
     # Trace plot
     axes[0].plot(samples.position.mu[:, 0], alpha=0.7, linewidth=0.5)
     axes[0].axhline(analytical.mean, color="red", linestyle="--", label="Analytical mean")
-    axes[0].axvline(burn_in, color="gray", linestyle=":", label="Burn-in")
     axes[0].set_xlabel("Iteration")
     axes[0].set_ylabel("μ")
     axes[0].set_title("Trace plot (chain 0)")
@@ -118,10 +120,15 @@ def plot_results(samples, burn_in, analytical, prior_mean, prior_stdv):
     )
     analytical_pdf = tfd.Normal(analytical.mean, analytical.stdv).prob(x_range)
     prior_pdf = tfd.Normal(prior_mean, prior_stdv).prob(x_range)
+    density_pdf = None
+    if density is not None:
+        density_pdf = density.prob({"mu": x_range})
 
     axes[1].hist(posterior_samples, bins=50, density=True, alpha=0.7, label="MCMC samples")
     axes[1].plot(x_range, analytical_pdf, "r-", linewidth=2, label="Analytical posterior")
     axes[1].plot(x_range, prior_pdf, "g--", linewidth=2, label="Prior")
+    if density_pdf is not None:
+        axes[1].plot(x_range, density_pdf, "k:", linewidth=2, label="Gaussian fit")
     axes[1].set_xlabel("μ")
     axes[1].set_ylabel("Density")
     axes[1].set_title("Posterior distribution")
@@ -176,21 +183,28 @@ def main():
     print(f"  μ | X ~ Normal({analytical.mean:.4f}, {analytical.stdv:.4f})")
 
     # Build model and run MCMC
-    model = build_normal_normal_model(prior_mean, prior_stdv, likelihood_stdv, observations)
+    model = build_normal_normal_model(
+        prior_mean, prior_stdv, likelihood_stdv, n_observations
+    )
+    data = {"x": observations}
 
     num_samples = 5000
     num_chains = 4
     sigma = 0.2
-    burn_in = 1000
+    warmup = 1000
 
     print(f"\nRunning MCMC...")
-    print(f"  Samples: {num_samples}, Chains: {num_chains}, Burn-in: {burn_in}")
+    print(f"  Samples: {num_samples}, Chains: {num_chains}, Warmup: {warmup}")
 
-    samples, infos = run_mcmc(model, key, num_samples, num_chains, sigma)
+    posterior = run_mcmc(
+        model, key, data, num_samples, num_chains, sigma, warmup
+    )
+    samples, infos = posterior.samples, posterior.infos
+    density = posterior.as_density(method="gaussian")
 
     # Compute MCMC statistics
-    mcmc_mean, mcmc_stdv = compute_mcmc_statistics(samples, burn_in)
-    acceptance_rate = infos.acceptance_rate[burn_in:].mean()
+    mcmc_mean, mcmc_stdv = compute_mcmc_statistics(samples)
+    acceptance_rate = infos.acceptance_rate.mean()
 
     print(f"\nMCMC Results:")
     print(f"  Acceptance rate: {acceptance_rate:.3f}")
@@ -212,7 +226,7 @@ def main():
         print("\n✗ MCMC did not converge - try more samples or tuning")
 
     # Plot results
-    fig = plot_results(samples, burn_in, analytical, prior_mean, prior_stdv)
+    fig = plot_results(samples, analytical, prior_mean, prior_stdv, density)
     plt.show()
 
     return analytical, mcmc_mean, mcmc_stdv

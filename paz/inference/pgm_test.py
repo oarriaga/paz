@@ -51,8 +51,14 @@ def build_three_priors_one_observable_model():
     low, high = 0.001, 0.3
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
     stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
-    y = Observable(Likelihood(X), observations, name="y_pred")(mean, bias, stdv)
-    return PGM([mean, bias, stdv], [y], "linear_regression"), bijector, (low, high)
+    y = Observable(Likelihood(X), name="y_pred")(mean, bias, stdv)
+    data = {"y_pred": observations}
+    return (
+        PGM([mean, bias, stdv], [y], "linear_regression"),
+        data,
+        bijector,
+        (low, high),
+    )
 
 
 def build_hierarchical_model():
@@ -78,8 +84,9 @@ def build_hierarchical_model():
     def y_distribution(x):
         return tfd.Normal(x, 0.1)
 
-    y = Observable(y_distribution, observation, name="y")(x)
-    return PGM([mu, sigma], [y], "hierarchical"), bijector, (low, high)
+    y = Observable(y_distribution, name="y")(x)
+    data = {"y": observation}
+    return PGM([mu, sigma], [y], "hierarchical"), data, bijector, (low, high)
 
 
 def build_two_observables_model():
@@ -104,9 +111,15 @@ def build_two_observables_model():
     def likelihood2(mean, stdv):
         return tfd.Normal(mean + 1, stdv)
 
-    y1 = Observable(likelihood1, obs1, name="y1")(mean, stdv)
-    y2 = Observable(likelihood2, obs2, name="y2")(mean, stdv)
-    return PGM([mean, stdv], [y1, y2], "two_observables"), bijector, (low, high)
+    y1 = Observable(likelihood1, name="y1")(mean, stdv)
+    y2 = Observable(likelihood2, name="y2")(mean, stdv)
+    data = {"y1": obs1, "y2": obs2}
+    return (
+        PGM([mean, stdv], [y1, y2], "two_observables"),
+        data,
+        bijector,
+        (low, high),
+    )
 
 
 def build_vector_latent_model(num_groups):
@@ -127,8 +140,9 @@ def build_vector_latent_model(num_groups):
     def y_distribution(x):
         return tfd.Normal(x, 1.0)
 
-    y = Observable(y_distribution, observation, name="y")(x)
-    return PGM([mu, sigma], [y], "vector_latent")
+    y = Observable(y_distribution, name="y")(x)
+    data = {"y": observation}
+    return PGM([mu, sigma], [y], "vector_latent"), data
 
 
 def build_multi_parent_observable_model():
@@ -150,8 +164,9 @@ def build_multi_parent_observable_model():
     def y_distribution(x, z):
         return tfd.Normal(x + z, 1.0)
 
-    y = Observable(y_distribution, observation, name="y")(x, z)
-    return PGM([mu1, mu2], [y], "multi_parent")
+    y = Observable(y_distribution, name="y")(x, z)
+    data = {"y": observation}
+    return PGM([mu1, mu2], [y], "multi_parent"), data
 
 
 # =============================================================================
@@ -175,7 +190,7 @@ def test_sample_inverse_single_prior_multiple_samples_shape():
 
 
 def test_sample_inverse_three_priors_single_sample_shape():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     samples = model.sample_inverse(key, num_samples=1)
     assert samples.mean.shape == (), f"Expected scalar, got {samples.mean.shape}"
@@ -184,7 +199,7 @@ def test_sample_inverse_three_priors_single_sample_shape():
 
 
 def test_sample_inverse_three_priors_multiple_samples_shape():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     for n in [2, 4, 10]:
         samples = model.sample_inverse(key, num_samples=n)
@@ -194,7 +209,7 @@ def test_sample_inverse_three_priors_multiple_samples_shape():
 
 
 def test_sample_inverse_hierarchical_model_shape():
-    model, _, _ = build_hierarchical_model()
+    model, _, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(0)
     for n in [1, 4]:
         samples = model.sample_inverse(key, num_samples=n)
@@ -210,7 +225,7 @@ def test_sample_inverse_hierarchical_model_shape():
 
 
 def test_sample_inverse_excludes_observables():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     samples = model.sample_inverse(key)
     assert hasattr(samples, "mean")
@@ -220,7 +235,7 @@ def test_sample_inverse_excludes_observables():
 
 
 def test_sample_inverse_hierarchical_includes_latent():
-    model, _, _ = build_hierarchical_model()
+    model, _, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(0)
     samples = model.sample_inverse(key)
     assert hasattr(samples, "mu")
@@ -243,7 +258,7 @@ def test_sample_inverse_returns_unconstrained_values():
 
 
 def test_sample_inverse_stdv_unconstrained():
-    model, bijector, (low, high) = build_three_priors_one_observable_model()
+    model, _, bijector, (low, high) = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(42)
     samples = model.sample_inverse(key, num_samples=1000)
     assert samples.stdv.min() < low, "Unconstrained stdv should go below low bound"
@@ -265,7 +280,7 @@ def test_sample_forward_single_prior_shape():
 
 
 def test_sample_forward_three_priors_includes_observable():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     samples = model.sample(key)
     assert hasattr(samples, "mean")
@@ -283,7 +298,7 @@ def test_sample_forward_returns_constrained_values():
 
 
 def test_sample_forward_stdv_constrained():
-    model, bijector, (low, high) = build_three_priors_one_observable_model()
+    model, _, bijector, (low, high) = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(42)
     samples = model.sample(key, num_samples=1000)
     assert samples.stdv.min() >= low, f"Constrained stdv should be >= {low}"
@@ -306,10 +321,10 @@ def test_apply_returns_node_state():
 
 
 def test_apply_log_prob_is_dict():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params)
+    state = model.apply(params, data)
     assert isinstance(state.log_prob, dict)
     assert "mean" in state.log_prob
     assert "bias" in state.log_prob
@@ -318,13 +333,36 @@ def test_apply_log_prob_is_dict():
 
 
 def test_apply_log_prob_sum_equals_sum_of_log_probs():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params)
+    state = model.apply(params, data)
     expected_sum = sum(state.log_prob.values())
     assert jp.isclose(state.log_prob_sum, expected_sum), \
         f"log_prob_sum {state.log_prob_sum} != sum {expected_sum}"
+
+
+# =============================================================================
+# Tests: apply data mapping
+# =============================================================================
+
+
+def test_apply_accepts_data_list_in_output_order():
+    model, data, _, _ = build_two_observables_model()
+    key = jax.random.PRNGKey(0)
+    params = model.sample_inverse(key)
+    data_list = [data["y1"], data["y2"]]
+    state = model.apply(params, data_list)
+    assert "y1" in state.log_prob
+    assert "y2" in state.log_prob
+
+
+def test_apply_missing_observation_raises():
+    model, _, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    params = model.sample_inverse(key)
+    with pytest.raises(ValueError):
+        model.apply(params, {})
 
 
 # =============================================================================
@@ -344,12 +382,12 @@ def test_apply_returns_constrained_sample():
 
 
 def test_apply_returns_constrained_stdv():
-    model, bijector, (low, high) = build_three_priors_one_observable_model()
+    model, data, bijector, (low, high) = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = model.apply(params, data)
         assert low <= state.sample.stdv <= high, \
             f"apply stdv {state.sample.stdv} not in [{low}, {high}]"
 
@@ -371,45 +409,45 @@ def test_apply_no_nan_single_prior_with_bijector():
 
 
 def test_apply_no_nan_three_priors():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = model.apply(params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
 def test_apply_no_nan_hierarchical():
-    model, _, _ = build_hierarchical_model()
+    model, data, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = model.apply(params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
 def test_apply_no_nan_two_observables():
-    model, _, _ = build_two_observables_model()
+    model, data, _, _ = build_two_observables_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = model.apply(params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
 def test_apply_no_nan_multi_parent_observable():
-    model = build_multi_parent_observable_model()
+    model, data = build_multi_parent_observable_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = model.apply(params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}"
 
@@ -430,20 +468,20 @@ def test_vmap_apply_single_prior():
 
 
 def test_vmap_apply_three_priors():
-    model, _, _ = build_three_priors_one_observable_model()
+    model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     positions = model.sample_inverse(key, num_samples=4)
-    log_density_fn = lambda params: model.apply(params).log_prob_sum
+    log_density_fn = lambda params: model.apply(params, data).log_prob_sum
     log_densities = jax.vmap(log_density_fn)(positions)
     assert log_densities.shape == (4,)
     assert jp.all(jp.isfinite(log_densities)), f"NaN in log_densities: {log_densities}"
 
 
 def test_vmap_apply_hierarchical():
-    model, _, _ = build_hierarchical_model()
+    model, data, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(0)
     positions = model.sample_inverse(key, num_samples=4)
-    log_density_fn = lambda params: model.apply(params).log_prob_sum
+    log_density_fn = lambda params: model.apply(params, data).log_prob_sum
     log_densities = jax.vmap(log_density_fn)(positions)
     assert log_densities.shape == (4,)
     assert jp.all(jp.isfinite(log_densities)), f"NaN in log_densities: {log_densities}"
@@ -496,7 +534,8 @@ def test_observable_receives_constrained_stdv():
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
     stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
-    y = Observable(Likelihood(X), observations, name="y")(stdv)
+    y = Observable(Likelihood(X), name="y")(stdv)
+    data = {"y": observations}
     model = PGM([stdv], [y], "test")
 
     key = jax.random.PRNGKey(42)
@@ -504,7 +543,7 @@ def test_observable_receives_constrained_stdv():
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
         if params.stdv < 0:
-            state = model.apply(params)
+            state = model.apply(params, data)
             assert jp.isfinite(state.log_prob_sum), \
                 f"NaN when unconstrained stdv={params.stdv} (should be transformed)"
 
@@ -522,14 +561,17 @@ def test_observable_scale_is_positive():
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
     stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
-    y = Observable(Likelihood(X), observations, name="y")(stdv)
+    y = Observable(Likelihood(X), name="y")(stdv)
+    data = {"y": observations}
     model = PGM([stdv], [y], "test")
 
     key = jax.random.PRNGKey(42)
     params = model.sample_inverse(key)
-    state = model.apply(params)
-    distribution = state.sample.y
-    assert distribution.scale > 0, f"Observable scale should be positive, got {distribution.scale}"
+    state = model.apply(params, data)
+    distribution = Likelihood(X)(state.sample.stdv)
+    assert jp.all(distribution.scale > 0), (
+        f"Observable scale should be positive, got {distribution.scale}"
+    )
 
 
 # =============================================================================
@@ -542,7 +584,7 @@ def test_sample_inverse_batch_not_overwritten():
     Regression test: sample_inverse with num_samples > 1 should return
     arrays with shape (num_samples,), not scalars.
     """
-    model, _, _ = build_three_priors_one_observable_model()
+    model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
 
     for n in [2, 4, 8]:
@@ -560,7 +602,7 @@ def test_sample_inverse_hierarchical_batch_preserved():
     Regression test for hierarchical model: latent variable x should also
     have correct batch dimension.
     """
-    model, _, _ = build_hierarchical_model()
+    model, _, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(0)
 
     for n in [2, 4, 8]:
@@ -571,7 +613,7 @@ def test_sample_inverse_hierarchical_batch_preserved():
 
 
 def test_sample_inverse_multi_parent_batch_preserved():
-    model = build_multi_parent_observable_model()
+    model, _ = build_multi_parent_observable_model()
     key = jax.random.PRNGKey(0)
     for n in [2, 4, 8]:
         samples = model.sample_inverse(key, num_samples=n)
@@ -582,7 +624,7 @@ def test_sample_inverse_multi_parent_batch_preserved():
 
 
 def test_sample_inverse_vector_latent_batch_preserved():
-    model = build_vector_latent_model(num_groups=5)
+    model, _ = build_vector_latent_model(num_groups=5)
     key = jax.random.PRNGKey(0)
     for n in [2, 4, 8]:
         samples = model.sample_inverse(key, num_samples=n)
@@ -594,7 +636,7 @@ def test_sample_inverse_vector_latent_batch_preserved():
 
 
 def test_sample_inverse_vector_latent_single_sample_shape():
-    model = build_vector_latent_model(num_groups=3)
+    model, _ = build_vector_latent_model(num_groups=3)
     key = jax.random.PRNGKey(0)
     samples = model.sample_inverse(key, num_samples=1)
     assert samples.mu.shape == (), f"mu shape {samples.mu.shape} != ()"
@@ -630,7 +672,7 @@ def test_same_key_same_samples():
 
 
 def test_two_observables_sample_forward_shape():
-    model, _, _ = build_two_observables_model()
+    model, _, _, _ = build_two_observables_model()
     key = jax.random.PRNGKey(0)
     samples = model.sample(key)
     assert hasattr(samples, "mean")
@@ -640,10 +682,10 @@ def test_two_observables_sample_forward_shape():
 
 
 def test_two_observables_apply_log_prob():
-    model, _, _ = build_two_observables_model()
+    model, data, _, _ = build_two_observables_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params)
+    state = model.apply(params, data)
     assert "y1" in state.log_prob
     assert "y2" in state.log_prob
     assert jp.isfinite(state.log_prob["y1"])
@@ -673,12 +715,12 @@ def test_extreme_unconstrained_values():
 
 def test_apply_with_manual_params():
     """Test apply with manually constructed parameters."""
-    model, _, _ = build_three_priors_one_observable_model()
+    model, data, _, _ = build_three_priors_one_observable_model()
     from collections import namedtuple
     Sample = namedtuple("Sample", ["mean", "bias", "stdv"])
 
     params = Sample(mean=jp.array(0.5), bias=jp.array(0.1), stdv=jp.array(0.0))
-    state = model.apply(params)
+    state = model.apply(params, data)
     assert jp.isfinite(state.log_prob_sum)
     assert state.sample.stdv > 0, "stdv should be transformed to positive"
 

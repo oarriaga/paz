@@ -25,6 +25,7 @@ RunResult = namedtuple(
         "bias_means",
         "posterior_configs",
         "switch_table",
+        "density_sample",
         "acceptance_rate",
         "mcmc_seconds",
         "posterior_seconds",
@@ -72,10 +73,9 @@ def main():
 
     print("Building model...")
     start_time = time.perf_counter()
-    model = build_switch_model(
-        x, observations, sigma, switch_table, num_switches
-    )
+    model = build_switch_model(x, sigma, switch_table, num_switches)
     model_marg = paz.marginalize(model, ["switch_index"])
+    data = {"y": observations}
     print(f"model build: {time.perf_counter() - start_time:.3f}s")
 
     result = run_inference(
@@ -83,6 +83,7 @@ def main():
         key,
         num_switches,
         switch_table,
+        data,
         num_samples,
         num_chains,
         burn_in,
@@ -107,6 +108,16 @@ def main():
     )
     print(f"posterior mean build: {time.perf_counter() - start_time:.3f}s")
 
+    print("Computing gaussian approximation line...")
+    start_time = time.perf_counter()
+    density_slopes, density_biases = extract_segment_values(
+        result.density_sample, num_switches
+    )
+    density_mean = compute_piecewise_mean(
+        x, density_slopes, density_biases, map_switch_indices
+    )
+    print(f"gaussian mean build: {time.perf_counter() - start_time:.3f}s")
+
     print("=" * 60)
     print("Multi change-point regression")
     print("=" * 60)
@@ -124,6 +135,7 @@ def main():
         x,
         observations,
         posterior_mean,
+        density_mean,
         true_mean,
         switch_positions,
         map_switch_indices,
@@ -139,6 +151,7 @@ def run_inference(
     key,
     num_switches,
     switch_table,
+    data,
     num_samples,
     num_chains,
     burn_in,
@@ -146,16 +159,17 @@ def run_inference(
 ):
     print("Running MCMC...")
     start_time = time.perf_counter()
-    samples, infos = run_mcmc(
-        model_marg, key, num_samples, num_chains, step_sigma
+    posterior = run_mcmc(
+        model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
     )
+    samples, infos = posterior.samples, posterior.infos
     mcmc_seconds = time.perf_counter() - start_time
     print(f"mcmc: {mcmc_seconds:.3f}s")
 
     print("Extracting segment samples...")
     start_time = time.perf_counter()
     slope_samples, bias_samples = extract_segment_samples(
-        samples.position, num_switches, burn_in
+        samples.position, num_switches
     )
     slope_means = jp.array([samples.mean() for samples in slope_samples])
     bias_means = jp.array([samples.mean() for samples in bias_samples])
@@ -171,18 +185,22 @@ def run_inference(
     print("Recovering switch posterior...")
     start_time = time.perf_counter()
     posterior_configs = paz.recover_discrete_posterior(
-        model_marg, "switch_index", theta_samples
+        model_marg, "switch_index", theta_samples, data
     ).posterior.mean(axis=0)
     posterior_seconds = time.perf_counter() - start_time
     print(f"switch posterior: {posterior_seconds:.3f}s")
 
-    acceptance_rate = infos.acceptance_rate[burn_in:].mean()
+    acceptance_rate = infos.acceptance_rate.mean()
+    density = posterior.as_density(method="gaussian")
+    key, density_key = jax.random.split(key)
+    density_sample = density.sample(density_key, num_samples=1)
 
     return RunResult(
         slope_means,
         bias_means,
         posterior_configs,
         switch_table,
+        density_sample,
         acceptance_rate,
         mcmc_seconds,
         posterior_seconds,
@@ -193,6 +211,7 @@ def plot_results(
     x,
     observations,
     posterior_mean,
+    density_mean,
     true_mean,
     switch_positions,
     map_switch_indices,
@@ -204,6 +223,9 @@ def plot_results(
 
     axes[0].scatter(x, observations, color="tab:gray", alpha=0.8, label="data")
     axes[0].plot(x, posterior_mean, color="black", label="posterior mean")
+    axes[0].plot(
+        x, density_mean, color="tab:purple", linestyle="--", label="gaussian approx"
+    )
     axes[0].plot(
         x, true_mean, color="tab:green", linestyle="--", label="true mean"
     )
@@ -236,16 +258,22 @@ def plot_results(
     plt.tight_layout()
 
 
-def run_mcmc(model_marg, key, num_samples, num_chains, step_sigma):
-    log_density_fn = lambda params: model_marg.apply(params).log_prob_sum
-    key, init_key = jax.random.split(key)
-    positions = model_marg.sample_inverse(init_key, num_chains)
-    return paz.metropolis_hastings.sample(
-        key, log_density_fn, positions, step_sigma, num_samples, num_chains
+def run_mcmc(
+    model_marg, key, data, num_samples, num_chains, step_sigma, warmup
+):
+    tune_key, infer_key = jax.random.split(key)
+    model_marg.tune(
+        tune_key,
+        data,
+        num_chains=num_chains,
+        sigma=step_sigma,
+        warmup=warmup,
+        num_samples=num_samples,
     )
+    return model_marg.infer(infer_key, data, num_samples=num_samples)
 
 
-def build_switch_model(x, observations, sigma, switch_table, num_switches):
+def build_switch_model(x, sigma, switch_table, num_switches):
     num_segments = num_switches + 1
     slope_priors = []
     bias_priors = []
@@ -278,7 +306,7 @@ def build_switch_model(x, observations, sigma, switch_table, num_switches):
         mean = compute_piecewise_mean(x, slopes, biases, switch_indices)
         return tfd.Normal(mean, sigma)
 
-    y_obs = paz.Observable(y_distribution, observations, name="y")(
+    y_obs = paz.Observable(y_distribution, name="y")(
         switch_index, *slope_priors, *bias_priors
     )
 
@@ -322,18 +350,28 @@ def compute_segment_ids(num_observations, switch_indices):
     return (switch_indices[:, None] < indices[None, :]).sum(axis=0)
 
 
-def extract_segment_samples(position, num_switches, burn_in):
+def extract_segment_samples(position, num_switches):
     num_segments = num_switches + 1
     slope_samples = []
     bias_samples = []
     for segment_index in range(num_segments):
         slope_name = f"slope_segment_{segment_index}"
         bias_name = f"bias_segment_{segment_index}"
-        slope_samples.append(
-            getattr(position, slope_name)[burn_in:].reshape(-1)
-        )
-        bias_samples.append(getattr(position, bias_name)[burn_in:].reshape(-1))
+        slope_samples.append(getattr(position, slope_name).reshape(-1))
+        bias_samples.append(getattr(position, bias_name).reshape(-1))
     return slope_samples, bias_samples
+
+
+def extract_segment_values(sample, num_switches):
+    num_segments = num_switches + 1
+    slopes = []
+    biases = []
+    for segment_index in range(num_segments):
+        slope_name = f"slope_segment_{segment_index}"
+        bias_name = f"bias_segment_{segment_index}"
+        slopes.append(getattr(sample, slope_name))
+        biases.append(getattr(sample, bias_name))
+    return jp.stack(slopes), jp.stack(biases)
 
 
 def build_theta_samples(slope_samples, bias_samples, num_switches):
