@@ -25,6 +25,7 @@ from paz.inference.types import (
     Variable,
 )
 from paz.inference.pgm_ops import (
+    build_compile,
     build_data_mapping,
     build_infer,
     build_prior_prob,
@@ -302,10 +303,7 @@ def marginalize(pgm, names):
     )
     likelihood_density = Likelihood(likelihood_log_prob, latent_space, None)
     inference_defaults = {}
-    tune = build_tune(prior_density, likelihood_density, inference_defaults)
-    infer = build_infer(prior_density, likelihood_density, inference_defaults)
-
-    return Variable(
+    pgm_marg = Variable(
         apply,
         sample,
         sample_inverse,
@@ -315,9 +313,19 @@ def marginalize(pgm, names):
         None,
         prior_density,
         likelihood_density,
-        tune,
-        infer,
+        None,
+        None,
+        None,
         inference_defaults,
+    )
+    compile = build_compile(inference_defaults, lambda: pgm_marg)
+    tune = build_tune(compile)
+    infer = build_infer(prior_density, likelihood_density, inference_defaults)
+
+    return pgm_marg._replace(
+        compile=compile,
+        tune=tune,
+        infer=infer,
     )
 
 

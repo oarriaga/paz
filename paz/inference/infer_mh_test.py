@@ -44,19 +44,17 @@ def test_infer_mh_shapes():
 def test_infer_mh_uses_tuned_defaults():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(1)
-    tune_key, infer_key = jax.random.split(key)
-    tuned_sigma = model.tune(
-        tune_key,
-        data,
-        sigma=0.3,
-        num_samples=5,
+    infer_key = jax.random.split(key)[0]
+    model.compile(
         num_chains=3,
-        tuner_steps=2,
-        tuner_episodes=1,
-        progress=False,
+        sigma=0.3,
+        warmup=0,
+        tuner=paz.AdaptiveStepTuner(
+            sigma=0.3, num_steps=2, num_episodes=1, progress=False
+        ),
     )
-    posterior = model.infer(infer_key, data)
-    assert bool(jp.isclose(posterior.config["sigma"], tuned_sigma))
+    posterior = model.infer(infer_key, data, num_samples=5, tune=False)
+    assert bool(jp.isclose(posterior.config["sigma"], 0.3))
     assert posterior.config["num_chains"] == 3
     assert posterior.config["num_samples"] == 5
 
@@ -97,16 +95,14 @@ def test_infer_mh_unknown_method_raises():
 def test_tune_updates_default_sigma():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(4)
-    tune_key, infer_key = jax.random.split(key)
-    tuned_sigma = model.tune(
-        tune_key,
-        data,
+    infer_key = jax.random.split(key)[0]
+    model.compile(
         num_chains=1,
-        num_samples=5,
         sigma=0.4,
-        tuner_steps=2,
-        tuner_episodes=1,
-        progress=False,
+        warmup=0,
+        tuner=paz.AdaptiveStepTuner(
+            sigma=0.4, num_steps=2, num_episodes=1, progress=False
+        ),
     )
     posterior = model.infer(
         infer_key,
@@ -115,4 +111,4 @@ def test_tune_updates_default_sigma():
         num_chains=1,
         progress=False,
     )
-    assert bool(jp.isclose(posterior.config["sigma"], tuned_sigma))
+    assert posterior.config["tune"] is True

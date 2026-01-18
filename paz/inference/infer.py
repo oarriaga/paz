@@ -4,11 +4,12 @@ import jax.numpy as jp
 from paz.inference.metropolis_hastings import sample as mh_sample
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
-from paz.inference.tuner import Tuner
+from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.utils import validate_space
 
 
 def infer(key, data, prior, likelihood, method, **kwargs):
+    # pgm.infer resolves defaults then overrides; warmup/tune happen here.
     if method is None:
         raise ValueError("method is required")
     method = method.lower()
@@ -24,14 +25,16 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
     if num_samples is None:
         raise ValueError("num_samples is required for MH")
     num_chains = kwargs.get("num_chains", 1)
-    sigma = kwargs.get("sigma", 0.1)
+    sigma = kwargs.get("sigma", None)
     warmup = kwargs.get("warmup", None)
     init = kwargs.get("init", None)
     space = kwargs.get("space", "inv")
     tuner = kwargs.get("tuner", None)
+    tune = kwargs.get("tune", None)
     progress = kwargs.get("progress", True)
     validate_space(space)
 
+    # Split once for init/tune/sample to avoid key reuse.
     key_init, key_tune, key_sample = jax.random.split(key, 3)
     positions = _get_initial_positions(key_init, prior, init, num_chains, space)
 
@@ -41,7 +44,10 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         return log_prior + log_likelihood
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
-    if tuner is not None:
+    if sigma is None:
+        sigma = tuner.sigma if isinstance(tuner, AdaptiveStepTuner) else 0.1
+    run_tuner = _should_tune(tune, tuner)
+    if run_tuner:
         sigma = _run_tuner(
             tuner,
             key_tune,
@@ -49,9 +55,6 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
             positions,
             num_chains,
             sigma,
-            num_warmup,
-            progress,
-            kwargs,
         )
 
     total_samples = num_samples + num_warmup
@@ -75,6 +78,7 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         "sigma": sigma,
         "warmup": num_warmup,
         "tuner": tuner,
+        "tune": run_tuner,
         "space": space,
         "progress": progress,
     }
@@ -87,11 +91,11 @@ def _resolve_num_warmup(num_samples, warmup):
     if isinstance(warmup, float):
         if warmup < 0 or warmup > 1:
             raise ValueError("warmup fraction must be in [0, 1]")
-        return int(num_samples * warmup)
+        return min(int(num_samples * warmup), num_samples)
     if isinstance(warmup, int):
         if warmup < 0:
             raise ValueError("warmup must be non-negative")
-        return warmup
+        return min(warmup, num_samples)
     raise TypeError("warmup must be float or int")
 
 
@@ -114,28 +118,25 @@ def _get_initial_positions(key, prior, init, num_chains, space):
     return jax.tree.map(ensure, init)
 
 
-def _run_tuner(
-    tuner,
-    key,
-    log_density_fn,
-    positions,
-    num_chains,
-    sigma,
-    num_warmup,
-    progress,
-    kwargs,
-):
-    if tuner != "adaptive_step":
-        raise NotImplementedError(f"Tuner '{tuner}' not implemented.")
-    tuner_steps = kwargs.get("tuner_steps")
-    tuner_episodes = kwargs.get("tuner_episodes")
-    if tuner_episodes is None:
-        tuner_episodes = 5
-    if tuner_steps is None:
-        if num_warmup > 0:
-            tuner_steps = max(1, num_warmup // tuner_episodes)
-        else:
-            tuner_steps = 50
-    tune = Tuner(log_density_fn, positions, num_chains, progress=progress)
-    tuned_sigma, _ = tune(key, tuner_steps, tuner_episodes, sigma)
+def _should_tune(tune, tuner):
+    if tune is None:
+        return tuner is not None
+    if tune and tuner is None:
+        raise ValueError("tune=True requires a tuner configuration.")
+    return tune
+
+
+def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
+    if not isinstance(tuner, AdaptiveStepTuner):
+        raise NotImplementedError("Only AdaptiveStepTuner is supported.")
+    tune = Tuner(
+        log_density_fn,
+        positions,
+        num_chains,
+        compute_rate=tuner.compute_rate,
+        progress=tuner.progress,
+    )
+    tuned_sigma, _ = tune(
+        key, tuner.num_steps, tuner.num_episodes, sigma
+    )
     return tuned_sigma
