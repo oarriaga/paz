@@ -235,19 +235,18 @@ def main():
     setup_plot_style()
 
     key = jax.random.PRNGKey(0)
-    key, tune_key, tuned_key, initial_key, tuned_density_key, initial_density_key = (
-        jax.random.split(key, 6)
+    key, tuned_key, initial_key, tuned_density_key, initial_density_key = (
+        jax.random.split(key, 5)
     )
-    model.tune(
-        tune_key,
-        data,
+    model.compile(
         num_chains=num_chains,
         sigma=sigma_initial,
         warmup=burn_in,
-        num_samples=num_samples,
-        tuner="adaptive_step",
-        tuner_steps=num_tune_steps,
-        tuner_episodes=num_episodes,
+        tuner=paz.AdaptiveStepTuner(
+            sigma=sigma_initial,
+            num_steps=num_tune_steps,
+            num_episodes=num_episodes,
+        ),
     )
 
     tuned_result = compute_posterior(model, tuned_key, data, num_samples)

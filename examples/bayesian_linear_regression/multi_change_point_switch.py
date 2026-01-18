@@ -261,16 +261,13 @@ def plot_results(
 def run_mcmc(
     model_marg, key, data, num_samples, num_chains, step_sigma, warmup
 ):
-    tune_key, infer_key = jax.random.split(key)
-    model_marg.tune(
-        tune_key,
-        data,
+    model_marg.compile(
         num_chains=num_chains,
-        sigma=step_sigma,
         warmup=warmup,
-        num_samples=num_samples,
+        sigma=step_sigma,
+        tuner=paz.AdaptiveStepTuner(sigma=step_sigma),
     )
-    return model_marg.infer(infer_key, data, num_samples=num_samples)
+    return model_marg.infer(key, data, num_samples=num_samples)
 
 
 def build_switch_model(x, sigma, switch_table, num_switches):

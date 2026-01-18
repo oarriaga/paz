@@ -253,14 +253,12 @@ def main():
     burn_in = 300
     sigma = 0.2
 
-    key, tune_key, infer_key = jax.random.split(key, 3)
-    model_marg.tune(
-        tune_key,
-        data,
+    key, infer_key = jax.random.split(key, 2)
+    model_marg.compile(
         num_chains=num_chains,
-        sigma=sigma,
         warmup=burn_in,
-        num_samples=num_samples,
+        sigma=sigma,
+        tuner=paz.AdaptiveStepTuner(sigma=sigma),
     )
     posterior = model_marg.infer(infer_key, data, num_samples=num_samples)
     p_samples = posterior.samples.position.p.reshape(-1)

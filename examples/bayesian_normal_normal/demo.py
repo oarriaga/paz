@@ -69,16 +69,13 @@ def build_normal_normal_model(
 
 def run_mcmc(model, key, data, num_samples, num_chains, sigma, warmup):
     """Run MCMC sampling."""
-    tune_key, infer_key = jax.random.split(key)
-    model.tune(
-        tune_key,
-        data,
+    model.compile(
         num_chains=num_chains,
-        sigma=sigma,
         warmup=warmup,
-        num_samples=num_samples,
+        sigma=sigma,
+        tuner=paz.AdaptiveStepTuner(sigma=sigma),
     )
-    return model.infer(infer_key, data, num_samples=num_samples)
+    return model.infer(key, data, num_samples=num_samples)
 
 
 def compute_mcmc_statistics(samples):

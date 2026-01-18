@@ -10,7 +10,7 @@ tfb = tfp.bijectors
 
 def Likelihood(X):
     def apply(mean, bias, stdv):
-        return tfd.Normal(jax.vmap(lambda x: mean * x + bias)(X), stdv)
+        return tfd.Normal(mean * X + bias, stdv)
 
     return apply
 
@@ -24,13 +24,13 @@ low, high = 0.001, 0.3
 bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
 stdv = paz.Prior(tfd.Uniform(low, high), name="stdv", bijector=bijector)
 y = paz.Observable(Likelihood(X), name="y_pred")(mean, bias, stdv)
-line = paz.PGM([mean, bias, stdv], [y], "line")
+model = paz.PGM([mean, bias, stdv], [y], "line")
 
 keys = jax.random.split(jax.random.PRNGKey(888), 4)
-samples = line.sample(keys[0], num_samples=100)
+samples = model.sample_inverse(keys[0], num_samples=100)
 
-for y_pred in samples.y_pred:
-    plt.plot(X, y_pred, color="blue", alpha=0.2)
+for mean, bias in zip(samples.mean, samples.bias):
+    plt.plot(X, mean * X + bias, color="blue", alpha=0.2)
 plt.plot(X, data, color="red", alpha=0.8)
 plt.show()
 
@@ -39,8 +39,9 @@ num_samples = 10_000
 burn_in = 0.1
 sigma = 0.01
 
-line.tune(keys[1], data, num_chains, sigma=sigma, num_samples=num_samples)
-posterior = line.infer(keys[2], data, num_samples=num_samples, warmup=burn_in)
+tuner = paz.AdaptiveStepTuner(sigma)
+model.compile(num_chains=num_chains, warmup=burn_in, tuner=tuner)
+posterior = model.infer(keys[1], data, num_samples=num_samples)
 samples = posterior.samples
 posterior_forward = posterior.samples_forward
 

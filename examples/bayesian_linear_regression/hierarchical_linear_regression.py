@@ -243,6 +243,7 @@ def main():
     X, y, group_idx, true_slopes, true_intercepts = generate_hierarchical_data(
         data_key, num_groups, num_per_group, true_params
     )
+    print("X.shape", X.shape)
     data = {"y_obs": y}
 
     print(f"Parameterization: {PARAMETERIZATION.upper()}")
@@ -337,17 +338,14 @@ def main():
     burn_in = 0.20
 
     print(f"\nRunning MCMC with {num_samples} samples, {num_chains} chains...")
-    key, tune_key, mcmc_key = jax.random.split(key, 3)
-    model.tune(
-        tune_key,
-        data,
+    key, mcmc_key = jax.random.split(key, 2)
+    model.compile(
         num_chains=num_chains,
+        warmup=burn_in,
         sigma=sigma,
-        num_samples=num_samples,
+        tuner=paz.AdaptiveStepTuner(sigma=sigma),
     )
-    posterior = model.infer(
-        mcmc_key, data, num_samples=num_samples, warmup=burn_in
-    )
+    posterior = model.infer(mcmc_key, data, num_samples=num_samples)
     samples, infos = posterior.samples, posterior.infos
     posterior_forward = posterior.samples_forward
 
