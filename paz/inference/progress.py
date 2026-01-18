@@ -19,17 +19,17 @@ def draw_bar(now_arg, total, start_time, description, width):
     else:
         percent_complete = min(max(now_arg / total, 0.0), 1.0)
     filled_width = int(width * percent_complete)
-    bar = "#" * filled_width + "-" * (width - filled_width)
+    bar = "█" * filled_width + "-" * (width - filled_width)
     elapsed_time = time.perf_counter() - start_time
     if now_arg > 0 and elapsed_time > 0:
         iters_per_sec = now_arg / elapsed_time
-        eta = (total - now_arg) / iters_per_sec
+        ETA = (total - now_arg) / iters_per_sec
     else:
-        iters_per_sec, eta = 0.0, float("inf")
+        iters_per_sec, ETA = 0.0, float("inf")
     message = (
         f"\r{description}: |{bar}| {int(now_arg)}/{int(total)} "
         f"({percent_complete:.0%}) "
-        f"[{elapsed_time:.2f}s<{eta:.2f}s, {iters_per_sec:.2f}it/s]"
+        f"[{elapsed_time:.2f}s<{ETA:.2f}s, {iters_per_sec:.2f}it/s]"
     )
     sys.stdout.write(message)
     sys.stdout.flush()
