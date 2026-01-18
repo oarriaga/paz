@@ -18,6 +18,7 @@ Variable = namedtuple(
         "metadata",
         "prior",
         "likelihood",
+        "compile",
         "tune",
         "infer",
         "inference_defaults",
