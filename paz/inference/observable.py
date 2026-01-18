@@ -7,7 +7,9 @@ from paz.inference.types import NodeMetadata, NodeState, SampleType, Variable
 def Observable(distribution_fn, name=None):
     if not callable(distribution_fn):
         raise ValueError(f"Input {distribution_fn} must be a callable")
-    node_name = name if name is not None else build_observation_name(distribution_fn)
+    node_name = (
+        name if name is not None else build_observation_name(distribution_fn)
+    )
     Sample = SampleType([node_name])
     metadata = NodeMetadata(distribution_fn, None)
     edges = []
@@ -16,7 +18,7 @@ def Observable(distribution_fn, name=None):
         distribution = distribution_fn(*args)
         log_prob = distribution.log_prob(observation)
         log_prob_sum = log_prob.sum()
-        return NodeState(Sample(observation), log_prob_sum, log_prob_sum)
+        return NodeState(Sample(observation), log_prob, log_prob_sum)
 
     def sample(key, num_samples, *args):
         distribution = distribution_fn(*args)
@@ -27,8 +29,6 @@ def Observable(distribution_fn, name=None):
     def call(*args):
         for arg in args:
             edges.append(arg)
-        return Variable(
-            apply, sample, None, node_name, edges, None, metadata
-        )
+        return Variable(apply, sample, None, node_name, edges, None, metadata)
 
     return call

@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jp
 
 from paz.inference.naming import build_prior_name
@@ -29,7 +28,7 @@ def Prior(distribution, bijector=None, name=None):
         log_prob = distribution.log_prob(forward_sample)
         log_prob = log_prob + bijector.forward_log_det_jacobian(inverse_sample)
         log_prob_sum = log_prob.sum()
-        return NodeState(Sample(forward_sample), log_prob_sum, log_prob_sum)
+        return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
 
     def sample_inverse(key, num_samples=1):
         forward_sample = distribution.sample(num_samples, seed=key)
