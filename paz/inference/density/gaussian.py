@@ -12,11 +12,7 @@ tfd = tfp.distributions
 
 
 def build_gaussian_density(
-    samples,
-    latent_space,
-    covariance="diag",
-    rank=None,
-    regularization=1e-6,
+    samples, latent_space, covariance="diag", rank=None, regularization=1e-6
 ):
     flat_samples, unravel = _flatten_samples(samples, latent_space)
     mean = jp.mean(flat_samples, axis=0)
