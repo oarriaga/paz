@@ -13,3 +13,4 @@ from paz.inference.metadata import (
 from paz.inference.types import Density, Likelihood
 from paz.inference.infer import infer
 from paz.inference.posterior import MCMCPosterior
+from paz.inference.tuner import AdaptiveStepTuner

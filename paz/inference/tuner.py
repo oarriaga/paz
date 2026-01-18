@@ -16,6 +16,11 @@ from .metropolis_hastings import (
 
 TunerInfo = namedtuple("TunerInfo", ["sigma", "factor", "acceptance_rate"])
 TunerState = namedtuple("TunerState", ["kernel_state", "sigma", "factor"])
+AdaptiveStepTuner = namedtuple(
+    "AdaptiveStepTuner",
+    ["sigma", "num_steps", "num_episodes", "progress", "compute_rate"],
+    defaults=[200, 10, True, None],
+)
 ACCEPTANCE_RATES = jp.array([0.001, 0.05, 0.2, 0.5, 0.75, 0.95])
 VARIANCE_FACTORS = jp.array([0.1, 0.5, 0.9, 1.1, 2, 10])
 
