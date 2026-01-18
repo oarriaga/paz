@@ -2,12 +2,12 @@ import jax
 import jax.numpy as jp
 
 from paz.inference.infer import infer as infer_fn
-from paz.inference.metadata import get_distribution_fn
 from paz.inference.latent_space import (
     as_latent_samples,
     to_forward_samples,
     to_inverse_samples,
 )
+from paz.inference.metadata import get_distribution_fn
 from paz.inference.types import Distribution, NodeState
 from paz.inference.utils import validate_space
 
@@ -86,9 +86,7 @@ def build_prior_log_prob(context):
 
 
 def build_prior_prob(prior_log_prob):
-    return lambda samples, space="inv": jp.exp(
-        prior_log_prob(samples, space=space)
-    )
+    return lambda samples, space="inv": jp.exp(prior_log_prob(samples, space=space))
 
 
 def build_likelihood_log_prob(context, apply):
@@ -135,13 +133,6 @@ def build_compile(inference_defaults, get_self):
         return get_self()
 
     return compile
-
-
-def build_tune(compile_fn):
-    def tune(method="mh", **kwargs):
-        return compile_fn(method=method, **kwargs)
-
-    return tune
 
 
 def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
@@ -204,13 +195,6 @@ def _validate_observations(data_mapping, observable_names):
         )
 
 
-def _sample_priors(prior_nodes, key, num_samples, sample_fn):
-    samples, keys = {}, jax.random.split(key, len(prior_nodes))
-    for key, prior in zip(keys, prior_nodes):
-        samples[prior.name] = sample_fn(prior, key, num_samples)
-    return samples
-
-
 def _sample_with_inputs(node, sample_fn, key, num_samples, node_inputs):
     if num_samples == 1 or len(node_inputs) == 0:
         return sample_fn(node, key, num_samples, *node_inputs)
@@ -232,9 +216,9 @@ def _sample_nodes(
     node_sample_fn,
 ):
     key_prior, key_node = jax.random.split(key)
-    samples = _sample_priors(
-        prior_nodes, key_prior, num_samples, prior_sample_fn
-    )
+    samples, keys = {}, jax.random.split(key_prior, len(prior_nodes))
+    for key, prior in zip(keys, prior_nodes):
+        samples[prior.name] = prior_sample_fn(prior, key, num_samples)
     keys = jax.random.split(key_node, len(non_prior_nodes))
     for key, node in zip(keys, non_prior_nodes):
         node_inputs = [samples[edge.name] for edge in node.edges]

@@ -723,7 +723,3 @@ def test_apply_with_manual_params():
     state = model.apply(params, data)
     assert jp.isfinite(state.log_prob_sum)
     assert state.sample.stdv > 0, "stdv should be transformed to positive"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

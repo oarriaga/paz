@@ -9,7 +9,6 @@ from paz.inference.utils import validate_space
 
 
 def infer(key, data, prior, likelihood, method, **kwargs):
-    # pgm.infer resolves defaults then overrides; warmup/tune happen here.
     if method is None:
         raise ValueError("method is required")
     method = method.lower()
@@ -91,12 +90,13 @@ def _resolve_num_warmup(num_samples, warmup):
     if isinstance(warmup, float):
         if warmup < 0 or warmup > 1:
             raise ValueError("warmup fraction must be in [0, 1]")
-        return min(int(num_samples * warmup), num_samples)
-    if isinstance(warmup, int):
+        warmup = int(num_samples * warmup)
+    elif isinstance(warmup, int):
         if warmup < 0:
             raise ValueError("warmup must be non-negative")
-        return min(warmup, num_samples)
-    raise TypeError("warmup must be float or int")
+    else:
+        raise TypeError("warmup must be float or int")
+    return min(warmup, num_samples)
 
 
 def _get_initial_positions(key, prior, init, num_chains, space):

@@ -55,7 +55,7 @@ from paz.inference.observable import Observable
 from paz.inference.latent import Latent
 from paz.inference.pgm import PGM
 from paz.inference.tuner import AdaptiveStepTuner, Tuner
-from paz.inference.marginalize import marginalize, recover_discrete_posterior
+from paz.inference.pgm import marginalize, recover_discrete_posterior
 from paz.inference.infer import infer
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.metadata import (

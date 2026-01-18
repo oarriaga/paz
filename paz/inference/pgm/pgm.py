@@ -1,11 +1,11 @@
-from paz.inference.pgm_builder import (
+from paz.inference.pgm.builder import (
     build_pgm_context,
     get_latent_nodes,
     get_non_root_nodes,
     get_observable_nodes,
     search_nodes,
 )
-from paz.inference.pgm_ops import (
+from paz.inference.pgm.ops import (
     build_apply,
     build_compile,
     build_infer,
@@ -15,7 +15,6 @@ from paz.inference.pgm_ops import (
     build_prior_sample,
     build_sample_forward,
     build_sample_inverse,
-    build_tune,
 )
 from paz.inference.types import Density, Likelihood, Variable
 
@@ -50,7 +49,7 @@ def PGM(inputs, outputs, name):
         inference_defaults,
     )
     compile = build_compile(inference_defaults, lambda: pgm)
-    tune = build_tune(compile)
+    tune = compile
     infer = build_infer(pgm_prior, pgm_likelihood, inference_defaults)
     return pgm._replace(
         compile=compile,

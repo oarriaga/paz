@@ -24,12 +24,11 @@ from paz.inference.types import (
     SampleType,
     Variable,
 )
-from paz.inference.pgm_ops import (
+from paz.inference.pgm.ops import (
     build_compile,
     build_data_mapping,
     build_infer,
     build_prior_prob,
-    build_tune,
     get_namedtuple_value,
 )
 from paz.inference.utils import (
@@ -41,8 +40,6 @@ from paz.inference.utils import (
 tfd = tfp.distributions
 tfb = tfp.bijectors
 DiscreteUniform = getattr(tfd, "DiscreteUniform", None)
-
-
 def finite_support(distribution):
     if len(distribution.batch_shape) != 0 or len(distribution.event_shape) != 0:
         raise NotImplementedError("Only scalar discrete variables are supported.")
@@ -55,28 +52,20 @@ def finite_support(distribution):
         logits = distribution.logits_parameter()
         probs = distribution.probs_parameter()
         if logits is None and probs is None:
-            raise NotImplementedError(
-                "Categorical distribution needs logits or probs."
-            )
+            raise NotImplementedError("Categorical distribution needs logits or probs.")
         num_categories = probs.shape[-1] if logits is None else logits.shape[-1]
         return jp.arange(num_categories, dtype=support_dtype)
     if DiscreteUniform is not None and isinstance(distribution, DiscreteUniform):
         low = distribution.low
         high = distribution.high
         if hasattr(low, "shape") and low.shape != ():
-            raise NotImplementedError(
-                "Only scalar discrete variables are supported."
-            )
+            raise NotImplementedError("Only scalar discrete variables are supported.")
         if hasattr(high, "shape") and high.shape != ():
-            raise NotImplementedError(
-                "Only scalar discrete variables are supported."
-            )
+            raise NotImplementedError("Only scalar discrete variables are supported.")
         return jp.arange(low, high + 1, dtype=support_dtype)
     raise NotImplementedError("Only Bernoulli, Categorical, DiscreteUniform supported.")
 
-
 _MISSING = object()
-
 
 def _update_samples(samples, name, value=_MISSING):
     if samples is None:
@@ -111,6 +100,28 @@ def _map_batches(theta_inverse_samples, data_mapping, batch_log_prob):
     return jax.vmap(
         lambda batch_theta: batch_log_prob(batch_theta, data_mapping)
     )(theta_inverse_samples)
+
+
+def _log_joint_values(pgm, z_name, support, batch_theta, batch_data):
+    return jp.stack(
+        [
+            pgm.apply(
+                _update_samples(batch_theta, z_name, value), batch_data
+            ).log_prob_sum
+            for value in support
+        ]
+    )
+
+
+def _log_prior_values(pgm, z_name, support, batch_theta):
+    return jp.stack(
+        [
+            pgm.prior.log_prob(
+                _update_samples(batch_theta, z_name, value), space="inv"
+            )
+            for value in support
+        ]
+    )
 
 
 def _validate_supports(pgm, node, inverse_samples):
@@ -217,17 +228,13 @@ def marginalize(pgm, names):
         data_mapping = build_data_mapping(data, output_nodes)
 
         def batch_log_prob(batch_theta, batch_data):
-            log_joint = [
-                pgm.apply(
-                    _update_samples(batch_theta, z_name, value), batch_data
-                ).log_prob_sum
-                for value in support
-            ]
-            return logsumexp(jp.stack(log_joint))
+            log_joint = _log_joint_values(
+                pgm, z_name, support, batch_theta, batch_data
+            )
+            return logsumexp(log_joint)
         log_prob_sum = _map_batches(
             theta_inverse_samples, data_mapping, batch_log_prob
         )
-
         return NodeState(None, {"marginalized": log_prob_sum}, log_prob_sum)
 
     def sample_inverse(key, num_samples=1):
@@ -252,13 +259,8 @@ def marginalize(pgm, names):
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
 
         def batch_log_prob(batch_theta, _):
-            log_prior = [
-                pgm.prior.log_prob(
-                    _update_samples(batch_theta, z_name, value), space="inv"
-                )
-                for value in support
-            ]
-            return logsumexp(jp.stack(log_prior))
+            log_prior = _log_prior_values(pgm, z_name, support, batch_theta)
+            return logsumexp(log_prior)
 
         return _map_batches(theta_inverse_samples, None, batch_log_prob)
 
@@ -274,20 +276,11 @@ def marginalize(pgm, names):
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
 
         def batch_log_prob(batch_theta, batch_data):
-            log_joint = [
-                pgm.apply(
-                    _update_samples(batch_theta, z_name, value), batch_data
-                ).log_prob_sum
-                for value in support
-            ]
-            log_joint = logsumexp(jp.stack(log_joint))
-            log_prior = [
-                pgm.prior.log_prob(
-                    _update_samples(batch_theta, z_name, value), space="inv"
-                )
-                for value in support
-            ]
-            return log_joint - logsumexp(jp.stack(log_prior))
+            log_joint = _log_joint_values(
+                pgm, z_name, support, batch_theta, batch_data
+            )
+            log_prior = _log_prior_values(pgm, z_name, support, batch_theta)
+            return logsumexp(log_joint) - logsumexp(log_prior)
         return _map_batches(
             theta_inverse_samples, data_mapping, batch_log_prob
         )
@@ -319,7 +312,7 @@ def marginalize(pgm, names):
         inference_defaults,
     )
     compile = build_compile(inference_defaults, lambda: pgm_marg)
-    tune = build_tune(compile)
+    tune = compile
     infer = build_infer(prior_density, likelihood_density, inference_defaults)
 
     return pgm_marg._replace(
@@ -344,13 +337,9 @@ def recover_discrete_posterior(
     data_mapping = build_data_mapping(data, get_output_nodes(base_pgm))
 
     def batch_log_joint(batch_theta, batch_data):
-        log_joint = [
-            base_pgm.apply(
-                _update_samples(batch_theta, z_name, value), batch_data
-            ).log_prob_sum
-            for value in support
-        ]
-        return jp.stack(log_joint)
+        return _log_joint_values(
+            base_pgm, z_name, support, batch_theta, batch_data
+        )
     log_joint = _map_batches(
         theta_inverse_samples, data_mapping, batch_log_joint
     )

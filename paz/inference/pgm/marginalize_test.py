@@ -3,7 +3,7 @@ import pytest
 from tensorflow_probability.substrates import jax as tfp
 
 from paz.inference.latent import Latent
-from paz.inference.marginalize import marginalize, recover_discrete_posterior
+from paz.inference.pgm import marginalize, recover_discrete_posterior
 from paz.inference.observable import Observable
 from paz.inference.pgm import PGM
 from paz.inference.prior import Prior
