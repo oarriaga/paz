@@ -1,12 +1,7 @@
 import jax
 import jax.numpy as jp
 
-from paz.inference.infer import (
-    infer as infer_fn,
-    _get_initial_positions,
-    _resolve_num_warmup,
-    _run_tuner,
-)
+from paz.inference.infer import infer as infer_fn
 from paz.inference.metadata import get_distribution_fn
 from paz.inference.latent_space import (
     as_latent_samples,
@@ -118,57 +113,33 @@ def build_likelihood_log_prob(context, apply):
     return likelihood_log_prob
 
 
-def build_tune(pgm_prior, pgm_likelihood, inference_defaults):
-    def tune(
-        key,
-        data,
+def build_compile(inference_defaults, get_self):
+    # compile stores per-method defaults; infer merges defaults then overrides.
+    def compile(
+        method="mh",
         num_chains=None,
-        tuner="adaptive_step",
-        progress=True,
+        warmup=None,
+        tuner=None,
         **method_kwargs,
     ):
-        defaults = inference_defaults.setdefault("mh", {})
-        defaults["tuner"] = tuner
+        method = method.lower()
+        defaults = inference_defaults.setdefault(method, {})
         if num_chains is not None:
             defaults["num_chains"] = num_chains
-        defaults["progress"] = progress
+        if warmup is not None:
+            defaults["warmup"] = warmup
+        if tuner is not None:
+            defaults["tuner"] = tuner
         defaults.update(method_kwargs)
-        inference_defaults["_last_method"] = "mh"
-        sigma = defaults.get("sigma", 0.1)
-        num_chains = defaults.get("num_chains", 1)
-        init = defaults.get("init", None)
-        space = defaults.get("space", "inv")
-        num_samples = defaults.get("num_samples", None)
-        warmup = defaults.get("warmup", None)
-        if isinstance(warmup, float) and num_samples is None:
-            raise ValueError("num_samples is required for warmup fractions.")
+        inference_defaults["_compiled_method"] = method
+        return get_self()
 
-        def log_density_fn(position):
-            log_prior = pgm_prior.log_prob(position, space="inv")
-            log_likelihood = pgm_likelihood.log_prob(
-                position, data, space="inv"
-            )
-            return log_prior + log_likelihood
+    return compile
 
-        key_init, key_tune = jax.random.split(key)
-        positions = _get_initial_positions(
-            key_init, pgm_prior, init, num_chains, space
-        )
-        num_warmup = _resolve_num_warmup(num_samples, warmup)
-        tuned_sigma = _run_tuner(
-            tuner,
-            key_tune,
-            log_density_fn,
-            positions,
-            num_chains,
-            sigma,
-            num_warmup,
-            progress,
-            defaults,
-        )
-        defaults["sigma"] = tuned_sigma
-        defaults["tuner"] = None
-        return tuned_sigma
+
+def build_tune(compile_fn):
+    def tune(method="mh", **kwargs):
+        return compile_fn(method=method, **kwargs)
 
     return tune
 
@@ -180,15 +151,14 @@ def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
         prior=None,
         likelihood=None,
         method=None,
+        tune=None,
         **overrides,
     ):
-        method_name = (
-            method
-            if method is not None
-            else inference_defaults.get("_last_method", "mh")
-        )
+        method_name = method or inference_defaults.get("_compiled_method", "mh")
         method_name = method_name.lower()
         resolved = dict(inference_defaults.get(method_name, {}))
+        if tune is not None:
+            overrides["tune"] = tune
         resolved.update(overrides)
         prior = prior if prior is not None else pgm_prior
         likelihood = likelihood if likelihood is not None else pgm_likelihood

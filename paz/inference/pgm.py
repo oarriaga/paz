@@ -7,7 +7,7 @@ from paz.inference.pgm_builder import (
 )
 from paz.inference.pgm_ops import (
     build_apply,
-    build_data_mapping,
+    build_compile,
     build_infer,
     build_likelihood_log_prob,
     build_prior_log_prob,
@@ -16,7 +16,6 @@ from paz.inference.pgm_ops import (
     build_sample_forward,
     build_sample_inverse,
     build_tune,
-    get_namedtuple_value,
 )
 from paz.inference.types import Density, Likelihood, Variable
 
@@ -34,12 +33,8 @@ def PGM(inputs, outputs, name):
     pgm_prior = Density(
         prior_sample, prior_log_prob, prior_prob, context.latent_space, None
     )
-    pgm_likelihood = Likelihood(
-        likelihood_log_prob, context.latent_space, None
-    )
-    tune = build_tune(pgm_prior, pgm_likelihood, inference_defaults)
-    infer = build_infer(pgm_prior, pgm_likelihood, inference_defaults)
-    return Variable(
+    pgm_likelihood = Likelihood(likelihood_log_prob, context.latent_space, None)
+    pgm = Variable(
         apply,
         sample_forward,
         sample_inverse,
@@ -49,13 +44,20 @@ def PGM(inputs, outputs, name):
         context.metadata,
         pgm_prior,
         pgm_likelihood,
-        tune,
-        infer,
+        None,
+        None,
+        None,
         inference_defaults,
+    )
+    compile = build_compile(inference_defaults, lambda: pgm)
+    tune = build_tune(compile)
+    infer = build_infer(pgm_prior, pgm_likelihood, inference_defaults)
+    return pgm._replace(
+        compile=compile,
+        tune=tune,
+        infer=infer,
     )
 
 
 def get_edges(nodes):
-    return [
-        [edge.name, node.name] for node in nodes for edge in node.edges
-    ]
+    return [[edge.name, node.name] for node in nodes for edge in node.edges]
