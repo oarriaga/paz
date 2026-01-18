@@ -198,6 +198,13 @@ def test_sample_inverse_three_priors_single_sample_shape():
     assert samples.stdv.shape == (), f"Expected scalar, got {samples.stdv.shape}"
 
 
+def test_pgm_fit_default_not_implemented():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(0)
+    with pytest.raises(NotImplementedError):
+        model.fit(key, jp.array(0.0), method="em")
+
+
 def test_sample_inverse_three_priors_multiple_samples_shape():
     model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)

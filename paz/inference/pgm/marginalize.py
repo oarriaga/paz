@@ -27,6 +27,7 @@ from paz.inference.types import (
 from paz.inference.pgm.ops import (
     build_compile,
     build_data_mapping,
+    build_fit,
     build_infer,
     build_prior_prob,
     get_namedtuple_value,
@@ -296,6 +297,7 @@ def marginalize(pgm, names):
     )
     likelihood_density = Likelihood(likelihood_log_prob, latent_space, None)
     inference_defaults = {}
+    fit = build_fit()
     pgm_marg = Variable(
         apply,
         sample,
@@ -309,6 +311,7 @@ def marginalize(pgm, names):
         None,
         None,
         None,
+        fit,
         inference_defaults,
     )
     compile = build_compile(inference_defaults, lambda: pgm_marg)
@@ -319,6 +322,7 @@ def marginalize(pgm, names):
         compile=compile,
         tune=tune,
         infer=infer,
+        fit=fit,
     )
 
 

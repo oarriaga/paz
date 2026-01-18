@@ -21,9 +21,10 @@ Variable = namedtuple(
         "compile",
         "tune",
         "infer",
+        "fit",
         "inference_defaults",
     ],
-    defaults=[None, None, None, None, None, None],
+    defaults=[None, None, None, None, None, None, None],
 )
 NodeMetadata = namedtuple("NodeMetadata", ["distribution_fn", "bijector"])
 PGMMetadata = namedtuple(

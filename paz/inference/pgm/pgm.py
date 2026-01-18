@@ -8,6 +8,7 @@ from paz.inference.pgm.builder import (
 from paz.inference.pgm.ops import (
     build_apply,
     build_compile,
+    build_fit,
     build_infer,
     build_likelihood_log_prob,
     build_prior_log_prob,
@@ -33,6 +34,7 @@ def PGM(inputs, outputs, name):
         prior_sample, prior_log_prob, prior_prob, context.latent_space, None
     )
     pgm_likelihood = Likelihood(likelihood_log_prob, context.latent_space, None)
+    fit = build_fit()
     pgm = Variable(
         apply,
         sample_forward,
@@ -46,6 +48,7 @@ def PGM(inputs, outputs, name):
         None,
         None,
         None,
+        fit,
         inference_defaults,
     )
     compile = build_compile(inference_defaults, lambda: pgm)
@@ -55,6 +58,7 @@ def PGM(inputs, outputs, name):
         compile=compile,
         tune=tune,
         infer=infer,
+        fit=fit,
     )
 
 

@@ -158,6 +158,23 @@ def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
     return infer
 
 
+def build_fit(fitters=None):
+    fitters = {} if fitters is None else dict(fitters)
+
+    def fit(key, data, method=None, **method_kwargs):
+        if not fitters:
+            raise NotImplementedError("fit is not implemented for this model.")
+        method_name = method.lower() if method is not None else None
+        if method_name is None:
+            raise ValueError("fit method is required.")
+        fit_fn = fitters.get(method_name)
+        if fit_fn is None:
+            raise ValueError("Unknown fit method: " + method_name)
+        return fit_fn(key, data, **method_kwargs)
+
+    return fit
+
+
 def build_data_mapping(data, output_nodes):
     if data is None:
         return {}
