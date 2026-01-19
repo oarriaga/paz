@@ -14,3 +14,8 @@ from paz.inference.types import Density, Likelihood
 from paz.inference.infer import infer
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.tuner import AdaptiveStepTuner
+from paz.inference.discretizer import (
+    discretize,
+    get_grid_values,
+    indices_to_values,
+)
