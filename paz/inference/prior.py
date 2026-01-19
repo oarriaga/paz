@@ -1,5 +1,6 @@
 import jax.numpy as jp
 
+from paz.inference.bijector_fitting import fit_bijector as fit_bijector_module
 from paz.inference.naming import build_prior_name
 from paz.inference.types import (
     Distribution,
@@ -43,6 +44,38 @@ def Prior(distribution, bijector=None, name=None):
             forward_samples = squeeze_pytree(forward_samples)
         return forward_samples
 
+    def fit_bijector(
+        key,
+        target_distribution,
+        num_samples=10_000,
+        optimizer=None,
+        num_steps=1000,
+        print=True,
+        return_losses=False,
+    ):
+        optimized_bijector, losses = fit_bijector_module(
+            distribution,
+            target_distribution,
+            bijector,
+            key,
+            num_samples=num_samples,
+            optimizer=optimizer,
+            num_steps=num_steps,
+            print=print,
+        )
+        new_prior = Prior(
+            distribution, bijector=optimized_bijector, name=node_name
+        )
+        return (new_prior, losses) if return_losses else new_prior
+
     return Variable(
-        apply, sample, sample_inverse, node_name, [], distribution, metadata
+        apply,
+        sample,
+        sample_inverse,
+        node_name,
+        [],
+        distribution,
+        metadata,
+        fit=fit_bijector,
+        fit_bijector=fit_bijector,
     )
