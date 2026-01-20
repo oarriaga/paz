@@ -84,7 +84,6 @@ def point_sample(input, point_coords, align_corners=False, **kwargs):
 
     def get_pixel_values(y_idx, x_idx, mask):
         # Calculate flat indices: b * (H*W) + y * W + x
-        # Note: We use channel-last input_transposed, so we flatten spatial dims
         # Flatten input to (N*H*W, C)
         flat_input = ops.reshape(input_transposed, (-1, C))
 
@@ -171,10 +170,6 @@ def get_uncertain_point_coords_with_randomness(
     # 4. Select Top-K Uncertain Points
     num_uncertain_points = int(importance_sample_ratio * num_points)
     num_random_points = num_points - num_uncertain_points
-
-    # Get values and indices of top uncertainties
-    # We look at channel 0 of uncertainties: (N, num_sampled)
-    # top_k returns (values, indices) tuple
     _, idx = ops.top_k(point_uncertainties[:, 0, :], k=num_uncertain_points)
 
     # 5. Gather the coordinates corresponding to high uncertainty

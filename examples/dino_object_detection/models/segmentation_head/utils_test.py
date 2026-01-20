@@ -48,9 +48,9 @@ from keras import ops
 # -------------------------------------------------------------------------
 def to_numpy(x):
     """Convert Torch tensors or Keras/JAX arrays to a standard Numpy array."""
-    if hasattr(x, "detach"):  # PyTorch
+    if hasattr(x, "detach"):
         return x.detach().cpu().numpy()
-    return np.array(x)  # Keras / JAX / TensorFlow
+    return np.array(x)
 
 
 # -------------------------------------------------------------------------
@@ -83,7 +83,6 @@ def test_point_sample_exact_match():
     ks_out = point_sample_Keras(ks_input, ks_points, align_corners=False)
 
     # 4. Assert Numerical Equivalence
-    # We use a small tolerance (atol=1e-5) for floating point differences between backends
     np.testing.assert_allclose(
         to_numpy(ks_out),
         to_numpy(th_out),

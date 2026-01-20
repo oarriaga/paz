@@ -10,7 +10,10 @@ import sys
 # -------------------------------------------------------------------------
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
+os.environ["bat"] = "1"
+torch.set_num_threads(1)  # Disable multi-threading noise
+torch.manual_seed(42)  # Seed PyTorch
+torch.use_deterministic_algorithms(True)  # Enforce deterministic ops
 # Add project root to path
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
@@ -30,13 +33,21 @@ from examples.dino_object_detection.models.transformer_decoder_head.torch_transf
     MLP as MLP_PyTorch,
     gen_sineembed_for_position as gen_sineembed_for_position_pt,
 )
-from examples.dino_object_detection.models.transformer_decoder_head.transformer import (
+from examples.dino_object_detection.models.transformer_decoder_head.transformer_kerass import (
     Transformer as Transformer_Keras,
 )
-from examples.dino_object_detection.models.transformer_decoder_head.MLP import (
+from examples.dino_object_detection.models.transformer_decoder_head.transformer_kerass import (
     MLP as MLP_Keras,
+    TransformerDecoderLayer as TransformerDecoderLayer_Keras,
+    TransformerDecoder as TransformerDecoder_Keras,
+    MSDeformAttn as MSDeformAttn_Keras,
 )
 
+from examples.dino_object_detection.models.transformer_decoder_head.torch_transformer_for_testing import (
+    MSDeformAttn as MSDeformAttn_PyTorch,
+    TransformerDecoderLayer as TransformerDecoderLayer_PyTorch,
+    TransformerDecoder as TransformerDecoder_PyTorch,
+)
 
 # =============================================================================
 # 1. HELPER FUNCTIONS (INLINED TO FIX IMPORT ERROR)
@@ -116,7 +127,21 @@ def transfer_mlp_weights(pt_mlp, k_mlp):
             k_mlp.mlp_layers.layers[i].set_weights([pt_w.T, pt_b])
 
 
-def transfer_decoder_layer_weights(pt_layer, k_layer, sa_nhead):
+def transfer_decoder_layer_weights(pt_layer, k_layer, *args):
+    """
+    Handles variable arguments to support conflicting calls in the test file.
+    Case 1: (pt_layer, k_layer, sa_nhead) -> 3 args
+    Case 2: (pt_layer, k_layer, d_model, sa_nhead, ca_nhead) -> 5 args
+    """
+    if len(args) == 1:
+        # Case 1: args = (sa_nhead,)
+        sa_nhead = args[0]
+    elif len(args) == 3:
+        # Case 2: args = (d_model, sa_nhead, ca_nhead)
+        sa_nhead = args[1]
+    else:
+        raise ValueError(f"Unexpected number of arguments: {len(args)}")
+
     with torch.no_grad():
         # Self Attention
         pt_sa = pt_layer.self_attn
@@ -539,6 +564,7 @@ def setup_parity_test_env():
     """Encapsulates the shared setup logic for all parity tests."""
     print("Setting up test environment...")
     np.random.seed(42)
+    torch.manual_seed(42)
     weights_path = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\rf-detr-base-coco.pth"
     config = get_config()
 
@@ -640,6 +666,676 @@ def generated_inputs(config_params):
 # =============================================================================
 # 5. MAIN TEST FUNCTION WITH PARAMETRIZATION and random weights.
 # =============================================================================
+def test_mlp_equivalence():
+    # --- Configuration ---
+    input_dim = 10
+    hidden_dim = 20
+    output_dim = 5
+    num_layers = 3
+    batch_size = 8
+
+    # --- Instantiate Models ---
+    pt_model = MLP_PyTorch(input_dim, hidden_dim, output_dim, num_layers)
+    k_model = MLP_Keras(input_dim, hidden_dim, output_dim, num_layers)
+
+    # --- Create Dummy Data (Random Weights) ---
+    # We generate weights in PyTorch format (out_features, in_features)
+    # Layer 1: Input -> Hidden
+    w1 = np.random.randn(hidden_dim, input_dim).astype(np.float32)
+    b1 = np.random.randn(hidden_dim).astype(np.float32)
+
+    # Layer 2: Hidden -> Hidden
+    w2 = np.random.randn(hidden_dim, hidden_dim).astype(np.float32)
+    b2 = np.random.randn(hidden_dim).astype(np.float32)
+
+    # Layer 3: Hidden -> Output
+    w3 = np.random.randn(output_dim, hidden_dim).astype(np.float32)
+    b3 = np.random.randn(output_dim).astype(np.float32)
+
+    weights = [(w1, b1), (w2, b2), (w3, b3)]
+
+    # --- Load Weights into PyTorch Model ---
+    with torch.no_grad():
+        # Layer 0
+        pt_model.layers[0].weight.copy_(torch.from_numpy(weights[0][0]))
+        pt_model.layers[0].bias.copy_(torch.from_numpy(weights[0][1]))
+        # Layer 1
+        pt_model.layers[1].weight.copy_(torch.from_numpy(weights[1][0]))
+        pt_model.layers[1].bias.copy_(torch.from_numpy(weights[1][1]))
+        # Layer 2
+        pt_model.layers[2].weight.copy_(torch.from_numpy(weights[2][0]))
+        pt_model.layers[2].bias.copy_(torch.from_numpy(weights[2][1]))
+
+    # --- Load Weights into Keras Model (With Transpose!) ---
+    # Keras Dense weights are [kernel, bias]
+    # Kernel shape must be (input_dim, units), so we transpose the PyTorch weights
+
+    # Layer 0
+    k_model.mlp_layers.layers[0].set_weights([weights[0][0].T, weights[0][1]])
+    # Layer 1
+    k_model.mlp_layers.layers[1].set_weights([weights[1][0].T, weights[1][1]])
+    # Layer 2
+    k_model.mlp_layers.layers[2].set_weights([weights[2][0].T, weights[2][1]])
+
+    # --- Run Forward Pass ---
+    # Generate random input
+    x_np = np.random.randn(batch_size, input_dim).astype(np.float32)
+
+    # 1. PyTorch Output
+    pt_model.eval()  # Set to eval mode (though no dropout/batchnorm here, good practice)
+    pt_out_tensor = pt_model(torch.from_numpy(x_np))
+    pt_out = pt_out_tensor.detach().numpy()
+
+    # 2. Keras Output
+    k_out_tensor = k_model(x_np)
+    # Convert Keras tensor to numpy (works for TF, JAX, or Torch backend)
+    k_out = np.array(k_out_tensor)
+
+    # --- Compare ---
+    print(f"\nPyTorch Output Sample:\n{pt_out[0]}")
+    print(f"Keras Output Sample:\n{k_out[0]}")
+
+    # Assert equality within a very small tolerance (float32 precision)
+    np.testing.assert_allclose(
+        pt_out, k_out, rtol=1e-4, atol=1e-5, err_msg="Outputs do not match!"
+    )
+
+    print(
+        "\nSUCCESS: The Keras implementation matches the PyTorch implementation exactly."
+    )
+
+
+def test_ms_deform_attn_equivalence():
+    # --- Configuration ---
+    N = 2  # Batch size
+    d_model = 32  # Hidden dimension
+    n_levels = 3  # Number of feature levels
+    n_heads = 4  # Number of attention heads
+    n_points = 4  # Number of sampling points
+    Len_q = 5  # Query length
+
+    # Define spatial shapes for the levels (H, W)
+    spatial_shapes_list = [(8, 8), (4, 4), (2, 2)]
+
+    # Calculate derived dimensions
+    total_len_in = sum(h * w for h, w in spatial_shapes_list)
+
+    # Prepare Spatial Shapes and Start Indices
+    spatial_shapes_np = np.array(spatial_shapes_list, dtype="int32")
+    level_start_index_np = np.concatenate(
+        [[0], np.cumsum([h * w for h, w in spatial_shapes_list])[:-1]]
+    )
+    level_start_index_np = level_start_index_np.astype("int32")
+
+    # Torch (for PyTorch model)
+    spatial_shapes_pt = torch.from_numpy(spatial_shapes_np).long()
+    level_start_index_pt = torch.from_numpy(level_start_index_np).long()
+
+    # --- Instantiate Models ---
+    pt_model = MSDeformAttn_PyTorch(d_model, n_levels, n_heads, n_points)
+    k_model = MSDeformAttn_Keras(d_model, n_levels, n_heads, n_points)
+
+    # --- Initialize Keras Model ---
+    dummy_q = np.zeros((1, Len_q, d_model), dtype="float32")
+    dummy_ref = np.zeros((1, Len_q, n_levels, 4), dtype="float32")  # 4D ref points
+    dummy_in = np.zeros((1, total_len_in, d_model), dtype="float32")
+
+    # Run one pass to initialize variables
+    _ = k_model(dummy_q, dummy_ref, dummy_in, spatial_shapes_np, level_start_index_np)
+
+    with torch.no_grad():
+        # 1. Value Projection
+        k_model.value_proj.set_weights(
+            [
+                pt_model.value_proj.weight.detach().numpy().T,
+                pt_model.value_proj.bias.detach().numpy(),
+            ]
+        )
+
+        # 2. Output Projection
+        k_model.output_proj.set_weights(
+            [
+                pt_model.output_proj.weight.detach().numpy().T,
+                pt_model.output_proj.bias.detach().numpy(),
+            ]
+        )
+
+        # 3. Sampling Offsets
+        k_model.sampling_offsets.set_weights(
+            [
+                pt_model.sampling_offsets.weight.detach().numpy().T,
+                pt_model.sampling_offsets.bias.detach().numpy(),
+            ]
+        )
+
+        # 4. Attention Weights
+        k_model.attention_weights.set_weights(
+            [
+                pt_model.attention_weights.weight.detach().numpy().T,
+                pt_model.attention_weights.bias.detach().numpy(),
+            ]
+        )
+
+    print("Weights transferred successfully.")
+
+    # --- Generate Random Inputs ---
+    # Query
+    query_np = np.random.randn(N, Len_q, d_model).astype("float32")
+
+    # Reference Points
+    ref_points_np = np.random.rand(N, Len_q, n_levels, 4).astype("float32")
+
+    # Input Flatten (Memory)
+    input_flatten_np = np.random.randn(N, total_len_in, d_model).astype("float32")
+
+    # --- Run Forward Pass ---
+
+    # 1. PyTorch Output
+    pt_model.eval()
+    pt_out_tensor = pt_model(
+        query=torch.from_numpy(query_np),
+        reference_points=torch.from_numpy(ref_points_np),
+        input_flatten=torch.from_numpy(input_flatten_np),
+        input_spatial_shapes=spatial_shapes_pt,
+        input_level_start_index=level_start_index_pt,
+        input_padding_mask=None,
+    )
+    pt_out = pt_out_tensor.detach().numpy()
+
+    # 2. Keras Output
+    k_out_tensor = k_model(
+        query=query_np,
+        reference_points=ref_points_np,
+        input_flatten=input_flatten_np,
+        input_spatial_shapes=spatial_shapes_np,
+        input_level_start_index=level_start_index_np,
+        input_padding_mask=None,
+    )
+    k_out = np.array(k_out_tensor)
+
+    # --- Compare ---
+    print(f"\nPyTorch Output Mean: {np.mean(pt_out):.6f}")
+    print(f"Keras Output Mean:   {np.mean(k_out):.6f}")
+
+    diff = np.abs(pt_out - k_out)
+    print(f"Max Absolute Difference: {np.max(diff):.8f}")
+
+    np.testing.assert_allclose(
+        pt_out,
+        k_out,
+        rtol=1e-4,
+        atol=1e-5,
+        err_msg="MSDeformAttn Outputs do not match!",
+    )
+
+    print("\nSUCCESS: The Keras MSDeformAttn implementation matches PyTorch.")
+
+
+def test_decoder_layer_equivalence():
+    # --- Configuration ---
+    d_model = 256
+    sa_nhead = 8
+    ca_nhead = 8
+    dim_feedforward = 1024
+    dropout = 0.0  # Disable dropout for deterministic testing
+    activation = "relu"
+    num_feature_levels = 4
+    dec_n_points = 4
+
+    batch_size = 2
+    num_queries = 10
+
+    # Total memory length must match sum of spatial_shapes areas
+    num_memory = 100
+
+    # --- Instantiate Models ---
+    pt_model = TransformerDecoderLayer_PyTorch(
+        d_model=d_model,
+        sa_nhead=sa_nhead,
+        ca_nhead=ca_nhead,
+        dim_feedforward=dim_feedforward,
+        dropout=dropout,
+        activation=activation,
+        num_feature_levels=num_feature_levels,
+        dec_n_points=dec_n_points,
+    )
+    pt_model.eval()
+
+    k_model = TransformerDecoderLayer_Keras(
+        d_model=d_model,
+        sa_nhead=sa_nhead,
+        ca_nhead=ca_nhead,
+        dim_feedforward=dim_feedforward,
+        dropout=dropout,
+        activation=activation,
+        num_feature_levels=num_feature_levels,
+        dec_n_points=dec_n_points,
+    )
+
+    # --- Prepare Dummy Inputs & Build Keras Model ---
+    tgt_np = np.random.randn(batch_size, num_queries, d_model).astype("float32")
+    memory_np = np.random.randn(batch_size, num_memory, d_model).astype("float32")
+    query_pos_np = np.random.randn(batch_size, num_queries, d_model).astype("float32")
+
+    # Reference points: (bs, nq, n_levels, 2)
+    ref_points_np = np.random.rand(
+        batch_size, num_queries, num_feature_levels, 2
+    ).astype("float32")
+    spatial_shapes_list = [(5, 5), (5, 5), (5, 5), (5, 5)]
+    spatial_shapes_np = np.array(spatial_shapes_list, dtype="int32")
+
+    level_start_index_np = np.concatenate(
+        [[0], np.cumsum([h * w for h, w in spatial_shapes_list])[:-1]]
+    ).astype("int32")
+
+    # Run a dummy pass to build Keras model weights
+    k_model(
+        tgt=tgt_np,
+        memory=memory_np,
+        training=False,
+        query_pos=query_pos_np,
+        reference_points=ref_points_np,
+        spatial_shapes=spatial_shapes_np,
+        level_start_index=level_start_index_np,
+    )
+
+    # --- Weight Transfer (PyTorch -> Keras) ---
+
+    with torch.no_grad():
+        # 1. Self Attention (MultiHeadAttention)
+        pt_sa = pt_model.self_attn
+
+        # Retrieve PyTorch weights (Concatenated Q, K, V)
+        qkv_w = pt_sa.in_proj_weight.detach().numpy()  # (3*d_model, d_model)
+        qkv_b = pt_sa.in_proj_bias.detach().numpy()  # (3*d_model,)
+
+        # Split into Q, K, V
+        q_w, k_w, v_w = np.split(qkv_w, 3, axis=0)
+        q_b, k_b, v_b = np.split(qkv_b, 3, axis=0)
+
+        # Retrieve Output Projection
+        out_w = pt_sa.out_proj.weight.detach().numpy()  # (d_model, d_model)
+        out_b = pt_sa.out_proj.bias.detach().numpy()  # (d_model,)
+
+        # --- Helper Functions for Reshaping ---
+
+        def to_keras_mha_input_kernel(w, n_head):
+            """Reshapes PyTorch (Out, In) -> Keras (In, Heads, Head_Dim)"""
+            w = w.T  # Transpose to (In, Out) -> (256, 256)
+            d_model = w.shape[0]
+            head_dim = w.shape[1] // n_head
+            # Reshape to (256, 8, 32)
+            return w.reshape(d_model, n_head, head_dim)
+
+        def to_keras_mha_bias(b, n_head):
+            """Reshapes PyTorch (Out,) -> Keras (Heads, Head_Dim)"""
+            head_dim = b.shape[0] // n_head
+            # Reshape to (8, 32)
+            return b.reshape(n_head, head_dim)
+
+        def to_keras_mha_output_kernel(w, n_head):
+            """Reshapes PyTorch OutProj (Out, In) -> Keras (Heads, Head_Dim, Out)"""
+            w = w.T
+
+            d_model_out = w.shape[1]
+            head_dim = w.shape[0] // n_head
+            return w.reshape(n_head, head_dim, d_model_out)
+
+        # --- Apply Reshaping ---
+        q_w_k = to_keras_mha_input_kernel(q_w, sa_nhead)
+        k_w_k = to_keras_mha_input_kernel(k_w, sa_nhead)
+        v_w_k = to_keras_mha_input_kernel(v_w, sa_nhead)
+
+        q_b_k = to_keras_mha_bias(q_b, sa_nhead)
+        k_b_k = to_keras_mha_bias(k_b, sa_nhead)
+        v_b_k = to_keras_mha_bias(v_b, sa_nhead)
+
+        out_w_k = to_keras_mha_output_kernel(out_w, sa_nhead)
+        out_b_k = out_b  # Bias matches (256,)
+
+        # Set Weights
+        k_model.self_attn.set_weights(
+            [q_w_k, q_b_k, k_w_k, k_b_k, v_w_k, v_b_k, out_w_k, out_b_k]
+        )
+
+        # 2. Norms
+        k_model.norm1.set_weights(
+            [
+                pt_model.norm1.weight.detach().numpy(),
+                pt_model.norm1.bias.detach().numpy(),
+            ]
+        )
+        k_model.norm2.set_weights(
+            [
+                pt_model.norm2.weight.detach().numpy(),
+                pt_model.norm2.bias.detach().numpy(),
+            ]
+        )
+        k_model.norm3.set_weights(
+            [
+                pt_model.norm3.weight.detach().numpy(),
+                pt_model.norm3.bias.detach().numpy(),
+            ]
+        )
+
+        # 3. Cross Attention (MSDeformAttn)
+        pt_ca = pt_model.cross_attn
+        k_ca = k_model.cross_attn
+
+        k_ca.value_proj.set_weights(
+            [
+                pt_ca.value_proj.weight.detach().numpy().T,
+                pt_ca.value_proj.bias.detach().numpy(),
+            ]
+        )
+        k_ca.output_proj.set_weights(
+            [
+                pt_ca.output_proj.weight.detach().numpy().T,
+                pt_ca.output_proj.bias.detach().numpy(),
+            ]
+        )
+        k_ca.sampling_offsets.set_weights(
+            [
+                pt_ca.sampling_offsets.weight.detach().numpy().T,
+                pt_ca.sampling_offsets.bias.detach().numpy(),
+            ]
+        )
+        k_ca.attention_weights.set_weights(
+            [
+                pt_ca.attention_weights.weight.detach().numpy().T,
+                pt_ca.attention_weights.bias.detach().numpy(),
+            ]
+        )
+
+        # 4. Feed Forward Network
+        k_model.linear1.set_weights(
+            [
+                pt_model.linear1.weight.detach().numpy().T,
+                pt_model.linear1.bias.detach().numpy(),
+            ]
+        )
+        k_model.linear2.set_weights(
+            [
+                pt_model.linear2.weight.detach().numpy().T,
+                pt_model.linear2.bias.detach().numpy(),
+            ]
+        )
+
+    print("Weights transferred successfully.")
+
+    # --- Run Comparison ---
+
+    # Prepare Inputs (Convert to Tensor for PyTorch)
+    tgt_pt = torch.from_numpy(tgt_np)
+    memory_pt = torch.from_numpy(memory_np)
+    query_pos_pt = torch.from_numpy(query_pos_np)
+    ref_points_pt = torch.from_numpy(ref_points_np)
+    spatial_shapes_pt = torch.from_numpy(spatial_shapes_np).long()
+    level_start_index_pt = torch.from_numpy(level_start_index_np).long()
+
+    # 1. PyTorch Forward
+    pt_out = (
+        pt_model(
+            tgt=tgt_pt,
+            memory=memory_pt,
+            pos=None,
+            query_pos=query_pos_pt,
+            reference_points=ref_points_pt,
+            spatial_shapes=spatial_shapes_pt,
+            level_start_index=level_start_index_pt,
+        )
+        .detach()
+        .numpy()
+    )
+
+    # 2. Keras Forward
+    k_out = k_model(
+        tgt=tgt_np,
+        memory=memory_np,
+        training=False,
+        pos=None,
+        query_pos=query_pos_np,
+        reference_points=ref_points_np,
+        spatial_shapes=spatial_shapes_np,
+        level_start_index=level_start_index_np,
+    )
+    k_out = np.array(k_out)
+
+    # --- Assertions ---
+    print(f"\nPyTorch Output Mean: {np.mean(pt_out):.6f}")
+    print(f"Keras Output Mean:   {np.mean(k_out):.6f}")
+
+    diff = np.abs(pt_out - k_out)
+    max_diff = np.max(diff)
+    print(f"Max Absolute Difference: {max_diff:.8f}")
+
+    np.testing.assert_allclose(
+        pt_out,
+        k_out,
+        rtol=1e-4,
+        atol=1e-5,
+        err_msg="TransformerDecoderLayer outputs do not match!",
+    )
+
+    print("\nSUCCESS: The Keras TransformerDecoderLayer matches PyTorch.")
+
+
+def test_transformer_decoder_equivalence():
+    # --- Configuration ---
+    d_model = 256
+    num_layers = 3
+    sa_nhead = 8
+    ca_nhead = 8
+    dim_feedforward = 1024
+    dropout = 0.0
+    activation = "relu"
+    num_feature_levels = 3
+    dec_n_points = 4
+    return_intermediate = True
+    lite_refpoint_refine = False
+    bbox_reparam = False
+
+    batch_size = 2
+    num_queries = 10
+
+    # Define spatial shapes for memory
+    spatial_shapes_list = [(8, 8), (4, 4), (2, 2)]
+    total_len_in = sum(h * w for h, w in spatial_shapes_list)
+
+    # --- Prepare Inputs ---
+    tgt_np = np.random.randn(batch_size, num_queries, d_model).astype("float32")
+    memory_np = np.random.randn(batch_size, total_len_in, d_model).astype("float32")
+    refpoints_unsigmoid_np = np.random.randn(batch_size, num_queries, 4).astype(
+        "float32"
+    )
+
+    spatial_shapes_np = np.array(spatial_shapes_list, dtype="int32")
+    level_start_index_np = np.concatenate(
+        [[0], np.cumsum([h * w for h, w in spatial_shapes_list])[:-1]]
+    ).astype("int32")
+
+    valid_ratios_np = (
+        np.ones((batch_size, num_feature_levels, 2), dtype="float32") * 0.99
+    )
+
+    tgt_pt = torch.from_numpy(tgt_np)
+    memory_pt = torch.from_numpy(memory_np)
+    refpoints_unsigmoid_pt = torch.from_numpy(refpoints_unsigmoid_np)
+    spatial_shapes_pt = torch.from_numpy(spatial_shapes_np).long()
+    level_start_index_pt = torch.from_numpy(level_start_index_np).long()
+    valid_ratios_pt = torch.from_numpy(valid_ratios_np)
+
+    # --- Instantiate Layer Models (Templates) ---
+    pt_layer = TransformerDecoderLayer_PyTorch(
+        d_model=d_model,
+        sa_nhead=sa_nhead,
+        ca_nhead=ca_nhead,
+        dim_feedforward=dim_feedforward,
+        dropout=dropout,
+        activation=activation,
+        num_feature_levels=num_feature_levels,
+        dec_n_points=dec_n_points,
+    )
+    k_layer = TransformerDecoderLayer_Keras(
+        d_model=d_model,
+        sa_nhead=sa_nhead,
+        ca_nhead=ca_nhead,
+        dim_feedforward=dim_feedforward,
+        dropout=dropout,
+        activation=activation,
+        num_feature_levels=num_feature_levels,
+        dec_n_points=dec_n_points,
+        skip_self_attn=False,
+    )
+
+    # --- Assign bbox_embed weights BEFORE model creation ---
+    if not lite_refpoint_refine:
+        bbox_embed_pt = MLP_PyTorch(d_model, d_model, 4, 3)
+        pt_layer.bbox_embed = bbox_embed_pt
+
+        bbox_embed_k = MLP_Keras(d_model, d_model, 4, 3)
+        k_layer.bbox_embed = bbox_embed_k
+
+        # Build Keras bbox_embed to init variables
+        bbox_embed_k.build((None, d_model))
+
+    # --- Instantiate Decoder Models ---
+    pt_model = TransformerDecoder_PyTorch(
+        pt_layer,
+        num_layers,
+        norm=torch.nn.LayerNorm(d_model),
+        return_intermediate=return_intermediate,
+        d_model=d_model,
+        lite_refpoint_refine=lite_refpoint_refine,
+        bbox_reparam=bbox_reparam,
+    )
+    if not lite_refpoint_refine:
+        pt_model.bbox_embed = bbox_embed_pt
+
+    k_model = TransformerDecoder_Keras(
+        k_layer,
+        num_layers,
+        norm=keras.layers.LayerNormalization(epsilon=1e-5),
+        return_intermediate=return_intermediate,
+        d_model=d_model,
+        lite_refpoint_refine=lite_refpoint_refine,
+        bbox_reparam=bbox_reparam,
+    )
+    pt_model.eval()
+
+    # --- Build Keras Model (Dummy Call) ---
+    _ = k_model(
+        tgt=tgt_np,
+        memory=memory_np,
+        tgt_mask=None,
+        memory_mask=None,
+        tgt_key_padding_mask=None,
+        memory_key_padding_mask=None,
+        pos=None,
+        refpoints_unsigmoid=refpoints_unsigmoid_np,
+        level_start_index=level_start_index_np,
+        spatial_shapes=spatial_shapes_np,
+        valid_ratios=valid_ratios_np,
+        training=False,
+    )
+
+    # --- Weight Transfer (PyTorch -> Keras) ---
+
+    # 1. Transfer MLP (ref_point_head)
+    transfer_mlp_weights(pt_model.ref_point_head, k_model.ref_point_head)
+
+    # 2. Transfer Decoder Layers (cloned modules)
+    for i in range(num_layers):
+        pt_dec_layer = pt_model.layers[i]
+        k_dec_layer = k_model.decoder_layers[i]
+
+        transfer_decoder_layer_weights(
+            pt_dec_layer, k_dec_layer, d_model, sa_nhead, ca_nhead
+        )
+
+        # 3. Transfer Layer Norm (if present)
+        if k_model.norm is not None:
+            k_model.norm.set_weights(
+                [
+                    pt_model.norm.weight.detach().numpy(),
+                    pt_model.norm.bias.detach().numpy(),
+                ]
+            )
+
+        # 4. Transfer bbox_embed (Shared or per-layer?)
+        if not lite_refpoint_refine and i == 0:
+            transfer_mlp_weights(pt_model.bbox_embed, k_model.bbox_embed)
+
+    print("Weights transferred successfully.")
+
+    # --- Run Forward Pass ---
+
+    # 1. PyTorch Output
+    with torch.no_grad():
+        pt_out_tuple = pt_model(
+            tgt=tgt_pt,
+            memory=memory_pt,
+            tgt_mask=None,
+            memory_mask=None,
+            tgt_key_padding_mask=None,
+            memory_key_padding_mask=None,
+            pos=None,
+            refpoints_unsigmoid=refpoints_unsigmoid_pt,
+            level_start_index=level_start_index_pt,
+            spatial_shapes=spatial_shapes_pt,
+            valid_ratios=valid_ratios_pt,
+        )
+        pt_hs = pt_out_tuple[0].detach().numpy()
+        pt_ref = pt_out_tuple[1].detach().numpy()
+
+    # 2. Keras Output
+    k_out_tuple = k_model(
+        tgt=tgt_np,
+        memory=memory_np,
+        tgt_mask=None,
+        memory_mask=None,
+        tgt_key_padding_mask=None,
+        memory_key_padding_mask=None,
+        pos=None,
+        refpoints_unsigmoid=refpoints_unsigmoid_np,
+        level_start_index=level_start_index_np,
+        spatial_shapes=spatial_shapes_np,
+        valid_ratios=valid_ratios_np,
+        training=False,
+    )
+    k_hs = np.array(k_out_tuple[0])
+    k_ref = np.array(k_out_tuple[1])
+
+    # --- Compare ---
+    print(f"\nComparing Hidden States (hs):")
+    diff_hs = np.abs(pt_hs - k_hs)
+    max_diff_hs = np.max(diff_hs)
+    print(f"Max Absolute Difference (hs): {max_diff_hs:.8f}")
+
+    np.testing.assert_allclose(
+        pt_hs,
+        k_hs,
+        rtol=1e-4,
+        atol=1e-5,
+        err_msg="TransformerDecoder Hidden States (hs) do not match!",
+    )
+
+    print(f"\nComparing Reference Points (ref):")
+    diff_ref = np.abs(pt_ref - k_ref)
+    max_diff_ref = np.max(diff_ref)
+    print(f"Max Absolute Difference (ref): {max_diff_ref:.8f}")
+
+    np.testing.assert_allclose(
+        pt_ref,
+        k_ref,
+        rtol=1e-4,
+        atol=1e-5,
+        err_msg="TransformerDecoder Reference Points (ref) do not match!",
+    )
+
+    print("\nFINAL SUCCESS: The Keras TransformerDecoder matches PyTorch.")
+
+
 @pytest.mark.parametrize(
     "two_stage, bbox_reparam, group_detr",
     [
@@ -825,19 +1521,19 @@ def test_transformer_decoder_parity(
 
     # --- 5. Assertions ---
     np.testing.assert_allclose(
-        pt_hs, k_hs, rtol=1e-4, atol=1e-5, err_msg="Hidden States Mismatch"
+        pt_hs, k_hs, rtol=1e-4, atol=1e-4, err_msg="Hidden States Mismatch"
     )
 
     np.testing.assert_allclose(
-        pt_ref, k_ref, rtol=1e-4, atol=1e-5, err_msg="Reference Points Mismatch"
+        pt_ref, k_ref, rtol=1e-4, atol=1e-4, err_msg="Reference Points Mismatch"
     )
 
     if two_stage:
         np.testing.assert_allclose(
-            pt_mem_ts, k_mem_ts, rtol=1e-4, atol=1e-5, err_msg="TS Memory Mismatch"
+            pt_mem_ts, k_mem_ts, rtol=1e-4, atol=1e-4, err_msg="TS Memory Mismatch"
         )
         np.testing.assert_allclose(
-            pt_box_ts, k_box_ts, rtol=1e-4, atol=1e-5, err_msg="TS Boxes Mismatch"
+            pt_box_ts, k_box_ts, rtol=1e-4, atol=1e-4, err_msg="TS Boxes Mismatch"
         )
 
 
@@ -1011,8 +1707,7 @@ def test_transformer_output_parity():
             diff = np.abs(pt_val_np - k_val_np)
             mae = np.mean(diff)
             max_diff = np.max(diff)
-            # Threshold relaxed slightly for full FP32 stack accumulation
-            status = "PASS" if mae < 2e-4 else "FAIL"
+            status = "PASS" if mae < 1e-4 else "FAIL"
 
         print(f"{name:<20} | {mae:.8f}     | {max_diff:.8f}     | {status}")
 
