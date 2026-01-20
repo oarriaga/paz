@@ -51,7 +51,6 @@ def build_normal_normal_model(
     prior_mean, prior_stdv, likelihood_stdv, num_observations
 ):
     """Build the Normal-Normal PGM."""
-
     def Likelihood(likelihood_stdv, num_observations):
         def apply(mu):
             return tfd.Normal(

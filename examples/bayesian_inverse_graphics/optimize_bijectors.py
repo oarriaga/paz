@@ -1,12 +1,10 @@
 import os
 import pickle
 import argparse
-from functools import partial
 from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-import optax
 import numpy as np
 from sklearn.mixture import GaussianMixture as SKLGaussianMixture
 from tensorflow_probability.substrates import jax as tfp
@@ -72,14 +70,6 @@ NAME_TO_TEX = {
     "G-color": r"color [g]",
     "B-color": r"color [b]",
 }
-
-
-def print_progress(total, current, message=""):
-    if current % max(1, total // 100) == 0:
-        percent = 100 * current / total
-        print(f"\r[{percent:5.1f}%] {message}", end="", flush=True)
-    if current == total - 1:
-        print()
 
 
 def load_parameters(wildcard, filename):
@@ -202,16 +192,6 @@ def plot_priors(key, priors, output_directory, num_samples=10_000):
         plot_prior(subkey, prior_node, output_directory, num_samples)
 
 
-def bijection_loss(samples, distribution, bijector_builder):
-    def compute(x):
-        bijector = bijector_builder(x)
-        pred_distribution = tfd.TransformedDistribution(distribution, bijector)
-        negative_log_likelihood = -pred_distribution.log_prob(samples)
-        return negative_log_likelihood.sum()
-
-    return compute
-
-
 def get_property_values(shape_parameters, name):
     values = []
     for type_name, type_values in shape_parameters.items():
@@ -221,18 +201,10 @@ def get_property_values(shape_parameters, name):
     return np.array(values)
 
 
-def optimize_bijector(x, samples, distribution, bijector, optimizer, steps):
-    optimizer_state = optimizer.init(x)
-    compute_loss = bijection_loss(samples, distribution, bijector)
-    compute_grad = jax.jit(jax.value_and_grad(compute_loss, argnums=(0)))
-    losses = []
-    for step in range(steps):
-        loss, grads = compute_grad(x)
-        update, optimizer_state = optimizer.update(grads, optimizer_state)
-        x = optax.apply_updates(x, update)
-        print_progress(steps, step, f" | {name} loss: {loss}")
-        losses.append(loss)
-    return losses, x
+def extract_affine_params(bijector):
+    shift = bijector.bijectors[0].shift
+    scale = bijector.bijectors[1].scale
+    return {"shift": jp.asarray(shift).tolist(), "scale": jp.asarray(scale).tolist()}
 
 
 def get_mixture_parameters(model, unidimensional=True):
@@ -334,7 +306,6 @@ try:
     print("Optimizing bijectors for material properties...")
 
     key = jax.random.PRNGKey(args.seed)
-    optimize_bijector = partial(optimize_bijector, steps=args.gradient_steps)
     for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
         one_dim = True if name != "color" else False
         values = get_property_values(shape_parameters, name)
@@ -342,15 +313,20 @@ try:
         key, key_n, key_g = jax.random.split(key, 3)
         shift_0 = 0.0 if name != "color" else jp.full(3, 0.0)
         scale_0 = 1.0 if name != "color" else jp.full(3, 1.0)
-        samples = tfd.Normal(shift_0, scale_0).sample(args.num_samples, seed=key_n)
         x_0 = BijectorParams(shift_0, scale_0)
-        distribution = build_gmm(**mixture_params)
-        optimizer = optax.adam(args.learning_rate)
-        loss, x = optimize_bijector(
-            x_0, samples, distribution, build_affine_bijector, optimizer
+        distribution = tfd.Normal(shift_0, scale_0)
+        bijector = build_affine_bijector(x_0)
+        target_distribution = build_gmm(**mixture_params)
+        prior = paz.Prior(distribution, name=name, bijector=bijector)
+        fitted_prior, losses = prior.fit_bijector(
+            key_g,
+            target_distribution,
+            num_samples=args.num_samples,
+            num_steps=args.gradient_steps,
+            return_losses=True,
         )
-        write_losses(loss, root, f"loss_{name}.pdf")
-        bijector_params = {"shift": x.shift.tolist(), "scale": x.scale.tolist()}
+        write_losses(losses, root, f"loss_{name}.pdf")
+        bijector_params = extract_affine_params(fitted_prior.metadata.bijector)
         priors[name] = {"mixture": mixture_params, "bijector": bijector_params}
     file.write_json(priors, os.path.join(root, args.prior_filename))
     print(f"Saved optimized bijector priors to: {os.path.join(root, args.prior_filename)}")
