@@ -4,7 +4,7 @@ from functools import partial
 import jax
 import jax.numpy as jp
 
-from paz.inference import progress as progress_module
+from paz import progressbar
 from .metropolis_hastings import (
     Samples,
     build_new_proposal,
@@ -28,7 +28,6 @@ VARIANCE_FACTORS = jp.array([0.1, 0.5, 0.9, 1.1, 2, 10])
 def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True):
     if compute_rate is None:
         compute_rate = AcceptanceToVariance(ACCEPTANCE_RATES, VARIANCE_FACTORS)
-    start_time = progress_module.now()
 
     def tune_episode(tuner_state, key, num_steps):
         sigma = tuner_state.factor * tuner_state.sigma
@@ -54,13 +53,15 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
 
     @partial(jax.jit, static_argnums=(1, 2))
     def tune(key, num_steps, num_episodes, sigma):
-        progress_callback = progress_module.build_bar_callback(
-            num_episodes, start_time, "tuning", 30
+        progress_callback = (
+            progressbar.show(num_episodes, "tuning", width=30)
+            if progress
+            else None
         )
 
         def one_episode(episode_state, sample_arg):
             if progress:
-                jax.debug.callback(progress_callback, sample_arg + 1)
+                progress_callback(sample_arg + 1)
             now_key, tune_states = episode_state
             new_key, key = jax.random.split(now_key)
             keys = jax.random.split(key, num_chains)
@@ -77,7 +78,7 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
         episode_args = jp.arange(num_episodes)
         _, infos = jax.lax.scan(one_episode, (key, tuner_state), episode_args)
         if progress:
-            jax.debug.callback(progress_module.move_to_next_line)
+            progressbar.newline()
         tuned_sigma = (infos.sigma[-1] * infos.factor[-1]).mean()
         return tuned_sigma, infos
 

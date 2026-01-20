@@ -4,7 +4,7 @@ import jax
 from jax import flatten_util
 import jax.numpy as jp
 
-from paz.inference import progress as progress_module
+from paz import progressbar
 
 Samples = namedtuple("Samples", ["position", "log_density"])
 State = namedtuple("State", ["proposal", "is_accepted", "acceptance_rate"])
@@ -65,8 +65,6 @@ def sample(
     num_chains,
     progress=False,
 ):
-    start_time = progress_module.now()
-
     def build_trajectory(key, initial_state):
         position, log_density = initial_state
         new_position = propose_additively(key, position, sigma)
@@ -80,15 +78,15 @@ def sample(
         sample = choose_proposal(keys[1], now_proposal, new_proposal)
         return sample.proposal.state, sample
 
-    def step_chain_with_progress(step_state, sample_arg):
-        jax.debug.callback(progress_callback, sample_arg + 1)
+    def step_chain(step_state, sample_arg):
         old_key, states = step_state
         new_key, now_key = jax.random.split(old_key)
         keys = jax.random.split(now_key, num_chains)
         states, infos = jax.vmap(step_kernel)(keys, states)
         return (new_key, states), (states, infos)
 
-    def step_chain(step_state, sample_arg):
+    def step_chain_with_progress(step_state, sample_arg):
+        progress_callback(sample_arg + 1)
         old_key, states = step_state
         new_key, now_key = jax.random.split(old_key)
         keys = jax.random.split(now_key, num_chains)
@@ -97,11 +95,11 @@ def sample(
 
     args = jp.arange(num_samples)
     state = Samples(positions, jax.vmap(log_density_fn)(positions))
-    progress_callback = progress_module.build_bar_callback(
-        num_samples, start_time, "sampling", 30
+    progress_callback = (
+        progressbar.show(num_samples, "sample", width=30) if progress else None
     )
     scan_step = step_chain_with_progress if progress else step_chain
     _, (states, infos) = jax.lax.scan(scan_step, (key, state), args)
     if progress:
-        jax.debug.callback(progress_module.move_to_next_line)
+        progressbar.newline()
     return states, infos

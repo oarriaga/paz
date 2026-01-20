@@ -3,7 +3,7 @@ import jax.numpy as jp
 import optax
 from tensorflow_probability.substrates import jax as tfp
 
-from paz.inference import progress as progress_module
+from paz import progressbar
 
 tfd = tfp.distributions
 
@@ -38,7 +38,7 @@ def fit_bijector(
         new_params = optax.apply_updates(current_params, updates)
         return new_params, new_state, loss
 
-    start_time = progress_module.now()
+    start_time = progressbar.start() if print else None
     losses = []
     current_params = params
     current_state = opt_state
@@ -46,10 +46,8 @@ def fit_bijector(
         current_params, current_state, loss = update_step(current_params, current_state)
         losses.append(float(loss))
         if print:
-            progress_module.draw_bar(
-                step + 1, num_steps, start_time, "fit bijector", 30
-            )
+            progressbar.draw(step + 1, num_steps, start_time, "fit bijector", 30)
     if print:
-        progress_module.move_to_next_line()
+        progressbar.newline()
     optimized_bijector = jax.tree_util.tree_unflatten(treedef, current_params)
     return optimized_bijector, losses
