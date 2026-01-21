@@ -16,10 +16,11 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
+import numpy as np
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 from paz.inference.types import SampleType
 
 tfd = tfp.distributions
@@ -92,118 +93,79 @@ def plot_switch_results(
     plot_args,
     density_lines=None,
 ):
+    import matplotlib.pyplot as plt
+
     fig, axes = plt.subplots(2, 1, figsize=(11, 8))
-    x_grid = jp.linspace(x.min(), x.max(), 300)
-    switch_positions = 0.5 * (x[:-1] + x[1:])
+    x_np = np.array(x)
+    obs_np = np.array(observations)
+    x_grid = np.linspace(float(x.min()), float(x.max()), 300)
+    switch_positions = 0.5 * (x_np[:-1] + x_np[1:])
     switch_map_index = int(
         plot_args.switch_support[jp.argmax(plot_args.switch_posterior)]
     )
     switch_map_x = switch_positions[switch_map_index]
     switch_true_x = switch_positions[plot_args.switch_true_index]
 
-    left_line = posterior_lines.left.slope * x_grid + posterior_lines.left.bias
-    right_line = (
-        posterior_lines.right.slope * x_grid + posterior_lines.right.bias
-    )
-    piecewise_line = jp.where(x_grid <= switch_map_x, left_line, right_line)
+    left_line = float(posterior_lines.left.slope) * x_grid + float(posterior_lines.left.bias)
+    right_line = float(posterior_lines.right.slope) * x_grid + float(posterior_lines.right.bias)
+    piecewise_line = np.where(x_grid <= switch_map_x, left_line, right_line)
     upper = piecewise_line + 2.0 * plot_args.sigma
     lower = piecewise_line - 2.0 * plot_args.sigma
 
     true_left = true_lines.left.slope * x_grid + true_lines.left.bias
     true_right = true_lines.right.slope * x_grid + true_lines.right.bias
-    true_piecewise = jp.where(x_grid <= switch_true_x, true_left, true_right)
+    true_piecewise = np.where(x_grid <= switch_true_x, true_left, true_right)
 
-    axes[0].scatter(x, observations, color="tab:gray", alpha=0.8, label="data")
-    axes[0].plot(x_grid, piecewise_line, color="black", label="posterior mean")
-    axes[0].fill_between(
-        x_grid,
-        lower,
-        upper,
-        color="tab:blue",
-        alpha=0.15,
-        label=f"noise band (sigma={plot_args.sigma})",
-    )
-    axes[0].plot(
-        x_grid,
-        left_line,
-        color="tab:blue",
-        linestyle=":",
-        label="left line (posterior)",
-    )
-    axes[0].plot(
-        x_grid,
-        right_line,
-        color="tab:orange",
-        linestyle=":",
-        label="right line (posterior)",
-    )
-    axes[0].plot(
-        x_grid,
-        true_piecewise,
-        color="tab:green",
-        linestyle="--",
-        label="true line",
-    )
+    # Regression plot
+    plot.scatter(x_np, obs_np, axes[0], s=30, alpha=0.8, color=plot.BLUE_GREY.neutral)
+    plot.line(x_grid, piecewise_line, axes[0], color="black", label="posterior mean")
+    plot.line_with_band(x_grid, piecewise_line, np.full_like(piecewise_line, plot_args.sigma),
+                        axes[0], color=plot.BLUE_GREY.primary, alpha=0.15,
+                        label=f"noise band (sigma={plot_args.sigma})")
+    plot.line(x_grid, left_line, axes[0], color=plot.BLUE_GREY.primary,
+              linestyle=":", label="left line (posterior)")
+    plot.line(x_grid, right_line, axes[0], color=plot.EARTH.accent,
+              linestyle=":", label="right line (posterior)")
+    plot.line(x_grid, true_piecewise, axes[0], color=plot.EARTH.secondary,
+              linestyle="--", label="true line")
+
     if density_lines is not None:
-        density_left = (
-            density_lines.left.slope * x_grid + density_lines.left.bias
-        )
-        density_right = (
-            density_lines.right.slope * x_grid + density_lines.right.bias
-        )
-        density_piecewise = jp.where(
-            x_grid <= switch_map_x, density_left, density_right
-        )
-        axes[0].plot(
-            x_grid,
-            density_piecewise,
-            color="tab:purple",
-            linestyle="--",
-            label="gaussian approx",
-        )
-    axes[0].axvline(
-        switch_map_x,
-        color="black",
-        linewidth=2,
-        label="posterior switch",
-    )
-    axes[0].axvline(
-        switch_true_x,
-        color="tab:green",
-        linestyle="--",
-        label="true switch",
-    )
+        density_left = float(density_lines.left.slope) * x_grid + float(density_lines.left.bias)
+        density_right = float(density_lines.right.slope) * x_grid + float(density_lines.right.bias)
+        density_piecewise = np.where(x_grid <= switch_map_x, density_left, density_right)
+        plot.line(x_grid, density_piecewise, axes[0], color="purple",
+                  linestyle="--", label="gaussian approx")
+
+    plot.vline(switch_map_x, axes[0], color="black", linewidth=2,
+               label="posterior switch")
+    plot.vline(switch_true_x, axes[0], color=plot.EARTH.secondary,
+               linestyle="--", label="true switch")
     axes[0].set_title("Change-point regression with a discrete switch")
     axes[0].legend(loc="upper left")
+    plot.set_labels(axes[0], x="x", y="y")
+    plot.clean(axes[0])
 
-    axes[1].plot(
-        switch_positions,
-        plot_args.switch_posterior,
-        color="tab:purple",
-        marker="o",
-    )
-    axes[1].axvline(
-        switch_map_x,
-        color="black",
-        linewidth=2,
-        label="posterior switch",
-    )
-    axes[1].axvline(
-        switch_true_x,
-        color="tab:green",
-        linestyle="--",
-        label="true switch",
-    )
-    axes[1].set_xlabel("Switch location (x)")
-    axes[1].set_ylabel("Posterior probability")
+    # Discrete posterior plot
+    switch_probs_np = np.array(plot_args.switch_posterior)
+    plot.discrete_posterior(switch_positions, switch_probs_np, axes[1],
+                            true_value=switch_true_x,
+                            color=plot.DANDELION.primary,
+                            true_color=plot.EARTH.secondary)
+    plot.vline(switch_map_x, axes[1], color="black", linewidth=2,
+               label="MAP switch")
     axes[1].set_ylim(0.0, 1.0)
     axes[1].legend(loc="upper left")
+    plot.set_labels(axes[1], x="Switch location (x)", y="Posterior probability")
+    plot.clean(axes[1])
 
     plt.tight_layout()
     return fig
 
 
 def main():
+    # Configure plotting
+    plot.configure(fontsize=12, latex=False)
+
     key = jax.random.PRNGKey(21)
     num_observations = 40
     x = jp.linspace(-1.0, 1.0, num_observations)
@@ -238,10 +200,10 @@ def main():
         model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
     )
     samples, infos = posterior.inverse_samples, posterior.infos
-    slope_left_samples = samples.position.slope_left.reshape(-1)
-    bias_left_samples = samples.position.bias_left.reshape(-1)
-    slope_right_samples = samples.position.slope_right.reshape(-1)
-    bias_right_samples = samples.position.bias_right.reshape(-1)
+    slope_left_samples = samples.slope_left.reshape(-1)
+    bias_left_samples = samples.bias_left.reshape(-1)
+    slope_right_samples = samples.slope_right.reshape(-1)
+    bias_right_samples = samples.bias_right.reshape(-1)
 
     slope_left_mean = slope_left_samples.mean()
     bias_left_mean = bias_left_samples.mean()
@@ -282,7 +244,7 @@ def main():
     )
 
     switch_map_index = int(switch_support[jp.argmax(switch_probs)])
-    switch_positions = 0.5 * (x[:-1] + x[1:])
+    switch_positions = 0.5 * (np.array(x)[:-1] + np.array(x)[1:])
     switch_map_x = switch_positions[switch_map_index]
     switch_true_x = switch_positions[switch_index_true]
 
@@ -301,7 +263,39 @@ def main():
         plot_args,
         density_lines,
     )
-    plt.show()
+    plot.show()
+
+    # Additional plots: Trace panel for line parameters
+    plot.trace_panel({
+        "slope_left": samples.slope_left,
+        "bias_left": samples.bias_left,
+        "slope_right": samples.slope_right,
+        "bias_right": samples.bias_right,
+    }, title="MCMC Traces for Line Parameters")
+    plot.show()
+
+    # Corner plot for left line parameters
+    plot.corner(
+        {"slope_left": np.array(slope_left_samples),
+         "bias_left": np.array(bias_left_samples)},
+        true_values={"slope_left": slope_left_true, "bias_left": bias_left_true}
+    )
+    plot.show()
+
+    # Corner plot for right line parameters
+    plot.corner(
+        {"slope_right": np.array(slope_right_samples),
+         "bias_right": np.array(bias_right_samples)},
+        true_values={"slope_right": slope_right_true, "bias_right": bias_right_true}
+    )
+    plot.show()
+
+    # Diagnostics
+    fig, ax = plot.subplots()
+    plot.diagnostics(infos.acceptance_rate, ax, color=plot.DANDELION.primary)
+    ax.set_title("Acceptance rates per chain")
+    plot.clean(ax)
+    plot.show()
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from tensorflow_probability.substrates import jax as tfp
 
 import paz
 from paz.inference.prior import Prior
-from paz.inference.serialization.api import _infer_format
+from paz.inference.serialize.api import _infer_format
 
 tfd = tfp.distributions
 

@@ -8,18 +8,20 @@ from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.utils import validate_space
 
 
-def infer(key, data, prior, likelihood, method, **kwargs):
+def infer(key, data, prior, likelihood, method, sample_predictive=None, **kwargs):
     if method is None:
         raise ValueError("method is required")
     method = method.lower()
     if method == "mh":
-        return _infer_mh(key, data, prior, likelihood, **kwargs)
+        return _infer_mh(
+            key, data, prior, likelihood, sample_predictive, **kwargs
+        )
     if method in ("smc", "vi", "hmc", "nuts"):
         raise NotImplementedError(f"Method '{method}' not implemented yet.")
     raise ValueError(f"Unknown inference method '{method}'.")
 
 
-def _infer_mh(key, data, prior, likelihood, **kwargs):
+def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
     num_samples = kwargs.get("num_samples")
     if num_samples is None:
         raise ValueError("num_samples is required for MH")
@@ -85,7 +87,9 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         "space": space,
         "progress": progress,
     }
-    return MCMCPosterior(states, infos, config, prior.latent_space)
+    return MCMCPosterior(
+        states, infos, config, prior.latent_space, sample_predictive
+    )
 
 
 def _resolve_mh_settings(kwargs):

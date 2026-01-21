@@ -27,7 +27,7 @@ Yes, if all components are supported by the safe serializer:
 
 2) Latent/Observable nodes:
    - The distribution_fn must be explicitly registered as serializable.
-   - Use the @paz.inference.serialization.serializable decorator.
+   - Use the @paz.inference.serialize.serializable decorator.
    - Example: linear_regression_likelihood(X) returns a callable with metadata.
 
 3) PGM:
@@ -42,7 +42,7 @@ Registering custom distribution builders
 Register in a module or directly in your script using the decorator.
 Example pattern:
 
-    @paz.inference.serialization.serializable("my_custom_likelihood")
+    @paz.inference.serialize.serializable("my_custom_likelihood")
     def my_custom_likelihood(feature):
         def apply(param):
             return tfd.Normal(param * feature, 1.0)
@@ -66,8 +66,7 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 
-# TODO change the serialization so that it's paz.inference.serialize.
-@paz.inference.serialization.serializable("local_linear_regression_likelihood")
+@paz.inference.serialize.serializable("local_linear_regression_likelihood")
 def local_linear_regression_likelihood(X):
     def apply(mean, bias, stdv):
         return tfd.Normal(mean * X + bias, stdv)

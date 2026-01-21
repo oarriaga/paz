@@ -280,12 +280,12 @@ def main():
     print("Posterior estimates (tuned sigma)")
     print(
         "  Mean: "
-        f"{tuned_result.posterior.inverse_samples.position.mean.mean():.4f} "
+        f"{tuned_result.posterior.inverse_samples.mean.mean():.4f} "
         f"(true: {true_params.mean:.2f})"
     )
     print(
         "  Bias: "
-        f"{tuned_result.posterior.inverse_samples.position.bias.mean():.4f} "
+        f"{tuned_result.posterior.inverse_samples.bias.mean():.4f} "
         f"(true: {true_params.bias:.2f})"
     )
     print(
@@ -298,12 +298,12 @@ def main():
     print("Posterior estimates (initial sigma)")
     print(
         "  Mean: "
-        f"{initial_result.posterior.inverse_samples.position.mean.mean():.4f} "
+        f"{initial_result.posterior.inverse_samples.mean.mean():.4f} "
         f"(true: {true_params.mean:.2f})"
     )
     print(
         "  Bias: "
-        f"{initial_result.posterior.inverse_samples.position.bias.mean():.4f} "
+        f"{initial_result.posterior.inverse_samples.bias.mean():.4f} "
         f"(true: {true_params.bias:.2f})"
     )
     print(

@@ -17,4 +17,5 @@ from paz.inference.discretizer import (
     get_grid_values,
     indices_to_values,
 )
-from paz.inference.serialization import load, save
+from paz.inference import serialize
+from paz.inference.serialize import load, save

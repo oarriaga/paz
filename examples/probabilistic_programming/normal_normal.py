@@ -2,25 +2,27 @@
 Normal-Normal Bayesian Model with Analytical Posterior Verification
 
 Model:
-    Prior:      μ ~ Normal(μ₀, σ₀)
-    Likelihood: X₁, ..., Xₙ | μ ~ Normal(μ, σ)  [σ known]
+    Prior:      mu ~ Normal(mu_0, sigma_0)
+    Likelihood: X_1, ..., X_n | mu ~ Normal(mu, sigma)  [sigma known]
 
 Analytical Posterior:
-    μ | X ~ Normal(μ_post, σ_post)
+    mu | X ~ Normal(mu_post, sigma_post)
 
     where:
-        σ²_post = 1 / (1/σ₀² + n/σ²)
-        μ_post  = σ²_post * (μ₀/σ₀² + n*X̄/σ²)
+        sigma^2_post = 1 / (1/sigma_0^2 + n/sigma^2)
+        mu_post  = sigma^2_post * (mu_0/sigma_0^2 + n*X_bar/sigma^2)
 
 This example verifies that MCMC samples converge to the analytical posterior.
 """
+
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
+import numpy as np
 from collections import namedtuple
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 
 tfd = tfp.distributions
 
@@ -28,7 +30,9 @@ tfd = tfp.distributions
 AnalyticalPosterior = namedtuple("AnalyticalPosterior", ["mean", "stdv"])
 
 
-def compute_analytical_posterior(prior_mean, prior_stdv, likelihood_stdv, observations):
+def compute_analytical_posterior(
+    prior_mean, prior_stdv, likelihood_stdv, observations
+):
     """Compute the analytical posterior for the Normal-Normal model."""
     n = len(observations)
     obs_mean = observations.mean()
@@ -51,6 +55,7 @@ def build_normal_normal_model(
     prior_mean, prior_stdv, likelihood_stdv, num_observations
 ):
     """Build the Normal-Normal PGM."""
+
     def Likelihood(likelihood_stdv, num_observations):
         def apply(mu):
             return tfd.Normal(
@@ -60,9 +65,9 @@ def build_normal_normal_model(
         return apply
 
     mu = paz.Prior(tfd.Normal(prior_mean, prior_stdv), name="mu")
-    x = paz.Observable(
-        Likelihood(likelihood_stdv, num_observations), name="x"
-    )(mu)
+    x = paz.Observable(Likelihood(likelihood_stdv, num_observations), name="x")(
+        mu
+    )
     return paz.PGM([mu], [x], "normal_normal")
 
 
@@ -79,11 +84,13 @@ def run_mcmc(model, key, data, num_samples, num_chains, sigma, warmup):
 
 def compute_mcmc_statistics(samples):
     """Compute mean and std from MCMC samples."""
-    posterior_samples = samples.position.mu.flatten()
+    posterior_samples = samples.mu.flatten()
     return posterior_samples.mean(), posterior_samples.std()
 
 
-def verify_posterior(analytical, mcmc_mean, mcmc_stdv, tolerance_mean=0.05, tolerance_stdv=0.1):
+def verify_posterior(
+    analytical, mcmc_mean, mcmc_stdv, tolerance_mean=0.05, tolerance_stdv=0.1
+):
     """Verify MCMC samples match analytical posterior within tolerance."""
     mean_error = abs(mcmc_mean - analytical.mean) / abs(analytical.mean)
     stdv_error = abs(mcmc_stdv - analytical.stdv) / analytical.stdv
@@ -94,63 +101,10 @@ def verify_posterior(analytical, mcmc_mean, mcmc_stdv, tolerance_mean=0.05, tole
     return mean_ok, stdv_ok, mean_error, stdv_error
 
 
-def plot_results(samples, analytical, prior_mean, prior_stdv, density=None):
-    """Plot MCMC samples against analytical posterior."""
-    posterior_samples = samples.position.mu.flatten()
-
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-
-    # Trace plot
-    axes[0].plot(samples.position.mu[:, 0], alpha=0.7, linewidth=0.5)
-    axes[0].axhline(analytical.mean, color="red", linestyle="--", label="Analytical mean")
-    axes[0].set_xlabel("Iteration")
-    axes[0].set_ylabel("μ")
-    axes[0].set_title("Trace plot (chain 0)")
-    axes[0].legend()
-
-    # Histogram vs analytical posterior
-    x_range = jp.linspace(
-        analytical.mean - 4 * analytical.stdv,
-        analytical.mean + 4 * analytical.stdv,
-        200,
-    )
-    analytical_pdf = tfd.Normal(analytical.mean, analytical.stdv).prob(x_range)
-    prior_pdf = tfd.Normal(prior_mean, prior_stdv).prob(x_range)
-    density_pdf = None
-    if density is not None:
-        density_pdf = density.prob({"mu": x_range})
-
-    axes[1].hist(posterior_samples, bins=50, density=True, alpha=0.7, label="MCMC samples")
-    axes[1].plot(x_range, analytical_pdf, "r-", linewidth=2, label="Analytical posterior")
-    axes[1].plot(x_range, prior_pdf, "g--", linewidth=2, label="Prior")
-    if density_pdf is not None:
-        axes[1].plot(x_range, density_pdf, "k:", linewidth=2, label="Gaussian fit")
-    axes[1].set_xlabel("μ")
-    axes[1].set_ylabel("Density")
-    axes[1].set_title("Posterior distribution")
-    axes[1].legend()
-
-    # QQ plot
-    sorted_samples = jp.sort(posterior_samples)
-    n = len(sorted_samples)
-    theoretical_quantiles = tfd.Normal(analytical.mean, analytical.stdv).quantile(
-        jp.linspace(0.001, 0.999, n)
-    )
-    axes[2].scatter(theoretical_quantiles, sorted_samples, alpha=0.3, s=1)
-    lims = [
-        min(theoretical_quantiles.min(), sorted_samples.min()),
-        max(theoretical_quantiles.max(), sorted_samples.max()),
-    ]
-    axes[2].plot(lims, lims, "r--", linewidth=2)
-    axes[2].set_xlabel("Theoretical quantiles")
-    axes[2].set_ylabel("Sample quantiles")
-    axes[2].set_title("Q-Q plot")
-
-    plt.tight_layout()
-    return fig
-
-
 def main():
+    # Configure plotting
+    plot.configure(fontsize=14, latex=False)
+
     # Model parameters
     prior_mean = 0.0
     prior_stdv = 2.0
@@ -161,22 +115,26 @@ def main():
     key = jax.random.PRNGKey(42)
     key, data_key = jax.random.split(key)
     n_observations = 20
-    observations = true_mu + likelihood_stdv * jax.random.normal(data_key, (n_observations,))
+    observations = true_mu + likelihood_stdv * jax.random.normal(
+        data_key, (n_observations,)
+    )
 
     print("=" * 60)
     print("Normal-Normal Bayesian Model")
     print("=" * 60)
-    print(f"\nPrior:      μ ~ Normal({prior_mean}, {prior_stdv})")
-    print(f"Likelihood: X | μ ~ Normal(μ, {likelihood_stdv})")
-    print(f"\nTrue μ:           {true_mu}")
-    print(f"Observations:     n={n_observations}, mean={observations.mean():.4f}")
+    print(f"\nPrior:      mu ~ Normal({prior_mean}, {prior_stdv})")
+    print(f"Likelihood: X | mu ~ Normal(mu, {likelihood_stdv})")
+    print(f"\nTrue mu:          {true_mu}")
+    print(
+        f"Observations:     n={n_observations}, mean={observations.mean():.4f}"
+    )
 
     # Compute analytical posterior
     analytical = compute_analytical_posterior(
         prior_mean, prior_stdv, likelihood_stdv, observations
     )
     print(f"\nAnalytical Posterior:")
-    print(f"  μ | X ~ Normal({analytical.mean:.4f}, {analytical.stdv:.4f})")
+    print(f"  mu | X ~ Normal({analytical.mean:.4f}, {analytical.stdv:.4f})")
 
     # Build model and run MCMC
     model = build_normal_normal_model(
@@ -196,7 +154,7 @@ def main():
         model, key, data, num_samples, num_chains, sigma, warmup
     )
     samples, infos = posterior.inverse_samples, posterior.infos
-    density = posterior.as_density(method="gaussian")
+    gaussian_density = posterior.as_density(method="gaussian")
 
     # Compute MCMC statistics
     mcmc_mean, mcmc_stdv = compute_mcmc_statistics(samples)
@@ -204,8 +162,12 @@ def main():
 
     print(f"\nMCMC Results:")
     print(f"  Acceptance rate: {acceptance_rate:.3f}")
-    print(f"  Posterior mean:  {mcmc_mean:.4f} (analytical: {analytical.mean:.4f})")
-    print(f"  Posterior stdv:  {mcmc_stdv:.4f} (analytical: {analytical.stdv:.4f})")
+    print(
+        f"  Posterior mean:  {mcmc_mean:.4f} (analytical: {analytical.mean:.4f})"
+    )
+    print(
+        f"  Posterior stdv:  {mcmc_stdv:.4f} (analytical: {analytical.stdv:.4f})"
+    )
 
     # Verify convergence
     mean_ok, stdv_ok, mean_error, stdv_error = verify_posterior(
@@ -213,17 +175,110 @@ def main():
     )
 
     print(f"\nVerification:")
-    print(f"  Mean error: {mean_error:.2%} {'✓' if mean_ok else '✗'}")
-    print(f"  Stdv error: {stdv_error:.2%} {'✓' if stdv_ok else '✗'}")
+    print(f"  Mean error: {mean_error:.2%} {'[OK]' if mean_ok else '[FAIL]'}")
+    print(f"  Stdv error: {stdv_error:.2%} {'[OK]' if stdv_ok else '[FAIL]'}")
 
     if mean_ok and stdv_ok:
-        print("\n✓ MCMC converged to analytical posterior!")
+        print("\n[OK] MCMC converged to analytical posterior!")
     else:
-        print("\n✗ MCMC did not converge - try more samples or tuning")
+        print("\n[FAIL] MCMC did not converge - try more samples or tuning")
 
-    # Plot results
-    fig = plot_results(samples, analytical, prior_mean, prior_stdv, density)
-    plt.show()
+    posterior_samples = samples.mu.flatten()
+
+    # Trace panel for all chains
+    plot.trace_panel({"mu": samples.mu}, title="MCMC Traces")
+    plot.show()
+
+    # Trace plot with analytical reference
+    fig, ax = plot.subplots()
+    plot.trace_lines(samples.mu, ax)
+    plot.hline(
+        float(analytical.mean),
+        ax,
+        color=plot.EARTH.primary,
+        linestyle="--",
+        label="Analytical mean",
+    )
+    plot.hline(
+        float(true_mu),
+        ax,
+        color=plot.EARTH.secondary,
+        linestyle=":",
+        label="True mu",
+    )
+    plot.set_labels(ax, x="Iteration", y="mu")
+    plot.clean(ax)
+    ax.legend()
+    ax.set_title("Trace plot (all chains)")
+    plot.show()
+
+    # Distribution comparison: MCMC histogram + analytical + prior + Gaussian fit
+    x_range = np.linspace(
+        float(analytical.mean - 4 * analytical.stdv),
+        float(analytical.mean + 4 * analytical.stdv),
+        200,
+    )
+    analytical_pdf = np.array(
+        tfd.Normal(analytical.mean, analytical.stdv).prob(x_range)
+    )
+    prior_pdf = np.array(tfd.Normal(prior_mean, prior_stdv).prob(x_range))
+    gaussian_fit_pdf = np.array(gaussian_density.prob({"mu": x_range}))
+
+    fig, ax = plot.subplots()
+    plot.histogram(
+        np.array(posterior_samples),
+        ax,
+        bins=50,
+        alpha=0.5,
+        color=plot.BLUE_GREY.primary,
+    )
+    plot.compare_densities(
+        x_range,
+        [analytical_pdf, prior_pdf, gaussian_fit_pdf],
+        ["Analytical posterior", "Prior", "Gaussian fit"],
+        ax,
+        colors=[plot.EARTH.primary, plot.EARTH.secondary, "black"],
+    )
+    plot.set_labels(ax, x="mu", y="Density")
+    plot.clean(ax)
+    ax.legend()
+    ax.set_title("Posterior distribution comparison")
+    plot.show()
+
+    # Prior vs posterior comparison
+    fig, axes = plot.prior_posterior_comparison(
+        prior_samples=np.random.normal(
+            prior_mean, prior_stdv, size=len(posterior_samples)
+        ),
+        posterior_samples=np.array(posterior_samples),
+        name="mu",
+    )
+    plot.show()
+
+    # Q-Q plot against analytical posterior
+    fig, ax = plot.subplots()
+    sorted_samples = np.sort(np.array(posterior_samples))
+    n = len(sorted_samples)
+    theoretical_quantiles = np.array(
+        tfd.Normal(analytical.mean, analytical.stdv).quantile(
+            np.linspace(0.001, 0.999, n)
+        )
+    )
+    # TODO this is not working
+    plot.qq_plot(
+        sorted_samples, theoretical_quantiles, ax, color=plot.BLUE_GREY.primary
+    )
+    plot.set_labels(ax, x="Theoretical quantiles", y="Sample quantiles")
+    plot.clean(ax)
+    ax.set_title("Q-Q plot (vs analytical posterior)")
+    plot.show()
+
+    # Diagnostics
+    fig, ax = plot.subplots()
+    plot.diagnostics(infos.acceptance_rate, ax, color=plot.DANDELION.primary)
+    plot.clean(ax)
+    ax.set_title("Acceptance rates per chain")
+    plot.show()
 
     return analytical, mcmc_mean, mcmc_stdv
 

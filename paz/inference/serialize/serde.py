@@ -38,13 +38,13 @@ class PosteriorSerde:
 
     def to_spec(self, obj):
         arrays = {}
-        position, sample_kind = _samples_to_dict(obj.inverse_samples.position)
+        position, sample_kind = _samples_to_dict(obj.inverse_samples)
         position_refs = {}
         for name, value in position.items():
             array_name = f"position_{name}"
             arrays[array_name] = value
             position_refs[name] = _ref(array_name)
-        arrays["log_density"] = obj.inverse_samples.log_density
+        arrays["log_density"] = obj.inverse_log_probs
         infos = obj.infos
         arrays["is_accepted"] = infos.is_accepted
         arrays["acceptance_rate"] = infos.acceptance_rate

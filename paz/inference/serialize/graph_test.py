@@ -4,7 +4,7 @@ from tensorflow_probability.substrates import jax as tfp
 from paz.inference.latent import Latent
 from paz.inference.observable import Observable
 from paz.inference.prior import Prior
-from paz.inference.serialization.graph import (
+from paz.inference.serialize.graph import (
     _build_graph,
     _build_node,
     _deserialize_distribution_fn,
@@ -12,7 +12,7 @@ from paz.inference.serialization.graph import (
     _serialize_graph,
     _serialize_node,
 )
-from paz.inference.serialization.serializable import serializable
+from paz.inference.serialize.serializable import serializable
 
 
 tfd = tfp.distributions

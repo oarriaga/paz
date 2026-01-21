@@ -31,10 +31,12 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jp
+import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -223,6 +225,9 @@ def build_noncentered_model(
 
 
 def main():
+    # Configure plotting
+    plot.configure(fontsize=12, latex=False)
+
     true_params = TrueParams(
         mu_slope=0.8,
         sigma_slope=0.3,
@@ -235,9 +240,11 @@ def main():
     num_per_group = 50
     PLOT = True
     PARAMETERIZATION = "non-centered"  # "centered" or "non-centered"
-    # PARAMETERIZATION = "centered"  # "centered" or "non-centered"
-    if PLOT:
-        colors = plt.cm.tab10(jp.arange(num_groups))
+
+    # Get group colors
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(i) for i in range(num_groups)]
+
     key = jax.random.PRNGKey(7)
     key, data_key = jax.random.split(key)
     X, y, group_idx, true_slopes, true_intercepts = generate_hierarchical_data(
@@ -284,17 +291,17 @@ def main():
 
     print("\nSampling from prior predictive...")
     key, prior_key = jax.random.split(key)
+
     if PLOT:
-        plt.figure(figsize=(10, 4))
-        plt.subplot(1, 2, 1)
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+
+        # Prior predictive
         for key_i in jax.random.split(prior_key, 20):
             sample = model.sample(key_i)
-            # Extract slopes and intercepts (handle both parameterizations)
             if PARAMETERIZATION == "centered":
                 slopes_sample = sample.slopes
                 intercepts_sample = sample.intercepts
             else:  # non-centered
-                # Transform z to actual parameters
                 slopes_sample = (
                     sample.mu_slope + sample.sigma_slope * sample.z_slopes
                 )
@@ -308,29 +315,25 @@ def main():
                 x_j = X[mask]
                 sort_idx = jp.argsort(x_j)
                 y_pred = slopes_sample[j] * x_j + intercepts_sample[j]
-                plt.plot(
-                    x_j[sort_idx], y_pred[sort_idx], color=colors[j], alpha=0.1
+                axes[0].plot(
+                    np.array(x_j[sort_idx]), np.array(y_pred[sort_idx]),
+                    color=colors[j], alpha=0.1
                 )
-        plt.title("Prior predictive")
-        plt.xlabel("X")
-        plt.ylabel("y")
+        axes[0].set_title("Prior predictive")
+        plot.set_labels(axes[0], x="X", y="y")
+        plot.clean(axes[0])
 
-        plt.subplot(1, 2, 2)
+        # Observed data with groups
         for j in range(num_groups):
             mask = group_idx == j
-            plt.scatter(
-                X[mask],
-                y[mask],
-                color=colors[j],
-                alpha=0.6,
-                label=f"Group {j}",
-            )
-        plt.legend()
-        plt.title("Observed data")
-        plt.xlabel("X")
-        plt.ylabel("y")
+            plot.scatter(np.array(X[mask]), np.array(y[mask]), axes[1],
+                         s=20, alpha=0.6, color=colors[j])
+        axes[1].set_title("Observed data")
+        plot.set_labels(axes[1], x="X", y="y")
+        plot.clean(axes[1])
+
         plt.tight_layout()
-        plt.show()
+        plot.show()
 
     num_chains = 10
     num_samples = 70_000
@@ -353,11 +356,11 @@ def main():
 
     print("\nPosterior estimates vs true values:")
     print(
-        f"  mu_slope: {samples.position.mu_slope.mean():.3f} "
+        f"  mu_slope: {samples.mu_slope.mean():.3f} "
         f"(true: {true_params.mu_slope})"
     )
     print(
-        f"  mu_intercept: {samples.position.mu_intercept.mean():.3f} "
+        f"  mu_intercept: {samples.mu_intercept.mean():.3f} "
         f"(true: {true_params.mu_intercept})"
     )
     print(
@@ -377,22 +380,17 @@ def main():
 
     # Extract slopes and intercepts (handle both parameterizations)
     if PARAMETERIZATION == "centered":
-        posterior_slopes = samples.position.slopes.reshape(-1, num_groups)
-        posterior_intercepts = samples.position.intercepts.reshape(
-            -1, num_groups
-        )
+        posterior_slopes = samples.slopes.reshape(-1, num_groups)
+        posterior_intercepts = samples.intercepts.reshape(-1, num_groups)
     else:  # non-centered
-        # Transform z to actual parameters
-        mu_slope_expanded = samples.position.mu_slope.reshape(-1, 1)
+        mu_slope_expanded = samples.mu_slope.reshape(-1, 1)
         sigma_slope_expanded = posterior_forward.sigma_slope.reshape(-1, 1)
-        z_slopes = samples.position.z_slopes.reshape(-1, num_groups)
+        z_slopes = samples.z_slopes.reshape(-1, num_groups)
         posterior_slopes = mu_slope_expanded + sigma_slope_expanded * z_slopes
 
-        mu_intercept_expanded = samples.position.mu_intercept.reshape(-1, 1)
-        sigma_intercept_expanded = posterior_forward.sigma_intercept.reshape(
-            -1, 1
-        )
-        z_intercepts = samples.position.z_intercepts.reshape(-1, num_groups)
+        mu_intercept_expanded = samples.mu_intercept.reshape(-1, 1)
+        sigma_intercept_expanded = posterior_forward.sigma_intercept.reshape(-1, 1)
+        z_intercepts = samples.z_intercepts.reshape(-1, num_groups)
         posterior_intercepts = (
             mu_intercept_expanded + sigma_intercept_expanded * z_intercepts
         )
@@ -423,153 +421,136 @@ def main():
         )
 
     if PLOT:
+        # Posterior panel for hyperparameters
         fig, axes = plt.subplots(2, 3, figsize=(12, 8))
 
-        axes[0, 0].hist(
-            samples.position.mu_slope.flatten(),
-            bins=50,
-            density=True,
-            alpha=0.7,
-        )
-        axes[0, 0].axvline(
-            true_params.mu_slope, color="red", linestyle="--", label="True"
-        )
-        axes[0, 0].set_xlabel("mu_slope")
+        plot.histogram(np.array(samples.mu_slope.flatten()), axes[0, 0],
+                       bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
+        plot.vline(true_params.mu_slope, axes[0, 0], color=plot.EARTH.primary,
+                   linestyle="--", label="True")
+        plot.set_labels(axes[0, 0], x="mu_slope", y="density")
         axes[0, 0].legend()
+        plot.clean(axes[0, 0])
 
-        axes[0, 1].hist(
-            samples.position.mu_intercept.flatten(),
-            bins=50,
-            density=True,
-            alpha=0.7,
-        )
-        axes[0, 1].axvline(
-            true_params.mu_intercept, color="red", linestyle="--", label="True"
-        )
-        axes[0, 1].set_xlabel("mu_intercept")
+        plot.histogram(np.array(samples.mu_intercept.flatten()), axes[0, 1],
+                       bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
+        plot.vline(true_params.mu_intercept, axes[0, 1], color=plot.EARTH.primary,
+                   linestyle="--", label="True")
+        plot.set_labels(axes[0, 1], x="mu_intercept", y="density")
         axes[0, 1].legend()
+        plot.clean(axes[0, 1])
 
-        axes[0, 2].hist(
-            posterior_forward.sigma_slope.flatten(),
-            bins=50,
-            density=True,
-            alpha=0.7,
-        )
-        axes[0, 2].axvline(
-            true_params.sigma_slope, color="red", linestyle="--", label="True"
-        )
-        axes[0, 2].set_xlabel("sigma_slope")
+        plot.histogram(np.array(posterior_forward.sigma_slope.flatten()), axes[0, 2],
+                       bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
+        plot.vline(true_params.sigma_slope, axes[0, 2], color=plot.EARTH.primary,
+                   linestyle="--", label="True")
+        plot.set_labels(axes[0, 2], x="sigma_slope", y="density")
         axes[0, 2].legend()
+        plot.clean(axes[0, 2])
 
-        axes[1, 0].hist(
-            posterior_forward.sigma_intercept.flatten(),
-            bins=50,
-            density=True,
-            alpha=0.7,
-        )
-        axes[1, 0].axvline(
-            true_params.sigma_intercept,
-            color="red",
-            linestyle="--",
-            label="True",
-        )
-        axes[1, 0].set_xlabel("sigma_intercept")
+        plot.histogram(np.array(posterior_forward.sigma_intercept.flatten()), axes[1, 0],
+                       bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
+        plot.vline(true_params.sigma_intercept, axes[1, 0], color=plot.EARTH.primary,
+                   linestyle="--", label="True")
+        plot.set_labels(axes[1, 0], x="sigma_intercept", y="density")
         axes[1, 0].legend()
+        plot.clean(axes[1, 0])
 
-        axes[1, 1].hist(
-            posterior_forward.sigma_obs.flatten(),
-            bins=50,
-            density=True,
-            alpha=0.7,
-        )
-        axes[1, 1].axvline(
-            true_params.sigma_obs, color="red", linestyle="--", label="True"
-        )
-        axes[1, 1].set_xlabel("sigma_obs")
+        plot.histogram(np.array(posterior_forward.sigma_obs.flatten()), axes[1, 1],
+                       bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
+        plot.vline(true_params.sigma_obs, axes[1, 1], color=plot.EARTH.primary,
+                   linestyle="--", label="True")
+        plot.set_labels(axes[1, 1], x="sigma_obs", y="density")
         axes[1, 1].legend()
+        plot.clean(axes[1, 1])
 
+        # Group parameter scatter (slope vs intercept)
         for j in range(num_groups):
             axes[1, 2].scatter(
-                posterior_slopes[:, j].mean(),
-                posterior_intercepts[:, j].mean(),
-                color=colors[j],
-                s=100,
-                label=f"Group {j} (post)",
-                zorder=3,
+                float(posterior_slopes[:, j].mean()),
+                float(posterior_intercepts[:, j].mean()),
+                color=colors[j], s=100, label=f"Group {j} (post)", zorder=3,
             )
             axes[1, 2].scatter(
-                true_slopes[j],
-                true_intercepts[j],
-                color=colors[j],
-                marker="x",
-                s=100,
-                zorder=3,
+                float(true_slopes[j]), float(true_intercepts[j]),
+                color=colors[j], marker="x", s=100, zorder=3,
             )
             axes[1, 2].scatter(
-                density_slopes[j],
-                density_intercepts[j],
-                color="tab:purple",
-                marker="D",
-                s=80,
-                zorder=4,
+                float(density_slopes[j]), float(density_intercepts[j]),
+                color="tab:purple", marker="D", s=80, zorder=4,
             )
-        axes[1, 2].scatter(
-            [],
-            [],
-            color="tab:purple",
-            marker="D",
-            s=80,
-            label="gaussian approx",
-        )
-
-        axes[1, 2].set_xlabel("slope")
-        axes[1, 2].set_ylabel("intercept")
+        axes[1, 2].scatter([], [], color="tab:purple", marker="D", s=80,
+                           label="gaussian approx")
+        plot.set_labels(axes[1, 2], x="slope", y="intercept")
         axes[1, 2].set_title("Group parameters (circle=posterior, x=true)")
         axes[1, 2].legend(loc="upper left", fontsize=8)
+        plot.clean(axes[1, 2])
 
         plt.tight_layout()
-        plt.show()
+        plot.show()
 
-        plt.figure(figsize=(12, 4))
+        # Posterior predictive by group
+        fig, axes = plt.subplots(1, num_groups, figsize=(12, 4))
         for j in range(num_groups):
-            plt.subplot(1, num_groups, j + 1)
             mask = group_idx == j
-            plt.scatter(X[mask], y[mask], color=colors[j], alpha=0.6, s=20)
+            plot.scatter(np.array(X[mask]), np.array(y[mask]), axes[j],
+                         s=20, alpha=0.6, color=colors[j])
 
-            x_plot = jp.linspace(0, 1, 100)
+            x_plot = np.linspace(0, 1, 100)
             for i in range(50):
-                idx = jax.random.randint(
+                idx = int(jax.random.randint(
                     jax.random.PRNGKey(i), (), 0, len(posterior_slopes)
-                )
-                slope_i = posterior_slopes[idx, j]
-                intercept_i = posterior_intercepts[idx, j]
-                plt.plot(
-                    x_plot,
-                    slope_i * x_plot + intercept_i,
-                    color=colors[j],
-                    alpha=0.1,
-                )
+                ))
+                slope_i = float(posterior_slopes[idx, j])
+                intercept_i = float(posterior_intercepts[idx, j])
+                plot.line(x_plot, slope_i * x_plot + intercept_i, axes[j],
+                          color=colors[j], alpha=0.1)
 
-            plt.plot(
-                x_plot,
-                true_slopes[j] * x_plot + true_intercepts[j],
-                "k--",
-                linewidth=2,
-                label="True",
-            )
-            plt.title(f"Group {j}")
-            plt.xlabel("X")
+            plot.line(x_plot, float(true_slopes[j]) * x_plot + float(true_intercepts[j]),
+                      axes[j], color="black", linestyle="--", linewidth=2, label="True")
+            axes[j].set_title(f"Group {j}")
+            plot.set_labels(axes[j], x="X", y="y" if j == 0 else None)
             if j == 0:
-                plt.ylabel("y")
-            plt.legend()
+                axes[j].legend()
+            plot.clean(axes[j])
 
         plt.suptitle("Posterior predictive by group", y=1.02)
         plt.tight_layout()
-        plt.show()
+        plot.show()
+
+        # Diagnostics
+        fig, ax = plot.subplots()
+        plot.diagnostics(infos.acceptance_rate, ax, color=plot.DANDELION.primary)
+        ax.set_title("Acceptance rates per chain")
+        plot.clean(ax)
+        plot.show()
+
+        # Corner plot for hyperparameters
+        plot.corner({
+            "mu_slope": np.array(samples.mu_slope.flatten()),
+            "mu_intercept": np.array(samples.mu_intercept.flatten()),
+        }, true_values={
+            "mu_slope": true_params.mu_slope,
+            "mu_intercept": true_params.mu_intercept,
+        })
+        plot.show()
+
+        # Forest plot for group slopes
+        group_names = [f"slope_{j}" for j in range(num_groups)]
+        group_means = [float(posterior_slopes[:, j].mean()) for j in range(num_groups)]
+        group_errors = [float(posterior_slopes[:, j].std()) for j in range(num_groups)]
+        group_true = [float(true_slopes[j]) for j in range(num_groups)]
+
+        fig, ax = plot.subplots(figsize=(8, 5))
+        plot.forest_plot(group_names, group_means, group_errors, ax,
+                         true_values=group_true, color=plot.BLUE_GREY.primary)
+        ax.set_title("Group slope estimates (with 1 std)")
+        plot.clean(ax, spines="box")
+        plot.show()
 
     print("\nShrinkage effect (group estimates pulled toward global mean):")
-    pooled_slope = samples.position.mu_slope.mean()
-    pooled_intercept = samples.position.mu_intercept.mean()
+    pooled_slope = samples.mu_slope.mean()
+    pooled_intercept = samples.mu_intercept.mean()
     print(f"  Pooled slope mean: {pooled_slope:.3f}")
     print(f"  Pooled intercept mean: {pooled_intercept:.3f}")
 

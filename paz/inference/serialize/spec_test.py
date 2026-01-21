@@ -4,7 +4,7 @@ from tensorflow_probability.substrates import jax as tfp
 
 from paz.inference.latent_space import build_latent_space
 from paz.inference.prior import Prior
-from paz.inference.serialization.spec import (
+from paz.inference.serialize.spec import (
     _build_latent_space,
     _clean_config,
     _decode_kwargs,

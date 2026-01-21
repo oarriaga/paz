@@ -3,7 +3,7 @@ from paz.inference.latent import Latent
 from paz.inference.observable import Observable
 from paz.inference.pgm.builder import search_nodes
 from paz.inference.prior import Prior
-from paz.inference.serialization.serializable import build_distribution_fn
+from paz.inference.serialize.serializable import build_distribution_fn
 
 from .spec import (
     _decode_kwargs,

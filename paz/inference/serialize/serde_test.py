@@ -9,8 +9,8 @@ from paz.inference.latent_space import build_latent_space
 from paz.inference.observable import Observable
 from paz.inference.pgm import PGM
 from paz.inference.prior import Prior
-from paz.inference.serialization.serde import _find_serde, _serde_for_type
-from paz.inference.serialization.serializable import serializable
+from paz.inference.serialize.serde import _find_serde, _serde_for_type
+from paz.inference.serialize.serializable import serializable
 
 
 tfd = tfp.distributions
@@ -82,12 +82,12 @@ def test_posterior_serde_roundtrip():
     posterior = _build_posterior()
     loaded = _roundtrip(posterior)
     assert jp.allclose(
-        loaded.inverse_samples.position.x,
-        posterior.inverse_samples.position.x,
+        loaded.inverse_samples.x,
+        posterior.inverse_samples.x,
     )
     assert jp.allclose(
-        loaded.inverse_samples.log_density,
-        posterior.inverse_samples.log_density,
+        loaded.inverse_log_probs,
+        posterior.inverse_log_probs,
     )
     assert jp.allclose(
         loaded.infos.is_accepted, posterior.infos.is_accepted

@@ -50,6 +50,7 @@ from paz import plot
 from paz.progress_bar import bar
 from paz import progress_bar
 from paz import progressbar
+from paz import inference
 from paz.inference import metropolis_hastings
 from paz.inference.prior import Prior
 from paz.inference.observable import Observable

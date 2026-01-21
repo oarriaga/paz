@@ -78,6 +78,7 @@ MCMCPosteriorType = namedtuple(
         "update",
         "samples",
         "inverse_samples",
+        "inverse_log_probs",
         "infos",
         "config",
         "latent_space",

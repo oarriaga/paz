@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
+import numpy as np
 from tensorflow_probability.substrates import jax as tfp
 
+import paz.plot as plot
 from paz.inference.gmm.model import GMM
 
 
@@ -75,30 +76,33 @@ def _extract_parameters(model, key):
 
 
 def _plot_1d_fit(axis, samples, weights, means, covariances, covariance, title):
+    """Plot 1D GMM fit: histogram + density."""
     samples = jp.squeeze(samples)
-    axis.hist(samples, bins=40, density=True, color="0.7", alpha=0.6)
+    samples_np = np.array(samples)
+
+    plot.histogram(samples_np, axis, bins=40, color=plot.BLUE_GREY.neutral, alpha=0.6)
+
     x_min = float(samples.min() - 1.0)
     x_max = float(samples.max() + 1.0)
     xs = jp.linspace(x_min, x_max, 400)
     distribution = _build_gmm_distribution(
         weights, means, covariances, covariance
     )
-    density = jp.exp(distribution.log_prob(xs[:, None]))
-    axis.plot(xs, density, color="black", linewidth=2)
+    density = np.array(jp.exp(distribution.log_prob(xs[:, None])))
+    plot.line(np.array(xs), density, axis, color="black", linewidth=2)
     axis.set_title(title)
-    axis.set_xlabel("x")
-    axis.set_ylabel("density")
+    plot.set_labels(axis, x="x", y="density")
+    plot.clean(axis)
 
 
 def _plot_2d_fit(axis, samples, weights, means, covariances, covariance, title):
+    """Plot 2D GMM fit: scatter + contours."""
     samples = jp.asarray(samples)
-    axis.scatter(
-        samples[:, 0],
-        samples[:, 1],
-        s=8,
-        alpha=0.35,
-        color="tab:blue",
-    )
+    samples_np = np.array(samples)
+
+    plot.scatter(samples_np[:, 0], samples_np[:, 1], axis, s=8, alpha=0.35,
+                 color=plot.BLUE_GREY.primary)
+
     x_min = float(samples[:, 0].min() - 1.0)
     x_max = float(samples[:, 0].max() + 1.0)
     y_min = float(samples[:, 1].min() - 1.0)
@@ -110,12 +114,12 @@ def _plot_2d_fit(axis, samples, weights, means, covariances, covariance, title):
     distribution = _build_gmm_distribution(
         weights, means, covariances, covariance
     )
-    density = jp.exp(distribution.log_prob(grid)).reshape(grid_x.shape)
-    axis.contour(grid_x, grid_y, density, levels=10, colors="black")
+    density = np.array(jp.exp(distribution.log_prob(grid)).reshape(grid_x.shape))
+    axis.contour(np.array(grid_x), np.array(grid_y), density, levels=10, colors="black")
     axis.set_aspect("equal", adjustable="box")
     axis.set_title(title)
-    axis.set_xlabel("x")
-    axis.set_ylabel("y")
+    plot.set_labels(axis, x="x", y="y")
+    plot.clean(axis, spines="box")
 
 
 def _describe_fit(name, samples, weights, means, covariances, covariance):
@@ -130,76 +134,87 @@ def _describe_fit(name, samples, weights, means, covariances, covariance):
 
 
 def main():
-    key = jax.random.PRNGKey(0)
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    # Configure plotting
+    plot.configure(fontsize=12, latex=False)
 
+    key = jax.random.PRNGKey(0)
+
+    # 1D mixture fit
     key, sample_key = jax.random.split(key)
     samples_1d = _sample_1d_mixture(sample_key, 500)
     weights, means, covariances = _build_initial_parameters(2, 1)
     model = GMM(weights, means, covariances, covariance="diag", name="gmm_1d")
     key, fit_key, read_key = jax.random.split(key, 3)
     fitted = model.fit(fit_key, samples_1d, method="em", num_iters=60)
-    weights, means, covariances = _extract_parameters(fitted, read_key)
+    weights_1d, means_1d, covariances_1d = _extract_parameters(fitted, read_key)
     _describe_fit(
-        "1D mixture (good fit)", samples_1d, weights, means, covariances, "diag"
-    )
-    _plot_1d_fit(
-        axes[0],
-        samples_1d,
-        weights,
-        means,
-        covariances,
-        "diag",
-        "Good fit (1D)",
+        "1D mixture (good fit)", samples_1d, weights_1d, means_1d, covariances_1d, "diag"
     )
 
+    # 2D mixture fit
     key, sample_key = jax.random.split(key)
     samples_2d = _sample_2d_mixture(sample_key, 800)
     weights, means, covariances = _build_initial_parameters(2, 2)
     model = GMM(weights, means, covariances, covariance="full", name="gmm_2d")
     key, fit_key, read_key = jax.random.split(key, 3)
     fitted = model.fit(fit_key, samples_2d, method="em", num_iters=60)
-    weights, means, covariances = _extract_parameters(fitted, read_key)
+    weights_2d, means_2d, covariances_2d = _extract_parameters(fitted, read_key)
     _describe_fit(
-        "2D mixture (good fit)", samples_2d, weights, means, covariances, "full"
-    )
-    _plot_2d_fit(
-        axes[1],
-        samples_2d,
-        weights,
-        means,
-        covariances,
-        "full",
-        "Good fit (2D)",
+        "2D mixture (good fit)", samples_2d, weights_2d, means_2d, covariances_2d, "full"
     )
 
+    # Ring data (showing GMM limitations)
     key, sample_key = jax.random.split(key)
     samples_ring = _sample_ring(sample_key, 800)
     weights, means, covariances = _build_initial_parameters(6, 2)
     model = GMM(weights, means, covariances, covariance="full", name="gmm_ring")
     key, fit_key, read_key = jax.random.split(key, 3)
     fitted = model.fit(fit_key, samples_ring, method="em", num_iters=60)
-    weights, means, covariances = _extract_parameters(fitted, read_key)
+    weights_ring, means_ring, covariances_ring = _extract_parameters(fitted, read_key)
     _describe_fit(
         "Ring data (limitations)",
         samples_ring,
-        weights,
-        means,
-        covariances,
+        weights_ring,
+        means_ring,
+        covariances_ring,
         "full",
     )
+
+    # Create side-by-side figure showing all three fits
+    import matplotlib.pyplot as plt
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+
+    _plot_1d_fit(
+        axes[0], samples_1d, weights_1d, means_1d, covariances_1d, "diag",
+        "Good fit (1D)"
+    )
     _plot_2d_fit(
-        axes[2],
-        samples_ring,
-        weights,
-        means,
-        covariances,
-        "full",
-        "Bad fit (ring)",
+        axes[1], samples_2d, weights_2d, means_2d, covariances_2d, "full",
+        "Good fit (2D)"
+    )
+    _plot_2d_fit(
+        axes[2], samples_ring, weights_ring, means_ring, covariances_ring, "full",
+        "Bad fit (ring)"
     )
 
     plt.tight_layout()
-    plt.show()
+    plot.show()
+
+    # Individual larger plots for better visualization
+    fig, ax = plot.subplots(figsize=(8, 5))
+    _plot_1d_fit(ax, samples_1d, weights_1d, means_1d, covariances_1d, "diag",
+                 "1D Gaussian Mixture Model")
+    plot.show()
+
+    fig, ax = plot.subplots(figsize=(8, 6))
+    _plot_2d_fit(ax, samples_2d, weights_2d, means_2d, covariances_2d, "full",
+                 "2D Gaussian Mixture Model")
+    plot.show()
+
+    fig, ax = plot.subplots(figsize=(8, 6))
+    _plot_2d_fit(ax, samples_ring, weights_ring, means_ring, covariances_ring, "full",
+                 "GMM fit on ring data (showing limitations)")
+    plot.show()
 
 
 if __name__ == "__main__":

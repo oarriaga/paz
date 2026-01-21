@@ -36,9 +36,9 @@ def test_infer_mh_shapes():
         sigma=0.2,
         progress=False,
     )
-    positions = posterior.inverse_samples.position
+    positions = posterior.inverse_samples
     assert positions.x.shape == (10, 2)
-    assert posterior.inverse_samples.log_density.shape == (10, 2)
+    assert posterior.inverse_log_probs.shape == (10, 2)
 
 
 def test_infer_mh_uses_tuned_defaults():
@@ -73,7 +73,7 @@ def test_infer_mh_warmup_discards_samples():
         warmup=2,
         progress=False,
     )
-    positions = posterior.inverse_samples.position
+    positions = posterior.inverse_samples
     assert positions.x.shape == (5, 1)
     assert posterior.config["warmup"] == 2
 

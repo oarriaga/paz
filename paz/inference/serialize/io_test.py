@@ -1,6 +1,6 @@
 import jax.numpy as jp
 
-from paz.inference.serialization.io import (
+from paz.inference.serialize.io import (
     _build_manifest,
     _read_arrays,
     _read_json,

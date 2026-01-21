@@ -8,6 +8,7 @@ from paz.inference.latent_space import (
     to_inverse_samples,
 )
 from paz.inference.types import Distribution, NodeState
+from paz.inference.utils import get_leading_batch_size
 
 
 def build_sample_inverse(context):
@@ -22,6 +23,32 @@ def build_sample_forward(context):
     return lambda key, num_samples=1: context.Sample(
         **_sample_forward(context.inputs, context.non_priors, key, num_samples)
     )
+
+
+def build_sample_predictive(context):
+    Sample = context.Sample
+    names = Sample._fields
+    nodes = context.nodes
+    latent_space = context.latent_space
+    latent_names = set(latent_space.names)
+    name_to_node = {node.name: node for node in nodes}
+    nodes_sorted = [name_to_node[name] for name in names]
+
+    def sample_predictive(key, forward_samples):
+        forward_samples = as_latent_samples(latent_space, forward_samples)
+        batch_size = get_leading_batch_size(forward_samples)
+        if batch_size is None:
+            return _sample_predictive_single(
+                key, forward_samples, nodes_sorted, latent_names, Sample
+            )
+        keys = jax.random.split(key, batch_size)
+        return jax.vmap(
+            lambda subkey, sample: _sample_predictive_single(
+                subkey, sample, nodes_sorted, latent_names, Sample
+            )
+        )(keys, forward_samples)
+
+    return sample_predictive
 
 
 def build_prior_sample(context, sample_inverse):
@@ -139,7 +166,11 @@ def build_configure(inference_defaults, get_self):
     return configure
 
 
-def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
+def build_infer(
+    pgm_prior, pgm_likelihood, inference_defaults, sample_predictive=None
+):
+    sample_predictive_default = sample_predictive
+
     def infer(
         key,
         data,
@@ -147,8 +178,11 @@ def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
         likelihood=None,
         method=None,
         tune=None,
+        sample_predictive=None,
         **overrides,
     ):
+        if sample_predictive is None:
+            sample_predictive = sample_predictive_default
         method_name = method or inference_defaults.get("_compiled_method", "mh")
         method_name = method_name.lower()
         resolved = dict(inference_defaults.get(method_name, {}))
@@ -157,7 +191,15 @@ def build_infer(pgm_prior, pgm_likelihood, inference_defaults):
         resolved.update(overrides)
         prior = prior if prior is not None else pgm_prior
         likelihood = likelihood if likelihood is not None else pgm_likelihood
-        return infer_fn(key, data, prior, likelihood, method_name, **resolved)
+        return infer_fn(
+            key,
+            data,
+            prior,
+            likelihood,
+            method_name,
+            sample_predictive=sample_predictive,
+            **resolved,
+        )
 
     return infer
 
@@ -300,6 +342,22 @@ def _build_likelihood_state(
             samples[node.name] = get_namedtuple_value(node.name, state.sample)
     log_prob_sum = sum(log_prob.values(), jp.array(0.0))
     return NodeState(Sample(**samples), log_prob, log_prob_sum)
+
+
+def _sample_predictive_single(
+    key, forward_samples, nodes_sorted, latent_names, Sample
+):
+    samples = {}
+    keys = jax.random.split(key, len(nodes_sorted))
+    for node, subkey in zip(nodes_sorted, keys):
+        if node.name in latent_names:
+            samples[node.name] = getattr(forward_samples, node.name)
+            continue
+        node_inputs = [samples[edge.name] for edge in node.edges]
+        if node.sample is None:
+            raise ValueError("Node sample is missing for " + node.name)
+        samples[node.name] = node.sample(subkey, 1, *node_inputs)
+    return Sample(**samples)
 
 
 def _compute_latent_log_probs(

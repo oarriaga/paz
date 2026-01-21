@@ -31,6 +31,7 @@ model = paz.PGM([mean, bias, stdv], [y], "line")
 
 # Prior predictive
 keys = jax.random.split(jax.random.PRNGKey(888), 4)
+# TODO the prior_samples.y_pred has a shape of (100, 200) I think it should be only (100,)
 prior_samples = model.sample(keys[0], num_samples=100)
 
 # Configure plotting
@@ -53,7 +54,7 @@ plot.show()
 # Inference
 num_chains = 4
 num_samples = 10_000
-burn_in = 0.2
+burn_in = 0.1
 sigma = 0.01
 
 tuner = paz.AdaptiveStepTuner(sigma)

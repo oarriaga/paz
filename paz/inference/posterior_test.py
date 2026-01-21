@@ -42,6 +42,14 @@ def build_simple_posterior():
     return model, data, posterior
 
 
+def build_model_posterior():
+    model, data = build_bijected_model()
+    key = jax.random.PRNGKey(5)
+    model.configure(num_chains=2, sigma=0.2, warmup=0, progress=False)
+    posterior = model.infer(key, data, num_samples=20)
+    return model, data, posterior
+
+
 def test_posterior_sample_shapes():
     model, data, posterior = build_simple_posterior()
     key = jax.random.PRNGKey(1)
@@ -50,10 +58,16 @@ def test_posterior_sample_shapes():
     samples_fwd = posterior.sample(key, num_samples=3)
     assert samples_fwd.x.shape == (3,)
     forward = posterior.samples
-    expected = to_forward_samples(
-        posterior.latent_space, posterior.inverse_samples.position
-    )
+    expected = to_forward_samples(posterior.latent_space, posterior.inverse_samples)
     assert jp.allclose(forward.x, expected.x)
+
+
+def test_posterior_sample_predictive():
+    model, data, posterior = build_model_posterior()
+    key = jax.random.PRNGKey(6)
+    samples = posterior.sample(key, num_samples=3)
+    assert samples.x.shape == (3,)
+    assert samples.y.shape == (3,)
 
 
 def test_posterior_diagnostics():
@@ -70,6 +84,15 @@ def test_posterior_as_density_gaussian():
     sample = density.sample_inverse(key, num_samples=1)
     log_prob = density.log_prob_inverse(sample)
     assert jp.isfinite(log_prob)
+
+
+def test_posterior_as_density_predictive():
+    model, data, posterior = build_model_posterior()
+    density = posterior.as_density(method="gaussian", covariance="diag")
+    key = jax.random.PRNGKey(7)
+    sample = density.sample(key, num_samples=4)
+    assert sample.x.shape == (4,)
+    assert sample.y.shape == (4,)
 
 
 def test_posterior_as_density_gmm():

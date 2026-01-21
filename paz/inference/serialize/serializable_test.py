@@ -1,4 +1,4 @@
-from paz.inference.serialization.serializable import (
+from paz.inference.serialize.serializable import (
     _register,
     _with_spec,
     build_distribution_fn,
