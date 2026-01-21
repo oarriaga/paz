@@ -66,6 +66,7 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 
+# TODO change the serialization so that it's paz.inference.serialize.
 @paz.inference.serialization.serializable("local_linear_regression_likelihood")
 def local_linear_regression_likelihood(X):
     def apply(mean, bias, stdv):

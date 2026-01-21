@@ -46,6 +46,7 @@ inverse_samples = posterior.inverse_samples
 posterior_forward = posterior.samples
 
 print(f"Mean acceptance rate: {posterior.infos.acceptance_rate.mean():.3f}")
+# TODO posterior.inverse_samples should contain here the positions directly and there should be another field as posterior.inverse_log_probs.
 print(f"Posterior mean: {inverse_samples.position.mean.mean():.4f} (true: 0.5)")
 print(f"Posterior bias: {inverse_samples.position.bias.mean():.4f} (true: 0.1)")
 print(f"Posterior stdv: {posterior_forward.stdv.mean():.4f} " f"(true: ~0.05)")
