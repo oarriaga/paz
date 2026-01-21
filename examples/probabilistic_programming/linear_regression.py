@@ -27,7 +27,7 @@ y = paz.Observable(Likelihood(X), name="y_pred")(mean, bias, stdv)
 model = paz.PGM([mean, bias, stdv], [y], "line")
 
 keys = jax.random.split(jax.random.PRNGKey(888), 4)
-samples = model.sample_inverse(keys[0], num_samples=100)
+samples = model.sample(keys[0], num_samples=100)
 
 for mean, bias in zip(samples.mean, samples.bias):
     plt.plot(X, mean * X + bias, color="blue", alpha=0.2)
@@ -58,7 +58,7 @@ for chain in range(num_chains):
     plt.scatter(mean, bias, alpha=0.1, s=1)
 plt.xlabel("mean")
 plt.ylabel("bias")
-plt.title("Posterior samples (unconstrained)")
+plt.title("Posterior samples (unconstrained inverse space)")
 
 plt.subplot(1, 2, 2)
 posterior_density = posterior.as_density(method="gaussian")
