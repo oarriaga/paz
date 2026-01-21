@@ -68,8 +68,7 @@ def plot_posterior(
     density_draw=None,
     num_draws=150,
 ):
-    samples = posterior.samples
-    forward = posterior.samples_forward
+    forward = posterior.samples
     mean_samples = forward.mean
     bias_samples = forward.bias
     stdv_samples = forward.stdv
@@ -238,7 +237,7 @@ def main():
     key, tuned_key, initial_key, tuned_density_key, initial_density_key = (
         jax.random.split(key, 5)
     )
-    model.compile(
+    model.configure(
         num_chains=num_chains,
         sigma=sigma_initial,
         warmup=burn_in,
@@ -266,27 +265,27 @@ def main():
     print("Tuning results")
     print(f"  Tuned sigma (mean across chains): {tuned_sigma:.5f}")
 
-    tuned_forward = tuned_result.posterior.samples_forward
-    initial_forward = initial_result.posterior.samples_forward
+    tuned_forward = tuned_result.posterior.samples
+    initial_forward = initial_result.posterior.samples
 
     tuned_density = tuned_result.posterior.as_density(method="gaussian")
     tuned_density_draw = tuned_density.sample(
-        tuned_density_key, num_samples=1, space="fwd"
+        tuned_density_key, num_samples=1
     )
     initial_density = initial_result.posterior.as_density(method="gaussian")
     initial_density_draw = initial_density.sample(
-        initial_density_key, num_samples=1, space="fwd"
+        initial_density_key, num_samples=1
     )
 
     print("Posterior estimates (tuned sigma)")
     print(
         "  Mean: "
-        f"{tuned_result.posterior.samples.position.mean.mean():.4f} "
+        f"{tuned_result.posterior.inverse_samples.position.mean.mean():.4f} "
         f"(true: {true_params.mean:.2f})"
     )
     print(
         "  Bias: "
-        f"{tuned_result.posterior.samples.position.bias.mean():.4f} "
+        f"{tuned_result.posterior.inverse_samples.position.bias.mean():.4f} "
         f"(true: {true_params.bias:.2f})"
     )
     print(
@@ -299,12 +298,12 @@ def main():
     print("Posterior estimates (initial sigma)")
     print(
         "  Mean: "
-        f"{initial_result.posterior.samples.position.mean.mean():.4f} "
+        f"{initial_result.posterior.inverse_samples.position.mean.mean():.4f} "
         f"(true: {true_params.mean:.2f})"
     )
     print(
         "  Bias: "
-        f"{initial_result.posterior.samples.position.bias.mean():.4f} "
+        f"{initial_result.posterior.inverse_samples.position.bias.mean():.4f} "
         f"(true: {true_params.bias:.2f})"
     )
     print(

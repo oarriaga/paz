@@ -40,21 +40,21 @@ burn_in = 0.1
 sigma = 0.01
 
 tuner = paz.AdaptiveStepTuner(sigma)
-model.compile(num_chains=num_chains, warmup=burn_in, tuner=tuner)
+model.configure(num_chains=num_chains, warmup=burn_in, tuner=tuner)
 posterior = model.infer(keys[1], data, num_samples=num_samples)
-samples = posterior.samples
-posterior_forward = posterior.samples_forward
+inverse_samples = posterior.inverse_samples
+posterior_forward = posterior.samples
 
 print(f"Mean acceptance rate: {posterior.infos.acceptance_rate.mean():.3f}")
-print(f"Posterior mean: {samples.position.mean.mean():.4f} (true: 0.5)")
-print(f"Posterior bias: {samples.position.bias.mean():.4f} (true: 0.1)")
+print(f"Posterior mean: {inverse_samples.position.mean.mean():.4f} (true: 0.5)")
+print(f"Posterior bias: {inverse_samples.position.bias.mean():.4f} (true: 0.1)")
 print(f"Posterior stdv: {posterior_forward.stdv.mean():.4f} " f"(true: ~0.05)")
 
 plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
 for chain in range(num_chains):
-    mean = samples.position.mean[:, chain]
-    bias = samples.position.bias[:, chain]
+    mean = inverse_samples.position.mean[:, chain]
+    bias = inverse_samples.position.bias[:, chain]
     plt.scatter(mean, bias, alpha=0.1, s=1)
 plt.xlabel("mean")
 plt.ylabel("bias")
@@ -62,7 +62,7 @@ plt.title("Posterior samples (unconstrained)")
 
 plt.subplot(1, 2, 2)
 posterior_density = posterior.as_density(method="gaussian")
-samples = posterior_density.sample(keys[3], int(num_samples * 0.2), space="fwd")
+samples = posterior_density.sample(keys[3], int(num_samples * 0.2))
 for mean, bias in zip(samples.mean, samples.bias):
     plt.plot(X, mean * X + bias, color="blue", alpha=0.1)
 plt.plot(X, data, color="red", alpha=0.8, label="data")

@@ -254,6 +254,20 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "scale": _ref(f"{prefix}_scale"),
         }
+    if isinstance(distribution, tfd.MixtureSameFamily):
+        arrays[f"{prefix}_weights"] = _get_probs(
+            distribution.mixture_distribution
+        )
+        components = _serialize_distribution_obj(
+            distribution.components_distribution,
+            arrays,
+            f"{prefix}_components",
+        )
+        return {
+            "kind": "MixtureSameFamily",
+            "weights": _ref(f"{prefix}_weights"),
+            "components": components,
+        }
     if isinstance(distribution, tfd.Uniform):
         arrays[f"{prefix}_low"] = distribution.low
         arrays[f"{prefix}_high"] = distribution.high
@@ -402,6 +416,12 @@ def _deserialize_distribution_obj(spec, arrays):
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
         return tfd.LogNormal(loc=loc, scale=scale)
+    if kind == "MixtureSameFamily":
+        weights = _resolve_ref(spec["weights"], arrays)
+        components = _deserialize_distribution_obj(spec["components"], arrays)
+        return tfd.MixtureSameFamily(
+            tfd.Categorical(probs=weights), components
+        )
     if kind == "Uniform":
         low = _resolve_ref(spec["low"], arrays)
         high = _resolve_ref(spec["high"], arrays)

@@ -1,22 +1,23 @@
-import os
-import pickle
 import argparse
+import json
+import pickle
 from collections import namedtuple
+from pathlib import Path
 
+import arviz as az
 import jax
 import jax.numpy as jp
+import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.mixture import GaussianMixture as SKLGaussianMixture
 from tensorflow_probability.substrates import jax as tfp
-import matplotlib.pyplot as plt
-import arviz as az
+
+import paz
+from paz.backend import directory
+from observation_model import build_observation_model, build_render_function
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
-
-import paz
-from paz.backend import directory, file
-from observation_model import build_observation_model, build_render_function
 
 parser = argparse.ArgumentParser(description="Optimize Bijectors")
 parser.add_argument("--root", default="experiments", type=str)
@@ -28,7 +29,7 @@ parser.add_argument("--parameters_filename", default="parameters.json")
 parser.add_argument("--scene_filename", default="scene.json")
 parser.add_argument("--materials_filename", default="materials.json")
 parser.add_argument("--floor_filename", default="floor.npy")
-parser.add_argument("--prior_filename", default="prior.json")
+parser.add_argument("--prior_filename", default="priors")
 parser.add_argument("--num_samples", default=100_000, type=int)
 parser.add_argument("--gradient_steps", default=25_000, type=int)
 parser.add_argument("--learning_rate", default=1e-3, type=int)
@@ -73,31 +74,26 @@ NAME_TO_TEX = {
 
 
 def load_parameters(wildcard, filename):
-    import json
-
-    filepath = directory.find_latest(wildcard)
-    filepath = os.path.join(filepath, filename)
-
-    # Try .json first, then .pkl
-    if os.path.exists(filepath):
-        with open(filepath, "r") as filedata:
+    filepath = Path(directory.find_latest(wildcard)) / filename
+    if filepath.exists():
+        with filepath.open("r") as filedata:
             return json.load(filedata)
-    elif os.path.exists(filepath.replace(".json", ".pkl")):
-        import pickle
-        with open(filepath.replace(".json", ".pkl"), "rb") as filedata:
+    pickle_path = filepath.with_suffix(".pkl")
+    if pickle_path.exists():
+        with pickle_path.open("rb") as filedata:
             return pickle.load(filedata)
-    else:
-        raise FileNotFoundError(f"Could not find {filename} or {filename.replace('.json', '.pkl')}")
+    message = f"Could not find {filename} or {pickle_path.name}"
+    raise FileNotFoundError(message)
 
 
 def build_directory(root, label):
-    return directory.make_timestamped(root, label)
+    return Path(directory.make_timestamped(root, label))
 
 
 def write_image(image, output_directory, filename):
     if not filename.endswith(".png"):
         raise ValueError(f"Filename {filename} missing extension .png")
-    filepath = os.path.join(output_directory, filename)
+    filepath = Path(output_directory) / filename
     plt.imsave(filepath, image)
 
 
@@ -108,8 +104,8 @@ def write_losses(losses, output_directory, filename):
     axis.set_xlabel("step")
     axis.spines["top"].set_visible(False)
     axis.spines["right"].set_visible(False)
-    fullpath = os.path.join(output_directory, filename)
-    if not fullpath.endswith(".pdf"):
+    fullpath = Path(output_directory) / filename
+    if fullpath.suffix != ".pdf":
         raise ValueError(f"Filename {fullpath} missing extension .pdf")
     figure.savefig(fullpath, bbox_inches="tight")
     plt.close()
@@ -131,8 +127,8 @@ def plot_forward_samples(forward_samples, name, output_directory):
     axis.yaxis.labelpad = 20
     axis.set_ylabel("density")
     axis.set_xlabel(NAME_TO_TEX.get(name, name))
-    filename = os.path.join(output_directory, f"prior_forward_{name}.pdf")
-    figure.savefig(filename, bbox_inches="tight")
+    filepath = Path(output_directory) / f"prior_forward_{name}.pdf"
+    figure.savefig(filepath, bbox_inches="tight")
     plt.close()
 
 
@@ -149,8 +145,8 @@ def plot_inverse_samples(inverse_samples, normals_samples, name, output_director
     axis.legend(prop={"size": 10}, frameon=False)
     axis.set_ylabel("density")
     axis.set_xlabel(NAME_TO_TEX.get(name, name))
-    filename = os.path.join(output_directory, f"prior_inverse_{name}.pdf")
-    figure.savefig(filename, bbox_inches="tight")
+    filepath = Path(output_directory) / f"prior_inverse_{name}.pdf"
+    figure.savefig(filepath, bbox_inches="tight")
     plt.close()
 
 
@@ -199,12 +195,6 @@ def get_property_values(shape_parameters, name):
             if property_name == name:
                 values.append(property_value)
     return np.array(values)
-
-
-def extract_affine_params(bijector):
-    shift = bijector.bijectors[0].shift
-    scale = bijector.bijectors[1].scale
-    return {"shift": jp.asarray(shift).tolist(), "scale": jp.asarray(scale).tolist()}
 
 
 def get_mixture_parameters(model, unidimensional=True):
@@ -274,43 +264,34 @@ def build_classes_prior(probabilities, temperature):
     return paz.Prior(distribution, name="classes", bijector=bijector)
 
 
-def build_material_prior(name, mixture_params, bijector_params):
-    mixture_dist = build_gmm(**mixture_params)
-    bijector = tfb.Invert(build_affine_bijector(BijectorParams(**bijector_params)))
-    return paz.Prior(mixture_dist, name=name, bijector=bijector)
+def save_priors(priors, output_directory, filename):
+    pgm = paz.PGM(priors, priors, "optimized_priors")
+    path = Path(output_directory) / filename
+    paz.inference.save(pgm, path, overwrite=True)
+    return path
 
 
-def load_material_priors(wildcard, filename):
-    import json
-
-    prior_directory = directory.find_latest(wildcard)
-    filedata = open(os.path.join(prior_directory, filename), "r")
-    priors_params = json.load(filedata)
-    priors = []
-    for name, prior_params in priors_params.items():
-        mixture_params = prior_params["mixture"]
-        bijector_params = prior_params["bijector"]
-        prior = build_material_prior(name, mixture_params, bijector_params)
-        priors.append(prior)
-    return priors
+def load_priors(path):
+    return paz.inference.load(path).inputs
 
 
-root = build_directory(os.path.join(args.root, args.dataset_name), args.label)
-file.write_json(args.__dict__, os.path.join(root, "parameters.json"))
-priors = {}
-wildcard = os.path.join(args.root, args.dataset_name, args.parameters_wildcard)
+root = build_directory(Path(args.root) / args.dataset_name, args.label)
+paz.file.write_json(args.__dict__, root / "parameters.json")
+wildcard = Path(args.root) / args.dataset_name / args.parameters_wildcard
+key = jax.random.PRNGKey(args.seed)
+material_priors = []
 
 try:
     shape_parameters = load_parameters(wildcard, args.materials_filename)
     print(f"Found previous optimization at: {directory.find_latest(wildcard)}")
     print("Optimizing bijectors for material properties...")
 
-    key = jax.random.PRNGKey(args.seed)
     for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
-        one_dim = True if name != "color" else False
         values = get_property_values(shape_parameters, name)
-        mixture_params = fit_gaussian_mixture(args.seed, values, one_dim)
-        key, key_n, key_g = jax.random.split(key, 3)
+        mixture_params = fit_gaussian_mixture(
+            args.seed, values, name != "color"
+        )
+        key, key_g = jax.random.split(key)
         shift_0 = 0.0 if name != "color" else jp.full(3, 0.0)
         scale_0 = 1.0 if name != "color" else jp.full(3, 1.0)
         x_0 = BijectorParams(shift_0, scale_0)
@@ -326,10 +307,7 @@ try:
             return_losses=True,
         )
         write_losses(losses, root, f"loss_{name}.pdf")
-        bijector_params = extract_affine_params(fitted_prior.metadata.bijector)
-        priors[name] = {"mixture": mixture_params, "bijector": bijector_params}
-    file.write_json(priors, os.path.join(root, args.prior_filename))
-    print(f"Saved optimized bijector priors to: {os.path.join(root, args.prior_filename)}")
+        material_priors.append(fitted_prior)
 
 except (ValueError, FileNotFoundError) as e:
     print(f"\nWarning: Could not find previous SCENE-OPTIMIZATION run.")
@@ -337,9 +315,15 @@ except (ValueError, FileNotFoundError) as e:
     print(f"Error: {e}")
     print("\nSkipping bijector optimization and prior predictive sampling.")
     print("\nTo run the full script:")
-    print(f"  1. First run: python optimize_scene.py --dataset_name {args.dataset_name}")
-    print(f"  2. Then run: python optimize_bijectors.py --dataset_name {args.dataset_name}")
-    print(f"\nParameters saved to: {os.path.join(root, 'parameters.json')}")
+    print(
+        "  1. First run: python optimize_scene.py "
+        f"--dataset_name {args.dataset_name}"
+    )
+    print(
+        "  2. Then run: python optimize_bijectors.py "
+        f"--dataset_name {args.dataset_name}"
+    )
+    print(f"\nParameters saved to: {root / 'parameters.json'}")
     import sys
     sys.exit(0)
 
@@ -349,21 +333,19 @@ camera_origin = jp.array(dataset_metadata["camera_origin"])
 H, W = dataset_metadata["image_shape"]
 y_FOV = dataset_metadata["y_FOV"]
 
-wildcard = os.path.join(args.root, args.dataset_name, args.parameters_wildcard)
 optimization_metadata = load_parameters(wildcard, args.parameters_filename)
 viewport_factor = optimization_metadata["viewport_factor"]
 image_shape = [int(H * viewport_factor), int(W * viewport_factor)]
 
-optimization_directory = directory.find_latest(wildcard)
-floor_filename = os.path.join(optimization_directory, "floor.pkl")
-floor = pickle.load(open(floor_filename, "rb"))
-
-lights_filename = os.path.join(optimization_directory, "lights.pkl")
-lights = pickle.load(open(lights_filename, "rb"))
-
+optimization_directory = Path(directory.find_latest(wildcard))
+floor_filename = optimization_directory / "floor.pkl"
+lights_filename = optimization_directory / "lights.pkl"
+with floor_filename.open("rb") as filedata:
+    floor = pickle.load(filedata)
+with lights_filename.open("rb") as filedata:
+    lights = pickle.load(filedata)
 print(f"\nLoaded floor and lights from: {optimization_directory}")
 
-camera_origin = jp.array(camera_origin)
 camera_target = jp.array([0.0, 0.0, 0.0])
 camera_upward = jp.array([0.0, 1.0, 0.0])
 camera_pose = paz.SE3.view_transform(camera_origin, camera_target, camera_upward)
@@ -372,8 +354,6 @@ render = build_observation_model(_render, floor)
 
 print("Building render function and observation model...")
 
-priors_wildcard = os.path.join(args.root, args.dataset_name, "*" + args.label)
-material_priors = load_material_priors(priors_wildcard, args.prior_filename)
 geometry_priors = [
     build_shift_prior(args.shift_mean, args.shift_scale),
     build_theta_prior(args.theta_mean, args.theta_concentration),
@@ -382,6 +362,9 @@ geometry_priors = [
 ]
 
 all_priors = material_priors + geometry_priors
+priors_path = save_priors(all_priors, root, args.prior_filename)
+print(f"Saved optimized priors to: {priors_path}")
+all_priors = load_priors(priors_path)
 
 print(f"\nAll prior names: {[p.name for p in all_priors]}")
 print(f"Number of priors: {len(all_priors)}")
@@ -390,7 +373,7 @@ print(f"\nGenerating {args.num_samples} samples for prior visualization...")
 plot_priors(key, all_priors, root, args.num_samples)
 print(f"Saved prior plots to: {root}")
 
-image_directory = os.path.join(root, "prior_predictive_samples")
+image_directory = root / "prior_predictive_samples"
 directory.make(image_directory)
 
 print(f"\nGenerating {args.num_images} prior predictive samples...")
@@ -400,7 +383,7 @@ for image_arg, subkey in enumerate(jax.random.split(key, args.num_images)):
     for prior, subkey_i in zip(all_priors, subkeys):
         sample = prior.sample(subkey_i, 1)
         sample_dict[prior.name] = jp.squeeze(sample)
-    image, depth = render(sample_dict)
+    image, _ = render(sample_dict)
     filename = f"{image_arg:02d}_prior_predictive_sample.png"
     write_image(image, image_directory, filename)
     if (image_arg + 1) % 10 == 0:

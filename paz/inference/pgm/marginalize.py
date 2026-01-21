@@ -14,6 +14,7 @@ from paz.inference.metadata import (
 from paz.inference.latent_space import (
     LatentSpace,
     as_latent_samples,
+    to_forward_samples,
     to_inverse_samples,
 )
 from paz.inference.types import (
@@ -21,11 +22,11 @@ from paz.inference.types import (
     Density,
     Likelihood,
     NodeState,
+    PGM,
     SampleType,
-    Variable,
 )
 from paz.inference.pgm.ops import (
-    build_compile,
+    build_configure,
     build_data_mapping,
     build_fit,
     build_infer,
@@ -35,7 +36,6 @@ from paz.inference.pgm.ops import (
 from paz.inference.utils import (
     get_leading_batch_size,
     slice_batch,
-    validate_space,
 )
 
 tfd = tfp.distributions
@@ -103,10 +103,19 @@ def _map_batches(theta_inverse_samples, data_mapping, batch_log_prob):
     )(theta_inverse_samples)
 
 
+def _build_marginal_state(latent_space, theta_inverse_samples, log_prob_sum):
+    forward_samples = to_forward_samples(latent_space, theta_inverse_samples)
+    log_prob = {"_marginal": log_prob_sum}
+    return NodeState(forward_samples, log_prob, log_prob_sum)
+
+
 def _log_joint_values(pgm, z_name, support, batch_theta, batch_data):
     return jp.stack(
         [
-            pgm.apply(
+            pgm.prior.log_prob_inverse(
+                _update_samples(batch_theta, z_name, value)
+            ).log_prob_sum
+            + pgm.likelihood.log_prob_inverse(
                 _update_samples(batch_theta, z_name, value), batch_data
             ).log_prob_sum
             for value in support
@@ -117,9 +126,9 @@ def _log_joint_values(pgm, z_name, support, batch_theta, batch_data):
 def _log_prior_values(pgm, z_name, support, batch_theta):
     return jp.stack(
         [
-            pgm.prior.log_prob(
-                _update_samples(batch_theta, z_name, value), space="inv"
-            )
+            pgm.prior.log_prob_inverse(
+                _update_samples(batch_theta, z_name, value)
+            ).log_prob_sum
             for value in support
         ]
     )
@@ -139,7 +148,7 @@ def _validate_supports(pgm, node, inverse_samples):
         sample_map = {}
         for prior in inputs:
             inverse_sample = get_namedtuple_value(prior.name, samples)
-            state = prior.apply(inverse_sample)
+            state = prior.log_prob_inverse(inverse_sample)
             sample_map[prior.name] = get_namedtuple_value(
                 prior.name, state.sample
             )
@@ -151,7 +160,7 @@ def _validate_supports(pgm, node, inverse_samples):
                     sample_map[edge.name] for edge in current.edges
                 ]
                 node_sample = get_namedtuple_value(current.name, samples)
-                state = current.apply(node_sample, *node_inputs)
+                state = current.log_prob_inverse(node_sample, *node_inputs)
                 sample_map[current.name] = get_namedtuple_value(
                     current.name, state.sample
                 )
@@ -221,23 +230,6 @@ def marginalize(pgm, names):
             **{name: data[name] for name in latent_space.names}
         )
 
-    def apply(theta_inverse_samples, data=None):
-        theta_inverse_samples = as_latent_samples(
-            latent_space, theta_inverse_samples
-        )
-        support = _validate_supports(pgm, z_node, theta_inverse_samples)
-        data_mapping = build_data_mapping(data, output_nodes)
-
-        def batch_log_prob(batch_theta, batch_data):
-            log_joint = _log_joint_values(
-                pgm, z_name, support, batch_theta, batch_data
-            )
-            return logsumexp(log_joint)
-        log_prob_sum = _map_batches(
-            theta_inverse_samples, data_mapping, batch_log_prob
-        )
-        return NodeState(None, {"marginalized": log_prob_sum}, log_prob_sum)
-
     def sample_inverse(key, num_samples=1):
         samples = pgm.sample_inverse(key, num_samples)
         return select_latent(samples)
@@ -246,34 +238,42 @@ def marginalize(pgm, names):
         samples = pgm.sample(key, num_samples)
         return _update_samples(samples, z_name)
 
-    def prior_sample(key, num_samples=1, space="inv"):
-        validate_space(space)
-        samples = pgm.prior.sample(key, num_samples, space=space)
+    def prior_sample_inverse(key, num_samples=1):
+        samples = pgm.prior.sample_inverse(key, num_samples)
         return select_latent(samples)
 
-    def prior_log_prob(samples, space="inv"):
-        validate_space(space)
-        if space == "fwd":
-            theta_inverse_samples = to_inverse_samples(latent_space, samples)
-        else:
-            theta_inverse_samples = as_latent_samples(latent_space, samples)
+    def prior_sample(key, num_samples=1):
+        samples = pgm.prior.sample(key, num_samples)
+        return select_latent(samples)
+
+    def prior_log_prob(samples):
+        theta_inverse_samples = to_inverse_samples(latent_space, samples)
+        return prior_log_prob_inverse(theta_inverse_samples)
+
+    def prior_log_prob_inverse(samples):
+        theta_inverse_samples = as_latent_samples(latent_space, samples)
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
 
         def batch_log_prob(batch_theta, _):
             log_prior = _log_prior_values(pgm, z_name, support, batch_theta)
             return logsumexp(log_prior)
 
-        return _map_batches(theta_inverse_samples, None, batch_log_prob)
+        log_prob_sum = _map_batches(theta_inverse_samples, None, batch_log_prob)
+        return _build_marginal_state(
+            latent_space, theta_inverse_samples, log_prob_sum
+        )
 
-    prior_prob = build_prior_prob(prior_log_prob)
+    prior_prob, prior_prob_inverse = build_prior_prob(
+        prior_log_prob, prior_log_prob_inverse
+    )
 
-    def likelihood_log_prob(samples, data, space="inv"):
-        validate_space(space)
+    def likelihood_log_prob(samples, data):
+        theta_inverse_samples = to_inverse_samples(latent_space, samples)
+        return likelihood_log_prob_inverse(theta_inverse_samples, data)
+
+    def likelihood_log_prob_inverse(samples, data):
         data_mapping = build_data_mapping(data, output_nodes)
-        if space == "fwd":
-            theta_inverse_samples = to_inverse_samples(latent_space, samples)
-        else:
-            theta_inverse_samples = as_latent_samples(latent_space, samples)
+        theta_inverse_samples = as_latent_samples(latent_space, samples)
         support = _validate_supports(pgm, z_node, theta_inverse_samples)
 
         def batch_log_prob(batch_theta, batch_data):
@@ -282,57 +282,72 @@ def marginalize(pgm, names):
             )
             log_prior = _log_prior_values(pgm, z_name, support, batch_theta)
             return logsumexp(log_joint) - logsumexp(log_prior)
-        return _map_batches(
+        log_prob_sum = _map_batches(
             theta_inverse_samples, data_mapping, batch_log_prob
         )
+        return _build_marginal_state(
+            latent_space, theta_inverse_samples, log_prob_sum
+        )
 
-    apply._marginalize_base_pgm = pgm
-    apply._marginalize_z_node = z_node
-    apply._marginalize_z_name = z_name
-    apply._marginalize_latent_space = latent_space
+    likelihood_log_prob_inverse._marginalize_base_pgm = pgm
+    likelihood_log_prob_inverse._marginalize_z_node = z_node
+    likelihood_log_prob_inverse._marginalize_z_name = z_name
+    likelihood_log_prob_inverse._marginalize_latent_space = latent_space
 
     name = f"{pgm.name}_marg_{z_name}"
     prior_density = Density(
-        prior_sample, prior_log_prob, prior_prob, latent_space, None
+        prior_sample,
+        prior_sample_inverse,
+        prior_log_prob,
+        prior_log_prob_inverse,
+        prior_prob,
+        prior_prob_inverse,
+        latent_space,
+        None,
     )
-    likelihood_density = Likelihood(likelihood_log_prob, latent_space, None)
+    likelihood_density = Likelihood(
+        likelihood_log_prob,
+        likelihood_log_prob_inverse,
+        latent_space,
+        None,
+    )
     inference_defaults = {}
     fit = build_fit()
-    pgm_marg = Variable(
-        apply,
+    def without_z(nodes):
+        return [node for node in nodes if node.name != z_name]
+
+    configure = build_configure(inference_defaults, lambda: pgm_marg)
+    tune = configure
+    infer = build_infer(prior_density, likelihood_density, inference_defaults)
+    pgm_marg = PGM(
         sample,
         sample_inverse,
         name,
-        [],
-        None,
-        None,
+        without_z(pgm.nodes),
+        without_z(pgm.inputs),
+        without_z(pgm.non_priors),
+        without_z(pgm.latent_nodes),
+        without_z(pgm.output_nodes),
+        without_z(pgm.observable_nodes),
+        latent_space,
         prior_density,
         likelihood_density,
-        None,
-        None,
-        None,
+        configure,
+        tune,
+        infer,
         fit,
         inference_defaults,
     )
-    compile = build_compile(inference_defaults, lambda: pgm_marg)
-    tune = compile
-    infer = build_infer(prior_density, likelihood_density, inference_defaults)
-
-    return pgm_marg._replace(
-        compile=compile,
-        tune=tune,
-        infer=infer,
-        fit=fit,
-    )
+    return pgm_marg
 
 
 def recover_discrete_posterior(
     pgm_marg, z_name, theta_inverse_samples, data=None
 ):
-    apply = pgm_marg.apply
-    base_pgm = getattr(apply, "_marginalize_base_pgm", None)
-    z_node = getattr(apply, "_marginalize_z_node", None)
-    stored_name = getattr(apply, "_marginalize_z_name", None)
+    log_prob_inverse = pgm_marg.likelihood.log_prob_inverse
+    base_pgm = getattr(log_prob_inverse, "_marginalize_base_pgm", None)
+    z_node = getattr(log_prob_inverse, "_marginalize_z_node", None)
+    stored_name = getattr(log_prob_inverse, "_marginalize_z_name", None)
     if base_pgm is None or z_node is None or stored_name is None:
         raise ValueError("PGM does not appear to be marginalized.")
     if z_name != stored_name:

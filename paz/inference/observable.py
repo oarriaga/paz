@@ -1,7 +1,7 @@
 import jax.numpy as jp
 
 from paz.inference.naming import build_observation_name
-from paz.inference.types import NodeMetadata, NodeState, SampleType, Variable
+from paz.inference.types import NodeState, SampleType, Variable
 
 
 def Observable(distribution_fn, name=None):
@@ -11,10 +11,9 @@ def Observable(distribution_fn, name=None):
         name if name is not None else build_observation_name(distribution_fn)
     )
     Sample = SampleType([node_name])
-    metadata = NodeMetadata(distribution_fn, None)
     edges = []
 
-    def apply(observation, *args):
+    def log_prob(observation, *args):
         distribution = distribution_fn(*args)
         log_prob = distribution.log_prob(observation)
         log_prob_sum = log_prob.sum()
@@ -29,6 +28,16 @@ def Observable(distribution_fn, name=None):
     def call(*args):
         for arg in args:
             edges.append(arg)
-        return Variable(apply, sample, None, node_name, edges, None, metadata)
+        return Variable(
+            log_prob,
+            None,
+            sample,
+            None,
+            node_name,
+            edges,
+            None,
+            distribution_fn,
+            None,
+        )
 
     return call

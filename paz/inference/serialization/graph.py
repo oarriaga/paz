@@ -30,7 +30,7 @@ def _serialize_node(node, arrays):
     if node.distribution is not None:
         spec = _serialize_distribution_obj(node.distribution, arrays, node.name)
         bijector = _serialize_bijector(
-            node.metadata.bijector, arrays, f"{node.name}_bijector"
+            node.bijector, arrays, f"{node.name}_bijector"
         )
         return {
             "type": "prior",
@@ -39,10 +39,10 @@ def _serialize_node(node, arrays):
             "distribution": spec,
             "bijector": bijector,
         }
-    distribution_fn = node.metadata.distribution_fn
+    distribution_fn = node.distribution_fn
     fn_spec = _serialize_distribution_fn(distribution_fn, arrays, node.name)
     bijector = _serialize_bijector(
-        node.metadata.bijector, arrays, f"{node.name}_bijector"
+        node.bijector, arrays, f"{node.name}_bijector"
     )
     node_type = "latent" if node.sample_inverse is not None else "observable"
     return {

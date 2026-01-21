@@ -70,6 +70,7 @@ tfb = tfp.bijectors
 def local_linear_regression_likelihood(X):
     def apply(mean, bias, stdv):
         return tfd.Normal(mean * X + bias, stdv)
+
     return apply
 
 
@@ -93,15 +94,17 @@ def main():
     data = model.sample(data_key, num_samples=1)
 
     # Serialize the model.
-    paz.inference.save(model, "serialization_example", overwrite=True)
+    paz.inference.save(model, "linear_model", overwrite=True)
 
     # Load it back.
-    loaded = paz.inference.load("serialization_example")
+    loaded = paz.inference.load("linear_model")
 
     # Quick check: likelihood log_prob should match.
     inv_sample = model.sample_inverse(sample_key, num_samples=1)
-    log_prob = model.likelihood.log_prob(inv_sample, data, space="inv")
-    log_prob_loaded = loaded.likelihood.log_prob(inv_sample, data, space="inv")
+    log_prob = model.likelihood.log_prob_inverse(inv_sample, data).log_prob_sum
+    log_prob_loaded = loaded.likelihood.log_prob_inverse(
+        inv_sample, data
+    ).log_prob_sum
     print("log_prob:", float(log_prob))
     print("log_prob (loaded):", float(log_prob_loaded))
 

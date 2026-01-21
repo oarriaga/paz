@@ -91,10 +91,12 @@ def compute_log_marginal_pgm(model_marg, data, p_grid):
     Theta = SampleType(["p"])
 
     def log_prob_for_p(p_value):
-        log_prior = model_marg.prior.log_prob(Theta(p_value), space="inv")
-        log_like = model_marg.likelihood.log_prob(
-            Theta(p_value), data, space="inv"
-        )
+        log_prior = model_marg.prior.log_prob_inverse(
+            Theta(p_value)
+        ).log_prob_sum
+        log_like = model_marg.likelihood.log_prob_inverse(
+            Theta(p_value), data
+        ).log_prob_sum
         return log_prior + log_like
 
     return jax.vmap(log_prob_for_p)(p_grid)
@@ -254,14 +256,14 @@ def main():
     sigma = 0.2
 
     key, infer_key = jax.random.split(key, 2)
-    model_marg.compile(
+    model_marg.configure(
         num_chains=num_chains,
         warmup=burn_in,
         sigma=sigma,
         tuner=paz.AdaptiveStepTuner(sigma=sigma),
     )
     posterior = model_marg.infer(infer_key, data, num_samples=num_samples)
-    p_samples = posterior.samples.position.p.reshape(-1)
+    p_samples = posterior.samples.p.reshape(-1)
     posterior_density = posterior.as_density(method="gaussian")
     Theta = SampleType(["p"])
     posterior_p_density = posterior_density.prob(Theta(p_grid))

@@ -68,7 +68,7 @@ def build_normal_normal_model(
 
 def run_mcmc(model, key, data, num_samples, num_chains, sigma, warmup):
     """Run MCMC sampling."""
-    model.compile(
+    model.configure(
         num_chains=num_chains,
         warmup=warmup,
         sigma=sigma,
@@ -195,7 +195,7 @@ def main():
     posterior = run_mcmc(
         model, key, data, num_samples, num_chains, sigma, warmup
     )
-    samples, infos = posterior.samples, posterior.infos
+    samples, infos = posterior.inverse_samples, posterior.infos
     density = posterior.as_density(method="gaussian")
 
     # Compute MCMC statistics

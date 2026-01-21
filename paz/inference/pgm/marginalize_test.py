@@ -67,11 +67,13 @@ def test_marginalize_log_prob_matches_analytic():
     theta = make_theta_inverse_samples(
         mu0_value, mu1_value, sigma_value, p_value
     )
-    state = pgm_marg.apply(theta, data)
+    prior_state = pgm_marg.prior.log_prob_inverse(theta)
+    likelihood_state = pgm_marg.likelihood.log_prob_inverse(theta, data)
+    log_prob_sum = prior_state.log_prob_sum + likelihood_state.log_prob_sum
     expected = compute_analytic_log_marginal(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
-    assert jp.allclose(state.log_prob_sum, expected)
+    assert jp.allclose(log_prob_sum, expected)
 
 
 def test_recover_discrete_posterior_matches_analytic():
@@ -107,8 +109,10 @@ def test_marginalize_batched_log_prob_shape():
         jp.full((num_samples,), sigma_value),
         jp.full((num_samples,), p_value),
     )
-    state = pgm_marg.apply(theta, data)
-    assert state.log_prob_sum.shape == (num_samples,)
+    prior_state = pgm_marg.prior.log_prob_inverse(theta)
+    likelihood_state = pgm_marg.likelihood.log_prob_inverse(theta, data)
+    log_prob_sum = prior_state.log_prob_sum + likelihood_state.log_prob_sum
+    assert log_prob_sum.shape == (num_samples,)
 
 
 def test_recover_discrete_posterior_batched_shape():

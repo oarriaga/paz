@@ -60,7 +60,7 @@ def build_switch_model(x, sigma_in, sigma_out):
 
 
 def run_mcmc(model_marg, key, data, num_samples, num_chains, sigma, warmup):
-    model_marg.compile(
+    model_marg.configure(
         num_chains=num_chains,
         warmup=warmup,
         sigma=sigma,
@@ -205,7 +205,7 @@ def run_case(
     posterior = run_mcmc(
         model_marg, key, data, num_samples, num_chains, sigma, burn_in
     )
-    samples, infos = posterior.samples, posterior.infos
+    samples, infos = posterior.inverse_samples, posterior.infos
     mcmc_seconds = time.perf_counter() - start_time
     slope_samples = samples.position.slope.reshape(-1)
     bias_samples = samples.position.bias.reshape(-1)

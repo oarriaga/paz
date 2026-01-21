@@ -2,7 +2,6 @@ from collections import namedtuple
 
 from tensorflow_probability.substrates import jax as tfp
 
-from paz.inference.metadata import get_bijector
 from paz.inference.types import SampleType
 
 tfb = tfp.bijectors
@@ -18,16 +17,24 @@ def build_latent_space(latent_nodes):
 
 
 def _get_latent_bijector(node):
-    bijector = get_bijector(node)
+    bijector = node.bijector
     return tfb.Identity() if bijector is None else bijector
 
 
 def as_latent_samples(latent_space, samples):
+    if isinstance(samples, latent_space.Sample):
+        return samples
     if isinstance(samples, dict):
-        return latent_space.Sample(**samples)
-    if hasattr(samples, "_asdict"):
-        return latent_space.Sample(**samples._asdict())
-    raise TypeError("Latent samples must be a dict or namedtuple.")
+        values = samples
+    elif hasattr(samples, "_asdict"):
+        values = samples._asdict()
+    else:
+        raise TypeError("Latent samples must be a dict or namedtuple.")
+    missing = [name for name in latent_space.names if name not in values]
+    if missing:
+        raise ValueError("Missing latent samples: " + ", ".join(missing))
+    filtered = {name: values[name] for name in latent_space.names}
+    return latent_space.Sample(**filtered)
 
 
 def to_forward_samples(latent_space, inverse_samples):

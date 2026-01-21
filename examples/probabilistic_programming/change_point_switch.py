@@ -75,7 +75,7 @@ def run_mcmc(
     step_sigma,
     warmup,
 ):
-    model_marg.compile(
+    model_marg.configure(
         num_chains=num_chains,
         warmup=warmup,
         sigma=step_sigma,
@@ -237,7 +237,7 @@ def main():
     posterior = run_mcmc(
         model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
     )
-    samples, infos = posterior.samples, posterior.infos
+    samples, infos = posterior.inverse_samples, posterior.infos
     slope_left_samples = samples.position.slope_left.reshape(-1)
     bias_left_samples = samples.position.bias_left.reshape(-1)
     slope_right_samples = samples.position.slope_right.reshape(-1)

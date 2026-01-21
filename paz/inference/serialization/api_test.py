@@ -16,8 +16,8 @@ def test_save_load_prior_roundtrip(tmp_path):
     paz.inference.save(prior, path)
     loaded = paz.inference.load(path)
     value = jp.array(0.1)
-    log_prob = prior.apply(value).log_prob_sum
-    log_prob_loaded = loaded.apply(value).log_prob_sum
+    log_prob = prior.log_prob(value).log_prob_sum
+    log_prob_loaded = loaded.log_prob(value).log_prob_sum
     assert jp.allclose(log_prob, log_prob_loaded)
 
 

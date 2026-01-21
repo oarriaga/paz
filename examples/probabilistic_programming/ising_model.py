@@ -87,7 +87,7 @@ burn_in = 0.2
 
 # Compile and Sample
 tuner = paz.AdaptiveStepTuner(0.01)
-model.compile(num_chains=num_chains, warmup=burn_in, tuner=tuner)
+model.configure(num_chains=num_chains, warmup=burn_in, tuner=tuner)
 
 # Note: We pass y_flat (0s and 1s) as the observed data
 key_infer = jax.random.PRNGKey(101)
@@ -96,7 +96,7 @@ samples = posterior.samples
 
 # --- 5. Visualization ---
 print(f"True J: {TRUE_J}")
-print(f"Inferred J (Mean): {samples.position.coupling.mean():.4f}")
+print(f"Inferred J (Mean): {samples.coupling.mean():.4f}")
 print(f"Acceptance Rate: {posterior.infos.acceptance_rate.mean():.3f}")
 
 plt.figure(figsize=(12, 5))
@@ -112,7 +112,7 @@ plt.subplot(1, 2, 2)
 # Using histogram since it's 1D
 for chain in range(num_chains):
     plt.hist(
-        samples.position.coupling[:, chain],
+        samples.coupling[:, chain],
         bins=30,
         alpha=0.3,
         density=True,

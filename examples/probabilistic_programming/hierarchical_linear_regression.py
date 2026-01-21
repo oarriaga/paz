@@ -339,15 +339,15 @@ def main():
 
     print(f"\nRunning MCMC with {num_samples} samples, {num_chains} chains...")
     key, mcmc_key = jax.random.split(key, 2)
-    model.compile(
+    model.configure(
         num_chains=num_chains,
         warmup=burn_in,
         sigma=sigma,
         tuner=paz.AdaptiveStepTuner(sigma=sigma),
     )
     posterior = model.infer(mcmc_key, data, num_samples=num_samples)
-    samples, infos = posterior.samples, posterior.infos
-    posterior_forward = posterior.samples_forward
+    samples, infos = posterior.inverse_samples, posterior.infos
+    posterior_forward = posterior.samples
 
     print(f"\nMean acceptance rate: {infos.acceptance_rate.mean():.3f}")
 
@@ -399,7 +399,7 @@ def main():
 
     density = posterior.as_density(method="gaussian")
     key, density_key = jax.random.split(key)
-    density_forward = density.sample(density_key, num_samples=1, space="fwd")
+    density_forward = density.sample(density_key, num_samples=1)
     if PARAMETERIZATION == "centered":
         density_slopes = density_forward.slopes
         density_intercepts = density_forward.intercepts

@@ -36,16 +36,16 @@ def test_infer_mh_shapes():
         sigma=0.2,
         progress=False,
     )
-    positions = posterior.samples.position
+    positions = posterior.inverse_samples.position
     assert positions.x.shape == (10, 2)
-    assert posterior.samples.log_density.shape == (10, 2)
+    assert posterior.inverse_samples.log_density.shape == (10, 2)
 
 
 def test_infer_mh_uses_tuned_defaults():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(1)
     infer_key = jax.random.split(key)[0]
-    model.compile(
+    model.configure(
         num_chains=3,
         sigma=0.3,
         warmup=0,
@@ -73,7 +73,7 @@ def test_infer_mh_warmup_discards_samples():
         warmup=2,
         progress=False,
     )
-    positions = posterior.samples.position
+    positions = posterior.inverse_samples.position
     assert positions.x.shape == (5, 1)
     assert posterior.config["warmup"] == 2
 
@@ -96,7 +96,7 @@ def test_tune_updates_default_sigma():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(4)
     infer_key = jax.random.split(key)[0]
-    model.compile(
+    model.configure(
         num_chains=1,
         sigma=0.4,
         warmup=0,

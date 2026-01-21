@@ -2,13 +2,7 @@ import jax.numpy as jp
 
 from paz.inference.bijector_fitting import fit_bijector as fit_bijector_module
 from paz.inference.naming import build_prior_name
-from paz.inference.types import (
-    Distribution,
-    NodeMetadata,
-    NodeState,
-    SampleType,
-    Variable,
-)
+from paz.inference.types import Distribution, NodeState, SampleType, Variable
 from paz.inference.utils import squeeze_pytree
 from tensorflow_probability.substrates import jax as tfp
 
@@ -22,9 +16,13 @@ def Prior(distribution, bijector=None, name=None):
 
     Sample = SampleType([node_name])
     bijector = tfb.Identity() if bijector is None else bijector
-    metadata = NodeMetadata(None, bijector)
 
-    def apply(inverse_sample):
+    def log_prob(forward_sample):
+        log_prob = distribution.log_prob(forward_sample)
+        log_prob_sum = log_prob.sum()
+        return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
+
+    def log_prob_inverse(inverse_sample):
         forward_sample = bijector(inverse_sample)
         log_prob = distribution.log_prob(forward_sample)
         log_prob = log_prob + bijector.forward_log_det_jacobian(inverse_sample)
@@ -64,18 +62,20 @@ def Prior(distribution, bijector=None, name=None):
             print=print,
         )
         new_prior = Prior(
-            distribution, bijector=optimized_bijector, name=node_name
+            target_distribution, bijector=optimized_bijector, name=node_name
         )
         return (new_prior, losses) if return_losses else new_prior
 
     return Variable(
-        apply,
+        log_prob,
+        log_prob_inverse,
         sample,
         sample_inverse,
         node_name,
         [],
         distribution,
-        metadata,
+        None,
+        bijector,
         fit=fit_bijector,
         fit_bijector=fit_bijector,
     )

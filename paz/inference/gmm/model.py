@@ -26,7 +26,7 @@ def GMM(weights, means, covariances, covariance="diag", name="gmm"):
 
     y = Observable(y_distribution, name="y")(weights, means, covariances)
     model = PGM([weights, means, covariances], [y], name)
-    output_nodes = model.metadata.output_nodes
+    output_nodes = model.output_nodes
     num_components = weights_value.shape[0]
 
     def fit(key, data, method="em", **method_kwargs):

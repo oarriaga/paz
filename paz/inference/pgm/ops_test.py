@@ -344,23 +344,23 @@ def build_single_observable_model():
     return PGM([mean], [y], "single_observable"), observations
 
 
-def test_prior_log_prob_inv_matches_apply():
+def test_prior_log_prob_inverse_is_consistent():
     model, _, _ = build_bijected_prior_model()
     key = jax.random.PRNGKey(0)
     theta_inv = model.sample_inverse(key)
-    state = model.apply(theta_inv)
-    log_prob = model.prior.log_prob(theta_inv, space="inv")
+    state = model.prior.log_prob_inverse(theta_inv)
+    log_prob = model.prior.log_prob_inverse(theta_inv).log_prob_sum
     assert jp.isclose(log_prob, state.log_prob_sum)
 
 
 def test_prior_log_prob_fwd_matches_distribution():
     model, bijector, (low, high) = build_bijected_prior_model()
     key = jax.random.PRNGKey(1)
-    theta_inv = model.prior.sample(key, space="inv")
+    theta_inv = model.prior.sample_inverse(key)
     theta_fwd = to_forward_samples(model.prior.latent_space, theta_inv)
     expected_fwd = tfd.Uniform(low, high).log_prob(theta_fwd.x)
-    actual_fwd = model.prior.log_prob(theta_fwd, space="fwd")
-    actual_inv = model.prior.log_prob(theta_inv, space="inv")
+    actual_fwd = model.prior.log_prob(theta_fwd).log_prob_sum
+    actual_inv = model.prior.log_prob_inverse(theta_inv).log_prob_sum
     expected_inv = expected_fwd + bijector.forward_log_det_jacobian(theta_inv.x)
     assert jp.isclose(actual_fwd, expected_fwd)
     assert jp.isclose(actual_inv, expected_inv)
@@ -369,29 +369,33 @@ def test_prior_log_prob_fwd_matches_distribution():
 def test_prior_sample_forward_respects_bounds():
     model, _, (low, high) = build_bijected_prior_model()
     key = jax.random.PRNGKey(2)
-    samples = model.prior.sample(key, num_samples=1000, space="fwd")
+    samples = model.prior.sample(key, num_samples=1000)
     assert samples.x.min() >= low
     assert samples.x.max() <= high
 
 
-def test_likelihood_log_prob_matches_apply_observables():
+def test_likelihood_log_prob_matches_observables():
     model, data = build_two_observables_model()
     key = jax.random.PRNGKey(3)
     theta_inv = model.sample_inverse(key)
-    state = model.apply(theta_inv, data)
+    state = model.likelihood.log_prob_inverse(theta_inv, data)
     expected = state.log_prob["y1"] + state.log_prob["y2"]
-    actual = model.likelihood.log_prob(theta_inv, data, space="inv")
+    actual = model.likelihood.log_prob_inverse(theta_inv, data).log_prob_sum
     assert jp.isclose(actual, expected)
 
 
 def test_likelihood_accepts_forward_samples_and_list_data():
     model, data = build_two_observables_model()
     key = jax.random.PRNGKey(4)
-    theta_inv = model.prior.sample(key, space="inv")
+    theta_inv = model.prior.sample_inverse(key)
     theta_fwd = to_forward_samples(model.prior.latent_space, theta_inv)
     data_list = [data["y1"], data["y2"]]
-    inv_log_prob = model.likelihood.log_prob(theta_inv, data, space="inv")
-    fwd_log_prob = model.likelihood.log_prob(theta_fwd, data_list, space="fwd")
+    inv_log_prob = model.likelihood.log_prob_inverse(
+        theta_inv, data
+    ).log_prob_sum
+    fwd_log_prob = model.likelihood.log_prob(
+        theta_fwd, data_list
+    ).log_prob_sum
     assert jp.isclose(inv_log_prob, fwd_log_prob)
 
 
@@ -399,10 +403,12 @@ def test_likelihood_accepts_single_output_value():
     model, observations = build_single_observable_model()
     key = jax.random.PRNGKey(5)
     theta_inv = model.sample_inverse(key)
-    expected = model.likelihood.log_prob(
-        theta_inv, {"y": observations}, space="inv"
-    )
-    actual = model.likelihood.log_prob(theta_inv, observations, space="inv")
+    expected = model.likelihood.log_prob_inverse(
+        theta_inv, {"y": observations}
+    ).log_prob_sum
+    actual = model.likelihood.log_prob_inverse(
+        theta_inv, observations
+    ).log_prob_sum
     assert jp.isclose(actual, expected)
 
 
@@ -411,4 +417,4 @@ def test_likelihood_rejects_single_value_for_multi_output():
     key = jax.random.PRNGKey(6)
     theta_inv = model.sample_inverse(key)
     with pytest.raises(TypeError):
-        model.likelihood.log_prob(theta_inv, data["y1"], space="inv")
+        model.likelihood.log_prob_inverse(theta_inv, data["y1"])

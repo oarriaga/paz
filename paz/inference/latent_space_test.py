@@ -38,5 +38,16 @@ def test_latent_space_accepts_dict_samples():
     forward = to_forward_samples(
         latent_space, {"x": jp.array(0.1), "y": jp.array(0.2)}
     )
-    assert hasattr(forward, "x")
-    assert hasattr(forward, "y")
+    assert hasattr(forward, "x") and hasattr(forward, "y")
+
+
+def test_latent_space_ignores_extra_keys():
+    x = Prior(tfd.Normal(0.0, 1.0), name="x")
+    y = Prior(tfd.Normal(0.0, 1.0), name="y")
+    latent_space = build_latent_space([x, y])
+    forward = to_forward_samples(
+        latent_space,
+        {"x": jp.array(0.1), "y": jp.array(0.2), "z": jp.array(0.3)},
+    )
+    values = jp.stack([forward.x, forward.y])
+    assert jp.allclose(values, jp.array([0.1, 0.2]))

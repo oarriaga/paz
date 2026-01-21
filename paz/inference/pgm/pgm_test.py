@@ -7,6 +7,7 @@ from paz.inference.prior import Prior
 from paz.inference.observable import Observable
 from paz.inference.latent import Latent
 from paz.inference.pgm import PGM
+from paz.inference.types import NodeState
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -169,6 +170,17 @@ def build_multi_parent_observable_model():
     return PGM([mu1, mu2], [y], "multi_parent"), data
 
 
+def evaluate_joint(model, params, data=None):
+    prior_state = model.prior.log_prob_inverse(params)
+    if data is None:
+        return prior_state
+    likelihood_state = model.likelihood.log_prob_inverse(params, data)
+    log_prob = dict(prior_state.log_prob)
+    log_prob.update(likelihood_state.log_prob)
+    log_prob_sum = prior_state.log_prob_sum + likelihood_state.log_prob_sum
+    return NodeState(prior_state.sample, log_prob, log_prob_sum)
+
+
 # =============================================================================
 # Tests: sample_inverse shapes
 # =============================================================================
@@ -313,25 +325,25 @@ def test_sample_forward_stdv_constrained():
 
 
 # =============================================================================
-# Tests: apply returns correct structure
+# Tests: joint log_prob structure
 # =============================================================================
 
 
-def test_apply_returns_node_state():
+def test_joint_log_prob_returns_node_state():
     model = build_single_prior_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params)
+    state = evaluate_joint(model, params)
     assert hasattr(state, "sample")
     assert hasattr(state, "log_prob")
     assert hasattr(state, "log_prob_sum")
 
 
-def test_apply_log_prob_is_dict():
+def test_joint_log_prob_is_dict():
     model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params, data)
+    state = evaluate_joint(model, params, data)
     assert isinstance(state.log_prob, dict)
     assert "mean" in state.log_prob
     assert "bias" in state.log_prob
@@ -339,156 +351,162 @@ def test_apply_log_prob_is_dict():
     assert "y_pred" in state.log_prob
 
 
-def test_apply_log_prob_sum_equals_sum_of_log_probs():
+def test_joint_log_prob_sum_equals_sum_of_log_probs():
     model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params, data)
+    state = evaluate_joint(model, params, data)
     expected_sum = sum(state.log_prob.values())
     assert jp.isclose(state.log_prob_sum, expected_sum), \
         f"log_prob_sum {state.log_prob_sum} != sum {expected_sum}"
 
 
 # =============================================================================
-# Tests: apply data mapping
+# Tests: likelihood data mapping
 # =============================================================================
 
 
-def test_apply_accepts_data_list_in_output_order():
+def test_likelihood_accepts_data_list_in_output_order():
     model, data, _, _ = build_two_observables_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
     data_list = [data["y1"], data["y2"]]
-    state = model.apply(params, data_list)
+    state = model.likelihood.log_prob_inverse(params, data_list)
     assert "y1" in state.log_prob
     assert "y2" in state.log_prob
 
 
-def test_apply_missing_observation_raises():
+def test_likelihood_missing_observation_raises():
     model, _, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
     with pytest.raises(ValueError):
-        model.apply(params, {})
+        model.likelihood.log_prob_inverse(params, {})
 
 
 # =============================================================================
-# Tests: apply returns constrained samples
+# Tests: log_prob_inverse returns constrained samples
 # =============================================================================
 
 
-def test_apply_returns_constrained_sample():
+def test_log_prob_inverse_returns_constrained_sample():
     model, bijector, (low, high) = build_single_prior_with_bijector_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = model.prior.log_prob_inverse(params)
         assert low <= state.sample.x <= high, \
-            f"apply sample {state.sample.x} not in [{low}, {high}]"
+            f"sample {state.sample.x} not in [{low}, {high}]"
 
 
-def test_apply_returns_constrained_stdv():
+def test_log_prob_inverse_returns_constrained_stdv():
     model, data, bijector, (low, high) = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params, data)
+        state = model.prior.log_prob_inverse(params)
         assert low <= state.sample.stdv <= high, \
-            f"apply stdv {state.sample.stdv} not in [{low}, {high}]"
+            f"stdv {state.sample.stdv} not in [{low}, {high}]"
 
 
 # =============================================================================
-# Tests: apply produces finite log_prob (no NaN/inf) - regression test for bug
+# Tests: log_prob remains finite (no NaN/inf) - regression test for bug
 # =============================================================================
 
 
-def test_apply_no_nan_single_prior_with_bijector():
+def test_log_prob_no_nan_single_prior_with_bijector():
     model, _, _ = build_single_prior_with_bijector_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params)
+        state = evaluate_joint(model, params)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}"
 
 
-def test_apply_no_nan_three_priors():
+def test_log_prob_no_nan_three_priors():
     model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params, data)
+        state = evaluate_joint(model, params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
-def test_apply_no_nan_hierarchical():
+def test_log_prob_no_nan_hierarchical():
     model, data, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params, data)
+        state = evaluate_joint(model, params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
-def test_apply_no_nan_two_observables():
+def test_log_prob_no_nan_two_observables():
     model, data, _, _ = build_two_observables_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params, data)
+        state = evaluate_joint(model, params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
 
 
-def test_apply_no_nan_multi_parent_observable():
+def test_log_prob_no_nan_multi_parent_observable():
     model, data = build_multi_parent_observable_model()
     key = jax.random.PRNGKey(42)
     for _ in range(100):
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
-        state = model.apply(params, data)
+        state = evaluate_joint(model, params, data)
         assert jp.isfinite(state.log_prob_sum), \
             f"log_prob_sum is not finite: {state.log_prob_sum}"
 
 
 # =============================================================================
-# Tests: vmap over apply works (required for MCMC)
+# Tests: vmap over log_prob works (required for MCMC)
 # =============================================================================
 
 
-def test_vmap_apply_single_prior():
+def test_vmap_log_prob_single_prior():
     model = build_single_prior_model()
     key = jax.random.PRNGKey(0)
     positions = model.sample_inverse(key, num_samples=4)
-    log_density_fn = lambda params: model.apply(params).log_prob_sum
+    log_density_fn = lambda params: model.prior.log_prob_inverse(
+        params
+    ).log_prob_sum
     log_densities = jax.vmap(log_density_fn)(positions)
     assert log_densities.shape == (4,)
     assert jp.all(jp.isfinite(log_densities))
 
 
-def test_vmap_apply_three_priors():
+def test_vmap_log_prob_three_priors():
     model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
     positions = model.sample_inverse(key, num_samples=4)
-    log_density_fn = lambda params: model.apply(params, data).log_prob_sum
+    log_density_fn = lambda params: evaluate_joint(
+        model, params, data
+    ).log_prob_sum
     log_densities = jax.vmap(log_density_fn)(positions)
     assert log_densities.shape == (4,)
     assert jp.all(jp.isfinite(log_densities)), f"NaN in log_densities: {log_densities}"
 
 
-def test_vmap_apply_hierarchical():
+def test_vmap_log_prob_hierarchical():
     model, data, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(0)
     positions = model.sample_inverse(key, num_samples=4)
-    log_density_fn = lambda params: model.apply(params, data).log_prob_sum
+    log_density_fn = lambda params: evaluate_joint(
+        model, params, data
+    ).log_prob_sum
     log_densities = jax.vmap(log_density_fn)(positions)
     assert log_densities.shape == (4,)
     assert jp.all(jp.isfinite(log_densities)), f"NaN in log_densities: {log_densities}"
@@ -499,7 +517,7 @@ def test_vmap_apply_hierarchical():
 # =============================================================================
 
 
-def test_apply_includes_jacobian_correction():
+def test_log_prob_inverse_includes_jacobian_correction():
     """Verify that log_prob includes the Jacobian correction from bijector."""
     low, high = 0.1, 1.0
     bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
@@ -509,7 +527,7 @@ def test_apply_includes_jacobian_correction():
 
     key = jax.random.PRNGKey(42)
     unconstrained = model.sample_inverse(key)
-    state = model.apply(unconstrained)
+    state = model.prior.log_prob_inverse(unconstrained)
 
     constrained = bijector(unconstrained.x)
     log_prob_without_jacobian = distribution.log_prob(constrained)
@@ -550,7 +568,7 @@ def test_observable_receives_constrained_stdv():
         key, subkey = jax.random.split(key)
         params = model.sample_inverse(subkey)
         if params.stdv < 0:
-            state = model.apply(params, data)
+            state = evaluate_joint(model, params, data)
             assert jp.isfinite(state.log_prob_sum), \
                 f"NaN when unconstrained stdv={params.stdv} (should be transformed)"
 
@@ -574,7 +592,7 @@ def test_observable_scale_is_positive():
 
     key = jax.random.PRNGKey(42)
     params = model.sample_inverse(key)
-    state = model.apply(params, data)
+    state = model.prior.log_prob_inverse(params)
     distribution = Likelihood(X)(state.sample.stdv)
     assert jp.all(distribution.scale > 0), (
         f"Observable scale should be positive, got {distribution.scale}"
@@ -688,11 +706,11 @@ def test_two_observables_sample_forward_shape():
     assert hasattr(samples, "y2")
 
 
-def test_two_observables_apply_log_prob():
+def test_two_observables_log_prob():
     model, data, _, _ = build_two_observables_model()
     key = jax.random.PRNGKey(0)
     params = model.sample_inverse(key)
-    state = model.apply(params, data)
+    state = model.likelihood.log_prob_inverse(params, data)
     assert "y1" in state.log_prob
     assert "y2" in state.log_prob
     assert jp.isfinite(state.log_prob["y1"])
@@ -713,20 +731,20 @@ def test_extreme_unconstrained_values():
     extreme_values = [-10.0, -5.0, 0.0, 5.0, 10.0]
     for val in extreme_values:
         params = Sample(x=jp.array(val))
-        state = model.apply(params)
+        state = model.prior.log_prob_inverse(params)
         assert jp.isfinite(state.log_prob_sum), \
             f"NaN for extreme unconstrained value {val}"
         assert low <= state.sample.x <= high, \
             f"Constrained value {state.sample.x} out of bounds for input {val}"
 
 
-def test_apply_with_manual_params():
-    """Test apply with manually constructed parameters."""
+def test_log_prob_with_manual_params():
+    """Test log_prob with manually constructed parameters."""
     model, data, _, _ = build_three_priors_one_observable_model()
     from collections import namedtuple
     Sample = namedtuple("Sample", ["mean", "bias", "stdv"])
 
     params = Sample(mean=jp.array(0.5), bias=jp.array(0.1), stdv=jp.array(0.0))
-    state = model.apply(params, data)
+    state = evaluate_joint(model, params, data)
     assert jp.isfinite(state.log_prob_sum)
     assert state.sample.stdv > 0, "stdv should be transformed to positive"

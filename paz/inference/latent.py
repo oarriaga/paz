@@ -1,7 +1,7 @@
 import jax.numpy as jp
 
 from paz.inference.naming import build_latent_name
-from paz.inference.types import NodeMetadata, NodeState, SampleType, Variable
+from paz.inference.types import NodeState, SampleType, Variable
 from tensorflow_probability.substrates import jax as tfp
 
 tfb = tfp.bijectors
@@ -14,10 +14,15 @@ def Latent(distribution_fn, bijector=None, name=None):
 
     Sample = SampleType([node_name])
     bijector = tfb.Identity() if bijector is None else bijector
-    metadata = NodeMetadata(distribution_fn, bijector)
     edges = []
 
-    def apply(inverse_sample, *args):
+    def log_prob(forward_sample, *args):
+        distribution = distribution_fn(*args)
+        log_prob = distribution.log_prob(forward_sample)
+        log_prob_sum = log_prob.sum()
+        return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
+
+    def log_prob_inverse(inverse_sample, *args):
         forward_sample = bijector(inverse_sample)
         distribution = distribution_fn(*args)
         log_prob = distribution.log_prob(forward_sample)
@@ -42,7 +47,15 @@ def Latent(distribution_fn, bijector=None, name=None):
         for arg in args:
             edges.append(arg)
         return Variable(
-            apply, sample, sample_inverse, node_name, edges, None, metadata
+            log_prob,
+            log_prob_inverse,
+            sample,
+            sample_inverse,
+            node_name,
+            edges,
+            None,
+            distribution_fn,
+            bijector,
         )
 
     return call

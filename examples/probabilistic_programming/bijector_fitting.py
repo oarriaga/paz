@@ -38,7 +38,7 @@ def main():
 
     x = jp.linspace(0.001, 6.0, 300)
     before_dist = build_transformed(source, initial_bijector)
-    after_dist = build_transformed(source, fitted_prior.metadata.bijector)
+    after_dist = build_transformed(source, fitted_prior.bijector)
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     axes[0].plot(x, target.prob(x), label="Target", linewidth=2)

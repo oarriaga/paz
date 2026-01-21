@@ -9,43 +9,79 @@ NodeState = namedtuple("NodeState", ["sample", "log_prob", "log_prob_sum"])
 Variable = namedtuple(
     "Variable",
     [
-        "apply",
+        "log_prob",
+        "log_prob_inverse",
         "sample",
         "sample_inverse",
         "name",
         "edges",
         "distribution",
-        "metadata",
-        "prior",
-        "likelihood",
-        "compile",
-        "tune",
-        "infer",
+        "distribution_fn",
+        "bijector",
         "fit",
-        "inference_defaults",
         "fit_bijector",
     ],
-    defaults=[None, None, None, None, None, None, None, None],
+    defaults=[None] * 11,
 )
-NodeMetadata = namedtuple("NodeMetadata", ["distribution_fn", "bijector"])
-PGMMetadata = namedtuple(
-    "PGMMetadata",
+PGM = namedtuple(
+    "PGM",
     [
+        "sample",
+        "sample_inverse",
+        "name",
         "nodes",
         "inputs",
         "non_priors",
         "latent_nodes",
         "output_nodes",
         "observable_nodes",
+        "latent_space",
+        "prior",
+        "likelihood",
+        "configure",
+        "tune",
+        "infer",
+        "fit",
+        "inference_defaults",
     ],
+    defaults=[None] * 17,
 )
 Density = namedtuple(
-    "Density", ["sample", "log_prob", "prob", "latent_space", "metadata"]
+    "Density",
+    [
+        "sample",
+        "sample_inverse",
+        "log_prob",
+        "log_prob_inverse",
+        "prob",
+        "prob_inverse",
+        "latent_space",
+        "metadata",
+    ],
 )
-Likelihood = namedtuple("Likelihood", ["log_prob", "latent_space", "metadata"])
+Likelihood = namedtuple(
+    "Likelihood",
+    ["log_prob", "log_prob_inverse", "latent_space", "metadata"],
+)
 DiscretePosterior = namedtuple(
     "DiscretePosterior",
     ["support", "log_posterior", "posterior", "z_map", "z_map_value"],
+)
+MCMCPosteriorType = namedtuple(
+    "MCMCPosterior",
+    [
+        "sample",
+        "sample_inverse",
+        "diagnostics",
+        "as_density",
+        "to_empirical",
+        "update",
+        "samples",
+        "inverse_samples",
+        "infos",
+        "config",
+        "latent_space",
+    ],
 )
 
 

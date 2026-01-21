@@ -95,9 +95,10 @@ def sample(
 
     args = jp.arange(num_samples)
     state = Samples(positions, jax.vmap(log_density_fn)(positions))
-    progress_callback = (
-        progressbar.show(num_samples, "sample", width=30) if progress else None
-    )
+    if progress:
+        progress_callback = progressbar.show(num_samples, "sample", width=30)
+    else:
+        progress_callback = None
     scan_step = step_chain_with_progress if progress else step_chain
     _, (states, infos) = jax.lax.scan(scan_step, (key, state), args)
     if progress:

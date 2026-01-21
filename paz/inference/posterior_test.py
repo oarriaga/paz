@@ -45,16 +45,15 @@ def build_simple_posterior():
 def test_posterior_sample_shapes():
     model, data, posterior = build_simple_posterior()
     key = jax.random.PRNGKey(1)
-    samples = posterior.sample(key, num_samples=5, space="inv")
+    samples = posterior.sample_inverse(key, num_samples=5)
     assert samples.x.shape == (5,)
-    samples_fwd = posterior.sample(key, num_samples=3, space="fwd")
+    samples_fwd = posterior.sample(key, num_samples=3)
     assert samples_fwd.x.shape == (3,)
-    forward = posterior.samples_forward
+    forward = posterior.samples
     expected = to_forward_samples(
-        posterior.latent_space, posterior.samples.position
+        posterior.latent_space, posterior.inverse_samples.position
     )
     assert jp.allclose(forward.x, expected.x)
-    assert jp.allclose(posterior.forward_samples().x, expected.x)
 
 
 def test_posterior_diagnostics():
@@ -68,8 +67,8 @@ def test_posterior_as_density_gaussian():
     model, data, posterior = build_simple_posterior()
     density = posterior.as_density(method="gaussian", covariance="diag")
     key = jax.random.PRNGKey(2)
-    sample = density.sample(key, num_samples=1, space="inv")
-    log_prob = density.log_prob(sample, space="inv")
+    sample = density.sample_inverse(key, num_samples=1)
+    log_prob = density.log_prob_inverse(sample)
     assert jp.isfinite(log_prob)
 
 
@@ -83,8 +82,8 @@ def test_posterior_as_density_gmm():
         num_iters=5,
         covariance="diag",
     )
-    sample = density.sample(key, num_samples=2, space="inv")
-    log_prob = density.log_prob(sample, space="inv")
+    sample = density.sample_inverse(key, num_samples=2)
+    log_prob = density.log_prob_inverse(sample)
     assert log_prob.shape == (2,)
     assert jp.all(jp.isfinite(log_prob))
 
@@ -93,7 +92,7 @@ def test_posterior_as_density_kde():
     model, data, posterior = build_simple_posterior()
     density = posterior.as_density(method="kde")
     key = jax.random.PRNGKey(4)
-    sample = density.sample(key, num_samples=3, space="inv")
-    log_prob = density.log_prob(sample, space="inv")
+    sample = density.sample_inverse(key, num_samples=3)
+    log_prob = density.log_prob_inverse(sample)
     assert log_prob.shape == (3,)
     assert jp.all(jp.isfinite(log_prob))

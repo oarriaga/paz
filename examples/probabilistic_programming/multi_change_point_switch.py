@@ -162,7 +162,7 @@ def run_inference(
     posterior = run_mcmc(
         model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
     )
-    samples, infos = posterior.samples, posterior.infos
+    samples, infos = posterior.inverse_samples, posterior.infos
     mcmc_seconds = time.perf_counter() - start_time
     print(f"mcmc: {mcmc_seconds:.3f}s")
 
@@ -261,7 +261,7 @@ def plot_results(
 def run_mcmc(
     model_marg, key, data, num_samples, num_chains, step_sigma, warmup
 ):
-    model_marg.compile(
+    model_marg.configure(
         num_chains=num_chains,
         warmup=warmup,
         sigma=step_sigma,

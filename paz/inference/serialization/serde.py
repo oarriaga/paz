@@ -3,10 +3,11 @@ from jax import flatten_util
 
 from paz.inference.density.core import _build_distribution_density
 from paz.inference.metropolis_hastings import Samples, State
-from paz.inference.posterior import MCMCPosterior, MCMCPosteriorType
-from paz.inference.pgm import PGM
+from paz.inference.posterior import MCMCPosterior
+from paz.inference.types import MCMCPosteriorType
+from paz.inference.pgm import PGM as PGMModel
 from paz.inference.prior import Prior
-from paz.inference.types import Density, PGMMetadata
+from paz.inference.types import Density, PGM as PGMType
 
 from .graph import _build_graph, _serialize_graph
 from .io import _build_manifest
@@ -37,13 +38,13 @@ class PosteriorSerde:
 
     def to_spec(self, obj):
         arrays = {}
-        position, sample_kind = _samples_to_dict(obj.samples.position)
+        position, sample_kind = _samples_to_dict(obj.inverse_samples.position)
         position_refs = {}
         for name, value in position.items():
             array_name = f"position_{name}"
             arrays[array_name] = value
             position_refs[name] = _ref(array_name)
-        arrays["log_density"] = obj.samples.log_density
+        arrays["log_density"] = obj.inverse_samples.log_density
         infos = obj.infos
         arrays["is_accepted"] = infos.is_accepted
         arrays["acceptance_rate"] = infos.acceptance_rate
@@ -83,8 +84,7 @@ class PosteriorSerde:
         )
         infos = State(None, is_accepted, acceptance_rate)
         config = payload.get("config", {})
-        space = config.get("space", "inv")
-        return MCMCPosterior(samples, infos, config, latent_space, space)
+        return MCMCPosterior(samples, infos, config, latent_space)
 
 
 class DensitySerde:
@@ -96,7 +96,7 @@ class DensitySerde:
     def to_spec(self, obj):
         arrays = {}
         spec = _serialize_distribution(obj, arrays)
-        sample = obj.sample(jax.random.PRNGKey(0), num_samples=1, space="inv")
+        sample = obj.sample_inverse(jax.random.PRNGKey(0), num_samples=1)
         sample_spec = _sample_spec(sample)
         latent_spec = _latent_space_spec(obj.latent_space, arrays, "latent")
         payload = {
@@ -125,7 +125,7 @@ class PriorSerde:
         arrays = {}
         spec = _serialize_distribution_obj(obj.distribution, arrays, obj.name)
         bijector = _serialize_bijector(
-            obj.metadata.bijector, arrays, f"{obj.name}_bijector"
+            obj.bijector, arrays, f"{obj.name}_bijector"
         )
         payload = {
             "name": obj.name,
@@ -147,7 +147,7 @@ class LatentSerde:
     type_id = "Latent"
 
     def can_handle(self, obj):
-        if isinstance(getattr(obj, "metadata", None), PGMMetadata):
+        if isinstance(obj, PGMType):
             return False
         return obj.sample_inverse is not None and obj.distribution is None
 
@@ -167,7 +167,7 @@ class ObservableSerde:
     type_id = "Observable"
 
     def can_handle(self, obj):
-        if isinstance(getattr(obj, "metadata", None), PGMMetadata):
+        if isinstance(obj, PGMType):
             return False
         return obj.sample_inverse is None and obj.distribution is None
 
@@ -187,17 +187,16 @@ class PGMSerde:
     type_id = "PGM"
 
     def can_handle(self, obj):
-        return isinstance(getattr(obj, "metadata", None), PGMMetadata)
+        return isinstance(obj, PGMType)
 
     def to_spec(self, obj):
         arrays = {}
-        metadata = obj.metadata
-        graph = _serialize_graph(metadata.output_nodes, arrays)
+        graph = _serialize_graph(obj.output_nodes, arrays)
         payload = {
             "name": obj.name,
             "graph": graph,
-            "inputs": [node.name for node in metadata.inputs],
-            "outputs": [node.name for node in metadata.output_nodes],
+            "inputs": [node.name for node in obj.inputs],
+            "outputs": [node.name for node in obj.output_nodes],
         }
         manifest = _build_manifest(self.type_id, 1)
         return manifest, payload, arrays
@@ -206,7 +205,7 @@ class PGMSerde:
         nodes = _build_graph(payload["graph"], arrays)
         inputs = [nodes[name] for name in payload["inputs"]]
         outputs = [nodes[name] for name in payload["outputs"]]
-        return PGM(inputs, outputs, payload["name"])
+        return PGMModel(inputs, outputs, payload["name"])
 
 
 SERDE_REGISTRY = [

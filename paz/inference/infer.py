@@ -23,14 +23,15 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
     num_samples = kwargs.get("num_samples")
     if num_samples is None:
         raise ValueError("num_samples is required for MH")
-    num_chains = kwargs.get("num_chains", 1)
-    sigma = kwargs.get("sigma", None)
-    warmup = kwargs.get("warmup", None)
-    init = kwargs.get("init", None)
-    space = kwargs.get("space", "inv")
-    tuner = kwargs.get("tuner", None)
-    tune = kwargs.get("tune", None)
-    progress = kwargs.get("progress", True)
+    settings = _resolve_mh_settings(kwargs)
+    num_chains = settings["num_chains"]
+    sigma = settings["sigma"]
+    warmup = settings["warmup"]
+    init = settings["init"]
+    space = settings["space"]
+    tuner = settings["tuner"]
+    tune = settings["tune"]
+    progress = settings["progress"]
     validate_space(space)
 
     # Split once for init/tune/sample to avoid key reuse.
@@ -38,8 +39,10 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
     positions = _get_initial_positions(key_init, prior, init, num_chains, space)
 
     def log_density_fn(position):
-        log_prior = prior.log_prob(position, space="inv")
-        log_likelihood = likelihood.log_prob(position, data, space="inv")
+        log_prior = prior.log_prob_inverse(position).log_prob_sum
+        log_likelihood = likelihood.log_prob_inverse(
+            position, data
+        ).log_prob_sum
         return log_prior + log_likelihood
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
@@ -47,7 +50,7 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         sigma = tuner.sigma if isinstance(tuner, AdaptiveStepTuner) else 0.1
     run_tuner = _should_tune(tune, tuner)
     if run_tuner:
-        sigma = _run_tuner(
+        tuner_args = (
             tuner,
             key_tune,
             log_density_fn,
@@ -55,6 +58,7 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
             num_chains,
             sigma,
         )
+        sigma = _run_tuner(*tuner_args)
 
     total_samples = num_samples + num_warmup
     states, infos = mh_sample(
@@ -81,7 +85,21 @@ def _infer_mh(key, data, prior, likelihood, **kwargs):
         "space": space,
         "progress": progress,
     }
-    return MCMCPosterior(states, infos, config, prior.latent_space, "inv")
+    return MCMCPosterior(states, infos, config, prior.latent_space)
+
+
+def _resolve_mh_settings(kwargs):
+    defaults = {
+        "num_chains": 1,
+        "sigma": None,
+        "warmup": None,
+        "init": None,
+        "space": "inv",
+        "tuner": None,
+        "tune": None,
+        "progress": True,
+    }
+    return {name: kwargs.get(name, default) for name, default in defaults.items()}
 
 
 def _resolve_num_warmup(num_samples, warmup):
@@ -101,7 +119,10 @@ def _resolve_num_warmup(num_samples, warmup):
 
 def _get_initial_positions(key, prior, init, num_chains, space):
     if init is None:
-        init = prior.sample(key, num_chains, space=space)
+        if space == "inv":
+            init = prior.sample_inverse(key, num_chains)
+        else:
+            init = prior.sample(key, num_chains)
     init = as_latent_samples(prior.latent_space, init)
     if space == "fwd":
         init = to_inverse_samples(prior.latent_space, init)
@@ -129,14 +150,10 @@ def _should_tune(tune, tuner):
 def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
     if not isinstance(tuner, AdaptiveStepTuner):
         raise NotImplementedError("Only AdaptiveStepTuner is supported.")
-    tune = Tuner(
-        log_density_fn,
-        positions,
-        num_chains,
-        compute_rate=tuner.compute_rate,
-        progress=tuner.progress,
-    )
-    tuned_sigma, _ = tune(
-        key, tuner.num_steps, tuner.num_episodes, sigma
-    )
+    tuner_config = {
+        "compute_rate": tuner.compute_rate,
+        "progress": tuner.progress,
+    }
+    tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
+    tuned_sigma, _ = tune(key, tuner.num_steps, tuner.num_episodes, sigma)
     return tuned_sigma

@@ -82,10 +82,12 @@ def test_posterior_serde_roundtrip():
     posterior = _build_posterior()
     loaded = _roundtrip(posterior)
     assert jp.allclose(
-        loaded.samples.position.x, posterior.samples.position.x
+        loaded.inverse_samples.position.x,
+        posterior.inverse_samples.position.x,
     )
     assert jp.allclose(
-        loaded.samples.log_density, posterior.samples.log_density
+        loaded.inverse_samples.log_density,
+        posterior.inverse_samples.log_density,
     )
     assert jp.allclose(
         loaded.infos.is_accepted, posterior.infos.is_accepted
@@ -95,9 +97,9 @@ def test_posterior_serde_roundtrip():
 def test_density_serde_roundtrip():
     density = _build_density()
     loaded = _roundtrip(density)
-    sample = density.sample(jax.random.PRNGKey(1), num_samples=1, space="inv")
-    log_prob = density.log_prob(sample, space="inv")
-    log_prob_loaded = loaded.log_prob(sample, space="inv")
+    sample = density.sample_inverse(jax.random.PRNGKey(1), num_samples=1)
+    log_prob = density.log_prob_inverse(sample)
+    log_prob_loaded = loaded.log_prob_inverse(sample)
     assert jp.allclose(log_prob, log_prob_loaded)
 
 
@@ -105,8 +107,24 @@ def test_prior_serde_roundtrip():
     prior = Prior(tfd.Normal(0.0, 1.0), name="x")
     loaded = _roundtrip(prior)
     value = jp.array(0.1)
-    log_prob = prior.apply(value).log_prob_sum
-    log_prob_loaded = loaded.apply(value).log_prob_sum
+    log_prob = prior.log_prob(value).log_prob_sum
+    log_prob_loaded = loaded.log_prob(value).log_prob_sum
+    assert jp.allclose(log_prob, log_prob_loaded)
+
+
+def test_prior_serde_roundtrip_mixture():
+    weights = jp.array([0.4, 0.6])
+    loc = jp.array([-1.0, 1.0])
+    scale = jp.array([0.5, 0.2])
+    components = tfd.Normal(loc=loc, scale=scale)
+    mixture = tfd.MixtureSameFamily(
+        tfd.Categorical(probs=weights), components
+    )
+    prior = Prior(mixture, name="x")
+    loaded = _roundtrip(prior)
+    value = jp.array(0.1)
+    log_prob = prior.log_prob(value).log_prob_sum
+    log_prob_loaded = loaded.log_prob(value).log_prob_sum
     assert jp.allclose(log_prob, log_prob_loaded)
 
 
@@ -134,6 +152,10 @@ def test_pgm_serde_roundtrip():
     key = jax.random.PRNGKey(0)
     sample_inv = model.sample_inverse(key, num_samples=1)
     data = model.sample(key, num_samples=1)
-    log_prob = model.likelihood.log_prob(sample_inv, data, space="inv")
-    log_prob_loaded = loaded.likelihood.log_prob(sample_inv, data, space="inv")
+    log_prob = model.likelihood.log_prob_inverse(
+        sample_inv, data
+    ).log_prob_sum
+    log_prob_loaded = loaded.likelihood.log_prob_inverse(
+        sample_inv, data
+    ).log_prob_sum
     assert jp.allclose(log_prob, log_prob_loaded)

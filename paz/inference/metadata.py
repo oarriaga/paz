@@ -1,44 +1,30 @@
-def get_pgm_metadata(pgm):
-    metadata = getattr(pgm, "metadata", None)
-    if metadata is None:
-        raise ValueError("Expected a PGM Variable with metadata.")
-    return metadata
-
-
-def get_node_metadata(node):
-    metadata = getattr(node, "metadata", None)
-    if metadata is None:
-        raise ValueError("Expected a Variable with metadata.")
-    return metadata
-
-
 def get_inputs(pgm):
-    return get_pgm_metadata(pgm).inputs
+    return pgm.inputs
 
 
 def get_non_priors(pgm):
-    return get_pgm_metadata(pgm).non_priors
+    return pgm.non_priors
 
 
 def get_latent_nodes(pgm):
-    return get_pgm_metadata(pgm).latent_nodes
+    return pgm.latent_nodes
 
 
 def get_output_nodes(pgm):
-    return get_pgm_metadata(pgm).output_nodes
+    return pgm.output_nodes
 
 
 def get_observable_nodes(pgm):
-    return get_pgm_metadata(pgm).observable_nodes
+    return pgm.observable_nodes
 
 
 def get_nodes(pgm):
-    return get_pgm_metadata(pgm).nodes
+    return pgm.nodes
 
 
 def get_distribution_fn(node):
-    return get_node_metadata(node).distribution_fn
+    return node.distribution_fn
 
 
 def get_bijector(node):
-    return get_node_metadata(node).bijector
+    return node.bijector

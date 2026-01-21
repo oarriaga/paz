@@ -9,11 +9,7 @@ from paz.inference.latent_space import (
     to_inverse_samples,
 )
 from paz.inference.types import Density
-from paz.inference.utils import (
-    get_leading_batch_size,
-    squeeze_pytree,
-    validate_space,
-)
+from paz.inference.utils import get_leading_batch_size, squeeze_pytree
 
 tfd = tfp.distributions
 
@@ -54,28 +50,42 @@ def _build_kde_density(kde, latent_space, unravel):
 def _build_density_from_flat(
     sample_flat, log_prob_flat, latent_space, unravel, metadata
 ):
-    def sample(key, num_samples=1, space="inv"):
-        validate_space(space)
+    def sample_inverse(key, num_samples=1):
         flat = sample_flat(key, num_samples)
         structured = _unflatten_samples(unravel, flat)
         if num_samples == 1:
             structured = squeeze_pytree(structured)
-        if space == "fwd":
-            structured = to_forward_samples(latent_space, structured)
         return structured
 
-    def log_prob(samples, space="inv"):
-        validate_space(space)
-        if space == "fwd":
-            samples = to_inverse_samples(latent_space, samples)
+    def sample(key, num_samples=1):
+        inverse = sample_inverse(key, num_samples)
+        return to_forward_samples(latent_space, inverse)
+
+    def log_prob_inverse(samples):
         samples = as_latent_samples(latent_space, samples)
         flat = _flatten_for_log_prob(samples)
         return log_prob_flat(flat)
 
-    def prob(samples, space="inv"):
-        return jp.exp(log_prob(samples, space=space))
+    def log_prob(samples):
+        inverse = to_inverse_samples(latent_space, samples)
+        return log_prob_inverse(inverse)
 
-    return Density(sample, log_prob, prob, latent_space, metadata)
+    def prob(samples):
+        return jp.exp(log_prob(samples))
+
+    def prob_inverse(samples):
+        return jp.exp(log_prob_inverse(samples))
+
+    return Density(
+        sample,
+        sample_inverse,
+        log_prob,
+        log_prob_inverse,
+        prob,
+        prob_inverse,
+        latent_space,
+        metadata,
+    )
 
 
 def _flatten_samples(samples, latent_space):

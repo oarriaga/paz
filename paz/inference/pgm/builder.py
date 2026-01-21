@@ -2,22 +2,23 @@ from collections import Counter, namedtuple
 
 from paz.abstract.dag import DAG
 from paz.inference.latent_space import build_latent_space
-from paz.inference.types import PGMMetadata, SampleType
+from paz.inference.types import SampleType
 
 
 PGMContext = namedtuple(
     "PGMContext",
     [
+        "nodes",
         "inputs",
         "non_priors",
         "latent_nodes",
         "latent_nodes_sorted",
         "output_nodes",
+        "observable_nodes",
         "observable_names",
         "latent_space",
         "Sample",
         "Latent",
-        "metadata",
     ],
 )
 
@@ -44,20 +45,18 @@ def build_pgm_context(inputs, outputs, name):
     observable_nodes = get_observable_nodes(nodes)
     observable_names = [node.name for node in observable_nodes]
     Latent = SampleType(latent_names)
-    metadata = PGMMetadata(
-        nodes, inputs, non_priors, latent_nodes, output_nodes, observable_nodes
-    )
     return PGMContext(
+        nodes,
         inputs,
         non_priors,
         latent_nodes,
         latent_nodes_sorted,
         output_nodes,
+        observable_nodes,
         observable_names,
         latent_space,
         Sample,
         Latent,
-        metadata,
     )
 
 
