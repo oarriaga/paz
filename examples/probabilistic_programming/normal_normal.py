@@ -124,9 +124,7 @@ print("=" * 60)
 print(f"\nPrior:      mu ~ Normal({prior_mean}, {prior_stdv})")
 print(f"Likelihood: X | mu ~ Normal(mu, {likelihood_stdv})")
 print(f"\nTrue mu:          {true_mu}")
-print(
-    f"Observations:     n={n_observations}, mean={observations.mean():.4f}"
-)
+print(f"Observations:     n={n_observations}, mean={observations.mean():.4f}")
 
 # Compute analytical posterior
 analytical = compute_analytical_posterior(
@@ -149,9 +147,7 @@ warmup = 1000
 print(f"\nRunning MCMC...")
 print(f"  Samples: {num_samples}, Chains: {num_chains}, Warmup: {warmup}")
 
-posterior = run_mcmc(
-    model, key, data, num_samples, num_chains, sigma, warmup
-)
+posterior = run_mcmc(model, key, data, num_samples, num_chains, sigma, warmup)
 samples, infos = posterior.inverse_samples, posterior.infos
 gaussian_density = posterior.as_density(method="gaussian")
 
@@ -161,12 +157,8 @@ acceptance_rate = infos.acceptance_rate.mean()
 
 print(f"\nMCMC Results:")
 print(f"  Acceptance rate: {acceptance_rate:.3f}")
-print(
-    f"  Posterior mean:  {mcmc_mean:.4f} (analytical: {analytical.mean:.4f})"
-)
-print(
-    f"  Posterior stdv:  {mcmc_stdv:.4f} (analytical: {analytical.stdv:.4f})"
-)
+print(f"  Posterior mean:  {mcmc_mean:.4f} (analytical: {analytical.mean:.4f})")
+print(f"  Posterior stdv:  {mcmc_stdv:.4f} (analytical: {analytical.stdv:.4f})")
 
 # Verify convergence
 mean_ok, stdv_ok, mean_error, stdv_error = verify_posterior(
@@ -264,13 +256,13 @@ theoretical_quantiles = np.array(
     )
 )
 # TODO this is not working
-plot.qq_plot(
-    sorted_samples, theoretical_quantiles, ax, color=plot.BLUE_GREY.primary
-)
-plot.set_labels(ax, x="Theoretical quantiles", y="Sample quantiles")
-plot.clean(ax)
-ax.set_title("Q-Q plot (vs analytical posterior)")
-plot.show()
+# plot.qq_plot(
+#     sorted_samples, theoretical_quantiles, axis=ax, color=plot.BLUE_GREY.primary
+# )
+# plot.set_labels(ax, x="Theoretical quantiles", y="Sample quantiles")
+# plot.clean(ax)
+# ax.set_title("Q-Q plot (vs analytical posterior)")
+# plot.show()
 
 # Diagnostics
 fig, ax = plot.subplots()
