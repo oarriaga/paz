@@ -3,7 +3,6 @@ import jax.numpy as jp
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
-import paz.plot as plot
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -34,21 +33,15 @@ keys = jax.random.split(jax.random.PRNGKey(888), 4)
 prior_samples = model.sample(keys[0], num_samples=100)
 
 # Configure plotting
-plot.configure(fontsize=14, latex=False)
-figure, axis = plot.subplots()
-plot.prior_predictive(
-    X,
-    prior_samples.y_pred,
-    axis,
-    color=plot.BLUE_GREY.primary,
-    alpha=0.2,
-    num_lines=50,
-)
-plot.scatter(X, data, axis, s=2, color=plot.EARTH.primary, alpha=0.8)
-plot.set_labels(axis, x="X", y="y")
-plot.clean(axis)
+paz.plot.configure(fontsize=14, latex=False)
+figure, axis = paz.plot.subplots()
+color = paz.plot.BLUE_GREY.primary
+paz.plot.prior_predictive(X, prior_samples.y_pred, axis, color=color)
+paz.plot.scatter(X, data, axis, s=2, color=paz.plot.EARTH.primary, alpha=0.8)
+paz.plot.set_labels(axis, x="X", y="y")
+paz.plot.clean(axis)
 axis.set_title("Prior predictive")
-plot.show()
+paz.plot.show()
 
 # Inference
 num_chains = 4
@@ -69,71 +62,60 @@ print(f"Posterior bias: {inverse_samples.bias.mean():.4f} (true: 0.1)")
 print(f"Posterior stdv: {posterior_forward.stdv.mean():.4f} (true: ~0.05)")
 
 # Trace panel for convergence diagnostics
-plot.trace_panel(
-    {"mean": inverse_samples.mean, "bias": inverse_samples.bias},
-    title="MCMC Traces",
-)
-plot.show()
+trace = {"mean": inverse_samples.mean, "bias": inverse_samples.bias}
+paz.plot.trace_panel(trace, title="MCMC Traces")
+paz.plot.show()
 
 # Posterior scatter (joint posterior of mean vs bias)
-figure, axis = plot.subplots()
+figure, axis = paz.plot.subplots()
 for chain in range(num_chains):
     chain_mean = inverse_samples.mean[:, chain]
     chain_bias = inverse_samples.bias[:, chain]
-    plot.scatter(chain_mean, chain_bias, axis, s=1, alpha=0.1)
-plot.set_labels(axis, x="mean", y="bias")
-plot.clean(axis)
+    paz.plot.scatter(chain_mean, chain_bias, axis, s=1, alpha=0.1)
+paz.plot.set_labels(axis, x="mean", y="bias")
+paz.plot.clean(axis)
 axis.set_title("Joint posterior (unconstrained space)")
-plot.show()
+paz.plot.show()
 
-# Contour plot of joint posterior
+# Contour paz.plot of joint posterior
 all_means = inverse_samples.mean.flatten()
 all_biases = inverse_samples.bias.flatten()
-figure, axis = plot.subplots()
-plot.contour(all_means, all_biases, axis, levels=15, cmap="viridis")
-plot.vline(
-    0.5, axis, color=plot.EARTH.primary, linestyle="--", label="true mean"
-)
-plot.hline(
-    0.1, axis, color=plot.EARTH.secondary, linestyle="--", label="true bias"
-)
-plot.set_labels(axis, x="mean", y="bias")
-plot.clean(axis)
+figure, axis = paz.plot.subplots()
+paz.plot.contour(all_means, all_biases, axis, levels=15, cmap="viridis")
+color_1, color_2 = paz.plot.EARTH.primary, paz.plot.EARTH.secondary
+paz.plot.vline(0.5, axis, color=color_1, linestyle="--", label="true mean")
+paz.plot.hline(0.1, axis, color=color_2, linestyle="--", label="true bias")
+paz.plot.set_labels(axis, x="mean", y="bias")
+paz.plot.clean(axis)
 axis.legend()
 axis.set_title("Joint posterior contours")
-plot.show()
+paz.plot.show()
 
 # Posterior predictive
 posterior_density = posterior.as_density(method="gaussian")
 pred_samples = posterior_density.sample(keys[3], int(num_samples * 0.2))
 y_pred = pred_samples.y_pred
 
-figure, axis = plot.subplots()
-plot.posterior_predictive(
-    X,
-    y_pred,
-    axis=axis,
-    color=plot.BLUE_GREY.primary,
-    num_lines=100,
-    alpha=0.1,
-)
-plot.scatter(X, data, axis, s=8, color=plot.EARTH.primary, alpha=0.8)
-plot.set_labels(axis, x="X", y="y")
-plot.clean(axis)
+figure, axis = paz.plot.subplots()
+color = paz.plot.BLUE_GREY.primary
+paz.plot.posterior_predictive(X, y_pred, axis=axis, color=color, num_lines=100)
+paz.plot.scatter(X, data, axis, s=8, color=paz.plot.EARTH.primary, alpha=0.8)
+paz.plot.set_labels(axis, x="X", y="y")
+paz.plot.clean(axis)
 axis.set_title("Posterior predictive")
-plot.show()
+paz.plot.show()
 
 
 # Diagnostics (acceptance rate per chain)
-figure, axis = plot.subplots()
-plot.diagnostics(posterior.infos.acceptance_rate, axis)
-plot.clean(axis)
+figure, axis = paz.plot.subplots()
+paz.plot.diagnostics(posterior.infos.acceptance_rate, axis)
+paz.plot.clean(axis)
 axis.set_title("Acceptance rates per chain")
-plot.show()
+paz.plot.show()
 
-# Corner plot showing all pairwise relationships
-plot.corner(
+# Corner paz.plot showing all pairwise relationships
+paz.plot.corner(
     {"mean": all_means, "bias": all_biases},
     true_values={"mean": 0.5, "bias": 0.1},
 )
-plot.show()
+paz.plot.show()
