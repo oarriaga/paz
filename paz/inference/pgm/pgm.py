@@ -32,9 +32,8 @@ def PGM(inputs, outputs, name):
     prior_prob, prior_prob_inverse = build_prior_prob(
         prior_log_prob, prior_log_prob_inverse
     )
-    likelihood_log_prob, likelihood_log_prob_inverse = build_likelihood_log_prob(
-        context
-    )
+    likelihood = build_likelihood_log_prob(context)
+    likelihood_log_prob, likelihood_log_prob_inverse = likelihood
     inference_defaults = {}
     pgm_prior = Density(
         prior_sample,

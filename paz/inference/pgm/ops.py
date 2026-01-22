@@ -12,17 +12,25 @@ from paz.inference.utils import get_leading_batch_size
 
 
 def build_sample_inverse(context):
-    return lambda key, num_samples=1: context.Latent(
-        **_sample_inverse(
-            context.inputs, context.latent_nodes, key, num_samples
+    def sample_inverse(key, num_samples=1):
+        return context.Latent(
+            **_sample_inverse(
+                context.inputs, context.latent_nodes, key, num_samples
+            )
         )
-    )
+
+    return sample_inverse
 
 
 def build_sample_forward(context):
-    return lambda key, num_samples=1: context.Sample(
-        **_sample_forward(context.inputs, context.non_priors, key, num_samples)
-    )
+    def sample_forward(key, num_samples=1):
+        return context.Sample(
+            **_sample_forward(
+                context.inputs, context.non_priors, key, num_samples
+            )
+        )
+
+    return sample_forward
 
 
 def build_sample_predictive(context):
@@ -34,19 +42,18 @@ def build_sample_predictive(context):
     name_to_node = {node.name: node for node in nodes}
     nodes_sorted = [name_to_node[name] for name in names]
 
+    def predictive_single(subkey, sample):
+        return _sample_predictive_single(
+            subkey, sample, nodes_sorted, latent_names, Sample
+        )
+
     def sample_predictive(key, forward_samples):
         forward_samples = as_latent_samples(latent_space, forward_samples)
         batch_size = get_leading_batch_size(forward_samples)
         if batch_size is None:
-            return _sample_predictive_single(
-                key, forward_samples, nodes_sorted, latent_names, Sample
-            )
+            return predictive_single(key, forward_samples)
         keys = jax.random.split(key, batch_size)
-        return jax.vmap(
-            lambda subkey, sample: _sample_predictive_single(
-                subkey, sample, nodes_sorted, latent_names, Sample
-            )
-        )(keys, forward_samples)
+        return jax.vmap(predictive_single)(keys, forward_samples)
 
     return sample_predictive
 
@@ -248,9 +255,7 @@ def get_namedtuple_value(field, named_tuple, default=None):
 
 
 def _validate_observations(data_mapping, observable_names):
-    missing = [
-        name for name in observable_names if name not in data_mapping
-    ]
+    missing = [name for name in observable_names if name not in data_mapping]
     missing.sort()
     if missing:
         raise ValueError("Missing observations for: " + ", ".join(missing))
@@ -293,26 +298,37 @@ def _sample_nodes(
 def _sample_inverse(prior_nodes, latent_nodes, key, num_samples):
     prior_names = {prior.name for prior in prior_nodes}
     non_prior_latents = [n for n in latent_nodes if n.name not in prior_names]
+
+    def prior_sample_fn(prior, subkey, num):
+        return prior.sample_inverse(subkey, num)
+
+    def node_sample_fn(node, subkey, num, *inputs):
+        return node.sample_inverse(subkey, num, *inputs)
+
     return _sample_nodes(
         prior_nodes,
         non_prior_latents,
         key,
         num_samples,
-        lambda prior, subkey, num: prior.sample_inverse(subkey, num),
-        lambda node, subkey, num, *inputs: node.sample_inverse(
-            subkey, num, *inputs
-        ),
+        prior_sample_fn,
+        node_sample_fn,
     )
 
 
 def _sample_forward(prior_nodes, non_prior_nodes, key, num_samples):
+    def prior_sample_fn(prior, subkey, num):
+        return prior.sample(subkey, num)
+
+    def node_sample_fn(node, subkey, num, *inputs):
+        return node.sample(subkey, num, *inputs)
+
     return _sample_nodes(
         prior_nodes,
         non_prior_nodes,
         key,
         num_samples,
-        lambda prior, subkey, num: prior.sample(subkey, num),
-        lambda node, subkey, num, *inputs: node.sample(subkey, num, *inputs),
+        prior_sample_fn,
+        node_sample_fn,
     )
 
 

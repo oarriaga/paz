@@ -26,9 +26,7 @@ PGMContext = namedtuple(
 def build_pgm_context(inputs, outputs, name):
     nodes = search_nodes(outputs)
     _validate_unique_names(nodes)
-    edges = [
-        [edge.name, node.name] for node in nodes for edge in node.edges
-    ]
+    edges = [[edge.name, node.name] for node in nodes for edge in node.edges]
     dag = DAG([node.name for node in nodes], edges, name)
     sorted_names = dag.sort_topologically()
     Sample = SampleType(sorted_names)
@@ -91,7 +89,8 @@ def _validate_unique_names(nodes):
     duplicates = [name for name, count in name_counts.items() if count > 1]
     if duplicates:
         duplicates.sort()
-        raise ValueError(
+        message = (
             "PGM node names must be unique. "
             f"Duplicates: {', '.join(duplicates)}"
         )
+        raise ValueError(message)

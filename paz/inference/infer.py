@@ -8,7 +8,9 @@ from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.utils import validate_space
 
 
-def infer(key, data, prior, likelihood, method, sample_predictive=None, **kwargs):
+def infer(
+    key, data, prior, likelihood, method, sample_predictive=None, **kwargs
+):
     if method is None:
         raise ValueError("method is required")
     method = method.lower()
@@ -103,7 +105,9 @@ def _resolve_mh_settings(kwargs):
         "tune": None,
         "progress": True,
     }
-    return {name: kwargs.get(name, default) for name, default in defaults.items()}
+    return {
+        name: kwargs.get(name, default) for name, default in defaults.items()
+    }
 
 
 def _resolve_num_warmup(num_samples, warmup):

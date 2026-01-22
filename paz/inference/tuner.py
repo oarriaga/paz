@@ -25,7 +25,9 @@ ACCEPTANCE_RATES = jp.array([0.001, 0.05, 0.2, 0.5, 0.75, 0.95])
 VARIANCE_FACTORS = jp.array([0.1, 0.5, 0.9, 1.1, 2, 10])
 
 
-def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True):
+def Tuner(
+    log_density_fn, samples, num_chains, compute_rate=None, progress=True
+):
     if compute_rate is None:
         compute_rate = AcceptanceToVariance(ACCEPTANCE_RATES, VARIANCE_FACTORS)
 
@@ -53,11 +55,12 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
 
     @partial(jax.jit, static_argnums=(1, 2))
     def tune(key, num_steps, num_episodes, sigma):
-        progress_callback = (
-            progressbar.show(num_episodes, "tuning", width=30)
-            if progress
-            else None
-        )
+        if progress:
+            progress_callback = progressbar.show(
+                num_episodes, "tuning", width=30
+            )
+        else:
+            progress_callback = None
 
         def one_episode(episode_state, sample_arg):
             if progress:
@@ -71,9 +74,11 @@ def Tuner(log_density_fn, samples, num_chains, compute_rate=None, progress=True)
 
         sigma = jp.full(num_chains, sigma)
         rates = jp.ones(num_chains)
-        kernel_state = jax.vmap(
-            lambda position: Samples(position, log_density_fn(position))
-        )(samples)
+
+        def build_kernel_state(position):
+            return Samples(position, log_density_fn(position))
+
+        kernel_state = jax.vmap(build_kernel_state)(samples)
         tuner_state = TunerState(kernel_state, sigma, rates)
         episode_args = jp.arange(num_episodes)
         _, infos = jax.lax.scan(one_episode, (key, tuner_state), episode_args)

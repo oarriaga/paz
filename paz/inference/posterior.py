@@ -83,7 +83,6 @@ def MCMCPosterior(states, infos, config, latent_space, sample_predictive=None):
         return density._replace(sample=density_sample)
 
     def to_empirical():
-        # TODO we should most likely remove this for now.
         raise NotImplementedError("Empirical posterior is not implemented yet.")
 
     def update(key, new_data, **kwargs):
