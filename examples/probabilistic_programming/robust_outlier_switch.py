@@ -16,11 +16,11 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 from paz.inference.types import SampleType
 
 tfd = tfp.distributions
@@ -105,45 +105,24 @@ def plot_switch_results(
         selected_label = f"selected band (sigma={sigma_in})"
         alt_label = f"alt band (sigma={sigma_out})"
 
-    axis_top.scatter(x, observations, color="tab:gray", alpha=0.8, label="data")
-    axis_top.plot(x_grid, mean_line, color="black", label="posterior mean line")
+    plot.scatter(x, observations, axis_top, color="tab:gray", alpha=0.8,
+                 label="data")
+    plot.line(x_grid, mean_line, axis_top, color="black",
+              label="posterior mean line")
     if density_params is not None:
         density_slope, density_bias = density_params
         density_line = density_slope * x_grid + density_bias
-        axis_top.plot(
-            x_grid,
-            density_line,
-            color="tab:purple",
-            linestyle="--",
-            label="gaussian approx",
-        )
+        plot.line(x_grid, density_line, axis_top, color="tab:purple",
+                  linestyle="--", label="gaussian approx")
     true_line = slope_true * x_grid + bias_true
-    axis_top.plot(
-        x_grid, true_line, color="tab:green", linestyle="--", label="true line"
-    )
-    axis_top.fill_between(
-        x_grid,
-        selected_lower,
-        selected_upper,
-        color=selected_color,
-        alpha=0.25,
-        label=selected_label,
-    )
-    axis_top.plot(
-        x_grid,
-        alt_upper,
-        color=alt_color,
-        linestyle=":",
-        linewidth=1.5,
-        label=alt_label,
-    )
-    axis_top.plot(
-        x_grid,
-        alt_lower,
-        color=alt_color,
-        linestyle=":",
-        linewidth=1.5,
-    )
+    plot.line(x_grid, true_line, axis_top, color="tab:green", linestyle="--",
+              label="true line")
+    plot.fill_between(x_grid, selected_lower, selected_upper, axis_top,
+                      color=selected_color, alpha=0.25, label=selected_label)
+    plot.line(x_grid, alt_upper, axis_top, color=alt_color, linestyle=":",
+              linewidth=1.5, label=alt_label)
+    plot.line(x_grid, alt_lower, axis_top, color=alt_color, linestyle=":",
+              linewidth=1.5)
     switch_label = "outlier" if highlight_outlier else "inlier"
     axis_top.set_title(
         f"Global switch selects: {switch_label} "
@@ -171,7 +150,8 @@ def plot_switch_results(
         color=selected_color,
         fontsize=9,
     )
-    axis_top.legend(loc="upper left")
+    plot.legend(axis_top, loc="upper left")
+    plot.clean(axis_top)
 
     axis_bottom.bar(
         [0, 1],
@@ -181,6 +161,7 @@ def plot_switch_results(
     )
     axis_bottom.set_ylim(0.0, 1.0)
     axis_bottom.set_ylabel("Posterior probability")
+    plot.clean(axis_bottom)
     axis_bottom.set_title("Posterior over switch z")
 
 
@@ -288,7 +269,8 @@ def main():
         print(f"mcmc seconds={result.mcmc_seconds:.2f}")
         print(f"posterior seconds={result.posterior_seconds:.2f}")
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+    plot.configure(fontsize=12)
+    figure, axes = plot.subplots(nrows=2, ncols=2, figsize=(14, 8))
     for column, result in enumerate(case_results):
         case_result, density_params = result
         plot_switch_results(
@@ -305,8 +287,8 @@ def main():
             case_result.z_true,
             density_params,
         )
-    plt.tight_layout()
-    plt.show()
+    figure.tight_layout()
+    plot.show()
 
 
 if __name__ == "__main__":

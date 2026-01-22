@@ -1,9 +1,9 @@
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -99,30 +99,21 @@ print(f"True J: {TRUE_J}")
 print(f"Inferred J (Mean): {samples.coupling.mean():.4f}")
 print(f"Acceptance Rate: {posterior.infos.acceptance_rate.mean():.3f}")
 
-plt.figure(figsize=(12, 5))
+plot.configure(fontsize=12)
+figure, axes = plot.subplots(ncols=2, figsize=(12, 5))
 
-# Plot 1: The Observed Ising Grid
-plt.subplot(1, 2, 1)
-plt.imshow(ising_grid, cmap="coolwarm")
-plt.title(f"Observed Ising Lattice (True J={TRUE_J})")
-plt.axis("off")
+plot.imshow(ising_grid, axes[0], cmap="coolwarm", colorbar=False)
+axes[0].axis("off")
+axes[0].set_title(f"Observed Ising Lattice (True J={TRUE_J})")
 
-# Plot 2: Posterior of Coupling Constant J
-plt.subplot(1, 2, 2)
-# Using histogram since it's 1D
 for chain in range(num_chains):
-    plt.hist(
-        samples.coupling[:, chain],
-        bins=30,
-        alpha=0.3,
-        density=True,
-        label=f"Chain {chain}",
-    )
-plt.axvline(TRUE_J, color="red", linestyle="--", label="True J")
-plt.xlabel("Coupling Strength J")
-plt.ylabel("Density")
-plt.title("Posterior Distribution of Parameter J")
-plt.legend()
+    plot.histogram(samples.coupling[:, chain], axes[1], bins=30, alpha=0.3,
+                   label=f"Chain {chain}")
+plot.vline(TRUE_J, axes[1], color="red", linestyle="--", label="True J")
+plot.set_labels(axes[1], x="Coupling Strength J", y="Density")
+plot.legend(axes[1])
+plot.clean(axes[1])
+axes[1].set_title("Posterior Distribution of Parameter J")
 
-plt.tight_layout()
-plt.show()
+figure.tight_layout()
+plot.show()

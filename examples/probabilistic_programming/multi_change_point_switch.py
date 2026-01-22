@@ -10,10 +10,10 @@ import time
 
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 from paz.inference.types import SampleType
 
 tfd = tfp.distributions
@@ -143,7 +143,7 @@ def main():
         switch_position_posterior,
     )
     print(f"plotting: {time.perf_counter() - start_time:.3f}s")
-    plt.show()
+    plot.show()
 
 
 def run_inference(
@@ -219,43 +219,37 @@ def plot_results(
     switch_position_posterior,
 ):
     num_switches = switch_position_posterior.shape[0]
-    fig, axes = plt.subplots(2, 1, figsize=(11, 8))
+    plot.configure(fontsize=12)
+    figure, axes = plot.subplots(nrows=2, ncols=1, figsize=(11, 8))
 
-    axes[0].scatter(x, observations, color="tab:gray", alpha=0.8, label="data")
-    axes[0].plot(x, posterior_mean, color="black", label="posterior mean")
-    axes[0].plot(
-        x, density_mean, color="tab:purple", linestyle="--", label="gaussian approx"
-    )
-    axes[0].plot(
-        x, true_mean, color="tab:green", linestyle="--", label="true mean"
-    )
+    plot.scatter(x, observations, axes[0], color="tab:gray", alpha=0.8, label="data")
+    plot.line(x, posterior_mean, axes[0], color="black", label="posterior mean")
+    plot.line(x, density_mean, axes[0], color="tab:purple", linestyle="--",
+              label="gaussian approx")
+    plot.line(x, true_mean, axes[0], color="tab:green", linestyle="--",
+              label="true mean")
     for position in switch_positions[map_switch_indices]:
-        axes[0].axvline(position, color="black", linewidth=1.5)
+        plot.vline(position, axes[0], color="black", linewidth=1.5)
     for position in switch_positions[true_switch_indices]:
-        axes[0].axvline(
-            position, color="tab:green", linestyle="--", linewidth=1.2
-        )
+        plot.vline(position, axes[0], color="tab:green", linestyle="--",
+                   linewidth=1.2)
+    plot.legend(axes[0], loc="upper left")
+    plot.clean(axes[0])
     axes[0].set_title("Piecewise regression with multiple switches")
-    axes[0].legend(loc="upper left")
 
-    image = axes[1].imshow(
-        switch_position_posterior,
-        aspect="auto",
-        origin="lower",
-        extent=[
-            float(switch_positions[0]),
-            float(switch_positions[-1]),
-            0.5,
-            num_switches + 0.5,
-        ],
-        cmap="viridis",
-    )
-    axes[1].set_xlabel("Switch location (x)")
-    axes[1].set_ylabel("Switch index")
+    extent = [
+        float(switch_positions[0]),
+        float(switch_positions[-1]),
+        0.5,
+        num_switches + 0.5,
+    ]
+    plot.imshow(switch_position_posterior, axes[1], cmap="viridis",
+                aspect="auto", origin="lower", extent=extent,
+                colorbar=True, colorbar_label="Posterior probability")
+    plot.set_labels(axes[1], x="Switch location (x)", y="Switch index")
     axes[1].set_yticks(range(1, num_switches + 1))
     axes[1].set_title("Posterior over switch locations")
-    fig.colorbar(image, ax=axes[1], label="Posterior probability")
-    plt.tight_layout()
+    figure.tight_layout()
 
 
 def run_mcmc(

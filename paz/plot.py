@@ -280,6 +280,35 @@ def bar(x, heights, axis=None, color=None, alpha=0.8, width=0.8, label=None):
     return axis
 
 
+def imshow(data, axis=None, cmap="viridis", aspect="auto", origin="lower",
+           extent=None, vmin=None, vmax=None, colorbar=True,
+           colorbar_label=None):
+    """Display 2D array as image/heatmap with optional colorbar."""
+    if axis is None:
+        fig, axis = plt.subplots()
+    else:
+        fig = axis.get_figure()
+    image = axis.imshow(data, cmap=cmap, aspect=aspect, origin=origin,
+                        extent=extent, vmin=vmin, vmax=vmax)
+    if colorbar:
+        cbar = fig.colorbar(image, ax=axis)
+        if colorbar_label is not None:
+            cbar.set_label(colorbar_label)
+    return image
+
+
+def stem(x, y, axis=None, color=None, linewidth=2, alpha=0.8, label=None):
+    """Stem plot (lollipop chart) for discrete distributions."""
+    if axis is None:
+        _, axis = plt.subplots()
+    if color is None:
+        color = DEFAULT_PALETTE.primary
+    markerline, stemlines, baseline = axis.stem(x, y, basefmt=" ", label=label)
+    plt.setp(stemlines, color=color, linewidth=linewidth, alpha=alpha)
+    plt.setp(markerline, color=color, markersize=6)
+    return axis
+
+
 # ---------------------------------------------------------------------------
 # Statistical comparison plots
 # ---------------------------------------------------------------------------
@@ -339,6 +368,48 @@ def discrete_posterior(support, probabilities, axis=None, true_value=None,
     set_labels(axis, y="probability")
     set_limits(axis, y=(0, 1.05))
     return axis
+
+
+def discretized_distribution(distribution, min_val, max_val, num_steps,
+                              axis=None, title=None):
+    """Plot continuous distribution alongside its discretized version.
+
+    Shows three elements:
+    - Continuous PDF as a line
+    - Discrete density as stem plot (probability per unit width)
+    - Discrete probabilities as scatter points on a twin y-axis
+    """
+    import jax.numpy as jp
+    from paz.inference.discretizer import discretize, get_grid_values
+
+    if axis is None:
+        _, axis = plt.subplots()
+
+    xs = jp.linspace(min_val, max_val, 400)
+    pdf = jp.exp(distribution.log_prob(xs))
+    grid = get_grid_values(min_val, max_val, num_steps)
+    categorical = discretize(distribution, min_val, max_val, num_steps)
+    probs = categorical.probs_parameter()
+    step_width = (max_val - min_val) / (num_steps - 1)
+    discrete_density = probs / step_width
+
+    prob_axis = axis.twinx()
+    line(xs, pdf, axis, color="black", linewidth=2, label="continuous pdf")
+    stem(grid, discrete_density, axis, color="tab:blue", linewidth=3,
+         alpha=0.8, label="discrete density")
+    scatter(grid, probs, prob_axis, color="tab:orange", s=18, alpha=0.7,
+            label="discrete prob")
+
+    if title is not None:
+        axis.set_title(title)
+    set_labels(axis, x="value", y="density")
+    prob_axis.set_ylabel("probability")
+
+    handles1, labels1 = axis.get_legend_handles_labels()
+    handles2, labels2 = prob_axis.get_legend_handles_labels()
+    axis.legend(handles1 + handles2, labels1 + labels2, loc="upper right")
+
+    return axis, prob_axis
 
 
 # ---------------------------------------------------------------------------

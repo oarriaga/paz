@@ -2,10 +2,10 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -41,19 +41,7 @@ def compute_posterior(model, key, data, num_samples, **infer_kwargs):
 
 
 def setup_plot_style():
-    plt.rcParams.update(
-        {
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.grid": True,
-            "grid.alpha": 0.3,
-            "grid.linestyle": "--",
-            "axes.titleweight": "bold",
-            "figure.facecolor": "white",
-            "axes.facecolor": "white",
-            "font.size": 11,
-        }
-    )
+    plot.configure(fontsize=11)
 
 
 
@@ -107,113 +95,57 @@ def plot_posterior(
     percentiles = paz.to_numpy(percentiles)
     mean_prediction = paz.to_numpy(mean_prediction)
 
-    figure, axes = plt.subplots(2, 2, figsize=(12, 8))
+    figure, axes = plot.subplots(nrows=2, ncols=2, figsize=(12, 8))
     figure.suptitle(f"{title} (acceptance {float(acceptance_rate):.3f})")
 
-    axes[0, 0].plot(trace_steps, trace_mean, color="C0", label="mean")
-    axes[0, 0].plot(trace_steps, trace_bias, color="C1", label="bias")
-    axes[0, 0].axhline(
-        true_params.mean,
-        color="C0",
-        linestyle="--",
-        linewidth=1.2,
-        label="true mean",
-    )
-    axes[0, 0].axhline(
-        true_params.bias,
-        color="C1",
-        linestyle="--",
-        linewidth=1.2,
-        label="true bias",
-    )
+    plot.line(trace_steps, trace_mean, axes[0, 0], color="C0", label="mean")
+    plot.line(trace_steps, trace_bias, axes[0, 0], color="C1", label="bias")
+    plot.hline(true_params.mean, axes[0, 0], color="C0", linestyle="--",
+               label="true mean")
+    plot.hline(true_params.bias, axes[0, 0], color="C1", linestyle="--",
+               label="true bias")
+    plot.set_labels(axes[0, 0], x="Sample", y="Value")
+    plot.legend(axes[0, 0], loc="upper right")
+    plot.clean(axes[0, 0])
     axes[0, 0].set_title("Chain-averaged traces")
-    axes[0, 0].set_xlabel("Sample")
-    axes[0, 0].set_ylabel("Value")
-    axes[0, 0].legend(loc="upper right")
 
-    axes[0, 1].plot(trace_steps, trace_stdv, color="C2")
-    axes[0, 1].axhline(
-        true_params.stdv,
-        color="C2",
-        linestyle="--",
-        linewidth=1.2,
-        label="true stdv",
-    )
+    plot.line(trace_steps, trace_stdv, axes[0, 1], color="C2")
+    plot.hline(true_params.stdv, axes[0, 1], color="C2", linestyle="--",
+               label="true stdv")
+    plot.set_labels(axes[0, 1], x="Sample", y="Stdv")
+    plot.legend(axes[0, 1], loc="upper right")
+    plot.clean(axes[0, 1])
     axes[0, 1].set_title("Noise scale trace")
-    axes[0, 1].set_xlabel("Sample")
-    axes[0, 1].set_ylabel("Stdv")
-    axes[0, 1].legend(loc="upper right")
 
-    axes[1, 0].scatter(
-        flat_mean,
-        flat_bias,
-        color="C0",
-        alpha=0.2,
-        s=10,
-    )
-    axes[1, 0].scatter(
-        true_params.mean,
-        true_params.bias,
-        color="black",
-        s=80,
-        marker="*",
-        label="true",
-    )
+    plot.scatter(flat_mean, flat_bias, axes[1, 0], color="C0", alpha=0.2, s=10)
+    axes[1, 0].scatter(true_params.mean, true_params.bias, color="black", s=80,
+                       marker="*", label="true")
+    plot.set_labels(axes[1, 0], x="mean", y="bias")
+    plot.legend(axes[1, 0], loc="upper right")
+    plot.clean(axes[1, 0])
     axes[1, 0].set_title("Posterior mean vs bias")
-    axes[1, 0].set_xlabel("mean")
-    axes[1, 0].set_ylabel("bias")
-    axes[1, 0].legend(loc="upper right")
 
     for draw in predictive_draws:
-        axes[1, 1].plot(inputs, draw, color="C0", alpha=0.05)
-    axes[1, 1].fill_between(
-        inputs,
-        percentiles[0],
-        percentiles[1],
-        color="C0",
-        alpha=0.2,
-        label="90% band",
-    )
-    axes[1, 1].plot(
-        inputs,
-        mean_prediction,
-        color="C0",
-        linewidth=2,
-        label="posterior mean",
-    )
-    axes[1, 1].plot(
-        inputs,
-        true_params.mean * inputs + true_params.bias,
-        color="black",
-        linestyle="--",
-        linewidth=1.5,
-        label="true mean line",
-    )
-    axes[1, 1].scatter(
-        inputs,
-        observations,
-        color="C3",
-        s=16,
-        alpha=0.8,
-        label="observations",
-    )
+        plot.line(inputs, draw, axes[1, 1], color="C0", alpha=0.05)
+    plot.fill_between(inputs, percentiles[0], percentiles[1], axes[1, 1],
+                      color="C0", alpha=0.2, label="90% band")
+    plot.line(inputs, mean_prediction, axes[1, 1], color="C0", linewidth=2,
+              label="posterior mean")
+    plot.line(inputs, true_params.mean * inputs + true_params.bias, axes[1, 1],
+              color="black", linestyle="--", linewidth=1.5, label="true mean line")
+    plot.scatter(inputs, observations, axes[1, 1], color="C3", s=16, alpha=0.8,
+                 label="observations")
     if density_draw is not None:
         density_line = density_draw.mean * inputs + density_draw.bias
-        axes[1, 1].plot(
-            inputs,
-            density_line,
-            color="tab:purple",
-            linestyle="--",
-            linewidth=2,
-            label="gaussian approx",
-        )
+        plot.line(inputs, density_line, axes[1, 1], color="tab:purple",
+                  linestyle="--", linewidth=2, label="gaussian approx")
+    plot.set_labels(axes[1, 1], x="inputs", y="observations")
+    plot.legend(axes[1, 1], loc="upper right")
+    plot.clean(axes[1, 1])
     axes[1, 1].set_title("Posterior predictive")
-    axes[1, 1].set_xlabel("inputs")
-    axes[1, 1].set_ylabel("observations")
-    axes[1, 1].legend(loc="upper right")
 
-    plt.tight_layout()
-    plt.show()
+    figure.tight_layout()
+    plot.show()
 
 
 def main():

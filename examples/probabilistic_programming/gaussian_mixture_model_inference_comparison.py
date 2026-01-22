@@ -43,11 +43,11 @@ approximations, verifying consistency.
 
 import jax
 import jax.numpy as jp
-import matplotlib.pyplot as plt
 from jax.scipy.special import logsumexp
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 from paz.inference.types import SampleType
 
 tfd = tfp.distributions
@@ -143,72 +143,56 @@ def plot_results(
     posterior_z_mcmc,
     posterior_p_density=None,
 ):
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    plot.configure(fontsize=12)
+    figure, axes = plot.subplots(nrows=2, ncols=2, figsize=(12, 8))
 
-    axes[0, 0].hist(observations, bins=20, density=True, alpha=0.7)
-    axes[0, 0].axvline(mean0, color="tab:blue", linestyle="--", label="mean0")
-    axes[0, 0].axvline(mean1, color="tab:orange", linestyle="--", label="mean1")
+    plot.histogram(observations, axes[0, 0], bins=20, alpha=0.7)
+    plot.vline(mean0, axes[0, 0], color="tab:blue", linestyle="--", label="mean0")
+    plot.vline(mean1, axes[0, 0], color="tab:orange", linestyle="--", label="mean1")
+    plot.legend(axes[0, 0])
+    plot.clean(axes[0, 0])
     axes[0, 0].set_title("Observations and component means")
-    axes[0, 0].legend()
 
-    axes[0, 1].plot(p_grid, log_joint_z0, label="log p(y,p,z=0)")
-    axes[0, 1].plot(p_grid, log_joint_z1, label="log p(y,p,z=1)")
-    axes[0, 1].plot(p_grid, log_marginal_enum, "--", label="log p(y,p) enum")
-    axes[0, 1].plot(p_grid, log_marginal_pgm, ":", label="log p(y,p) marg")
+    plot.line(p_grid, log_joint_z0, axes[0, 1], label="log p(y,p,z=0)")
+    plot.line(p_grid, log_joint_z1, axes[0, 1], label="log p(y,p,z=1)")
+    plot.line(p_grid, log_marginal_enum, axes[0, 1], linestyle="--",
+              label="log p(y,p) enum")
+    plot.line(p_grid, log_marginal_pgm, axes[0, 1], linestyle=":",
+              label="log p(y,p) marg")
+    plot.legend(axes[0, 1])
+    plot.clean(axes[0, 1])
     axes[0, 1].set_title("Joint and marginalized log densities")
-    axes[0, 1].legend()
 
-    axes[1, 0].hist(
-        p_samples,
-        bins=30,
-        density=True,
-        alpha=0.4,
-        label="posterior p density (MCMC)",
-    )
-    axes[1, 0].plot(
-        p_grid, posterior_p_enum, label="posterior p density (enum)"
-    )
-    axes[1, 0].plot(
-        p_grid, posterior_p_marg, "--", label="posterior p density (marg)"
-    )
+    plot.histogram(p_samples, axes[1, 0], bins=30, alpha=0.4,
+                   label="posterior p density (MCMC)")
+    plot.line(p_grid, posterior_p_enum, axes[1, 0],
+              label="posterior p density (enum)")
+    plot.line(p_grid, posterior_p_marg, axes[1, 0], linestyle="--",
+              label="posterior p density (marg)")
     if posterior_p_density is not None:
-        axes[1, 0].plot(
-            p_grid,
-            posterior_p_density,
-            ":",
-            label="posterior p density (gaussian fit)",
-        )
+        plot.line(p_grid, posterior_p_density, axes[1, 0], linestyle=":",
+                  label="posterior p density (gaussian fit)")
+    plot.legend(axes[1, 0])
+    plot.clean(axes[1, 0])
     axes[1, 0].set_title("Posterior over p")
-    axes[1, 0].legend()
 
     bar_positions = jp.arange(2)
     bar_width = 0.35
-    axes[1, 1].bar(
-        bar_positions - bar_width,
-        posterior_z_enum,
-        width=bar_width,
-        label="enum",
-    )
-    axes[1, 1].bar(
-        bar_positions,
-        posterior_z_marg,
-        width=bar_width,
-        label="marg",
-    )
-    axes[1, 1].bar(
-        bar_positions + bar_width,
-        posterior_z_mcmc,
-        width=bar_width,
-        label="mcmc",
-    )
+    plot.bar(bar_positions - bar_width, posterior_z_enum, axes[1, 1],
+             width=bar_width, label="enum")
+    plot.bar(bar_positions, posterior_z_marg, axes[1, 1],
+             width=bar_width, label="marg")
+    plot.bar(bar_positions + bar_width, posterior_z_mcmc, axes[1, 1],
+             width=bar_width, label="mcmc")
     axes[1, 1].set_xticks(bar_positions)
     axes[1, 1].set_xticklabels(["z=0", "z=1"])
     axes[1, 1].set_ylim(0.0, 1.0)
+    plot.legend(axes[1, 1])
+    plot.clean(axes[1, 1])
     axes[1, 1].set_title("Posterior over z")
-    axes[1, 1].legend()
 
-    plt.tight_layout()
-    return fig
+    figure.tight_layout()
+    return figure
 
 
 def main():
@@ -319,7 +303,7 @@ def main():
         posterior_z_mcmc,
         posterior_p_density,
     )
-    plt.show()
+    plot.show()
 
 
 if __name__ == "__main__":
