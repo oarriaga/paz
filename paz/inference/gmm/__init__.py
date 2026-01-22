@@ -1,4 +1,8 @@
-from paz.inference.gmm.em import GMMParameters, fit_gmm_em
+from paz.inference.gmm.em import (
+    GMMParameters,
+    build_gmm_parameters,
+    fit_gmm_em,
+)
 
 
-__all__ = ["GMMParameters", "fit_gmm_em"]
+__all__ = ["GMMParameters", "build_gmm_parameters", "fit_gmm_em"]

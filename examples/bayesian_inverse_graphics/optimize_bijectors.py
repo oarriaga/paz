@@ -1,19 +1,20 @@
 import argparse
+import glob
 import json
 import pickle
 from collections import namedtuple
 from pathlib import Path
 
-import arviz as az
 import jax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.mixture import GaussianMixture as SKLGaussianMixture
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
+import paz.plot as plot
 from paz.backend import directory
+from paz.inference.gmm.model import GMM
 from observation_model import build_observation_model, build_render_function
 
 tfd = tfp.distributions
@@ -51,7 +52,6 @@ args = parser.parse_args()
 BijectorParams = namedtuple("BijectorParams", ["shift", "scale"])
 
 
-DANDELION = [0.992, 0.737, 0.258]
 NAME_TO_TEX = {
     "shift": r"$x$-$y$ translation [m]",
     "x-translation": r"$x$ [m]",
@@ -98,56 +98,64 @@ def write_image(image, output_directory, filename):
 
 
 def write_losses(losses, output_directory, filename):
-    figure, axis = plt.subplots()
-    axis.plot(losses, color=DANDELION)
-    axis.set_ylabel("loss")
-    axis.set_xlabel("step")
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
+    figure, axis = plot.subplots()
+    steps = np.arange(len(losses))
+    plot.line(steps, losses, axis=axis, color=plot.DANDELION.primary)
+    plot.set_labels(axis, x="step", y="loss")
+    plot.hide_spines(axis, "box")
     fullpath = Path(output_directory) / filename
     if fullpath.suffix != ".pdf":
         raise ValueError(f"Filename {fullpath} missing extension .pdf")
-    figure.savefig(fullpath, bbox_inches="tight")
-    plt.close()
+    plot.save(figure, fullpath)
 
 
 def plot_forward_samples(forward_samples, name, output_directory):
-    figure, axis = plt.subplots()
-    az.plot_dist(
-        forward_samples,
-        color=DANDELION,
-        ax=axis,
-        plot_kwargs={"linewidth": 5},
-        fill_kwargs={"alpha": 0.4},
+    figure, axis = plot.subplots()
+    finite_samples = forward_samples[np.isfinite(forward_samples)]
+    plot.density(
+        finite_samples,
+        axis=axis,
+        color=plot.DANDELION.primary,
+        alpha=0.4,
+        linewidth=5.0,
     )
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.spines["left"].set_visible(False)
-    axis.xaxis.labelpad = 20
-    axis.yaxis.labelpad = 20
-    axis.set_ylabel("density")
-    axis.set_xlabel(NAME_TO_TEX.get(name, name))
+    plot.clean(axis)
+    plot.set_labels(
+        axis, x=NAME_TO_TEX.get(name, name), y="density", labelpad=20
+    )
     filepath = Path(output_directory) / f"prior_forward_{name}.pdf"
-    figure.savefig(filepath, bbox_inches="tight")
-    plt.close()
+    plot.save(figure, filepath)
 
 
-def plot_inverse_samples(inverse_samples, normals_samples, name, output_directory):
-    figure, axis = plt.subplots()
-    kwargs = {"plot_kwargs": {"linewidth": 5}, "fill_kwargs": {"alpha": 0.4}}
-    az.plot_dist(normals_samples, color="r", ax=axis, label="normal", **kwargs)
-    az.plot_dist(inverse_samples, color="b", ax=axis, label="inverse", **kwargs)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.spines["left"].set_visible(False)
-    axis.xaxis.labelpad = 20
-    axis.yaxis.labelpad = 20
-    axis.legend(prop={"size": 10}, frameon=False)
-    axis.set_ylabel("density")
-    axis.set_xlabel(NAME_TO_TEX.get(name, name))
+def plot_inverse_samples(
+    inverse_samples, normals_samples, name, output_directory
+):
+    figure, axis = plot.subplots()
+    finite_inverse = inverse_samples[np.isfinite(inverse_samples)]
+    finite_normals = normals_samples[np.isfinite(normals_samples)]
+    plot.density(
+        finite_normals,
+        axis=axis,
+        color="tab:red",
+        alpha=0.4,
+        linewidth=5.0,
+        label="normal",
+    )
+    plot.density(
+        finite_inverse,
+        axis=axis,
+        color="tab:blue",
+        alpha=0.4,
+        linewidth=5.0,
+        label="inverse",
+    )
+    plot.clean(axis)
+    plot.legend(axis, frameon=False, fontsize=10)
+    plot.set_labels(
+        axis, x=NAME_TO_TEX.get(name, name), y="density", labelpad=20
+    )
     filepath = Path(output_directory) / f"prior_inverse_{name}.pdf"
-    figure.savefig(filepath, bbox_inches="tight")
-    plt.close()
+    plot.save(figure, filepath)
 
 
 def plot_prior(key, prior_node, output_directory, num_samples=10_000):
@@ -159,9 +167,14 @@ def plot_prior(key, prior_node, output_directory, num_samples=10_000):
 
     if name == "shift":
         for arg, shift_name in enumerate(["x-translation", "y-translation"]):
-            plot_forward_samples(forward_samples[:, arg], shift_name, output_directory)
+            plot_forward_samples(
+                forward_samples[:, arg], shift_name, output_directory
+            )
             plot_inverse_samples(
-                inverse_samples[:, arg], normals_samples, shift_name, output_directory
+                inverse_samples[:, arg],
+                normals_samples,
+                shift_name,
+                output_directory,
             )
     elif name == "color":
         for arg, channel_name in enumerate(["R-color", "G-color", "B-color"]):
@@ -169,17 +182,27 @@ def plot_prior(key, prior_node, output_directory, num_samples=10_000):
                 forward_samples[:, arg], channel_name, output_directory
             )
             plot_inverse_samples(
-                inverse_samples[:, arg], normals_samples, channel_name, output_directory
+                inverse_samples[:, arg],
+                normals_samples,
+                channel_name,
+                output_directory,
             )
     elif name == "scale":
         for arg, scale_name in enumerate(["x-scale", "y-scale", "z-scale"]):
-            plot_forward_samples(forward_samples[:, arg], scale_name, output_directory)
+            plot_forward_samples(
+                forward_samples[:, arg], scale_name, output_directory
+            )
             plot_inverse_samples(
-                inverse_samples[:, arg], normals_samples, scale_name, output_directory
+                inverse_samples[:, arg],
+                normals_samples,
+                scale_name,
+                output_directory,
             )
     else:
         plot_forward_samples(forward_samples, name, output_directory)
-        plot_inverse_samples(inverse_samples, normals_samples, name, output_directory)
+        plot_inverse_samples(
+            inverse_samples, normals_samples, name, output_directory
+        )
 
 
 def plot_priors(key, priors, output_directory, num_samples=10_000):
@@ -197,41 +220,21 @@ def get_property_values(shape_parameters, name):
     return np.array(values)
 
 
-def get_mixture_parameters(model, unidimensional=True):
-    weights = model.weights_.tolist()
-    if unidimensional:
-        mean = model.means_[:, 0].tolist()
-        stdv = np.sqrt(model.covariances_[:, 0]).tolist()
-    else:
-        mean = np.moveaxis(np.array(model.means_), 1, 0).tolist()
-        stdv = np.moveaxis(np.sqrt(model.covariances_), 1, 0).tolist()
-    return {"weights": weights, "mean": mean, "stdv": stdv}
-
-
 def fit_gaussian_mixture(seed, samples, unidimensional=True):
-    kwargs = {
-        "covariance_type": "diag",
-        "max_iter": 1000,
-        "reg_covar": 1e-3,
-        "n_init": 500,
-        "tol": 1e-4,
-        "random_state": seed,
-    }
-    model = SKLGaussianMixture(2, **kwargs)
-    if unidimensional:
-        samples = samples.reshape(-1, 1)
-    model = model.fit(samples)
-    return get_mixture_parameters(model, unidimensional)
+    _, fit_key = jax.random.split(jax.random.PRNGKey(seed))
+    flat_samples = samples.reshape(-1, 1) if unidimensional else samples
+    model = GMM(2, covariance="diag", name="gmm")
+    return model.fit(
+        fit_key,
+        jp.asarray(flat_samples),
+        method="em",
+        num_iters=200,
+        regularization=1e-3,
+    )
 
 
 def build_affine_bijector(x):
     return tfb.Chain([tfb.Shift(x.shift), tfb.Scale(x.scale)])
-
-
-def build_gmm(weights, mean, stdv):
-    return tfd.MixtureSameFamily(
-        tfd.Categorical(probs=weights), tfd.Normal(loc=mean, scale=stdv)
-    )
 
 
 def build_shift_prior(mean, scale):
@@ -259,7 +262,9 @@ def build_scale_prior(mean, variance):
 
 
 def build_classes_prior(probabilities, temperature):
-    distribution = tfd.RelaxedOneHotCategorical(temperature, probs=probabilities)
+    distribution = tfd.RelaxedOneHotCategorical(
+        temperature, probs=probabilities
+    )
     bijector = tfb.Chain([tfb.SoftmaxCentered(), tfb.Scale(3.0)])
     return paz.Prior(distribution, name="classes", bijector=bijector)
 
@@ -275,57 +280,72 @@ def load_priors(path):
     return paz.inference.load(path).inputs
 
 
+def find_latest_directory(wildcard):
+    matches = [
+        Path(path) for path in glob.glob(str(wildcard)) if Path(path).is_dir()
+    ]
+    if not matches:
+        raise FileNotFoundError(
+            f"No previous optimization found for wildcard: {wildcard}"
+        )
+    return max(matches, key=lambda path: path.stat().st_mtime)
+
+
+def require_files(directory_path, filenames):
+    missing = []
+    for filename in filenames:
+        path = Path(directory_path) / filename
+        candidates = [path]
+        if path.suffix != ".pkl":
+            candidates.append(path.with_suffix(".pkl"))
+        if not any(candidate.exists() for candidate in candidates):
+            missing.append(filename)
+    if missing:
+        missing_list = ", ".join(missing)
+        raise FileNotFoundError(
+            f"Missing required files in {directory_path}: {missing_list}"
+        )
+
+
 root = build_directory(Path(args.root) / args.dataset_name, args.label)
 paz.file.write_json(args.__dict__, root / "parameters.json")
 wildcard = Path(args.root) / args.dataset_name / args.parameters_wildcard
 key = jax.random.PRNGKey(args.seed)
 material_priors = []
 
-try:
-    shape_parameters = load_parameters(wildcard, args.materials_filename)
-    print(f"Found previous optimization at: {directory.find_latest(wildcard)}")
-    print("Optimizing bijectors for material properties...")
+optimization_directory = find_latest_directory(wildcard)
+require_files(
+    optimization_directory,
+    [
+        args.materials_filename,
+        args.parameters_filename,
+        "floor.pkl",
+        "lights.pkl",
+    ],
+)
+shape_parameters = load_parameters(wildcard, args.materials_filename)
+print(f"Found previous optimization at: {optimization_directory}")
+print("Optimizing bijectors for material properties...")
 
-    for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
-        values = get_property_values(shape_parameters, name)
-        mixture_params = fit_gaussian_mixture(
-            args.seed, values, name != "color"
-        )
-        key, key_g = jax.random.split(key)
-        shift_0 = 0.0 if name != "color" else jp.full(3, 0.0)
-        scale_0 = 1.0 if name != "color" else jp.full(3, 1.0)
-        x_0 = BijectorParams(shift_0, scale_0)
-        distribution = tfd.Normal(shift_0, scale_0)
-        bijector = build_affine_bijector(x_0)
-        target_distribution = build_gmm(**mixture_params)
-        prior = paz.Prior(distribution, name=name, bijector=bijector)
-        fitted_prior, losses = prior.fit_bijector(
-            key_g,
-            target_distribution,
-            num_samples=args.num_samples,
-            num_steps=args.gradient_steps,
-            return_losses=True,
-        )
-        write_losses(losses, root, f"loss_{name}.pdf")
-        material_priors.append(fitted_prior)
-
-except (ValueError, FileNotFoundError) as e:
-    print(f"\nWarning: Could not find previous SCENE-OPTIMIZATION run.")
-    print(f"Searched for: {wildcard}")
-    print(f"Error: {e}")
-    print("\nSkipping bijector optimization and prior predictive sampling.")
-    print("\nTo run the full script:")
-    print(
-        "  1. First run: python optimize_scene.py "
-        f"--dataset_name {args.dataset_name}"
+for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
+    values = get_property_values(shape_parameters, name)
+    target_dist = fit_gaussian_mixture(args.seed, values, name != "color")
+    key, key_g = jax.random.split(key)
+    shift_0 = 0.0 if name != "color" else jp.full(3, 0.0)
+    scale_0 = 1.0 if name != "color" else jp.full(3, 1.0)
+    x_0 = BijectorParams(shift_0, scale_0)
+    distribution = tfd.Normal(shift_0, scale_0)
+    bijector = build_affine_bijector(x_0)
+    prior = paz.Prior(distribution, name=name, bijector=bijector)
+    fitted_prior, losses = prior.fit_bijector(
+        key_g,
+        target_dist,
+        num_samples=args.num_samples,
+        num_steps=args.gradient_steps,
+        return_losses=True,
     )
-    print(
-        "  2. Then run: python optimize_bijectors.py "
-        f"--dataset_name {args.dataset_name}"
-    )
-    print(f"\nParameters saved to: {root / 'parameters.json'}")
-    import sys
-    sys.exit(0)
+    write_losses(losses, root, f"loss_{name}.pdf")
+    material_priors.append(fitted_prior)
 
 
 dataset_metadata = paz.datasets.fsclvr.parse_metadata(args.dataset_name)
@@ -337,7 +357,6 @@ optimization_metadata = load_parameters(wildcard, args.parameters_filename)
 viewport_factor = optimization_metadata["viewport_factor"]
 image_shape = [int(H * viewport_factor), int(W * viewport_factor)]
 
-optimization_directory = Path(directory.find_latest(wildcard))
 floor_filename = optimization_directory / "floor.pkl"
 lights_filename = optimization_directory / "lights.pkl"
 with floor_filename.open("rb") as filedata:
@@ -348,8 +367,12 @@ print(f"\nLoaded floor and lights from: {optimization_directory}")
 
 camera_target = jp.array([0.0, 0.0, 0.0])
 camera_upward = jp.array([0.0, 1.0, 0.0])
-camera_pose = paz.SE3.view_transform(camera_origin, camera_target, camera_upward)
-_render = build_render_function(image_shape, y_FOV, camera_pose, lights, args.shadows)
+camera_pose = paz.SE3.view_transform(
+    camera_origin, camera_target, camera_upward
+)
+_render = build_render_function(
+    image_shape, y_FOV, camera_pose, lights, args.shadows
+)
 render = build_observation_model(_render, floor)
 
 print("Building render function and observation model...")

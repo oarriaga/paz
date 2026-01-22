@@ -222,6 +222,22 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "scale": _ref(f"{prefix}_scale"),
         }
+    if isinstance(distribution, tfd.MultivariateNormalDiag):
+        arrays[f"{prefix}_loc"] = distribution.loc
+        arrays[f"{prefix}_scale_diag"] = _get_scale_diag(distribution)
+        return {
+            "kind": "MultivariateNormalDiag",
+            "loc": _ref(f"{prefix}_loc"),
+            "scale_diag": _ref(f"{prefix}_scale_diag"),
+        }
+    if isinstance(distribution, tfd.MultivariateNormalFullCovariance):
+        arrays[f"{prefix}_loc"] = distribution.loc
+        arrays[f"{prefix}_covariance"] = distribution.covariance()
+        return {
+            "kind": "MultivariateNormalFullCovariance",
+            "loc": _ref(f"{prefix}_loc"),
+            "covariance": _ref(f"{prefix}_covariance"),
+        }
     if isinstance(distribution, tfd.Deterministic):
         arrays[f"{prefix}_loc"] = distribution.loc
         return {
@@ -388,9 +404,10 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
                 distribution.reinterpreted_batch_ndims
             ),
         }
+    distribution_name = distribution.__class__.__name__
     raise ValueError(
-        "Unsupported prior distribution for safe serialization. "
-        "Use a supported distribution type."
+        "Unsupported prior distribution for safe serialization: "
+        f"{distribution_name}. Use a supported distribution type."
     )
 
 
@@ -400,6 +417,16 @@ def _deserialize_distribution_obj(spec, arrays):
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
         return tfd.Normal(loc=loc, scale=scale)
+    if kind == "MultivariateNormalDiag":
+        loc = _resolve_ref(spec["loc"], arrays)
+        scale = _resolve_ref(spec["scale_diag"], arrays)
+        return tfd.MultivariateNormalDiag(loc=loc, scale_diag=scale)
+    if kind == "MultivariateNormalFullCovariance":
+        loc = _resolve_ref(spec["loc"], arrays)
+        cov = _resolve_ref(spec["covariance"], arrays)
+        return tfd.MultivariateNormalFullCovariance(
+            loc=loc, covariance_matrix=cov
+        )
     if kind == "Deterministic":
         loc = _resolve_ref(spec["loc"], arrays)
         return tfd.Deterministic(loc=loc)

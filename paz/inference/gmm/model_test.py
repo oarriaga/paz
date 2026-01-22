@@ -27,25 +27,25 @@ def _initial_parameters():
     return weights, means, covariances
 
 
-def test_gmm_pgm_fit_returns_pgm():
+def test_gmm_fit_returns_distribution():
     weights, means, covariances = _initial_parameters()
     model = GMM(weights, means, covariances)
     key = jax.random.PRNGKey(0)
     sample_key, fit_key = jax.random.split(key)
     samples, _ = _sample_1d_mixture(sample_key, 200)
     fitted = model.fit(fit_key, samples, method="em", num_iters=10)
-    assert fitted.name == "gmm"
+    assert isinstance(fitted, tfd.MixtureSameFamily)
 
 
 def test_gmm_pgm_fit_recovers_means():
     weights, means, covariances = _initial_parameters()
     model = GMM(weights, means, covariances)
     key = jax.random.PRNGKey(1)
-    sample_key, fit_key, read_key = jax.random.split(key, 3)
+    sample_key, fit_key = jax.random.split(key)
     samples, means = _sample_1d_mixture(sample_key, 400)
     fitted = model.fit(fit_key, samples, method="em", num_iters=40)
-    fitted_samples = fitted.sample_inverse(read_key)
-    fitted_means = fitted_samples.means[:, 0]
+    components = fitted.components_distribution
+    fitted_means = components.loc[:, 0]
     order = jp.argsort(fitted_means)
     max_diff = jp.max(jp.abs(fitted_means[order] - jp.sort(means)))
     assert float(max_diff) < 0.6

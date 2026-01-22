@@ -13,6 +13,17 @@ tfd = tfp.distributions
 GMMParameters = namedtuple("GMMParameters", ["weights", "means", "covariances"])
 
 
+def build_gmm_parameters(
+    key, samples, num_components, covariance="diag", regularization=1e-6
+):
+    _validate_inputs(key, covariance)
+    flat_samples = jp.asarray(samples)
+    if flat_samples.ndim == 1:
+        flat_samples = flat_samples[:, None]
+    args = (key, flat_samples, num_components, covariance, regularization)
+    return GMMParameters(*_initialize_parameters(*args))
+
+
 def fit_gmm_em(key, flat_samples, k, covariance="diag", *args, **kwargs):
     num_iters, regularization = _parse_em_args(args, kwargs)
     _validate_inputs(key, covariance)

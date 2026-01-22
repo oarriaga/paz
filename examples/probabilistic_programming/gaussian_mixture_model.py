@@ -63,16 +63,23 @@ def _sample_ring(key, num_samples):
     return jp.stack([x, y], axis=1)
 
 
-def _build_initial_parameters(num_components, num_dims):
-    weights = jp.full((num_components,), 1.0 / num_components)
-    means = jp.zeros((num_components, num_dims))
-    covariances = jp.ones((num_components, num_dims))
+def _get_mixture_probs(mixture_distribution):
+    if hasattr(mixture_distribution, "probs_parameter"):
+        return mixture_distribution.probs_parameter()
+    if hasattr(mixture_distribution, "probs"):
+        return mixture_distribution.probs
+    return jax.nn.softmax(mixture_distribution.logits)
+
+
+def _extract_parameters(distribution):
+    weights = _get_mixture_probs(distribution.mixture_distribution)
+    components = distribution.components_distribution
+    means = components.loc
+    if isinstance(components, tfd.MultivariateNormalDiag):
+        covariances = components.variance()
+    else:
+        covariances = components.covariance()
     return weights, means, covariances
-
-
-def _extract_parameters(model, key):
-    samples = model.sample_inverse(key)
-    return samples.weights, samples.means, samples.covariances
 
 
 def _plot_1d_fit(axis, samples, weights, means, covariances, covariance, title):
@@ -147,11 +154,10 @@ key = jax.random.PRNGKey(0)
 # 1D mixture fit
 key, sample_key = jax.random.split(key)
 samples_1d = _sample_1d_mixture(sample_key, 500)
-weights, means, covariances = _build_initial_parameters(2, 1)
-model = GMM(weights, means, covariances, covariance="diag", name="gmm_1d")
-key, fit_key, read_key = jax.random.split(key, 3)
+model = GMM(2, covariance="diag", name="gmm_1d")
+key, fit_key = jax.random.split(key)
 fitted = model.fit(fit_key, samples_1d, method="em", num_iters=60)
-weights_1d, means_1d, covariances_1d = _extract_parameters(fitted, read_key)
+weights_1d, means_1d, covariances_1d = _extract_parameters(fitted)
 _describe_fit(
     "1D mixture (good fit)",
     samples_1d,
@@ -164,11 +170,10 @@ _describe_fit(
 # 2D mixture fit
 key, sample_key = jax.random.split(key)
 samples_2d = _sample_2d_mixture(sample_key, 800)
-weights, means, covariances = _build_initial_parameters(2, 2)
-model = GMM(weights, means, covariances, covariance="full", name="gmm_2d")
-key, fit_key, read_key = jax.random.split(key, 3)
+model = GMM(2, covariance="full", name="gmm_2d")
+key, fit_key = jax.random.split(key)
 fitted = model.fit(fit_key, samples_2d, method="em", num_iters=60)
-weights_2d, means_2d, covariances_2d = _extract_parameters(fitted, read_key)
+weights_2d, means_2d, covariances_2d = _extract_parameters(fitted)
 _describe_fit(
     "2D mixture (good fit)",
     samples_2d,
@@ -181,13 +186,10 @@ _describe_fit(
 # Ring data (showing GMM limitations)
 key, sample_key = jax.random.split(key)
 samples_ring = _sample_ring(sample_key, 800)
-weights, means, covariances = _build_initial_parameters(6, 2)
-model = GMM(weights, means, covariances, covariance="full", name="gmm_ring")
-key, fit_key, read_key = jax.random.split(key, 3)
+model = GMM(6, covariance="full", name="gmm_ring")
+key, fit_key = jax.random.split(key)
 fitted = model.fit(fit_key, samples_ring, method="em", num_iters=60)
-weights_ring, means_ring, covariances_ring = _extract_parameters(
-    fitted, read_key
-)
+weights_ring, means_ring, covariances_ring = _extract_parameters(fitted)
 _describe_fit(
     "Ring data (limitations)",
     samples_ring,
