@@ -19,32 +19,40 @@ def build_observation_model(render, floor):
     zero_image = jp.zeros_like(floor.pattern.image)
     zero_pattern = paz.graphics.Pattern(jp.eye(4), paz.graphics.NO_PATTERN, zero_image)
 
-    shape_types = {
-        0: paz.graphics.SPHERE,
-        1: paz.graphics.CUBE,
-        2: paz.graphics.CYLINDER,
-    }
+    shape_types = jp.array(
+        [paz.graphics.SPHERE, paz.graphics.CUBE, paz.graphics.CYLINDER]
+    )
 
     def sample_to_shape(sample):
-        x = sample["shift"][..., 0]
-        z = sample["shift"][..., 1]
-        y = sample["scale"][..., 1]
+        shift = jp.squeeze(sample["shift"])
+        scale = jp.squeeze(sample["scale"])
+        color = jp.squeeze(sample["color"])
+        ambient = jp.squeeze(sample["ambient"])
+        diffuse = jp.squeeze(sample["diffuse"])
+        specular = jp.squeeze(sample["specular"])
+        shininess = jp.squeeze(sample["shininess"])
+        classes = jp.squeeze(sample["classes"])
+        theta = jp.squeeze(sample["theta"])
+
+        x = shift[..., 0]
+        z = shift[..., 1]
+        y = scale[..., 1]
         translate = jp.array([x, y, z])
         translate = paz.SE3.translation(translate)
-        rotate = paz.SE3.rotation_y(sample["theta"])
-        scale = paz.SE3.scaling(sample["scale"])
+        rotate = paz.SE3.rotation_y(theta)
+        scale = paz.SE3.scaling(scale)
         transform = translate @ rotate @ scale
 
         material = paz.graphics.Material(
-            color=sample["color"],
-            ambient=sample["ambient"],
-            diffuse=sample["diffuse"],
-            specular=sample["specular"],
-            shininess=sample["shininess"],
+            color=color,
+            ambient=ambient,
+            diffuse=diffuse,
+            specular=specular,
+            shininess=shininess,
         )
 
-        shape_type_arg = jp.argmax(sample["classes"])
-        shape_type = shape_types[int(shape_type_arg)]
+        shape_type_arg = jp.argmax(classes)
+        shape_type = shape_types[shape_type_arg]
 
         return paz.graphics.Shape(transform, shape_type, material, zero_pattern)
 
@@ -160,6 +168,15 @@ def parse_summary(summary, statistic="mean"):
     Returns:
         Dictionary of parameter values
     """
+    def read_stat(name):
+        row = summary[statistic]
+        if name in row:
+            return row[name]
+        indexed = f"{name}[0]"
+        if indexed in row:
+            return row[indexed]
+        raise KeyError(name)
+
     x_shift = summary[statistic]["shift[0]"]
     y_shift = summary[statistic]["shift[1]"]
     shift = jp.array([x_shift, y_shift])
@@ -176,10 +193,10 @@ def parse_summary(summary, statistic="mean"):
     b_color = summary[statistic]["color[2]"]
     color = jp.array([r_color, g_color, b_color])
 
-    ambient = jp.array(summary[statistic]["ambient"])
-    diffuse = jp.array(summary[statistic]["diffuse"])
-    specular = jp.array(summary[statistic]["specular"])
-    shininess = jp.array(summary[statistic]["shininess"])
+    ambient = jp.array(read_stat("ambient"))
+    diffuse = jp.array(read_stat("diffuse"))
+    specular = jp.array(read_stat("specular"))
+    shininess = jp.array(read_stat("shininess"))
 
     class_0 = summary[statistic]["classes[0]"]
     class_1 = summary[statistic]["classes[1]"]
