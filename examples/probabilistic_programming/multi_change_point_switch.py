@@ -33,119 +33,6 @@ RunResult = namedtuple(
 )
 
 
-def main():
-    key = jax.random.PRNGKey(777)
-    num_switches = 2
-    num_observations = 30
-    sigma = 0.15
-    num_samples = 5_000
-    num_chains = 5
-    burn_in = 500
-    step_sigma = 0.25
-
-    x = jp.linspace(-1.0, 1.0, num_observations)
-    print("Building ground-truth segments...")
-    start_time = time.perf_counter()
-    true_slopes, true_biases = build_true_segments(num_switches)
-    true_switch_indices = build_true_switch_indices(
-        num_observations, num_switches
-    )
-    print(f"ground-truth build: {time.perf_counter() - start_time:.3f}s")
-
-    key, noise_key = jax.random.split(key)
-    print("Generating observations...")
-    start_time = time.perf_counter()
-    true_mean = compute_piecewise_mean(
-        x, true_slopes, true_biases, true_switch_indices
-    )
-    observations = true_mean + sigma * jax.random.normal(
-        noise_key, (num_observations,)
-    )
-    print(f"observations build: {time.perf_counter() - start_time:.3f}s")
-
-    print("Building switch table...")
-    start_time = time.perf_counter()
-    switch_table = build_switch_table(num_observations, num_switches)
-    print(
-        f"switch table build: {time.perf_counter() - start_time:.3f}s "
-        f"(configs={switch_table.shape[0]})"
-    )
-
-    print("Building model...")
-    start_time = time.perf_counter()
-    model = build_switch_model(x, sigma, switch_table, num_switches)
-    model_marg = paz.marginalize(model, ["switch_index"])
-    data = {"y": observations}
-    print(f"model build: {time.perf_counter() - start_time:.3f}s")
-
-    result = run_inference(
-        model_marg,
-        key,
-        num_switches,
-        switch_table,
-        data,
-        num_samples,
-        num_chains,
-        burn_in,
-        step_sigma,
-    )
-
-    print("Computing switch posterior summary...")
-    start_time = time.perf_counter()
-    num_positions = num_observations - 1
-    switch_positions = 0.5 * (x[:-1] + x[1:])
-    switch_position_posterior = compute_switch_position_posterior(
-        result.switch_table, result.posterior_configs, num_positions
-    )
-    map_config_index = int(jp.argmax(result.posterior_configs))
-    map_switch_indices = result.switch_table[map_config_index]
-    print(f"switch posterior summary: {time.perf_counter() - start_time:.3f}s")
-
-    print("Computing posterior mean line...")
-    start_time = time.perf_counter()
-    posterior_mean = compute_piecewise_mean(
-        x, result.slope_means, result.bias_means, map_switch_indices
-    )
-    print(f"posterior mean build: {time.perf_counter() - start_time:.3f}s")
-
-    print("Computing gaussian approximation line...")
-    start_time = time.perf_counter()
-    density_slopes, density_biases = extract_segment_values(
-        result.density_sample, num_switches
-    )
-    density_mean = compute_piecewise_mean(
-        x, density_slopes, density_biases, map_switch_indices
-    )
-    print(f"gaussian mean build: {time.perf_counter() - start_time:.3f}s")
-
-    print("=" * 60)
-    print("Multi change-point regression")
-    print("=" * 60)
-    print(f"num_switches={num_switches}")
-    print(f"num_configs={result.switch_table.shape[0]}")
-    print(f"true switch indices={true_switch_indices.tolist()}")
-    print(f"map switch indices={map_switch_indices.tolist()}")
-    print(f"acceptance rate={result.acceptance_rate:.3f}")
-    print(f"mcmc seconds={result.mcmc_seconds:.2f}")
-    print(f"posterior seconds={result.posterior_seconds:.2f}")
-
-    print("Plotting...")
-    start_time = time.perf_counter()
-    plot_results(
-        x,
-        observations,
-        posterior_mean,
-        density_mean,
-        true_mean,
-        switch_positions,
-        map_switch_indices,
-        true_switch_indices,
-        switch_position_posterior,
-    )
-    print(f"plotting: {time.perf_counter() - start_time:.3f}s")
-    plot.show()
-
-
 def run_inference(
     model_marg,
     key,
@@ -222,7 +109,9 @@ def plot_results(
     plot.configure(fontsize=12)
     figure, axes = plot.subplots(nrows=2, ncols=1, figsize=(11, 8))
 
-    plot.scatter(x, observations, axes[0], color="tab:gray", alpha=0.8, label="data")
+    plot.scatter(
+        x, observations, axes[0], color="tab:gray", alpha=0.8, label="data"
+    )
     plot.line(x, posterior_mean, axes[0], color="black", label="posterior mean")
     plot.line(x, density_mean, axes[0], color="tab:purple", linestyle="--",
               label="gaussian approx")
@@ -390,5 +279,114 @@ def compute_switch_position_posterior(
     return posterior
 
 
-if __name__ == "__main__":
-    main()
+key = jax.random.PRNGKey(777)
+num_switches = 2
+num_observations = 30
+sigma = 0.15
+num_samples = 5_000
+num_chains = 5
+burn_in = 500
+step_sigma = 0.25
+
+x = jp.linspace(-1.0, 1.0, num_observations)
+print("Building ground-truth segments...")
+start_time = time.perf_counter()
+true_slopes, true_biases = build_true_segments(num_switches)
+true_switch_indices = build_true_switch_indices(
+    num_observations, num_switches
+)
+print(f"ground-truth build: {time.perf_counter() - start_time:.3f}s")
+
+key, noise_key = jax.random.split(key)
+print("Generating observations...")
+start_time = time.perf_counter()
+true_mean = compute_piecewise_mean(
+    x, true_slopes, true_biases, true_switch_indices
+)
+observations = true_mean + sigma * jax.random.normal(
+    noise_key, (num_observations,)
+)
+print(f"observations build: {time.perf_counter() - start_time:.3f}s")
+
+print("Building switch table...")
+start_time = time.perf_counter()
+switch_table = build_switch_table(num_observations, num_switches)
+print(
+    f"switch table build: {time.perf_counter() - start_time:.3f}s "
+    f"(configs={switch_table.shape[0]})"
+)
+
+print("Building model...")
+start_time = time.perf_counter()
+model = build_switch_model(x, sigma, switch_table, num_switches)
+model_marg = paz.marginalize(model, ["switch_index"])
+data = {"y": observations}
+print(f"model build: {time.perf_counter() - start_time:.3f}s")
+
+result = run_inference(
+    model_marg,
+    key,
+    num_switches,
+    switch_table,
+    data,
+    num_samples,
+    num_chains,
+    burn_in,
+    step_sigma,
+)
+
+print("Computing switch posterior summary...")
+start_time = time.perf_counter()
+num_positions = num_observations - 1
+switch_positions = 0.5 * (x[:-1] + x[1:])
+switch_position_posterior = compute_switch_position_posterior(
+    result.switch_table, result.posterior_configs, num_positions
+)
+map_config_index = int(jp.argmax(result.posterior_configs))
+map_switch_indices = result.switch_table[map_config_index]
+print(f"switch posterior summary: {time.perf_counter() - start_time:.3f}s")
+
+print("Computing posterior mean line...")
+start_time = time.perf_counter()
+posterior_mean = compute_piecewise_mean(
+    x, result.slope_means, result.bias_means, map_switch_indices
+)
+print(f"posterior mean build: {time.perf_counter() - start_time:.3f}s")
+
+print("Computing gaussian approximation line...")
+start_time = time.perf_counter()
+density_slopes, density_biases = extract_segment_values(
+    result.density_sample, num_switches
+)
+density_mean = compute_piecewise_mean(
+    x, density_slopes, density_biases, map_switch_indices
+)
+print(f"gaussian mean build: {time.perf_counter() - start_time:.3f}s")
+
+print("=" * 60)
+print("Multi change-point regression")
+print("=" * 60)
+print(f"num_switches={num_switches}")
+print(f"num_configs={result.switch_table.shape[0]}")
+print(f"true switch indices={true_switch_indices.tolist()}")
+print(f"map switch indices={map_switch_indices.tolist()}")
+print(f"acceptance rate={result.acceptance_rate:.3f}")
+print(f"mcmc seconds={result.mcmc_seconds:.2f}")
+print(f"posterior seconds={result.posterior_seconds:.2f}")
+
+print("Plotting...")
+start_time = time.perf_counter()
+plot_results(
+    x,
+    observations,
+    posterior_mean,
+    density_mean,
+    true_mean,
+    switch_positions,
+    map_switch_indices,
+    true_switch_indices,
+    switch_position_posterior,
+)
+print(f"plotting: {time.perf_counter() - start_time:.3f}s")
+plot.show()
+

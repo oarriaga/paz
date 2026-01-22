@@ -87,27 +87,22 @@ def build_model():
     return paz.PGM([mean, bias, stdv], [y_obs], "serializable_linear")
 
 
-def main():
-    model = build_model()
-    key = jax.random.PRNGKey(0)
-    data_key, sample_key = jax.random.split(key)
-    data = model.sample(data_key, num_samples=1)
+model = build_model()
+key = jax.random.PRNGKey(0)
+data_key, sample_key = jax.random.split(key)
+data = model.sample(data_key, num_samples=1)
 
-    # Serialize the model.
-    paz.inference.save(model, "linear_model", overwrite=True)
+# Serialize the model.
+paz.inference.save(model, "linear_model", overwrite=True)
 
-    # Load it back.
-    loaded = paz.inference.load("linear_model")
+# Load it back.
+loaded = paz.inference.load("linear_model")
 
-    # Quick check: likelihood log_prob should match.
-    inv_sample = model.sample_inverse(sample_key, num_samples=1)
-    log_prob = model.likelihood.log_prob_inverse(inv_sample, data).log_prob_sum
-    log_prob_loaded = loaded.likelihood.log_prob_inverse(
-        inv_sample, data
-    ).log_prob_sum
-    print("log_prob:", float(log_prob))
-    print("log_prob (loaded):", float(log_prob_loaded))
-
-
-if __name__ == "__main__":
-    main()
+# Quick check: likelihood log_prob should match.
+inv_sample = model.sample_inverse(sample_key, num_samples=1)
+log_prob = model.likelihood.log_prob_inverse(inv_sample, data).log_prob_sum
+log_prob_loaded = loaded.likelihood.log_prob_inverse(
+    inv_sample, data
+).log_prob_sum
+print("log_prob:", float(log_prob))
+print("log_prob (loaded):", float(log_prob_loaded))

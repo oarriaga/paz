@@ -225,71 +225,66 @@ def run_case(
     )
 
 
-def main():
-    key = jax.random.PRNGKey(7)
-    num_observations = 30
-    x = jp.linspace(-1.0, 1.0, num_observations)
-    slope_true = 1.2
-    bias_true = -0.2
-    sigma_in = 0.2
-    sigma_out = 1.0
+key = jax.random.PRNGKey(7)
+num_observations = 30
+x = jp.linspace(-1.0, 1.0, num_observations)
+slope_true = 1.2
+bias_true = -0.2
+sigma_in = 0.2
+sigma_out = 1.0
 
-    case_results = []
-    for z_value in [0.0, 1.0]:
-        key, noise_key = jax.random.split(key)
-        sigma_true = jp.where(z_value == 1.0, sigma_out, sigma_in)
-        observations = (
-            slope_true * x
-            + bias_true
-            + sigma_true * jax.random.normal(noise_key, (num_observations,))
-        )
-        result, density_params, key = run_case(
-            key,
-            x,
-            observations,
-            sigma_in,
-            sigma_out,
-            jp.array(z_value),
-        )
-        case_results.append((result, density_params))
+case_results = []
+for z_value in [0.0, 1.0]:
+    key, noise_key = jax.random.split(key)
+    sigma_true = jp.where(z_value == 1.0, sigma_out, sigma_in)
+    observations = (
+        slope_true * x
+        + bias_true
+        + sigma_true * jax.random.normal(noise_key, (num_observations,))
+    )
+    result, density_params, key = run_case(
+        key,
+        x,
+        observations,
+        sigma_in,
+        sigma_out,
+        jp.array(z_value),
+    )
+    case_results.append((result, density_params))
 
-        print("=" * 60)
-        print("Robust linear regression with outlier switch")
-        print("=" * 60)
-        print(
-            f"true slope={slope_true}, true bias={bias_true}, "
-            f"z_true={int(z_value)}"
-        )
-        print(
-            f"posterior mean slope={result.slope_mean:.3f}, "
-            f"bias={result.bias_mean:.3f}"
-        )
-        print(f"posterior p(z=1 | y)={result.posterior_z[1]:.3f}")
-        print(f"acceptance rate={result.acceptance_rate:.3f}")
-        print(f"mcmc seconds={result.mcmc_seconds:.2f}")
-        print(f"posterior seconds={result.posterior_seconds:.2f}")
+    print("=" * 60)
+    print("Robust linear regression with outlier switch")
+    print("=" * 60)
+    print(
+        f"true slope={slope_true}, true bias={bias_true}, "
+        f"z_true={int(z_value)}"
+    )
+    print(
+        f"posterior mean slope={result.slope_mean:.3f}, "
+        f"bias={result.bias_mean:.3f}"
+    )
+    print(f"posterior p(z=1 | y)={result.posterior_z[1]:.3f}")
+    print(f"acceptance rate={result.acceptance_rate:.3f}")
+    print(f"mcmc seconds={result.mcmc_seconds:.2f}")
+    print(f"posterior seconds={result.posterior_seconds:.2f}")
 
-    plot.configure(fontsize=12)
-    figure, axes = plot.subplots(nrows=2, ncols=2, figsize=(14, 8))
-    for column, result in enumerate(case_results):
-        case_result, density_params = result
-        plot_switch_results(
-            (axes[0, column], axes[1, column]),
-            x,
-            case_result.observations,
-            case_result.slope_mean,
-            case_result.bias_mean,
-            sigma_in,
-            sigma_out,
-            case_result.posterior_z,
-            slope_true,
-            bias_true,
-            case_result.z_true,
-            density_params,
-        )
-    figure.tight_layout()
-    plot.show()
-
-
-if __name__ == "__main__":
-    main()
+plot.configure(fontsize=12)
+figure, axes = plot.subplots(nrows=2, ncols=2, figsize=(14, 8))
+for column, result in enumerate(case_results):
+    case_result, density_params = result
+    plot_switch_results(
+        (axes[0, column], axes[1, column]),
+        x,
+        case_result.observations,
+        case_result.slope_mean,
+        case_result.bias_mean,
+        sigma_in,
+        sigma_out,
+        case_result.posterior_z,
+        slope_true,
+        bias_true,
+        case_result.z_true,
+        density_params,
+    )
+figure.tight_layout()
+plot.show()

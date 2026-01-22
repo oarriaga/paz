@@ -131,8 +131,15 @@ def plot_posterior(
                       color="C0", alpha=0.2, label="90% band")
     plot.line(inputs, mean_prediction, axes[1, 1], color="C0", linewidth=2,
               label="posterior mean")
-    plot.line(inputs, true_params.mean * inputs + true_params.bias, axes[1, 1],
-              color="black", linestyle="--", linewidth=1.5, label="true mean line")
+    plot.line(
+        inputs,
+        true_params.mean * inputs + true_params.bias,
+        axes[1, 1],
+        color="black",
+        linestyle="--",
+        linewidth=1.5,
+        label="true mean line",
+    )
     plot.scatter(inputs, observations, axes[1, 1], color="C3", s=16, alpha=0.8,
                  label="observations")
     if density_draw is not None:
@@ -148,122 +155,117 @@ def plot_posterior(
     plot.show()
 
 
-def main():
-    inputs = jp.linspace(0.0, 1.0, 200)
-    observations = 0.5 * inputs + 0.1 + 0.05 * jp.sin(50.0 * inputs)
-    true_params = TrueParameters(mean=0.5, bias=0.1, stdv=0.05)
-    low, high = 0.001, 0.3
-    model, _ = build_model(inputs, low, high)
-    data = {"y_pred": observations}
+inputs = jp.linspace(0.0, 1.0, 200)
+observations = 0.5 * inputs + 0.1 + 0.05 * jp.sin(50.0 * inputs)
+true_params = TrueParameters(mean=0.5, bias=0.1, stdv=0.05)
+low, high = 0.001, 0.3
+model, _ = build_model(inputs, low, high)
+data = {"y_pred": observations}
 
-    num_chains = 4
-    num_tune_steps = 5000
-    num_episodes = 50
-    sigma_initial = 0.05
-    num_samples = 50_000
-    burn_in = 1000
+num_chains = 4
+num_tune_steps = 5000
+num_episodes = 50
+sigma_initial = 0.05
+num_samples = 50_000
+burn_in = 1000
 
-    setup_plot_style()
+setup_plot_style()
 
-    key = jax.random.PRNGKey(0)
-    key, tuned_key, initial_key, tuned_density_key, initial_density_key = (
-        jax.random.split(key, 5)
-    )
-    model.configure(
-        num_chains=num_chains,
+key = jax.random.PRNGKey(0)
+key, tuned_key, initial_key, tuned_density_key, initial_density_key = (
+    jax.random.split(key, 5)
+)
+model.configure(
+    num_chains=num_chains,
+    sigma=sigma_initial,
+    warmup=burn_in,
+    tuner=paz.AdaptiveStepTuner(
         sigma=sigma_initial,
-        warmup=burn_in,
-        tuner=paz.AdaptiveStepTuner(
-            sigma=sigma_initial,
-            num_steps=num_tune_steps,
-            num_episodes=num_episodes,
-        ),
-    )
+        num_steps=num_tune_steps,
+        num_episodes=num_episodes,
+    ),
+)
 
-    tuned_result = compute_posterior(model, tuned_key, data, num_samples)
-    tuned_sigma = tuned_result.posterior.config["sigma"]
+tuned_result = compute_posterior(model, tuned_key, data, num_samples)
+tuned_sigma = tuned_result.posterior.config["sigma"]
 
-    initial_result = compute_posterior(
-        model,
-        initial_key,
-        data,
-        num_samples,
-        sigma=sigma_initial,
-        warmup=burn_in,
-        num_chains=num_chains,
-        tuner=None,
-    )
+initial_result = compute_posterior(
+    model,
+    initial_key,
+    data,
+    num_samples,
+    sigma=sigma_initial,
+    warmup=burn_in,
+    num_chains=num_chains,
+    tuner=None,
+)
 
-    print("Tuning results")
-    print(f"  Tuned sigma (mean across chains): {tuned_sigma:.5f}")
+print("Tuning results")
+print(f"  Tuned sigma (mean across chains): {tuned_sigma:.5f}")
 
-    tuned_forward = tuned_result.posterior.samples
-    initial_forward = initial_result.posterior.samples
+tuned_forward = tuned_result.posterior.samples
+initial_forward = initial_result.posterior.samples
 
-    tuned_density = tuned_result.posterior.as_density(method="gaussian")
-    tuned_density_draw = tuned_density.sample(
-        tuned_density_key, num_samples=1
-    )
-    initial_density = initial_result.posterior.as_density(method="gaussian")
-    initial_density_draw = initial_density.sample(
-        initial_density_key, num_samples=1
-    )
+tuned_density = tuned_result.posterior.as_density(method="gaussian")
+tuned_density_draw = tuned_density.sample(
+    tuned_density_key, num_samples=1
+)
+initial_density = initial_result.posterior.as_density(method="gaussian")
+initial_density_draw = initial_density.sample(
+    initial_density_key, num_samples=1
+)
 
-    print("Posterior estimates (tuned sigma)")
-    print(
-        "  Mean: "
-        f"{tuned_result.posterior.inverse_samples.mean.mean():.4f} "
-        f"(true: {true_params.mean:.2f})"
-    )
-    print(
-        "  Bias: "
-        f"{tuned_result.posterior.inverse_samples.bias.mean():.4f} "
-        f"(true: {true_params.bias:.2f})"
-    )
-    print(
-        "  Stdv: "
-        f"{tuned_forward.stdv.mean():.4f} "
-        f"(true: {true_params.stdv:.2f})"
-    )
-    print(f"  Acceptance rate: {tuned_result.acceptance_rate:.3f}")
+print("Posterior estimates (tuned sigma)")
+print(
+    "  Mean: "
+    f"{tuned_result.posterior.inverse_samples.mean.mean():.4f} "
+    f"(true: {true_params.mean:.2f})"
+)
+print(
+    "  Bias: "
+    f"{tuned_result.posterior.inverse_samples.bias.mean():.4f} "
+    f"(true: {true_params.bias:.2f})"
+)
+print(
+    "  Stdv: "
+    f"{tuned_forward.stdv.mean():.4f} "
+    f"(true: {true_params.stdv:.2f})"
+)
+print(f"  Acceptance rate: {tuned_result.acceptance_rate:.3f}")
 
-    print("Posterior estimates (initial sigma)")
-    print(
-        "  Mean: "
-        f"{initial_result.posterior.inverse_samples.mean.mean():.4f} "
-        f"(true: {true_params.mean:.2f})"
-    )
-    print(
-        "  Bias: "
-        f"{initial_result.posterior.inverse_samples.bias.mean():.4f} "
-        f"(true: {true_params.bias:.2f})"
-    )
-    print(
-        "  Stdv: "
-        f"{initial_forward.stdv.mean():.4f} "
-        f"(true: {true_params.stdv:.2f})"
-    )
-    print(f"  Acceptance rate: {initial_result.acceptance_rate:.3f}")
+print("Posterior estimates (initial sigma)")
+print(
+    "  Mean: "
+    f"{initial_result.posterior.inverse_samples.mean.mean():.4f} "
+    f"(true: {true_params.mean:.2f})"
+)
+print(
+    "  Bias: "
+    f"{initial_result.posterior.inverse_samples.bias.mean():.4f} "
+    f"(true: {true_params.bias:.2f})"
+)
+print(
+    "  Stdv: "
+    f"{initial_forward.stdv.mean():.4f} "
+    f"(true: {true_params.stdv:.2f})"
+)
+print(f"  Acceptance rate: {initial_result.acceptance_rate:.3f}")
 
-    plot_posterior(
-        inputs,
-        observations,
-        tuned_result.posterior,
-        tuned_result.acceptance_rate,
-        true_params,
-        "Posterior with tuned sigma",
-        tuned_density_draw,
-    )
-    plot_posterior(
-        inputs,
-        observations,
-        initial_result.posterior,
-        initial_result.acceptance_rate,
-        true_params,
-        "Posterior with initial sigma",
-        initial_density_draw,
-    )
-
-
-if __name__ == "__main__":
-    main()
+plot_posterior(
+    inputs,
+    observations,
+    tuned_result.posterior,
+    tuned_result.acceptance_rate,
+    true_params,
+    "Posterior with tuned sigma",
+    tuned_density_draw,
+)
+plot_posterior(
+    inputs,
+    observations,
+    initial_result.posterior,
+    initial_result.acceptance_rate,
+    true_params,
+    "Posterior with initial sigma",
+    initial_density_draw,
+)
