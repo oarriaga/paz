@@ -4,6 +4,7 @@ import numpy as np
 import jax.numpy as jp
 from jax import vmap
 
+import paz
 from paz.backend import algebra
 
 
@@ -12,6 +13,121 @@ def project_to_3D(camera_intrinsics, point2D, depth):
     pixel = jp.array([u, v, 1.0])
     point3D = jp.linalg.inv(camera_intrinsics) @ pixel * -depth
     return point3D
+
+
+
+def build_corner_rays(intrinsics, image_shape, world_to_camera=None):
+    """Build normalized rays from camera through image corners."""
+    image_height, image_width = image_shape
+    corner_pixels = jp.array(
+        [
+            [0.0, 0.0],
+            [image_width, 0.0],
+            [image_width, image_height],
+            [0.0, image_height],
+        ]
+    )
+    world_to_camera = jp.eye(4) if world_to_camera is None else world_to_camera
+    project = vmap(project_to_3D, in_axes=(None, 0, None))
+    rays_camera = project(intrinsics, corner_pixels, 1.0)
+    rotation_inverse = paz.SE3.get_rotation_matrix(world_to_camera).T
+    rays_world = (rotation_inverse @ rays_camera.T).T
+    norms = jp.linalg.norm(rays_world, axis=1, keepdims=True)
+    return rays_world / norms
+
+
+def build_corner_rays_from_bounds(intrinsics, bounds, world_to_camera=None):
+    """Build normalized rays from camera through specified pixel bounds.
+
+    Arguments:
+        intrinsics: Camera intrinsics matrix (3x3).
+        bounds: Tuple of (u_min, u_max, v_min, v_max) pixel coordinates.
+        world_to_camera: Optional transform matrix (4x4).
+
+    Returns:
+        Array of 4 normalized ray directions through the corner pixels.
+    """
+    u_min, u_max, v_min, v_max = bounds
+    corner_pixels = jp.array([
+        [u_min, v_min],
+        [u_max, v_min],
+        [u_max, v_max],
+        [u_min, v_max],
+    ])
+    world_to_camera = jp.eye(4) if world_to_camera is None else world_to_camera
+    project = vmap(project_to_3D, in_axes=(None, 0, None))
+    rays_camera = project(intrinsics, corner_pixels, 1.0)
+    rotation_inverse = paz.SE3.get_rotation_matrix(world_to_camera).T
+    rays_world = (rotation_inverse @ rays_camera.T).T
+    norms = jp.linalg.norm(rays_world, axis=1, keepdims=True)
+    return rays_world / norms
+
+
+def build_frustum_plane_intersection(
+    intrinsics, image_shape, plane_normal, plane_centroid, world_to_camera=None
+):
+    """Compute frustum-plane intersection corners."""
+    rays = build_corner_rays(intrinsics, image_shape, world_to_camera)
+    ray_origins = jp.zeros_like(rays)
+    return paz.plane.intersect_rays(
+        plane_centroid, plane_normal, ray_origins, rays
+    )
+
+
+def build_frustum_plane_intersection_from_bounds(
+    intrinsics, bounds, plane_normal, plane_centroid, world_to_camera=None
+):
+    """Compute frustum-plane intersection corners using pixel bounds.
+
+    Arguments:
+        intrinsics: Camera intrinsics matrix (3x3).
+        bounds: Tuple of (u_min, u_max, v_min, v_max) pixel coordinates.
+        plane_normal: Normal vector of the plane.
+        plane_centroid: A point on the plane.
+        world_to_camera: Optional transform matrix (4x4).
+
+    Returns:
+        Array of 4 intersection points where the frustum meets the plane.
+    """
+    rays = build_corner_rays_from_bounds(intrinsics, bounds, world_to_camera)
+    ray_origins = jp.zeros_like(rays)
+    return paz.plane.intersect_rays(
+        plane_centroid, plane_normal, ray_origins, rays
+    )
+
+
+def shrink_frustum_corners(corners, margins):
+    """Apply margins to shrink frustum corners inward."""
+    left_margin, right_margin, near_margin, far_margin = jp.array(margins)
+    far_left, far_right, near_right, near_left = corners
+    depth_vector = far_left - near_left
+    near_left = near_left + depth_vector * near_margin
+    near_right = near_right + depth_vector * near_margin
+    far_left = far_left - depth_vector * far_margin
+    far_right = far_right - depth_vector * far_margin
+    near_edge = near_right - near_left
+    far_edge = far_right - far_left
+    return jp.stack(
+        [
+            far_left + far_edge * left_margin,
+            far_right - far_edge * right_margin,
+            near_right - near_edge * right_margin,
+            near_left + near_edge * left_margin,
+        ]
+    )
+
+
+def build_frustum_grid(corners, depth_steps, width_steps):
+    """Build regular 2D grid of 3D points within frustum trapezoid."""
+    far_left, far_right, near_right, near_left = corners
+    depth_ratios = jp.linspace(0.0, 1.0, depth_steps)[:, None]
+    width_ratios = jp.linspace(0.0, 1.0, width_steps)[None, :, None]
+    left_edge = near_left + depth_ratios * (far_left - near_left)
+    right_edge = near_right + depth_ratios * (far_right - near_right)
+    grid = left_edge[:, jp.newaxis, :] + width_ratios * (
+        right_edge[:, jp.newaxis, :] - left_edge[:, jp.newaxis, :]
+    )
+    return grid.reshape(-1, 3)
 
 
 def get_image_size(camera_intrinsics):
