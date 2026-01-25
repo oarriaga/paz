@@ -218,3 +218,22 @@ def filter_above_plane(pointcloud, plane_to_world, min_height=0.01):
     pointcloud_plane = paz.algebra.transform_points(world_to_plane, pointcloud)
     mask = pointcloud_plane[:, 1] > min_height
     return pointcloud[mask]
+
+
+def compute_valid_bounds(depth, max_depth):
+    """Compute pixel bounding box of valid depth measurements.
+
+    Returns (u_min, u_max, v_min, v_max) pixel coordinates, or None if no
+    valid depth. Valid depth is defined as: 0 < depth < max_depth.
+    """
+    if len(depth.shape) == 3:
+        depth = depth.squeeze()
+    is_close_by = depth < max_depth
+    is_not_zero = jp.logical_not(jp.isclose(depth, 0.0))
+    valid_mask = jp.logical_and(is_close_by, is_not_zero)
+    v_indices, u_indices = jp.where(valid_mask)
+    if len(u_indices) == 0:
+        return None
+    u_min, u_max = float(u_indices.min()), float(u_indices.max())
+    v_min, v_max = float(v_indices.min()), float(v_indices.max())
+    return u_min, u_max, v_min, v_max
