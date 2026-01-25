@@ -14,7 +14,6 @@ import arviz as az
 import jax
 import jax.numpy as jp
 import numpy as np
-import matplotlib.pyplot as plt
 import keras
 from tensorflow_probability.substrates import jax as tfp
 
@@ -266,145 +265,6 @@ def write_summary(summary, directory):
     summary.to_latex(Path(directory) / "summary.tex")
 
 
-def plot_trace(inference_data, directory):
-    az.plot_trace(inference_data)
-    plt.savefig(Path(directory) / "trace.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_shift_posterior(trace, label, directory, name="shift"):
-    x_samples = trace[name][:, :, 0]
-    y_samples = trace[name][:, :, 1]
-    xz_trace = {"x": x_samples, "y": y_samples}
-    axes = az.plot_pair(xz_trace, var_names=["x", "y"])
-    label = list(label.values())[0]
-    true_shift = paz.datasets.fsclvr.parse_shift(label)
-    if hasattr(axes, "shape"):
-        axis = axes[0, 0]
-    else:
-        axis = axes
-    axis.scatter(true_shift[0], true_shift[1], s=30, marker="*", c="red")
-    plt.savefig(Path(directory) / f"{name}_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_theta_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["theta"])
-    plt.savefig(Path(directory) / "theta_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_trace_variable(trace, name, directory):
-    az.plot_trace(trace, var_names=[name])
-    plt.savefig(Path(directory) / f"{name}_trace.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_shift_posteriors(trace, directory):
-    az.plot_posterior(trace, var_names=["shift"])
-    plt.savefig(Path(directory) / "shift_posteriors.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_shift_x_posterior(trace, directory):
-    data = {"shift_x": trace["shift"][:, :, 0]}
-    az.plot_posterior(data, var_names=["shift_x"])
-    plt.savefig(Path(directory) / "shift_x_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_shift_y_posterior(trace, directory):
-    data = {"shift_y": trace["shift"][:, :, 1]}
-    az.plot_posterior(data, var_names=["shift_y"])
-    plt.savefig(Path(directory) / "shift_y_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_scale_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["scale"])
-    plt.savefig(Path(directory) / "scale_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_scale_x_posterior(trace, directory):
-    data = {"scale_x": trace["scale"][:, :, 0]}
-    az.plot_posterior(data, var_names=["scale_x"])
-    plt.savefig(Path(directory) / "scale_x_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_scale_y_posterior(trace, directory):
-    data = {"scale_y": trace["scale"][:, :, 1]}
-    az.plot_posterior(data, var_names=["scale_y"])
-    plt.savefig(Path(directory) / "scale_y_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_scale_z_posterior(trace, directory):
-    data = {"scale_z": trace["scale"][:, :, 2]}
-    az.plot_posterior(data, var_names=["scale_z"])
-    plt.savefig(Path(directory) / "scale_z_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_color_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["color"])
-    plt.savefig(Path(directory) / "color_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_ambient_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["ambient"])
-    plt.savefig(Path(directory) / "ambient_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_diffuse_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["diffuse"])
-    plt.savefig(Path(directory) / "diffuse_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_specular_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["specular"])
-    plt.savefig(Path(directory) / "specular_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_shininess_posterior(trace, directory):
-    az.plot_posterior(trace, var_names=["shininess"])
-    plt.savefig(
-        Path(directory) / "shininess_posterior.pdf", bbox_inches="tight"
-    )
-    plt.close()
-
-
-def plot_classes_posterior(trace, directory):
-    classes = trace["classes"]
-    data = {
-        "class_0": classes[:, :, 0],
-        "class_1": classes[:, :, 1],
-        "class_2": classes[:, :, 2],
-    }
-    az.plot_posterior(data)
-    plt.savefig(Path(directory) / "classes_posterior.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def plot_dirichlet_posterior(trace, directory):
-    classes = trace["classes"]
-    data = {
-        "class_0": classes[:, :, 0],
-        "class_1": classes[:, :, 1],
-        "class_2": classes[:, :, 2],
-    }
-    az.plot_posterior(data)
-    plt.savefig(
-        Path(directory) / "dirichlet_posterior.pdf", bbox_inches="tight"
-    )
-    plt.close()
-
-
 def estimate_point(summary, render, statistic):
     sample = parse_summary(summary, statistic)
     return render(sample)
@@ -453,7 +313,7 @@ parser.add_argument("--image_noise", default=1.0, type=float)
 parser.add_argument("--neuro_weight", default=0.05, type=float)
 parser.add_argument("--num_branches", default=3, type=int)
 parser.add_argument("--num_chains", default=20, type=int)
-parser.add_argument("--burn_in", default=1000, type=int)
+parser.add_argument("--burn_in", default=3000, type=int)
 parser.add_argument("--num_samples", default=30_000, type=int)
 parser.add_argument("--sigma", default=0.05, type=float)
 parser.add_argument("--tune", default=True, type=bool)
@@ -574,23 +434,42 @@ write_error_image(image, medn_image, root)
 write_image(mean_image, root, "mean_image.png")
 write_image(medn_image, root, "median_image.png")
 
-plot_trace(inference_data, root)
-plot_shift_posterior(trace_dict, label, root)
-plot_theta_posterior(inference_data, root)
-plot_shift_posteriors(inference_data, root)
-plot_shift_x_posterior(trace_dict, root)
-plot_shift_y_posterior(trace_dict, root)
-plot_scale_posterior(inference_data, root)
-plot_scale_x_posterior(trace_dict, root)
-plot_scale_y_posterior(trace_dict, root)
-plot_scale_z_posterior(trace_dict, root)
-plot_color_posterior(inference_data, root)
-plot_ambient_posterior(inference_data, root)
-plot_diffuse_posterior(inference_data, root)
-plot_specular_posterior(inference_data, root)
-plot_shininess_posterior(inference_data, root)
-plot_classes_posterior(trace_dict, root)
-plot_dirichlet_posterior(trace_dict, root)
+true_shift = paz.datasets.fsclvr.parse_shift(list(label.values())[0])
+
+figure, _ = paz.plot.plot_trace(inference_data)
+paz.plot.save(figure, Path(root) / "trace.pdf")
+figure, _ = paz.plot.plot_shift_posterior(trace_dict, true_point=true_shift)
+paz.plot.save(figure, Path(root) / "shift_posterior.pdf")
+figure, _ = paz.plot.plot_theta_posterior(trace_dict["theta"])
+paz.plot.save(figure, Path(root) / "theta_posterior.pdf")
+figure, _ = paz.plot.plot_shift_posteriors(inference_data)
+paz.plot.save(figure, Path(root) / "shift_posteriors.pdf")
+figure, _ = paz.plot.plot_shift_x_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "shift_x_posterior.pdf")
+figure, _ = paz.plot.plot_shift_y_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "shift_y_posterior.pdf")
+figure, _ = paz.plot.plot_scale_posterior(inference_data)
+paz.plot.save(figure, Path(root) / "scale_posterior.pdf")
+figure, _ = paz.plot.plot_scale_x_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "scale_x_posterior.pdf")
+figure, _ = paz.plot.plot_scale_y_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "scale_y_posterior.pdf")
+figure, _ = paz.plot.plot_scale_z_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "scale_z_posterior.pdf")
+figure, _ = paz.plot.plot_color_posterior(inference_data)
+paz.plot.save(figure, Path(root) / "color_posterior.pdf")
+figure, _ = paz.plot.plot_ambient_posterior(inference_data)
+paz.plot.save(figure, Path(root) / "ambient_posterior.pdf")
+figure, _ = paz.plot.plot_diffuse_posterior(inference_data)
+paz.plot.save(figure, Path(root) / "diffuse_posterior.pdf")
+figure, _ = paz.plot.plot_specular_posterior(inference_data)
+paz.plot.save(figure, Path(root) / "specular_posterior.pdf")
+figure, _ = paz.plot.plot_shininess_posterior(inference_data)
+paz.plot.save(figure, Path(root) / "shininess_posterior.pdf")
+figure, _ = paz.plot.plot_classes_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "classes_posterior.pdf")
+figure, _ = paz.plot.plot_dirichlet_posterior(trace_dict)
+paz.plot.save(figure, Path(root) / "dirichlet_posterior.pdf")
 
 posterior_directory = Path(root) / "posterior_samples"
 paz.directory.make(posterior_directory)
