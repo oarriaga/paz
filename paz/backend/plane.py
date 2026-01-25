@@ -144,6 +144,22 @@ def build_plane_to_world(world_up, normal, position):
     return paz.SE3.to_affine_matrix(rotation, position)
 
 
+
+def fit_ground_plane(pointcloud, world_up=None):
+    """Fit ground plane and build plane-to-world transform."""
+    # TODO maybe remove since is doing too many things.
+    normal, _, centroid = fit_student_t(pointcloud)
+    world_up = jp.array([0.0, 1.0, 0.0]) if world_up is None else world_up
+    floor_to_world = build_plane_to_world(world_up, normal, centroid)
+    return normal, centroid, floor_to_world
+
+
+def intersect_rays(plane_center, plane_normal, ray_origins, ray_directions):
+    """Vectorized ray-plane intersection for multiple rays."""
+    intersect = jax.vmap(intersect_ray, in_axes=(None, None, 0, 0))
+    return intersect(plane_center, plane_normal, ray_origins, ray_directions)
+
+
 def intersect_ray(plane_center, plane_normal, ray_origin, ray_direction):
     numerator = jp.dot(plane_center - ray_origin, plane_normal)
     denominator = jp.dot(ray_direction, plane_normal)
