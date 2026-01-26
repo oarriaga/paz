@@ -100,11 +100,12 @@ def shrink_frustum_corners(corners, margins):
     """Apply margins to shrink frustum corners inward."""
     left_margin, right_margin, near_margin, far_margin = jp.array(margins)
     far_left, far_right, near_right, near_left = corners
-    depth_vector = far_left - near_left
-    near_left = near_left + depth_vector * near_margin
-    near_right = near_right + depth_vector * near_margin
-    far_left = far_left - depth_vector * far_margin
-    far_right = far_right - depth_vector * far_margin
+    left_depth_vector = far_left - near_left
+    right_depth_vector = far_right - near_right
+    near_left = near_left + left_depth_vector * near_margin
+    near_right = near_right + right_depth_vector * near_margin
+    far_left = far_left - left_depth_vector * far_margin
+    far_right = far_right - right_depth_vector * far_margin
     near_edge = near_right - near_left
     far_edge = far_right - far_left
     return jp.stack(
