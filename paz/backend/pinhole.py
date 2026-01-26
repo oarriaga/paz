@@ -16,37 +16,21 @@ def project_to_3D(camera_intrinsics, point2D, depth):
 
 
 
-def build_corner_rays(intrinsics, image_shape, world_to_camera=None):
-    """Build normalized rays from camera through image corners."""
-    image_height, image_width = image_shape
-    corner_pixels = jp.array(
-        [
-            [0.0, 0.0],
-            [image_width, 0.0],
-            [image_width, image_height],
-            [0.0, image_height],
-        ]
-    )
-    world_to_camera = jp.eye(4) if world_to_camera is None else world_to_camera
-    project = vmap(project_to_3D, in_axes=(None, 0, None))
-    rays_camera = project(intrinsics, corner_pixels, 1.0)
-    rotation_inverse = paz.SE3.get_rotation_matrix(world_to_camera).T
-    rays_world = (rotation_inverse @ rays_camera.T).T
-    norms = jp.linalg.norm(rays_world, axis=1, keepdims=True)
-    return rays_world / norms
-
-
-def build_corner_rays_from_bounds(intrinsics, bounds, world_to_camera=None):
-    """Build normalized rays from camera through specified pixel bounds.
+def build_corner_rays(intrinsics, bounds=None, world_to_camera=None):
+    """Build normalized rays from camera through corner pixels.
 
     Arguments:
         intrinsics: Camera intrinsics matrix (3x3).
-        bounds: Tuple of (u_min, u_max, v_min, v_max) pixel coordinates.
+        bounds: Optional tuple of (u_min, u_max, v_min, v_max) pixel coordinates.
+            If None, uses full image bounds derived from intrinsics.
         world_to_camera: Optional transform matrix (4x4).
 
     Returns:
         Array of 4 normalized ray directions through the corner pixels.
     """
+    if bounds is None:
+        H, W = get_image_size(intrinsics)
+        bounds = (0, W, 0, H)
     u_min, u_max, v_min, v_max = bounds
     corner_pixels = jp.array([
         [u_min, v_min],
@@ -63,33 +47,23 @@ def build_corner_rays_from_bounds(intrinsics, bounds, world_to_camera=None):
     return rays_world / norms
 
 
-def build_frustum_plane_intersection(
-    intrinsics, image_shape, plane_normal, plane_centroid, world_to_camera=None
+def intersect_frustum_plane(
+    intrinsics, plane_normal, plane_centroid, bounds=None, world_to_camera=None
 ):
-    """Compute frustum-plane intersection corners."""
-    rays = build_corner_rays(intrinsics, image_shape, world_to_camera)
-    ray_origins = jp.zeros_like(rays)
-    return paz.plane.intersect_rays(
-        plane_centroid, plane_normal, ray_origins, rays
-    )
-
-
-def build_frustum_plane_intersection_from_bounds(
-    intrinsics, bounds, plane_normal, plane_centroid, world_to_camera=None
-):
-    """Compute frustum-plane intersection corners using pixel bounds.
+    """Compute frustum-plane intersection corners.
 
     Arguments:
         intrinsics: Camera intrinsics matrix (3x3).
-        bounds: Tuple of (u_min, u_max, v_min, v_max) pixel coordinates.
         plane_normal: Normal vector of the plane.
         plane_centroid: A point on the plane.
+        bounds: Optional tuple of (u_min, u_max, v_min, v_max) pixel coordinates.
+            If None, uses full image bounds derived from intrinsics.
         world_to_camera: Optional transform matrix (4x4).
 
     Returns:
         Array of 4 intersection points where the frustum meets the plane.
     """
-    rays = build_corner_rays_from_bounds(intrinsics, bounds, world_to_camera)
+    rays = build_corner_rays(intrinsics, bounds, world_to_camera)
     ray_origins = jp.zeros_like(rays)
     return paz.plane.intersect_rays(
         plane_centroid, plane_normal, ray_origins, rays
