@@ -11,15 +11,24 @@ def from_directories(
         image_wildcard = os.path.join(directory, wildcard)
         image_files = sorted(glob.glob(image_wildcard))
         total_image_files.extend(image_files)
+    if not total_image_files:
+        raise ValueError("No images found for video.")
+    from_paths(total_image_files, video_name, fps)
 
 
 def from_paths(image_paths, name="video.mp4", fps=10):
-    H, W = imread(image_paths[0]).shape[:2]
+    if not image_paths:
+        raise ValueError("No images found for video.")
+    first_image = cv2.imread(image_paths[0], cv2.IMREAD_COLOR)
+    if first_image is None:
+        raise ValueError(f"Failed to read image: {image_paths[0]}")
+    H, W = first_image.shape[:2]
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     video = cv2.VideoWriter(name, fourcc, fps, (W, H))
     for image_path in image_paths:
-        image = imread(image_path)
-        image = (255.0 * image[..., :3][..., ::-1]).astype("uint8")
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError(f"Failed to read image: {image_path}")
         video.write(image)
     video.release()
 
