@@ -3,6 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import jax
+from jax import lax
 from jax.scipy.ndimage import map_coordinates
 import jax.numpy as jp
 
@@ -147,6 +148,49 @@ def RGB_to_GRAY(image):
     image = rgb_to_gray(image)
     image = denormalize(image)
     return image
+
+
+def compute_channel_norm(values, axis=-1):
+    return jp.sqrt(jp.sum(values * values, axis=axis))
+
+
+def compute_sobel_edges(rgb_image):
+    normalized = normalize(rgb_image)
+    luminance = rgb_to_gray(normalized)
+    gradients = apply_sobel(luminance)
+    return compute_channel_norm(gradients)
+
+
+def apply_sobel(image):
+    """Compute Sobel x/y gradients for a 2D or single-channel image."""
+    if image.ndim == 2:
+        image = image[..., jp.newaxis]
+    kernel_x = jp.array(
+        [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=jp.float32
+    )
+    kernel_y = jp.array(
+        [[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=jp.float32
+    )
+    kernel = jp.stack([kernel_x, kernel_y], axis=-1)
+    kernel = kernel[:, :, jp.newaxis, :]
+
+    image = image.astype(jp.float32)
+    image_4d = image[jp.newaxis, ...]
+
+    dimension_numbers = lax.conv_dimension_numbers(
+        image_4d.shape, kernel.shape, ("NHWC", "HWIO", "NHWC")
+    )
+    output = lax.conv_general_dilated(
+        image_4d,
+        kernel,
+        (1, 1),
+        "SAME",
+        (1, 1),
+        (1, 1),
+        dimension_numbers,
+    )
+    gradients = output[0]
+    return gradients
 
 
 def preprocess(image, shape):
