@@ -220,6 +220,25 @@ def filter_above_plane(pointcloud, plane_to_world, min_height=0.01):
     return pointcloud[mask]
 
 
+def filter_above_height(pointcloud, min_height=0.01, up_axis=1):
+    return pointcloud[pointcloud[:, up_axis] > min_height]
+
+
+def to_ground_frame(pointcloud, plane_to_world=None):
+    if plane_to_world is None:
+        _, _, plane_to_world = paz.plane.fit_ground_plane(pointcloud)
+    world_to_plane = paz.SE3.invert(plane_to_world)
+    return transform(pointcloud, world_to_plane), plane_to_world
+
+
+def compute_extents(pointcloud):
+    centroid = jp.mean(pointcloud, axis=0)
+    box_min = jp.min(pointcloud, axis=0)
+    box_max = jp.max(pointcloud, axis=0)
+    box_size = box_max - box_min
+    return centroid, box_min, box_max, box_size
+
+
 def compute_valid_bounds(depth, max_depth):
     """Compute pixel bounding box of valid depth measurements.
 
