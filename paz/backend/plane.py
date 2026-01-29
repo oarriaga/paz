@@ -144,7 +144,6 @@ def build_plane_to_world(world_up, normal, position):
     return paz.SE3.to_affine_matrix(rotation, position)
 
 
-
 def fit_ground_plane(pointcloud, world_up=None):
     """Fit ground plane and build plane-to-world transform."""
     # TODO maybe remove since is doing too many things.
