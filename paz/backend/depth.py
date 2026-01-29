@@ -1,5 +1,6 @@
 import jax.numpy as jp
 import numpy as np
+import paz
 import cv2
 
 
@@ -27,6 +28,20 @@ def to_RGB(depth):
     max_depth = jp.max(depth)
     normalized_depth = depth - min_depth / (max_depth - min_depth)
     return (255 * normalized_depth).astype("uint8")
+
+
+def bound(depth, max_depth):
+    depth_2d = depth[..., 0] if depth.ndim == 3 else depth
+    is_positive = depth_2d > 0
+    is_close_by = depth_2d < max_depth
+    mask = jp.logical_and(is_positive, is_close_by)
+    return jp.where(mask, depth_2d, 0.0)
+
+
+def compute_sobel_edges(depth, max_depth):
+    valid_depth = bound(depth, max_depth)
+    gradients = paz.image.apply_sobel(valid_depth)
+    return paz.image.compute_channel_norm(gradients)
 
 
 def compute_gradient_norm(depth):
