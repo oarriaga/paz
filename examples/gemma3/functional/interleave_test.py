@@ -1,56 +1,12 @@
-import sys
-from pathlib import Path
-
 import numpy as np
-import keras
 from keras import ops
 
-from examples.gemma3.functional.interleave import interleave_embeddings
+from examples.gemma3.functional.gemma3 import interleave_embeddings
+from examples.gemma3.functional.keras_hub_utils import ensure_keras_hub
 
-KERAS_HUB_ROOT = Path(__file__).resolve().parents[1] / "keras-hub"
-if not hasattr(keras.layers, "ReversibleEmbedding"):
-    class ReversibleEmbedding(keras.layers.Layer):
-        def __init__(
-            self,
-            input_dim,
-            output_dim,
-            tie_weights=True,
-            embeddings_initializer="uniform",
-            logit_soft_cap=None,
-            **kwargs,
-        ):
-            super().__init__(**kwargs)
-            self.tie_weights = tie_weights
-            self.logit_soft_cap = logit_soft_cap
-            self.embedding = keras.layers.Embedding(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                embeddings_initializer=embeddings_initializer,
-                dtype=self.dtype_policy,
-                name="embedding",
-            )
+ensure_keras_hub()
 
-        def build(self, input_shape):
-            self.embedding.build(input_shape)
-            self.built = True
-
-        def call(self, inputs, reverse=False):
-            if not reverse:
-                return self.embedding(inputs)
-            kernel = self.embedding.embeddings
-            logits = ops.matmul(inputs, ops.transpose(kernel))
-            if self.logit_soft_cap is None:
-                return logits
-            logits = ops.divide(logits, self.logit_soft_cap)
-            logits = ops.multiply(ops.tanh(logits), self.logit_soft_cap)
-            return logits
-
-    keras.layers.ReversibleEmbedding = ReversibleEmbedding
-sys.path.insert(0, str(KERAS_HUB_ROOT))
-
-from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
-    Gemma3InterleaveEmbeddings,
-)
+from keras_hub.src.models.gemma3 import gemma3_interleave_embeddings
 
 
 def test_interleave_embeddings_matches_hub():
@@ -58,34 +14,28 @@ def test_interleave_embeddings_matches_hub():
     batch_size = 2
     sequence_length = 6
     embedding_dim = 4
-    num_vision_tokens_per_image = 2
+    num_vision_tokens = 2
 
-    text_embeddings = ops.convert_to_tensor(
-        rng.standard_normal((batch_size, sequence_length, embedding_dim)).astype(
-            "float32"
-        )
-    )
-    image_embeddings = ops.convert_to_tensor(
-        rng.standard_normal((batch_size, num_vision_tokens_per_image, embedding_dim)).astype(
-            "float32"
-        )
-    )
-    vision_indices = ops.convert_to_tensor(
-        [[2, 3], [1, 2]], dtype="int32"
-    )
+    text_shape = (batch_size, sequence_length, embedding_dim)
+    text_values = rng.standard_normal(text_shape).astype("float32")
+    text_embeddings = ops.convert_to_tensor(text_values)
 
-    hub_layer = Gemma3InterleaveEmbeddings(num_vision_tokens_per_image)
-    hub_output = hub_layer(image_embeddings, text_embeddings, vision_indices)
-    clean_output = interleave_embeddings(
-        image_embeddings,
-        text_embeddings,
-        vision_indices,
-        num_vision_tokens_per_image,
-    )
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(clean_output),
-        ops.convert_to_numpy(hub_output),
-        rtol=1e-6,
-        atol=1e-6,
-    )
+    image_shape = (batch_size, num_vision_tokens, embedding_dim)
+    image_values = rng.standard_normal(image_shape).astype("float32")
+    image_embeddings = ops.convert_to_tensor(image_values)
 
+    vision_indices = ops.convert_to_tensor([[2, 3], [1, 2]], dtype="int32")
+
+    interleave = interleave_embeddings
+    hub_class = gemma3_interleave_embeddings.Gemma3InterleaveEmbeddings
+    hub_layer = hub_class(num_vision_tokens)
+
+    img = image_embeddings
+    txt = text_embeddings
+    idx = vision_indices
+    num_tokens = num_vision_tokens
+    hub_output = hub_layer(img, txt, idx)
+    clean_output = interleave(img, txt, idx, num_tokens)
+    clean_np = ops.convert_to_numpy(clean_output)
+    hub_np = ops.convert_to_numpy(hub_output)
+    np.testing.assert_allclose(clean_np, hub_np, rtol=1e-6, atol=1e-6)
