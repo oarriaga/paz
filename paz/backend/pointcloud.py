@@ -198,7 +198,7 @@ def remove_outliers(pointcloud, num_stdvs=3.0):
     upper_cutoff = data_mean + cut_off
     is_above_lower_cutoff = jp.all(pointcloud > lower_cutoff, axis=1)
     is_below_upper_cutoff = jp.all(pointcloud < upper_cutoff, axis=1)
-    mask = jp.logical_or(is_above_lower_cutoff, is_below_upper_cutoff)
+    mask = jp.logical_and(is_above_lower_cutoff, is_below_upper_cutoff)
     return pointcloud[mask]
 
 
