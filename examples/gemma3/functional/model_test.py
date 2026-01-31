@@ -235,7 +235,7 @@ def _build_vision_setup():
     apply_backbone(
         token_ids, padding_mask, images, vision_indices, vision_mask, False
     )
-    return hub_model, apply_backbone, layers, hub_inputs
+    return hub_model, apply_backbone, layers, hub_inputs, vision_apply
 
 
 def test_backbone_text_only_param_count_matches_hub():
@@ -259,14 +259,14 @@ def test_backbone_text_only_output_matches_hub():
 
 
 def test_backbone_vision_param_count_matches_hub():
-    hub_model, _, layers, _ = _build_vision_setup()
+    hub_model, _, layers, _, _ = _build_vision_setup()
     hub_count = hub_model.count_params()
     clean_count = count_params(collect_backbone_weights(layers))
     assert hub_count == clean_count
 
 
 def test_backbone_vision_output_matches_hub():
-    hub_model, apply_backbone, layers, hub_inputs = _build_vision_setup()
+    hub_model, apply_backbone, layers, hub_inputs, _ = _build_vision_setup()
     copy_backbone_weights(layers, hub_model)
     hub_output = hub_model(hub_inputs)
     token_ids = hub_inputs["token_ids"]
@@ -290,10 +290,9 @@ def test_causal_lm_logits_match_hub():
     setup = _build_text_only_setup()
     hub_model, apply_backbone, layers, token_ids, padding_mask = setup
     copy_backbone_weights(layers, hub_model)
-    lm_kwargs = {}
-    lm_kwargs["preprocessor"] = None
-    lm_kwargs["backbone"] = hub_model
-    hub_lm = gemma3_causal_lm.Gemma3CausalLM(**lm_kwargs)
+    hub_lm = gemma3_causal_lm.Gemma3CausalLM(
+        preprocessor=None, backbone=hub_model
+    )
     hub_inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
     hub_lm(hub_inputs)
 
@@ -305,3 +304,103 @@ def test_causal_lm_logits_match_hub():
     clean_np = ops.convert_to_numpy(clean_logits)
     hub_np = ops.convert_to_numpy(hub_output)
     np.testing.assert_allclose(clean_np, hub_np, rtol=1e-5, atol=1e-5)
+
+
+def _collect_hub_backbone_outputs(
+    hub_model,
+    token_ids,
+    padding_mask,
+    images,
+    vision_indices,
+    vision_mask,
+):
+    token_embeddings = hub_model.token_embedding(token_ids)
+    scale = ops.cast(ops.sqrt(hub_model.hidden_dim), token_embeddings.dtype)
+    text_embeddings = token_embeddings * scale
+    image_embeddings = hub_model.vision_encoder(images)
+    interleaved = hub_model.interleave_embeddings(
+        image_embeddings, text_embeddings, vision_indices
+    )
+    outputs = [text_embeddings, image_embeddings, interleaved]
+    hidden = interleaved
+    for layer in hub_model.transformer_layers:
+        hidden = layer(hidden, padding_mask, vision_mask)
+        outputs.append(hidden)
+    outputs.append(hub_model.layer_norm(hidden))
+    return outputs
+
+
+def _collect_clean_backbone_outputs(
+    layers,
+    token_ids,
+    padding_mask,
+    images,
+    vision_indices,
+    vision_mask,
+    hidden_dim,
+    vision_apply,
+):
+    token_embedding = layers[0]
+    decoder_blocks = layers[1]
+    final_norm = layers[2]
+    vision_tokens = layers[4]
+    token_embeddings = token_embedding(token_ids)
+    scale = ops.cast(ops.sqrt(hidden_dim), token_embeddings.dtype)
+    text_embeddings = token_embeddings * scale
+    image_embeddings = vision_apply(images, None, False)
+    interleaved = g3.interleave_embeddings(
+        image_embeddings, text_embeddings, vision_indices, vision_tokens
+    )
+    outputs = [text_embeddings, image_embeddings, interleaved]
+    hidden = interleaved
+    for block_apply, _ in decoder_blocks:
+        hidden = block_apply(hidden, padding_mask, vision_mask, None, False)
+        outputs.append(hidden)
+    outputs.append(final_norm(hidden))
+    return outputs
+
+
+def _assert_outputs_match(clean_outputs, hub_outputs, names):
+    assert len(clean_outputs) == len(hub_outputs)
+    for name, clean, hub in zip(names, clean_outputs, hub_outputs):
+        clean_np = ops.convert_to_numpy(clean)
+        hub_np = ops.convert_to_numpy(hub)
+        np.testing.assert_allclose(
+            clean_np, hub_np, rtol=1e-5, atol=1e-5, err_msg=name
+        )
+
+
+def test_backbone_vision_layer_outputs_match_hub():
+    setup = _build_vision_setup()
+    hub_model, _, layers, hub_inputs, vision_apply = setup
+    copy_backbone_weights(layers, hub_model)
+    token_ids = hub_inputs["token_ids"]
+    padding_mask = hub_inputs["padding_mask"]
+    images = hub_inputs["images"]
+    vision_indices = hub_inputs["vision_indices"]
+    vision_mask = hub_inputs["vision_mask"]
+    hub_outputs = _collect_hub_backbone_outputs(
+        hub_model,
+        token_ids,
+        padding_mask,
+        images,
+        vision_indices,
+        vision_mask,
+    )
+    hidden_dim = hub_model.hidden_dim
+    clean_outputs = _collect_clean_backbone_outputs(
+        layers,
+        token_ids,
+        padding_mask,
+        images,
+        vision_indices,
+        vision_mask,
+        hidden_dim,
+        vision_apply,
+    )
+    decoder_blocks = layers[1]
+    names = ["text_embeddings", "image_embeddings", "interleaved"]
+    for layer_index in range(len(decoder_blocks)):
+        names.append("decoder_block_{}".format(layer_index))
+    names.append("final_norm")
+    _assert_outputs_match(clean_outputs, hub_outputs, names)

@@ -64,15 +64,14 @@ def test_decoder_block_output_matches_hub():
     padding_mask = ops.ones((2, 3), dtype="int32")
 
     hub_block = _build_hub_block("hub_block")
-    hub_kwargs = {"padding_mask": padding_mask}
-    hub_block(inputs, **hub_kwargs)
+    hub_block(inputs, padding_mask=padding_mask)
 
     apply_block, block_layers = _build_block()
     apply_block(inputs, padding_mask, None, None, False)
 
     copy_decoder_block_weights(block_layers, hub_block)
 
-    hub_output = hub_block(inputs, **hub_kwargs)
+    hub_output = hub_block(inputs, padding_mask=padding_mask)
     clean_output = apply_block(inputs, padding_mask, None, None, False)
     clean_np = ops.convert_to_numpy(clean_output)
     hub_np = ops.convert_to_numpy(hub_output)

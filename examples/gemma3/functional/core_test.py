@@ -1,12 +1,11 @@
 import numpy as np
 from keras import ops
+from keras.layers import RMSNormalization
 
-from examples.gemma3.functional.gemma3 import apply_reversible_embedding
 from examples.gemma3.functional.gemma3 import apply_reversible_projection
 from examples.gemma3.functional.gemma3 import apply_rotary_embedding
 from examples.gemma3.functional.gemma3 import apply_tanh_soft_cap
 from examples.gemma3.functional.gemma3 import build_reversible_embedding
-from examples.gemma3.functional.gemma3 import build_rms_norm
 from examples.gemma3.functional.gemma3 import compute_causal_mask
 from examples.gemma3.functional.gemma3 import merge_padding_and_attention_mask
 from examples.gemma3.functional.keras_hub_utils import ensure_keras_hub
@@ -14,8 +13,7 @@ from examples.gemma3.functional.keras_hub_utils import ensure_keras_hub
 ensure_keras_hub()
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.models.gemma3.rms_normalization import RMSNormalization
-
+from keras_hub.src.models.gemma3.rms_normalization import RMSNormalization as HubRMSNormalization
 
 def test_apply_tanh_soft_cap_matches_formula():
     values = ops.convert_to_tensor([[-2.0, 0.5, 3.0]], dtype="float32")
@@ -60,10 +58,9 @@ def test_apply_rotary_embedding_matches_hub():
     scaling_factor = 2.0
     start_index = 1
 
-    hub_kwargs = {}
-    hub_kwargs["max_wavelength"] = max_wavelength
-    hub_kwargs["scaling_factor"] = scaling_factor
-    hub_layer = RotaryEmbedding(**hub_kwargs)
+    hub_layer = RotaryEmbedding(
+        max_wavelength=max_wavelength, scaling_factor=scaling_factor
+    )
     hub_output = hub_layer(inputs, start_index=start_index)
 
     apply_rotary = apply_rotary_embedding
@@ -83,8 +80,8 @@ def test_rms_norm_matches_hub():
     inputs = ops.convert_to_tensor(values)
     epsilon = 1e-6
 
-    hub_layer = RMSNormalization(epsilon=epsilon)
-    clean_layer = build_rms_norm("rms_norm", epsilon=epsilon)
+    hub_layer = HubRMSNormalization(epsilon=epsilon)
+    clean_layer = RMSNormalization(epsilon=epsilon, name="rms_norm")
     hub_layer(inputs)
     clean_layer(inputs)
 
@@ -102,7 +99,7 @@ def test_rms_norm_matches_hub():
 def test_reversible_projection_uses_embedding_weights():
     embedding_layer = build_reversible_embedding(7, 4)
     token_ids = ops.convert_to_tensor([[1, 2, 3]], dtype="int32")
-    embeddings = apply_reversible_embedding(embedding_layer, token_ids)
+    embeddings = embedding_layer(token_ids)
     logits = apply_reversible_projection(embedding_layer, embeddings)
     kernel = embedding_layer.embeddings
     expected = ops.matmul(embeddings, ops.transpose(kernel))
