@@ -165,12 +165,8 @@ def apply_sobel(image):
     """Compute Sobel x/y gradients for a 2D or single-channel image."""
     if image.ndim == 2:
         image = image[..., jp.newaxis]
-    kernel_x = jp.array(
-        [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=jp.float32
-    )
-    kernel_y = jp.array(
-        [[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=jp.float32
-    )
+    kernel_x = jp.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=jp.float32)
+    kernel_y = jp.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=jp.float32)
     kernel = jp.stack([kernel_x, kernel_y], axis=-1)
     kernel = kernel[:, :, jp.newaxis, :]
 
@@ -191,6 +187,35 @@ def apply_sobel(image):
     )
     gradients = output[0]
     return gradients
+
+
+def apply_gaussian_blur(image, kernel_size=9, sigma=2.0):
+    """Apply Gaussian blur to a 2D or single-channel image."""
+    if image.ndim == 2:
+        image = image[..., jp.newaxis]
+    image = image.astype(jp.float32)
+    image_4d = image[jp.newaxis, ...]
+
+    radius = kernel_size // 2
+    coords = jp.arange(-radius, radius + 1)
+    x_grid, y_grid = jp.meshgrid(coords, coords)
+    kernel = jp.exp(-(x_grid**2 + y_grid**2) / (2.0 * sigma**2))
+    kernel = kernel / jp.sum(kernel)
+    kernel = kernel[:, :, jp.newaxis, jp.newaxis]
+
+    dimension_numbers = lax.conv_dimension_numbers(
+        image_4d.shape, kernel.shape, ("NHWC", "HWIO", "NHWC")
+    )
+    output = lax.conv_general_dilated(
+        image_4d,
+        kernel,
+        (1, 1),
+        "SAME",
+        (1, 1),
+        (1, 1),
+        dimension_numbers,
+    )
+    return output[0]
 
 
 def preprocess(image, shape):
