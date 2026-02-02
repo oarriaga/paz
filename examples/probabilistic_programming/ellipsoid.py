@@ -1,0 +1,218 @@
+from collections import namedtuple
+from functools import partial
+
+import jax
+import jax.numpy as jp
+import numpy as np
+import trimesh
+from tensorflow_probability.substrates import jax as tfp
+
+import paz
+from paz.inference.latent_space import to_forward_samples, to_inverse_samples
+from optimizers import LBFGS, LineSearch, optimize
+
+tfd = tfp.distributions
+tfb = tfp.bijectors
+
+PointcloudStatistics = namedtuple(
+    "PointcloudStatistics",
+    ["x_mean", "y_mean", "z_mean", "x_stdv", "y_stdv", "z_stdv"],
+)
+
+
+# TODO we are going to take instead the pointcloud already transformed of the object. Thus we might not need a lot of the arguments such as depth, masks, camera_intrinsics, max_depth
+# TODO rename function to only "fit"
+def fit_scene(key, depth, masks, scale, num_stdvs, camera_intrinsics, max_depth, x_scale):  # fmt: skip
+    shifts, scales = [], []
+    rescale_args = (key, depth, scale, camera_intrinsics, max_depth)
+    rescale = partial(rescale_pointcloud, *rescale_args)
+    for mask in masks:
+        pointcloud = rescale(mask)
+        statistics = pointcloud_compute_statistics(pointcloud)
+        model, data = RobustEllipsoid(pointcloud, statistics, x_scale)
+        initial = initialize_unconstrained(model, statistics, num_stdvs)
+        # TODO we should have the loss as an input of the function
+        loss_fn = build_map_objective(model, data)
+        # TODO we should have the optimizer as an input of the function
+        optimizer = LBFGS(10.0, 10, LineSearch(50))
+        result = optimize(initial, loss_fn, optimizer, 150, 1e-2)
+        forward = to_forward_samples(model.latent_space, result.parameters)
+        center = jp.array([forward.x_mean, forward.y_mean, forward.z_mean])
+        axes = jp.array([forward.x_axis, forward.y_axis, forward.z_axis])
+        shifts.append(center / scale)
+        scales.append(axes / scale)
+    return jp.array(shifts), jp.array(scales)
+
+
+def RobustEllipsoid(pointcloud, statistics, x_scale):
+    mean_priors = build_mean_priors(statistics)
+    axis_priors = build_axis_priors(statistics, x_scale)
+    priors = mean_priors + axis_priors
+    surface_likelihood = build_surface_likelihood(pointcloud)
+    surface = paz.Observable(surface_likelihood, name="surface")(*priors)
+    model = paz.PGM(priors, [surface], "ellipsoid")
+    return model, {"surface": jp.zeros(len(pointcloud))}
+
+
+def build_mean_priors(statistics):
+    names = ["x_mean", "y_mean", "z_mean"]
+    values = [statistics.x_mean, statistics.y_mean, statistics.z_mean]
+    iterator = zip(values, names)
+    return [paz.Prior(tfd.Laplace(v, 0.1), name=n) for v, n in iterator]
+
+
+def build_axis_priors(statistics, x_scale):
+    x_axis = build_x_axis_prior(statistics.x_stdv, x_scale)
+    y_axis = build_bounded_axis_prior(statistics.y_stdv, "y_axis")
+    z_axis = build_bounded_axis_prior(statistics.z_stdv, "z_axis")
+    return [x_axis, y_axis, z_axis]
+
+
+def build_x_axis_prior(x_stdv, x_scale):
+    log_mean, log_scale = to_log_normal(x_scale * x_stdv, 0.1)
+    distribution = tfd.LogNormal(log_mean, log_scale)
+    return paz.Prior(distribution, bijector=tfb.Softplus(), name="x_axis")
+
+
+def build_bounded_axis_prior(stdv, name):
+    upper = 3.0 * stdv
+    bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(upper), tfb.Sigmoid()])
+    distribution = tfd.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
+    return paz.Prior(distribution, bijector=bijector, name=name)
+
+
+def build_map_objective(model, data):
+    def negative_log_posterior(inverse_samples):
+        log_prior = model.prior.log_prob_inverse(inverse_samples).log_prob_sum
+        likelihood = model.likelihood.log_prob_inverse(inverse_samples, data)
+        return -(log_prior + likelihood.log_prob_sum)
+
+    return negative_log_posterior
+
+
+def build_surface_likelihood(observations):
+    x, y, z = paz.pointcloud.split(observations)
+
+    def distribution_fn(x_mean, y_mean, z_mean, x_axis, y_axis, z_axis):
+        args = (x, y, z, x_mean, y_mean, z_mean, x_axis, y_axis, z_axis)
+        residuals = compute_surface_equation(*args)
+        return tfd.Laplace(residuals, scale=1.0)
+
+    return distribution_fn
+
+
+def verify_prior_predictive(model, key, num_samples=1000):
+    forward_samples = model.prior.sample(key, num_samples)
+    for name in model.latent_space.names:
+        values = getattr(forward_samples, name)
+        print(
+            f"{name}: mean={float(values.mean()):.4f}, "
+            f"stdv={float(values.std()):.4f}, "
+            f"min={float(values.min()):.4f}, "
+            f"max={float(values.max()):.4f}"
+        )
+    key_rt, _ = jax.random.split(key)
+    inverse_samples = model.prior.sample_inverse(key_rt, num_samples)
+    forward_from_inverse = to_forward_samples(
+        model.latent_space, inverse_samples
+    )
+    for name in model.latent_space.names:
+        forward_val = getattr(forward_from_inverse, name)
+        inverse_val = getattr(inverse_samples, name)
+        recovered = model.latent_space.bijectors[name].inverse(forward_val)
+        is_close = jp.allclose(inverse_val, recovered, atol=1e-5)
+        print(f"{name} bijector round-trip: {'OK' if is_close else 'FAILED'}")
+    return forward_samples
+
+
+def initialize_unconstrained(model, statistics, num_stdvs):
+    forward_sample = model.latent_space.Sample(
+        x_mean=statistics.x_mean,
+        y_mean=statistics.y_mean,
+        z_mean=statistics.z_mean,
+        x_axis=statistics.x_stdv * num_stdvs,
+        y_axis=statistics.y_stdv * num_stdvs,
+        z_axis=statistics.z_stdv * num_stdvs,
+    )
+    return to_inverse_samples(model.latent_space, forward_sample)
+
+
+def compute_surface_equation(
+    x, y, z, x_mean, y_mean, z_mean, x_axis, y_axis, z_axis
+):
+    zeta_0 = (x - x_mean) ** 2 / x_axis**2
+    zeta_1 = (y - y_mean) ** 2 / y_axis**2
+    zeta_2 = (z - z_mean) ** 2 / z_axis**2
+    return zeta_0 + zeta_1 + zeta_2 - 1.0
+
+
+def to_log_normal(mean, variance):
+    scale = jp.log((variance / mean**2) + 1)
+    mu = jp.log(mean) - (scale / 2)
+    return mu, jp.sqrt(scale)
+
+
+def pointcloud_compute_statistics(observations):
+    x, y, z = paz.pointcloud.split(observations)
+    args = x.mean(), y.mean(), z.mean(), x.std(), y.std(), z.std()
+    return PointcloudStatistics(*args)
+
+
+def rescale_pointcloud(seed, depth, scale, camera_intrinsics, max_depth, mask):
+    points, depth = scale_pointcloud(depth, scale, camera_intrinsics)
+    max_depth_scaled = scale * max_depth
+    scene_points = paz.pointcloud.bound(points, max_depth_scaled)
+    camera_to_plane = fit_plane(seed, scene_points)
+    points = paz.pointcloud.mask(points, mask, max_depth_scaled)
+    points = paz.pointcloud.transform(points, camera_to_plane)
+    return points
+
+
+def scale_pointcloud(depth, scale, camera_intrinsics):
+    scaled_depth = scale * depth
+    return (
+        paz.pointcloud.from_depth(scaled_depth, camera_intrinsics),
+        scaled_depth,
+    )
+
+
+def fit_plane(key, pointcloud):
+    normal, _offset, inliers = paz.plane.fit_RANSAC(key, pointcloud)
+    centroid = pointcloud[inliers].mean(axis=0)
+    world_up = jp.array([0.0, 1.0, 0.0])
+    plane_to_world = paz.plane.build_plane_to_world(world_up, normal, centroid)
+    plane_to_world = plane_to_world @ paz.SE3.rotation_x(jp.pi / 2.0)
+    camera_to_plane = paz.SE3.invert(plane_to_world)
+    return camera_to_plane
+
+
+def build_vertices(a, b, c, u_segments, v_segments):
+    vertices = []
+    for u_segment_arg in range(u_segments + 1):
+        theta = u_segment_arg * (np.pi / u_segments)
+        for v_segment_arg in range(v_segments + 1):
+            phi = v_segment_arg * 2 * np.pi / v_segments
+            x = a * np.sin(theta) * np.cos(phi)
+            y = b * np.sin(theta) * np.sin(phi)
+            z = c * np.cos(theta)
+            vertices.append([x, y, z])
+    return vertices
+
+
+def build_faces(u_segments, v_segments):
+    faces = []
+    for u_segment_arg in range(u_segments):
+        for v_segment_arg in range(v_segments):
+            v1 = u_segment_arg * (v_segments + 1) + v_segment_arg
+            v2 = (u_segment_arg + 1) * (v_segments + 1) + v_segment_arg
+            v3 = (u_segment_arg + 1) * (v_segments + 1) + (v_segment_arg + 1)
+            v4 = u_segment_arg * (v_segments + 1) + (v_segment_arg + 1)
+            faces.append([v1, v2, v3])
+            faces.append([v1, v3, v4])
+    return faces
+
+
+def Mesh(a, b, c, u_segments=100, v_segments=100):
+    vertices = build_vertices(a, b, c, u_segments, v_segments)
+    faces = build_faces(u_segments, v_segments)
+    return trimesh.Trimesh(vertices=vertices, faces=faces)
