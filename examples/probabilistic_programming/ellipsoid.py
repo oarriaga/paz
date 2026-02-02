@@ -36,9 +36,9 @@ def fit(
     return center, axes, result
 
 
-def RobustEllipsoid(pointcloud, statistics, x_scale):
+def RobustEllipsoid(pointcloud, statistics, back_axis="z", back_scale=1.0):
     mean_priors = build_mean_priors(statistics)
-    axis_priors = build_axis_priors(statistics, x_scale)
+    axis_priors = build_axis_priors(statistics, back_axis, back_scale)
     priors = mean_priors + axis_priors
     surface_likelihood = build_surface_likelihood(pointcloud)
     surface = paz.Observable(surface_likelihood, name="surface")(*priors)
@@ -53,17 +53,24 @@ def build_mean_priors(statistics):
     return [paz.Prior(tfd.Laplace(v, 0.1), name=n) for v, n in iterator]
 
 
-def build_axis_priors(statistics, x_scale):
-    x_axis = build_x_axis_prior(statistics.x_stdv, x_scale)
-    y_axis = build_bounded_axis_prior(statistics.y_stdv, "y_axis")
-    z_axis = build_bounded_axis_prior(statistics.z_stdv, "z_axis")
-    return [x_axis, y_axis, z_axis]
+def build_axis_priors(statistics, back_axis, back_scale):
+    axis_stdvs = [statistics.x_stdv, statistics.y_stdv, statistics.z_stdv]
+    axis_names = ["x_axis", "y_axis", "z_axis"]
+    axis_priors = [
+        build_bounded_axis_prior(stdv, name)
+        for stdv, name in zip(axis_stdvs, axis_names)
+    ]
+    back_axis_arg = axis_name_to_index(back_axis)
+    axis_priors[back_axis_arg] = build_back_axis_prior(
+        axis_stdvs[back_axis_arg], back_scale, axis_names[back_axis_arg]
+    )
+    return axis_priors
 
 
-def build_x_axis_prior(x_stdv, x_scale):
-    log_mean, log_scale = to_log_normal(x_scale * x_stdv, 0.1)
+def build_back_axis_prior(axis_stdv, back_scale, axis_name):
+    log_mean, log_scale = to_log_normal(back_scale * axis_stdv, 0.1)
     distribution = tfd.LogNormal(log_mean, log_scale)
-    return paz.Prior(distribution, bijector=tfb.Softplus(), name="x_axis")
+    return paz.Prior(distribution, bijector=tfb.Softplus(), name=axis_name)
 
 
 def build_bounded_axis_prior(stdv, name):
@@ -71,6 +78,13 @@ def build_bounded_axis_prior(stdv, name):
     bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(upper), tfb.Sigmoid()])
     distribution = tfd.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
     return paz.Prior(distribution, bijector=bijector, name=name)
+
+
+def axis_name_to_index(name):
+    names = {"x": 0, "y": 1, "z": 2}
+    if name not in names:
+        raise ValueError(f"Unknown axis name: {name}")
+    return names[name]
 
 
 def build_map_objective(model, data):

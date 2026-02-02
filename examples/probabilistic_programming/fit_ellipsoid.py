@@ -1,10 +1,7 @@
 import os
 
-# os.environ["PYOPENGL_PLATFORM"] = "egl"  # must be set before importing pyrender
-
 os.environ["__NV_PRIME_RENDER_OFFLOAD"] = "1"
 os.environ["__GLX_VENDOR_LIBRARY_NAME"] = "nvidia"
-# os.environ["PYOPENGL_PLATFORM"] = "egl"  # keep this too
 
 import time
 import trimesh
@@ -15,9 +12,6 @@ import jax.numpy as jp
 import matplotlib.pyplot as plt
 import numpy as np
 
-# jax.config.update("jax_debug_nans", True)
-# jax.config.update("jax_platform_name", "cpu")
-
 import paz
 from paz.datasets import fewsol
 import ellipsoid
@@ -26,9 +20,10 @@ from optimizers import LBFGS, LineSearch
 concept_arg = 0
 shot_arg = 0
 seed = 777
-max_depth = 1.4
+max_depth = 1.5
 num_stdvs = 2.0
-x_scale = 1.0
+back_axis = "z"
+back_scale = 1.0
 cv_to_gl = jp.diag(jp.array([1.0, -1.0, -1.0, 1.0]))
 min_height = 0.01
 
@@ -58,11 +53,13 @@ object_pointcloud = paz.pointcloud.filter_above_height(
 object_pointcloud = paz.pointcloud.remove_outliers(object_pointcloud, 2.0)
 
 optimizer = LBFGS(10.0, 10, LineSearch(50))
+
 statistics = ellipsoid.pointcloud_compute_statistics(object_pointcloud)
 model, data = ellipsoid.RobustEllipsoid(
-    object_pointcloud, statistics, x_scale
+    object_pointcloud, statistics, back_axis, back_scale
 )
 loss_fn = ellipsoid.build_map_objective(model, data)
+
 shift, axes, result = ellipsoid.fit(
     model, object_pointcloud, num_stdvs, loss_fn, optimizer
 )
