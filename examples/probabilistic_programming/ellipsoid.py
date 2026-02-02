@@ -18,15 +18,7 @@ PointcloudStatistics = namedtuple(
 )
 
 
-def fit(
-    model,
-    pointcloud,
-    num_stdvs,
-    loss_fn,
-    optimizer,
-    max_steps=150,
-    tolerance=1e-2,
-):
+def fit(model, pointcloud, num_stdvs, loss_fn, optimizer, max_steps=150, tolerance=1e-2):  # fmt: skip
     statistics = pointcloud_compute_statistics(pointcloud)
     initial = initialize_unconstrained(model, statistics, num_stdvs)
     result = optimize(initial, loss_fn, optimizer, max_steps, tolerance)
@@ -36,10 +28,12 @@ def fit(
     return center, axes, result
 
 
-def RobustEllipsoid(pointcloud, statistics, back_axis="z", back_scale=1.0):
+def RobustEllipsoid(pointcloud, statistics):
     mean_priors = build_mean_priors(statistics)
-    axis_priors = build_axis_priors(statistics, back_axis, back_scale)
-    priors = mean_priors + axis_priors
+    x_axis = build_bounded_axis_prior(statistics.x_stdv, "x_axis")
+    y_axis = build_bounded_axis_prior(statistics.y_stdv, "y_axis")
+    z_axis = build_bounded_axis_prior(statistics.z_stdv, "z_axis")
+    priors = mean_priors + [x_axis, y_axis, z_axis]
     surface_likelihood = build_surface_likelihood(pointcloud)
     surface = paz.Observable(surface_likelihood, name="surface")(*priors)
     model = paz.PGM(priors, [surface], "ellipsoid")
@@ -48,43 +42,71 @@ def RobustEllipsoid(pointcloud, statistics, back_axis="z", back_scale=1.0):
 
 def build_mean_priors(statistics):
     names = ["x_mean", "y_mean", "z_mean"]
-    values = [statistics.x_mean, statistics.y_mean, statistics.z_mean]
-    iterator = zip(values, names)
-    return [paz.Prior(tfd.Laplace(v, 0.1), name=n) for v, n in iterator]
+    means = [statistics.x_mean, statistics.y_mean, statistics.z_mean]
+    stdvs = [statistics.x_stdv, statistics.y_stdv, statistics.z_stdv]
+    # center should not wander multiple cloud-stds without strong evidence
+    scales = [0.10 * s for s in stdvs]  # try 0.25*s if too tight
+    iterator = zip(means, scales, names)
+    return [paz.Prior(tfd.Laplace(m, sc), name=n) for m, sc, n in iterator]
 
 
-def build_axis_priors(statistics, back_axis, back_scale):
-    axis_stdvs = [statistics.x_stdv, statistics.y_stdv, statistics.z_stdv]
-    axis_names = ["x_axis", "y_axis", "z_axis"]
-    axis_priors = [
-        build_bounded_axis_prior(stdv, name)
-        for stdv, name in zip(axis_stdvs, axis_names)
-    ]
-    back_axis_arg = axis_name_to_index(back_axis)
-    axis_priors[back_axis_arg] = build_back_axis_prior(
-        axis_stdvs[back_axis_arg], back_scale, axis_names[back_axis_arg]
-    )
-    return axis_priors
+# def build_bounded_axis_prior(stdv, name):
+#     upper = 3.0 * stdv
+#     bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(upper), tfb.Sigmoid()])
+#     distribution = tfd.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
+#     return paz.Prior(distribution, bijector=bijector, name=name)
 
 
-def build_back_axis_prior(axis_stdv, back_scale, axis_name):
-    log_mean, log_scale = to_log_normal(back_scale * axis_stdv, 0.1)
-    distribution = tfd.LogNormal(log_mean, log_scale)
-    return paz.Prior(distribution, bijector=tfb.Softplus(), name=axis_name)
+def build_bounded_axis_prior(axis_standard_deviation, axis_name):
+    """
+    Scale-aware bounded prior for an ellipsoid axis length using a TruncatedNormal.
+
+    Motivation:
+      - Hard-coding `scale=0.1` is unit-dependent and will be too tight/loose depending on the pointcloud scale.
+      - Axis uncertainty is better expressed *relative* to its expected magnitude.
+
+    Construction:
+      1) Expected axis length (prior mean):
+           axis_mean = axis_mean_multiplier * axis_standard_deviation
+
+         A reasonable default is axis_mean_multiplier ≈ sqrt(3) for roughly uniform surface sampling of a sphere,
+         but we use 1.8 as a practical slightly-conservative value.
+
+      2) Prior spread (standard deviation) set by a coefficient of variation:
+           axis_scale = axis_coefficient_of_variation * axis_mean
+
+      3) Hard bounds set relative to the mean:
+           axis_low  = epsilon_relative_to_mean * axis_mean
+           axis_high = axis_upper_factor * axis_mean
+
+    Defaults (visible axes):
+      - axis_mean_multiplier = 1.8
+      - axis_coefficient_of_variation = 0.20
+      - axis_upper_factor = 3.0
+
+    If you want an occluded/back axis to be more permissive, override it in your
+    `build_back_axis_prior(...)` by using a larger coefficient_of_variation and upper_factor.
+    """
+    axis_mean_multiplier = 1.8
+    axis_coefficient_of_variation = 0.05
+    axis_upper_factor = 2.0
+    epsilon_relative_to_mean = 1e-6
+
+    axis_mean = axis_mean_multiplier * axis_standard_deviation
+    axis_scale = axis_coefficient_of_variation * axis_mean
+
+    axis_low = epsilon_relative_to_mean * axis_mean
+    axis_high = axis_upper_factor * axis_mean
+
+    truncated_normal_distribution = tfd.TruncatedNormal( loc=axis_mean, scale=axis_scale, low=axis_low, high=axis_high)  # fmt: skip
+    return paz.Prior(truncated_normal_distribution, name=axis_name)
 
 
-def build_bounded_axis_prior(stdv, name):
-    upper = 3.0 * stdv
+def build_back_axis_prior(stdv, name):
+    upper = 6.0 * stdv
     bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(upper), tfb.Sigmoid()])
-    distribution = tfd.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
+    distribution = tfd.TruncatedNormal(2.0 * stdv, 1.0, 0.0, upper)
     return paz.Prior(distribution, bijector=bijector, name=name)
-
-
-def axis_name_to_index(name):
-    names = {"x": 0, "y": 1, "z": 2}
-    if name not in names:
-        raise ValueError(f"Unknown axis name: {name}")
-    return names[name]
 
 
 def build_map_objective(model, data):
@@ -102,7 +124,7 @@ def build_surface_likelihood(observations):
     def distribution_fn(x_mean, y_mean, z_mean, x_axis, y_axis, z_axis):
         args = (x, y, z, x_mean, y_mean, z_mean, x_axis, y_axis, z_axis)
         residuals = compute_surface_equation(*args)
-        return tfd.Laplace(residuals, scale=1.0)
+        return tfd.Laplace(residuals, scale=0.01)
 
     return distribution_fn
 

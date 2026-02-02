@@ -8,16 +8,22 @@ import trimesh
 import pyrender
 
 import jax
+
+jax.config.update("jax_debug_nans", True)
+
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 import numpy as np
 
 import paz
 from paz.datasets import fewsol
+
 import ellipsoid
+
+# import ellipsoid_patched as ellipsoid
 from optimizers import LBFGS, LineSearch
 
-concept_arg = 0
+concept_arg = 2
 shot_arg = 0
 seed = 777
 max_depth = 1.5
@@ -55,9 +61,7 @@ object_pointcloud = paz.pointcloud.remove_outliers(object_pointcloud, 2.0)
 optimizer = LBFGS(10.0, 10, LineSearch(50))
 
 statistics = ellipsoid.pointcloud_compute_statistics(object_pointcloud)
-model, data = ellipsoid.RobustEllipsoid(
-    object_pointcloud, statistics, back_axis, back_scale
-)
+model, data = ellipsoid.RobustEllipsoid(object_pointcloud, statistics)
 loss_fn = ellipsoid.build_map_objective(model, data)
 
 shift, axes, result = ellipsoid.fit(
@@ -81,7 +85,7 @@ def build_forward_fit(model, shift, axes):
     )
 
 
-def plot_prior_predictive_samples(model, key, forward_fit, num_samples=1000):
+def plot_prior_predictive_samples(model, key, forward_fit, num_samples=10_000):
     samples = model.prior.sample(key, num_samples)
     names = model.latent_space.names
     figure, axes = plt.subplots(2, 3, figsize=(10, 6))
@@ -146,7 +150,7 @@ plot_prior_predictive_samples(
     model,
     key_prior,
     forward_fit,
-    num_samples=2000,
+    num_samples=200_000,
 )
 plot_loss_curve(result.losses, "Loss curve")
 plot_surface_residuals(
