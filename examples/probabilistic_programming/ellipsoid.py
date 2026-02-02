@@ -1,6 +1,4 @@
 from collections import namedtuple
-from functools import partial
-
 import jax
 import jax.numpy as jp
 import numpy as np
@@ -9,7 +7,7 @@ from tensorflow_probability.substrates import jax as tfp
 
 import paz
 from paz.inference.latent_space import to_forward_samples, to_inverse_samples
-from optimizers import LBFGS, LineSearch, optimize
+from optimizers import optimize
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -20,28 +18,22 @@ PointcloudStatistics = namedtuple(
 )
 
 
-# TODO we are going to take instead the pointcloud already transformed of the object. Thus we might not need a lot of the arguments such as depth, masks, camera_intrinsics, max_depth
-# TODO rename function to only "fit"
-def fit_scene(key, depth, masks, scale, num_stdvs, camera_intrinsics, max_depth, x_scale):  # fmt: skip
-    shifts, scales = [], []
-    rescale_args = (key, depth, scale, camera_intrinsics, max_depth)
-    rescale = partial(rescale_pointcloud, *rescale_args)
-    for mask in masks:
-        pointcloud = rescale(mask)
-        statistics = pointcloud_compute_statistics(pointcloud)
-        model, data = RobustEllipsoid(pointcloud, statistics, x_scale)
-        initial = initialize_unconstrained(model, statistics, num_stdvs)
-        # TODO we should have the loss as an input of the function
-        loss_fn = build_map_objective(model, data)
-        # TODO we should have the optimizer as an input of the function
-        optimizer = LBFGS(10.0, 10, LineSearch(50))
-        result = optimize(initial, loss_fn, optimizer, 150, 1e-2)
-        forward = to_forward_samples(model.latent_space, result.parameters)
-        center = jp.array([forward.x_mean, forward.y_mean, forward.z_mean])
-        axes = jp.array([forward.x_axis, forward.y_axis, forward.z_axis])
-        shifts.append(center / scale)
-        scales.append(axes / scale)
-    return jp.array(shifts), jp.array(scales)
+def fit(
+    model,
+    pointcloud,
+    num_stdvs,
+    loss_fn,
+    optimizer,
+    max_steps=150,
+    tolerance=1e-2,
+):
+    statistics = pointcloud_compute_statistics(pointcloud)
+    initial = initialize_unconstrained(model, statistics, num_stdvs)
+    result = optimize(initial, loss_fn, optimizer, max_steps, tolerance)
+    forward = to_forward_samples(model.latent_space, result.parameters)
+    center = jp.array([forward.x_mean, forward.y_mean, forward.z_mean])
+    axes = jp.array([forward.x_axis, forward.y_axis, forward.z_axis])
+    return center, axes, result
 
 
 def RobustEllipsoid(pointcloud, statistics, x_scale):
@@ -156,34 +148,6 @@ def pointcloud_compute_statistics(observations):
     x, y, z = paz.pointcloud.split(observations)
     args = x.mean(), y.mean(), z.mean(), x.std(), y.std(), z.std()
     return PointcloudStatistics(*args)
-
-
-def rescale_pointcloud(seed, depth, scale, camera_intrinsics, max_depth, mask):
-    points, depth = scale_pointcloud(depth, scale, camera_intrinsics)
-    max_depth_scaled = scale * max_depth
-    scene_points = paz.pointcloud.bound(points, max_depth_scaled)
-    camera_to_plane = fit_plane(seed, scene_points)
-    points = paz.pointcloud.mask(points, mask, max_depth_scaled)
-    points = paz.pointcloud.transform(points, camera_to_plane)
-    return points
-
-
-def scale_pointcloud(depth, scale, camera_intrinsics):
-    scaled_depth = scale * depth
-    return (
-        paz.pointcloud.from_depth(scaled_depth, camera_intrinsics),
-        scaled_depth,
-    )
-
-
-def fit_plane(key, pointcloud):
-    normal, _offset, inliers = paz.plane.fit_RANSAC(key, pointcloud)
-    centroid = pointcloud[inliers].mean(axis=0)
-    world_up = jp.array([0.0, 1.0, 0.0])
-    plane_to_world = paz.plane.build_plane_to_world(world_up, normal, centroid)
-    plane_to_world = plane_to_world @ paz.SE3.rotation_x(jp.pi / 2.0)
-    camera_to_plane = paz.SE3.invert(plane_to_world)
-    return camera_to_plane
 
 
 def build_vertices(a, b, c, u_segments, v_segments):
