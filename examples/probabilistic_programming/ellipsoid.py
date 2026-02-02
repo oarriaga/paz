@@ -87,7 +87,7 @@ def build_bounded_axis_prior(axis_standard_deviation, axis_name):
     If you want an occluded/back axis to be more permissive, override it in your
     `build_back_axis_prior(...)` by using a larger coefficient_of_variation and upper_factor.
     """
-    axis_mean_multiplier = 1.8
+    axis_mean_multiplier = 1.732
     axis_coefficient_of_variation = 0.05
     axis_upper_factor = 2.0
     epsilon_relative_to_mean = 1e-6
@@ -124,7 +124,8 @@ def build_surface_likelihood(observations):
     def distribution_fn(x_mean, y_mean, z_mean, x_axis, y_axis, z_axis):
         args = (x, y, z, x_mean, y_mean, z_mean, x_axis, y_axis, z_axis)
         residuals = compute_surface_equation(*args)
-        return tfd.Laplace(residuals, scale=0.01)
+        # return tfd.Laplace(residuals, scale=0.01)
+        return tfd.Normal(residuals, scale=0.01)
 
     return distribution_fn
 

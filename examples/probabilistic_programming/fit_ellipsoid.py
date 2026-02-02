@@ -23,7 +23,7 @@ import ellipsoid
 # import ellipsoid_patched as ellipsoid
 from optimizers import LBFGS, LineSearch
 
-concept_arg = 2
+concept_arg = 19
 shot_arg = 0
 seed = 777
 max_depth = 1.5
