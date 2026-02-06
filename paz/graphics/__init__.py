@@ -36,6 +36,7 @@ from paz.graphics import geometry
 from paz.graphics import shapes
 from paz.graphics import camera
 from paz.graphics import phong
+from paz.graphics import mesh
 from paz.graphics.renderer import render
 
 from paz.graphics import patterns

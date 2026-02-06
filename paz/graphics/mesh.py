@@ -276,9 +276,9 @@ def make_ray_targets(tile_H, tile_W, pixel_size, half_W, half_H, tile_arg):
     W_final = tile_W * (W_tile_arg + 1)
     H_start = tile_H * H_tile_arg
     H_final = tile_H * (H_tile_arg + 1)
-    x_offset = (jp.linspace(W_start, W_final, tile_W) + 0.5) * pixel_size
-    y_offset = (jp.linspace(H_start, H_final, tile_H) + 0.5) * pixel_size
-    x = half_W - x_offset
+    x_offset = (jp.arange(tile_W) + W_start + 0.5) * pixel_size
+    y_offset = (jp.arange(tile_H) + H_start + 0.5) * pixel_size
+    x = x_offset - half_W
     y = half_H - y_offset
     x_grid, y_grid = jp.meshgrid(x, y)
     num_pixels = tile_W * tile_H
