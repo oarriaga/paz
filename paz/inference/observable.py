@@ -1,6 +1,6 @@
 import jax.numpy as jp
 
-from paz.inference.naming import build_observation_name
+from paz.inference.naming import build_observation_name as build_name
 from paz.inference.types import NodeState, SampleType, Variable
 
 
@@ -8,9 +8,7 @@ def Observable(distribution_fn, name=None):
     if not callable(distribution_fn):
         raise ValueError(f"Input {distribution_fn} must be a callable")
 
-    node_name = (
-        name if name is not None else build_observation_name(distribution_fn)
-    )
+    node_name = name if name is not None else build_name(distribution_fn)
     Sample = SampleType([node_name])
     edges = []
 
@@ -30,16 +28,6 @@ def Observable(distribution_fn, name=None):
         for arg in args:
             edges.append(arg)
 
-        return Variable(
-            log_prob,
-            None,
-            sample,
-            None,
-            node_name,
-            edges,
-            None,
-            distribution_fn,
-            None,
-        )
+        return Variable(log_prob, None, sample, None, node_name, edges, None, distribution_fn, None)  # fmt: skip
 
     return call
