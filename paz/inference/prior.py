@@ -52,9 +52,14 @@ def Prior(distribution, bijector=None, name=None):
         return_losses=False,
     ):
         optimized_bijector, losses = fit_bijector_module(
-            distribution, target_distribution, bijector, key,
-            num_samples=num_samples, optimizer=optimizer,
-            num_steps=num_steps, print=print,
+            distribution,
+            target_distribution,
+            bijector,
+            key,
+            num_samples=num_samples,
+            optimizer=optimizer,
+            num_steps=num_steps,
+            verbose=print,
         )
         new_prior = Prior(
             target_distribution, bijector=optimized_bijector, name=node_name
@@ -62,7 +67,15 @@ def Prior(distribution, bijector=None, name=None):
         return (new_prior, losses) if return_losses else new_prior
 
     return Variable(
-        log_prob, log_prob_inverse, sample, sample_inverse, node_name, [],
-        distribution, None, bijector, fit=fit_bijector,
+        log_prob,
+        log_prob_inverse,
+        sample,
+        sample_inverse,
+        node_name,
+        [],
+        distribution,
+        None,
+        bijector,
+        fit=fit_bijector,
         fit_bijector=fit_bijector,
     )
