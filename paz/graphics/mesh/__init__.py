@@ -32,8 +32,11 @@ from .render import (
     compute_scene_hit_mask,
     mask_out_mesh,
     postprocess,
+    postprocess_depth,
     render,
+    render_depth,
     render_mesh,
+    render_mesh_depth,
     select_triangle_color,
     to_color_image,
     to_depth_image,
@@ -45,8 +48,10 @@ from .tile import (
     make_ray_origins,
     make_ray_targets,
     make_tile_coordinates,
+    render_depth_tile,
     render_tile,
     tile_render,
+    tile_render_depth,
     transform_tile_rays,
 )
 from .builders import (
