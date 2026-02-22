@@ -145,6 +145,20 @@ def test_to_json_handles_nested_scene(sample_scene):
     assert "parent_array" in serialized
 
 
+def test_to_json_converts_numpy_array_to_list():
+    color = np.array([1.0, 0.65, 0.0], dtype=np.float32)
+    serialized = serialization.to_json(color)
+    assert isinstance(serialized, list)
+    assert np.allclose(serialized, [1.0, 0.65, 0.0])
+
+
+def test_to_json_converts_numpy_scalar_to_python_scalar():
+    value = np.float32(0.25)
+    serialized = serialization.to_json(value)
+    assert isinstance(serialized, float)
+    assert np.isclose(serialized, 0.25)
+
+
 def test_build_node_differentiates_shape_and_group(sample_scene):
     """Tests that build_node correctly identifies and constructs Shapes vs Groups."""
     scene_as_dict = serialization.to_json(sample_scene)
@@ -181,6 +195,15 @@ def test_save_and_load_standalone_shape(tmp_path, sample_shape):
     loaded_shape = serialization.load(filepath)
     assert isinstance(loaded_shape, types.Shape)
     assert_pytrees_allclose(loaded_shape, sample_shape)
+
+
+def test_save_and_load_shape_with_default_material(tmp_path):
+    filepath = tmp_path / "shape_default_material"
+    shape = types.Sphere()
+    serialization.save(filepath, shape)
+    loaded_shape = serialization.load(filepath)
+    assert isinstance(loaded_shape, types.Shape)
+    assert_pytrees_allclose(loaded_shape, shape)
 
 
 def test_save_and_load_accepts_path_objects(tmp_path, shape_with_image):

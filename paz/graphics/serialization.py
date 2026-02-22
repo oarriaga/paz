@@ -1,6 +1,9 @@
 import json
 import pathlib
+
 import jax.numpy as jp
+import numpy as np
+
 from paz.graphics.types import Material, Pattern, Shape, Group, Scene
 import paz
 
@@ -33,6 +36,10 @@ def to_json(scene_node_field, counter=[0], filepath=None):
         filepath = pathlib.Path(filepath)
     if isinstance(scene_node_field, jp.ndarray):
         return scene_node_field.tolist()
+    if isinstance(scene_node_field, np.ndarray):
+        return scene_node_field.tolist()
+    if isinstance(scene_node_field, np.generic):
+        return scene_node_field.item()
     if isinstance(scene_node_field, Pattern):
         if pattern_contains_image(scene_node_field):
             image = paz.image.denormalize(scene_node_field.image)
