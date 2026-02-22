@@ -23,6 +23,17 @@ def render(image_shape, world_to_camera, rays, meshes, mask, lights):
     return postprocess(*args)
 
 
+def render_depth(image_shape, world_to_camera, rays, meshes, mask, lights):
+    meshes = normalize_mesh_batch(meshes)
+    _render_mesh_depth = partial(render_mesh_depth, lights, *rays)
+    hit_masks, depths = jax.vmap(_render_mesh_depth)(meshes)
+    hit_masks, depths = mask_out_mesh(mask, hit_masks, depths)
+    num_meshes, num_triangles, num_pixels = depths.shape
+    depths = jp.reshape(depths, (num_meshes * num_triangles, num_pixels, 1))
+    args = (hit_masks, depths, world_to_camera, rays, image_shape)
+    return postprocess_depth(*args)
+
+
 def render_mesh(lights, ray_origins, ray_directions, mesh):
     rays = (ray_origins, ray_directions)
     hit_mask, depths, barycentric_u, barycentric_v = intersect_mesh(mesh, *rays)
@@ -36,6 +47,13 @@ def render_mesh(lights, ray_origins, ray_directions, mesh):
     return hit_mask, jp.squeeze(depths, axis=-1), colors
 
 
+def render_mesh_depth(_, ray_origins, ray_directions, mesh):
+    rays = (ray_origins, ray_directions)
+    hit_mask, depths, _, _ = intersect_mesh(mesh, *rays)
+    hit_mask = compute_scene_hit_mask(hit_mask)
+    return hit_mask, depths
+
+
 def postprocess(hit_masks, depths, colors, world_to_camera, rays, image_shape):
     H, W = image_shape
     scene_hit_mask = jp.any(hit_masks, axis=0)
@@ -45,6 +63,14 @@ def postprocess(hit_masks, depths, colors, world_to_camera, rays, image_shape):
     args = scene_hit_mask, min_depths, world_to_camera, rays, H, W
     depth = to_depth_image(*args)
     return image, depth
+
+
+def postprocess_depth(hit_masks, depths, world_to_camera, rays, image_shape):
+    H, W = image_shape
+    scene_hit_mask = jp.any(hit_masks, axis=0)
+    min_depths = jp.min(depths[..., 0], axis=0)
+    args = scene_hit_mask, min_depths, world_to_camera, rays, H, W
+    return to_depth_image(*args)
 
 
 def mask_out_mesh(mask, hit_masks, depths):
