@@ -4,7 +4,7 @@ import jax.numpy as jp
 from paz.graphics import phong
 from paz import algebra
 from paz.graphics.types import PointLight, Material, Pattern, Shape
-from paz.graphics.constants import NO_PATTERN
+from paz.graphics.constants import NO_PATTERN, PLANAR_PATTERN
 
 
 @pytest.fixture
@@ -59,6 +59,36 @@ def test_compute_colors_in_shape_with_transforms():
         pattern_transform, shape_transform, points_world
     )
     assert jp.allclose(points_pattern, expected_points)
+
+
+def test_compute_base_color_scales_pattern_with_light_intensity():
+    pattern_image = jp.broadcast_to(jp.array([0.2, 0.3, 0.1]), (2, 2, 3))
+    pattern = Pattern(jp.eye(4), PLANAR_PATTERN, pattern_image)
+    shape = Shape(jp.eye(4), 0, None, pattern)
+    material = Material(color=jp.array([0.4, 0.1, 0.2]))
+    light = PointLight(
+        intensity=jp.array([0.5, 0.25, 0.8]),
+        position=jp.array([0.0, 1.0, 0.0]),
+    )
+    points = jp.array([[0.0, 0.0, 0.0]])
+    expected_color = (jp.array([[0.2, 0.3, 0.1]]) + material.color)
+    expected_color = expected_color * light.intensity
+    color = phong.compute_base_color(shape, material, light, points)
+    assert jp.allclose(color, expected_color)
+
+
+def test_compute_base_color_with_pattern_is_zero_for_zero_light():
+    pattern_image = jp.full((2, 2, 3), 0.5)
+    pattern = Pattern(jp.eye(4), PLANAR_PATTERN, pattern_image)
+    shape = Shape(jp.eye(4), 0, None, pattern)
+    material = Material(color=jp.array([0.4, 0.1, 0.2]))
+    light = PointLight(
+        intensity=jp.zeros(3),
+        position=jp.array([0.0, 1.0, 0.0]),
+    )
+    points = jp.array([[0.0, 0.0, 0.0]])
+    color = phong.compute_base_color(shape, material, light, points)
+    assert jp.allclose(color, jp.zeros((1, 3)))
 
 
 def test_compute_ambient(simple_shape, simple_material, simple_light):

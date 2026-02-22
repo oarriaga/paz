@@ -36,16 +36,16 @@ def compute_pattern_colors(shape, points):
     return pattern_colors
 
 
-def compute_material_colors(material, light, points):
-    return jp.full_like(points, material.color * light.intensity)
+def compute_material_colors(material, points):
+    return jp.full_like(points, material.color)
 
 
 def compute_base_color(shape, material, light, points):
     pattern_colors = compute_pattern_colors(shape, points)
-    material_colors = compute_material_colors(material, light, points)
-    # TODO: check that sum equals overwriting when material color is 0
+    material_colors = compute_material_colors(material, points)
+    # Align shape shading with mesh shading: light scales the combined base.
     base_colors = pattern_colors + material_colors
-    return base_colors
+    return base_colors * light.intensity
 
 
 def compute_ambient(shape, material, light, points):
