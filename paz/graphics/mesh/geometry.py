@@ -31,7 +31,7 @@ def compute_canonical_normals(vertices, faces, shape_points):
     points_A, points_B, points_C = extract_points(vertices, faces)
     edges_AB = points_B - points_A
     edges_AC = points_C - points_A
-    normals = jp.cross(edges_AC, edges_AB)
+    normals = jp.cross(edges_AB, edges_AC)
     normals = paz.algebra.normalize(normals)
     num_rays = shape_points.shape[1]
     normals = jp.expand_dims(normals, 1)
