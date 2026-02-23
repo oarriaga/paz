@@ -1,22 +1,18 @@
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 
-# from pipeline import DetectFaceKeypointNet2D32
+import argparse
 import paz
 
-camera = 4
+parser = argparse.ArgumentParser(description="HaarCascadeDetector")
+parser.add_argument("--camera", default=0, type=int)
+parser.add_argument("--H", default=480, type=int)
+parser.add_argument("--W", default=640, type=int)
+args = parser.parse_args()
+
+
 pipeline = paz.applications.DetectFaceKeypointNet2D32()
-camera = paz.Camera(identifier=camera)
-player = paz.VideoPlayer((480, 640), pipeline, camera)
+camera = paz.Camera(identifier=args.camera)
+player = paz.VideoPlayer((args.H, args.W), pipeline, camera)
 player.run()
-
-
-# from pipeline import FaceKeypointNet2D32
-# import numpy as np
-
-# model = FaceKeypointNet2D32(draw=None)
-# image = np.zeros((100, 100, 3)).astype(np.float32)
-# keypoints, image = model(image)
-# print(keypoints.shape)
