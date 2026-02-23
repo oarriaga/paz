@@ -23,10 +23,12 @@ from paz.graphics.mesh import (
     select_triangle_color,
     to_color_image,
     to_depth_image,
+    render_depth,
     fill_bottom_with_last,
     fill_mesh,
     build_cube,
     tile_render,
+    tile_render_depth,
     assert_exact_tile_side,
     make_tile_coordinates,
     make_ray_origins,
@@ -98,6 +100,22 @@ def test_compute_canonical_normals_direction():
     normals = compute_canonical_normals(vertices, faces, shape_points)
     assert normals.shape == (1, 4, 3)
     assert jp.abs(normals[0, 0, 2]) > 0.9
+
+
+def test_compute_canonical_normals_floor_points_up():
+    half = 2.0
+    vertices = jp.array(
+        [
+            [-half, 0.0, -half],
+            [half, 0.0, -half],
+            [half, 0.0, half],
+            [-half, 0.0, half],
+        ]
+    )
+    faces = jp.array([[0, 2, 1], [0, 3, 2]])
+    shape_points = jp.zeros((2, 1, 3))
+    normals = compute_canonical_normals(vertices, faces, shape_points)
+    assert jp.all(normals[:, 0, 1] > 0.9)
 
 
 def test_compute_position_shape():
@@ -266,6 +284,21 @@ def test_render_jit_compatible():
     assert image.shape == (20, 20, 3)
 
 
+def test_render_depth_matches_render_depth():
+    args = make_scene()
+    _, expected_depth = render(*args)
+    depth = render_depth(*args)
+    assert depth.shape == expected_depth.shape
+    assert jp.allclose(depth, expected_depth, atol=1e-5)
+
+
+def test_render_depth_respects_mask():
+    image_shape, camera_pose, rays, meshes, mask, lights = make_scene()
+    mask = jp.zeros_like(mask).astype(bool)
+    depth = render_depth(image_shape, camera_pose, rays, meshes, mask, lights)
+    assert jp.allclose(depth, 0.0)
+
+
 def test_render_gradient_through_vertices():
     camera_origin = jp.array([0.0, 1.0, -1.5])
     y_FOV = jp.pi / 4.0
@@ -378,3 +411,16 @@ def test_tile_render_jit_compatible():
     render_fn = jax.jit(tile_render, static_argnums=(0, 2, 3))
     image, depth = render_fn(*args)
     assert image.shape == (20, 20, 3)
+
+
+def test_tile_render_depth_matches_render_depth():
+    tile_shape, y_FOV, H, W, camera_pose, meshes, mask, lights = make_tile_scene()
+    rays = build_rays((H, W), y_FOV, camera_pose)
+    expected_depth = render_depth(
+        (H, W), camera_pose, rays, meshes, mask, lights
+    )
+    depth = tile_render_depth(
+        tile_shape, y_FOV, H, W, camera_pose, meshes, mask, lights
+    )
+    assert depth.shape == expected_depth.shape
+    assert jp.allclose(depth, expected_depth, atol=1e-5)
