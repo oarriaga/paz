@@ -53,9 +53,9 @@ camera = paz.graphics.Group(
     ]
 )
 
-axes = paz.graphics.load("axes.json")
+# axes = paz.graphics.load("axes.json")
 
-paz.graphics.save("camera.json", camera)
+# paz.graphics.save("camera.json", camera)
 
 
 scene = paz.graphics.Scene(nodes=[camera, axes])
