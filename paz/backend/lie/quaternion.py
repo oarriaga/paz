@@ -25,3 +25,27 @@ def to_matrix(quaternion):
             [xzs - wys, yzs + wxs, 1.0 - (xxs + yys)],
         ]
     )
+
+
+def from_rotation_vector(rotation_vector):
+    """Transforms rotation vector into quaternion.
+
+    # Arguments
+        rotation_vector: Array of shape ``[3]``.
+
+    # Returns
+        Array representing a quaternion having a shape ``[4]``.
+    """
+    theta = jp.linalg.norm(rotation_vector)
+    rotation_axis = rotation_vector / theta
+    half_theta = 0.5 * theta
+    norm = jp.sin(half_theta)
+    quaternion = jp.array(
+        [
+            norm * rotation_axis[0],
+            norm * rotation_axis[1],
+            norm * rotation_axis[2],
+            jp.cos(half_theta),
+        ]
+    )
+    return quaternion
