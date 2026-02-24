@@ -240,3 +240,90 @@ def axis(image, camera_intrinsics, object_to_camera):
     image = cv2.line(image, center, to_tuple(z_axis), (0, 0, 255), 3)
     image = paz.to_jax(image)
     return image
+
+
+def line(image, point_A, point_B, color=GREEN, thickness=5):
+    """Draws a line in image from ``point_A`` to ``point_B``.
+
+    # Arguments
+        image: Numpy array of shape ``[H, W, 3]``.
+        point_A: List of length two indicating ``(y, x)`` openCV coordinates.
+        point_B: List of length two indicating ``(y, x)`` openCV coordinates.
+        color: List of length three indicating RGB color of point.
+        thickness: Integer indicating the thickness of the line to be drawn.
+
+    # Returns
+        Numpy array with shape ``[H, W, 3]``. Image with line.
+    """
+    cv2.line(image, tuple(point_A), tuple(point_B), tuple(color), thickness)
+    return image
+
+
+def dot(image, point, color=GREEN, radius=5, filled=cv2.FILLED):
+    """Draws a dot (small rectangle) in image.
+
+    # Arguments
+        image: Numpy array of shape ``[H, W, 3]``.
+        point: List of length two indicating ``(y, x)`` openCV coordinates.
+        color: List of length three indicating RGB color of point.
+        radius: Integer indicating the radius of the point to be drawn.
+        filled: Boolean. If `True` rectangle is filled with `color`.
+
+    # Returns
+        Numpy array with shape ``[H, W, 3]``. Image with dot.
+    """
+    # drawing outer black rectangle
+    point_A = (int(point[0] - radius), int(point[1] - radius))
+    point_B = (int(point[0] + radius), int(point[1] + radius))
+    rectangle(image, tuple(point_A), tuple(point_B), color, filled)
+
+    # drawing innner rectangle with given `color`
+    inner_radius = int(0.8 * radius)
+    point_A = (int(point[0] - inner_radius), int(point[1] - inner_radius))
+    point_B = (int(point[0] + inner_radius), int(point[1] + inner_radius))
+    rectangle(image, tuple(point_A), tuple(point_B), color, filled)
+    return image
+
+
+def cube(image, points, color=GREEN, thickness=2, radius=5):
+    """Draws a cube in image.
+
+    # Arguments
+        image: Numpy array of shape (H, W, 3).
+        points: List of length 8  having each element a list
+            of length two indicating (U, V) openCV coordinates.
+        color: List of length three indicating RGB color of point.
+        thickness: Integer indicating the thickness of the line to be drawn.
+        radius: Integer indicating the radius of corner points to be drawn.
+
+    # Returns
+        Numpy array with shape (H, W, 3). Image with cube.
+    """
+    # if points.shape != (8, 2):
+    #     raise ValueError("Cube points 2D must be of shape (8, 2)")
+
+    # draw bottom
+    line(image, points[0], points[1], color, thickness)
+    line(image, points[1], points[2], color, thickness)
+    line(image, points[3], points[2], color, thickness)
+    line(image, points[3], points[0], color, thickness)
+
+    # draw top
+    line(image, points[4], points[5], color, thickness)
+    line(image, points[6], points[5], color, thickness)
+    line(image, points[6], points[7], color, thickness)
+    line(image, points[4], points[7], color, thickness)
+
+    # draw sides
+    line(image, points[0], points[4], color, thickness)
+    line(image, points[7], points[3], color, thickness)
+    line(image, points[5], points[1], color, thickness)
+    line(image, points[2], points[6], color, thickness)
+
+    # draw X mark on top
+    line(image, points[4], points[6], color, thickness)
+    line(image, points[5], points[7], color, thickness)
+
+    # draw dots
+    [dot(image, np.squeeze(point), color, radius) for point in points]
+    return image
