@@ -2,7 +2,6 @@ import jax.numpy as jp
 import numpy as np
 import cv2
 import paz
-import jax
 
 
 class Camera(object):
