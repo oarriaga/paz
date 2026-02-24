@@ -15,7 +15,6 @@ def project_to_3D(camera_intrinsics, point2D, depth):
     return point3D
 
 
-
 def build_corner_rays(intrinsics, bounds=None, world_to_camera=None):
     """Build normalized rays from camera through corner pixels.
 
@@ -32,12 +31,14 @@ def build_corner_rays(intrinsics, bounds=None, world_to_camera=None):
         H, W = get_image_size(intrinsics)
         bounds = (0, W, 0, H)
     u_min, u_max, v_min, v_max = bounds
-    corner_pixels = jp.array([
-        [u_min, v_min],
-        [u_max, v_min],
-        [u_max, v_max],
-        [u_min, v_max],
-    ])
+    corner_pixels = jp.array(
+        [
+            [u_min, v_min],
+            [u_max, v_min],
+            [u_max, v_max],
+            [u_min, v_max],
+        ]
+    )
     world_to_camera = jp.eye(4) if world_to_camera is None else world_to_camera
     project = vmap(project_to_3D, in_axes=(None, 0, None))
     rays_camera = project(intrinsics, corner_pixels, 1.0)
@@ -237,7 +238,7 @@ def intrinsics_from_HFOV(H, W, HFOV=70):
     alpha in webcams and phones is often between 50 and 70 degrees.
     -> 0.7 w <= f <= w
     """
-    focal_length = compute_focal_length(W, HFOV)
+    focal_length = (W / 2) * (1 / np.tan(np.deg2rad(HFOV / 2.0)))
     camera_intrinsics = jp.array(
         [
             [focal_length, 0, W / 2.0],
@@ -245,6 +246,7 @@ def intrinsics_from_HFOV(H, W, HFOV=70):
             [0, 0, 1.0],
         ]
     )
+    return camera_intrinsics
 
 
 def calibrate(images, chessboard_size):
