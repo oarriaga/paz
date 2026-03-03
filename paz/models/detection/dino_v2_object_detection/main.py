@@ -186,9 +186,15 @@ def build_criterion_from_config(cfg, train_cfg=None):
         weight_dict["loss_mask_ce"] = getattr(train_cfg, "mask_ce_loss_coef", 5.0)
         weight_dict["loss_mask_dice"] = getattr(train_cfg, "mask_dice_loss_coef", 5.0)
 
-    # Auxiliary losses
+    # Auxiliary losses — iterate over the *base* keys only (not the
+    # growing dict) to avoid cascading duplication.
+    base_weight_keys = list(weight_dict.items())
     for i in range(cfg.dec_layers - 1):
-        weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
+        weight_dict.update({k + f"_{i}": v for k, v in base_weight_keys})
+
+    # Two-stage encoder losses
+    if cfg.two_stage:
+        weight_dict.update({k + "_enc": v for k, v in base_weight_keys})
 
     losses = ["labels", "boxes", "cardinality"]
     if cfg.segmentation_head:
@@ -277,7 +283,7 @@ class Model:
         if ext == ".keras":
             self.model = keras.models.load_model(weights_path)
         elif ext in (".h5", ".hdf5"):
-            self.model.load_weights(weights_path)
+            self.model.load_weights(weights_path, skip_mismatch=True)
         else:
             raise ValueError(
                 f"Unsupported weight format '{ext}'. "
@@ -350,12 +356,7 @@ class Model:
     # ------------------------------------------------------------------
 
     def reinitialize_detection_head(self, num_classes):
-        """Re-create the classification head for a new number of classes.
-
-        Avoids calling ``.build()`` eagerly so that Keras 3 does not raise
-        ``can't add state to built layer``.  The new Dense layer will be
-        built lazily on the next forward pass.
-        """
+        """Re-create the classification head for a new number of classes."""
         from keras import layers
 
         self.model.class_embed = layers.Dense(num_classes, name="class_embed")

@@ -366,9 +366,13 @@ class TrainConfig:
     group_detr: int = 13
     ia_bce_loss: bool = True
     cls_loss_coef: float = 1.0
+    dataset_file: str = "coco_json"
+    square_resize_div_64: bool = True
+    dataset_dir: str = ""
     output_dir: str = "output"
     multi_scale: bool = True
     expanded_scales: bool = True
+    do_random_resize_via_padding: bool = False
     use_ema: bool = True
     num_workers: int = 2
     weight_decay: float = 1e-4
@@ -376,8 +380,15 @@ class TrainConfig:
     early_stopping_patience: int = 10
     early_stopping_min_delta: float = 0.001
     early_stopping_use_ema: bool = False
+    tensorboard: bool = False
+    wandb: bool = False
+    project: Optional[str] = None
+    run: Optional[str] = None
+    class_names: Optional[List[str]] = None
+    run_test: bool = True
     clip_max_norm: float = 0.1
     segmentation_head: bool = False
+    eval_max_dets: int = 500
 
 
 @dataclass
