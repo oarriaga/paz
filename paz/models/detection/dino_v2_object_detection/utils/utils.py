@@ -6,18 +6,20 @@ import keras.ops as k
 import numpy as np
 
 class ModelEma(object):
-    """EMA Model for Keras"""
+    """EMA Model for Keras.
+
+    Weights are stored in a dict keyed by variable name so that the EMA
+    update is robust to changes in the iteration order of
+    ``model.weights`` (which Keras 3 can reorder between calls after
+    optimizer steps or lazy layer building).
+    """
     def __init__(self, model, decay=0.9997, tau=0, device=None):
-        # make a copy of the model for accumulating moving average of weights
-        # In Keras, we can't easily deepcopy a model if it's functional/subclassed complexly
-        # without serialization.
-        # Instead, we will store the weights.
-        
-        self.model_weights = [w.numpy() for w in model.weights]
+        self.model_weights = {
+            w.path: w.numpy().copy() for w in model.weights
+        }
         self.decay = decay
         self.tau = tau
         self.updates = 1
-        # Device handling is implicit in Keras usually
 
     def _get_decay(self):
         if self.tau == 0:
@@ -28,20 +30,29 @@ class ModelEma(object):
 
     def update(self, model):
         decay = self._get_decay()
-        
-        new_weights = model.get_weights()
-        self.model_weights = [
-            decay * ema + (1. - decay) * new
-            for ema, new in zip(self.model_weights, new_weights)
-        ]
+        for w in model.weights:
+            key = w.path
+            new = w.numpy()
+            if key in self.model_weights:
+                self.model_weights[key] = (
+                    decay * self.model_weights[key] + (1. - decay) * new
+                )
+            else:
+                # Variable appeared after init (e.g. lazy build) — track it
+                self.model_weights[key] = new.copy()
         self.updates += 1
 
     def set(self, model):
-        self.model_weights = [w.numpy() for w in model.weights]
-        
+        self.model_weights = {
+            w.path: w.numpy().copy() for w in model.weights
+        }
+
     def apply_to(self, model):
-        """Applies the EMA weights to a model instance"""
-        model.set_weights(self.model_weights)
+        """Applies the EMA weights to a model instance."""
+        for w in model.weights:
+            key = w.path
+            if key in self.model_weights:
+                w.assign(self.model_weights[key])
 
 
 class BestMetricSingle(object):

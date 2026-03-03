@@ -1,115 +1,114 @@
 from typing import Any, Dict, List
-import keras
+import math
 
-def get_vit_lr_decay_rate(name: str, lr_decay_rate: float = 1.0, num_layers: int = 12) -> float:
-    """
-    Calculate lr decay rate for different ViT blocks.
 
-    Args:
-        name: parameter name.
-        lr_decay_rate: base lr decay rate.
-        num_layers: number of ViT blocks.
-    Returns:
-        lr decay rate for the given parameter.
-    """
+def get_vit_lr_decay_rate(name: str, lr_decay_rate: float = 1.0,
+                          num_layers: int = 12) -> float:
+    """Per-block LR decay for ViT / DinoV2 backbones."""
     layer_id = num_layers + 1
-    # Keras names might use / instead of .
-    # standardized to . for logic checks or handle both
     norm_name = name.replace("/", ".")
-    
+
     if norm_name.startswith("backbone"):
-        if ".pos_embed" in norm_name or ".patch_embed" in norm_name:
+        if "embeddings" in norm_name:
             layer_id = 0
-        elif ".blocks." in norm_name and ".residual." not in norm_name:
-            # Assumes name format like backbone.blocks.N. ...
-            try:
-                # Find the index of the block
-                parts = norm_name.split(".")
-                blocks_idx = parts.index("blocks")
-                layer_id = int(parts[blocks_idx + 1]) + 1
-            except (ValueError, IndexError):
-                pass
-                
-    # print("name: {}, lr_decay: {}".format(name, lr_decay_rate ** (num_layers + 1 - layer_id)))
+        elif ".layer." in norm_name and ".residual." not in norm_name:
+            layer_id = int(
+                norm_name[norm_name.find(".layer."):].split(".")[2]) + 1
     return lr_decay_rate ** (num_layers + 1 - layer_id)
 
 
-def get_vit_weight_decay_rate(name: str, weight_decay_rate: float = 1.0) -> float:
-    """
-    Calculate weight decay rate for different ViT parameters.
-
-    Args:
-        name: parameter name.
-        weight_decay_rate: base weight decay rate.
-    Returns:
-        weight decay rate for the given parameter.
-    """
-    # Keras variables often have names like 'kernel', 'bias', 'gamma', 'beta'
-    # 'pos_embed', 'rel_pos' might be in the path
-    
-    if ('gamma' in name) or ('pos_embed' in name) or ('rel_pos' in name) or ('bias' in name) or ('norm' in name) or ('beta' in name):
-        weight_decay_rate = 0.
-    
-    # print("name: {}, weight_decay rate: {}".format(name, weight_decay_rate))
+def get_vit_weight_decay_rate(name: str,
+                              weight_decay_rate: float = 1.0) -> float:
+    """Return 0 for bias / norm / positional-embedding parameters."""
+    if (("gamma" in name) or ("pos_embed" in name)
+            or ("rel_pos" in name) or ("bias" in name)
+            or ("norm" in name) or ("embeddings" in name)):
+        return 0.0
     return weight_decay_rate
 
 
-def get_param_dict(args: Any, model: keras.Model) -> List[Dict[str, Any]]:
+# ---------------------------------------------------------------------------
+# Classify a variable name into a parameter group
+# ---------------------------------------------------------------------------
+
+
+def classify_variable(name: str):
+    """Return ``'backbone'``, ``'decoder'``, or ``'other'``."""
+    norm = name.replace("/", ".")
+    if "backbone" in norm:
+        return "backbone"
+    if "transformer.decoder" in norm or "transformer/decoder" in name:
+        return "decoder"
+    return "other"
+
+
+def compute_backbone_lr(name, *, lr_encoder, lr_vit_layer_decay,
+                        lr_component_decay, num_layers):
+    """LR for a single backbone variable.
+
+    Formula (from PyTorch ``Backbone.get_named_param_lr_pairs``):
+        lr = lr_encoder × layer_decay(name) × lr_component_decay²
     """
-    Create parameter groups for optimization.
-    
-    Args:
-        args: Argument object with 'lr', 'lr_component_decay', etc.
-        model: Keras model
-        
-    Returns:
-        List of dicts with 'params', 'lr', 'weight_decay'
+    layer_decay = get_vit_lr_decay_rate(
+        name, lr_decay_rate=lr_vit_layer_decay, num_layers=num_layers)
+    return lr_encoder * layer_decay * (lr_component_decay ** 2)
+
+
+# ---------------------------------------------------------------------------
+# Build LR-scale map (model-level)
+# ---------------------------------------------------------------------------
+
+
+def build_lr_scale_map(model, *, lr, lr_encoder, lr_vit_layer_decay,
+                       lr_component_decay, weight_decay,
+                       num_layers) -> Dict[str, Dict[str, float]]:
+    """Return ``{var.name: {"lr_scale": s, "wd": w}}`` for every trainable var.
+
+    ``lr_scale`` is the multiplier so that
+        effective_lr(var) = base_lr_schedule(step) × lr_scale
+    ``wd`` is the per-variable weight decay (0 for bias/norm/embed).
     """
-    # We iterate over all trainable variables
-    # We need to classify them: backbone, decoder, other
-    
-    backbone_params = []
-    decoder_params = []
-    other_params = []
-    
-    # Heuristics for grouping
-    # We assume standard naming conventions in the ported model
-    
+    result = {}
     for v in model.trainable_variables:
         name = v.name
-        # Normalize name for checks
-        norm_name = name.replace("/", ".")
-        
-        # Check if backbone
-        # The backbone variable names usually start with 'backbone' if the layer is named 'backbone'
-        # Or if it's a nested model, it might be 'functional_...' but we hope user named layers.
-        # Assuming the ported model has a 'backbone' layer.
-        
-        is_backbone = "backbone" in norm_name
-        is_decoder = "transformer.decoder" in norm_name or "transformer/decoder" in name
-        
-        if is_backbone:
-            # Backbone logic might vary if it's ViT (decay rates) or ResNet (standard)
-            # Original code called backbone.get_named_param_lr_pairs which implies backbone might handle self
-            # For simplicity, we assign backbone LR here. 
-            # If args has lr_backbone, maybe use it? 
-            # The original code used 'backbone_param_lr_pairs'.
-            # If it's a ViT backbone, we might need get_vit_lr_decay_rate. 
-            # Let's check args for ViT specific flags? original code assumes Joiner handles it.
-            # We will use args.lr_backbone if available, else args.lr.
-            
-            lr_val = getattr(args, 'lr_backbone', args.lr)
-            
-            # Apply layer-wise decay if it looks like ViT and we have mechanism?
-            # For now, minimal port:
-            backbone_params.append({"params": v, "lr": lr_val})
-            
-        elif is_decoder:
-            lr_val = args.lr * getattr(args, 'lr_component_decay', 1.0)
-            decoder_params.append({"params": v, "lr": lr_val})
-            
-        else:
-            other_params.append({"params": v, "lr": args.lr})
-            
-    # Combine
-    return other_params + backbone_params + decoder_params
+        group = classify_variable(name)
+
+        if group == "backbone":
+            var_lr = compute_backbone_lr(
+                name,
+                lr_encoder=lr_encoder,
+                lr_vit_layer_decay=lr_vit_layer_decay,
+                lr_component_decay=lr_component_decay,
+                num_layers=num_layers,
+            )
+            wd = weight_decay * get_vit_weight_decay_rate(name)
+        elif group == "decoder":
+            var_lr = lr * lr_component_decay
+            wd = weight_decay
+        else:  # heads, query embeds, projector, enc_out, …
+            var_lr = lr
+            wd = weight_decay
+
+        # Scale relative to the base LR the optimizer will use.
+        # The optimizer schedule outputs ``base_lr * lr_lambda(step)``.
+        # We want the effective LR for this var to be
+        #   ``var_lr * lr_lambda(step)``.
+        # So the scale factor is ``var_lr / base_lr``.
+        lr_scale = var_lr / lr if lr > 0 else 1.0
+        result[name] = {"lr_scale": lr_scale, "wd": wd}
+
+    return result
+
+
+def scale_gradients_by_lr(grads, trainable_variables, lr_scale_map):
+    """Multiply each gradient by its ``lr_scale``."""
+    scaled = []
+    for g, v in zip(grads, trainable_variables):
+        if g is None:
+            scaled.append(None)
+            continue
+        info = lr_scale_map.get(v.name)
+        if info is not None and info["lr_scale"] != 1.0:
+            g = g * info["lr_scale"]
+        scaled.append(g)
+    return scaled

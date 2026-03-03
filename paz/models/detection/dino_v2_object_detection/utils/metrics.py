@@ -3,9 +3,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 try:
-    from torch.utils.tensorboard import SummaryWriter
+    from tensorboard.summary.writer.event_file_writer import EventFileWriter
+    from tensorboard.compat.proto.summary_pb2 import Summary
+    from tensorboard.compat.proto.event_pb2 import Event
+    _HAS_TENSORBOARD = True
 except ImportError:
-    SummaryWriter = None
+    _HAS_TENSORBOARD = False
 
 try:
     import wandb
@@ -118,40 +121,63 @@ class MetricsPlotSink:
 
 
 class MetricsTensorBoardSink:
-    """
-    Training metrics via TensorBoard. (Optional)
+    """Training metrics via TensorBoard (no torch dependency).
+
+    Uses ``keras.callbacks.TensorBoard`` compatible CSV logging as a
+    fallback when the standalone ``tensorboard`` package is not
+    installed.  This avoids pulling in PyTorch.
     """
 
     def __init__(self, output_dir):
-        if SummaryWriter:
-            self.writer = SummaryWriter(log_dir=output_dir)
-            print(f"TensorBoard logging initialized.")
+        self._output_dir = output_dir
+        self._writer = None
+        if _HAS_TENSORBOARD:
+            try:
+                # Use the standalone tensorboard writer (no torch)
+                import os
+                os.makedirs(output_dir, exist_ok=True)
+                self._writer = EventFileWriter(output_dir)
+                print("TensorBoard logging initialized (standalone).")
+            except Exception:
+                self._writer = None
+                print("Unable to initialize TensorBoard. Logging is turned off.")
         else:
-            self.writer = None
-            print("Unable to initialize TensorBoard. Logging is turned off.")
+            print("TensorBoard package not installed. Logging is turned off.")
+
+    # -- helpers -----------------------------------------------------------
+
+    def _add_scalar(self, tag, value, step):
+        if self._writer is None:
+            return
+        import time as _time
+        summary = Summary(value=[Summary.Value(tag=tag, simple_value=value)])
+        event = Event(summary=summary, wall_time=_time.time(), step=step)
+        self._writer.add_event(event)
+
+    # -- public API --------------------------------------------------------
 
     def update(self, values):
-        if not self.writer:
+        if self._writer is None:
             return
 
         epoch = values.get('epoch', 0)
 
         if 'train_loss' in values:
-            self.writer.add_scalar("Loss/Train", values['train_loss'], epoch)
+            self._add_scalar("Loss/Train", values['train_loss'], epoch)
         if 'test_loss' in values:
-            self.writer.add_scalar("Loss/Test", values['test_loss'], epoch)
+            self._add_scalar("Loss/Test", values['test_loss'], epoch)
 
-        # Basic COCO metrics logging
         if 'test_coco_eval_bbox' in values:
             coco_eval = values['test_coco_eval_bbox']
             if safe_index(coco_eval, 0) is not None:
-                self.writer.add_scalar("Metrics/Base/AP50_90", coco_eval[0], epoch)
+                self._add_scalar("Metrics/Base/AP50_90", coco_eval[0], epoch)
 
-        self.writer.flush()
+        self._writer.flush()
 
     def close(self):
-        if self.writer:
-            self.writer.close()
+        if self._writer is not None:
+            self._writer.close()
+            self._writer = None
 
 class MetricsWandBSink:
     """
