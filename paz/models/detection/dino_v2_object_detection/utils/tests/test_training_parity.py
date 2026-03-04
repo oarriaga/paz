@@ -200,7 +200,10 @@ def test_ema_decay_matches_pytorch(decay, tau, updates, desc):
     class FakeModel:
         def get_weights(self):
             return [np.zeros(1)]
-        weights = [type("W", (), {"numpy": lambda self: np.zeros(1)})()]
+        weights = [type("W", (), {
+            "path": "fake/weight",
+            "numpy": lambda self: np.zeros(1),
+        })()]
 
     ema = ModelEma(FakeModel(), decay=decay, tau=tau)
     ema.updates = updates

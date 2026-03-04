@@ -73,7 +73,9 @@ def test_model_ema():
     # Update EMA: 0.5 * 1.0 + 0.5 * 2.0 = 1.5
     ema.update(model)
     
-    assert np.allclose(ema.model_weights[0], 1.5)
+    # model_weights is keyed by variable path (e.g. "dense/kernel")
+    kernel_path = model.weights[0].path
+    assert np.allclose(ema.model_weights[kernel_path], 1.5)
     
     # Apply to model
     ema.apply_to(model)
