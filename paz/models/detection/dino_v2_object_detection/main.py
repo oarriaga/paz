@@ -356,8 +356,18 @@ class Model:
     # ------------------------------------------------------------------
 
     def reinitialize_detection_head(self, num_classes):
-        """Re-create the classification head for a new number of classes."""
-        from keras import layers
+        """Rebuild the model with a new number of classes.
 
-        self.model.class_embed = layers.Dense(num_classes, name="class_embed")
-        self.model.num_classes = num_classes
+        Keras 3 does not allow adding new sub-layers to an already-built
+        model (the state tracker is locked after ``build()``).  The
+        safest approach is to recreate the ``LWDETR`` from scratch with
+        the updated ``num_classes`` — this is cheap because no pretrained
+        weights need to be reloaded (they will be re-initialised randomly
+        and trained from the new dataset anyway).
+        """
+        from dataclasses import replace as _dc_replace
+
+        updated_config = _dc_replace(self.config, num_classes=num_classes)
+        self.config = updated_config
+        self.model = build_model_from_config(updated_config)
+        self.postprocess = PostProcess(num_select=updated_config.num_select)
