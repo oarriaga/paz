@@ -144,6 +144,8 @@ class RFDETR:
 
         if self.model_config.num_classes != num_classes:
             self.model.reinitialize_detection_head(num_classes)
+            # Sync model_config so criterion / postprocess see the right count
+            self.model_config = self.model.config
 
         # ---- Merge config dicts ------------------------------------------
         train_dict = asdict(config)
