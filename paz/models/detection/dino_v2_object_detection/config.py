@@ -1,11 +1,3 @@
-"""Configuration dataclasses for RF-DETR model variants.
-
-Defines ``ModelConfig`` (base architecture hyperparameters), per-variant
-overrides for detection and segmentation sizes, and ``TrainConfig`` /
-``SegmentationTrainConfig`` for training hyperparameters.  A
-``MODEL_CONFIG_REGISTRY`` maps variant names to their config classes.
-"""
-
 from dataclasses import dataclass, field
 from typing import List, Optional
 

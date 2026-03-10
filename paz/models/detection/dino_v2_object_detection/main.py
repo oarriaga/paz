@@ -1,12 +1,3 @@
-"""Model assembly and inference wrapper for RF-DETR.
-
-Provides factory functions that build the LWDETR Keras model and its
-components (backbone, transformer, segmentation head, matcher, criterion)
-from a ``ModelConfig`` dataclass.  Also contains the ``Model`` wrapper
-that handles pretrained-weight loading and numpy-in / numpy-out
-inference via ``predict``.
-"""
-
 import os
 import math
 from dataclasses import asdict

@@ -1,15 +1,3 @@
-"""Training engine and evaluation utilities for RF-DETR.
-
-Contains the core epoch loop (``train_one_epoch``), learning-rate schedule
-helpers (``build_lr_lambda``, ``LambdaLRSchedule``), forward-only evaluation
-(``evaluate``), and a confidence-threshold sweep for precision/recall
-computation (``sweep_confidence_thresholds``).
-
-The training loop uses a two-phase strategy for JAX compatibility:
-  1. Eager forward pass + Hungarian matching (calls scipy, not JAX-traceable).
-  2. Traced forward pass + loss + gradients via ``jax.value_and_grad``.
-"""
-
 import math
 import time
 import datetime

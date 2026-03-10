@@ -1,19 +1,3 @@
-"""High-level RF-DETR facade for detection and segmentation.
-
-Provides the ``RFDETR`` base class and its size-specific sub-classes
-(Nano, Small, Medium, Base, Large, XLarge, 2XLarge, plus segmentation
-variants).  Each sub-class wires the correct ``ModelConfig`` and, for
-segmentation, a ``SegmentationTrainConfig``.
-
-Key responsibilities:
-
-* Model instantiation via ``get_model`` / ``get_model_config``.
-* Full training loop (``train`` / ``train_from_config``).
-* Inference via ``predict`` (numpy-in, numpy-out).
-* ``VARIANT_REGISTRY`` mapping variant names to facade classes.
-* ``_COCODataLoader`` for COCO-format dataset iteration.
-"""
-
 import json
 import os
 import datetime
