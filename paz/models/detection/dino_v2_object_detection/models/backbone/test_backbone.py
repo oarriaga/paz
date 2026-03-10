@@ -38,7 +38,7 @@ from paz.models.detection.dino_v2_object_detection.models.backbone import (
     build_backbone as k_build_backbone,
 )
 
-# ─── PyTorch imports ────────────────────────────────────────────────
+# ─── PyTorch reference imports ─────────────────────────────────────────
 from rfdetr.models.position_encoding import (
     PositionEmbeddingSine as PtPositionEmbeddingSine,
     build_position_encoding as pt_build_position_encoding,
@@ -48,7 +48,7 @@ from rfdetr.models.backbone.backbone import (
     get_dinov2_weight_decay_rate as pt_get_dinov2_weight_decay_rate,
 )
 
-# ─── Tolerances & helpers from shared utils ─────────────────────────
+# ─── Tolerances & helpers ───────────────────────────────────────────────
 from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (
     ATOL,
     RTOL,
@@ -80,7 +80,7 @@ def test_pos_sine_output_shape_default():
 
 
 def test_pos_sine_parity_aligned():
-    """Numerical parity with PyTorch, align_dim_orders=True."""
+    """Numerical parity with reference implementation, align_dim_orders=True."""
     pt = PtPositionEmbeddingSine(num_pos_feats=32, normalize=True).eval()
     k = KPositionEmbeddingSine(num_pos_feats=32, normalize=True)
     mask_np = make_mask(1, 6, 8, all_false=True)
@@ -94,7 +94,7 @@ def test_pos_sine_parity_aligned():
 
 
 def test_pos_sine_parity_channel_first():
-    """Numerical parity with PyTorch, align_dim_orders=False."""
+    """Numerical parity with reference implementation, align_dim_orders=False."""
     pt = PtPositionEmbeddingSine(num_pos_feats=64, normalize=True).eval()
     k = KPositionEmbeddingSine(num_pos_feats=64, normalize=True)
     mask_np = make_mask(2, 10, 12, all_false=True)
@@ -103,7 +103,7 @@ def test_pos_sine_parity_channel_first():
     )
     with torch.no_grad():
         pt_out = pt(nt, align_dim_orders=False)
-        # PT: (B, C, H, W) -> (B, H, W, C) for comparison
+        # (B, C, H, W) -> (B, H, W, C) for comparison
         pt_out = pt_out.permute(0, 2, 3, 1)
         
     k_out = k(mask_np, align_dim_orders=False)
@@ -622,11 +622,11 @@ def test_joiner_pos_shape():
     features, pos = joiner(x, mask=mask, training=False)
     feat, feat_mask = features[0]
     p = pos[0]
-    # pos should be (B, C, H, W) since align_dim_orders=False
-    assert ops.shape(p)[0] == ops.shape(feat)[0]  # batch
-    assert ops.shape(p)[1] == ops.shape(feat)[1]  # height
-    assert ops.shape(p)[2] == ops.shape(feat)[2]  # width
-    assert ops.shape(p)[3] == 64 # num_pos_feats default (32*2)
+    # pos should be (B, H, W, C) since align_dim_orders=False
+    assert ops.shape(p)[0] == ops.shape(feat)[0]
+    assert ops.shape(p)[1] == ops.shape(feat)[1]
+    assert ops.shape(p)[2] == ops.shape(feat)[2]
+    assert ops.shape(p)[3] == 64
 
 
 def test_joiner_export_returns_three():

@@ -6,10 +6,13 @@ import numpy as np
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class LayerNorm(layers.Layer):
-    """
-    A LayerNorm variant, popularized by Transformers, that performs point-wise mean and
-    variance normalization over the channel dimension for inputs that have shape
-    (batch_size, channels, height, width).
+    """Channel-wise layer normalization for spatial feature maps.
+
+    Performs point-wise mean and variance normalization over the
+    channel dimension for inputs of shape (batch, ..., channels).
+
+    Attributes:
+        epsilon (float): Small constant for numerical stability.
     """
 
     def __init__(self, epsilon=1e-6, **kwargs):
@@ -40,18 +43,37 @@ class LayerNorm(layers.Layer):
 
 
 def get_norm(norm, out_channels):
+    """Create a normalization layer from a string specification.
+
+    Args:
+        norm (str or None): Normalization type. 'LN' for LayerNormalization.
+        out_channels (int): Number of output channels.
+
+    Returns:
+        Layer or None: Normalization layer instance.
+    """
     if norm is None:
         return None
     if isinstance(norm, str):
         if len(norm) == 0:
             return None
         if norm == "LN":
-            # Keras LayerNormalization defaults to axis=-1 which is correct for NHWC
             return layers.LayerNormalization(epsilon=1e-6)
     return norm
 
 
 def get_activation(name):
+    """Create an activation layer by name.
+
+    Args:
+        name (str or None): Activation name ('silu', 'relu', 'LeakyReLU').
+
+    Returns:
+        Layer: Activation layer instance.
+
+    Raises:
+        AttributeError: If activation type is unsupported.
+    """
     if name == "silu":
         return layers.Activation("silu")
     elif name == "relu":
@@ -66,7 +88,13 @@ def get_activation(name):
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class ConvX(layers.Layer):
-    """Conv-bn module"""
+    """Convolution-normalization-activation module.
+
+    Attributes:
+        conv (Conv2D): Convolution layer.
+        bn: Normalization layer (BatchNorm or LayerNorm).
+        act: Activation layer.
+    """
 
     def __init__(
         self,
@@ -106,7 +134,7 @@ class ConvX(layers.Layer):
             out_planes,
             kernel_size=kernel_size,
             strides=stride,
-            padding="valid",  # We handle padding manually
+            padding="valid",
             groups=groups,
             dilation_rate=dilation,
             use_bias=False,
@@ -146,7 +174,13 @@ class ConvX(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class Bottleneck(layers.Layer):
-    """Standard bottleneck."""
+    """Standard bottleneck block with optional residual connection.
+
+    Attributes:
+        cv1 (ConvX): First convolution (channel reduction).
+        cv2 (ConvX): Second convolution (channel expansion).
+        add (bool): Whether to use residual connection.
+    """
 
     def __init__(
         self,
@@ -171,7 +205,7 @@ class Bottleneck(layers.Layer):
         self._act = act
         self._layer_norm = layer_norm
         self._rms_norm = rms_norm
-        c_ = int(c2 * e)  # hidden channels
+        c_ = int(c2 * e)
         self.cv1 = ConvX(
             c1,
             c_,
@@ -297,33 +331,28 @@ class C2f(layers.Layer):
         return config
 
     def call(self, x):
-        # cv1 output shape: (B, H, W, 2*c)
         y = self.cv1(x)
-        # split along channel axis (last axis)
         y = ops.split(y, 2, axis=-1)
-        y = list(y)  # make it a list
-        # y is now [y0, y1] each (B, H, W, c)
-
-        # Apply bottlenecks to the last chunk (originally y[1] aka y[-1])
-        # In PyTorch: y.extend(m(y[-1]) for m in self.m)
-        # It creates a chain of outputs? No, it appends new outputs to y list.
-        # Wait, the loop `for m in self.m: m(y[-1])` takes the *last* element, processes it, and adds it.
-        # So it IS a chain if it always takes the latest.
-        # But `m(y[-1])` suggests it takes the *current* last element.
-        # And then appends the result. So the *next* m takes the result of the *previous* m.
-        # Yes, that's correct.
+        y = list(y)
 
         for m in self.m:
             y.append(m(y[-1]))
 
-        # Concatenate all parts
         return self.cv2(ops.concatenate(y, axis=-1))
 
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class MultiScaleProjector(layers.Layer):
-    """
-    MultiScaleProjector
+    """Projects isotropic ViT features into multi-scale feature maps.
+
+    Applies per-scale sampling (upsampling/downsampling) to each input
+    feature map, fuses them via concatenation, and refines with C2f blocks.
+
+    Attributes:
+        scale_factors (list): Target scale factors for each output level.
+        input_scales (list): Scale of each input feature map.
+        stages_sampling_blocks (list): Per-scale sampling modules.
+        stages_blocks (list): Per-scale fusion and refinement modules.
     """
 
     def __init__(
@@ -358,32 +387,19 @@ class MultiScaleProjector(layers.Layer):
         self.force_drop_last_n_features = force_drop_last_n_features
         self.use_extra_pool = False
 
-        self.stages_sampling_blocks = []  # List of lists of layers
-        self.stages_blocks = []  # List of layers
-
-        # We assume input 'x' is a list of features corresponding to scale_factors
-        # e.g. x[0] -> scale_factors[0]
-        # So we iterate over target scales (i) and input scales (j)
+        self.stages_sampling_blocks = []
+        self.stages_blocks = []
 
         for i, target_scale in enumerate(scale_factors):
             current_stage_sampling = []
 
-            # For each input feature map 'j', transform it to 'target_scale'
             for j, input_scale in enumerate(self.input_scales):
                 in_dim = in_channels[j]
-
-                # Calculate ratio: target / input
-                # e.g. Target P3 (scale 2.0), Input P4 (scale 1.0) -> ratio 2.0 (Upsample x2)
-                # e.g. Target P3 (scale 2.0), Input P3 (scale 2.0) -> ratio 1.0 (Identity)
-                # e.g. Target P4 (scale 1.0), Input P3 (scale 2.0) -> ratio 0.5 (Downsample x2)
-
                 ratio = target_scale / input_scale
 
                 layers_list = []
 
                 if ratio == 4.0:
-                    # Upsample x4: ConvT (x2) -> LN -> GELU -> ConvT (x2)
-                    # MATCH PYTORCH: channels are reduced (in_dim // 2 -> in_dim // 4)
                     layers_list.extend(
                         [
                             layers.Conv2DTranspose(
@@ -406,8 +422,6 @@ class MultiScaleProjector(layers.Layer):
                     )
 
                 elif ratio == 2.0:
-                    # Upsample x2: ConvT (x2)
-                    # MATCH PYTORCH: channels are reduced (in_dim // 2)
                     layers_list.extend(
                         [
                             layers.Conv2DTranspose(
@@ -421,11 +435,9 @@ class MultiScaleProjector(layers.Layer):
                     )
 
                 elif ratio == 1.0:
-                    # Identity
                     pass
 
                 elif ratio == 0.5:
-                    # Downsample x2: ConvX stride 2
                     layers_list.extend(
                         [
                             ConvX(
@@ -440,20 +452,12 @@ class MultiScaleProjector(layers.Layer):
                     )
 
                 elif ratio == 0.25:
-                    # Downsample x4
-                    # Matches PyTorch use_extra_pool logic (skipped here)
-                    # But if we enter here (e.g. target_scale 0.25 vs input 1.0), we should downsample?
-                    # PyTorch implementation handles scale 0.25 by setting use_extra_pool=True and CONTINUING loop.
-                    # It NEVER builds a sampler for 0.25.
-                    # So we should strictly follow that structure if target_scale == 0.25.
                     pass
 
-                elif ratio == 0.125:  # Upsample 0.25 -> 2.0? ratio 8.0?
-                    # Unsupported
+                elif ratio == 0.125:
                     pass
 
                 else:
-                    # Fallback or error?
                     pass
 
                 if layers_list:
@@ -465,24 +469,12 @@ class MultiScaleProjector(layers.Layer):
                         layers.Identity(name=f"stage_{i}_samp_{j}")
                     )
 
-            # If we skipped due to extra pool (scale 0.25), continue
             if target_scale == 0.25:
                 self.use_extra_pool = True
                 continue
 
             self.stages_sampling_blocks.append(current_stage_sampling)
 
-            # Combined input dim calculation matching PyTorch logic
-            # PyTorch: int(sum(in_channel // max(1, scale) for in_channel in in_channels))
-            # Here 'scale' refers to the ratio (target/input) essentially, if input is 1.0.
-            # But technically it's the reduction factor applied.
-            # If ratio 4.0 (Upsample), channels became in // 4.
-            # If ratio 2.0 (Upsample), channels became in // 2.
-            # If ratio 1.0, channels in.
-            # If ratio 0.5 (Downsample), channels in.
-            # So divisor is ratio if ratio >= 1 else 1.
-
-            # We iterate over inputs again to calculate sum
             in_dim_combined = 0
             for j, input_scale in enumerate(self.input_scales):
                 ratio = target_scale / input_scale
@@ -524,13 +516,18 @@ class MultiScaleProjector(layers.Layer):
         return config
 
     def call(self, x, training=False):
-        # x is a list of feature maps (NHWC)
+        """Project input feature maps to multi-scale outputs.
 
-        # Handle Survival Prob / Drop features (Training only)
+        Args:
+            x (list): List of feature map tensors in NHWC format.
+            training (bool): Whether in training mode.
+
+        Returns:
+            list: Multi-scale output feature maps.
+        """
         if training and self.survival_prob < 1.0:
-            pass  # TODO: Implement
+            pass
 
-        # Dropping last n features (always if set)
         if self.force_drop_last_n_features > 0:
             pass
 
@@ -541,11 +538,9 @@ class MultiScaleProjector(layers.Layer):
             sampling_modules = self.stages_sampling_blocks[i]
 
             for j, sampler in enumerate(sampling_modules):
-                # x[j] is the j-th input feature map
                 out = sampler(x[j])
                 feat_fuse.append(out)
 
-            # Concatenate all sampled inputs
             if len(feat_fuse) > 1:
                 feat_fuse = ops.concatenate(feat_fuse, axis=-1)
             else:
@@ -553,10 +548,7 @@ class MultiScaleProjector(layers.Layer):
 
             results.append(stage_model(feat_fuse))
 
-        # Handle extra pool (P6)
-        # Matches PyTorch: results.append(F.max_pool2d(results[-1], kernel_size=1, stride=2, padding=0))
         if self.use_extra_pool:
-            # Keras MaxPool: pool_size=1, strides=2, padding="valid" (0 padding)
             results.append(
                 layers.MaxPooling2D(pool_size=1, strides=2, padding="valid")(
                     results[-1]
@@ -568,6 +560,14 @@ class MultiScaleProjector(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class SimpleProjector(layers.Layer):
+    """Single-scale projector using two ConvX blocks and layer normalization.
+
+    Attributes:
+        convx1 (ConvX): First convolution block.
+        convx2 (ConvX): Second convolution block.
+        ln: Layer normalization.
+    """
+
     def __init__(self, in_dim, out_dim, factor_kernel=False, **kwargs):
         super().__init__(**kwargs)
         self._in_dim = in_dim
@@ -611,6 +611,5 @@ class SimpleProjector(layers.Layer):
         return config
 
     def call(self, x):
-        # x is expected to be a list, based on PyTorch forward: "x[0]"
         out = self.ln(self.convx2(self.convx1(x[0])))
         return [out]

@@ -38,11 +38,9 @@ class Backbone(layers.Layer):
         positional_encoding_size: int = 37,
         **kwargs,
     ):
-        # Store the backbone name before calling super().__init__
         self._backbone_name = name
         super().__init__(name="backbone", **kwargs)
 
-        # Parse the name string
         name_parts = name.split("_")
         assert name_parts[0] == "dinov2"
 
@@ -84,7 +82,7 @@ class Backbone(layers.Layer):
             in_channels=self.encoder._out_feature_channels,
             out_channels=out_channels,
             scale_factors=scale_factors,
-            input_scales=[1.0] * len(self.encoder._out_feature_channels), # Inputs are isotropic (P4 / Stride 16)
+            input_scales=[1.0] * len(self.encoder._out_feature_channels),
             layer_norm=layer_norm,
             rms_norm=rms_norm,
             name="projector",
@@ -92,7 +90,6 @@ class Backbone(layers.Layer):
 
         self._export = False
 
-        # Store init config for serialization
         self._init_config = dict(
             name=self._backbone_name,
             pretrained_encoder=pretrained_encoder,
@@ -115,20 +112,19 @@ class Backbone(layers.Layer):
         )
 
     def call(self, images, mask=None, training=None):
-        """Forward pass.
+        """Forward pass through encoder and projector.
 
         Args:
-            images: Input tensor (B, H, W, C) — channels-last.
-            mask: Boolean mask (B, H, W).
+            images (Tensor): Input tensor of shape (B, H, W, C).
+            mask (Tensor): Boolean mask of shape (B, H, W).
+            training (bool): Whether in training mode.
 
         Returns:
-            List of (feat, mask) tuples. Each feat is (B, H', W', C)
-            in channels-last format (Keras convention).
-            If mask is None, returned masks are all-False.
+            list: List of (feat, mask) tuples per scale, where
+                feat has shape (B, H', W', C) and mask has
+                shape (B, H', W').
         """
-        # DinoV2 expects (B, H, W, C), returns list of (B, h, w, embed_dim)
         feats = self.encoder(images, training=training)
-        # Projector expects/returns (B, H, W, C) channels-last
         feats = self.projector(feats, training=training)
 
         out = []
@@ -136,14 +132,13 @@ class Backbone(layers.Layer):
             feat_h = ops.shape(feat)[1]
             feat_w = ops.shape(feat)[2]
             if mask is not None:
-                # Resize mask to feature spatial size via nearest interpolation
                 m = ops.cast(mask, "float32")
-                m = ops.expand_dims(m, axis=-1)  # (B, H, W, 1)
+                m = ops.expand_dims(m, axis=-1)
                 m = ops.image.resize(
                     m, (feat_h, feat_w),
                     interpolation="nearest",
                 )
-                m = ops.cast(ops.squeeze(m, axis=-1), "bool")  # (B, h, w)
+                m = ops.cast(ops.squeeze(m, axis=-1), "bool")
             else:
                 batch_size = ops.shape(feat)[0]
                 m = ops.zeros((batch_size, feat_h, feat_w), dtype="bool")
@@ -151,10 +146,15 @@ class Backbone(layers.Layer):
         return out
 
     def call_export(self, images, training=None):
-        """Export-friendly forward (no NestedTensor).
+        """Export-friendly forward pass without nested tensor tuples.
+
+        Args:
+            images (Tensor): Input tensor of shape (B, H, W, C).
+            training (bool): Whether in training mode.
 
         Returns:
-            (feats, masks): lists of feature tensors and zero-masks.
+            tuple: (feats, masks) where each is a list of tensors.
+                Masks are all-False.
         """
         feats = self.encoder(images, training=training)
         feats = self.projector(feats, training=training)
@@ -178,15 +178,15 @@ class Backbone(layers.Layer):
 
 
 def get_dinov2_lr_decay_rate(name, lr_decay_rate=1.0, num_layers=12):
-    """
-    Calculate lr decay rate for different ViT blocks.
+    """Compute layer-wise learning rate decay for ViT blocks.
 
     Args:
-        name (string): parameter name.
-        lr_decay_rate (float): base lr decay rate.
-        num_layers (int): number of ViT blocks.
+        name (str): Parameter name.
+        lr_decay_rate (float): Base learning rate decay rate.
+        num_layers (int): Number of ViT blocks.
+
     Returns:
-        lr decay rate for the given parameter.
+        float: Decayed learning rate for the given parameter.
     """
     layer_id = num_layers + 1
     if name.startswith("backbone"):
@@ -198,7 +198,18 @@ def get_dinov2_lr_decay_rate(name, lr_decay_rate=1.0, num_layers=12):
 
 
 def get_dinov2_weight_decay_rate(name, weight_decay_rate=1.0):
-    """Determine weight decay rate based on parameter name."""
+    """Compute weight decay rate based on parameter name.
+
+    Disables weight decay for normalization, bias, embedding,
+    and position-related parameters.
+
+    Args:
+        name (str): Parameter name.
+        weight_decay_rate (float): Base weight decay rate.
+
+    Returns:
+        float: Weight decay rate (0.0 if parameter should not be decayed).
+    """
     if (
         ("gamma" in name)
         or ("pos_embed" in name)

@@ -18,9 +18,11 @@ import keras
 
 @__import__("keras").saving.register_keras_serializable(package="backbone")
 class Joiner(__import__("keras").layers.Layer):
-    """Joins a Backbone with a PositionEmbeddingSine.
+    """Combines a Backbone with sinusoidal position embeddings.
 
-    Keras3 port of the PyTorch Joiner (nn.Sequential subclass).
+    Attributes:
+        backbone (Backbone): Feature extraction backbone.
+        position_embedding (PositionEmbeddingSine): Positional encoding layer.
     """
 
     def __init__(self, backbone, position_embedding, **kwargs):
@@ -50,15 +52,17 @@ class Joiner(__import__("keras").layers.Layer):
         return cls(**config)
 
     def call(self, images, mask=None, training=None):
-        """Forward pass.
+        """Run backbone and compute position encodings per scale.
 
         Args:
-            images: (B, H, W, C) input tensor.
-            mask: (B, H, W) boolean mask.
+            images (Tensor): Input tensor of shape (B, H, W, C).
+            mask (Tensor): Boolean mask of shape (B, H, W).
+            training (bool): Whether in training mode.
 
         Returns:
-            (x, pos): x is list of (feat, mask) tuples,
-                       pos is list of position encodings.
+            tuple: (features, positions) where features is a list of
+                (feat, mask) tuples and positions is a list of
+                position encoding tensors.
         """
         x = self.backbone(images, mask=mask, training=training)
         pos = []
@@ -71,7 +75,16 @@ class Joiner(__import__("keras").layers.Layer):
         return x, pos
 
     def call_export(self, images, training=None):
-        """Export-friendly forward."""
+        """Export-friendly forward pass without nested tensor tuples.
+
+        Args:
+            images (Tensor): Input tensor of shape (B, H, W, C).
+            training (bool): Whether in training mode.
+
+        Returns:
+            tuple: (feats, None, positions) where feats and positions
+                are flat lists of tensors.
+        """
         feats, masks = self.backbone.call_export(images, training=training)
         poss = []
         for feat, mask in zip(feats, masks):
@@ -103,7 +116,16 @@ def build_backbone(
     num_windows=4,
     positional_encoding_size=37,
 ):
-    """Build a Backbone + PositionEmbeddingSine → Joiner."""
+    """Build a Joiner by assembling a Backbone with sinusoidal position encoding.
+
+    Args:
+        encoder (str): Backbone name (e.g. 'dinov2_windowed_small').
+        hidden_dim (int): Hidden dimension for position encoding.
+        position_embedding (str): Type of position embedding ('sine' or 'v2').
+
+    Returns:
+        Joiner: Combined backbone and position encoding module.
+    """
     pos_embed = build_position_encoding(hidden_dim, position_embedding)
 
     backbone = Backbone(

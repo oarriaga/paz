@@ -4,12 +4,9 @@ import numpy as np
 import keras
 from keras import ops
 
-# Import PyTorch implementation using importlib to avoid name collision
 import sys
 import os
 import importlib.util
-
-# Import PyTorch implementation using importlib to avoid name collision
 torch_proj_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../../", "examples", "rf-detr_original_pytorch_implementation", "rfdetr", "models", "backbone", "projector.py"))
 spec = importlib.util.spec_from_file_location("torch_projector", torch_proj_path)
 torch_projector = importlib.util.module_from_spec(spec)
@@ -125,9 +122,6 @@ def test_multiscale_projector_parity():
     t_mod.eval()
     
     # Inputs (NHWC for Keras)
-    # Using SAME spatial size because MultiScaleProjector in PyTorch (as analyzed)
-    # likely treats inputs as coming from a ViT (same resolution) or requires explicit handling not visible here.
-    # To verify WEIGHT PORTING, we use compatible constraints (same resolution).
     size = 32
     x_np = [
         np.random.randn(1, size, size, 64).astype('float32'),
@@ -207,7 +201,6 @@ def test_multiscale_projector_parity():
         # t_seq[1] is Norm
         copy_ln(t_seq[1], k_seq.layers[1])
 
-    # Run Verify
     device = next(t_mod.parameters()).device
     x_torch = [torch.from_numpy(x.transpose(0, 3, 1, 2)).to(device) for x in x_np]
     
@@ -215,8 +208,7 @@ def test_multiscale_projector_parity():
         out_torch = t_mod(x_torch)
         
     out_keras = k_mod(x_np)
-    
-    
+
     for i, (o_t, o_k) in enumerate(zip(out_torch, out_keras)):
         o_t_np = to_numpy(o_t).transpose(0, 2, 3, 1)
         np.testing.assert_allclose(o_t_np, o_k, rtol=1e-4, atol=1e-4)
@@ -247,26 +239,16 @@ def test_simple_projector_parity():
 def test_conv_transpose_parity():
     set_seed()
     C_in, C_out = 64, 32
-    # PyTorch: In, Out, K, K. 
     t_mod = torch.nn.ConvTranspose2d(C_in, C_out, kernel_size=2, stride=2, bias=True)
-    
-    # Keras: K, K, Out, In
     k_mod = keras.layers.Conv2DTranspose(C_out, kernel_size=2, strides=2, padding="valid")
-    
-    # Build
+
     x_np = np.random.randn(1, 32, 32, C_in).astype('float32')
     k_mod(x_np)
-    
-    # Copy weights
-    # PyTorch weight: (In, Out, K, K)
-    # Keras weight: (K, K, Out, In)
+
+    # PT: (In, Out, K, K) -> Keras: (K, K, Out, In)
     w = t_mod.weight.data.cpu().numpy()
     b = t_mod.bias.data.cpu().numpy()
-    
-    # Transpose (2, 3, 1, 0)
-    # 2->K, 3->K, 1->Out, 0->In
     k_mod.set_weights([w.transpose(2, 3, 1, 0), b])
-    
     # Verify
     device = next(t_mod.parameters()).device
     x_torch = torch.from_numpy(x_np.transpose(0, 3, 1, 2)).to(device)
@@ -278,13 +260,8 @@ def test_conv_transpose_parity():
     
     np.testing.assert_allclose(to_numpy(out_torch).transpose(0, 2, 3, 1), out_keras, rtol=1e-5, atol=1e-5)
 
-    np.testing.assert_allclose(to_numpy(out_torch).transpose(0, 2, 3, 1), out_keras, rtol=1e-5, atol=1e-5)
-
 def test_multiscale_projector_configurations():
     set_seed()
-    
-    # Configurations to test based on backbone.py usage
-    # level2scalefactor = dict(P3=2.0, P4=1.0, P5=0.5, P6=0.25)
     configs = [
         {
             "name": "Standard (P3, P4, P5)",
@@ -332,15 +309,8 @@ def test_multiscale_projector_configurations():
                 k_sub = k_mod.stages_sampling_blocks[i][j]
                 # Check for Identity
                 if isinstance(k_sub, keras.layers.Identity):
-                     # PyTorch might be Identity too? 
-                     # PyTorch doesn't have Identity layer in sampling block, checks loop condition.
-                     # But my code puts Identity in Keras if scale=1.0? 
-                     # Wait, checking implementation logic.
-                     # PyTorch: if 1.0: pass. stages_sampling[-1] appended empty Sequential? 
-                     # No, layers=[] then Sequential(*layers). Sequential([]) identifies as identity? No.
-                     # It is an empty Sequential.
                      continue
-                
+
                 k_idx = 0
                 for t_layer in t_sub:
                     if isinstance(t_layer, torch.nn.ConvTranspose2d):
@@ -385,7 +355,7 @@ def test_multiscale_projector_configurations():
                 raise e
 
 def test_multiscale_projector_extra_pool():
-    # Keras-specific test for P6 (scale 0.25) which crashes in provided PyTorch code
+    """Test P6 scale (0.25) which uses extra max-pooling."""
     set_seed()
     in_channels = [64]
     out_channels = 32
@@ -396,18 +366,8 @@ def test_multiscale_projector_extra_pool():
     size = 32
     x_np = [np.random.randn(1, size, size, 64).astype('float32')]
     
-    # Run
     out_keras = k_mod(x_np, training=False)
-    
-    # Verify outputs
-    # Scales: 2.0 (Up 2x -> 64), 1.0 (Same -> 32), 0.5 (Down 2x -> 16), 0.25 (Extra pool on last -> 8?)
-    # Wait, 0.25 just sets use_extra_pool=True.
-    # It appends MaxPool2D(result[-1]) at the END.
-    # result[-1] is the result of the LAST STAGE.
-    # The last stage processed covers up to scale 0.5 (since 0.25 is skipped).
-    # scale 0.5 output size: size // 2 = 16.
-    # So P6 output size: 16 // 2 = 8.
-    
+
     expected_shapes = [
         (1, 64, 64, 32), # Scale 2.0
         (1, 32, 32, 32), # Scale 1.0

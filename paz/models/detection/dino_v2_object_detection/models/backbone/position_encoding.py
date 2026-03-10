@@ -31,7 +31,16 @@ class PositionEmbeddingSine(layers.Layer):
         self._export = False
 
     def _compute_pos(self, mask, align_dim_orders=True):
-        """Core position computation from a boolean mask (B, H, W)."""
+        """Compute sinusoidal position encodings from a boolean mask.
+
+        Args:
+            mask (Tensor): Boolean mask of shape (B, H, W).
+            align_dim_orders (bool): If True, return (H, W, B, C);
+                otherwise return (B, H, W, C).
+
+        Returns:
+            Tensor: Position encodings.
+        """
         not_mask = ops.cast(ops.logical_not(mask), "float32")
         y_embed = ops.cumsum(not_mask, axis=1)
         x_embed = ops.cumsum(not_mask, axis=2)
@@ -44,10 +53,10 @@ class PositionEmbeddingSine(layers.Layer):
         dim_t = ops.cast(ops.arange(self.num_pos_feats), "float32")
         dim_t = self.temperature ** (2 * (dim_t // 2) / self.num_pos_feats)
 
-        pos_x = ops.expand_dims(x_embed, axis=-1) / dim_t  # (B, H, W, D)
+        pos_x = ops.expand_dims(x_embed, axis=-1) / dim_t
         pos_y = ops.expand_dims(y_embed, axis=-1) / dim_t
 
-        # Interleave sin/cos: stack along new dim then flatten
+        # Interleave sin/cos components
         pos_x = ops.stack(
             [ops.sin(pos_x[:, :, :, 0::2]), ops.cos(pos_x[:, :, :, 1::2])],
             axis=4,
@@ -61,33 +70,34 @@ class PositionEmbeddingSine(layers.Layer):
         pos_y = ops.reshape(pos_y, ops.shape(pos_y)[:3] + (-1,))
 
         if align_dim_orders:
-            # (B, H, W, C) → (H, W, B, C)
             pos = ops.concatenate([pos_y, pos_x], axis=3)
             pos = ops.transpose(pos, (1, 2, 0, 3))
         else:
-            # (B, H, W, C)
             pos = ops.concatenate([pos_y, pos_x], axis=3)
-            # pos = ops.transpose(pos, (0, 3, 1, 2))
         return pos
 
     def call(self, tensor_or_mask, mask=None, align_dim_orders=False):
-        """
-        Forward pass.
+        """Compute position encodings.
 
-        Usage modes:
-            1) call(nested_tensor_tuple, align_dim_orders=...) 
-               where nested_tensor_tuple = (tensors, mask)
-            2) call(mask, align_dim_orders=...)   — export mode
+        Supports three calling conventions:
+            1. call(tensors, mask=mask) - explicit tensors and mask.
+            2. call((tensors, mask)) - tuple input.
+            3. call(mask) - mask-only export mode.
+
+        Args:
+            tensor_or_mask: Either a mask tensor or a (tensors, mask) tuple.
+            mask (Tensor): Optional boolean mask of shape (B, H, W).
+            align_dim_orders (bool): Output dimension ordering.
+
+        Returns:
+            Tensor: Position encodings.
         """
         if mask is not None:
-            # Called as call(tensors, mask)
             return self._compute_pos(mask, align_dim_orders=align_dim_orders)
         elif isinstance(tensor_or_mask, (tuple, list)) and len(tensor_or_mask) == 2:
-            # Called as call((tensors, mask))
             _, mask = tensor_or_mask
             return self._compute_pos(mask, align_dim_orders=align_dim_orders)
         else:
-            # Export mode: tensor_or_mask IS the mask
             return self._compute_pos(
                 tensor_or_mask, align_dim_orders=align_dim_orders
             )
@@ -106,7 +116,18 @@ class PositionEmbeddingSine(layers.Layer):
 
 
 def build_position_encoding(hidden_dim, position_embedding):
-    """Factory for position encoding layers."""
+    """Create a position encoding layer.
+
+    Args:
+        hidden_dim (int): Total hidden dimension (split across two axes).
+        position_embedding (str): Encoding type, either 'sine' or 'v2'.
+
+    Returns:
+        PositionEmbeddingSine: Configured position encoding layer.
+
+    Raises:
+        ValueError: If position_embedding type is not supported.
+    """
     N_steps = hidden_dim // 2
     if position_embedding in ("v2", "sine"):
         position_embedding = PositionEmbeddingSine(

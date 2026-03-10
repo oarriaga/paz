@@ -60,7 +60,7 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
         )
         self.num_patches = num_patches
 
-        # Patch Embedding (Conv2D) — channels-last in Keras
+        # Patch Embedding (Conv2D)
         self.projection = layers.Conv2D(
             hidden_size,
             kernel_size=self.patch_size,
@@ -115,7 +115,16 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
         return config
 
     def interpolate_pos_encoding(self, embeddings, height, width):
-        """Interpolate position encodings for arbitrary resolution."""
+        """Interpolate position encodings to match arbitrary input resolution.
+
+        Args:
+            embeddings (Tensor): Token embeddings of shape (B, N, D).
+            height (int): Input image height.
+            width (int): Input image width.
+
+        Returns:
+            Tensor: Position embeddings of shape (1, N, D).
+        """
         num_patches = ops.shape(embeddings)[1] - 1
         num_positions = ops.shape(self.position_embeddings)[1] - 1
 
@@ -135,7 +144,7 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
 
         sqrt_num_positions = int(math.sqrt(num_positions))
 
-        # Reshape to (1, H, W, D) for Keras image resize
+        # Reshape to (1, H, W, D) for image resize
         patch_pos_embed = ops.reshape(
             patch_pos_embed, (1, sqrt_num_positions, sqrt_num_positions, dim)
         )
@@ -151,26 +160,36 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
         return ops.concatenate([class_pos_embed, patch_pos_embed], axis=1)
 
     def call(self, pixel_values, training=None):
+        """Compute patch embeddings with positional encoding and optional windowing.
+
+        Args:
+            pixel_values (Tensor): Input images of shape (B, H, W, C).
+            training (bool): Whether in training mode.
+
+        Returns:
+            Tensor: Token embeddings. Shape is (B, N, D) without windowing
+                or (B*num_windows^2, N_win, D) with windowing.
+        """
         batch_size = ops.shape(pixel_values)[0]
         height = ops.shape(pixel_values)[1]
         width = ops.shape(pixel_values)[2]
 
-        # 1. Patch Embeddings
-        embeddings = self.projection(pixel_values)  # (B, H', W', C)
+        # Patch Embeddings
+        embeddings = self.projection(pixel_values)
         embeddings = ops.reshape(
             embeddings, (batch_size, -1, self.hidden_size)
-        )  # (B, N, C)
+        )
 
-        # 2. Add CLS Token
+        # Add CLS Token
         cls_tokens = ops.broadcast_to(self.cls_token, (batch_size, 1, self.hidden_size))
         embeddings = ops.concatenate([cls_tokens, embeddings], axis=1)
 
-        # 3. Add Positional Encoding
+        # Add Positional Encoding
         embeddings = embeddings + self.interpolate_pos_encoding(
             embeddings, height, width
         )
 
-        # 4. Windowing Logic
+        # Windowing
         if self.num_windows > 1:
             num_h_patches = height // self.patch_size[0]
             num_w_patches = width // self.patch_size[1]
@@ -239,7 +258,7 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
                 [windowed_cls_token, windowed_pixel_tokens], axis=1
             )
 
-        # 5. Register Tokens
+        # Register Tokens
         if self.num_register_tokens > 0:
             current_batch_size = ops.shape(embeddings)[0]
             register_tokens = ops.broadcast_to(
@@ -256,9 +275,11 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="backbone")
 class WindowedDinov2Layer(layers.Layer):
-    """
-    DINOv2 Layer with optional Windowed Attention support.
-    Corresponds to PyTorch WindowedDinov2WithRegistersLayer.
+    """Single DINOv2 transformer layer with optional windowed attention.
+
+    Attributes:
+        hidden_size (int): Hidden dimension.
+        num_windows (int): Number of attention windows per axis.
     """
 
     def __init__(
@@ -342,6 +363,17 @@ class WindowedDinov2Layer(layers.Layer):
         return config
 
     def call(self, hidden_states, training=None, run_full_attention=False):
+        """Apply self-attention and FFN with optional window reshaping.
+
+        Args:
+            hidden_states (Tensor): Input of shape (B, N, D).
+            training (bool): Whether in training mode.
+            run_full_attention (bool): If True, merge windows before
+                attention and re-split afterwards.
+
+        Returns:
+            Tensor: Output of shape (B, N, D).
+        """
         shortcut = hidden_states
 
         x = self.norm1(hidden_states)
@@ -365,7 +397,6 @@ class WindowedDinov2Layer(layers.Layer):
         x_attn = self.layer_scale1(x_attn)
         x = shortcut + self.drop_path1(x_attn, training=training)
 
-        # FFN
         shortcut = x
         x = self.norm2(x)
         x_mlp = self.mlp(x, training=training)
@@ -377,9 +408,12 @@ class WindowedDinov2Layer(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="backbone")
 class WindowedDinov2Encoder(layers.Layer):
-    """
-    Stacks WindowedDinov2Layer blocks.
-    Corresponds to PyTorch WindowedDinov2WithRegistersEncoder.
+    """Stack of WindowedDinov2Layer blocks.
+
+    Attributes:
+        num_hidden_layers (int): Number of transformer layers.
+        window_block_indexes (list): Layer indices using windowed attention.
+        out_feature_indexes (list): Layer indices for feature extraction.
     """
 
     def __init__(
@@ -416,7 +450,7 @@ class WindowedDinov2Encoder(layers.Layer):
             out_feature_indexes if out_feature_indexes is not None else []
         )
 
-        # Stochastic Depth Decay Rule
+        # Stochastic depth decay
         dpr = [
             (
                 x * drop_path_rate / (num_hidden_layers - 1)
@@ -462,6 +496,15 @@ class WindowedDinov2Encoder(layers.Layer):
         return config
 
     def call(self, hidden_states, training=None):
+        """Run input through all encoder layers.
+
+        Args:
+            hidden_states (Tensor): Input of shape (B, N, D).
+            training (bool): Whether in training mode.
+
+        Returns:
+            list: Hidden states from each layer.
+        """
         all_hidden_states = []
 
         for i, layer_module in enumerate(self.encoder_layers):
@@ -479,9 +522,13 @@ class WindowedDinov2Encoder(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="backbone")
 class WindowedDinov2Model(Model):
-    """
-    Full DINOv2 Model: Embeddings + Encoder + LayerNorm.
-    Corresponds to PyTorch WindowedDinov2WithRegistersModel.
+    """Complete DINOv2 model: patch embeddings, encoder, and layer normalization.
+
+    Attributes:
+        hidden_size (int): Hidden dimension.
+        num_register_tokens (int): Number of register tokens.
+        patch_size (int): Patch size for tokenization.
+        num_windows (int): Number of attention windows per axis.
     """
 
     def __init__(
@@ -594,6 +641,17 @@ class WindowedDinov2Model(Model):
         return self.num_register_tokens
 
     def call(self, pixel_values, training=None):
+        """Forward pass through embeddings, encoder, and normalization.
+
+        Args:
+            pixel_values (Tensor): Input images of shape (B, H, W, C).
+            training (bool): Whether in training mode.
+
+        Returns:
+            tuple: (sequence_output, encoder_outputs) where sequence_output
+                is the normalized final hidden state and encoder_outputs
+                is a list of all layer outputs.
+        """
         embedding_output = self.embeddings(pixel_values, training=training)
         encoder_outputs = self.encoder(embedding_output, training=training)
 
@@ -623,6 +681,7 @@ def dinov2_windowed_small(
     window_block_indexes=None,
     **kwargs,
 ):
+    """Build a small DINOv2 model with windowed attention (384-dim, 12 layers)."""
     if window_block_indexes is None:
         window_block_indexes = (
             list(range(0, 2))
@@ -652,6 +711,7 @@ def dinov2_windowed_base(
     window_block_indexes=None,
     **kwargs,
 ):
+    """Build a base DINOv2 model with windowed attention (768-dim, 12 layers)."""
     if window_block_indexes is None:
         window_block_indexes = (
             list(range(0, 2))
@@ -681,6 +741,7 @@ def dinov2_windowed_large(
     window_block_indexes=None,
     **kwargs,
 ):
+    """Build a large DINOv2 model with windowed attention (1024-dim, 24 layers)."""
     if window_block_indexes is None:
         window_block_indexes = (
             list(range(0, 5))
@@ -710,6 +771,7 @@ def dinov2_windowed_giant(
     window_block_indexes=None,
     **kwargs,
 ):
+    """Build a giant DINOv2 model with windowed attention (1536-dim, 40 layers, SwiGLU)."""
     if window_block_indexes is None:
         window_block_indexes = list(range(0, 39))
     return WindowedDinov2Model(

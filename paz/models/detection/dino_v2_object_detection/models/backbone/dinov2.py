@@ -78,32 +78,19 @@ class DinoV2(layers.Layer):
         self.out_feature_indexes = out_feature_indexes
         self.size = size
         self.use_registers = use_registers
-
-        # window_block_indexes will be derived below after loading config
-        # (needs num_hidden_layers from the config file)
         self.window_block_indexes = window_block_indexes
 
         # Load config from JSON
         dino_config = get_config(size, use_registers)
 
-        # Use the actual target resolution for image_size so that position
-        # embeddings are created at the runtime patch-grid size.  This avoids
-        # runtime pos-embedding interpolation (whose coordinate mapping
-        # differs between PyTorch and TF/Keras) and eliminates the parity
-        # drift seen e.g. for RFDETRBase where pos_enc_size*patch != res.
+        # Set image_size to the actual target resolution so that position
+        # embeddings match the runtime patch-grid size without interpolation.
         target_resolution = shape[0]
         if target_resolution != dino_config["image_size"]:
             dino_config["image_size"] = target_resolution
 
         if patch_size != 14:
             dino_config["patch_size"] = patch_size
-
-        print(
-            f"DEBUG DinoV2 init: size={size}, patch_size={patch_size}, pos_enc_size={positional_encoding_size}"
-        )
-        print(
-            f"DEBUG DinoV2 config: image_size={dino_config['image_size']}, patch_size={dino_config['patch_size']}"
-        )
 
         num_register_tokens = (
             dino_config.get("num_register_tokens", 4) if use_registers else 0
@@ -112,17 +99,10 @@ class DinoV2(layers.Layer):
         num_hidden_layers = dino_config.get("num_hidden_layers", 12)
 
         if window_block_indexes is None:
-            # Match PyTorch behavior in rfdetr/models/backbone/dinov2.py
-            # PT uses out_feature_indexes=[3, 6, 9, 12] for Nano/Small/etc.
-            # and derives window_block_indexes as:
-            # set(range(13)).difference_update([3, 6, 9, 12]) -> [0, 1, 2, 4, 5, 7, 8, 10, 11]
-            # Since our Keras out_feature_indexes [2, 5, 8, 11] match PT [3, 6, 9, 12],
-            # we should use the corresponding indices.
             pt_out_indices = [idx + 1 for idx in out_feature_indexes]
             wb_indexes = set(range(num_hidden_layers + 1))
             wb_indexes.difference_update(pt_out_indices)
             window_block_indexes = sorted(list(wb_indexes))
-            print(f"DEBUG: Derived window_block_indexes: {window_block_indexes}")
 
         self.window_block_indexes = window_block_indexes
 
@@ -177,14 +157,15 @@ class DinoV2(layers.Layer):
         return config
 
     def call(self, x, training=None):
-        """
-        Forward pass: runs the encoder, collects multi-scale feature maps.
+        """Extract multi-scale feature maps from the encoder.
 
         Args:
-            x: Input tensor of shape (B, H, W, C) in channels-last format.
+            x (Tensor): Input tensor of shape (B, H, W, C).
+            training (bool): Whether in training mode.
 
         Returns:
-            list of tensors, each (B, H', W', embed_dim), one per out_feature_index.
+            list: Feature tensors, each of shape (B, H', W', embed_dim),
+                one per entry in out_feature_indexes.
         """
         batch_size = ops.shape(x)[0]
         height = ops.shape(x)[1]
@@ -195,10 +176,8 @@ class DinoV2(layers.Layer):
         num_register_tokens = self.encoder.num_register_tokens
         nw = self.num_windows
 
-        # Run embeddings
         embedding_output = self.encoder.embeddings(x, training=training)
 
-        # Run encoder layers individually to collect intermediate outputs
         hidden_states = embedding_output
         outputs = []
         for i, layer_module in enumerate(self.encoder.encoder.encoder_layers):
@@ -212,11 +191,9 @@ class DinoV2(layers.Layer):
             if i in self.out_feature_indexes:
                 normed = self.encoder.layernorm(hidden_states)
 
-                # Remove CLS + register tokens
                 start_idx = 1 + num_register_tokens
                 feature = normed[:, start_idx:]
 
-                # Un-window if needed
                 if nw > 1:
                     pad_h = (nw - patch_h % nw) % nw
                     pad_w = (nw - patch_w % nw) % nw

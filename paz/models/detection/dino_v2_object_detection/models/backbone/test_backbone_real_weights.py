@@ -5,7 +5,7 @@ import sys
 import os
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
-import keras  # noqa: E402
+import keras
 
 # Ensure project root is in path
 project_root = os.path.abspath(
