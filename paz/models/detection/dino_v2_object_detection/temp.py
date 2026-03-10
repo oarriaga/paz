@@ -22,7 +22,7 @@ from rfdetr import (
     RFDETRLarge as PT_RFDETRLarge,
 )
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────────────────────────
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_visual_compare")
 THRESHOLD = 0.3
 
@@ -40,7 +40,9 @@ VARIANTS = {
     "large": (K_RFDETRLarge, PT_RFDETRLarge),
 }
 
-# ── Drawing helpers (pure OpenCV, no supervision) ────────────────────────────
+# ── Drawing helpers (pure OpenCV) ─────────────────────────────────────────────
+
+# Twelve distinct colours for bounding-box visualisation
 COLORS = [
     (230, 25, 75),
     (60, 180, 75),
@@ -58,11 +60,23 @@ COLORS = [
 
 
 def _color_for(class_id):
+    """Return an RGB colour tuple for visible class identification."""
     return COLORS[class_id % len(COLORS)]
 
 
 def _draw_detections(image, boxes, scores, labels, title=""):
-    """Draw boxes + labels on a copy of the image. Returns BGR."""
+    """Draw bounding boxes and labels on a copy of the image.
+
+    Args:
+        image (np.ndarray): ``(H, W, 3)`` RGB uint8 image.
+        boxes (np.ndarray): ``(N, 4)`` xyxy bounding boxes.
+        scores (np.ndarray): ``(N,)`` confidence scores.
+        labels (np.ndarray): ``(N,)`` class indices.
+        title (str): Optional banner text overlaid at the top.
+
+    Returns:
+        np.ndarray: BGR image with annotations.
+    """
     vis = cv2.cvtColor(image.copy(), cv2.COLOR_RGB2BGR)
     for box, score, cid in zip(boxes, scores, labels):
         x1, y1, x2, y2 = map(int, box)
@@ -88,11 +102,13 @@ def _draw_detections(image, boxes, scores, labels, title=""):
 
 
 def _load_image(url):
+    """Download an image from *url* and return it as an RGB uint8 array."""
     data = urlopen(url).read()
     return np.array(Image.open(io.BytesIO(data)).convert("RGB"), dtype=np.uint8)
 
 
 def _pad_height(im, target_h):
+    """Pad *im* with black rows at the bottom to reach *target_h*."""
     if im.shape[0] < target_h:
         pad = np.zeros((target_h - im.shape[0], im.shape[1], 3), dtype=np.uint8)
         return np.vstack([im, pad])
@@ -101,6 +117,7 @@ def _pad_height(im, target_h):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    """Run detection on all variants and images, saving comparison JPEGs."""
     os.makedirs(OUT_DIR, exist_ok=True)
 
     # Download all images first

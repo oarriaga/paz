@@ -1,16 +1,3 @@
-"""Smoke-test: RFDETRSmall end-to-end training on random dummy data.
-
-This script verifies that the full training pipeline works:
-  1. RFDETRSmall() instantiation
-  2. Callback registration (on_fit_epoch_end)
-  3. model.train() with a tiny COCO-format dummy dataset
-
-No real learning is expected — the goal is to confirm that the code
-path from model construction through data loading, forward pass,
-loss computation, gradient update, and callback invocation executes
-without error.
-"""
-
 import json
 import os
 import shutil

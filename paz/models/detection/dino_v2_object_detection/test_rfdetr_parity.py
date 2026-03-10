@@ -14,7 +14,7 @@ project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# ---- PyTorch guard -------------------------------------------------------
+# ---- Reference framework guard -------------------------------------------
 try:
     import torch
     import torchvision.transforms.functional as TF
@@ -24,7 +24,7 @@ try:
 except ImportError:
     HAS_TORCH = False
 
-# ---- PyTorch RFDETR imports ---------------------------------------------
+# ---- Reference RF-DETR imports -------------------------------------------
 if HAS_TORCH:
     try:
         from rfdetr import (
@@ -86,7 +86,7 @@ if HAS_TORCH:
     except ImportError:
         NestedTensor = None
 
-# ---- Keras RFDETR imports ------------------------------------------------
+# ---- Keras RF-DETR imports -----------------------------------------------
 from paz.models.detection.dino_v2_object_detection.detr import (
     RFDETR as K_RFDETR,
     RFDETRBase as K_RFDETRBase,
@@ -120,7 +120,7 @@ from paz.models.detection.dino_v2_object_detection.main import (
 )
 from paz.models.detection.dino_v2_object_detection.utils.coco_classes import COCO_CLASSES
 
-# ---- Weight-transfer utilities (reused from the LWDETR parity suite) -----
+# ---- Weight-transfer utilities -------------------------------------------
 if HAS_TORCH:
     from paz.models.detection.dino_v2_object_detection.models.lwdetr.test_lwdetr_with_real_weights import (
         transfer_full_model_weights,
@@ -236,7 +236,7 @@ def _check_backbone_parity_fallback(
     """Check backbone parity when full-model parity fails.
 
     When the two-stage transformer's top-k selects different proposals
-    due to float32 precision differences between JAX and PyTorch, the
+    due to float32 precision differences between numerical backends, the
     decoder input diverges even though the backbone (weight-transfer
     target) matches.  This helper returns True if backbone features
     match within tolerance, indicating top-k instability rather than a
@@ -244,8 +244,8 @@ def _check_backbone_parity_fallback(
 
     Parameters
     ----------
-    pt_model : PyTorch RFDETR model wrapper
-    keras_facade : Keras RFDETR facade
+    pt_model : reference RF-DETR model wrapper
+    keras_facade : Keras RF-DETR facade
     k_input : np.ndarray (1, H, W, 3) float32 preprocessed input
     description : str  context label for diagnostics
 
@@ -320,15 +320,15 @@ def all_coco_images_float(all_coco_images):
 
 
 # ---------------------------------------------------------------------------
-# PT model fixture: build once per module so tests share the same weights
+# Reference model fixture: build once per module so tests share the same weights
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
 def pt_nano():
-    """Instantiate PyTorch RFDETRNano (downloads weights if needed)."""
+    """Instantiate reference RFDETRNano (downloads weights if needed)."""
     if not HAS_TORCH:
-        pytest.skip("PyTorch not installed")
+        pytest.skip("Reference library not installed")
     model = PT_RFDETRNano()
     model.model.model.eval()
     model.model.model.cpu()
@@ -337,7 +337,7 @@ def pt_nano():
 
 @pytest.fixture(scope="module")
 def keras_nano_with_pt_weights(pt_nano):
-    """Build Keras RFDETRNano via the RFDETR facade and transfer PT weights."""
+    """Build Keras RFDETRNano via the RFDETR facade and transfer reference weights."""
     facade = K_RFDETRNano(pretrain_weights=None)
 
     # Build the LWDETR by running a dummy forward pass (use training=True
@@ -347,7 +347,7 @@ def keras_nano_with_pt_weights(pt_nano):
     dummy = np.ones((1, res, res, 3), dtype=np.float32) * 0.5
     facade.model.model(dummy, training=True)
 
-    # Transfer weights from PyTorch to the internal LWDETR model
+    # Transfer weights from the reference model to the internal LWDETR model
     config = MODEL_CONFIGS["RFDETRNano"]
     transfer_full_model_weights(pt_nano, facade.model.model, config)
 
@@ -368,13 +368,13 @@ class TestRFDETRClassMethods:
     # ---------- means / stds  -----------------------------------------
 
     def test_means_match_pytorch(self):
-        """Keras RFDETR.means matches PyTorch values."""
+        """ImageNet channel means match expected values."""
         k_means = K_RFDETR.means
         pt_means = np.array([0.485, 0.456, 0.406], dtype="float32")
         np.testing.assert_allclose(k_means, pt_means, atol=1e-7)
 
     def test_stds_match_pytorch(self):
-        """Keras RFDETR.stds matches PyTorch values."""
+        """ImageNet channel stds match expected values."""
         k_stds = K_RFDETR.stds
         pt_stds = np.array([0.229, 0.224, 0.225], dtype="float32")
         np.testing.assert_allclose(k_stds, pt_stds, atol=1e-7)
@@ -435,13 +435,13 @@ class TestRFDETRClassMethods:
 
 
 # =====================================================================
-# 2. CONFIG PARITY: Keras config values vs PyTorch config values
+# 2. CONFIG PARITY: Keras config values vs reference config values
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestConfigParity:
-    """Cross-check Keras dataclass configs against PyTorch Pydantic configs."""
+    """Cross-check Keras config values against reference config values."""
 
     def test_nano_config_parity(self):
         pt_cfg = PT_RFDETRNano().model_config
@@ -470,9 +470,11 @@ class TestConfigParity:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestPostProcessParity:
-    """Compare Keras PostProcess against PyTorch PostProcess with identical
+    """PostProcess parity tests.
+
+    Compares Keras PostProcess against reference PostProcess with identical
     synthetic model outputs, ensuring scores/labels/boxes match to 1e-4."""
 
     def _make_synthetic_outputs(self, B=2, Q=300, C=91, seed=42):
@@ -488,7 +490,7 @@ class TestPostProcessParity:
         logits, boxes = self._make_synthetic_outputs()
         target_sizes = np.array([[480, 640], [360, 480]], dtype="float32")
 
-        # PyTorch
+        # Reference
         pt_pp = pt_module.PostProcess(num_select=300)
         pt_out = pt_pp(
             {
@@ -580,10 +582,10 @@ class TestPostProcessParity:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestPreprocessingParity:
-    """Ensure Keras Model.predict preprocessing matches PyTorch RFDETR.predict
-    preprocessing step-by-step, using a real COCO image."""
+    """Ensure Keras Model.predict preprocessing matches the reference
+    RFDETR.predict preprocessing step-by-step, using a real COCO image."""
 
     def test_normalisation_parity(self, coco_image_float):
         """ImageNet normalisation (x - mean) / std identical to 1e-6."""
@@ -594,7 +596,7 @@ class TestPreprocessingParity:
         # Keras path: (H, W, C), normalise in HWC
         keras_normed = (img - means) / stds
 
-        # PyTorch path: CHW, torchvision.F.normalize
+        # Reference path: CHW, torchvision.F.normalize
         img_chw = torch.from_numpy(img).permute(2, 0, 1)  # (3, H, W)
         pt_normed = TF.normalize(img_chw, means.tolist(), stds.tolist())
         pt_normed_hwc = pt_normed.permute(1, 2, 0).numpy()
@@ -603,13 +605,13 @@ class TestPreprocessingParity:
             keras_normed,
             pt_normed_hwc,
             atol=1e-6,
-            err_msg="Normalisation mismatch between Keras and PyTorch paths",
+            err_msg="Normalisation mismatch between Keras and reference paths",
         )
 
     def test_resize_parity(self, coco_image_float):
         """Bilinear resize produces outputs with similar statistics.
 
-        Note: Keras (TF backend) and PyTorch resize use different
+        Note: Keras (TF backend) and reference framework resize use different
         anti-aliasing and pixel-alignment conventions, so per-pixel
         values can differ significantly.  We verify shape and
         statistical proximity instead.
@@ -622,7 +624,7 @@ class TestPreprocessingParity:
         keras_resized = ops.image.resize(keras_t, (resolution, resolution))
         keras_resized = ops.convert_to_numpy(keras_resized)[0]
 
-        # PyTorch
+        # Reference
         img_chw = torch.from_numpy(img).permute(2, 0, 1)  # (3, H, W)
         pt_resized = TF.resize(img_chw, (resolution, resolution))
         pt_resized_hwc = pt_resized.permute(1, 2, 0).numpy()
@@ -660,7 +662,7 @@ class TestPreprocessingParity:
             ops.image.resize(k_t, (resolution, resolution))
         )[0]
 
-        # PyTorch pipeline (as in RFDETR.predict)
+        # Reference pipeline (as in RFDETR.predict)
         img_chw = torch.from_numpy(img).permute(2, 0, 1)
         pt_normed = TF.normalize(img_chw, means.tolist(), stds.tolist())
         pt_resized = TF.resize(pt_normed, (resolution, resolution))
@@ -687,7 +689,7 @@ class TestPreprocessingParity:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestForwardPassParity:
     """Full forward-pass parity using the RFDETRNano model with real
     pretrained weights and a real COCO image."""
@@ -709,7 +711,7 @@ class TestForwardPassParity:
         k_t = ops.convert_to_tensor(img_normed[np.newaxis], dtype="float32")
         k_input = ops.convert_to_numpy(ops.image.resize(k_t, (res, res)))
 
-        # PyTorch: same pixels but permuted to CHW
+        # Reference: same pixels but permuted to CHW
         pt_input = torch.from_numpy(k_input).permute(0, 3, 1, 2)
         mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask_pt)
@@ -784,11 +786,11 @@ class TestForwardPassParity:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestPredictParity:
     """End-to-end ``predict`` parity: real image → postprocessed detections.
 
-    Since Keras and PyTorch may use slightly different resize interpolation,
+    Since Keras and the reference framework may use slightly different resize interpolation,
     we compare the PostProcess outputs on *identical* preprocessed tensors
     (bypassing the resize step) and also test the full pipeline tolerantly.
     """
@@ -813,16 +815,16 @@ class TestPredictParity:
         mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask_pt)
 
-        # Get raw outputs from PyTorch
+        # Get raw outputs from reference model
         with torch.no_grad():
             pt_raw = pt_nano.model.model(samples)
 
-        # Use PyTorch raw outputs for both PostProcess implementations
+        # Use reference raw outputs for both PostProcess implementations
         logits_np = pt_raw["pred_logits"].cpu().numpy()
         boxes_np = pt_raw["pred_boxes"].cpu().numpy()
         target_sizes_np = np.array([[H, W]], dtype="float32")
 
-        # PyTorch PostProcess
+        # Reference PostProcess
         pt_pp = pt_nano.model.postprocess
         pt_results = pt_pp(
             {
@@ -880,7 +882,7 @@ class TestPredictParity:
         img = coco_image_float
         H, W, _ = img.shape
 
-        # ---- PyTorch predict pipeline ----
+        # ---- Reference predict pipeline ----
         img_chw = torch.from_numpy(img).permute(2, 0, 1)
         pt_normed = TF.normalize(img_chw, means.tolist(), stds.tolist())
         pt_resized = TF.resize(pt_normed, (res, res))
@@ -931,7 +933,7 @@ class TestPredictParity:
             np.sort(k_scores[k_top_k_idx])[::-1],
             np.sort(pt_scores[pt_top_k_idx])[::-1],
             atol=2e-2,
-            err_msg="Top-4 scores diverge between Keras and PyTorch predict",
+            err_msg="Top-4 scores diverge between Keras and reference predict",
         )
 
         # Labels: same categories detected (as sorted lists)
@@ -959,7 +961,7 @@ class TestPredictParity:
             k_sorted_boxes,
             pt_sorted_boxes,
             atol=10.0,
-            err_msg="Top-4 boxes diverge between Keras and PyTorch predict "
+            err_msg="Top-4 boxes diverge between Keras and reference predict "
             "(> 10 pixel tolerance after label-based sorting)",
         )
 
@@ -976,7 +978,7 @@ class TestPredictParity:
         H, W, _ = img.shape
         threshold = 0.5
 
-        # --- PyTorch ---
+        # --- Reference ---
         img_chw = torch.from_numpy(img).permute(2, 0, 1)
         pt_normed = TF.normalize(img_chw, means.tolist(), stds.tolist())
         pt_resized = TF.resize(pt_normed, (res, res))
@@ -1028,7 +1030,7 @@ class TestPredictParity:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestBackboneParity:
     """Backbone feature-map parity on a real image."""
 
@@ -1235,15 +1237,15 @@ class TestRFDETRPredictUint8:
 
 
 # =====================================================================
-# 12. FULL PREDICT PARITY (PT ↔ Keras, real weights, real image)
+# 12. FULL PREDICT PARITY (reference ↔ Keras, real weights, real image)
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestFullPredictParity:
     """End-to-end RFDETR.predict / Model.predict parity with real weights
     and a real COCO image.  Uses the same preprocessed tensor for both
-    frameworks to isolate model+postprocess differences."""
+    implementations to isolate model+postprocess differences."""
 
     def test_predict_same_input_same_output(
         self, coco_image_float, pt_nano, keras_nano_with_pt_weights
@@ -1260,7 +1262,7 @@ class TestFullPredictParity:
         k_t = ops.convert_to_tensor(img_normed[np.newaxis], dtype="float32")
         k_input_np = ops.convert_to_numpy(ops.image.resize(k_t, (res, res)))
 
-        # PT forward
+        # Reference forward
         pt_input = torch.from_numpy(k_input_np).permute(0, 3, 1, 2)
         mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask_pt)
@@ -1318,7 +1320,7 @@ class TestFullPredictParity:
         self, coco_image_float, pt_nano, keras_nano_with_pt_weights
     ):
         """The COCO cat image should detect 'cat' (class 17) with both
-        frameworks."""
+        implementations."""
         facade = keras_nano_with_pt_weights
         res = facade.resolution
         means = np.array([0.485, 0.456, 0.406], dtype="float32")
@@ -1330,7 +1332,7 @@ class TestFullPredictParity:
         k_t = ops.convert_to_tensor(img_normed[np.newaxis], dtype="float32")
         k_input_np = ops.convert_to_numpy(ops.image.resize(k_t, (res, res)))
 
-        # PT
+        # Reference
         pt_input = torch.from_numpy(k_input_np).permute(0, 3, 1, 2)
         with torch.no_grad():
             pt_raw = pt_nano.model.model(pt_input)
@@ -1374,11 +1376,11 @@ class TestFullPredictParity:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestMultiImageDetection:
     """Run detection on multiple diverse COCO images and print the
     detected classes with confidence scores.  Verifies that expected
-    objects are detected by both Keras and PyTorch."""
+    objects are detected by both Keras and the reference implementation."""
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_detection_on_image(
@@ -1389,7 +1391,7 @@ class TestMultiImageDetection:
         keras_nano_with_pt_weights,
     ):
         """Detect objects on each COCO image, print results, and verify
-        expected classes are found by both frameworks."""
+        expected classes are found by both implementations."""
         facade = keras_nano_with_pt_weights
         res = facade.resolution
         means = np.array([0.485, 0.456, 0.406], dtype="float32")
@@ -1405,7 +1407,7 @@ class TestMultiImageDetection:
         k_t = ops.convert_to_tensor(img_normed[np.newaxis], dtype="float32")
         k_input_np = ops.convert_to_numpy(ops.image.resize(k_t, (res, res)))
 
-        # ---- PyTorch forward + PostProcess ----
+        # ---- Reference forward + PostProcess ----
         pt_input = torch.from_numpy(k_input_np).permute(0, 3, 1, 2)
         mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask_pt)
@@ -1432,7 +1434,7 @@ class TestMultiImageDetection:
         print(f"  Size: {W}x{H}, ID: {info['id']}")
         print(f"{'='*60}")
 
-        print("\n  [PyTorch RFDETRNano]")
+        print("\n  [Reference RFDETRNano]")
         _print_detections(pt_scores, pt_labels, f"PT / {image_name}", threshold=0.3)
 
         print("  [Keras RFDETRNano]")
@@ -1517,7 +1519,7 @@ class TestMultiImageDetection:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestRFDETRFacade:
     """Test the high-level ``RFDETR`` / ``RFDETRNano`` facade interface
     end-to-end, including instantiation, properties, and prediction
@@ -1525,10 +1527,11 @@ class TestRFDETRFacade:
 
     @pytest.fixture(scope="class")
     def keras_facade(self, keras_nano_with_pt_weights):
-        """Return the Keras RFDETRNano facade with transferred PT weights.
+        """Return the Keras RFDETRNano facade with transferred reference weights.
 
         The ``keras_nano_with_pt_weights`` fixture already builds the
-        facade via ``K_RFDETRNano`` with weights transferred from PyTorch.
+        facade via ``K_RFDETRNano`` with weights transferred from the
+        reference model.
         """
         return keras_nano_with_pt_weights
 
@@ -1623,12 +1626,12 @@ class TestRFDETRFacade:
         # Both should detect the same thing (same image)
         assert set(results[0]["labels"].tolist()) == set(results[1]["labels"].tolist())
 
-    # ---- Predict parity: facade vs PyTorch ----
+    # ---- Predict parity: facade vs reference ----
 
     def test_facade_predict_parity_with_pytorch(
         self, keras_facade, pt_nano, coco_image_float
     ):
-        """Facade predict output matches PyTorch RFDETR.predict output
+        """Facade predict output matches reference RFDETR.predict output
         for the same preprocessed input (scores within tolerance)."""
         img = coco_image_float
         H, W, _ = img.shape
@@ -1641,7 +1644,7 @@ class TestRFDETRFacade:
         k_t = ops.convert_to_tensor(img_normed[np.newaxis], dtype="float32")
         k_input_np = ops.convert_to_numpy(ops.image.resize(k_t, (res, res)))
 
-        # PyTorch raw forward
+        # Reference raw forward
         pt_input = torch.from_numpy(k_input_np).permute(0, 3, 1, 2)
         mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask_pt)
@@ -1664,8 +1667,8 @@ class TestRFDETRFacade:
         k_labels = ops.convert_to_numpy(k_labels)[0]
         k_boxes = ops.convert_to_numpy(k_boxes)[0]
 
-        print("\n  [Facade parity — PT vs Keras on identical input]")
-        print("  PyTorch:")
+        print("\n  [Facade parity — reference vs Keras on identical input]")
+        print("  Reference:")
         _print_detections(pt_scores, pt_labels, "PT", threshold=0.3)
         print("  Keras (via facade):")
         _print_detections(k_scores, k_labels, "Keras facade", threshold=0.3)
@@ -1710,7 +1713,7 @@ class TestRFDETRFacade:
 # =====================================================================
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestMultiImageForwardParity:
     """Forward-pass parity on every test image (not just cats).
     Prints detailed detection output with class names and confidence."""
@@ -1735,7 +1738,7 @@ class TestMultiImageForwardParity:
         k_t = ops.convert_to_tensor(img_normed[np.newaxis], dtype="float32")
         k_input = ops.convert_to_numpy(ops.image.resize(k_t, (res, res)))
 
-        # PyTorch
+        # Reference
         pt_input = torch.from_numpy(k_input).permute(0, 3, 1, 2)
         mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask_pt)
@@ -1798,12 +1801,12 @@ _VARIANT_INFO = {
 
 
 def _build_and_transfer_variant(variant_name):
-    """Build Keras facade for *variant_name*, transfer PT weights, and
-    register in ``_WEIGHT_SAVE_REGISTRY``.  Returns ``(pt_model, facade)``.
+    """Build Keras facade for *variant_name*, transfer reference weights,
+    and register in ``_WEIGHT_SAVE_REGISTRY``.  Returns ``(pt_model, facade)``.
     """
     config = MODEL_CONFIGS[variant_name]
 
-    # PyTorch model (loads weights from local .pth / .pt file)
+    # Reference model (loads weights from local .pth / .pt file)
     # Platform models (XLarge, 2XLarge) require license acceptance
     pt_cls = config["pt_class"]
     try:
@@ -1813,7 +1816,7 @@ def _build_and_transfer_variant(variant_name):
     pt_model.model.model.eval()
     pt_model.model.model.cpu()
 
-    # Detect num_classes from the PT model (it may have been reinitialised,
+    # Detect num_classes from the reference model (it may have been reinitialised,
     # e.g. XLarge/2XLarge ship with 365 classes but rfdetr resets to 91).
     # NOTE: ``reinitialize_detection_head`` only resizes ``.weight.data`` /
     # ``.bias.data`` — it does NOT update the ``out_features`` attribute.
@@ -1831,7 +1834,7 @@ def _build_and_transfer_variant(variant_name):
     dummy = np.ones((1, res, res, 3), dtype=np.float32) * 0.5
     facade.model.model(dummy, training=True)
 
-    # Transfer weights from PyTorch to Keras LWDETR
+    # Transfer weights from reference model to Keras LWDETR
     transfer_full_model_weights(pt_model, facade.model.model, config)
 
     # Register the Keras LWDETR for weight saving
@@ -1841,14 +1844,14 @@ def _build_and_transfer_variant(variant_name):
     return pt_model, facade
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestAllVariantsParity:
     """Build every RFDETR variant (detection + segmentation), transfer
-    weights from PyTorch, verify forward-pass parity, and register each
+    weights from the reference model, verify forward-pass parity, and register each
     Keras LWDETR model for weight saving.
 
     Each variant is parameterised as a separate class invocation so that
-    the PyTorch model can be freed after testing while the Keras model
+    the reference model can be freed after testing while the Keras model
     persists in ``_WEIGHT_SAVE_REGISTRY``.
     """
 
@@ -1864,7 +1867,7 @@ class TestAllVariantsParity:
         print(f"{'='*60}")
         pt_model, facade = _build_and_transfer_variant(variant_name)
         yield variant_name, pt_model, facade
-        # Free PyTorch model to recover GPU memory
+        # Free reference model to recover GPU memory
         del pt_model
         gc.collect()
         if torch.cuda.is_available():
@@ -1876,7 +1879,7 @@ class TestAllVariantsParity:
         When strict parity fails, a backbone-level check is performed.
         The two-stage transformer selects top-k proposals via
         ``ops.top_k`` on encoder-output class logits.  Tiny float32
-        precision differences between JAX and PyTorch backends can swap
+        precision differences between numerical backends can swap
         near-tied proposals, which changes the decoder input entirely
         and causes large output differences even though the backbone
         features match to <1e-5.  When this is detected (backbone
@@ -1959,7 +1962,7 @@ class TestAllVariantsParity:
 
         if backbone_max_diff < strict_tol:
             # Backbone features match — divergence is caused by two-stage
-            # top-k proposal instability between JAX and PyTorch backends.
+            # top-k proposal instability between numerical backends.
             import warnings
 
             warnings.warn(
@@ -2026,7 +2029,7 @@ def save_weights_on_all_tests_pass(request):
     formats, but ONLY when every collected test passes.
 
     This guarantees the saved weights have been verified to produce
-    outputs identical to the original PyTorch implementation.
+    outputs identical to the reference implementation.
     """
     yield  # ---- run all tests first ----
 
@@ -2048,7 +2051,7 @@ def save_weights_on_all_tests_pass(request):
     if not _WEIGHT_SAVE_REGISTRY:
         print(
             "\n[weight-save] All tests passed but no models in the "
-            "save registry (PT tests may have been skipped). "
+            "save registry (reference-framework tests may have been skipped). "
             "Weights NOT saved."
         )
         return

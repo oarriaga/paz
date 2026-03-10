@@ -1,3 +1,12 @@
+"""Model assembly and inference wrapper for RF-DETR.
+
+Provides factory functions that build the LWDETR Keras model and its
+components (backbone, transformer, segmentation head, matcher, criterion)
+from a ``ModelConfig`` dataclass.  Also contains the ``Model`` wrapper
+that handles pretrained-weight loading and numpy-in / numpy-out
+inference via ``predict``.
+"""
+
 import os
 import math
 from dataclasses import asdict
@@ -59,10 +68,15 @@ def resolve_weights_path(filename):
 
 
 def build_backbone_from_config(cfg):
-    """Instantiate a Keras backbone (Joiner) from a ``ModelConfig``.
+    """Instantiate a Keras backbone (``Joiner``) from a ``ModelConfig``.
 
-    Returns a ``Joiner`` that wraps ``Backbone`` + ``PositionEmbeddingSine``,
-    mirroring the PyTorch ``build_backbone`` factory.
+    Returns a ``Joiner`` that wraps ``Backbone`` + ``PositionEmbeddingSine``.
+
+    Args:
+        cfg (ModelConfig): Architecture configuration.
+
+    Returns:
+        Joiner: Combined backbone and positional encoding.
     """
     return _build_backbone(
         encoder=cfg.encoder,
@@ -81,7 +95,14 @@ def build_backbone_from_config(cfg):
 
 
 def build_transformer_from_config(cfg):
-    """Instantiate a Keras ``Transformer`` from a ``ModelConfig``."""
+    """Instantiate a Keras ``Transformer`` decoder from a ``ModelConfig``.
+
+    Args:
+        cfg (ModelConfig): Architecture configuration.
+
+    Returns:
+        Transformer: Configured transformer decoder.
+    """
     num_feature_levels = len(cfg.projector_scale)
     dim_feedforward = getattr(cfg, "dim_feedforward", 2048)
     return Transformer(
@@ -106,7 +127,14 @@ def build_transformer_from_config(cfg):
 
 
 def build_segmentation_head_from_config(cfg):
-    """Build optional segmentation head, or ``None``."""
+    """Build optional segmentation head, or ``None`` if disabled.
+
+    Args:
+        cfg (ModelConfig): Architecture configuration.
+
+    Returns:
+        SegmentationHead or None: The segmentation head layer.
+    """
     if not cfg.segmentation_head:
         return None
     return SegmentationHead(
@@ -117,7 +145,16 @@ def build_segmentation_head_from_config(cfg):
 
 
 def build_matcher_from_config(cfg, train_cfg=None):
-    """Build the ``HungarianMatcher`` Keras layer."""
+    """Build the ``HungarianMatcher`` Keras layer.
+
+    Args:
+        cfg (ModelConfig): Architecture configuration.
+        train_cfg (TrainConfig or None): Training configuration (unused
+            currently, reserved for future cost overrides).
+
+    Returns:
+        HungarianMatcher: The bipartite matching layer.
+    """
     cost_class = getattr(cfg, "set_cost_class", 2)
     cost_bbox = getattr(cfg, "set_cost_bbox", 5)
     cost_giou = getattr(cfg, "set_cost_giou", 2)
@@ -159,17 +196,18 @@ def build_model_from_config(cfg):
 
 
 def build_criterion_from_config(cfg, train_cfg=None):
-    """Build ``SetCriterion`` + ``PostProcess`` from configs.
+    """Build ``SetCriterion`` and ``PostProcess`` from configuration.
 
-    Parameters
-    ----------
-    cfg : ModelConfig
-    train_cfg : TrainConfig or None
+    Constructs the loss criterion with auxiliary and two-stage weight
+    entries, and a post-processor that applies NMS and selects top-K
+    predictions.
 
-    Returns
-    -------
-    criterion : SetCriterion
-    postprocess : PostProcess
+    Args:
+        cfg (ModelConfig): Architecture configuration.
+        train_cfg (TrainConfig or None): Training configuration.
+
+    Returns:
+        tuple: ``(criterion, postprocess)``.
     """
     matcher = build_matcher_from_config(cfg, train_cfg)
 
@@ -186,13 +224,14 @@ def build_criterion_from_config(cfg, train_cfg=None):
         weight_dict["loss_mask_ce"] = getattr(train_cfg, "mask_ce_loss_coef", 5.0)
         weight_dict["loss_mask_dice"] = getattr(train_cfg, "mask_dice_loss_coef", 5.0)
 
-    # Auxiliary losses — iterate over the *base* keys only (not the
+    # Auxiliary losses -- create weight entries for each decoder layer
+    # except the last.  Iterate over the *base* keys only (not the
     # growing dict) to avoid cascading duplication.
     base_weight_keys = list(weight_dict.items())
     for i in range(cfg.dec_layers - 1):
         weight_dict.update({k + f"_{i}": v for k, v in base_weight_keys})
 
-    # Two-stage encoder losses
+    # Two-stage encoder losses: duplicate base weights with "_enc" suffix
     if cfg.two_stage:
         weight_dict.update({k + "_enc": v for k, v in base_weight_keys})
 
@@ -213,24 +252,33 @@ def build_criterion_from_config(cfg, train_cfg=None):
     return criterion, postprocess
 
 
-# ---- Model class (mirrors PyTorch ``Model``) -----------------------------
+# ---- Model wrapper -------------------------------------------------------
 
 
 class Model:
-    """High-level wrapper that mirrors the PyTorch ``Model`` class.
+    """High-level wrapper around the LWDETR Keras model.
 
     * Builds the Keras ``LWDETR`` from a ``ModelConfig``.
-    * Optionally downloads and loads pre-trained weights (via
-      the weight-porting utilities).
-    * Exposes ``predict`` for simple numpy-in / numpy-out inference.
+    * Optionally loads pre-trained weights (via the weight-porting utilities).
+    * Exposes ``predict`` for numpy-in / numpy-out inference.
+
+    Attributes:
+        config (ModelConfig): Architecture configuration.
+        resolution (int): Input image resolution.
+        model (LWDETR): Underlying Keras model.
+        postprocess (PostProcess): Post-processing layer.
+        class_names (list[str] or None): Class label names.
     """
 
     def __init__(self, config):
-        """
-        Parameters
-        ----------
-        config : ModelConfig
-            Dataclass with all architecture hyper-parameters.
+        """Initialise the Model wrapper.
+
+        Args:
+            config (ModelConfig): Dataclass with all architecture
+                hyperparameters.
+
+        Raises:
+            TypeError: If *config* is not a ``ModelConfig``.
         """
         if not isinstance(config, ModelConfig):
             raise TypeError(f"Expected ModelConfig, got {type(config)}")
@@ -245,7 +293,7 @@ class Model:
         if config.pretrain_weights is not None:
             wpath = resolve_weights_path(config.pretrain_weights)
             if wpath is not None:
-                # Build all layers with a dummy forward pass first.
+        # Build all layers with a dummy forward pass so weights can be loaded
                 res = config.resolution
                 dummy = np.ones((1, res, res, 3), dtype="float32") * 0.5
                 self.model(dummy, training=False)
@@ -258,21 +306,18 @@ class Model:
                 )
 
     # ------------------------------------------------------------------
-    # Weight loading (from .pth checkpoint via porting utilities)
+    # Pretrained weight loading
     # ------------------------------------------------------------------
 
     def load_pretrained_weights(self, weights_path=None):
-        """Load weights from a ``.keras`` checkpoint.
+        """Load weights from a ``.keras`` or ``.weights.h5`` checkpoint.
 
-        For loading from a ``.pth`` file you should use the weight-porting
-        utilities in the sub-package (backbone, transformer, segmentation_head,
-        matcher) to transfer weights first and then save a ``.keras`` file.
+        Args:
+            weights_path (str or None): Path to the weights file.
+                If ``None``, falls back to ``config.pretrain_weights``.
 
-        Parameters
-        ----------
-        weights_path : str or None
-            Path to a ``.keras`` or ``.weights.h5`` file.  If ``None``, uses
-            ``config.pretrain_weights`` (if set and ends with ``.keras``).
+        Raises:
+            ValueError: If the file extension is unsupported.
         """
         if weights_path is None:
             weights_path = self.config.pretrain_weights
@@ -297,27 +342,24 @@ class Model:
     def predict(self, images, threshold=0.5):
         """Run inference on one or more images.
 
-        Parameters
-        ----------
-        images : np.ndarray
-            ``(B, H, W, 3)`` float32, normalised to [0, 1].
-        threshold : float
-            Confidence threshold.
+        Args:
+            images (np.ndarray): ``(B, H, W, 3)`` float32 normalised to [0, 1].
+            threshold (float): Confidence threshold.
 
-        Returns
-        -------
-        list[dict] : one dict per image with keys ``boxes`` (xyxy, int),
-            ``scores``, ``labels``, and optionally ``masks``.
+        Returns:
+            list[dict]: Per-image results with ``boxes`` (xyxy, int),
+                ``scores``, ``labels``, and optionally ``masks``.
         """
+        # Ensure batch dimension
         if images.ndim == 3:
             images = images[np.newaxis]
 
-        # Normalise
+        # Apply ImageNet normalisation
         means = np.array([0.485, 0.456, 0.406], dtype="float32")
         stds = np.array([0.229, 0.224, 0.225], dtype="float32")
         images = (images - means) / stds
 
-        # Resize to model resolution
+        # Resize images to the model's expected resolution
         from keras import ops as kops
 
         imgs = kops.convert_to_tensor(images, dtype="float32")
@@ -325,7 +367,7 @@ class Model:
             imgs, (self.resolution, self.resolution), antialias=True
         )
 
-        # Forward
+        # Forward pass and post-processing
         outputs = self.model(imgs, training=False)
         scores, labels, boxes = self.postprocess(
             outputs,
@@ -335,6 +377,7 @@ class Model:
             ),
         )
 
+        # Convert to numpy and filter by confidence threshold
         scores = ops.convert_to_numpy(scores)
         labels = ops.convert_to_numpy(labels)
         boxes = ops.convert_to_numpy(boxes)
@@ -358,12 +401,13 @@ class Model:
     def reinitialize_detection_head(self, num_classes):
         """Rebuild the model with a new number of classes.
 
-        Keras 3 does not allow adding new sub-layers to an already-built
-        model (the state tracker is locked after ``build()``).  The
-        safest approach is to recreate the ``LWDETR`` from scratch with
-        the updated ``num_classes`` — this is cheap because no pretrained
-        weights need to be reloaded (they will be re-initialised randomly
-        and trained from the new dataset anyway).
+        Recreates the entire ``LWDETR`` from scratch with the updated
+        ``num_classes``.  Existing pretrained backbone and transformer
+        weights are discarded; this is intended for fine-tuning on a
+        new dataset where weights will be re-initialised.
+
+        Args:
+            num_classes (int): New number of object categories.
         """
         from dataclasses import replace as _dc_replace
 

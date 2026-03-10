@@ -1,3 +1,19 @@
+"""High-level RF-DETR facade for detection and segmentation.
+
+Provides the ``RFDETR`` base class and its size-specific sub-classes
+(Nano, Small, Medium, Base, Large, XLarge, 2XLarge, plus segmentation
+variants).  Each sub-class wires the correct ``ModelConfig`` and, for
+segmentation, a ``SegmentationTrainConfig``.
+
+Key responsibilities:
+
+* Model instantiation via ``get_model`` / ``get_model_config``.
+* Full training loop (``train`` / ``train_from_config``).
+* Inference via ``predict`` (numpy-in, numpy-out).
+* ``VARIANT_REGISTRY`` mapping variant names to facade classes.
+* ``_COCODataLoader`` for COCO-format dataset iteration.
+"""
+
 import json
 import os
 import datetime
@@ -54,10 +70,15 @@ logger = getLogger(__name__)
 
 
 class RFDETR:
-    """High-level RF-DETR interface (Keras 3).
+    """High-level RF-DETR interface.
 
     Sub-classes override ``get_model_config`` / ``get_train_config`` to
-    return the right variant.
+    return the configuration for a specific model variant.
+
+    Attributes:
+        means (np.ndarray): ImageNet channel means for normalisation.
+        stds (np.ndarray): ImageNet channel standard deviations.
+        size (Optional[str]): Human-readable variant identifier.
     """
 
     means = np.array([0.485, 0.456, 0.406], dtype="float32")
@@ -101,11 +122,13 @@ class RFDETR:
 
     def train_from_config(self, config, **kwargs):
         """Full training loop driven by a ``TrainConfig``.
-        - reads annotations to determine ``num_classes`` / ``class_names``
-        - reinitialises the detection head when needed
-        - sets up criterion, optimizer, LR schedule and EMA
-        - runs epoch loop with evaluation and checkpointing
-        - fires all registered callbacks
+
+        Steps:
+        - Reads annotations to determine ``num_classes`` / ``class_names``.
+        - Reinitialises the detection head when the class count changes.
+        - Sets up criterion, optimizer, LR schedule, and EMA.
+        - Runs epoch loop with evaluation and checkpointing.
+        - Fires all registered callbacks.
         """
         from paz.models.detection.dino_v2_object_detection.engine import (
             build_lr_lambda,
@@ -117,7 +140,7 @@ class RFDETR:
             BestMetricHolder,
         )
 
-        # ---- Determine num_classes / class_names -------------------------
+        # ---- Determine num_classes / class_names from annotations -----
         if config.dataset_file in ("coco_json", "roboflow"):
             # Generic COCO-format JSON (also covers Roboflow exports)
             ann_path = os.path.join(
@@ -147,7 +170,7 @@ class RFDETR:
             # Sync model_config so criterion / postprocess see the right count
             self.model_config = self.model.config
 
-        # ---- Merge config dicts ------------------------------------------
+        # ---- Merge model and training config dicts --------------------
         train_dict = asdict(config)
         model_dict = asdict(self.model_config)
         model_dict.pop("num_classes", None)
@@ -162,7 +185,7 @@ class RFDETR:
 
         all_kwargs = {**model_dict, **train_dict, **kwargs, "num_classes": num_classes}
 
-        # ---- Metrics sinks -----------------------------------------------
+        # ---- Set up metrics logging sinks -----------------------------
         metrics_plot_sink = MetricsPlotSink(output_dir=config.output_dir)
         self.callbacks["on_fit_epoch_end"].append(metrics_plot_sink.update)
         self.callbacks["on_train_end"].append(metrics_plot_sink.save)
@@ -196,7 +219,7 @@ class RFDETR:
             )
             self.callbacks["on_fit_epoch_end"].append(es_cb.update)
 
-        # ---- Build criterion & postprocess --------------------------------
+        # ---- Build loss criterion and post-processing -----------------
         criterion, postprocess = build_criterion_from_config(
             self.model_config,
             config,
@@ -224,9 +247,9 @@ class RFDETR:
         best_map_5095 = 0.0
         best_map_ema_5095 = 0.0
 
-        # ---- Data loading (lazy import) ------------------------------------
-        # Users may provide their own data pipeline.  When ``dataset_dir`` is
-        # set we attempt to build COCO-format datasets.
+        # ---- Data loading ------------------------------------------------
+        # Users may provide a custom data pipeline.  When ``dataset_dir``
+        # is set, COCO-format datasets are built automatically.
         data_loader_train = all_kwargs.pop("data_loader_train", None)
         data_loader_val = all_kwargs.pop("data_loader_val", None)
 
@@ -252,7 +275,7 @@ class RFDETR:
             epoch_start = time.time()
             print(f"\nEpoch [{epoch}/{config.epochs}]")
 
-            # Training step
+            # Training epoch forward/backward pass
             train_stats = {"train_loss": 0.0}
             if data_loader_train is not None:
                 train_stats = train_one_epoch(
@@ -265,10 +288,11 @@ class RFDETR:
                     clip_max_norm=config.clip_max_norm,
                 )
 
+            # Update exponential moving average after each epoch
             if ema_m is not None:
                 ema_m.update(model)
 
-            # Checkpoint
+            # Save periodic checkpoints
             if config.output_dir:
                 ckpt_path = output_dir / "checkpoint.weights.h5"
                 model.save_weights(str(ckpt_path))
@@ -277,7 +301,7 @@ class RFDETR:
                         str(output_dir / f"checkpoint{epoch:04}.weights.h5")
                     )
 
-            # Log stats
+            # Aggregate and log epoch statistics
             log_stats = {
                 **{f"train_{k}": v for k, v in train_stats.items()},
                 "epoch": epoch,
@@ -306,13 +330,13 @@ class RFDETR:
                 print(f"Early stopping at epoch {epoch}")
                 break
 
-        # ---- Post-training ------------------------------------------------
+        # ---- Post-training: apply EMA and fire callbacks ---------------
         total_time = time.time() - start_time
         print(
             f"Training time {datetime.timedelta(seconds=int(total_time))}"
         )
 
-        # Apply EMA weights if they outperform
+        # Apply EMA weights to the model if available
         if ema_m is not None:
             ema_m.apply_to(model)
 
@@ -320,14 +344,22 @@ class RFDETR:
         for cb in self.callbacks["on_train_end"]:
             cb()
 
-    # ---- private helpers -------------------------------------------------
+    # ---- COCO data-loader factory -------------------------------------
 
     @staticmethod
     def _build_data_loader(config, split, all_kwargs):
-        """Build a data loader from ``dataset_dir`` (COCO-format).
+        """Build a COCO-format data loader from ``dataset_dir``.
 
-        Returns ``None`` if the path does not exist, letting the caller
-        fall back to an alternative pipeline.
+        Returns ``None`` if the annotation file does not exist, letting
+        the caller fall back to an alternative pipeline.
+
+        Args:
+            config: Training configuration with ``dataset_dir``.
+            split (str): ``'train'`` or ``'val'``.
+            all_kwargs (dict): Extra keyword arguments (used for ``resolution``).
+
+        Returns:
+            _COCODataLoader or None: The data loader, or ``None``.
         """
         if not config.dataset_dir:
             return None
@@ -350,26 +382,24 @@ class RFDETR:
     # ---- predict ---------------------------------------------------------
 
     def predict(self, images, threshold=0.5):
-        """Run detection on a batch of images.
+        """Run detection on one or more images.
 
-        Parameters
-        ----------
-        images : np.ndarray or list[np.ndarray]
-            HWC uint8/float images.  Lists are stacked into a batch.
-        threshold : float
-            Confidence threshold.
+        Args:
+            images (np.ndarray or list[np.ndarray]): HWC uint8 or float
+                images.  Lists are stacked into a batch.
+            threshold (float): Confidence threshold for filtering.
 
-        Returns
-        -------
-        list[dict] : per-image results with ``boxes``, ``scores``, ``labels``
-            (and optionally ``masks``).
+        Returns:
+            list[dict]: Per-image results with ``boxes`` (xyxy),
+                ``scores``, ``labels``, and optionally ``masks``.
         """
+        # Ensure batch dimension
         if isinstance(images, list):
             images = np.stack(images)
         if images.ndim == 3:
             images = images[np.newaxis]
 
-        # uint8 → float
+        # Convert uint8 images to float32 [0, 1]
         if images.dtype == np.uint8:
             images = images.astype("float32") / 255.0
 
@@ -453,7 +483,17 @@ class _COCODataLoader:
             yield images_np, targets
 
     def _load_and_resize(self, path):
-        """Load an image, resize to ``resolution`` and normalise to [0, 1]."""
+        """Load an image, resize to ``resolution``, and normalise to [0, 1].
+
+        ImageNet channel means and standard deviations are applied after
+        dividing by 255.
+
+        Args:
+            path (str): Path to the image file.
+
+        Returns:
+            np.ndarray: ``(H, W, 3)`` float32 normalised image.
+        """
         from PIL import Image as PILImage
 
         img = PILImage.open(path).convert("RGB")
@@ -461,7 +501,7 @@ class _COCODataLoader:
             (self._resolution, self._resolution), PILImage.BILINEAR
         )
         arr = np.asarray(img, dtype="float32") / 255.0
-        # Normalise with ImageNet stats
+        # Normalise with ImageNet channel statistics
         means = np.array([0.485, 0.456, 0.406], dtype="float32")
         stds = np.array([0.229, 0.224, 0.225], dtype="float32")
         arr = (arr - means) / stds

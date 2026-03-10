@@ -72,7 +72,7 @@ from paz.models.detection.dino_v2_object_detection.engine import (
 )
 
 # ---------------------------------------------------------------------------
-# PyTorch implementation (reference)
+# Reference implementation (for parity comparison)
 # ---------------------------------------------------------------------------
 import sys
 
@@ -131,7 +131,7 @@ def _keras_config_to_dict(cfg):
 
 
 def _pt_config_to_dict(cfg):
-    """Convert a Pydantic (PyTorch) config to a flat dict."""
+    """Convert a reference Pydantic config to a flat dict."""
     return cfg.dict()
 
 
@@ -211,7 +211,7 @@ def mock_keras_model():
 
 @pytest.fixture
 def mock_pt_model():
-    """Patch the PyTorch Model class to avoid building a real network."""
+    """Patch the reference Model class to avoid building a real network."""
     mock = MagicMock()
     mock.class_names = None
     mock.resolution = 560
@@ -475,7 +475,7 @@ def test_pt_seg_variant_size(cls, expected_size):
     assert cls.size == expected_size
 
 
-# Check that the sizes match between Keras and PyTorch for shared variants
+# Check that the sizes match between Keras and reference for shared variants
 SHARED_SIZE_PAIRS = [
     (KerasRFDETRBase, PTRFDETRBase),
     (KerasRFDETRNano, PTRFDETRNano),
@@ -561,7 +561,7 @@ def test_request_early_stop_sets_flag(mock_keras_model):
 
 
 # ===================================================================
-# 7. PyTorch RFDETR base class API match
+# 7. Reference RFDETR base class API match
 # ===================================================================
 
 def test_pt_base_has_train_method(mock_pt_model):
@@ -575,7 +575,7 @@ def test_pt_base_has_train_from_config(mock_pt_model):
 
 
 def test_pt_base_has_request_early_stop(mock_pt_model):
-    # The PyTorch model has request_early_stop on the Model inner class
+    # The reference model exposes request_early_stop on the inner Model
     # The detr wrapper mirrors it via stop_early
     model = PTRFDETRBase()
     assert hasattr(model.model, "request_early_stop")
@@ -593,7 +593,7 @@ def test_api_method_parity(mock_keras_model, mock_pt_model):
     methods = ["train", "predict", "get_model_config", "get_train_config"]
     for m in methods:
         assert hasattr(k, m), f"Keras missing {m}"
-        assert hasattr(p, m), f"PyTorch missing {m}"
+        assert hasattr(p, m), f"Reference missing {m}"
 
 
 # ===================================================================
@@ -641,7 +641,7 @@ def test_get_train_config_kwargs(mock_keras_model):
     assert cfg.epochs == 5
 
 
-# PyTorch side
+# Reference side
 def test_pt_get_train_config_returns_correct_type(mock_pt_model):
     model = PTRFDETRBase()
     cfg = model.get_train_config(dataset_dir="/tmp")
@@ -1100,7 +1100,7 @@ def test_early_stop_terminates_loop(mock_keras_model):
 
 
 # ===================================================================
-# 21. PyTorch vs Keras API signature comparison
+# 21. API signature comparison
 # ===================================================================
 
 def test_train_accepts_dataset_dir_kwarg(mock_keras_model):
@@ -1177,7 +1177,7 @@ def test_predict_accepts_3d_array(mock_keras_model):
 # ===================================================================
 
 def test_train_config_has_all_pt_fields():
-    """Ensure Keras TrainConfig has at least all fields that PyTorch has."""
+    """Ensure Keras TrainConfig has at least all fields that the reference has."""
     pt_fields = set(PTTrainConfig.model_fields.keys())
     keras_fields = {f.name for f in fields(KerasTrainConfig)}
     # Allow Keras to have extra fields but must have all PT fields
@@ -1185,7 +1185,7 @@ def test_train_config_has_all_pt_fields():
     # Filter out fields that may differ by design:
     # - square_resize_div_64 / do_random_resize_via_padding: Keras-specific padding
     # - num_select: belongs in ModelConfig, not TrainConfig
-    # - resume: PyTorch-specific checkpoint resume path
+    # - resume: reference-specific checkpoint resume path
     allowed_missing = {
         "square_resize_div_64", "do_random_resize_via_padding",
         "num_select", "resume",
@@ -1195,7 +1195,7 @@ def test_train_config_has_all_pt_fields():
 
 
 def test_model_config_shared_fields():
-    """Core fields should exist in both Keras and PyTorch ModelConfig."""
+    """Core fields should exist in both Keras and reference ModelConfig."""
     core_fields = [
         "encoder", "hidden_dim", "dec_layers", "num_classes", "resolution",
         "patch_size", "num_windows", "sa_nheads", "ca_nheads", "dec_n_points",

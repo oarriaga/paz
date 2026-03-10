@@ -1,3 +1,15 @@
+"""Training engine and evaluation utilities for RF-DETR.
+
+Contains the core epoch loop (``train_one_epoch``), learning-rate schedule
+helpers (``build_lr_lambda``, ``LambdaLRSchedule``), forward-only evaluation
+(``evaluate``), and a confidence-threshold sweep for precision/recall
+computation (``sweep_confidence_thresholds``).
+
+The training loop uses a two-phase strategy for JAX compatibility:
+  1. Eager forward pass + Hungarian matching (calls scipy, not JAX-traceable).
+  2. Traced forward pass + loss + gradients via ``jax.value_and_grad``.
+"""
+
 import math
 import time
 import datetime
@@ -26,9 +38,22 @@ def build_lr_lambda(
     lr_drop=100,
     lr_min_factor=0.0,
 ):
-    """Return a callable ``lr_lambda(step) -> float`` for LambdaLR-style use.
+    """Return a callable ``lr_lambda(step) -> float`` for use with
+    ``LambdaLRSchedule``.
 
-    Mirrors the PyTorch ``lr_lambda`` closure in ``main.py``.
+    Supports ``'step'`` (drop at ``lr_drop`` epochs) and ``'cosine'``
+    (cosine annealing with optional warm-up) schedules.
+
+    Args:
+        num_training_steps_per_epoch (int): Steps in one epoch.
+        epochs (int): Total training epochs.
+        warmup_epochs (float): Linear warm-up duration in epochs.
+        lr_scheduler (str): ``'step'`` or ``'cosine'``.
+        lr_drop (int): Epoch to drop LR (step schedule only).
+        lr_min_factor (float): Minimum LR as a fraction of base LR.
+
+    Returns:
+        callable: ``lr_lambda(current_step) -> float`` multiplier.
     """
     total_steps = num_training_steps_per_epoch * epochs
     warmup_steps = int(num_training_steps_per_epoch * warmup_epochs)
@@ -56,7 +81,14 @@ def build_lr_lambda(
 
 
 class LambdaLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
-    """Keras LR schedule that delegates to a ``lr_lambda`` function."""
+    """Keras LR schedule that delegates to a ``lr_lambda`` callable.
+
+    Multiplies ``base_lr`` by ``lr_lambda(step)`` at each training step.
+
+    Attributes:
+        base_lr (float): Base learning rate.
+        lr_lambda (callable): Step-to-multiplier function.
+    """
 
     def __init__(self, base_lr, lr_lambda):
         super().__init__()
@@ -88,36 +120,26 @@ def train_one_epoch(
     """Train *model* for one epoch using *data_iterator*.
 
     Uses a two-phase strategy for JAX compatibility:
-      1. **Eager forward + matching** – run the model and the Hungarian
+      1. **Eager forward + matching** -- run the model and the Hungarian
          matcher (which calls scipy) on concrete arrays.
-      2. **Traced forward + loss + gradients** – use ``jax.value_and_grad``
+      2. **Traced forward + loss + gradients** -- use ``jax.value_and_grad``
          with ``model.stateless_call`` and the pre-computed matching
-         indices, so the full loss is JAX-traceable.
+         indices, so the full loss computation is JAX-traceable.
 
-    Parameters
-    ----------
-    model : keras.Model
-        The LWDETR Keras model.
-    criterion : SetCriterion (Keras layer)
-        Computes losses given outputs and targets.
-    optimizer : keras.optimizers.Optimizer
-        Must already be compiled with the model.
-    data_iterator : iterable
-        Yields ``(images, targets)`` batches.  ``images`` is a
-        ``(B, H, W, 3)`` Keras tensor; ``targets`` is a list of dicts
-        with ``"labels"`` and ``"boxes"`` keys.
-    num_steps : int
-        Total steps in this epoch (used for logging only).
-    epoch : int
-        Current epoch index.
-    clip_max_norm : float
-        Max gradient norm for clipping (0 disables).
-    print_freq : int
-        Print every N steps.
+    Args:
+        model (keras.Model): The LWDETR Keras model.
+        criterion (SetCriterion): Computes losses given outputs and targets.
+        optimizer (keras.optimizers.Optimizer): Optimiser instance.
+        data_iterator (iterable): Yields ``(images, targets)`` batches.
+            ``images`` is ``(B, H, W, 3)`` float32; ``targets`` is a list
+            of dicts with ``labels`` and ``boxes`` keys.
+        num_steps (int): Total steps in this epoch (for logging).
+        epoch (int): Current epoch index.
+        clip_max_norm (float): Max gradient norm for clipping (0 disables).
+        print_freq (int): Print every N steps.
 
-    Returns
-    -------
-    dict : averaged metric values.
+    Returns:
+        dict: Averaged metric values across the epoch.
     """
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter(
@@ -233,8 +255,21 @@ def _compute_loss_with_indices(
 ):
     """Compute weighted total loss using pre-computed matching indices.
 
-    This replicates ``SetCriterion.call()`` but **skips the matcher**,
+    Replicates the ``SetCriterion.call()`` logic but **skips the matcher**,
     so the function is safe to call inside ``jax.value_and_grad``.
+
+    Args:
+        outputs (dict): Model outputs with ``pred_logits``, ``pred_boxes``,
+            and optionally ``aux_outputs``.
+        targets (list[dict]): Ground-truth targets.
+        indices_main (list): Main-head matching indices.
+        aux_indices_list (list): Per-layer auxiliary matching indices.
+        criterion (SetCriterion): Loss module.
+        weight_dict (dict): Loss name → weight mapping.
+        num_boxes_f (float): Total matched boxes (for normalisation).
+
+    Returns:
+        Tensor: Scalar weighted total loss.
     """
     num_boxes_t = ops.convert_to_tensor(num_boxes_f, dtype="float32")
     total_loss = ops.convert_to_tensor(0.0, dtype="float32")
@@ -269,7 +304,18 @@ def _compute_loss_with_indices(
 
 
 def _clip_grad_norm(grads, max_norm):
-    """Global gradient clipping (mirrors ``torch.nn.utils.clip_grad_norm_``)."""
+    """Clip gradients by global norm.
+
+    Computes the global L2 norm across all gradient tensors and scales
+    them down when the norm exceeds ``max_norm``.
+
+    Args:
+        grads (list): List of gradient tensors.
+        max_norm (float): Maximum allowed global norm.
+
+    Returns:
+        list: Clipped gradient tensors.
+    """
     total_norm_sq = sum(ops.sum(g**2) for g in grads if g is not None)
     total_norm = ops.sqrt(total_norm_sq)
     clip_coef = max_norm / (total_norm + 1e-6)
@@ -285,19 +331,15 @@ def _clip_grad_norm(grads, max_norm):
 def evaluate(model, data_iterator, num_steps=None, print_freq=10):
     """Run the model in evaluation mode and collect predictions.
 
-    Parameters
-    ----------
-    model : keras.Model
-    data_iterator : iterable
-        Yields ``(images, targets)`` batches.
-    num_steps : int or None
-        Max steps; if ``None``, iterate until exhaustion.
-    print_freq : int
+    Args:
+        model (keras.Model): Trained model.
+        data_iterator (iterable): Yields ``(images, targets)`` batches.
+        num_steps (int or None): Max steps; ``None`` iterates to exhaustion.
+        print_freq (int): Logging interval.
 
-    Returns
-    -------
-    list[dict] : one dict per image with ``pred_logits``, ``pred_boxes``
-        (and optionally ``pred_masks``).
+    Returns:
+        list[dict]: One dict per batch with ``pred_logits``, ``pred_boxes``
+            (and optionally ``pred_masks``) as numpy arrays.
     """
     all_results = []
     for step, (images, _targets) in enumerate(data_iterator):
@@ -323,9 +365,21 @@ def evaluate(model, data_iterator, num_steps=None, print_freq=10):
 
 
 def sweep_confidence_thresholds(per_class_data, conf_thresholds, classes_with_gt):
-    """Sweep confidence thresholds and compute P/R/F1 at each.
+    """Sweep confidence thresholds and compute precision, recall, and F1.
 
-    This is a pure-NumPy replica of the PyTorch ``sweep_confidence_thresholds``.
+    For each threshold, computes per-class metrics and macro-averages
+    across classes that have ground-truth annotations.
+
+    Args:
+        per_class_data (list[dict]): Per-class scores, matches, ignore flags,
+            and total ground-truth counts.
+        conf_thresholds (array-like): Confidence thresholds to evaluate.
+        classes_with_gt (list[int]): Indices of classes with GT annotations.
+
+    Returns:
+        list[dict]: One entry per threshold with ``confidence_threshold``,
+            ``macro_f1``, ``macro_precision``, ``macro_recall``, and
+            per-class arrays.
     """
     results = []
     for conf_thresh in conf_thresholds:

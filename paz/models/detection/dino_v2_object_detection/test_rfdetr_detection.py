@@ -21,7 +21,7 @@ from paz.models.detection.dino_v2_object_detection.detr import (
 )
 from paz.models.detection.dino_v2_object_detection.utils.coco_classes import COCO_CLASSES
 
-# ── PT rfdetr library (optional — for parity comparison only) ─────────────────
+# ── Reference implementation (optional — for parity comparison) ──────────────────
 try:
     from rfdetr import (
         RFDETRBase as PT_RFDETRBase,
@@ -35,7 +35,7 @@ try:
 except ImportError:
     HAS_PT = False
 
-needs_pt = pytest.mark.skipif(not HAS_PT, reason="rfdetr (PyTorch) not installed")
+needs_pt = pytest.mark.skipif(not HAS_PT, reason="Reference library not installed")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 _CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".test_cache")
@@ -58,7 +58,7 @@ COCO_IMAGES = {
     },
 }
 
-# Detection variants.  ``pt`` is None when no PT equivalent exists.
+# Detection variants.  ``pt`` is None when no reference equivalent exists.
 VARIANTS = {
     "nano": {
         "keras": K_RFDETRNano,
@@ -109,7 +109,7 @@ ALL_NAMES = list(VARIANTS.keys())
 COCO_NAMES = [k for k, v in VARIANTS.items() if v["coco"]]
 PARITY_NAMES = [k for k, v in VARIANTS.items() if v["pt"] is not None]
 
-# Tolerances (accounts for different resize / float paths)
+# Tolerance settings for cross-implementation comparison
 SCORE_ATOL = 0.05
 BOX_ATOL = 15.0
 TOP_K = 5
@@ -119,7 +119,14 @@ TOP_K = 5
 
 
 def _download_image(name):
-    """Download and cache a COCO test image as uint8 (H, W, 3)."""
+    """Download and cache a COCO test image as uint8 ``(H, W, 3)``.
+
+    Args:
+        name (str): Key in ``COCO_IMAGES``.
+
+    Returns:
+        np.ndarray: ``(H, W, 3)`` uint8 RGB array.
+    """
     info = COCO_IMAGES[name]
     os.makedirs(_CACHE_DIR, exist_ok=True)
     path = os.path.join(_CACHE_DIR, f"coco_{info['id']}.npy")
@@ -132,7 +139,7 @@ def _download_image(name):
 
 
 def _pt_to_dict(det):
-    """Convert PT ``sv.Detections`` to ``{boxes, scores, labels}`` dict."""
+    """Convert a reference ``Detections`` object to a standard dict."""
     return {"boxes": det.xyxy, "scores": det.confidence, "labels": det.class_id}
 
 
@@ -145,12 +152,18 @@ def _sort_desc(result):
 def _assert_top_k_close(
     keras_res, pt_res, k=TOP_K, score_atol=SCORE_ATOL, box_atol=BOX_ATOL
 ):
-    """Assert the top-K detections agree (scores, labels, boxes).
+    """Assert the top-K detections agree between two result dicts.
 
     After selecting top-K by score, both sets are re-sorted by
-    (label, box_x1, box_y1) so that minor score-ordering differences
-    (e.g. two detections with nearly equal confidence) do not cause
-    spurious label-mismatch failures.
+    ``(label, box_x1, box_y1)`` so that minor score-ordering differences
+    do not cause spurious label-mismatch failures.
+
+    Args:
+        keras_res (dict): Keras detection results.
+        pt_res (dict): Reference detection results.
+        k (int): Number of top detections to compare.
+        score_atol (float): Absolute tolerance for scores.
+        box_atol (float): Absolute tolerance for box coordinates.
     """
     ks = _sort_desc(keras_res)
     ps = _sort_desc(pt_res)
@@ -170,7 +183,7 @@ def _assert_top_k_close(
 
 
 def _build_and_compare(keras_cls, pt_cls, images):
-    """Build both models, run predict on every image, compare top-K."""
+    """Build both models, predict on every image, and compare top-K."""
     k_model = keras_cls()
     pt_model = pt_cls()
     try:
@@ -194,12 +207,13 @@ def coco_images():
 
 @pytest.fixture(scope="module")
 def cats_image(coco_images):
+    """Single 'cats' test image."""
     return coco_images["cats"]
 
 
 @pytest.fixture(scope="module")
 def keras_nano():
-    """Keras RFDETRNano loaded with pre-ported .h5 weights."""
+    """Keras ``RFDETRNano`` loaded with pretrained weights."""
     m = K_RFDETRNano()
     yield m
     del m
@@ -208,7 +222,7 @@ def keras_nano():
 
 @pytest.fixture(scope="module")
 def pt_nano():
-    """PT RFDETRNano (skipped when rfdetr is not installed)."""
+    """Reference ``RFDETRNano`` (skipped when the library is not installed)."""
     if not HAS_PT:
         pytest.skip("rfdetr not installed")
     m = PT_RFDETRNano()
@@ -218,13 +232,13 @@ def pt_nano():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Tests — Keras properties  (no weights needed, fast)
+#  Tests — Keras properties (no weights needed, fast)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 @pytest.mark.parametrize("name", ALL_NAMES)
 def test_resolution(name):
-    """Resolution matches the documented config value."""
+    """Resolution matches the documented config value for each variant."""
     m = VARIANTS[name]["keras"](pretrain_weights=None)
     assert m.resolution == VARIANTS[name]["res"]
 
@@ -257,7 +271,7 @@ def test_all_detection_variants_are_rfdetr_subclass():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Tests — Keras predict format  (Nano, loaded weights)
+#  Tests — Keras predict format (Nano, loaded weights)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -317,26 +331,26 @@ def test_expected_class_detected(keras_nano, coco_images, img_name):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Tests — Nano parity:  Keras vs PT rfdetr  (module fixtures)
+#  Tests — Nano parity: Keras vs reference (module fixtures)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 @needs_pt
 def test_resolution_parity_nano(keras_nano, pt_nano):
-    """Keras and PT Nano report the same resolution."""
+    """Keras and reference Nano report the same resolution."""
     assert keras_nano.resolution == pt_nano.model_config.resolution
 
 
 @needs_pt
 def test_class_names_parity_nano(keras_nano, pt_nano):
-    """Keras and PT Nano report the same class names."""
+    """Keras and reference Nano report the same class names."""
     assert keras_nano.class_names == pt_nano.class_names
 
 
 @needs_pt
 @pytest.mark.parametrize("img_name", list(COCO_IMAGES.keys()))
 def test_predict_parity_nano(keras_nano, pt_nano, coco_images, img_name):
-    """Nano top-K detections match between Keras and PT."""
+    """Nano top-K detections match between Keras and the reference."""
     k_res = keras_nano.predict(coco_images[img_name])[0]
     pt_res = _pt_to_dict(pt_nano.predict(coco_images[img_name]))
     _assert_top_k_close(k_res, pt_res)
@@ -345,7 +359,7 @@ def test_predict_parity_nano(keras_nano, pt_nano, coco_images, img_name):
 @needs_pt
 @pytest.mark.parametrize("img_name", list(COCO_IMAGES.keys()))
 def test_same_expected_class_nano(keras_nano, pt_nano, coco_images, img_name):
-    """Both Keras and PT Nano detect the expected class."""
+    """Both Keras and reference Nano detect the expected class."""
     expected = COCO_IMAGES[img_name]["expected_classes"]
     k_labels = set(
         keras_nano.predict(coco_images[img_name], threshold=0.3)[0]["labels"].tolist()
@@ -360,14 +374,14 @@ def test_same_expected_class_nano(keras_nano, pt_nano, coco_images, img_name):
 @needs_pt
 @pytest.mark.parametrize("img_name", list(COCO_IMAGES.keys()))
 def test_detection_count_similar_nano(keras_nano, pt_nano, coco_images, img_name):
-    """Keras and PT Nano produce a similar number of detections."""
+    """Keras and reference Nano produce a similar detection count."""
     k_n = len(keras_nano.predict(coco_images[img_name], threshold=0.5)[0]["scores"])
     p_n = len(pt_nano.predict(coco_images[img_name], threshold=0.5).confidence)
     assert abs(k_n - p_n) <= 3, f"Keras={k_n}, PT={p_n}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Tests — Multi-variant parity  (builds models per invocation)
+#  Tests — Multi-variant parity (builds models per invocation)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -382,7 +396,7 @@ def test_variant_parity_all_images(variant, coco_images):
 @needs_pt
 @pytest.mark.parametrize("variant", PARITY_NAMES)
 def test_variant_expected_classes(variant, coco_images):
-    """Both Keras and PT detect expected classes for each variant."""
+    """Both Keras and reference detect expected classes for each variant."""
     v = VARIANTS[variant]
     k_model = v["keras"]()
     pt_model = v["pt"]()
@@ -403,7 +417,7 @@ def test_variant_expected_classes(variant, coco_images):
 @needs_pt
 @pytest.mark.parametrize("variant", PARITY_NAMES)
 def test_variant_resolution_parity(variant):
-    """Resolution matches between Keras and PT for each variant."""
+    """Resolution matches between Keras and reference for each variant."""
     v = VARIANTS[variant]
     k = v["keras"](pretrain_weights=None)
     pt = v["pt"]()
@@ -417,7 +431,7 @@ def test_variant_resolution_parity(variant):
 @needs_pt
 @pytest.mark.parametrize("variant", PARITY_NAMES)
 def test_variant_class_names_parity(variant):
-    """class_names match between Keras and PT for each COCO variant."""
+    """Class names match between Keras and reference for each COCO variant."""
     v = VARIANTS[variant]
     k = v["keras"](pretrain_weights=None)
     pt = v["pt"]()

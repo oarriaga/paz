@@ -14,7 +14,7 @@ project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# ---- PyTorch guard -------------------------------------------------------
+# ---- Reference implementation guard -------------------------------------
 try:
     import torch
     from PIL import Image
@@ -23,7 +23,7 @@ try:
 except ImportError:
     HAS_TORCH = False
 
-# ---- PyTorch RFDETR imports (detection only) -----------------------------
+# ---- Reference RF-DETR imports (detection only) -------------------------
 if HAS_TORCH:
     try:
         from rfdetr import (
@@ -65,7 +65,7 @@ if HAS_TORCH:
 
     from rfdetr.util.misc import NestedTensor
 
-# ---- Keras RFDETR imports (detection only) --------------------------------
+# ---- Keras RF-DETR imports (detection only) ------------------------------
 from paz.models.detection.dino_v2_object_detection.detr import (
     RFDETRBase as K_RFDETRBase,
     RFDETRNano as K_RFDETRNano,
@@ -143,7 +143,15 @@ def _ensure_cache_dir():
 
 
 def _download_coco_image(image_id, url):
-    """Download or load cached COCO image. Returns (H, W, 3) uint8 RGB."""
+    """Download or load a cached COCO image.
+
+    Args:
+        image_id (str): COCO image identifier.
+        url (str): Image download URL.
+
+    Returns:
+        np.ndarray: ``(H, W, 3)`` uint8 RGB array.
+    """
     _ensure_cache_dir()
     cached = os.path.join(CACHE_DIR, f"coco_val_{image_id}.npy")
     if os.path.exists(cached):
@@ -157,7 +165,18 @@ def _download_coco_image(image_id, url):
 
 
 def _preprocess(image_float, resolution):
-    """Normalise and resize a float32 [0,1] image to (1, res, res, 3)."""
+    """Normalise and resize a float32 [0,1] image.
+
+    Applies ImageNet channel normalisation and resizes to
+    ``(1, resolution, resolution, 3)``.
+
+    Args:
+        image_float (np.ndarray): ``(H, W, 3)`` float32 in [0, 1].
+        resolution (int): Target spatial size.
+
+    Returns:
+        np.ndarray: ``(1, resolution, resolution, 3)`` float32.
+    """
     normed = (image_float - IMAGENET_MEANS) / IMAGENET_STDS
     t = ops.convert_to_tensor(normed[np.newaxis], dtype="float32")
     resized = ops.image.resize(t, (resolution, resolution))
@@ -165,7 +184,14 @@ def _preprocess(image_float, resolution):
 
 
 def _print_detections(scores, labels, header="", threshold=0.3):
-    """Print detections above *threshold*."""
+    """Print detections above a confidence threshold.
+
+    Args:
+        scores (np.ndarray): Confidence scores.
+        labels (np.ndarray): Class label indices.
+        header (str): Context prefix for the output line.
+        threshold (float): Minimum confidence to display.
+    """
     keep = scores > threshold
     s = scores[keep]
     l = labels[keep]
@@ -183,8 +209,16 @@ def _print_detections(scores, labels, header="", threshold=0.3):
 
 
 def _run_keras_detection(keras_lwdetr, image_float, resolution, num_select):
-    """Run forward pass + postprocess on a single image.
-    Returns (scores, labels, boxes) numpy arrays for the first image.
+    """Run a Keras forward pass and post-process a single image.
+
+    Args:
+        keras_lwdetr: Keras LWDETR model instance.
+        image_float (np.ndarray): ``(H, W, 3)`` float32 in [0, 1].
+        resolution (int): Model input resolution.
+        num_select (int): Top-K queries for post-processing.
+
+    Returns:
+        tuple: ``(scores, labels, boxes)`` numpy arrays for the image.
     """
     preprocessed = _preprocess(image_float, resolution)
     raw = keras_lwdetr(preprocessed, training=False)
@@ -208,7 +242,7 @@ def _run_keras_detection(keras_lwdetr, image_float, resolution, num_select):
 
 @pytest.fixture(scope="session")
 def coco_images():
-    """Session-scoped: download all test COCO images as float32 [0,1]."""
+    """Download all test COCO images as float32 [0, 1]."""
     images = {}
     for name, info in COCO_IMAGES.items():
         arr = _download_coco_image(info["id"], info["url"])
@@ -217,22 +251,27 @@ def coco_images():
 
 
 # ---------------------------------------------------------------------------
-# Phase 1: Build Keras model from RFDETR, port PT weights, compare outputs
+# Phase 1: Build Keras model, port reference weights, compare outputs
 # ---------------------------------------------------------------------------
 
 
 def _build_and_port_variant(variant_name):
-    """Build PyTorch model, build Keras model via the RFDETR class,
-    transfer weights.  Returns (pt_model, keras_facade).
+    """Build reference and Keras models, then transfer weights.
+
+    Args:
+        variant_name (str): Key in ``DETECTION_VARIANTS``.
+
+    Returns:
+        tuple: ``(reference_model, keras_facade)``.
     """
     config = MODEL_CONFIGS[variant_name]
     info = DETECTION_VARIANTS[variant_name]
 
-    # 1. PyTorch model (auto-downloads weights)
+    # 1. Reference model (auto-downloads weights)
     pt_model = config["pt_class"]()
     pt_model.model.model.eval()
 
-    # 2. Keras RFDETR facade (skip pretrained download)
+    # 2. Keras RF-DETR facade (skip pretrained download)
     facade = info["keras_cls"](pretrain_weights=None)
 
     # 3. Build all layers with training=True (needed for group_detr heads)
@@ -240,16 +279,16 @@ def _build_and_port_variant(variant_name):
     dummy = np.ones((1, res, res, 3), dtype=np.float32) * 0.5
     facade.model.model(dummy, training=True)
 
-    # 4. Transfer weights from PyTorch → Keras
+    # 4. Transfer weights from reference model to Keras
     transfer_full_model_weights(pt_model, facade.model.model, config)
 
     return pt_model, facade
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="PyTorch not installed")
+@pytest.mark.skipif(not HAS_TORCH, reason="Reference library not installed")
 class TestPortingParity:
-    """For each detection variant: port PT weights to Keras, verify output
-    parity within 1e-4 on three COCO images, then save weights."""
+    """Port reference weights to Keras, verify output parity within 1e-4
+    on three COCO images, then save verified weights."""
 
     @pytest.fixture(
         scope="class",
@@ -260,7 +299,11 @@ class TestPortingParity:
         ],
     )
     def variant(self, request, coco_images):
-        """Class-scoped parameterised fixture: builds one variant at a time."""
+        """Class-scoped parameterised fixture: builds one variant at a time.
+
+        Yields a dict with the variant name, reference model, Keras facade,
+        config, and test images.
+        """
         name = request.param
         print(f"\n{'=' * 60}")
         print(f"  Building variant: {name}")
@@ -276,7 +319,7 @@ class TestPortingParity:
             "images": coco_images,
         }
 
-        # Teardown: free PyTorch model
+        # Teardown: free reference model
         del pt_model
         gc.collect()
         if torch.cuda.is_available():
@@ -286,7 +329,7 @@ class TestPortingParity:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_forward_parity(self, variant, image_name):
-        """Raw logits and boxes must match within 1e-4 mean diff."""
+        """Raw logits and boxes must match within 1e-4 mean difference."""
         name = variant["name"]
         pt_model = variant["pt_model"]
         facade = variant["facade"]
@@ -296,7 +339,7 @@ class TestPortingParity:
         # Identical preprocessed input
         preprocessed = _preprocess(img, res)
 
-        # PyTorch forward
+        # Reference forward pass
         pt_input = torch.from_numpy(preprocessed).permute(0, 3, 1, 2)
         mask = torch.zeros((1, res, res), dtype=torch.bool)
         samples = NestedTensor(pt_input, mask)
@@ -337,7 +380,7 @@ class TestPortingParity:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_detects_expected_objects(self, variant, image_name):
-        """Keras model detects every expected COCO class above 0.3."""
+        """Keras model detects every expected COCO class above threshold 0.3."""
         name = variant["name"]
         facade = variant["facade"]
         img = variant["images"][image_name]
@@ -360,14 +403,14 @@ class TestPortingParity:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: Save weights (only when all parity tests pass)
+# Phase 2: Save verified weights to disk
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="session", autouse=True)
 def save_weights_after_parity(request, coco_images):
-    """After all Phase-1 tests pass, save .keras and .weights.h5 for every
-    detection variant, then proceed to Phase 3 (h5 reload tests)."""
+    """After all Phase-1 tests pass, save ``.keras`` and ``.weights.h5``
+    for every detection variant."""
     yield  # wait for all tests to run first
 
     session = request.session
@@ -379,7 +422,7 @@ def save_weights_after_parity(request, coco_images):
         return
 
     if not HAS_TORCH:
-        print("\n[weight-save] PyTorch not available — skipping.")
+        print("\n[weight-save] Reference library not available — skipping.")
         return
 
     os.makedirs(WEIGHTS_DIR, exist_ok=True)
@@ -390,16 +433,15 @@ def save_weights_after_parity(request, coco_images):
     for name, info in DETECTION_VARIANTS.items():
         pt_cls = MODEL_CONFIGS.get(name, {}).get("pt_class")
         if pt_cls is None:
-            print(f"  Skipping {name}: PT class unavailable")
+            print(f"  Skipping {name}: reference class unavailable")
             continue
 
         save_key = info["save_key"]
         keras_path = os.path.join(WEIGHTS_DIR, f"{save_key}.keras")
         h5_path = os.path.join(WEIGHTS_DIR, f"{save_key}.weights.h5")
 
-        # Re-build and port if not yet done (each parameterised fixture
-        # was class-scoped and already gone). Rebuilding is cheap compared
-        # to the parity tests since we already verified correctness.
+        # Re-build and port (each parameterised fixture was class-scoped
+        # and already gone).  Rebuilding is cheap since we already verified.
         print(f"\n  Building {name} for saving ...")
         try:
             _, facade = _build_and_port_variant(name)
@@ -422,20 +464,20 @@ def save_weights_after_parity(request, coco_images):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3: Reload .h5 weights (no PyTorch) and re-run detection tests
+# Phase 3: Reload .h5 weights and re-run detection tests
 # ---------------------------------------------------------------------------
 
 
 class TestReloadH5Weights:
-    """Load saved .weights.h5 into a fresh Keras RFDETR model (no PyTorch)
-    and verify detection still works on all three COCO images."""
+    """Load saved ``.weights.h5`` into a fresh Keras RF-DETR model and
+    verify detection still works on all three COCO images."""
 
     @pytest.fixture(
         scope="class",
         params=list(DETECTION_VARIANTS.keys()),
     )
     def reloaded_model(self, request, coco_images):
-        """Build a fresh Keras RFDETR, load .h5 weights, yield for tests."""
+        """Build a fresh Keras RF-DETR, load .h5 weights, yield for tests."""
         name = request.param
         info = DETECTION_VARIANTS[name]
         save_key = info["save_key"]
@@ -450,7 +492,7 @@ class TestReloadH5Weights:
         print(f"  Reloading variant: {name} from .h5")
         print(f"{'=' * 60}")
 
-        # Fresh Keras model (no PyTorch involved)
+        # Fresh Keras model (no reference library required)
         facade = info["keras_cls"](pretrain_weights=None)
 
         # Build layers
@@ -473,7 +515,7 @@ class TestReloadH5Weights:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_h5_detects_expected_objects(self, reloaded_model, image_name):
-        """After reloading .h5, the model detects expected objects."""
+        """After reloading .h5, the model detects expected COCO objects."""
         name = reloaded_model["name"]
         facade = reloaded_model["facade"]
         img = reloaded_model["images"][image_name]
@@ -502,8 +544,8 @@ class TestReloadH5Weights:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_h5_has_confident_detections(self, reloaded_model, image_name):
-        """After reloading .h5, the model produces at least one
-        detection above 0.3 confidence."""
+        """After reloading .h5, the model produces at least one detection
+        above 0.3 confidence."""
         name = reloaded_model["name"]
         facade = reloaded_model["facade"]
         img = reloaded_model["images"][image_name]

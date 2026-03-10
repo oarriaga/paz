@@ -1,10 +1,47 @@
+"""Configuration dataclasses for RF-DETR model variants.
+
+Defines ``ModelConfig`` (base architecture hyperparameters), per-variant
+overrides for detection and segmentation sizes, and ``TrainConfig`` /
+``SegmentationTrainConfig`` for training hyperparameters.  A
+``MODEL_CONFIG_REGISTRY`` maps variant names to their config classes.
+"""
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 
 @dataclass
 class ModelConfig:
-    """Base configuration shared by every RF-DETR variant."""
+    """Base architecture configuration shared by every RF-DETR variant.
+
+    Attributes:
+        encoder (str): DINOv2 backbone variant name.
+        out_feature_indexes (List[int]): Backbone block indices to tap.
+        dec_layers (int): Number of transformer decoder layers.
+        two_stage (bool): Enable two-stage (encoder proposal) mode.
+        projector_scale (List[str]): Feature pyramid level names.
+        hidden_dim (int): Transformer hidden dimension.
+        patch_size (int): ViT patch size.
+        num_windows (int): Number of attention windows in the backbone.
+        sa_nheads (int): Self-attention head count.
+        ca_nheads (int): Cross-attention head count.
+        dec_n_points (int): Deformable attention sampling points.
+        bbox_reparam (bool): Use bounding-box reparameterisation.
+        lite_refpoint_refine (bool): Lightweight reference-point refinement.
+        layer_norm (bool): Apply layer normalisation in the projector.
+        num_classes (int): Number of object categories (excluding background).
+        pretrain_weights (Optional[str]): Filename of pretrained weights.
+        resolution (int): Input image resolution (square).
+        group_detr (int): GROUP-DETR query duplication factor.
+        gradient_checkpointing (bool): Enable gradient checkpointing.
+        positional_encoding_size (int): Spatial size of positional encoding.
+        ia_bce_loss (bool): Use instance-aware BCE loss.
+        cls_loss_coef (float): Classification loss coefficient.
+        segmentation_head (bool): Attach a segmentation head.
+        mask_downsample_ratio (int): Mask spatial downsample ratio.
+        num_queries (int): Total number of object queries.
+        num_select (int): Queries selected for post-processing.
+    """
 
     encoder: str = "dinov2_windowed_small"
     out_feature_indexes: List[int] = field(default_factory=lambda: [2, 5, 8, 11])
@@ -55,7 +92,7 @@ class RFDETRBaseConfig(ModelConfig):
     out_feature_indexes: List[int] = field(default_factory=lambda: [1, 4, 7, 10])
     pretrain_weights: Optional[str] = "lwdetr_base.weights.h5"
     resolution: int = 560
-    positional_encoding_size: int = 37  # matches PyTorch original DINOv2 default
+    positional_encoding_size: int = 37  # DINOv2 default for patch_size=14
 
 
 @dataclass
@@ -348,7 +385,49 @@ class RFDETRSeg2XLargeConfig(ModelConfig):
 
 @dataclass
 class TrainConfig:
-    """Training hyper-parameters (detection)."""
+    """Training hyperparameters for detection.
+
+    Attributes:
+        lr (float): Base learning rate.
+        lr_encoder (float): Learning rate for the backbone encoder.
+        batch_size (int): Images per device per step.
+        grad_accum_steps (int): Gradient accumulation steps.
+        epochs (int): Total training epochs.
+        ema_decay (float): Exponential moving average decay.
+        ema_tau (int): EMA warm-up steps.
+        lr_drop (int): Epoch at which to drop the LR (step schedule).
+        checkpoint_interval (int): Save a checkpoint every N epochs.
+        warmup_epochs (float): Linear warm-up duration in epochs.
+        lr_vit_layer_decay (float): Per-layer LR decay for the ViT.
+        lr_component_decay (float): Component-wise LR decay.
+        drop_path (float): Stochastic depth rate.
+        group_detr (int): GROUP-DETR duplication factor.
+        ia_bce_loss (bool): Instance-aware BCE classification loss.
+        cls_loss_coef (float): Classification loss weight.
+        dataset_file (str): Dataset format (``coco_json`` or ``coco``).
+        square_resize_div_64 (bool): Resize to nearest multiple of 64.
+        dataset_dir (str): Root directory of the dataset.
+        output_dir (str): Directory for checkpoints and logs.
+        multi_scale (bool): Multi-scale data augmentation.
+        expanded_scales (bool): Extended scale range.
+        do_random_resize_via_padding (bool): Pad-based random resize.
+        use_ema (bool): Use exponential moving average.
+        num_workers (int): Data-loader worker count.
+        weight_decay (float): AdamW weight decay.
+        early_stopping (bool): Enable early stopping.
+        early_stopping_patience (int): Patience (epochs) for early stop.
+        early_stopping_min_delta (float): Minimum improvement delta.
+        early_stopping_use_ema (bool): Monitor EMA metric for early stop.
+        tensorboard (bool): Log to TensorBoard.
+        wandb (bool): Log to Weights & Biases.
+        project (Optional[str]): W&B project name.
+        run (Optional[str]): W&B run name.
+        class_names (Optional[List[str]]): Class label names.
+        run_test (bool): Run evaluation after training.
+        clip_max_norm (float): Max gradient norm for clipping.
+        segmentation_head (bool): Train with segmentation head.
+        eval_max_dets (int): Maximum detections per image at evaluation.
+    """
 
     lr: float = 1e-4
     lr_encoder: float = 1.5e-4
@@ -393,7 +472,18 @@ class TrainConfig:
 
 @dataclass
 class SegmentationTrainConfig(TrainConfig):
-    """Training hyper-parameters (segmentation)."""
+    """Training hyperparameters for instance segmentation.
+
+    Extends ``TrainConfig`` with mask-specific loss weights and enables
+    the segmentation head by default.
+
+    Attributes:
+        mask_point_sample_ratio (int): Points per mask for point-based loss.
+        mask_ce_loss_coef (float): Mask cross-entropy loss weight.
+        mask_dice_loss_coef (float): Mask Dice loss weight.
+        cls_loss_coef (float): Classification loss weight (overridden).
+        segmentation_head (bool): Always ``True``.
+    """
 
     mask_point_sample_ratio: int = 16
     mask_ce_loss_coef: float = 5.0
