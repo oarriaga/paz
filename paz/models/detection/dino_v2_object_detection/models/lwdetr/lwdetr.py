@@ -7,7 +7,6 @@ from keras import layers
 from keras import ops
 import numpy as np
 
-# Adjust imports based on your actual directory structure
 from paz.models.detection.dino_v2_object_detection.utils import box_ops
 from paz.models.detection.dino_v2_object_detection.utils.misc import (
     NestedTensor,
@@ -16,38 +15,42 @@ from paz.models.detection.dino_v2_object_detection.utils.misc import (
 )
 
 
-# Loss functions ported from original lwdetr.py
 def sigmoid_focal_loss(
     inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2
 ):
-    """
-    Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
+    """Computes the sigmoid focal loss for dense object detection.
+
+    Applies a modulating factor to the standard cross-entropy loss to
+    downweight easy examples and focus training on hard negatives.
+
     Args:
-        inputs: A float tensor of arbitrary shape.
-                The predictions for each example.
-        targets: A float tensor with the same shape as inputs. Stores the binary
-                 classification label for each element in inputs
-                (0 for the negative class and 1 for the positive class).
-        alpha: (optional) Weighting factor in range (0,1) to balance
-                positive vs negative examples. Default = -1 (no weighting).
-        gamma: Exponent of the modulating factor (1 - p_t) to
-               balance easy vs hard examples.
+        inputs (Tensor): Prediction logits of arbitrary shape.
+        targets (Tensor): Binary classification labels with the same shape
+            as inputs (0 for negative, 1 for positive).
+        num_boxes (int): Number of ground-truth boxes for loss normalization.
+        alpha (float): Balancing factor for positive vs negative examples.
+        gamma (float): Focusing parameter that reduces the loss contribution
+            from easy examples.
+
     Returns:
-        Loss tensor
+        Tensor: Scalar focal loss normalized by num_boxes.
     """
     prob = ops.sigmoid(inputs)
-    # Binary cross entropy with logits
-    # Keras binary_crossentropy(from_logits=True)
+    # Compute binary cross-entropy from logits for numerical stability
     ce_loss = ops.binary_crossentropy(targets, inputs, from_logits=True)
+    # Ensure ce_loss has the same number of dimensions as inputs
     ce_loss = (
         ops.expand_dims(ce_loss, axis=-1)
         if ops.ndim(ce_loss) < ops.ndim(inputs)
         else ce_loss
     )
 
+    # Modulating factor: p_t is the probability of the correct class,
+    # so (1 - p_t)^gamma downweights well-classified examples
     p_t = prob * targets + (1 - prob) * (1 - targets)
     loss = ce_loss * ((1 - p_t) ** gamma)
 
+    # Apply class-balancing alpha weight
     if alpha >= 0:
         alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
         loss = alpha_t * loss
@@ -58,10 +61,25 @@ def sigmoid_focal_loss(
 def sigmoid_varifocal_loss(
     inputs, targets, num_boxes, alpha: float = 0.75, gamma: float = 2
 ):
-    """
-    Varifocal Loss
+    """Computes the varifocal loss for quality-aware classification.
+
+    Weighs positive samples by their target quality score and negative
+    samples by a focal-style modulating factor based on prediction error.
+
+    Args:
+        inputs (Tensor): Prediction logits.
+        targets (Tensor): Continuous quality targets (IoU scores for
+            positives, 0 for negatives).
+        num_boxes (int): Number of ground-truth boxes for normalization.
+        alpha (float): Weighting factor for negative samples.
+        gamma (float): Focusing exponent for negative samples.
+
+    Returns:
+        Tensor: Scalar varifocal loss normalized by num_boxes.
     """
     prob = ops.sigmoid(inputs)
+    # Positive samples weighted by target quality; negative samples
+    # weighted by focal modulation based on prediction-target distance
     focal_weight = targets * ops.cast(targets > 0.0, "float32") + (1 - alpha) * (
         ops.abs(prob - targets) ** gamma
     ) * ops.cast(targets <= 0.0, "float32")
@@ -80,6 +98,21 @@ def sigmoid_varifocal_loss(
 def position_supervised_loss(
     inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2
 ):
+    """Computes position-supervised loss for localization-aware classification.
+
+    Modulates cross-entropy by the absolute difference between predicted
+    probability and target, focusing on hard-to-localize examples.
+
+    Args:
+        inputs (Tensor): Prediction logits.
+        targets (Tensor): Continuous target values.
+        num_boxes (int): Number of ground-truth boxes for normalization.
+        alpha (float): Balancing factor for positive vs negative targets.
+        gamma (float): Exponent for the position-aware modulating factor.
+
+    Returns:
+        Tensor: Scalar position-supervised loss normalized by num_boxes.
+    """
     prob = ops.sigmoid(inputs)
     ce_loss = ops.binary_crossentropy(targets, inputs, from_logits=True)
     ce_loss = (
@@ -100,8 +133,19 @@ def position_supervised_loss(
 
 
 def dice_loss(inputs, targets, num_masks):
-    """
-    Compute the DICE loss, similar to generalized IOU for masks
+    """Computes dice loss between predicted and target binary masks.
+
+    Measures the overlap between predicted and target masks, analogous
+    to generalized IoU for bounding boxes. A smoothing constant of 1
+    is added to numerator and denominator to prevent division by zero.
+
+    Args:
+        inputs (Tensor): Mask prediction logits of shape (N, H*W).
+        targets (Tensor): Binary mask targets of shape (N, H*W).
+        num_masks (int): Number of masks for loss normalization.
+
+    Returns:
+        Tensor: Scalar dice loss normalized by num_masks.
     """
     inputs = ops.sigmoid(inputs)
     inputs = ops.reshape(inputs, (ops.shape(inputs)[0], -1))
@@ -114,13 +158,31 @@ def dice_loss(inputs, targets, num_masks):
 
 
 def sigmoid_ce_loss(inputs, targets, num_masks):
+    """Computes sigmoid binary cross-entropy loss for mask predictions.
+
+    Args:
+        inputs (Tensor): Mask prediction logits.
+        targets (Tensor): Binary mask targets.
+        num_masks (int): Number of masks for loss normalization.
+
+    Returns:
+        Tensor: Scalar cross-entropy loss normalized by num_masks.
+    """
     loss = ops.binary_crossentropy(targets, inputs, from_logits=True)
     return ops.sum(ops.mean(loss, axis=1)) / num_masks
 
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class MLP(layers.Layer):
-    """Very simple multi-layer perceptron (also called FFN)"""
+    """Multi-layer perceptron with ReLU activations between hidden layers.
+
+    Used as the bounding-box regression head. All intermediate layers use
+    ReLU activation; the final layer has no activation.
+
+    Attributes:
+        num_layers (int): Total number of dense layers.
+        layers_list (list): Ordered list of Dense layers.
+    """
 
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, **kwargs):
         super().__init__(**kwargs)
@@ -136,7 +198,6 @@ class MLP(layers.Layer):
             self.layers_list.append(layers.Dense(dims[i + 1], name=f"dense_{i}"))
 
     def build(self, input_shape):
-        # input_shape is (batch, input_dim)
         curr_dim = input_shape[-1]
         for layer in self.layers_list:
             layer.build((None, curr_dim))
@@ -165,7 +226,35 @@ class MLP(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class LWDETR(keras.Model):
-    """This is the Group DETR v3 module that performs object detection"""
+    """End-to-end object detection model using Group DETR v3 architecture.
+
+    Combines a DINOv2 backbone, a deformable transformer decoder with
+    multi-scale features, and classification/bounding-box regression heads.
+    Supports two-stage detection with encoder output proposals, group DETR
+    query splitting, auxiliary losses, bounding-box reparameterization,
+    and optional segmentation.
+
+    Attributes:
+        num_queries (int): Number of object queries per group.
+        transformer: Deformable transformer decoder.
+        num_classes (int): Number of object categories.
+        hidden_dim (int): Feature dimensionality from the transformer.
+        class_embed (Dense): Classification head.
+        bbox_embed (MLP): Bounding-box regression head.
+        segmentation_head: Optional segmentation head.
+        refpoint_embed (Variable): Learnable reference point embeddings.
+        query_feat (Variable): Learnable query feature embeddings.
+        backbone: DINOv2 backbone with multi-scale projector.
+        aux_loss (bool): Whether to compute auxiliary losses from
+            intermediate decoder layers.
+        group_detr (int): Number of query groups for group DETR.
+        lite_refpoint_refine (bool): Whether to use lightweight reference
+            point refinement.
+        bbox_reparam (bool): Whether to use bounding-box reparameterization
+            relative to reference points.
+        two_stage (bool): Whether to use two-stage detection with encoder
+            output proposals.
+    """
 
     def __init__(
         self,
@@ -181,7 +270,21 @@ class LWDETR(keras.Model):
         bbox_reparam=False,
         **kwargs,
     ):
-        """Initializes the model."""
+        """Initializes the LWDETR detection model.
+
+        Args:
+            backbone: DINOv2 backbone returning multi-scale features.
+            transformer: Deformable transformer decoder.
+            segmentation_head: Optional segmentation head, or None.
+            num_classes (int): Number of object categories.
+            num_queries (int): Number of queries per group.
+            aux_loss (bool): If True, compute losses at intermediate layers.
+            group_detr (int): Number of query groups.
+            two_stage (bool): If True, use encoder output proposals.
+            lite_refpoint_refine (bool): Use lightweight refpoint refinement.
+            bbox_reparam (bool): Use bbox reparameterization.
+            **kwargs: Additional Keras model arguments.
+        """
         super().__init__(**kwargs)
         self.num_queries = num_queries
         self.transformer = transformer
@@ -189,15 +292,15 @@ class LWDETR(keras.Model):
         self.hidden_dim = transformer.d_model
         hidden_dim = self.hidden_dim
         self._aux_loss = aux_loss
-        self._segmentation_head_config = (
-            None  # segmentation_head is keras layer or None
-        )
+        self._segmentation_head_config = None
 
-        # In Keras, we prefer explicit activation in layer or separate layer, but Linear implies just Dense
+        # Detection heads: classification (linear) and bbox regression (MLP)
         self.class_embed = layers.Dense(num_classes)
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.segmentation_head = segmentation_head
 
+        # Learnable query embeddings: reference points (4D) and query
+        # features (hidden_dim). Total queries = num_queries * group_detr.
         query_dim = 4
         self.refpoint_embed = self.add_weight(
             name="refpoint_embed",
@@ -207,7 +310,7 @@ class LWDETR(keras.Model):
         self.query_feat = self.add_weight(
             name="query_feat",
             shape=(num_queries * group_detr, self.hidden_dim),
-            initializer="glorot_uniform",  # Common for embedding-like weights
+            initializer="glorot_uniform",
         )
 
         self.backbone = backbone
@@ -215,9 +318,8 @@ class LWDETR(keras.Model):
         self.group_detr = group_detr
 
         self.lite_refpoint_refine = lite_refpoint_refine
-        # Note: In PyTorch, transformer.decoder.bbox_embed is assigned.
-        # In Keras, we should probably pass it or handle it in call.
-        # For now, we mirror structure but properties might need care in Keras logic.
+        # Assign bbox_embed to decoder for iterative refinement (or None
+        # when using lightweight refinement where decoder handles it)
         if not self.lite_refpoint_refine:
             self.transformer.decoder.bbox_embed = self.bbox_embed
         else:
@@ -227,19 +329,16 @@ class LWDETR(keras.Model):
 
         self.two_stage = two_stage
 
-        # Creating shared layers for two_stage if needed
-        # In PyTorch: copy.deepcopy(self.bbox_embed) for _ in range(group_detr)
-        # In Keras, we create distinct layers.
+        # Two-stage encoder output heads: separate class/bbox heads per
+        # group for generating encoder proposals
         if self.two_stage:
             self.enc_out_bbox_embed = []
             self.enc_out_class_embed = []
             for _ in range(group_detr):
-                # We need structurally identical MLPs/Dense
-                # Best to instantiate new ones
                 self.enc_out_bbox_embed.append(MLP(hidden_dim, hidden_dim, 4, 3))
                 self.enc_out_class_embed.append(layers.Dense(num_classes))
 
-            # Need to assign these to transformer because transformer calls them in two_stage
+            # Make encoder output heads accessible to the transformer
             self.transformer.enc_out_bbox_embed = self.enc_out_bbox_embed
             self.transformer.enc_out_class_embed = self.enc_out_class_embed
 
@@ -280,7 +379,6 @@ class LWDETR(keras.Model):
         return cls(**config)
 
     def build(self, input_shape):
-        # Initialize weights if needed, or rely on lazy build
         if not self.class_embed.built:
             self.class_embed.build((None, self.hidden_dim))
         if not self.bbox_embed.built:
@@ -298,7 +396,23 @@ class LWDETR(keras.Model):
         super().build(input_shape)
 
     def call(self, samples, training=False):
-        # Unpack samples if it's a list/tuple
+        """Forward pass of the LWDETR detection model.
+
+        Args:
+            samples: Input images as a tensor (B, H, W, 3), a tuple of
+                (tensors, mask), or a NestedTensor.
+            training (bool): Whether in training mode. Controls whether
+                all group_detr queries or only one group is used.
+
+        Returns:
+            dict: Detection outputs containing:
+                - "pred_logits": Classification logits (B, Q, num_classes).
+                - "pred_boxes": Predicted boxes (B, Q, 4).
+                - "pred_masks" (optional): Mask predictions.
+                - "aux_outputs" (optional): Intermediate layer outputs.
+                - "enc_outputs" (optional): Encoder proposal outputs.
+        """
+        # Unpack input format
         if isinstance(samples, (list, tuple)) and len(samples) == 2:
             # (tensors, mask)
             tensors, mask = samples
@@ -310,15 +424,13 @@ class LWDETR(keras.Model):
             tensors = samples
             mask = None
 
-        # Backbone forward
-        # backbone is a Joiner that wraps Backbone + PositionEmbeddingSine.
-        # Returns (features, poss_all) where:
-        #   features = list of (feat, mask) tuples
-        #   poss_all = list of position encoding tensors
+        # Backbone forward pass: extracts multi-scale features and their
+        # corresponding position encodings
         features, poss_all = self.backbone(tensors, mask=mask, training=training)
 
         srcs = []
         masks = []
+        # Decompose features into source tensors and attention masks
         for l, feat in enumerate(features):
             if isinstance(feat, (list, tuple)):
                 src, m = feat
@@ -336,15 +448,17 @@ class LWDETR(keras.Model):
             srcs.append(src)
             masks.append(m)
 
-        # Prepare embeddings
+        # During training, use all group_detr queries; during inference,
+        # use only the first group for efficiency
         if training:
             refpoint_embed_weight = self.refpoint_embed
             query_feat_weight = self.query_feat
         else:
-            # only use one group in inference
             refpoint_embed_weight = self.refpoint_embed[: self.num_queries]
             query_feat_weight = self.query_feat[: self.num_queries]
 
+        # Transformer forward: deformable decoder with multi-scale features
+        # Returns decoder hidden states, reference points, and encoder outputs
         hs, ref_unsigmoid, hs_enc, ref_enc = self.transformer(
             srcs,
             masks,
@@ -358,22 +472,25 @@ class LWDETR(keras.Model):
         outputs_class = None
         outputs_masks = None
 
-        # Pre-compute NCHW spatial features for segmentation head (if present)
+        # Pre-compute NCHW spatial features for the segmentation head
         spatial_nchw = (
             ops.transpose(srcs[0], (0, 3, 1, 2))
             if self.segmentation_head is not None
             else None
         )
 
+        # Compute detection outputs from decoder hidden states
         if hs is not None:
             if self.bbox_reparam:
+                # Bounding-box reparameterization: predict deltas relative
+                # to reference points rather than absolute coordinates.
+                # CX, CY are offset by delta scaled by reference WH;
+                # W, H are exponentiated delta scaled by reference WH.
                 outputs_coord_delta = self.bbox_embed(hs)
-                # Correct reparameterization: CXCY delta scaled by WH, added to reference CXCY
                 outputs_coord_cxcy = (
                     outputs_coord_delta[..., :2] * ref_unsigmoid[..., 2:]
                     + ref_unsigmoid[..., :2]
                 )
-                # WH delta exponentiated and scaled by reference WH
                 outputs_coord_wh = (
                     ops.exp(outputs_coord_delta[..., 2:]) * ref_unsigmoid[..., 2:]
                 )
@@ -381,22 +498,24 @@ class LWDETR(keras.Model):
                     [outputs_coord_cxcy, outputs_coord_wh], axis=-1
                 )
             else:
+                # Standard coordinate prediction: add bbox offset to
+                # reference point and apply sigmoid for normalization
                 outputs_coord = self.bbox_embed(hs) + ref_unsigmoid
                 outputs_coord = ops.sigmoid(outputs_coord)
 
             outputs_class = self.class_embed(hs)
 
             if self.segmentation_head is not None:
-                # Logic for segmentation head
-                # input_shape should be (H, W) of the input tensor
+                # Compute mask predictions from spatial features and
+                # decoder query features
                 target_shape = (
                     ops.shape(tensors)[1:3]
                     if ops.ndim(tensors) == 4
                     else ops.shape(tensors)[0:2]
                 )
 
-                # The SegmentationHead.call expects (spatial_features, query_features, image_size)
-                # spatial_nchw was pre-computed above (NHWC → NCHW)
+                # Segmentation head expects (spatial_features_NCHW,
+                # query_features, image_size)
                 outputs_masks = self.segmentation_head(
                     spatial_nchw, hs, image_size=target_shape
                 )
@@ -405,42 +524,43 @@ class LWDETR(keras.Model):
             if self.segmentation_head is not None:
                 out["pred_masks"] = outputs_masks[-1]
 
+            # Collect intermediate decoder layer outputs for auxiliary loss
             if self.aux_loss:
                 out["aux_outputs"] = self._set_aux_loss(
                     outputs_class, outputs_coord, outputs_masks
                 )
 
+        # Two-stage: compute encoder output proposals by applying
+        # per-group class/bbox heads to the encoder hidden states
         if self.two_stage:
             group_detr = self.group_detr if training else 1
+            # Split encoder hidden states into query groups
             hs_enc_list = ops.split(
                 hs_enc, group_detr, axis=1
-            )  # split on dim 1 (queries)? Check chunks
+            )
 
-            # Actually in PyTorch chunk(group_detr, dim=1)
-
+            # Apply per-group classification heads
             cls_enc = []
-            # We need to iterate over group_detr and apply corresponding enc_out_class_embed
-            # hs_enc_list = [t1, t2...]
             for g_idx in range(group_detr):
-                # We need to slice if we didn't split perfectly or just use split logic
-                # ops.split returns list
+                # ops.split returns a list of sub-tensors
                 cls_enc_gidx = self.transformer.enc_out_class_embed[g_idx](
                     hs_enc_list[g_idx]
                 )
                 cls_enc.append(cls_enc_gidx)
 
+            # Recombine group classifications into a single tensor
             cls_enc = ops.concatenate(cls_enc, axis=1)
 
             masks_enc = None
             if self.segmentation_head is not None:
-                # Compute masks for encoded features
+                # Compute segmentation masks for encoder proposals
                 target_shape = (
                     ops.shape(tensors)[1:3]
                     if ops.ndim(tensors) == 4
                     else ops.shape(tensors)[0:2]
                 )
-                # Pass [hs_enc] as list to skip blocks logic in head if needed, or just hs_enc
-                # spatial_features must be NCHW; srcs[0] is NHWC from Keras backbone
+                # Pass encoder hidden states through segmentation head
+                # with skip_blocks=True to bypass decoder block processing
                 masks_enc_list = self.segmentation_head(
                     spatial_nchw, [hs_enc], image_size=target_shape, skip_blocks=True
                 )
@@ -458,8 +578,18 @@ class LWDETR(keras.Model):
         return out
 
     def _set_aux_loss(self, outputs_class, outputs_coord, outputs_masks):
-        # outputs_class: [layers, B, Q, C]
-        # Return list of dicts
+        """Collects intermediate decoder layer outputs for auxiliary loss.
+
+        Args:
+            outputs_class (Tensor): Class predictions from all layers
+                with shape (num_layers, B, Q, C).
+            outputs_coord (Tensor): Box predictions from all layers
+                with shape (num_layers, B, Q, 4).
+            outputs_masks: Optional mask predictions from all layers.
+
+        Returns:
+            list[dict]: Per-layer output dicts excluding the last layer.
+        """
         aux_outputs = []
         num_layers = ops.shape(outputs_class)[0]
         for i in range(num_layers - 1):
@@ -471,7 +601,26 @@ class LWDETR(keras.Model):
 
 
 class SetCriterion(layers.Layer):
-    """This class computes the loss for LWDETR."""
+    """Computes the training loss for LWDETR via Hungarian matching.
+
+    Performs bipartite matching between predictions and ground-truth
+    targets, then computes classification (focal loss), bounding-box
+    (L1 + GIoU), and optional mask losses.
+
+    Attributes:
+        num_classes (int): Number of object categories.
+        matcher: Hungarian matcher for bipartite assignment.
+        weight_dict (dict): Loss term weights keyed by loss name.
+        loss_types (list[str]): Active loss types (e.g. 'labels', 'boxes').
+        focal_alpha (float): Alpha parameter for focal loss.
+        group_detr (int): Number of query groups.
+        sum_group_losses (bool): If True, sum rather than average across
+            groups when normalizing by num_boxes.
+        use_varifocal_loss (bool): Use varifocal loss instead of focal.
+        use_position_supervised_loss (bool): Use position-supervised loss.
+        ia_bce_loss (bool): Use instance-aware BCE loss.
+        mask_point_sample_ratio (int): Downsampling ratio for mask loss.
+    """
 
     def __init__(
         self,
@@ -502,31 +651,42 @@ class SetCriterion(layers.Layer):
         self.mask_point_sample_ratio = mask_point_sample_ratio
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
+        """Computes classification loss using sigmoid focal loss.
+
+        Constructs one-hot target tensors via scatter update of matched
+        indices, then applies focal loss against predicted logits.
+
+        Args:
+            outputs (dict): Contains "pred_logits" of shape (B, Q, C).
+            targets (list[dict]): Per-image targets with "labels".
+            indices (list[tuple]): Matched (src, tgt) index pairs.
+            num_boxes (int): Total matched boxes for normalization.
+            log (bool): Reserved for logging metrics.
+
+        Returns:
+            dict: {"loss_ce": scalar classification loss}.
+        """
         src_logits = outputs["pred_logits"]
         idx = self._get_src_permutation_idx(indices)
 
-        # Get target classes corresponding to the selected indices
-        # targets is list of dicts.
+        # Gather target class labels at the matched positions
         target_classes_o = ops.concatenate(
             [ops.take(t["labels"], J, axis=0) for t, (_, J) in zip(targets, indices)]
         )
 
-        # Default Focal Loss logic
+        # Initialize target tensor with num_classes (background class
+        # index) and scatter matched class labels into their positions
         target_classes = ops.full(src_logits.shape[:2], self.num_classes, dtype="int64")
-        # Scatter indices?
-        # In Keras/Jax, scatter update is specific.
-        # target_classes[idx] = target_classes_o
 
-        # Helper to do scatter nd update
-        # idx is (batch_idx, src_idx)
-        # We need to stack them for gather_nd / scatter_nd
+        # Build N-dimensional index array for scatter update: each row
+        # is (batch_idx, query_idx) identifying where to place a target
         indices_nd = ops.stack(idx, axis=-1)
         target_classes = ops.scatter_update(
             target_classes, indices_nd, target_classes_o
         )
 
-        # One-hot
-        # src_logits shape: (B, Q, num_classes)
+        # Convert to one-hot with an extra background column, then
+        # remove the background column to get (B, Q, num_classes)
         num_classes_logits = ops.shape(src_logits)[2]
         target_classes_onehot = ops.one_hot(target_classes, num_classes_logits + 1)
         target_classes_onehot = target_classes_onehot[..., :-1]
@@ -542,30 +702,42 @@ class SetCriterion(layers.Layer):
         return {"loss_ce": loss_ce}
 
     def loss_boxes(self, outputs, targets, indices, num_boxes):
+        """Computes bounding-box L1 and generalized IoU losses.
+
+        Gathers matched predicted and target boxes, then computes L1
+        regression loss and GIoU loss for the matched pairs.
+
+        Args:
+            outputs (dict): Contains "pred_boxes" of shape (B, Q, 4).
+            targets (list[dict]): Per-image targets with "boxes".
+            indices (list[tuple]): Matched (src, tgt) index pairs.
+            num_boxes (int): Total matched boxes for normalization.
+
+        Returns:
+            dict: {"loss_bbox": L1 loss, "loss_giou": GIoU loss}.
+        """
         idx = self._get_src_permutation_idx(indices)
         src_boxes = ops.take(
             outputs["pred_boxes"], ops.stack(idx, axis=-1)
-        )  # gather_nd logic needed if direct indexing fails
-        # Actually ops.take works on flattened or simple axis. For Multi-dim index:
-        # src_boxes = ops.gather_nd(outputs['pred_boxes'], ops.stack(idx, axis=-1))
-        # Wait, indices is list of tuples (src_idx, tgt_idx).
-        # idx from _get_src... returns (batch_indices, src_indices)
+        )
 
-        # Implement gathering using reshape + take as gather_nd is missing in keras.ops
+        # Gather matched predictions using flattened indexing since
+        # ops.gather_nd is not available in keras.ops
         B, Q, C = ops.shape(outputs["pred_boxes"])
         outputs_boxes_flat = ops.reshape(outputs["pred_boxes"], (-1, C))
-        # idx is (batch_idx, src_idx)
         flat_indices = idx[0] * Q + idx[1]
         src_boxes = ops.take(outputs_boxes_flat, flat_indices, axis=0)
 
+        # Concatenate matched target boxes across the batch
         target_boxes = ops.concatenate(
             [ops.take(t["boxes"], i, axis=0) for t, (_, i) in zip(targets, indices)],
             axis=0,
         )
 
-        loss_bbox = ops.abs(src_boxes - target_boxes)  # L1 loss
+        loss_bbox = ops.abs(src_boxes - target_boxes)
         loss_bbox = ops.sum(loss_bbox) / num_boxes
 
+        # Generalized IoU loss: 1 - GIoU for each matched pair
         loss_giou = 1 - ops.diag(
             box_ops.generalized_box_iou(
                 box_ops.box_cxcywh_to_xyxy(src_boxes),
@@ -577,7 +749,14 @@ class SetCriterion(layers.Layer):
         return {"loss_bbox": loss_bbox, "loss_giou": loss_giou}
 
     def _get_src_permutation_idx(self, indices):
-        # permute predictions following indices
+        """Builds batch and source index arrays from matching results.
+
+        Args:
+            indices (list[tuple]): Per-image (src_indices, tgt_indices).
+
+        Returns:
+            tuple: (batch_indices, src_indices) tensors for gathering.
+        """
         batch_idx = ops.concatenate(
             [ops.full_like(src, i) for i, (src, _) in enumerate(indices)]
         )
@@ -585,32 +764,60 @@ class SetCriterion(layers.Layer):
         return batch_idx, src_idx
 
     def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
+        """Dispatches to the appropriate loss computation method.
+
+        Args:
+            loss (str): Loss type name ('labels' or 'boxes').
+            outputs (dict): Model predictions.
+            targets (list[dict]): Ground-truth targets.
+            indices (list[tuple]): Matched index pairs.
+            num_boxes (int): Normalization factor.
+
+        Returns:
+            dict: Computed loss values, or empty dict if loss type unknown.
+        """
         loss_map = {
             "labels": self.loss_labels,
-            # 'cardinality': self.loss_cardinality,
             "boxes": self.loss_boxes,
-            # 'masks': self.loss_masks,
         }
         if loss not in loss_map:
             return {}
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
     def call(self, outputs, targets):
-        group_detr = self.group_detr  # ignore training flag for now or pass it
+        """Computes all training losses for the model outputs.
+
+        Runs Hungarian matching, computes per-type losses on the main
+        output, and optionally on auxiliary intermediate outputs.
+
+        Args:
+            outputs (dict): Model predictions including "pred_logits",
+                "pred_boxes", and optionally "aux_outputs".
+            targets (list[dict]): Per-image ground-truth targets.
+
+        Returns:
+            dict: All computed losses keyed by name (e.g. "loss_ce",
+                "loss_bbox", "loss_giou", with "_i" suffixes for
+                auxiliary layers).
+        """
+        group_detr = self.group_detr
         outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
 
+        # Bipartite matching between predictions and targets
         indices = self.matcher(outputs_without_aux, targets, group_detr=group_detr)
 
+        # Normalize by total number of matched boxes
         num_boxes = sum(len(t["labels"]) for t in targets)
         if not self.sum_group_losses:
             num_boxes = num_boxes * group_detr
         num_boxes = ops.cast(num_boxes, "float32")
-        # Distributed reduce would go here
 
+        # Compute losses for each loss type on the main output
         losses = {}
         for loss in self.loss_types:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
 
+        # Compute losses on auxiliary intermediate decoder outputs
         if "aux_outputs" in outputs:
             for i, aux_outputs in enumerate(outputs["aux_outputs"]):
                 indices = self.matcher(aux_outputs, targets, group_detr=group_detr)
@@ -626,7 +833,15 @@ class SetCriterion(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class PostProcess(layers.Layer):
-    """This module converts the model's output into the format expected by the coco api"""
+    """Converts raw model outputs to scaled detection results.
+
+    Selects the top-k most confident predictions across all classes,
+    converts boxes from normalized (cx, cy, w, h) to absolute (x1, y1,
+    x2, y2) coordinates, and scales them to the target image size.
+
+    Attributes:
+        num_select (int): Number of top detections to return per image.
+    """
 
     def __init__(self, num_select=300, **kwargs):
         super().__init__(**kwargs)
@@ -638,48 +853,47 @@ class PostProcess(layers.Layer):
         return config
 
     def call(self, outputs, target_sizes):
+        """Post-processes model outputs into scaled detections.
+
+        Args:
+            outputs (dict): Contains "pred_logits" (B, Q, C) and
+                "pred_boxes" (B, Q, 4) in normalized coordinates.
+            target_sizes (Tensor): Original image sizes (B, 2) as
+                (height, width) for coordinate scaling.
+
+        Returns:
+            tuple: (scores, labels, boxes) where:
+                - scores: (B, K) confidence scores.
+                - labels: (B, K) class label indices.
+                - boxes: (B, K, 4) in absolute (x1, y1, x2, y2) coords.
+        """
         out_logits, out_bbox = outputs["pred_logits"], outputs["pred_boxes"]
 
-        # Avoid len() and as_list() on symbolic tensors
-        # assert len(out_logits) == len(target_sizes)
-        # assert target_sizes.shape[1] == 2
-
+        # Flatten class probabilities and select top-k across all classes
         prob = ops.sigmoid(out_logits)
         prob_flat = ops.reshape(prob, (ops.shape(out_logits)[0], -1))
 
         topk_values, topk_indexes = ops.top_k(prob_flat, self.num_select)
 
         scores = topk_values
+        # Recover which query and class each top-k entry belongs to
         num_classes_logits = ops.shape(out_logits)[2]
         topk_boxes = topk_indexes // num_classes_logits
         labels = topk_indexes % num_classes_logits
 
+        # Convert boxes from (cx, cy, w, h) to (x1, y1, x2, y2) format
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
 
-        # Gather boxes
-        # boxes has shape (B, Q, 4)
-        # topk_boxes has shape (B, K)
-        # We need to gather (B, K, 4)
-
-        # Using batch gather or gather_nd
-        # B = boxes.shape[0]
-        # gathered_boxes = []
-        # for i in range(B):
-        #      gathered_boxes.append(ops.take(boxes[i], topk_boxes[i], axis=0))
-        # boxes = ops.stack(gathered_boxes)
-
-        # Vectorized gather using take_along_axis? No, indices are not same shape.
-        # Construct indices for gather_nd
-        # Implement gathering using reshape + take as gather_nd is missing in keras.ops
+        # Gather the boxes corresponding to top-k queries using
+        # flattened indexing (batch_idx * Q + query_idx)
         B, Q, C = ops.shape(boxes)
         boxes_flat = ops.reshape(boxes, (-1, C))
-        # batch_indices[:, None] * Q + topk_boxes
         batch_indices = ops.arange(B)[:, None]
         flat_indices = ops.reshape(batch_indices * Q + topk_boxes, (-1,))
         boxes = ops.take(boxes_flat, flat_indices, axis=0)
         boxes = ops.reshape(boxes, (B, self.num_select, C))
 
-        # Scale boxes
+        # Scale boxes to absolute pixel coordinates using target image sizes
         img_h = target_sizes[:, 0]
         img_w = target_sizes[:, 1]
         scale_fct = ops.stack([img_w, img_h, img_w, img_h], axis=1)

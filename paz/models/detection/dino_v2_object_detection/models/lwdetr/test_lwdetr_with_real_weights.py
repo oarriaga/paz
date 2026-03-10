@@ -1,3 +1,9 @@
+"""Integration tests for LWDETR with real pre-trained weights.
+
+Verifies forward-pass parity between the reference implementation and
+Keras LWDETR across all model variants (detection and segmentation),
+using full weight transfer and identical preprocessed inputs.
+"""
 import os
 import sys
 import numpy as np
@@ -7,15 +13,14 @@ import keras
 from keras import ops
 import pytest
 import warnings
-import tensorflow as tf  # Needed for image resizing operations
+import tensorflow as tf
 
-# Add project root to sys.path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "../../../../../../"))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# RFDETR imports
+# Reference implementation imports
 try:
     from rfdetr import (
         RFDETRNano,
@@ -79,7 +84,7 @@ from paz.models.detection.dino_v2_object_detection.models.segmentation_head.segm
     SegmentationHead as KerasSegmentationHead,
 )
 
-# Utility imports
+# Weight transfer utilities
 from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (
     transfer_encoder as transfer_backbone_encoder,
     port_weights_multiscale_projector,
@@ -343,14 +348,18 @@ MODEL_CONFIGS = {
 
 
 def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
-    """
-    Interpolates PyTorch position embeddings to match Keras shape if necessary,
-    then assigns them.
+    """Interpolates position embeddings to match target spatial grid.
 
-    PyTorch shape: (1, N_pt, D)
-    Keras shape: (1, N_keras, D)
+    Separates CLS token from spatial grid tokens, performs bicubic
+    interpolation on the grid to match the target size, and reassembles.
+
+    Args:
+        pt_embeddings_layer: Source embeddings containing
+            ``position_embeddings`` of shape (1, N_src, D).
+        keras_embeddings_layer: Target Keras embeddings whose
+            ``position_embeddings`` (1, N_tgt, D) will be overwritten.
     """
-    # Fix: Check if it is a module with .weight (Embedding) or just a Parameter (DINOv2 typical)
+    # Fix: Handle both Embedding module (.weight) and raw Parameter
     if hasattr(pt_embeddings_layer.position_embeddings, "weight"):
         pt_pos_embed = (
             pt_embeddings_layer.position_embeddings.weight.detach().cpu().numpy()
@@ -359,30 +368,23 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
         pt_pos_embed = pt_embeddings_layer.position_embeddings.detach().cpu().numpy()
 
     if pt_pos_embed.ndim == 2:
-        pt_pos_embed = np.expand_dims(pt_pos_embed, axis=0)  # (1, N, D)
+        pt_pos_embed = np.expand_dims(pt_pos_embed, axis=0)
 
     keras_shape = keras_embeddings_layer.position_embeddings.shape
 
-    # Check if shapes match
     if pt_pos_embed.shape == keras_shape:
         keras_embeddings_layer.position_embeddings.assign(pt_pos_embed)
         return
 
-    print(f"  Resizing PosEmbed: PT {pt_pos_embed.shape} -> Keras {keras_shape}")
+    print(f"  Resizing PosEmbed: {pt_pos_embed.shape} -> {keras_shape}")
 
-    # Separate CLS token
     cls_token = pt_pos_embed[:, 0:1, :]
     grid_tokens = pt_pos_embed[:, 1:, :]
 
-    # Calculate grid size
-    # Assuming square grid for simplicity, derived from tokens
+    # Calculate grid size (assuming square grid)
     n_tokens = grid_tokens.shape[1]
     if n_tokens == 0:
-        print(
-            "  WARNING: PyTorch grid tokens are empty! Skipping resize/assign for grid."
-        )
-        # If possible, just assign CLS if Keras expects only CLS?
-        # Likely Keras expects grid tokens too, so this will still fail later, but avoids crash here.
+        print("  WARNING: Grid tokens are empty! Skipping resize.")
         return
 
     gs_pt = int(np.sqrt(n_tokens))
@@ -390,15 +392,14 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     n_tokens_keras = keras_shape[1] - 1
     gs_keras = int(np.sqrt(n_tokens_keras))
 
-    # Reshape to (B, H, W, C)
+    # Reshape to spatial grid and interpolate
     grid_tokens = grid_tokens.reshape(1, gs_pt, gs_pt, -1)
 
-    # Use PyTorch's interpolation with size= (NOT scale_factor) and
-    # align_corners=False to exactly match the DINOv2 runtime code in
-    # dinov2_with_windowed_attn.py::interpolate_pos_encoding.
+    # Bicubic interpolation to match DINOv2 runtime
+    # (dinov2_with_windowed_attn.py::interpolate_pos_encoding)
     pt_tensor = (
         torch.tensor(grid_tokens).permute(0, 3, 1, 2).to(dtype=torch.float32)
-    )  # (1, C, H, W)
+    )
     grid_tokens_resized = torch.nn.functional.interpolate(
         pt_tensor,
         size=(gs_keras, gs_keras),
@@ -408,19 +409,27 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     )
     grid_tokens_resized = grid_tokens_resized.permute(
         0, 2, 3, 1
-    ).numpy()  # (1, H, W, C)
+    ).numpy()
 
-    # Flatten back
     grid_tokens_resized = grid_tokens_resized.reshape(1, -1, pt_pos_embed.shape[-1])
 
-    # Concat CLS
+    # Recombine CLS token and resized grid
     new_pos_embed = np.concatenate([cls_token, grid_tokens_resized], axis=1)
 
     keras_embeddings_layer.position_embeddings.assign(new_pos_embed)
 
 
 def transfer_lwdetr_head_weights(pt_model, keras_model, config):
-    """Transfer LWDETR specific weights (heads, embeddings)."""
+    """Transfers LWDETR detection head weights to the Keras model.
+
+    Copies classification head, bbox MLP, query/refpoint embeddings,
+    and two-stage encoder output heads.
+
+    Args:
+        pt_model: Source reference model with detection heads.
+        keras_model: Target Keras LWDETR model.
+        config (dict): Model configuration.
+    """
     # 1. Class embed
     keras_model.class_embed.set_weights(
         [
@@ -437,8 +446,7 @@ def transfer_lwdetr_head_weights(pt_model, keras_model, config):
             [pt_l.weight.detach().cpu().numpy().T, pt_l.bias.detach().cpu().numpy()]
         )
 
-    # 3. Embeddings
-    # Handle refpoint_embed and query_feat if they are Parameters or Embedding layers
+    # 3. Query and reference point embeddings
     if hasattr(pt_model.refpoint_embed, "weight"):
         keras_model.refpoint_embed.assign(
             pt_model.refpoint_embed.weight.detach().cpu().numpy()
@@ -453,11 +461,11 @@ def transfer_lwdetr_head_weights(pt_model, keras_model, config):
     else:
         keras_model.query_feat.assign(pt_model.query_feat.detach().cpu().numpy())
 
-    # 4. Two-stage heads
+    # 4. Two-stage encoder output heads
     if config.get("two_stage", True):
         group_detr = config.get("group_detr", 13)
         for g in range(group_detr):
-            # Class embed
+            # Classification embed
             pt_cls = pt_model.transformer.enc_out_class_embed[g]
             k_cls = keras_model.enc_out_class_embed[g]
             k_cls.set_weights(
@@ -467,7 +475,7 @@ def transfer_lwdetr_head_weights(pt_model, keras_model, config):
                 ]
             )
 
-            # BBox embed
+            # Bbox MLP
             pt_bbox = pt_model.transformer.enc_out_bbox_embed[g]
             k_bbox = keras_model.enc_out_bbox_embed[g]
             for pt_l, k_l in zip(pt_bbox.layers, k_bbox.layers_list):
@@ -480,32 +488,39 @@ def transfer_lwdetr_head_weights(pt_model, keras_model, config):
 
 
 def transfer_full_model_weights(pt_model, keras_model, config):
-    """Orchestrate weight transfer for the entire model."""
+    """Orchestrates full weight transfer from reference to Keras model.
+
+    Transfers backbone (embeddings, encoder, projector), transformer
+    decoder, detection heads, and optional segmentation head weights.
+
+    Args:
+        pt_model: Source reference wrapper model.
+        keras_model: Target Keras LWDETR model.
+        config (dict): Model configuration.
+    """
     inner_pt = pt_model.model.model
     pt_backbone = inner_pt.backbone[0]
     keras_backbone = keras_model.backbone.backbone
 
     # 1. Backbone
-    # Handle Embedding Interpolation manually here
+    # a. Position embeddings
     resize_and_assign_pos_embed(
         pt_backbone.encoder.encoder.embeddings,
         keras_backbone.encoder.encoder.embeddings,
     )
 
-    # Transfer other embedding parts (CLS token, Patch Embeddings)
-    # Check if cls_token/mask_token are Parameters or have weight (usually Params)
-    # Access logic handles both 'embeddings' container and flatten patch_embeddings case
+    # b. Transfer other embedding parts (CLS token, patch projection)
     pt_embeddings = pt_backbone.encoder.encoder.embeddings
 
-    # Check for patch_embeddings submodule
+    # Locate patch embedding submodule
     if hasattr(pt_embeddings, "patch_embeddings"):
         pt_patch_embed = pt_embeddings.patch_embeddings
     else:
-        pt_patch_embed = pt_embeddings  # Fallback
+        pt_patch_embed = pt_embeddings
 
     keras_patch_embed = keras_backbone.encoder.encoder.embeddings
 
-    # Handle both 'projection' and 'proj' naming in PyTorch
+    # Handle both 'projection' and 'proj' naming conventions
     if hasattr(pt_patch_embed, "projection"):
         pt_proj_weight = pt_patch_embed.projection.weight
         pt_proj_bias = pt_patch_embed.projection.bias
@@ -525,27 +540,27 @@ def transfer_full_model_weights(pt_model, keras_model, config):
             pt_embeddings.cls_token.detach().cpu().numpy()
         )
 
-    # Mask token might be optional in Keras implementation (inference only)
+    # Mask token (optional, inference-only)
     if hasattr(keras_backbone.encoder.encoder.embeddings, "mask_token"):
         if hasattr(pt_embeddings, "mask_token"):
             keras_backbone.encoder.encoder.embeddings.mask_token.assign(
                 pt_embeddings.mask_token.detach().cpu().numpy()
             )
 
-    # b. Encoder Blocks
+    # c. Encoder blocks
     transfer_backbone_encoder(
         pt_backbone.encoder.encoder.encoder, keras_backbone.encoder.encoder.encoder
     )
 
-    # c. Final Norm
+    # d. Final layer norm
     transfer_layernorm(
         pt_backbone.encoder.encoder.layernorm, keras_backbone.encoder.encoder.layernorm
     )
 
-    # d. Projector
+    # e. Multi-scale projector
     port_weights_multiscale_projector(pt_backbone.projector, keras_backbone.projector)
 
-    # 2. Transformer
+    # 2. Transformer decoder
     transfer_transformer_weights(
         inner_pt.transformer,
         keras_model.transformer,
@@ -553,16 +568,16 @@ def transfer_full_model_weights(pt_model, keras_model, config):
         config["sa_nheads"],
     )
 
-    # 3. LWDETR Heads
+    # 3. Detection heads
     transfer_lwdetr_head_weights(inner_pt, keras_model, config)
 
-    # 4. Segmentation Head
+    # 4. Segmentation head (optional)
     if config.get("segmentation_head"):
         copy_segmentation_head(
             inner_pt.segmentation_head, keras_model.segmentation_head
         )
 
-    # Debug: Check Keras backbone weight norms
+    # Debug: verify backbone weight norms match
     enc_weights = keras_backbone.encoder.encoder.encoder.encoder_layers[
         0
     ].attention.predict_query_key_value.get_weights()[0]
@@ -578,13 +593,19 @@ def transfer_full_model_weights(pt_model, keras_model, config):
 
 @pytest.mark.parametrize("variant_name", list(MODEL_CONFIGS.keys()))
 def test_lwdetr_real_weights_parity(variant_name):
+    """Verifies forward-pass parity between reference and Keras LWDETR.
+
+    Builds both implementations for the given variant, transfers weights,
+    runs identical inputs through both, and asserts output differences
+    are within tolerance.
+    """
     config = MODEL_CONFIGS[variant_name]
     if config["pt_class"] is None:
         pytest.skip(f"{variant_name} requires rfdetr[plus] which is not installed")
     num_classes = config.get("num_classes", 90) + 1
 
-    # 1. Instantiate PyTorch model
-    print(f"Instantiating PyTorch {variant_name}...")
+    # 1. Instantiate reference model
+    print(f"Instantiating reference {variant_name}...")
     if "XLarge" in variant_name or "Xlarge" in variant_name:
         pt_model = config["pt_class"](accept_platform_model_license=True)
     else:
@@ -647,23 +668,23 @@ def test_lwdetr_real_weights_parity(variant_name):
     print(f"Transferring weights for {variant_name}...")
     transfer_full_model_weights(pt_model, keras_model, config)
 
-    # 4. Forward pass
+    # 4. Forward pass comparison
     print(f"Running forward pass for {variant_name}...")
     img_pt = torch.from_numpy(dummy_input).permute(0, 3, 1, 2)
     mask_pt = torch.zeros((1, res, res), dtype=torch.bool)
     samples = NestedTensor(img_pt, mask_pt)
 
-    # Trace PyTorch models
+    # Reference forward pass
     with torch.no_grad():
         pt_backbone_out, pt_pos = pt_model.model.model.backbone(samples)
         pt_out = pt_model.model.model(samples)
 
-    print("Running Keras forward...")
+    print("Running Keras forward pass...")
     k_backbone_out, k_pos = keras_model.backbone(dummy_input, training=False)
 
     k_out = keras_model(dummy_input, training=False)
 
-    # 5.1.5 Encoder-only Parity (Check DinoV2 core)
+    # 5.1.5 Encoder-only parity check
     print("  Checking weight transfer norms...")
     pt_backbone = pt_model.model.model.backbone[0]
     # Patch projection
@@ -714,7 +735,7 @@ def test_lwdetr_real_weights_parity(variant_name):
             f"    Layer {i} FC1 Weight Norm - PT: {torch.norm(pt_fc1).item():.4e}, Keras: {np.linalg.norm(np.asarray(keras_fc1)):.4e}"
         )
 
-    print("  Checking PyTorch Backbone configuration...")
+    print("  Checking backbone configuration...")
     pt_backbone = pt_model.model.model.backbone[0]
     pt_dino_config = pt_backbone.encoder.encoder.config
     print(f"    PT num_windows: {getattr(pt_dino_config, 'num_windows', 'N/A')}")
@@ -728,22 +749,15 @@ def test_lwdetr_real_weights_parity(variant_name):
         print(f"    PT Backbone register_tokens shape: {reg_toks.shape}")
 
     with torch.no_grad():
-        # ...
         pt_enc_out = pt_backbone.encoder(img_pt)
-        # DinoV2 PT returns list of tensors
     k_enc_out = keras_model.backbone.backbone.encoder(dummy_input)
-    # DinoV2 Keras returns list of tensors
 
     for i, (pt_e, k_e) in enumerate(zip(pt_enc_out, k_enc_out)):
         pt_e_np = pt_e.detach().cpu().numpy()
-        # PT is sequence (B, N, C). Keras is list of features (B, H, W, C)
-        # Wait, DinoV2 Keras call() returns list of (B, H, W, C)?
-        # Let's check k_enc_out elements.
         k_e_np = np.asarray(k_e)
 
-        # If PT is (B, N, C), we need to handle CLS/registers and reshape.
-        # But wait, DinoV2 Keras already does un-windowing and reshaping in call()!
-        # Let's verify k_e shape.
+        # If PT is (B, N, C), handle CLS/registers and reshape.
+        # DinoV2 Keras already does un-windowing and reshaping in call().
         print(
             f"    DinoV2 Level {i} - Keras Shape: {k_e_np.shape}, PT Shape: {pt_e_np.shape}"
         )
@@ -786,7 +800,7 @@ def test_lwdetr_real_weights_parity(variant_name):
         )
         # assert diff.max() < 1e-2, f"Backbone Projector mismatch at level {i} for {variant_name}"
 
-    # 5.2 Transformer Parity (Logits/Boxes)
+    # 5.2 Full model parity (logits/boxes)
     pt_logits = pt_out["pred_logits"].detach().cpu().numpy()
     keras_logits = np.asarray(k_out["pred_logits"])
 
@@ -801,8 +815,8 @@ def test_lwdetr_real_weights_parity(variant_name):
     print(f"Boxes Max Diff: {diff_boxes.max():.6e}, Mean Diff: {diff_boxes.mean():.6e}")
 
     # Final assertion
-    # Larger models (higher resolution, more decoder layers) accumulate more
-    # floating-point error, so we use max-based thresholds.
+    # Larger models accumulate more floating-point error, so use
+    # max-based thresholds.
     strict_logits_ok = diff_logits.max() < 1e-2
     strict_boxes_ok = diff_boxes.max() < 1e-2
     strict_logits_mean_ok = diff_logits.mean() < 2e-4
