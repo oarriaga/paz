@@ -4,12 +4,10 @@ import numpy as np
 import torch
 from scipy.optimize import linear_sum_assignment
 
-# Note: We assume Keras is available in the environment where this is run
 try:
     import keras
     from paz.models.detection.dino_v2_object_detection.models.matcher.matcher import HungarianMatcher as KerasHungarianMatcher
 except ImportError:
-    # Try importing assuming run from root
     try:
         from paz.models.detection.dino_v2_object_detection.models.matcher.matcher import HungarianMatcher as KerasHungarianMatcher
     except ImportError:
@@ -17,30 +15,57 @@ except ImportError:
          KerasHungarianMatcher = None
 
 def to_numpy(t):
-    """Converts a tensor (Torch/Keras/Numpy) to a numpy array."""
+    """Converts a tensor to a numpy array.
+
+    Handles torch tensors, keras tensors, and numpy arrays uniformly.
+
+    Args:
+        t: Input tensor (torch.Tensor, keras tensor, or np.ndarray).
+
+    Returns:
+        np.ndarray: Numpy array representation of the input.
+    """
     if isinstance(t, torch.Tensor):
         return t.detach().cpu().numpy()
-    if hasattr(t, "numpy"): # Keras tensor
+    if hasattr(t, "numpy"):
         return t.numpy()
     return np.array(t)
 
 def convert_to_keras(outputs_torch, targets_torch):
-    """
-    Convert PyTorch outputs and targets to the format expected by Keras matcher.
+    """Converts model outputs and targets to numpy-backed format.
+
+    Transforms torch tensor outputs and target dictionaries into numpy
+    arrays suitable for use with the Keras HungarianMatcher.
+
+    Args:
+        outputs_torch (dict): Model predictions with torch tensor values.
+            Expected keys: "pred_logits", "pred_boxes", optional
+            "pred_masks" (tensor or dict of tensors).
+        targets_torch (list[dict]): Per-image target dicts with torch
+            tensor values. Expected keys: "labels", "boxes", optional
+            "masks".
+
+    Returns:
+        tuple: (outputs_numpy, targets_numpy) with the same structure
+            but numpy array values.
     """
     outputs_keras = {}
+    # Convert prediction tensors to numpy
     outputs_keras["pred_logits"] = to_numpy(outputs_torch["pred_logits"])
     outputs_keras["pred_boxes"] = to_numpy(outputs_torch["pred_boxes"])
     
+    # Handle mask predictions: either a single tensor or a dictionary
+    # of component tensors for deferred mask computation
     if "pred_masks" in outputs_torch:
         if isinstance(outputs_torch["pred_masks"], torch.Tensor):
             outputs_keras["pred_masks"] = to_numpy(outputs_torch["pred_masks"])
         else:
-            # Sparse masks (dictionary)
+            # Sparse/deferred masks: dictionary of component tensors
             outputs_keras["pred_masks"] = {}
             for k, v in outputs_torch["pred_masks"].items():
                 outputs_keras["pred_masks"][k] = to_numpy(v)
 
+    # Convert per-image target dictionaries to numpy
     targets_keras = []
     for t in targets_torch:
         t_keras = {}
@@ -53,9 +78,22 @@ def convert_to_keras(outputs_torch, targets_torch):
     return outputs_keras, targets_keras
 
 def extract_matcher_config(args):
-    """
-    Extracts matcher configuration from RF-DETR args object.
-    Injects default values for mask coefficients if segmentation head is present but args are missing.
+    """Extracts matcher configuration from model arguments.
+
+    Reads cost weights and focal alpha from the model's argument object.
+    If a segmentation head is present, also extracts mask cost parameters
+    with sensible defaults.
+
+    Args:
+        args: Model configuration object with attributes set_cost_class,
+            set_cost_bbox, set_cost_giou, focal_alpha, and optionally
+            segmentation_head, mask_ce_loss_coef, mask_dice_loss_coef,
+            mask_point_sample_ratio.
+
+    Returns:
+        dict: Configuration dictionary with keys cost_class, cost_bbox,
+            cost_giou, focal_alpha, and optionally cost_mask_ce,
+            cost_mask_dice, mask_point_sample_ratio.
     """
     config = {
         "cost_class": args.set_cost_class,
@@ -65,7 +103,7 @@ def extract_matcher_config(args):
     }
     
     if getattr(args, 'segmentation_head', False):
-        # Default values if missing (e.g. inference mode config)
+        # Inject default mask cost values when not explicitly configured
         config["cost_mask_ce"] = getattr(args, 'mask_ce_loss_coef', 5.0)
         config["cost_mask_dice"] = getattr(args, 'mask_dice_loss_coef', 5.0)
         config["mask_point_sample_ratio"] = getattr(args, 'mask_point_sample_ratio', 16)
@@ -73,7 +111,19 @@ def extract_matcher_config(args):
     return config
 
 def build_keras_matcher_from_config(config):
-    """Builds a Keras HungarianMatcher from a configuration dictionary."""
+    """Builds a HungarianMatcher instance from a configuration dictionary.
+
+    Args:
+        config (dict): Matcher configuration with keys cost_class,
+            cost_bbox, cost_giou, focal_alpha, and optionally
+            mask_point_sample_ratio, cost_mask_ce, cost_mask_dice.
+
+    Returns:
+        HungarianMatcher: Configured matcher instance.
+
+    Raises:
+        ImportError: If KerasHungarianMatcher could not be imported.
+    """
     if KerasHungarianMatcher is None:
         raise ImportError("KerasHungarianMatcher not imported.")
         
@@ -88,11 +138,23 @@ def build_keras_matcher_from_config(config):
     )
 
 def assert_matcher_parity(indices_torch, indices_keras, check_exact=True):
-    """
-    Asserts parity between PyTorch and Keras matcher outputs.
-    indices_torch: List of (row_ind, col_ind) tensors from PyTorch matcher.
-    indices_keras: List of (row_ind, col_ind) tensors/arrays from Keras matcher.
-    check_exact: If False, skips exact index comparison (useful for randomized sampling cases like masks).
+    """Asserts that two sets of matcher outputs are equivalent.
+
+    Compares matched index pairs from two matcher implementations to
+    verify they produce identical assignments.
+
+    Args:
+        indices_torch (list[tuple]): Reference matcher output as a list
+            of (row_indices, col_indices) tuples.
+        indices_keras (list[tuple]): Matcher output to validate, same
+            format as indices_torch.
+        check_exact (bool): If True, asserts exact index equality.
+            If False, only checks shape consistency (useful when
+            randomized mask sampling causes non-deterministic results).
+
+    Raises:
+        AssertionError: If batch sizes differ, shapes mismatch, or
+            (when check_exact=True) index values differ.
     """
     assert len(indices_torch) == len(indices_keras), "Number of batch elements matched differs"
     
@@ -100,10 +162,10 @@ def assert_matcher_parity(indices_torch, indices_keras, check_exact=True):
         ind_i_torch, ind_j_torch = indices_torch[i]
         ind_i_keras, ind_j_keras = indices_keras[i]
         
+        # Convert reference indices to numpy for comparison
         ind_i_torch_np = to_numpy(ind_i_torch)
         ind_j_torch_np = to_numpy(ind_j_torch)
         
-        # Check shapes
         assert ind_i_torch_np.shape == ind_i_keras.shape, f"Shape mismatch at batch index {i}"
         
         if check_exact:
