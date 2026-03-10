@@ -10,7 +10,25 @@ def drop_scheduler(
     mode: Literal['standard', 'early', 'late'] = 'standard',
     schedule: Literal['constant', 'linear'] = 'constant',
 ) -> np.ndarray:
-    """drop scheduler"""
+    """Build a per-iteration drop-path rate schedule.
+
+    Args:
+        drop_rate (float): Maximum drop-path rate.
+        epochs (int): Total number of training epochs.
+        niter_per_ep (int): Iterations per epoch.
+        cutoff_epoch (int): Epoch boundary between the *early* and *late*
+            phases. Only used when *mode* is ``'early'`` or ``'late'``.
+        mode: ``'standard'`` applies *drop_rate* for the entire training.
+            ``'early'`` applies it only before *cutoff_epoch* (zero after).
+            ``'late'`` applies it only after *cutoff_epoch* (zero before).
+        schedule: ``'constant'`` keeps *drop_rate* fixed;
+            ``'linear'`` linearly ramps it to zero (only for ``'early'``
+            mode).
+
+    Returns:
+        np.ndarray: 1-D array of length ``epochs * niter_per_ep`` with the
+            drop-path rate for each training iteration.
+    """
     assert mode in ['standard', 'early', 'late']
     if mode == 'standard':
         return np.full(epochs * niter_per_ep, drop_rate)

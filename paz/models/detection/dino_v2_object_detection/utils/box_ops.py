@@ -2,10 +2,15 @@ import keras
 import keras.ops as k
 from keras import random
 
+
 def box_cxcywh_to_xyxy(x):
-    """
-    Converts bounding boxes from (cx, cy, w, h) format to (x1, y1, x2, y2) format.
-    (cx, cy) is the center of the box, w is width, h is height.
+    """Convert boxes from center-size to corner format.
+
+    Args:
+        x: Tensor of shape ``(..., 4)`` in ``(cx, cy, w, h)`` format.
+
+    Returns:
+        Tensor of same shape in ``(x1, y1, x2, y2)`` format.
     """
     x_c, y_c, w, h = k.split(x, 4, axis=-1)
     x_c = k.squeeze(x_c, axis=-1)
@@ -23,8 +28,13 @@ def box_cxcywh_to_xyxy(x):
 
 
 def box_xyxy_to_cxcywh(x):
-    """
-    Converts bounding boxes from (x1, y1, x2, y2) format to (cx, cy, w, h) format.
+    """Convert boxes from corner to center-size format.
+
+    Args:
+        x: Tensor of shape ``(..., 4)`` in ``(x1, y1, x2, y2)`` format.
+
+    Returns:
+        Tensor of same shape in ``(cx, cy, w, h)`` format.
     """
     x0, y0, x1, y1 = k.split(x, 4, axis=-1)
     x0 = k.squeeze(x0, axis=-1)
@@ -42,59 +52,60 @@ def box_xyxy_to_cxcywh(x):
 
 
 def box_iou(boxes1, boxes2):
-    """
-    Computes Intersection over Union (IoU) of two sets of boxes.
-    Both sets of boxes are expected to be in (x1, y1, x2, y2) format.
+    """Compute pairwise Intersection-over-Union for two box sets.
+
+    Both sets must be in ``(x1, y1, x2, y2)`` corner format.
 
     Args:
-        boxes1: (N, 4) tensor
-        boxes2: (M, 4) tensor
+        boxes1: Tensor of shape ``(N, 4)``.
+        boxes2: Tensor of shape ``(M, 4)``.
 
     Returns:
-        iou: (N, M) matrix containing the pairwise IoU values
-        union: (N, M) matrix containing the pairwise union areas
+        tuple:
+            iou: ``(N, M)`` pairwise IoU matrix.
+            union: ``(N, M)`` pairwise union-area matrix.
     """
     area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
     area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
 
-    # boxes1[:, None, :2] shape: (N, 1, 2)
-    # boxes2[:, :2] shape: (M, 2)
-    # Result: (N, M, 2)
+    # Top-left corners of intersection rectangles — shape (N, M, 2)
     lt = k.maximum(boxes1[:, None, :2], boxes2[:, :2])
-    
-    # boxes1[:, None, 2:] shape: (N, 1, 2)
-    # boxes2[:, 2:] shape: (M, 2)
-    # Result: (N, M, 2)
+    # Bottom-right corners of intersection rectangles — shape (N, M, 2)
     rb = k.minimum(boxes1[:, None, 2:], boxes2[:, 2:])
 
-    wh = k.maximum(rb - lt, 0)  # [N, M, 2]
-    inter = wh[:, :, 0] * wh[:, :, 1]  # [N, M]
+    # Clamp to zero: non-overlapping pairs get zero intersection
+    wh = k.maximum(rb - lt, 0)  # (N, M, 2)
+    inter = wh[:, :, 0] * wh[:, :, 1]  # (N, M)
 
     union = area1[:, None] + area2 - inter
 
-    iou = inter / (union + 1e-6) # Add epsilon to avoid division by zero
+    # Epsilon prevents division by zero for degenerate boxes
+    iou = inter / (union + 1e-6)
     return iou, union
 
 
 def generalized_box_iou(boxes1, boxes2):
-    """
-    Generalized IoU from https://giou.stanford.edu/
+    """Compute pairwise Generalized IoU (GIoU).
 
-    The boxes should be in [x0, y0, x1, y1] format
+    Reference: https://giou.stanford.edu/
 
-    Returns a [N, M] pairwise matrix, where N = len(boxes1)
-    and M = len(boxes2)
+    Args:
+        boxes1: Tensor of shape ``(N, 4)`` in ``(x1, y1, x2, y2)`` format.
+        boxes2: Tensor of shape ``(M, 4)`` in ``(x1, y1, x2, y2)`` format.
+
+    Returns:
+        Tensor of shape ``(N, M)`` containing pairwise GIoU values.
     """
-    # degenerate boxes gives inf / nan results
-    # so do an early check
     iou, union = box_iou(boxes1, boxes2)
 
+    # Smallest enclosing box for each pair
     lt = k.minimum(boxes1[:, None, :2], boxes2[:, :2])
     rb = k.maximum(boxes1[:, None, 2:], boxes2[:, 2:])
 
-    wh = k.maximum(rb - lt, 0)  # [N,M,2]
+    wh = k.maximum(rb - lt, 0)  # (N, M, 2)
     area = wh[:, :, 0] * wh[:, :, 1]
 
+    # GIoU = IoU - (enclosing_area - union) / enclosing_area
     return iou - (area - union) / (area + 1e-6)
 
 
@@ -166,31 +177,26 @@ def masks_to_boxes(masks):
 
 
 def batch_dice_loss(inputs, targets):
-    """
-    Compute the DICE loss, similar to generalized IOU for masks
+    """Compute pairwise DICE loss between predictions and targets.
+
+    Returns an ``(N, M)`` cost matrix suitable for Hungarian matching,
+    where ``N`` is the number of predictions and ``M`` the number of
+    ground-truth masks.
+
     Args:
-        inputs: A float tensor of arbitrary shape.
-                The predictions for each example.
-        targets: A float tensor with the same shape as inputs. Stores the binary
-                 classification label for each element in inputs
-                (0 for the negative class and 1 for the positive class).
+        inputs: Float tensor of shape ``(N, *)`` with raw logits.
+        targets: Binary tensor of shape ``(M, *)`` with ground-truth masks.
+
+    Returns:
+        Tensor of shape ``(N, M)`` with pairwise DICE loss values.
     """
     inputs = k.sigmoid(inputs)
     inputs = k.reshape(inputs, (k.shape(inputs)[0], -1))
-    targets = k.cast(targets, inputs.dtype) # Ensure targets are same type
+    targets = k.cast(targets, inputs.dtype)
     targets = k.reshape(targets, (k.shape(targets)[0], -1))
 
-    # numerator = 2 * torch.einsum("nc,mc->nm", inputs, targets)
-    # This einsum computes for every pair of (prediction_n, target_m). 
-    # This looks like it computes an N x N matrix of dice losses?
-    # Original code: 
-    # numerator = 2 * torch.einsum("nc,mc->nm", inputs, targets)
-    # This computes a matrix. Is this intended? 
-    # Yes, usually used for hungarian matching cost computation.
-    
-    # Keras ops doesn't have native einsum yet? checking... 
-    # It does have `numpy.einsum` equivalent via backend? 
-    # Use k.matmul: (N, C) @ (M, C).T -> (N, M)
+    # Pairwise dot product (N, C) @ (M, C)^T -> (N, M) gives the
+    # per-pair intersection used in the DICE numerator.
     numerator = 2 * k.matmul(inputs, k.transpose(targets, (1, 0)))
     
     denominator = k.sum(inputs, axis=-1)[:, None] + k.sum(targets, axis=-1)[None, :]
@@ -199,45 +205,31 @@ def batch_dice_loss(inputs, targets):
 
 
 def batch_sigmoid_ce_loss(inputs, targets):
-    """
+    """Compute pairwise sigmoid binary cross-entropy loss.
+
+    Returns an ``(N, M)`` cost matrix suitable for Hungarian matching.
+
     Args:
-        inputs: A float tensor of arbitrary shape.
-                The predictions for each example.
-        targets: A float tensor with the same shape as inputs. Stores the binary
-                 classification label for each element in inputs
-                (0 for the negative class and 1 for the positive class).
+        inputs: Float tensor of shape ``(N, C)`` with raw logits.
+        targets: Binary tensor of shape ``(M, C)`` with ground-truth labels.
+
     Returns:
-        Loss tensor
+        Tensor of shape ``(N, M)`` with pairwise BCE loss values
+        normalized by the spatial dimension *C*.
     """
     hw = k.shape(inputs)[1]
     
-    # F.binary_cross_entropy_with_logits(input, target, reduction='none')
-    # = max(x, 0) - x * z + log(1 + exp(-abs(x)))
-    # or just use k.binary_crossentropy(target, input, from_logits=True)
-    
-    # Note: Keras binary_crossentropy(y_true, y_pred, from_logits=True) expects (batch, ...)
-    # But here we need to compute it against all ones and all zeros.
-    
-    # pos: BCE(inputs, ones)
+    # Pre-compute per-element BCE against all-ones and all-zeros targets.
+    # These are then linearly combined via the actual target masks.
     pos = k.binary_crossentropy(k.ones_like(inputs), inputs, from_logits=True)
-    
-    # neg: BCE(inputs, zeros)
     neg = k.binary_crossentropy(k.zeros_like(inputs), inputs, from_logits=True)
 
-    # All flattened? No, original uses reduction='none', so shape preserved.
-    # original: inputs is (N, C), targets is (M, C).
-    # wait, the original logic:
-    # pos = F.binary_cross_entropy_with_logits(inputs, torch.ones_like(inputs), reduction="none")
-    # pos shape: same as inputs
-    
-    # loss = torch.einsum("nc,mc->nm", pos, targets) + torch.einsum("nc,mc->nm", neg, (1 - targets))
-    
-    # We flatten along C dimension for dot product
     pos_flat = k.reshape(pos, (k.shape(pos)[0], -1))
     neg_flat = k.reshape(neg, (k.shape(neg)[0], -1))
     
     targets_flat = k.cast(k.reshape(targets, (k.shape(targets)[0], -1)), inputs.dtype)
     
+    # Pairwise cost: weight positive-class BCE by target, negative by (1-target)
     term1 = k.matmul(pos_flat, k.transpose(targets_flat, (1, 0)))
     term2 = k.matmul(neg_flat, k.transpose(1 - targets_flat, (1, 0)))
     

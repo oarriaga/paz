@@ -3,6 +3,15 @@ from tqdm import tqdm
 
 
 def download_file(url, filename):
+    """Download a file from *url* and save it to *filename*.
+
+    Streams the response in 1 KiB chunks and displays a tqdm
+    progress bar during the download.
+
+    Args:
+        url (str): Source URL.
+        filename (str): Local file path to write to.
+    """
     response = requests.get(url, stream=True)
     total_size = int(response.headers.get('content-length', 0))
     with open(filename, "wb") as f, tqdm(

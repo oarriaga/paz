@@ -3,16 +3,23 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-class EarlyStoppingCallback:
-    """
-    Early stopping callback that monitors mAP and stops training if no improvement
-    over a threshold is observed for a specified number of epochs.
 
-    Args:
-        patience (int): Number of epochs with no improvement to wait before stopping
-        min_delta (float): Minimum change in mAP to qualify as improvement
-        use_ema (bool): Whether to use EMA model metrics for early stopping
-        verbose (bool): Whether to print early stopping messages
+class EarlyStoppingCallback:
+    """Early stopping callback that monitors mAP.
+
+    Stops training when mAP has not improved by at least *min_delta*
+    for *patience* consecutive epochs.
+
+    Attributes:
+        patience (int): Epochs without improvement before stopping.
+        min_delta (float): Minimum mAP improvement to reset the counter.
+        use_ema (bool): If True, prefer EMA model metrics.
+        verbose (bool): Print status messages each epoch.
+        best_map (float): Best mAP observed so far.
+        counter (int): Consecutive epochs without improvement.
+        model: Keras model whose ``stop_training`` flag is set.
+        segmentation_head (bool): If True, monitor mask metrics instead
+            of bounding-box metrics.
     """
 
     def __init__(
@@ -34,10 +41,24 @@ class EarlyStoppingCallback:
         self.segmentation_head = segmentation_head
 
     def update(self, log_stats: Dict[str, Any]) -> None:
-        """Update early stopping state based on epoch validation metrics"""
+        """Update early stopping state from epoch validation metrics.
+
+        Extracts mAP from *log_stats* (using bounding-box or mask
+        evaluation keys depending on ``segmentation_head``), compares
+        against the best recorded mAP, and increments or resets the
+        patience counter accordingly.
+
+        Args:
+            log_stats (dict): Epoch log dictionary, expected to contain
+                one or more of ``test_coco_eval_bbox``,
+                ``ema_test_coco_eval_bbox``,
+                ``test_coco_eval_masks``, or
+                ``ema_test_coco_eval_masks``.
+        """
         regular_map = None
         ema_map = None
 
+        # --- Extract regular (non-EMA) mAP ---
         if 'test_coco_eval_bbox' in log_stats:
             val = log_stats['test_coco_eval_bbox']
             # Handle if val is list or single value
@@ -45,9 +66,9 @@ class EarlyStoppingCallback:
                  if not self.segmentation_head:
                     regular_map = val[0]
             elif isinstance(val, (float, int)):
-                 # Assuming it is mAP directly
                  regular_map = val
             
+        # If a segmentation head is used, override with mask metrics
         if 'test_coco_eval_masks' in log_stats and self.segmentation_head:
             val = log_stats['test_coco_eval_masks']
             if isinstance(val, (list, tuple)) and len(val) > 0:
@@ -55,6 +76,7 @@ class EarlyStoppingCallback:
             elif isinstance(val, (float, int)):
                 regular_map = val
 
+        # --- Extract EMA mAP ---
         if 'ema_test_coco_eval_bbox' in log_stats:
             val = log_stats['ema_test_coco_eval_bbox']
             if isinstance(val, (list, tuple)) and len(val) > 0:
@@ -70,6 +92,7 @@ class EarlyStoppingCallback:
             elif isinstance(val, (float, int)):
                 ema_map = val
 
+        # --- Determine the current mAP to compare against best ---
         current_map = None
         metric_source = "unknown"
         
@@ -87,7 +110,7 @@ class EarlyStoppingCallback:
             current_map = regular_map
             metric_source = "regular"
         else:
-            # If verbose, we might warn, but fail silently/return if no metric found
+            # No mAP metric was found in this epoch's log
             if self.verbose:
                 print("Early stopping: No valid mAP metric found in log_stats.")
             return

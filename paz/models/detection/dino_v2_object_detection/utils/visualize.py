@@ -9,7 +9,14 @@ except ImportError:
     sv = None
 
 def _xywh_to_xyxy(boxes):
-    """Convert list of [x, y, w, h] boxes to numpy array of [x1, y1, x2, y2]."""
+    """Convert ``[x, y, w, h]`` boxes to ``[x1, y1, x2, y2]`` format.
+
+    Args:
+        boxes (list[list[float]]): List of boxes in ``[x, y, w, h]``.
+
+    Returns:
+        np.ndarray: ``(N, 4)`` array in ``[x1, y1, x2, y2]`` format.
+    """
     if not boxes:
         return np.empty((0, 4))
     arr = np.array(boxes)
@@ -33,11 +40,24 @@ def save_gt_predictions_visualization(
     pred_ious: List[Optional[float]],
     save_dir: Path,
 ) -> None:
-    """
-    Save a visualization image showing both GT and prediction boxes.
+    """Save a visualization image with ground-truth and predicted boxes.
 
-    Boxes are labeled with class ID and confidence (for predictions).
-    For predictions with known IoU, the IoU value is also shown.
+    Creates a blank canvas with a top padding region, draws GT boxes
+    in green/cyan and prediction boxes in red/magenta, labels each
+    with class ID and (for predictions) confidence and optional IoU,
+    then saves the result as a PNG.
+
+    Args:
+        scenario_name (str): Base filename for the saved image.
+        image_width (int): Canvas width in pixels.
+        image_height (int): Canvas height in pixels.
+        gt_boxes (list): Ground-truth boxes as ``[x, y, w, h]``.
+        gt_class_ids (list[int]): Class IDs for each GT box.
+        pred_boxes (list): Predicted boxes as ``[x, y, w, h]``.
+        pred_class_ids (list[int]): Class IDs for each prediction.
+        pred_confidences (list[float]): Confidence scores.
+        pred_ious (list[float | None]): IoU values (``None`` if unavailable).
+        save_dir (Path): Output directory for the saved image.
     """
     if sv is None:
         print("Supervision library not found. Skipping visualization.")
@@ -46,9 +66,11 @@ def save_gt_predictions_visualization(
     save_dir_path = Path(save_dir)
     save_dir_path.mkdir(exist_ok=True, parents=True)
 
+    # Create a blank canvas with top padding for header space
     top_padding = 60
     image = np.zeros((image_height + top_padding, image_width, 3), dtype=np.uint8)
 
+    # Offset boxes vertically to account for the padding region
     gt_boxes_offset = [[x, y + top_padding, w, h] for x, y, w, h in gt_boxes]
     pred_boxes_offset = [[x, y + top_padding, w, h] for x, y, w, h in pred_boxes]
 
@@ -71,7 +93,7 @@ def save_gt_predictions_visualization(
             confidence=np.array(pred_confidences),
         )
 
-    # Index 0 is unused because class IDs start at 1
+    # Color palettes: index 0 is unused (class IDs are 1-indexed)
     gt_colors = sv.ColorPalette.from_hex(['#808080', '#00ff64', '#00c8ff'])
     pred_colors = sv.ColorPalette.from_hex(['#808080', '#ff6432', '#ff32c8'])
 

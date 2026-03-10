@@ -7,8 +7,17 @@ from keras import random
 import numpy as np
 
 class SmoothedValue(object):
-    """Track a series of values and provide access to smoothed values over a
-    window or the global series average.
+    """Track a series of values and provide smoothed statistics.
+
+    Maintains a fixed-size sliding window of recent values together with
+    a running global total/count for computing windowed and global
+    averages.
+
+    Attributes:
+        deque (deque): Sliding window of recent values.
+        total (float): Running sum of all recorded values.
+        count (int): Total number of recorded values.
+        fmt (str): Format string used by ``__str__``.
     """
 
     def __init__(self, window_size=20, fmt=None):
@@ -25,10 +34,11 @@ class SmoothedValue(object):
         self.total += value * n
 
     def synchronize_between_processes(self):
+        """Placeholder for distributed synchronization.
+
+        In a multi-process setup this would aggregate the global
+        total and count across workers. Currently a no-op.
         """
-        Warning: does not synchronize the deque!
-        """
-        # Distributed synchronization stub
         return
 
     @property
@@ -63,13 +73,20 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
+    """Aggregate and display multiple ``SmoothedValue`` meters.
+
+    Attributes:
+        meters (dict): Mapping from metric name to ``SmoothedValue``.
+        delimiter (str): Separator used when formatting output.
+    """
     def __init__(self, delimiter="\t"):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
 
     def update(self, **kwargs):
+        """Record one or more named scalar values."""
         for k, v in kwargs.items():
-            if hasattr(v, "item"): # Handle tensor-like objects
+            if hasattr(v, "item"):
                 v = v.item()
             if isinstance(v, (float, int)):
                 self.meters[k].update(v)
@@ -98,6 +115,16 @@ class MetricLogger(object):
         self.meters[name] = meter
 
     def log_every(self, iterable, print_freq, header=None):
+        """Yield items from *iterable*, printing progress periodically.
+
+        Args:
+            iterable: Data source to iterate over.
+            print_freq (int): Print every *print_freq* iterations.
+            header (str | None): Prefix for log lines.
+
+        Yields:
+            Items from *iterable*.
+        """
         i = 0
         if not header:
             header = ''
@@ -137,12 +164,21 @@ class MetricLogger(object):
 
 
 class NestedTensor(object):
+    """Pair of a batched image tensor and a corresponding padding mask.
+
+    Wraps a ``(B, C, H, W)`` tensor and a ``(B, H, W)`` boolean mask
+    where ``True`` marks padded (invalid) pixels.
+
+    Attributes:
+        tensors: Batched image tensor.
+        mask: Boolean padding mask.
+    """
     def __init__(self, tensors, mask=None):
         self.tensors = tensors
         self.mask = mask
 
     def to(self, device):
-        # Keras handles device placement differently, stub for now
+        """Device placement stub (no-op under Keras)."""
         return self
 
     def decompose(self):
@@ -153,8 +189,24 @@ class NestedTensor(object):
 
 
 def nested_tensor_from_tensor_list(tensor_list):
+    """Pad a list of 3-D image tensors into a batched ``NestedTensor``.
+
+    Each image ``(C, H, W)`` is zero-padded to the maximum spatial
+    dimensions found in *tensor_list*.  The returned mask is ``True``
+    for padded positions.
+
+    Args:
+        tensor_list: List of tensors, each of shape ``(C, H, W)``.
+
+    Returns:
+        NestedTensor: Batched ``(B, C, H_max, W_max)`` tensor with
+            an accompanying ``(B, H_max, W_max)`` boolean padding mask.
+
+    Raises:
+        ValueError: If input tensors are not 3-D.
+    """
     if k.ndim(tensor_list[0]) == 3:
-        # TODO make it support different-sized images
+        # Determine the maximum spatial extent across all images
         max_size = _max_by_axis([list(k.shape(img)) for img in tensor_list])
         batch_shape = [len(tensor_list)] + max_size
         b, c, h, w = batch_shape
@@ -163,32 +215,26 @@ def nested_tensor_from_tensor_list(tensor_list):
         tensor = k.zeros(batch_shape, dtype=dtype)
         mask = k.ones((b, h, w), dtype="bool")
 
-        # Keras ops doesn't allow in-place assignment like tensor[i] = x
-        # We need to construct the list of padded tensors and stack them.
+        # Build padded tensors and masks for each image, then stack
+        # into a single batch. Direct element assignment is not
+        # supported on immutable Keras tensors.
         padded_tensors = []
         padded_masks = []
         
         for img in tensor_list:
             img_shape = k.shape(img)
-            # Pad img to max_size
-            # img is (C, H, W)
-            # pad width to (C, max_h, max_w)
-            # padding needed: (0, 0), (0, max_h - h), (0, max_w - w)
+            # Compute padding needed to reach (C, H_max, W_max)
             h_pad = h - img_shape[1]
             w_pad = w - img_shape[2]
             
-            # Use k.pad
-            # k.pad expects [[top, bottom], [left, right]] for 2D, but we have 3D
-            # It expects padding_width relative to each dimension.
+            # Pad along spatial dimensions only (channel dim unchanged)
             paddings = [[0, 0], [0, h_pad], [0, w_pad]]
             padded_img = k.pad(img, paddings)
             padded_tensors.append(padded_img)
             
-            # Mask: 0 for valid pixels, 1 for padding
-            # Create mask of shape (h, w)
+            # Mask: False for valid pixels, True for padding
             m = k.zeros((img_shape[1], img_shape[2]), dtype="bool")
             m_paddings = [[0, h_pad], [0, w_pad]]
-            # Pad with True (1)
             padded_mask = k.pad(m, m_paddings, constant_values=True)
             padded_masks.append(padded_mask)
             
@@ -201,8 +247,15 @@ def nested_tensor_from_tensor_list(tensor_list):
 
 
 def _max_by_axis(the_list):
-    # the_list is list of [C, H, W]
-    maxes = the_list[0][:] # Copy
+    """Element-wise maximum across a list of equal-length lists.
+
+    Args:
+        the_list: List of lists (e.g. ``[[C, H, W], ...]``).
+
+    Returns:
+        list: Element-wise maxima.
+    """
+    maxes = the_list[0][:]
     for sublist in the_list[1:]:
         for index, item in enumerate(sublist):
             maxes[index] = max(maxes[index], item)
@@ -210,19 +263,29 @@ def _max_by_axis(the_list):
 
 
 def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corners=None):
-    """
-    Equivalent to nn.functional.interpolate.
-    Supported modes: 'nearest', 'bilinear', 'bicubic'
+    """Resize a 4-D tensor (NCHW) using the specified interpolation mode.
+
+    The input is transposed to channels-last layout for the resize
+    operation and transposed back to channels-first before returning.
+
+    Args:
+        input: Tensor of shape ``(N, C, H, W)``.
+        size (tuple | None): Target ``(H, W)``.
+        scale_factor (float | None): Multiplicative spatial factor.
+            Exactly one of *size* or *scale_factor* must be given.
+        mode (str): ``'nearest'``, ``'bilinear'``, or ``'bicubic'``.
+        align_corners: Unused; accepted for API compatibility.
+
+    Returns:
+        Tensor of shape ``(N, C, H', W')``.
+
+    Raises:
+        ValueError: If neither *size* nor *scale_factor* is provided.
     """
     if size is None and scale_factor is None:
         raise ValueError("Either size or scale_factor must be defined")
         
-    # Input shape: (N, C, H, W) usually in PyTorch code ported here
-    # Keras usually expects (N, H, W, C). 
-    # RF-DETR uses (N, C, H, W) throughout? 
-    # Let's assume input is (N, C, H, W) as per standard PyTorch vision models.
-    # We must transpose to (N, H, W, C) for resize, then back.
-    
+    # Transpose from NCHW to NHWC for the resize operation
     x = k.transpose(input, (0, 2, 3, 1))
     
     if size is not None:
@@ -243,10 +306,23 @@ def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corne
         
     x = k.image.resize(x, new_size, interpolation=method)
     
+    # Transpose back to NCHW
     return k.transpose(x, (0, 3, 1, 2))
 
 
 def inverse_sigmoid(x, eps=1e-5):
+    """Compute the inverse sigmoid (logit) of a probability tensor.
+
+    Values are clipped to ``[0, 1]`` and clamped away from zero before
+    taking the log to ensure numerical stability.
+
+    Args:
+        x: Tensor of probabilities.
+        eps (float): Minimum value for clamping.
+
+    Returns:
+        Tensor of logits.
+    """
     x = k.clip(x, 0, 1)
     x1 = k.maximum(x, eps)
     x2 = k.maximum(1 - x, eps)
@@ -254,21 +330,29 @@ def inverse_sigmoid(x, eps=1e-5):
 
 
 def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
+    """Compute top-k classification accuracy.
+
+    Args:
+        output: Logits tensor of shape ``(N, C)``.
+        target: Ground-truth class indices of shape ``(N,)``.
+        topk (tuple[int]): Tuple of *k* values to evaluate.
+
+    Returns:
+        list: One accuracy percentage per requested *k*.
+    """
     if k.size(target) == 0:
         return [k.zeros([])]
         
     maxk = max(topk)
     batch_size = k.shape(target)[0]
 
-    # output: (N, C)
-    # topk indices
-    # k.top_k returns values, indices
-    _, pred = k.top_k(output, maxk) # (N, maxk)
-    pred = k.transpose(pred, (1, 0)) # (maxk, N)
+    # Retrieve the top-k predicted class indices per sample
+    _, pred = k.top_k(output, maxk)  # (N, maxk)
+    pred = k.transpose(pred, (1, 0))  # (maxk, N)
     
-    target_expand = k.expand_dims(target, 0) # (1, N)
-    target_expand = k.repeat(target_expand, maxk, axis=0) # (maxk, N)
+    # Broadcast target to (maxk, N) for element-wise comparison
+    target_expand = k.expand_dims(target, 0)  # (1, N)
+    target_expand = k.repeat(target_expand, maxk, axis=0)  # (maxk, N)
     
     correct = k.equal(pred, k.cast(target_expand, pred.dtype))
 

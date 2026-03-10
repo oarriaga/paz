@@ -4,7 +4,20 @@ import math
 
 def get_vit_lr_decay_rate(name: str, lr_decay_rate: float = 1.0,
                           num_layers: int = 12) -> float:
-    """Per-block LR decay for ViT / DinoV2 backbones."""
+    """Compute per-layer LR decay multiplier for ViT / DINOv2 backbones.
+
+    Assigns a layer index based on the variable name and returns
+    ``lr_decay_rate ** (num_layers + 1 - layer_id)``.
+
+    Args:
+        name (str): Variable name (may use ``/`` or ``.`` separators).
+        lr_decay_rate (float): Base decay rate per layer.
+        num_layers (int): Total number of transformer layers in the
+            backbone.
+
+    Returns:
+        float: LR multiplier for this variable.
+    """
     layer_id = num_layers + 1
     norm_name = name.replace("/", ".")
 
@@ -19,7 +32,17 @@ def get_vit_lr_decay_rate(name: str, lr_decay_rate: float = 1.0,
 
 def get_vit_weight_decay_rate(name: str,
                               weight_decay_rate: float = 1.0) -> float:
-    """Return 0 for bias / norm / positional-embedding parameters."""
+    """Return weight decay for a variable, zeroing out bias/norm/embed.
+
+    Args:
+        name (str): Variable name.
+        weight_decay_rate (float): Default weight-decay value returned
+            for parameters that are *not* exempted.
+
+    Returns:
+        float: ``0.0`` for bias, norm, positional-embedding, and
+            other embedding parameters; *weight_decay_rate* otherwise.
+    """
     if (("gamma" in name) or ("pos_embed" in name)
             or ("rel_pos" in name) or ("bias" in name)
             or ("norm" in name) or ("embeddings" in name)):
@@ -33,7 +56,14 @@ def get_vit_weight_decay_rate(name: str,
 
 
 def classify_variable(name: str):
-    """Return ``'backbone'``, ``'decoder'``, or ``'other'``."""
+    """Classify a variable into a parameter group by name.
+
+    Args:
+        name (str): Variable name.
+
+    Returns:
+        str: One of ``'backbone'``, ``'decoder'``, or ``'other'``.
+    """
     norm = name.replace("/", ".")
     if "backbone" in norm:
         return "backbone"
@@ -44,10 +74,21 @@ def classify_variable(name: str):
 
 def compute_backbone_lr(name, *, lr_encoder, lr_vit_layer_decay,
                         lr_component_decay, num_layers):
-    """LR for a single backbone variable.
+    """Compute the effective LR for a single backbone variable.
 
-    Formula (from PyTorch ``Backbone.get_named_param_lr_pairs``):
-        lr = lr_encoder × layer_decay(name) × lr_component_decay²
+    Formula::
+
+        lr = lr_encoder * layer_decay(name) * lr_component_decay ** 2
+
+    Args:
+        name (str): Variable name.
+        lr_encoder (float): Base backbone learning rate.
+        lr_vit_layer_decay (float): Per-layer LR decay rate.
+        lr_component_decay (float): Component-level LR decay multiplier.
+        num_layers (int): Number of transformer layers in the backbone.
+
+    Returns:
+        float: Effective learning rate for this variable.
     """
     layer_decay = get_vit_lr_decay_rate(
         name, lr_decay_rate=lr_vit_layer_decay, num_layers=num_layers)
@@ -62,11 +103,26 @@ def compute_backbone_lr(name, *, lr_encoder, lr_vit_layer_decay,
 def build_lr_scale_map(model, *, lr, lr_encoder, lr_vit_layer_decay,
                        lr_component_decay, weight_decay,
                        num_layers) -> Dict[str, Dict[str, float]]:
-    """Return ``{var.name: {"lr_scale": s, "wd": w}}`` for every trainable var.
+    """Build a per-variable LR-scale and weight-decay map.
 
-    ``lr_scale`` is the multiplier so that
-        effective_lr(var) = base_lr_schedule(step) × lr_scale
-    ``wd`` is the per-variable weight decay (0 for bias/norm/embed).
+    Returns a dictionary keyed by variable name, where each value
+    contains:
+
+    - ``lr_scale``: multiplier so that
+      ``effective_lr(var) = base_lr_schedule(step) * lr_scale``.
+    - ``wd``: per-variable weight decay (``0`` for bias/norm/embed).
+
+    Args:
+        model: Keras model.
+        lr (float): Base learning rate for heads and query embeddings.
+        lr_encoder (float): Base backbone learning rate.
+        lr_vit_layer_decay (float): Per-layer LR decay in the backbone.
+        lr_component_decay (float): Component-level LR multiplier.
+        weight_decay (float): Default weight decay.
+        num_layers (int): Number of transformer layers in the backbone.
+
+    Returns:
+        dict: ``{var_name: {"lr_scale": float, "wd": float}}``.
     """
     result = {}
     for v in model.trainable_variables:
@@ -101,7 +157,16 @@ def build_lr_scale_map(model, *, lr, lr_encoder, lr_vit_layer_decay,
 
 
 def scale_gradients_by_lr(grads, trainable_variables, lr_scale_map):
-    """Multiply each gradient by its ``lr_scale``."""
+    """Scale each gradient by its variable's ``lr_scale``.
+
+    Args:
+        grads: List of gradient tensors (may contain ``None``).
+        trainable_variables: Corresponding list of model variables.
+        lr_scale_map (dict): Output of :func:`build_lr_scale_map`.
+
+    Returns:
+        list: Scaled gradient tensors.
+    """
     scaled = []
     for g, v in zip(grads, trainable_variables):
         if g is None:

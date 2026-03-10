@@ -23,15 +23,27 @@ _T = TypeVar("_T")
 
 
 def safe_index(arr, idx):
+    """Return ``arr[idx]`` if *idx* is in bounds, else ``None``.
+
+    Args:
+        arr: Sequence to index into.
+        idx (int): Index.
+
+    Returns:
+        Element at *idx* or ``None``.
+    """
     return arr[idx] if 0 <= idx < len(arr) else None
 
 
 class MetricsPlotSink:
-    """
-    The MetricsPlotSink class records training metrics and saves them to a plot.
+    """Record training metrics and save them as a multi-panel plot.
 
-    Args:
-        output_dir (str): Directory where the plot will be saved.
+    Produces a 2x2 figure with training/validation loss, AP@0.50,
+    AP@0.50:0.95, and AR@0.50:0.95 (base and EMA models).
+
+    Attributes:
+        output_dir (str): Directory where the plot image is saved.
+        history (list): Accumulated per-epoch metric dictionaries.
     """
 
     def __init__(self, output_dir):
@@ -39,9 +51,11 @@ class MetricsPlotSink:
         self.history = []
 
     def update(self, values):
+        """Append a single epoch's metrics dictionary."""
         self.history.append(values)
 
     def save(self):
+        """Generate and save the metrics plot to *output_dir*."""
         if not self.history:
             print("No data to plot.")
             return
@@ -49,11 +63,12 @@ class MetricsPlotSink:
         def get_array(key):
             return np.array([h[key] for h in self.history if key in h])
 
+        # Extract arrays for each metric type
         epochs = get_array('epoch')
         train_loss = get_array('train_loss')
         test_loss = get_array('test_loss')
         
-        # Accessing coco_eval safely
+        # Safely unpack COCO evaluation vectors (may be absent or varying length)
         test_coco_eval = [h['test_coco_eval_bbox'] for h in self.history if 'test_coco_eval_bbox' in h]
         ap50_90 = np.array([safe_index(x, 0) for x in test_coco_eval if x is not None], dtype=np.float32)
         ap50 = np.array([safe_index(x, 1) for x in test_coco_eval if x is not None], dtype=np.float32)
@@ -121,11 +136,15 @@ class MetricsPlotSink:
 
 
 class MetricsTensorBoardSink:
-    """Training metrics via TensorBoard (no torch dependency).
+    """Log training metrics to TensorBoard.
 
-    Uses ``keras.callbacks.TensorBoard`` compatible CSV logging as a
-    fallback when the standalone ``tensorboard`` package is not
-    installed.  This avoids pulling in PyTorch.
+    Uses the standalone ``tensorboard`` package (no deep-learning
+    framework dependency). Falls back silently when TensorBoard is
+    not installed.
+
+    Attributes:
+        _output_dir (str): Event-log directory.
+        _writer: ``EventFileWriter`` instance, or ``None``.
     """
 
     def __init__(self, output_dir):
@@ -133,11 +152,10 @@ class MetricsTensorBoardSink:
         self._writer = None
         if _HAS_TENSORBOARD:
             try:
-                # Use the standalone tensorboard writer (no torch)
                 import os
                 os.makedirs(output_dir, exist_ok=True)
                 self._writer = EventFileWriter(output_dir)
-                print("TensorBoard logging initialized (standalone).")
+                print("TensorBoard logging initialized.")
             except Exception:
                 self._writer = None
                 print("Unable to initialize TensorBoard. Logging is turned off.")
@@ -147,6 +165,7 @@ class MetricsTensorBoardSink:
     # -- helpers -----------------------------------------------------------
 
     def _add_scalar(self, tag, value, step):
+        """Write a single scalar summary event."""
         if self._writer is None:
             return
         import time as _time
@@ -157,6 +176,7 @@ class MetricsTensorBoardSink:
     # -- public API --------------------------------------------------------
 
     def update(self, values):
+        """Log one epoch's metrics to TensorBoard."""
         if self._writer is None:
             return
 
@@ -175,13 +195,21 @@ class MetricsTensorBoardSink:
         self._writer.flush()
 
     def close(self):
+        """Flush and close the TensorBoard writer."""
         if self._writer is not None:
             self._writer.close()
             self._writer = None
 
 class MetricsWandBSink:
-    """
-    Training metrics via W&B. (Optional)
+    """Log training metrics to Weights & Biases.
+
+    Initializes a W&B run on construction and logs metrics via
+    ``wandb.log``. Falls back silently when the ``wandb`` package is
+    not installed.
+
+    Attributes:
+        output_dir (str): Local artifact directory.
+        run: Active ``wandb.Run`` instance, or ``None``.
     """
 
     def __init__(self, output_dir, project=None, run=None, config=None):
@@ -199,11 +227,13 @@ class MetricsWandBSink:
             print("Unable to initialize W&B. Logging is turned off.")
 
     def update(self, values):
+        """Log one epoch's metrics to W&B."""
         if not wandb or not self.run:
             return
         
         wandb.log(values)
 
     def close(self):
+        """Finish the W&B run."""
         if wandb and self.run:
             self.run.finish()
