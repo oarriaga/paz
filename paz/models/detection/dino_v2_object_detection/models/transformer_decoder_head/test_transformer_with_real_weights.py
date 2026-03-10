@@ -9,16 +9,12 @@ import keras  # noqa: E402
 from keras import ops
 from keras import layers
 
-# Ensure project root is in path
 project_root = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../../../../../")
 )
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-
-
-# RFDETR imports
 try:
     from rfdetr import RFDETRNano, RFDETRSmall, RFDETRMedium, RFDETRLarge, RFDETRBase
     from rfdetr.config import RFDETRBaseConfig
@@ -31,11 +27,9 @@ except ImportError:
     from rfdetr import RFDETRNano, RFDETRSmall, RFDETRMedium, RFDETRLarge, RFDETRBase
     from rfdetr.config import RFDETRBaseConfig
 
-# Keras implementations
 from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer import Transformer as KerasTransformer
 from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer import MLP as KerasMLP
 
-# Utils
 from transformer_weights_porting_utils import (
     to_numpy,
     to_keras,
@@ -43,9 +37,6 @@ from transformer_weights_porting_utils import (
     verify_transformer_parity
 )
 
-# ═══════════════════════════════════════════════════════════════════
-# Tests
-# ═══════════════════════════════════════════════════════════════════
 
 MODEL_VARIANTS = {
     "Nano": RFDETRNano,
@@ -56,13 +47,13 @@ MODEL_VARIANTS = {
 
 @pytest.mark.parametrize("variant", list(MODEL_VARIANTS.keys()))
 def test_transformer_real_weights(variant):
-    print(f"\\n{'='*60}")
+    """Verify Transformer parity for a pretrained RF-DETR variant."""
+    print(f"\n{'='*60}")
     print(f"Testing Transformer parity for RFDETR {variant}")
     print(f"{'='*60}")
     
     model_cls = MODEL_VARIANTS[variant]
     
-    # 1. Load PyTorch Transformer
     print(f"Loading pretrained {model_cls.__name__} Transformer...")
     pt_transformer = extract_pt_transformer(model_cls)
     
@@ -74,25 +65,21 @@ def test_transformer_real_weights(variant):
     {"sa_nheads": 4, "ca_nheads": 4},
     {"sa_nheads": 16, "ca_nheads": 16},
     {"dec_layers": 2},
-    {"hidden_dim": 128}, # Smaller dim
-    # Add more combinations as needed
+    {"hidden_dim": 128},
 ])
 def test_transformer_synthetic_configs(config_overrides):
-    print(f"\\n{'='*60}")
+    """Verify Transformer parity with synthetic configuration overrides."""
+    print(f"\n{'='*60}")
     print(f"Testing Transformer parity for Synthetic Config: {config_overrides}")
     print(f"{'='*60}")
     
-    # Create config
-    # Use RFDETRBaseConfig as base, and override
+    # Create config from base with overrides
     config_dict = RFDETRBaseConfig().model_dump()
-    # Override defaults
-    config_dict["pretrain_weights"] = None # Random init
+    config_dict["pretrain_weights"] = None
     config_dict.update(config_overrides)
     
-    # Re-validate
     config = RFDETRBaseConfig(**config_dict)
     
-    # 1. Load PyTorch Transformer (Synthetic)
     print(f"Creating synthetic Transformer with config: {config_overrides}")
     pt_transformer = extract_pt_transformer(RFDETRBase, config=config)
     

@@ -8,7 +8,6 @@ import keras
 from keras import layers
 from keras import ops
 
-# Add path for rfdetr
 current_dir = os.path.dirname(os.path.abspath(__file__))
 rf_detr_root = os.path.abspath(os.path.join(current_dir, '../../../../../../examples/rf-detr_original_pytorch_implementation'))
 sys.path.append(rf_detr_root)
@@ -37,6 +36,7 @@ from transformer_weights_porting_utils import (
 )
 
 def test_mlp_parity():
+    """Verify MLP forward-pass parity between reference and Keras."""
     input_dim = 16
     hidden_dim = 32
     output_dim = 16
@@ -46,36 +46,32 @@ def test_mlp_parity():
     # Inputs
     x_np = np.random.randn(bs, input_dim).astype(np.float32)
     
-    # Torch
     torch_mlp = TorchMLP(input_dim, hidden_dim, output_dim, num_layers)
     torch_mlp.eval()
     
-    # Keras
     keras_mlp = KerasMLP(input_dim, hidden_dim, output_dim, num_layers)
     
     # Build
     _ = keras_mlp(to_keras(x_np))
     
-    # Transfer weights
+    # Transfer weights: transpose Dense kernels for (in, out) convention
     with torch.no_grad():
         for i, (torch_layer, keras_layer) in enumerate(zip(torch_mlp.layers, keras_mlp.layers_list)):
             keras_layer.kernel.assign(to_keras(torch_layer.weight.T.numpy()))
             keras_layer.bias.assign(to_keras(torch_layer.bias.numpy()))
             
-    # Inference
     out_torch = torch_mlp(to_torch(x_np))
     out_keras = keras_mlp(to_keras(x_np))
     
     assert np.allclose(to_numpy(out_torch), to_numpy(out_keras), atol=1e-5)
 
 def test_sine_embed_parity():
+    """Verify sine positional embedding parity."""
     nq, bs = 5, 2
-    pos_np = np.random.rand(nq, bs, 4).astype(np.float32) # Normalized 0-1
+    pos_np = np.random.rand(nq, bs, 4).astype(np.float32)
     dim = 128
     
     out_torch = torch_gen_sineembed(to_torch(pos_np), dim)
-    
-    # Keras implementation adapted to handle (..., 4) logic
     out_keras = keras_gen_sineembed(to_keras(pos_np), dim)
     
     diff = np.abs(to_numpy(out_torch) - to_numpy(out_keras))
@@ -83,6 +79,7 @@ def test_sine_embed_parity():
     assert np.allclose(to_numpy(out_torch), to_numpy(out_keras), atol=1e-5)
 
 def test_gen_encoder_output_proposals():
+    """Verify encoder output proposal generation parity."""
     bs = 2
     spatial_shapes = [(4, 4), (2, 2)]
     d_model = 16
@@ -93,28 +90,26 @@ def test_gen_encoder_output_proposals():
     
     # Mask (some True)
     mask_np = np.zeros((bs, total_len), dtype=bool)
-    mask_np[:, -2:] = True # simple mask
+    mask_np[:, -2:] = True
     
-    # Torch
     t_spatial = torch.tensor(spatial_shapes, dtype=torch.long)
     t_memory = to_torch(memory_np)
     t_mask = torch.tensor(mask_np, dtype=torch.bool)
     
     out_mem_torch, out_prop_torch = torch_gen_encoder_output_proposals(t_memory, t_mask, spatial_shapes)
     
-    # Keras
     out_mem_keras, out_prop_keras = keras_gen_encoder_output_proposals(
         to_keras(memory_np), to_keras(mask_np), spatial_shapes
     )
     
     assert np.allclose(to_numpy(out_mem_torch), to_numpy(out_mem_keras), atol=1e-5)
     
-    prop_diff = np.abs(to_numpy(out_prop_torch) - to_numpy(out_prop_keras))
     valid_mask = ~np.isinf(to_numpy(out_prop_torch))
     assert np.allclose(to_numpy(out_prop_torch)[valid_mask], to_numpy(out_prop_keras)[valid_mask], atol=1e-5)
     assert np.all(np.isinf(to_numpy(out_prop_torch)) == np.isinf(to_numpy(out_prop_keras)))
 
 def test_decoder_layer_parity():
+    """Verify TransformerDecoderLayer forward-pass parity."""
     d_model = 32
     sa_nhead = 4
     ca_nhead = 4
@@ -216,7 +211,8 @@ def test_decoder_layer_parity():
     assert np.allclose(to_numpy(out_torch), to_numpy(out_keras), atol=1e-5)
 
 def test_transformer_full_parity():
-    # Only verify default config here, exhaustive in test_transformer_configurations
+    """Verify full Transformer forward-pass parity with default config."""
+    # Only verify default config here; exhaustive in test_transformer_configurations
     d_model = 32
     sa_nhead = 4
     ca_nhead = 4
@@ -242,7 +238,7 @@ def test_transformer_full_parity():
     )
     torch_transformer.eval()
     
-    torch_transformer.enc_out_class_embed = nn.ModuleList([nn.Linear(d_model, 91)]) 
+    torch_transformer.enc_out_class_embed = nn.ModuleList([nn.Linear(d_model, 91)])
     torch_transformer.enc_out_bbox_embed = nn.ModuleList([TorchMLP(d_model, d_model, 4, 3)])
     torch_transformer.decoder.bbox_embed = TorchMLP(d_model, d_model, 4, 3)
     
@@ -286,7 +282,7 @@ def test_transformer_full_parity():
     keras_transformer(k_srcs, k_masks, k_pos_embeds, k_query_feat, k_refpoint_embed)
     
     with torch.no_grad():
-        for i in range(1): 
+        for i in range(1):
              keras_transformer.enc_output[i].kernel.assign(to_keras(torch_transformer.enc_output[i].weight.T.numpy()))
              keras_transformer.enc_output[i].bias.assign(to_keras(torch_transformer.enc_output[i].bias.numpy()))
              keras_transformer.enc_output_norm[i].gamma.assign(to_keras(torch_transformer.enc_output_norm[i].weight.numpy()))
@@ -298,11 +294,13 @@ def test_transformer_full_parity():
                   klayer.kernel.assign(to_keras(tk.weight.T.numpy()))
                   klayer.bias.assign(to_keras(tk.bias.numpy()))
         
+        # Transfer decoder layer weights
         for i in range(num_decoder_layers):
             t_layer = torch_transformer.decoder.layers[i]
             k_layer = keras_transformer.decoder.layers_list[i]
             
             def transfer_mha(t_mha, k_mha):
+                """Transfer MultiHeadAttention weights from reference to Keras."""
                 q_w = to_keras(t_mha.in_proj_weight[:d_model, :].T.numpy())
                 q_w = ops.reshape(q_w, (d_model, sa_nhead, d_model // sa_nhead))
                 k_mha.query_dense.kernel.assign(q_w)
@@ -389,6 +387,7 @@ def test_transformer_full_parity():
 @pytest.mark.parametrize("activation", ["relu", "gelu"])
 @pytest.mark.parametrize("num_decoder_layers", [1, 2])
 def test_transformer_configurations(two_stage, bbox_reparam, activation, num_decoder_layers):
+    """Verify full Transformer parity across configuration combinations."""
     d_model = 32
     sa_nhead = 4
     ca_nhead = 4
@@ -399,7 +398,6 @@ def test_transformer_configurations(two_stage, bbox_reparam, activation, num_dec
     num_feature_levels = 2
     dec_n_points = 2
     
-    # Torch
     torch_transformer = TorchTransformer(
         d_model=d_model, sa_nhead=sa_nhead, ca_nhead=ca_nhead,
         num_queries=num_queries,
@@ -416,12 +414,11 @@ def test_transformer_configurations(two_stage, bbox_reparam, activation, num_dec
     torch_transformer.eval()
     
     if two_stage:
-        torch_transformer.enc_out_class_embed = nn.ModuleList([nn.Linear(d_model, 91)]) 
+        torch_transformer.enc_out_class_embed = nn.ModuleList([nn.Linear(d_model, 91)])
         torch_transformer.enc_out_bbox_embed = nn.ModuleList([TorchMLP(d_model, d_model, 4, 3)])
     
     torch_transformer.decoder.bbox_embed = TorchMLP(d_model, d_model, 4, 3)
     
-    # Keras
     keras_transformer = KerasTransformer(
         d_model=d_model, sa_nhead=sa_nhead, ca_nhead=ca_nhead,
         num_queries=num_queries,
@@ -442,7 +439,6 @@ def test_transformer_configurations(two_stage, bbox_reparam, activation, num_dec
         
     keras_transformer.decoder.bbox_embed = KerasMLP(d_model, d_model, 4, 3)
     
-    # Inputs
     srcs_np = [np.random.randn(bs, d_model, 4, 4).astype(np.float32), 
                np.random.randn(bs, d_model, 2, 2).astype(np.float32)]
     masks_np = [np.zeros((bs, 4, 4), dtype=bool), np.zeros((bs, 2, 2), dtype=bool)]
@@ -467,10 +463,9 @@ def test_transformer_configurations(two_stage, bbox_reparam, activation, num_dec
     # Build Keras
     keras_transformer(k_srcs, k_masks, k_pos_embeds, k_query_feat, k_refpoint_embed)
     
-    # Transfer weights
     with torch.no_grad():
         if two_stage:
-            for i in range(1): 
+            for i in range(1):
                  keras_transformer.enc_output[i].kernel.assign(to_keras(torch_transformer.enc_output[i].weight.T.numpy()))
                  keras_transformer.enc_output[i].bias.assign(to_keras(torch_transformer.enc_output[i].bias.numpy()))
                  keras_transformer.enc_output_norm[i].gamma.assign(to_keras(torch_transformer.enc_output_norm[i].weight.numpy()))
@@ -482,11 +477,13 @@ def test_transformer_configurations(two_stage, bbox_reparam, activation, num_dec
                       klayer.kernel.assign(to_keras(tk.weight.T.numpy()))
                       klayer.bias.assign(to_keras(tk.bias.numpy()))
         
+        # Transfer decoder layer weights
         for i in range(num_decoder_layers):
             t_layer = torch_transformer.decoder.layers[i]
             k_layer = keras_transformer.decoder.layers_list[i]
             
             def transfer_mha(t_mha, k_mha):
+                """Transfer MultiHeadAttention weights from reference to Keras."""
                 q_w = to_keras(t_mha.in_proj_weight[:d_model, :].T.numpy())
                 q_w = ops.reshape(q_w, (d_model, sa_nhead, d_model // sa_nhead))
                 k_mha.query_dense.kernel.assign(q_w)
@@ -569,9 +566,6 @@ def test_transformer_configurations(two_stage, bbox_reparam, activation, num_dec
         print(f"Box TS Max diff: {diff_box.max()}")
         assert np.allclose(to_numpy(out_box_ts_torch), to_numpy(out_box_ts_keras), atol=1e-5)
     else:
-        # Check that outputs are correct shapes/None as expected for non-two-stage
-        # Or just checking that it runs without error and returns valid hs/ref is enough.
-        # Check hs shape
         pass
 
 if __name__ == "__main__":

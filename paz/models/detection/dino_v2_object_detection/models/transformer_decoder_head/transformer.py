@@ -12,7 +12,15 @@ from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_he
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class MLP(layers.Layer):
-    """Very simple multi-layer perceptron (also called FFN)"""
+    """Multi-layer perceptron (feed-forward network).
+
+    Applies a sequence of Dense layers with ReLU activations between
+    all layers except the last.
+
+    Attributes:
+        num_layers (int): Total number of dense layers.
+        layers_list (list): List of Dense layers.
+    """
 
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, **kwargs):
         super().__init__(**kwargs)
@@ -50,17 +58,39 @@ class MLP(layers.Layer):
 
 
 def gen_sineembed_for_position(pos_tensor, dim=128):
+    """Generate sinusoidal positional embeddings from coordinate tensors.
+
+    Encodes each coordinate dimension (x, y and optionally w, h) into
+    sin/cos pairs using a frequency spectrum, producing a fixed-length
+    embedding vector for each query position.
+
+    Args:
+        pos_tensor (tensor): Position coordinates of shape
+            (batch, num_queries, 2) for (x, y) or
+            (batch, num_queries, 4) for (x, y, w, h).
+            Coordinates should be normalized to [0, 1].
+        dim (int): Half the output embedding dimension per coordinate
+            pair. Total output dim is 2*dim for 2-D input, 4*dim for 4-D.
+
+    Returns:
+        tensor: Sinusoidal position embeddings of shape
+            (batch, num_queries, 2*dim) or (batch, num_queries, 4*dim).
+    """
     scale = 2 * math.pi
+
+    # Build the frequency spectrum: 10000^(2i/dim) for dimension index i
     dim_t = ops.arange(dim, dtype=pos_tensor.dtype)
     exponent = 2 * ops.floor(dim_t / 2) / dim
     dim_t = 10000**exponent
 
+    # Scale coordinates to [0, 2*pi] and divide by frequencies
     x_embed = pos_tensor[:, :, 0] * scale
     y_embed = pos_tensor[:, :, 1] * scale
 
     pos_x = ops.expand_dims(x_embed, axis=-1) / dim_t
     pos_y = ops.expand_dims(y_embed, axis=-1) / dim_t
 
+    # Interleave sin and cos: even indices get sin, odd indices get cos
     pos_x_sin = ops.sin(pos_x[:, :, 0::2])
     pos_x_cos = ops.cos(pos_x[:, :, 1::2])
     pos_x_stacked = ops.stack([pos_x_sin, pos_x_cos], axis=-1)
@@ -76,8 +106,10 @@ def gen_sineembed_for_position(pos_tensor, dim=128):
     )
 
     if ops.shape(pos_tensor)[-1] == 2:
+        # 2-D positions: concatenate y and x embeddings
         pos = ops.concatenate([pos_y_flattened, pos_x_flattened], axis=2)
     elif ops.shape(pos_tensor)[-1] == 4:
+        # 4-D positions: also encode width and height
         w_embed = pos_tensor[:, :, 2] * scale
         pos_w = ops.expand_dims(w_embed, axis=-1) / dim_t
         pos_w_sin = ops.sin(pos_w[:, :, 0::2])
@@ -98,8 +130,7 @@ def gen_sineembed_for_position(pos_tensor, dim=128):
 
         pos = ops.concatenate([pos_y_flattened, pos_x_flattened, pos_w, pos_h], axis=2)
     else:
-        # Fallback or error?
-        # Usually 2 or 4.
+        # Default to 2-D encoding for unrecognized coordinate dimensions
         pos = ops.concatenate([pos_y_flattened, pos_x_flattened], axis=2)
 
     return pos
@@ -108,17 +139,34 @@ def gen_sineembed_for_position(pos_tensor, dim=128):
 def gen_encoder_output_proposals(
     memory, memory_padding_mask, spatial_shapes, unsigmoid=True
 ):
+    """Generate initial object proposals from encoder memory features.
+
+    Creates a uniform grid of anchor-like proposals for each spatial level,
+    with center coordinates normalized by the valid (non-padded) region.
+    Optionally applies inverse-sigmoid to convert proposals to logit space.
+
+    Args:
+        memory (tensor): Encoder output features, shape (N, S, C).
+        memory_padding_mask (tensor): Boolean mask of shape (N, S) where
+            True indicates padded positions, or None if no padding.
+        spatial_shapes (list): List of (H, W) tuples for each feature level.
+        unsigmoid (bool): If True, convert proposals to inverse-sigmoid
+            (logit) space. If False, keep in normalized coordinate space.
+
+    Returns:
+        tuple: (output_memory, output_proposals) where:
+            - output_memory: Filtered memory with padded/invalid positions
+              zeroed, shape (N, S, C).
+            - output_proposals: Proposal boxes of shape (N, S, 4), either
+              in logit space or normalized coordinates depending on
+              unsigmoid flag.
+    """
     N_ = ops.shape(memory)[0]
     S_ = ops.shape(memory)[1]
     C_ = ops.shape(memory)[2]
 
     proposals = []
     _cur = 0
-
-    # We assume spatial_shapes is indexable (list or tensor)
-    # If tensor, we need to extract values.
-    # Since we are building graph, we might iterate if num_levels is known.
-    # Usually passed as list of (h, w) tuples.
 
     num_levels = (
         len(spatial_shapes)
@@ -133,6 +181,7 @@ def gen_encoder_output_proposals(
             H_ = spatial_shapes[lvl][0]
             W_ = spatial_shapes[lvl][1]
 
+        # Compute the valid (non-padded) height and width for normalization
         if memory_padding_mask is not None:
             mask_flatten_ = memory_padding_mask[:, _cur : (_cur + H_ * W_)]
             mask_flatten_ = ops.reshape(mask_flatten_, (N_, H_, W_, 1))
@@ -144,9 +193,10 @@ def gen_encoder_output_proposals(
             valid_H = ops.full((N_,), ops.cast(H_, "float32"))
             valid_W = ops.full((N_,), ops.cast(W_, "float32"))
 
+        # Create a uniform grid of proposal centers normalized to [0, 1]
+        # by the valid spatial extent. The +0.5 centers each pixel.
         grid_y = ops.linspace(0.0, ops.cast(H_ - 1, "float32"), int(H_))
         grid_x = ops.linspace(0.0, ops.cast(W_ - 1, "float32"), int(W_))
-
         grid_y_mesh, grid_x_mesh = ops.meshgrid(grid_y, grid_x, indexing="ij")
 
         grid = ops.stack([grid_x_mesh, grid_y_mesh], axis=-1)
@@ -156,6 +206,8 @@ def gen_encoder_output_proposals(
         grid_expanded = ops.expand_dims(grid, axis=0)
         grid_final = (grid_expanded + 0.5) / scale
 
+        # Assign default width/height that grows with the feature level,
+        # providing coarser anchors at lower-resolution levels
         wh = ops.ones_like(grid_final) * 0.05 * (2.0**lvl)
         proposal = ops.concatenate([grid_final, wh], axis=-1)
         proposal = ops.reshape(proposal, (N_, -1, 4))
@@ -164,10 +216,14 @@ def gen_encoder_output_proposals(
         _cur += H_ * W_
 
     output_proposals = ops.concatenate(proposals, axis=1)
+
+    # Mark proposals as valid only if all 4 coordinates lie in (0.01, 0.99),
+    # filtering out proposals near image borders or in padded regions
     valid_mask = ops.logical_and(output_proposals > 0.01, output_proposals < 0.99)
     output_proposals_valid = ops.all(valid_mask, axis=-1, keepdims=True)
 
     if unsigmoid:
+        # Convert to logit space via inverse-sigmoid; invalid positions get inf
         output_proposals_logit = ops.log(output_proposals / (1 - output_proposals))
         if memory_padding_mask is not None:
             mask_exp = ops.expand_dims(memory_padding_mask, axis=-1)
@@ -182,6 +238,7 @@ def gen_encoder_output_proposals(
         )
         output_proposals = output_proposals_logit
     else:
+        # Keep in coordinate space; zero out invalid positions
         if memory_padding_mask is not None:
             mask_exp = ops.expand_dims(memory_padding_mask, axis=-1)
             output_proposals = ops.where(mask_exp, 0.0, output_proposals)
@@ -189,6 +246,7 @@ def gen_encoder_output_proposals(
             ops.logical_not(output_proposals_valid), 0.0, output_proposals
         )
 
+    # Zero out memory features at padded or invalid proposal positions
     output_memory = memory
     if memory_padding_mask is not None:
         mask_exp = ops.expand_dims(memory_padding_mask, axis=-1)
@@ -206,6 +264,25 @@ def gen_encoder_output_proposals(
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class TransformerDecoderLayer(layers.Layer):
+    """Single transformer decoder layer with self-attention, deformable
+    cross-attention, and a feed-forward network.
+
+    Follows the standard DETR decoder layer pattern:
+    1. Self-attention among object queries.
+    2. Multi-scale deformable cross-attention over encoder features.
+    3. Feed-forward network.
+    Each sub-layer is followed by dropout and layer normalization.
+
+    Attributes:
+        d_model (int): Model embedding dimension.
+        dropout_rate (float): Dropout probability.
+        activation_name (str): Name of the activation function.
+        normalize_before (bool): Whether to apply pre-norm instead of
+            post-norm.
+        group_detr (int): Number of groups for grouped DETR training.
+            Queries are split into groups during training for efficiency.
+        skip_self_attn (bool): If True, skip the self-attention sub-layer.
+    """
     def __init__(
         self,
         d_model,
@@ -234,14 +311,14 @@ class TransformerDecoderLayer(layers.Layer):
         self._num_feature_levels = num_feature_levels
         self._dec_n_points = dec_n_points
 
-        # self_attn
+        # Self-attention: standard multi-head attention among queries
         self.self_attn = layers.MultiHeadAttention(
             num_heads=sa_nhead, key_dim=d_model // sa_nhead, dropout=dropout
         )
         self.dropout1 = layers.Dropout(dropout)
         self.norm1 = layers.LayerNormalization(epsilon=1e-5)
 
-        # cross_attn
+        # Cross-attention: multi-scale deformable attention over encoder features
         self.cross_attn = MSDeformAttn(
             d_model=d_model,
             n_levels=num_feature_levels,
@@ -251,7 +328,7 @@ class TransformerDecoderLayer(layers.Layer):
         self.dropout2 = layers.Dropout(dropout)
         self.norm2 = layers.LayerNormalization(epsilon=1e-5)
 
-        # FFN
+        # Feed-forward network: two-layer MLP with activation
         self.linear1 = layers.Dense(dim_feedforward)
         self.dropout = layers.Dropout(dropout)
         self.linear2 = layers.Dense(d_model)
@@ -287,6 +364,7 @@ class TransformerDecoderLayer(layers.Layer):
         return config
 
     def with_pos_embed(self, tensor, pos):
+        """Add positional embedding to the tensor if provided."""
         return tensor if pos is None else tensor + pos
 
     def call(
@@ -306,13 +384,40 @@ class TransformerDecoderLayer(layers.Layer):
         level_start_index=None,
         training=None,
     ):
+        """Forward pass for a single decoder layer.
 
+        Args:
+            tgt (tensor): Query features, shape (B, num_queries, d_model).
+            memory (tensor): Encoder features, shape (B, Len_memory, d_model).
+            tgt_mask (tensor): Attention mask for self-attention.
+            memory_mask (tensor): Attention mask for cross-attention.
+            tgt_key_padding_mask (tensor): Padding mask for queries.
+            memory_key_padding_mask (tensor): Padding mask for encoder
+                features (True = padded).
+            pos (tensor): Positional embedding for encoder features.
+            query_pos (tensor): Positional embedding for queries.
+            query_sine_embed (tensor): Sinusoidal embedding of query
+                reference points.
+            is_first (bool): Whether this is the first decoder layer.
+            reference_points (tensor): Reference point coordinates for
+                deformable cross-attention.
+            spatial_shapes (array): Spatial shapes of multi-scale features.
+            level_start_index (tensor): Start indices per feature level.
+            training (bool): Training mode flag.
+
+        Returns:
+            tensor: Updated query features, shape (B, num_queries, d_model).
+        """
+        # Self-attention: queries attend to each other
         q = k = self.with_pos_embed(tgt, query_pos)
         v = tgt
 
         bs = ops.shape(tgt)[0]
         num_queries = ops.shape(tgt)[1]
 
+        # During grouped DETR training, split queries into groups so each
+        # group performs self-attention independently. This reduces memory
+        # and enables parallel group-wise training.
         if training and self.group_detr > 1:
             q = ops.reshape(
                 q, (bs * self.group_detr, num_queries // self.group_detr, self.d_model)
@@ -328,12 +433,16 @@ class TransformerDecoderLayer(layers.Layer):
             query=q, value=v, key=k, attention_mask=tgt_mask, training=training
         )
 
+        # Merge groups back after self-attention
         if training and self.group_detr > 1:
             tgt2 = ops.reshape(tgt2, (bs, num_queries, self.d_model))
 
+        # Residual connection + layer norm for self-attention
         tgt = tgt + self.dropout1(tgt2, training=training)
         tgt = self.norm1(tgt)
 
+        # Cross-attention: queries attend to multi-scale encoder features
+        # using deformable attention at learned sampling locations
         query_cross = self.with_pos_embed(tgt, query_pos)
 
         tgt2 = self.cross_attn(
@@ -346,9 +455,11 @@ class TransformerDecoderLayer(layers.Layer):
             training=training,
         )
 
+        # Residual connection + layer norm for cross-attention
         tgt = tgt + self.dropout2(tgt2, training=training)
         tgt = self.norm2(tgt)
 
+        # Feed-forward network with residual connection
         tgt2 = self.linear2(
             self.dropout(self.activation(self.linear1(tgt)), training=training)
         )
@@ -359,11 +470,34 @@ class TransformerDecoderLayer(layers.Layer):
 
 
 def _get_clones(module_class, N, **kwargs):
+    """Create N independent instances of a layer class."""
     return [module_class(**kwargs) for _ in range(N)]
 
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class TransformerDecoder(layers.Layer):
+    """Stack of transformer decoder layers with iterative reference point
+    refinement.
+
+    Runs the query features through multiple decoder layers, optionally
+    refining the reference points (bounding box proposals) between layers
+    using a bbox regression head. Supports both standard and
+    lite (single-computation) reference point refinement modes.
+
+    Attributes:
+        d_model (int): Model embedding dimension.
+        num_layers (int): Number of stacked decoder layers.
+        return_intermediate (bool): If True, return outputs from all layers
+            (used for auxiliary loss during training).
+        lite_refpoint_refine (bool): If True, compute reference-derived
+            query position embeddings once before the layer loop rather
+            than recomputing at each layer.
+        bbox_reparam (bool): If True, use reparameterized bbox encoding
+            where center offsets are relative to reference box size and
+            width/height use log-space deltas.
+        bbox_embed (MLP): Optional bbox regression head for iterative
+            reference point refinement between layers.
+    """
     def __init__(
         self,
         d_model,
@@ -391,10 +525,16 @@ class TransformerDecoder(layers.Layer):
         ]
 
         self.norm = layers.LayerNormalization(epsilon=1e-5)
+
+        # MLP that converts sinusoidal reference point embeddings to query
+        # position embeddings. Input dim is 2*d_model because it receives
+        # the concatenated sin/cos embeddings of all coordinates.
         self.ref_point_head = MLP(
             input_dim=2 * d_model, hidden_dim=d_model, output_dim=d_model, num_layers=2
         )
 
+        # Optional bbox regression head, assigned externally when iterative
+        # refinement is used
         self.bbox_embed = None
 
     def get_config(self):
@@ -412,6 +552,22 @@ class TransformerDecoder(layers.Layer):
         return config
 
     def refpoints_refine(self, refpoints_unsigmoid, new_refpoints_delta):
+        """Apply predicted deltas to refine reference points.
+
+        Two modes depending on bbox_reparam:
+        - Reparameterized: center deltas are scaled by reference box size,
+          width/height deltas are exponentiated and multiplied by reference
+          size. This stabilizes training for large/small objects.
+        - Standard: deltas are directly added to reference coordinates.
+
+        Args:
+            refpoints_unsigmoid (tensor): Current reference points in
+                inverse-sigmoid (logit) or raw coordinate space.
+            new_refpoints_delta (tensor): Predicted refinement deltas.
+
+        Returns:
+            tensor: Refined reference points.
+        """
         if self.bbox_reparam:
             new_refpoints_cxcy = (
                 new_refpoints_delta[..., :2] * refpoints_unsigmoid[..., 2:]
@@ -442,20 +598,53 @@ class TransformerDecoder(layers.Layer):
         valid_ratios=None,
         training=None,
     ):
+        """Run query features through the decoder layer stack.
 
+        Args:
+            tgt (tensor): Initial query features, shape (B, N_q, d_model).
+            memory (tensor): Encoder features, shape (B, S, d_model).
+            tgt_mask (tensor): Self-attention mask for queries.
+            memory_mask (tensor): Cross-attention mask.
+            tgt_key_padding_mask (tensor): Query padding mask.
+            memory_key_padding_mask (tensor): Encoder padding mask.
+            pos (tensor): Encoder positional embeddings.
+            refpoints_unsigmoid (tensor): Initial reference point
+                coordinates in logit space, shape (B, N_q, 4).
+            level_start_index (tensor): Start indices for each feature level.
+            spatial_shapes (list): Spatial shapes per feature level.
+            valid_ratios (tensor): Ratio of valid (non-padded) area per
+                level, used to scale reference points.
+            training (bool): Training mode flag.
+
+        Returns:
+            tuple: (hidden_states, reference_points) where:
+                - hidden_states: stacked layer outputs if return_intermediate,
+                  else single output with leading dim 1.
+                - reference_points: stacked reference points history.
+        """
         output = tgt
         intermediate = []
         hs_refpoints_unsigmoid = [refpoints_unsigmoid]
 
         def get_reference(refpoints):
+            """Compute query positional embeddings from reference points.
+
+            Generates sinusoidal embeddings from the reference coordinates
+            and transforms them through the ref_point_head MLP to produce
+            query position embeddings for the decoder layer.
+            """
             obj_center = refpoints[..., :4]
             refpoints_input = ops.expand_dims(obj_center, axis=2)
 
+            # Scale reference points by valid ratios to account for
+            # padding in multi-scale features
             if valid_ratios is not None:
                 vr = ops.concatenate([valid_ratios, valid_ratios], axis=-1)
                 vr = ops.expand_dims(vr, axis=1)
                 refpoints_input = refpoints_input * vr
 
+            # Generate sinusoidal position embeddings and project to
+            # d_model-dimensional query position embeddings
             query_sine_embed = gen_sineembed_for_position(
                 refpoints_input[..., 0, :], self.d_model // 2
             )
@@ -463,6 +652,8 @@ class TransformerDecoder(layers.Layer):
 
             return obj_center, refpoints_input, query_pos, query_sine_embed
 
+        # In lite mode, compute reference-derived embeddings once before
+        # the layer loop (saves computation when refinement is not per-layer)
         if self.lite_refpoint_refine:
             if self.bbox_reparam:
                 obj_center, refpoints_input, query_pos, query_sine_embed = (
@@ -474,6 +665,8 @@ class TransformerDecoder(layers.Layer):
                 )
 
         for layer_id, layer in enumerate(self.layers_list):
+            # In standard mode, recompute reference embeddings at each layer
+            # using the latest (possibly refined) reference points
             if not self.lite_refpoint_refine:
                 if self.bbox_reparam:
                     obj_center, refpoints_input, query_pos, query_sine_embed = (
@@ -499,6 +692,10 @@ class TransformerDecoder(layers.Layer):
                 training=training,
             )
 
+            # Iterative reference point refinement: predict bbox deltas
+            # from the layer output and update reference points for the
+            # next layer. Detach gradients to prevent refinement from
+            # back-propagating through earlier layers.
             if not self.lite_refpoint_refine:
                 if self.bbox_embed is not None:
                     new_refpoints_delta = self.bbox_embed(output)
@@ -512,8 +709,10 @@ class TransformerDecoder(layers.Layer):
             if self.return_intermediate:
                 intermediate.append(self.norm(output))
 
+        # Final layer normalization
         if self.norm is not None:
             output = self.norm(output)
+            # Replace the last intermediate with the fully normalized output
             if self.return_intermediate:
                 intermediate.pop()
                 intermediate.append(output)
@@ -522,8 +721,6 @@ class TransformerDecoder(layers.Layer):
             if self.bbox_embed is not None:
                 return ops.stack(intermediate), ops.stack(hs_refpoints_unsigmoid)
             else:
-                # If bbox_embed is None, we just return the input refpoints for the second arg?
-                # PyTorch returns stack(hs_refpoints_unsigmoid) where hs_refpoints_unsigmoid has [refpoints_unsigmoid] init
                 return ops.stack(intermediate), ops.stack(hs_refpoints_unsigmoid)
 
         return ops.expand_dims(output, axis=0), ops.expand_dims(
@@ -533,6 +730,31 @@ class TransformerDecoder(layers.Layer):
 
 @keras.saving.register_keras_serializable(package="RFDETR")
 class Transformer(keras.Model):
+    """Top-level transformer model for RF-DETR object detection.
+
+    Flattens multi-scale feature maps from the backbone, optionally
+    generates two-stage object proposals from encoder memory, and
+    runs the decoder to produce detection outputs.
+
+    Attributes:
+        d_model (int): Model embedding dimension.
+        num_queries (int): Number of object queries.
+        dec_layers (int): Number of decoder layers.
+        two_stage (bool): If True, generate initial proposals from
+            encoder memory (two-stage detection).
+        hidden_dim (int): Alias for d_model.
+        bbox_reparam (bool): Use reparameterized bbox encoding.
+        group_detr (int): Number of DETR groups for training.
+        decoder (TransformerDecoder): The decoder layer stack.
+        enc_output (list): Per-group projection layers for encoder
+            memory (two-stage only).
+        enc_output_norm (list): Per-group normalization layers for
+            encoder memory (two-stage only).
+        enc_out_class_embed (list): Per-group classification heads
+            for proposal scoring (assigned externally, two-stage only).
+        enc_out_bbox_embed (list): Per-group bbox regression heads
+            for proposal generation (assigned externally, two-stage only).
+    """
     def __init__(
         self,
         d_model=512,
@@ -575,6 +797,7 @@ class Transformer(keras.Model):
         self._lite_refpoint_refine = lite_refpoint_refine
         self._decoder_norm_type = decoder_norm_type
 
+        # Build shared decoder layer configuration
         decoder_layer_kwargs = dict(
             d_model=d_model,
             sa_nhead=sa_nhead,
@@ -597,6 +820,8 @@ class Transformer(keras.Model):
             decoder_layer_kwargs=decoder_layer_kwargs,
         )
 
+        # Two-stage components: per-group projection and normalization
+        # for generating initial object proposals from encoder memory
         if two_stage:
             self.enc_output = [layers.Dense(d_model) for _ in range(group_detr)]
             self.enc_output_norm = [
@@ -631,6 +856,14 @@ class Transformer(keras.Model):
         return config
 
     def get_valid_ratio(self, mask):
+        """Compute the ratio of valid (non-padded) spatial extent.
+
+        Args:
+            mask (tensor): Boolean padding mask of shape (B, H, W).
+
+        Returns:
+            tensor: Valid width and height ratios, shape (B, 2).
+        """
         _, H, W = ops.shape(mask)[0], ops.shape(mask)[1], ops.shape(mask)[2]
 
         not_mask = ops.logical_not(ops.cast(mask, "bool"))
@@ -649,63 +882,82 @@ class Transformer(keras.Model):
         masks,
         pos_embeds,
         query_feat=None,
-        refpoint_embed=None,  # Explicit arg for call
+        refpoint_embed=None,
         training=None,
     ):
+        """Forward pass of the full transformer.
+
+        Args:
+            srcs (list): Multi-scale feature maps, each of shape
+                (B, C, H, W) or (B, H, W, C).
+            masks (list): Padding masks per level, each (B, H, W).
+            pos_embeds (list): Positional embeddings per level,
+                same shape as srcs.
+            query_feat (tensor): Learnable query features,
+                shape (N_q, d_model).
+            refpoint_embed (tensor): Initial reference point coordinates,
+                shape (N_q, 4).
+            training (bool): Training mode flag.
+
+        Returns:
+            tuple: (hs, references, memory_ts, boxes_ts) where:
+                - hs: Decoder hidden states (stacked across layers if
+                  return_intermediate).
+                - references: Reference points history.
+                - memory_ts: Two-stage selected memory features or None.
+                - boxes_ts: Two-stage proposal boxes or None.
+        """
+        # Flatten multi-scale feature maps and positional embeddings
+        # into a single sequence for the decoder
         src_flatten = []
         mask_flatten = []
         lvl_pos_embed_flatten = []
         spatial_shapes = []
 
-        # srcs, masks, pos_embeds are lists
         for lvl, key in enumerate(srcs):
             src = srcs[lvl]
             pos_embed = pos_embeds[lvl]
 
-            # Handle Keras channels_last (B, H, W, C) vs PyTorch channels_first (B, C, H, W)
-            # Standard Keras backbones use channels last.
+            # Auto-detect channel ordering: channels-last (B, H, W, C)
+            # vs channels-first (B, C, H, W) and flatten accordingly
             s_shape = ops.shape(src)
-            # If the last dimension equals d_model, assume channels last.
-            # Or if rank 4 and dim 1 is not d_model.
             if s_shape[-1] == self.d_model or (
                 len(s_shape) == 4 and s_shape[1] != self.d_model
             ):
-                # Channels Last: (B, H, W, C)
+                # Channels-last: (B, H, W, C) -> (B, H*W, C)
                 bs, h, w, c = s_shape[0], s_shape[1], s_shape[2], s_shape[3]
-
-                # Flatten spatial dims: (B, H, W, C) -> (B, H*W, C)
                 src = ops.reshape(src, (bs, -1, c))
                 pos_embed = ops.reshape(pos_embed, (bs, -1, c))
             else:
-                # Channels First: (B, C, H, W)
+                # Channels-first: (B, C, H, W) -> (B, H*W, C)
                 bs, c, h, w = s_shape[0], s_shape[1], s_shape[2], s_shape[3]
-
-                # Flatten: (B, C, H, W) -> (B, C, H*W) -> (B, H*W, C)
                 src = ops.reshape(src, (bs, c, -1))
                 src = ops.transpose(src, (0, 2, 1))
-
                 pos_embed = ops.reshape(pos_embed, (bs, c, -1))
                 pos_embed = ops.transpose(pos_embed, (0, 2, 1))
 
             spatial_shapes.append((h, w))
-
             src_flatten.append(src)
             lvl_pos_embed_flatten.append(pos_embed)
 
             if masks is not None:
-                mask = masks[lvl]  # (B, H, W)
+                mask = masks[lvl]
                 mask = ops.reshape(mask, (bs, -1))
                 mask_flatten.append(mask)
 
+        # Concatenate all levels into one sequence
         memory = ops.concatenate(src_flatten, axis=1)
         lvl_pos_embed_flatten = ops.concatenate(lvl_pos_embed_flatten, axis=1)
 
+        # Compute valid ratios and level start indices for deformable attention
         valid_ratios = None
         mask_flatten_concat = None
         if masks is not None:
             mask_flatten_concat = ops.concatenate(mask_flatten, axis=1)
             valid_ratios = ops.stack([self.get_valid_ratio(m) for m in masks], axis=1)
 
+        # Compute cumulative start index for each feature level in the
+        # flattened sequence, used by deformable attention to split levels
         spatial_shapes_tensor = ops.convert_to_tensor(spatial_shapes, dtype="int64")
         lens = spatial_shapes_tensor[:, 0] * spatial_shapes_tensor[:, 1]
 
@@ -713,11 +965,14 @@ class Transformer(keras.Model):
         cumsum = ops.cumsum(lens, axis=0)[:-1]
         level_start_index = ops.concatenate([zero, cumsum], axis=0)
 
+        # Two-stage proposal generation: select top-k proposals from
+        # encoder memory using classification scores
         refpoint_embed_ts = None
         memory_ts = None
         boxes_ts = None
 
         if self.two_stage:
+            # Generate initial proposals from the encoder memory
             output_memory, output_proposals = gen_encoder_output_proposals(
                 memory,
                 mask_flatten_concat,
@@ -729,9 +984,12 @@ class Transformer(keras.Model):
             memory_ts_list = []
             boxes_ts_list = []
 
+            # Process each DETR group: project memory, classify proposals,
+            # regress box coordinates, and select top-k proposals
             group_detr = self.group_detr if training else 1
 
             for g_idx in range(group_detr):
+                # Project and normalize encoder memory for this group
                 output_memory_gidx = self.enc_output_norm[g_idx](
                     self.enc_output[g_idx](output_memory)
                 )
@@ -740,6 +998,7 @@ class Transformer(keras.Model):
                     output_memory_gidx
                 )
 
+                # Predict bbox coordinates for all spatial positions
                 if self.bbox_reparam:
                     enc_outputs_coord_delta_gidx = self.enc_out_bbox_embed[g_idx](
                         output_memory_gidx
@@ -763,6 +1022,7 @@ class Transformer(keras.Model):
                         + output_proposals
                     )
 
+                # Select top-k proposals based on max classification score
                 topk = min(
                     self.num_queries, ops.shape(enc_outputs_class_unselected_gidx)[-2]
                 )
@@ -770,6 +1030,9 @@ class Transformer(keras.Model):
                     ops.max(enc_outputs_class_unselected_gidx, axis=-1), topk
                 )[1]
 
+                # Gather the selected proposals' coordinates and features.
+                # Stop gradient on reference embeddings to prevent proposal
+                # selection from affecting the encoder gradients.
                 topk_indices_expanded = ops.expand_dims(topk_proposals_gidx, axis=-1)
 
                 refpoint_embed_gidx_undetach = ops.take_along_axis(
@@ -785,19 +1048,24 @@ class Transformer(keras.Model):
                 memory_ts_list.append(tgt_undetach_gidx)
                 boxes_ts_list.append(refpoint_embed_gidx_undetach)
 
+            # Concatenate proposals from all groups along the query dimension
             refpoint_embed_ts = ops.concatenate(refpoint_embed_ts_list, axis=1)
             memory_ts = ops.concatenate(memory_ts_list, axis=1)
             boxes_ts = ops.concatenate(boxes_ts_list, axis=1)
 
+        # Prepare decoder input: broadcast query features and reference
+        # points across the batch dimension
         tgt = None
 
         if self.dec_layers > 0:
             tgt = ops.expand_dims(query_feat, axis=0)
             tgt = ops.repeat(tgt, bs, axis=0)
 
-            refpoint_embed_dec = ops.expand_dims(refpoint_embed, axis=0)  # (1, N, 4)
-            refpoint_embed_dec = ops.repeat(refpoint_embed_dec, bs, axis=0)  # (B, N, 4)
+            refpoint_embed_dec = ops.expand_dims(refpoint_embed, axis=0)
+            refpoint_embed_dec = ops.repeat(refpoint_embed_dec, bs, axis=0)
 
+            # In two-stage mode, combine the two-stage proposals with
+            # the learned reference point embeddings
             if self.two_stage:
                 ts_len = ops.shape(refpoint_embed_ts)[-2]
                 refpoint_embed_ts_subset = refpoint_embed_dec[..., :ts_len, :]

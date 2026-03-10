@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import keras
 from keras import ops
 
-# Add path for rfdetr to import original implementation
+# Add path for reference implementation imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 rf_detr_root = os.path.abspath(os.path.join(current_dir, '../../../../../../examples/rf-detr_original_pytorch_implementation'))
 sys.path.append(rf_detr_root)
@@ -18,7 +18,6 @@ try:
 except ImportError:
     pass
 
-# Import our Keras implementation
 from ms_deform_attn import MSDeformAttn as KerasMSDeformAttn
 from ms_deform_attn import grid_sample as keras_grid_sample
 from ms_deform_attn import ms_deform_attn_core as keras_ms_deform_attn_core
@@ -31,6 +30,7 @@ from transformer_weights_porting_utils import (
 
 @pytest.mark.parametrize("align_corners", [False, True])
 def test_grid_samplepy(align_corners):
+    """Verify grid_sample produces identical bilinear sampling results."""
     N, C, H, W = 2, 4, 8, 8
     H_out, W_out = 4, 4
     
@@ -56,6 +56,7 @@ def test_grid_samplepy(align_corners):
 @pytest.mark.parametrize("ref_points_dim", [2, 4])
 @pytest.mark.parametrize("batch_size", [1, 2])
 def test_ms_deform_attn_full_parity(ref_points_dim, batch_size):
+    """Verify full MSDeformAttn parity with both 2-D and 4-D reference points."""
     N = batch_size
     Len_q, n_heads, n_levels, n_points, d_model = 10, 4, 2, 4, 16
     Len_in_list = [20, 10]
@@ -79,7 +80,7 @@ def test_ms_deform_attn_full_parity(ref_points_dim, batch_size):
     # Init Keras model
     _ = keras_model(to_keras(query_np), to_keras(ref_points_np), to_keras(input_flatten_np), input_spatial_shapes_np)
     
-    # Transfer Weights
+    # Transfer weights: transpose Dense kernels for (in, out) convention
     with torch.no_grad():
         keras_model.sampling_offsets.kernel.assign(to_keras(torch_model.sampling_offsets.weight.T.numpy()))
         keras_model.sampling_offsets.bias.assign(to_keras(torch_model.sampling_offsets.bias.numpy()))
@@ -114,8 +115,9 @@ def test_ms_deform_attn_full_parity(ref_points_dim, batch_size):
 @pytest.mark.parametrize("n_levels", [1, 3])
 @pytest.mark.parametrize("n_heads", [4])
 @pytest.mark.parametrize("n_points", [2, 4])
-@pytest.mark.parametrize("d_model", [64]) # Divisible by 4
+@pytest.mark.parametrize("d_model", [64])
 def test_ms_deform_attn_enhanced(use_padding_mask, n_levels, n_heads, n_points, d_model):
+    """Extended parity test across various MSDeformAttn configurations."""
     batch_size = 2
     Len_q = 8
     spatial_shapes = []
@@ -129,15 +131,11 @@ def test_ms_deform_attn_enhanced(use_padding_mask, n_levels, n_heads, n_points, 
     input_spatial_shapes_np = np.array(spatial_shapes, dtype=np.int32)
     
     query_np = np.random.randn(batch_size, Len_q, d_model).astype(np.float32)
-    # Use 4D reference points for broader coverage
     ref_points_np = np.random.rand(batch_size, Len_q, n_levels, 4).astype(np.float32)
     input_flatten_np = np.random.randn(batch_size, total_Len_in, d_model).astype(np.float32)
     
-    # Padding mask
     if use_padding_mask:
-        # Create random boolean mask
         input_padding_mask_np = np.random.choice([False, True], size=(batch_size, total_Len_in), p=[0.9, 0.1])
-        # PyTorch defaults: True for padding/ignored, False for valid
     else:
         input_padding_mask_np = None
 
@@ -148,10 +146,10 @@ def test_ms_deform_attn_enhanced(use_padding_mask, n_levels, n_heads, n_points, 
     # Keras Model
     keras_model = KerasMSDeformAttn(d_model=d_model, n_levels=n_levels, n_heads=n_heads, n_points=n_points)
     
-    # Init Keras (call build implicitly)
+    # Build Keras model
     _ = keras_model(to_keras(query_np), to_keras(ref_points_np), to_keras(input_flatten_np), input_spatial_shapes_np, input_padding_mask=to_keras(input_padding_mask_np) if input_padding_mask_np is not None else None)
     
-    # Transfer Weights
+    # Transfer weights: transpose Dense kernels for (in, out) convention
     with torch.no_grad():
         keras_model.sampling_offsets.kernel.assign(to_keras(torch_model.sampling_offsets.weight.T.numpy()))
         keras_model.sampling_offsets.bias.assign(to_keras(torch_model.sampling_offsets.bias.numpy()))
