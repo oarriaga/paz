@@ -27,6 +27,7 @@ from examples.speech_to_text.weights import build_whisper_base_en_parity_inputs
 from examples.speech_to_text.weights import build_whisper_frontend_waveform
 from examples.speech_to_text.weights import build_reference_whisper_model
 from examples.speech_to_text.weights import call_reference_model
+from examples.speech_to_text.weights import collect_logical_weight_path_names
 from examples.speech_to_text.weights import collect_weight_path_names
 from examples.speech_to_text.weights import copy_matching_weights
 from examples.speech_to_text.weights import find_whisper_base_en_preset_dir
@@ -45,8 +46,10 @@ def test_encoder_model_matches_reference():
         }
     )
     clean_model(encoder_features)
-    clean_paths = collect_weight_path_names(clean_model)
-    reference_paths = collect_weight_path_names(reference_model)
+    clean_paths = collect_logical_weight_path_names(clean_model, "clean")
+    reference_paths = collect_logical_weight_path_names(
+        reference_model, "reference"
+    )
     reference_paths = filter_encoder_paths(reference_paths)
     assert clean_paths == reference_paths
 
@@ -74,8 +77,10 @@ def test_decoder_model_matches_reference():
         reference_model, encoder_features, decoder_token_ids, decoder_padding_mask
     )
     clean_model([decoder_token_ids, decoder_padding_mask, reference_encoder])
-    clean_paths = collect_weight_path_names(clean_model)
-    reference_paths = collect_weight_path_names(reference_model)
+    clean_paths = collect_logical_weight_path_names(clean_model, "clean")
+    reference_paths = collect_logical_weight_path_names(
+        reference_model, "reference"
+    )
     reference_paths = filter_decoder_paths(reference_paths)
     assert clean_paths == reference_paths
 
@@ -170,7 +175,9 @@ def test_base_en_preset_logits_match_reference():
 def test_runtime_files_do_not_import_keras_hub():
     root = Path(__file__).resolve().parent
     model_source = (root / "model.py").read_text(encoding="utf-8")
-    layers_source = (root / "layers.py").read_text(encoding="utf-8")
+    layers_source = ""
+    for path in sorted((root / "layers").glob("*.py")):
+        layers_source += path.read_text(encoding="utf-8")
     result = "keras_hub" not in model_source and "keras_hub" not in layers_source
     assert result
 
@@ -279,8 +286,8 @@ def test_logits_use_tied_decoder_embedding():
     encoder_output, decoder_output, logits = model(
         [encoder_features, decoder_token_ids, decoder_padding_mask]
     )
-    embedding_layer = model.get_layer("decoder_token_and_position_embedding")
-    manual_logits = embedding_layer.token_embedding(decoder_output, reverse=True)
+    embedding_layer = model.get_layer("decoder_token_embedding")
+    manual_logits = embedding_layer(decoder_output, reverse=True)
     paths = collect_weight_path_names(model)
     result = np.allclose(
         ops.convert_to_numpy(logits),
@@ -431,7 +438,7 @@ def build_logits_model_shapes(builder):
     input_shapes = tuple(tuple(shape) for shape in model.input_shape)
     output_shapes = tuple(tuple(shape) for shape in model.output_shape)
     paths = collect_weight_path_names(model)
-    has_embedding = model.get_layer("decoder_token_and_position_embedding") is not None
+    has_embedding = model.get_layer("decoder_token_embedding") is not None
     del model
     return input_shapes, output_shapes, paths, has_embedding
 

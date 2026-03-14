@@ -3,12 +3,11 @@ from keras import Model
 from keras import ops
 from keras.layers import Input
 
-from examples.speech_to_text.layers import WhisperAudioFrontend
-from examples.speech_to_text.layers import WhisperDecoderBlock
-from examples.speech_to_text.layers import WhisperEncoderBlock
-from examples.speech_to_text.layers import WhisperPositionEmbedding
-from examples.speech_to_text.layers import WhisperTokenAndPositionEmbedding
-from examples.speech_to_text.layers import whisper_kernel_initializer
+from examples.speech_to_text.layers import decoder_block
+from examples.speech_to_text.layers import encoder_block
+from examples.speech_to_text.layers import frontend
+from examples.speech_to_text.layers import kernel_initializer
+from examples.speech_to_text.layers import position_embedding
 
 
 # Field order:
@@ -318,7 +317,7 @@ def build_whisper_core_logits_model(
         max_decoder_sequence_length,
         dtype,
     )
-    logits = decoder_embeddings.token_embedding(decoder_output, reverse=True)
+    logits = decoder_embeddings(decoder_output, reverse=True)
     inputs = [encoder_features, decoder_token_ids, decoder_padding_mask]
     outputs = [encoder_output, decoder_output, logits]
     return Model(inputs, outputs, name=name)
@@ -493,15 +492,15 @@ def apply_whisper_audio_frontend(
     max_audio_length,
     dtype,
 ):
-    return WhisperAudioFrontend(
-        num_mels=num_mels,
-        num_fft_bins=num_fft_bins,
-        stride=stride,
-        sampling_rate=sampling_rate,
-        max_audio_length=max_audio_length,
-        dtype=dtype,
-        name="audio_frontend",
-    )(waveform)
+    return frontend(
+        waveform,
+        num_mels,
+        num_fft_bins,
+        stride,
+        sampling_rate,
+        max_audio_length,
+        dtype,
+    )
 
 
 def apply_whisper_encoder(
@@ -519,14 +518,15 @@ def apply_whisper_encoder(
         hidden, dropout, max_encoder_sequence_length, dtype
     )
     for layer_index in range(num_layers):
-        hidden = WhisperEncoderBlock(
-            num_heads=num_heads,
-            intermediate_dim=intermediate_dim,
-            dropout=dropout,
-            layer_norm_epsilon=1e-5,
-            dtype=dtype,
-            name=f"transformer_encoder_layer_{layer_index}",
-        )(hidden)
+        hidden = encoder_block(
+            hidden,
+            num_heads,
+            intermediate_dim,
+            dropout,
+            1e-5,
+            dtype,
+            f"transformer_encoder_layer_{layer_index}",
+        )
     hidden = keras.layers.LayerNormalization(
         axis=-1,
         epsilon=1e-5,
@@ -549,29 +549,48 @@ def apply_whisper_decoder(
     max_decoder_sequence_length,
     dtype,
 ):
-    decoder_embeddings = WhisperTokenAndPositionEmbedding(
-        vocabulary_size=vocabulary_size,
-        sequence_length=max_decoder_sequence_length,
-        embedding_dim=hidden_dim,
-        embeddings_initializer=whisper_kernel_initializer(),
+    decoder_embeddings = keras.layers.ReversibleEmbedding(
+        vocabulary_size,
+        hidden_dim,
+        tie_weights=True,
+        embeddings_initializer=kernel_initializer(),
+        mask_zero=False,
         dtype=dtype,
-        name="decoder_token_and_position_embedding",
+        name="decoder_token_embedding",
     )
     hidden = decoder_embeddings(decoder_token_ids)
+    positions = position_embedding(
+        hidden,
+        max_decoder_sequence_length,
+        kernel_initializer(),
+        0,
+        None,
+        True,
+        dtype,
+        "decoder_position_embedding",
+    )
+    hidden = keras.layers.Add(
+        dtype=dtype,
+        name="decoder_embeddings_add",
+    )((hidden, positions))
     hidden = keras.layers.Dropout(
         dropout,
         dtype=dtype,
         name="decoder_embeddings_dropout",
     )(hidden)
     for layer_index in range(num_layers):
-        hidden = WhisperDecoderBlock(
-            num_heads=num_heads,
-            intermediate_dim=intermediate_dim,
-            dropout=dropout,
-            layer_norm_epsilon=1e-5,
-            dtype=dtype,
-            name=f"transformer_decoder_layer_{layer_index}",
-        )(hidden, encoder_output, decoder_padding_mask)
+        hidden = decoder_block(
+            hidden,
+            encoder_output,
+            decoder_padding_mask,
+            None,
+            num_heads,
+            intermediate_dim,
+            dropout,
+            1e-5,
+            dtype,
+            f"transformer_decoder_layer_{layer_index}",
+        )
     hidden = keras.layers.LayerNormalization(
         axis=-1,
         epsilon=1e-5,
@@ -610,13 +629,16 @@ def build_encoder_token_embedding(encoder_features, hidden_dim, dtype):
 def build_encoder_position_embeddings(
     hidden, dropout, max_encoder_sequence_length, dtype
 ):
-    positions = WhisperPositionEmbedding(
-        initializer=whisper_kernel_initializer(),
-        sequence_length=max_encoder_sequence_length // 2,
-        trainable=False,
-        dtype=dtype,
-        name="encoder_position_embedding",
-    )(hidden)
+    positions = position_embedding(
+        hidden,
+        max_encoder_sequence_length // 2,
+        kernel_initializer(),
+        0,
+        None,
+        False,
+        dtype,
+        "encoder_position_embedding",
+    )
     hidden = keras.layers.Add(
         dtype=dtype,
         name="encoder_embeddings_add",
