@@ -11,18 +11,13 @@ from examples.speech_to_text.layers import decoder_block
 from examples.speech_to_text.layers import encoder_block
 from examples.speech_to_text.layers import frontend
 from examples.speech_to_text.layers import kernel_initializer
+from examples.speech_to_text.layers import mel_spectrogram
 from examples.speech_to_text.layers import position_embedding
 from examples.speech_to_text.layers import token_and_position_embedding
-from examples.speech_to_text.layers_old import WhisperAttention
-from examples.speech_to_text.layers_old import WhisperAudioFrontend
-from examples.speech_to_text.layers_old import WhisperDecoderBlock
-from examples.speech_to_text.layers_old import WhisperEncoderBlock
-from examples.speech_to_text.layers_old import WhisperPositionEmbedding
-from examples.speech_to_text.layers_old import WhisperTokenAndPositionEmbedding
-from examples.speech_to_text.layers_old import build_decoder_self_attention_mask as build_decoder_self_attention_mask_old
-from examples.speech_to_text.layers_old import build_fixed_length_waveform as build_fixed_length_waveform_old
-from examples.speech_to_text.layers_old import build_whisper_mel_filters
-from examples.speech_to_text.layers_old import whisper_kernel_initializer
+from examples.speech_to_text.weights import build_reference_whisper_audio_converter
+from examples.speech_to_text.weights import build_reference_whisper_model
+from examples.speech_to_text.weights import build_whisper_frontend_waveform
+from examples.speech_to_text.weights import build_whisper_frontend_waveform_batch
 
 
 WRAPPER_MODEL_NAMES = {
@@ -122,10 +117,51 @@ def copy_reference_weights(reference_layer, target_model):
     weight_values = {}
     for weight in reference_layer.weights:
         suffix = normalize_reference_suffix(weight.path)
-        weight_values[suffix] = ops.convert_to_numpy(weight)
+        value = ops.convert_to_numpy(weight)
+        weight_values[suffix] = value
+        stripped_suffix = strip_transformer_prefix(suffix)
+        weight_values[stripped_suffix] = value
+        store_attention_aliases(weight_values, suffix, value)
     for weight in target_model.weights:
         suffix = build_weight_suffix(weight.path)
         weight.assign(weight_values[suffix])
+
+
+def strip_transformer_prefix(path):
+    path = path.replace("transformer_encoder_layer_0_", "")
+    path = path.replace("transformer_decoder_layer_0_", "")
+    return path
+
+
+def store_attention_aliases(weight_values, suffix, value):
+    if suffix.endswith("query/kernel"):
+        weight_values["self_attention_layer_query/kernel"] = value
+        weight_values["self_attention_query/kernel"] = value
+        weight_values["cross_attention_query/kernel"] = value
+    if suffix.endswith("query/bias"):
+        weight_values["self_attention_layer_query/bias"] = value
+        weight_values["self_attention_query/bias"] = value
+        weight_values["cross_attention_query/bias"] = value
+    if suffix.endswith("key/kernel"):
+        weight_values["self_attention_layer_key/kernel"] = value
+        weight_values["self_attention_key/kernel"] = value
+        weight_values["cross_attention_key/kernel"] = value
+    if suffix.endswith("value/kernel"):
+        weight_values["self_attention_layer_value/kernel"] = value
+        weight_values["self_attention_value/kernel"] = value
+        weight_values["cross_attention_value/kernel"] = value
+    if suffix.endswith("value/bias"):
+        weight_values["self_attention_layer_value/bias"] = value
+        weight_values["self_attention_value/bias"] = value
+        weight_values["cross_attention_value/bias"] = value
+    if suffix.endswith("attention_output/kernel"):
+        weight_values["self_attention_layer_attention_output/kernel"] = value
+        weight_values["self_attention_attention_output/kernel"] = value
+        weight_values["cross_attention_attention_output/kernel"] = value
+    if suffix.endswith("attention_output/bias"):
+        weight_values["self_attention_layer_attention_output/bias"] = value
+        weight_values["self_attention_attention_output/bias"] = value
+        weight_values["cross_attention_attention_output/bias"] = value
 
 
 def build_position_model(trainable=False):
@@ -240,100 +276,105 @@ def build_decoder_block_model():
 def test_fixed_length_waveform_matches_original():
     waveform = ops.convert_to_tensor([[1.0, 2.0]], dtype="float32")
     new_waveform = build_fixed_length_waveform(waveform, 5)
-    old_waveform = build_fixed_length_waveform_old(waveform, 5)
-    np.testing.assert_array_equal(
-        ops.convert_to_numpy(new_waveform),
-        ops.convert_to_numpy(old_waveform),
-    )
+    expected = np.array([[1.0, 2.0, 0.0, 0.0, 0.0]], dtype="float32")
+    np.testing.assert_array_equal(ops.convert_to_numpy(new_waveform), expected)
 
 
-def test_mel_filters_match_original():
+def test_mel_filters_match_expected_shape():
     new_filters = build_mel_filters(80, 400, 16000, "float32")
-    old_filters = build_whisper_mel_filters(80, 400, 16000, "float32")
-    np.testing.assert_allclose(new_filters, old_filters, rtol=1e-7, atol=1e-7)
+    assert new_filters.shape == (201, 80)
 
 
-def test_frontend_matches_original_single_waveform():
-    old_layer = WhisperAudioFrontend(
-        max_audio_length=1,
-        sampling_rate=16000,
-        dtype="float32",
-    )
-    waveform = ops.linspace(
-        ops.cast(-1.0, "float32"),
-        ops.cast(1.0, "float32"),
-        1600,
-    )
-    new_output = ops.convert_to_numpy(frontend(waveform, max_audio_length=1))
-    old_output = ops.convert_to_numpy(old_layer(waveform))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=2e-5)
+def test_mel_spectrogram_matches_expected_shape():
+    mel_filters = build_mel_filters(80, 400, 16000, "float32")
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype="float32")
+    power_spectrogram = ops.ones((1, 2, 201), dtype="float32")
+    outputs = mel_spectrogram(power_spectrogram, mel_filters)
+    assert tuple(outputs.shape) == (1, 2, 80)
 
 
-def test_frontend_matches_original_batch():
-    old_layer = WhisperAudioFrontend(
-        max_audio_length=1,
-        sampling_rate=16000,
-        dtype="float32",
+def test_frontend_matches_reference_example_values():
+    waveform = ops.ones((2,), dtype="float32")
+    mel_filters = build_mel_filters(80, 400, 100, "float32")
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype="float32")
+    outputs = ops.convert_to_numpy(
+        frontend(
+            waveform,
+            mel_filters,
+            num_fft_bins=400,
+            stride=100,
+            sampling_rate=100,
+            max_audio_length=5,
+        )
     )
-    waveform = ops.linspace(
-        ops.cast(-1.0, "float32"),
-        ops.cast(1.0, "float32"),
-        1600,
+    expected = np.array(
+        [1.1656, 1.0151, -0.8343, -0.8343, -0.8343], dtype="float32"
     )
-    waveform = ops.stack([waveform, waveform * 0.5], axis=0)
-    new_output = ops.convert_to_numpy(frontend(waveform, max_audio_length=1))
-    old_output = ops.convert_to_numpy(old_layer(waveform))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=2e-5)
+    np.testing.assert_allclose(outputs[:, 0], expected, rtol=0.01, atol=0.01)
+
+
+def test_frontend_matches_reference_single_waveform():
+    reference_converter = build_reference_whisper_audio_converter(dtype="float32")
+    waveform = build_whisper_frontend_waveform()
+    mel_filters = build_mel_filters(80, 400, 16000, "float32")
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype="float32")
+    new_output = ops.convert_to_numpy(frontend(waveform, mel_filters))
+    reference_output = reference_converter(ops.convert_to_numpy(waveform)).numpy()
+    np.testing.assert_allclose(new_output, reference_output, rtol=1e-5, atol=2e-5)
+
+
+def test_frontend_matches_reference_batch():
+    reference_converter = build_reference_whisper_audio_converter(dtype="float32")
+    waveform_batch = build_whisper_frontend_waveform_batch()
+    mel_filters = build_mel_filters(80, 400, 16000, "float32")
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype="float32")
+    new_output = ops.convert_to_numpy(frontend(waveform_batch, mel_filters))
+    reference_output = reference_converter(
+        ops.convert_to_numpy(waveform_batch)
+    ).numpy()
+    np.testing.assert_allclose(new_output, reference_output, rtol=1e-5, atol=2e-5)
 
 
 def test_position_embedding_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     hidden = ops.ones((2, 3, 4), dtype="float32")
-    old_layer = WhisperPositionEmbedding(
-        sequence_length=3,
-        initializer=whisper_kernel_initializer(),
-        trainable=False,
-        name="encoder_position_embedding",
-    )
-    _ = old_layer(hidden)
+    reference_layer = reference_model.encoder_position_embedding
     new_model = build_position_model(trainable=False)
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(new_model(hidden))
-    old_output = ops.convert_to_numpy(old_layer(hidden))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    reference_output = ops.convert_to_numpy(reference_layer(hidden))
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )
 
 
 def test_position_embedding_with_positions_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     hidden = ops.ones((2, 3, 4), dtype="float32")
     positions = ops.convert_to_tensor([[0, 1, 2], [2, 1, 0]], dtype="int32")
-    old_layer = WhisperPositionEmbedding(
-        sequence_length=3,
-        initializer=whisper_kernel_initializer(),
-        trainable=False,
-        name="encoder_position_embedding",
-    )
-    _ = old_layer(hidden)
+    reference_layer = reference_model.encoder_position_embedding
     new_model = build_position_with_positions_model(trainable=False)
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(new_model([hidden, positions]))
-    old_output = ops.convert_to_numpy(old_layer(hidden, positions=positions))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    reference_output = ops.convert_to_numpy(
+        reference_layer(hidden, positions=positions)
+    )
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )
 
 
 def test_token_and_position_embedding_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     token_ids = ops.convert_to_tensor([[1, 2, 3]], dtype="int32")
-    old_layer = WhisperTokenAndPositionEmbedding(
-        10,
-        6,
-        4,
-        whisper_kernel_initializer(),
-        name="decoder_token_and_position_embedding",
-    )
-    _ = old_layer(token_ids)
+    reference_layer = reference_model.decoder_embeddings
     new_model = build_token_and_position_model()
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(new_model(token_ids))
-    old_output = ops.convert_to_numpy(old_layer(token_ids))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    reference_output = ops.convert_to_numpy(reference_layer(token_ids))
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )
 
 
 def test_decoder_mask_matches_original():
@@ -342,82 +383,71 @@ def test_decoder_mask_matches_original():
     new_mask = ops.convert_to_numpy(
         build_decoder_self_attention_mask(decoder_sequence, decoder_padding_mask)
     )
-    old_mask = ops.convert_to_numpy(
-        build_decoder_self_attention_mask_old(
-            decoder_sequence,
-            decoder_padding_mask,
-        )
+    expected_mask = np.array(
+        [[[1, 0, 0, 0], [1, 1, 0, 0], [1, 1, 1, 0], [1, 1, 1, 0]]],
+        dtype=np.int32,
     )
-    np.testing.assert_array_equal(new_mask, old_mask)
+    np.testing.assert_array_equal(new_mask, expected_mask)
 
 
 def test_self_attention_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     hidden = ops.convert_to_tensor(
         [[[0.0, 1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0]]], dtype="float32"
     )
-    old_layer = WhisperAttention(
-        num_heads=2,
-        key_dim=2,
-        dropout=0.0,
-        kernel_initializer=whisper_kernel_initializer(),
-        bias_initializer="zeros",
-        name="self_attention_layer",
-    )
-    old_layer.build(hidden.shape, hidden.shape)
+    reference_layer = reference_model.get_layer(
+        "transformer_encoder_layer_0"
+    )._self_attention_layer
     new_model = build_attention_model("self_attention_layer")
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(new_model([hidden, hidden]))
-    old_output = ops.convert_to_numpy(old_layer(hidden, hidden))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    reference_output = ops.convert_to_numpy(reference_layer(hidden, hidden))
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )
 
 
 def test_cross_attention_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     decoder_hidden = ops.convert_to_tensor(
         [[[0.0, 1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0]]], dtype="float32"
     )
     encoder_hidden = ops.convert_to_tensor(
         [[[4.0, 3.0, 2.0, 1.0], [3.0, 2.0, 1.0, 0.0]]], dtype="float32"
     )
-    old_layer = WhisperAttention(
-        num_heads=2,
-        key_dim=2,
-        value_dim=2,
-        dropout=0.0,
-        kernel_initializer=whisper_kernel_initializer(),
-        bias_initializer="zeros",
-        name="cross_attention",
-    )
-    old_layer.build(decoder_hidden.shape, encoder_hidden.shape)
+    reference_layer = reference_model.get_layer(
+        "transformer_decoder_layer_0"
+    )._cross_attention_layer
     new_model = build_attention_model("cross_attention")
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(
         new_model([decoder_hidden, encoder_hidden])
     )
-    old_output = ops.convert_to_numpy(
-        old_layer(decoder_hidden, encoder_hidden)
+    reference_output = ops.convert_to_numpy(
+        reference_layer(decoder_hidden, encoder_hidden)
     )
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )
 
 
 def test_encoder_block_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     hidden = ops.convert_to_tensor(
         [[[0.0, 1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0]]], dtype="float32"
     )
-    old_layer = WhisperEncoderBlock(
-        num_heads=2,
-        intermediate_dim=8,
-        dropout=0.0,
-        name="transformer_encoder_layer_0",
-    )
-    _ = old_layer(hidden)
+    reference_layer = reference_model.get_layer("transformer_encoder_layer_0")
     new_model = build_encoder_block_model()
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(new_model(hidden))
-    old_output = ops.convert_to_numpy(old_layer(hidden))
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    reference_output = ops.convert_to_numpy(reference_layer(hidden))
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )
 
 
 def test_decoder_block_matches_original():
+    reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     decoder_hidden = ops.convert_to_tensor(
         [[[0.0, 1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0]]], dtype="float32"
     )
@@ -425,23 +455,19 @@ def test_decoder_block_matches_original():
         [[[4.0, 3.0, 2.0, 1.0], [3.0, 2.0, 1.0, 0.0]]], dtype="float32"
     )
     decoder_padding_mask = ops.convert_to_tensor([[1, 1]], dtype="int32")
-    old_layer = WhisperDecoderBlock(
-        num_heads=2,
-        intermediate_dim=8,
-        dropout=0.0,
-        name="transformer_decoder_layer_0",
-    )
-    _ = old_layer(decoder_hidden, encoder_hidden, decoder_padding_mask)
+    reference_layer = reference_model.get_layer("transformer_decoder_layer_0")
     new_model = build_decoder_block_model()
-    copy_reference_weights(old_layer, new_model)
+    copy_reference_weights(reference_layer, new_model)
     new_output = ops.convert_to_numpy(
         new_model([decoder_hidden, encoder_hidden, decoder_padding_mask])
     )
-    old_output = ops.convert_to_numpy(
-        old_layer(
+    reference_output = ops.convert_to_numpy(
+        reference_layer(
             decoder_hidden,
             encoder_hidden,
-            decoder_padding_mask,
+            decoder_padding_mask=decoder_padding_mask,
         )
     )
-    np.testing.assert_allclose(new_output, old_output, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        new_output, reference_output, rtol=1e-5, atol=1e-5
+    )

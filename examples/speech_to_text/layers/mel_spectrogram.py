@@ -79,18 +79,5 @@ def build_mel_filters(num_mels, num_fft_bins, sampling_rate, dtype):
     return np.asarray(mel_filters.T, dtype=dtype)
 
 
-def mel_spectrogram(
-    inputs,
-    num_mels=80,
-    num_fft_bins=400,
-    sampling_rate=16000,
-    dtype="float32",
-):
-    mel_filters = build_mel_filters(
-        num_mels,
-        num_fft_bins,
-        sampling_rate,
-        dtype,
-    )
-    mel_filters = ops.convert_to_tensor(mel_filters, dtype=dtype)
+def mel_spectrogram(inputs, mel_filters):
     return ops.matmul(inputs, mel_filters)

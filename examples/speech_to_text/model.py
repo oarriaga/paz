@@ -6,6 +6,7 @@ from keras.layers import Input
 from examples.speech_to_text.layers import decoder_block
 from examples.speech_to_text.layers import encoder_block
 from examples.speech_to_text.layers import frontend
+from examples.speech_to_text.layers import build_mel_filters
 from examples.speech_to_text.layers import kernel_initializer
 from examples.speech_to_text.layers import position_embedding
 
@@ -492,9 +493,16 @@ def apply_whisper_audio_frontend(
     max_audio_length,
     dtype,
 ):
+    mel_filters = build_mel_filters(
+        num_mels,
+        num_fft_bins,
+        sampling_rate,
+        dtype,
+    )
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype=dtype)
     return frontend(
         waveform,
-        num_mels,
+        mel_filters,
         num_fft_bins,
         stride,
         sampling_rate,

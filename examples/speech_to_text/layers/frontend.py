@@ -63,7 +63,7 @@ def squeeze_features_batch_axis(features, squeeze_batch_axis):
 
 def frontend(
     waveform,
-    num_mels=80,
+    mel_filters,
     num_fft_bins=400,
     stride=160,
     sampling_rate=16000,
@@ -81,12 +81,6 @@ def frontend(
         stride,
     )
     power_spectrogram = compute_power_spectrogram(real_part, imaginary_part)
-    mel_features = mel_spectrogram(
-        power_spectrogram,
-        num_mels,
-        num_fft_bins,
-        sampling_rate,
-        dtype,
-    )
+    mel_features = mel_spectrogram(power_spectrogram, mel_filters)
     features = compute_log_mel_features(mel_features)
     return squeeze_features_batch_axis(features, squeeze_batch_axis)
