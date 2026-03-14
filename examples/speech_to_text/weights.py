@@ -304,9 +304,13 @@ def collect_weight_path_names(model):
     return [path for path, _ in collect_weight_paths(model)]
 
 
+def collect_logical_weight_path_names(model, label):
+    return [path for path, _ in collect_logical_weight_paths(model, label)]
+
+
 def copy_matching_weights(clean_model, reference_model):
-    clean_weights = collect_weight_paths(clean_model)
-    reference_weights = collect_weight_paths(reference_model)
+    clean_weights = collect_logical_weight_paths(clean_model, "clean")
+    reference_weights = collect_logical_weight_paths(reference_model, "reference")
     validate_unique_weight_paths(clean_weights, "clean")
     validate_unique_weight_paths(reference_weights, "reference")
     validate_weight_count_alignment(clean_weights, reference_weights)
@@ -322,9 +326,11 @@ def copy_matching_weights(clean_model, reference_model):
 
 
 def copy_matching_encoder_weights(clean_model, reference_model):
-    clean_weights = filter_encoder_weight_pairs(collect_weight_paths(clean_model))
+    clean_weights = filter_encoder_weight_pairs(
+        collect_logical_weight_paths(clean_model, "clean")
+    )
     reference_weights = filter_encoder_weight_pairs(
-        collect_weight_paths(reference_model)
+        collect_logical_weight_paths(reference_model, "reference")
     )
     validate_unique_weight_paths(clean_weights, "clean")
     validate_unique_weight_paths(reference_weights, "reference")
@@ -341,9 +347,11 @@ def copy_matching_encoder_weights(clean_model, reference_model):
 
 
 def copy_matching_decoder_weights(clean_model, reference_model):
-    clean_weights = filter_decoder_weight_pairs(collect_weight_paths(clean_model))
+    clean_weights = filter_decoder_weight_pairs(
+        collect_logical_weight_paths(clean_model, "clean")
+    )
     reference_weights = filter_decoder_weight_pairs(
-        collect_weight_paths(reference_model)
+        collect_logical_weight_paths(reference_model, "reference")
     )
     validate_unique_weight_paths(clean_weights, "clean")
     validate_unique_weight_paths(reference_weights, "reference")
@@ -366,6 +374,15 @@ def count_params_from_weights(model):
     return total
 
 
+def collect_logical_weight_paths(model, label):
+    logical_weights = []
+    for path, weight in collect_weight_paths(model):
+        logical_path = normalize_weight_path(path, label)
+        logical_weights.append((logical_path, weight))
+    logical_weights.sort(key=lambda pair: pair[0])
+    return logical_weights
+
+
 def filter_encoder_weight_pairs(weight_pairs):
     filtered_pairs = []
     for path, weight in weight_pairs:
@@ -380,6 +397,94 @@ def filter_decoder_weight_pairs(weight_pairs):
         if path.startswith("decoder_") or path.startswith("transformer_decoder_"):
             filtered_pairs.append((path, weight))
     return filtered_pairs
+
+
+def normalize_weight_path(path, label):
+    if label == "reference":
+        return path
+    if label == "clean":
+        return normalize_clean_weight_path(path)
+    raise ValueError("Unknown weight path label: {}".format(label))
+
+
+def normalize_clean_weight_path(path):
+    path = path.replace(
+        "decoder_token_embedding/",
+        "decoder_token_and_position_embedding/token_embedding/",
+    )
+    path = path.replace(
+        "decoder_position_embedding/",
+        "decoder_token_and_position_embedding/position_embedding/",
+    )
+    path = path.replace(
+        "_self_attention_layer_query/",
+        "/self_attention_layer/query/",
+    )
+    path = path.replace(
+        "_self_attention_layer_key/",
+        "/self_attention_layer/key/",
+    )
+    path = path.replace(
+        "_self_attention_layer_value/",
+        "/self_attention_layer/value/",
+    )
+    path = path.replace(
+        "_self_attention_layer_attention_output/",
+        "/self_attention_layer/attention_output/",
+    )
+    path = path.replace(
+        "_self_attention_layer_norm/",
+        "/self_attention_layer_norm/",
+    )
+    path = path.replace(
+        "_self_attention_query/",
+        "/self_attention/query/",
+    )
+    path = path.replace(
+        "_self_attention_key/",
+        "/self_attention/key/",
+    )
+    path = path.replace(
+        "_self_attention_value/",
+        "/self_attention/value/",
+    )
+    path = path.replace(
+        "_self_attention_attention_output/",
+        "/self_attention/attention_output/",
+    )
+    path = path.replace(
+        "_cross_attention_query/",
+        "/cross_attention/query/",
+    )
+    path = path.replace(
+        "_cross_attention_key/",
+        "/cross_attention/key/",
+    )
+    path = path.replace(
+        "_cross_attention_value/",
+        "/cross_attention/value/",
+    )
+    path = path.replace(
+        "_cross_attention_attention_output/",
+        "/cross_attention/attention_output/",
+    )
+    path = path.replace(
+        "_cross_attention_layer_norm/",
+        "/cross_attention_layer_norm/",
+    )
+    path = path.replace(
+        "_feedforward_layer_norm/",
+        "/feedforward_layer_norm/",
+    )
+    path = path.replace(
+        "_feedforward_intermediate_dense/",
+        "/feedforward_intermediate_dense/",
+    )
+    path = path.replace(
+        "_feedforward_output_dense/",
+        "/feedforward_output_dense/",
+    )
+    return path
 
 
 def build_reference_whisper_model_from_preset_dir(

@@ -24,6 +24,7 @@ from examples.speech_to_text.weights import find_whisper_base_en_preset_dir
 from examples.speech_to_text.weights import find_whisper_preset_dir
 from examples.speech_to_text.weights import build_reference_logits
 from examples.speech_to_text.weights import build_reference_whisper_preset_model
+from examples.speech_to_text.weights import collect_logical_weight_path_names
 from examples.speech_to_text.weights import load_reference_whisper_preset_names
 from examples.speech_to_text.weights import preset_matches_base_en_arguments
 
@@ -162,10 +163,12 @@ def test_base_en_preset_weight_inventory_matches_clean_model():
     )
 
 
-def test_base_en_preset_weight_paths_align_exactly():
+def test_base_en_preset_weight_paths_align_logically():
     clean_model, reference_model = build_base_en_preset_weight_pair()
-    assert collect_weight_path_names(clean_model) == collect_weight_path_names(
-        reference_model
+    assert collect_logical_weight_path_names(
+        clean_model, "clean"
+    ) == collect_logical_weight_path_names(
+        reference_model, "reference"
     )
 
 
