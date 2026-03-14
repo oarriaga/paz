@@ -1,7 +1,7 @@
 import numpy as np
 from keras import ops
 
-from examples.speech_to_text.layers2.mel_spectrogram import mel_spectrogram
+from .mel_spectrogram import mel_spectrogram
 
 
 def batch_tensor(waveform):

@@ -57,6 +57,8 @@ def token_and_position_embedding(
     start_index=0,
     positions=None,
     dtype="float32",
+    token_embedding_name="token_embedding",
+    position_embedding_name="position_embedding",
 ):
     token_embedding = keras.layers.ReversibleEmbedding(
         vocabulary_size,
@@ -65,7 +67,7 @@ def token_and_position_embedding(
         embeddings_initializer=keras.initializers.get(embeddings_initializer),
         mask_zero=False,
         dtype=dtype,
-        name="token_embedding",
+        name=token_embedding_name,
     )
     embedded_tokens = token_embedding(token_ids)
     embedded_positions = position_embedding(
@@ -76,6 +78,6 @@ def token_and_position_embedding(
         positions,
         True,
         dtype,
-        "position_embedding",
+        position_embedding_name,
     )
     return embedded_tokens + embedded_positions

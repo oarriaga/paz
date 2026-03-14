@@ -1,9 +1,9 @@
 import keras
 
-from examples.speech_to_text.layers2.attention import attention
-from examples.speech_to_text.layers2.attention import build_decoder_self_attention_mask
-from examples.speech_to_text.layers2.attention import build_padding_attention_mask
-from examples.speech_to_text.layers2.encoder import kernel_initializer
+from .attention import attention
+from .attention import build_decoder_self_attention_mask
+from .attention import build_padding_attention_mask
+from .encoder import kernel_initializer
 
 
 def self_attention_block(
@@ -14,6 +14,7 @@ def self_attention_block(
     dropout=0.0,
     epsilon=1e-5,
     dtype="float32",
+    name="self_attention",
 ):
     residual = decoder_sequence
     attention_mask = build_decoder_self_attention_mask(
@@ -23,7 +24,7 @@ def self_attention_block(
     hidden = keras.layers.LayerNormalization(
         epsilon=epsilon,
         dtype=dtype,
-        name="self_attention_layer_norm",
+        name=f"{name}_layer_norm",
     )(decoder_sequence)
     hidden = attention(
         hidden,
@@ -39,12 +40,12 @@ def self_attention_block(
         kernel_initializer(),
         "zeros",
         dtype,
-        "self_attention",
+        name,
     )
     hidden = keras.layers.Dropout(
         dropout,
         dtype=dtype,
-        name="self_attention_dropout",
+        name=f"{name}_dropout",
     )(hidden)
     return hidden + residual
 
@@ -58,13 +59,14 @@ def cross_attention_block(
     dropout=0.0,
     epsilon=1e-5,
     dtype="float32",
+    name="cross_attention",
 ):
     residual = decoder_sequence
     attention_mask = build_padding_attention_mask(encoder_padding_mask)
     hidden = keras.layers.LayerNormalization(
         epsilon=epsilon,
         dtype=dtype,
-        name="cross_attention_layer_norm",
+        name=f"{name}_layer_norm",
     )(decoder_sequence)
     hidden = attention(
         hidden,
@@ -80,12 +82,12 @@ def cross_attention_block(
         kernel_initializer(),
         "zeros",
         dtype,
-        "cross_attention",
+        name,
     )
     hidden = keras.layers.Dropout(
         dropout,
         dtype=dtype,
-        name="cross_attention_dropout",
+        name=f"{name}_dropout",
     )(hidden)
     return hidden + residual
 
@@ -96,12 +98,13 @@ def feedforward_block(
     dropout=0.0,
     epsilon=1e-5,
     dtype="float32",
+    name="feedforward",
 ):
     residual = inputs
     hidden = keras.layers.LayerNormalization(
         epsilon=epsilon,
         dtype=dtype,
-        name="feedforward_layer_norm",
+        name=f"{name}_layer_norm",
     )(inputs)
     hidden = keras.layers.Dense(
         intermediate_dim,
@@ -109,19 +112,19 @@ def feedforward_block(
         kernel_initializer=kernel_initializer(),
         bias_initializer="zeros",
         dtype=dtype,
-        name="feedforward_intermediate_dense",
+        name=f"{name}_intermediate_dense",
     )(hidden)
     hidden = keras.layers.Dense(
         inputs.shape[-1],
         kernel_initializer=kernel_initializer(),
         bias_initializer="zeros",
         dtype=dtype,
-        name="feedforward_output_dense",
+        name=f"{name}_output_dense",
     )(hidden)
     hidden = keras.layers.Dropout(
         dropout,
         dtype=dtype,
-        name="feedforward_dropout",
+        name=f"{name}_dropout",
     )(hidden)
     return hidden + residual
 
@@ -136,6 +139,7 @@ def decoder_block(
     dropout=0.0,
     epsilon=1e-5,
     dtype="float32",
+    name="transformer_decoder_layer",
 ):
     hidden_dim = decoder_sequence.shape[-1]
     if hidden_dim is None:
@@ -149,6 +153,7 @@ def decoder_block(
         dropout,
         epsilon,
         dtype,
+        f"{name}_self_attention",
     )
     hidden = cross_attention_block(
         hidden,
@@ -159,6 +164,7 @@ def decoder_block(
         dropout,
         epsilon,
         dtype,
+        f"{name}_cross_attention",
     )
     return feedforward_block(
         hidden,
@@ -166,4 +172,5 @@ def decoder_block(
         dropout,
         epsilon,
         dtype,
+        f"{name}_feedforward",
     )
