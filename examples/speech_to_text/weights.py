@@ -8,9 +8,6 @@ from pathlib import Path
 import keras
 import numpy as np
 
-from examples.speech_to_text.model import build_whisper_base_en_decoder_model
-from examples.speech_to_text.model import build_whisper_base_en_encoder_model
-from examples.speech_to_text.model import build_whisper_base_en_logits_model
 from examples.speech_to_text.model import find_whisper_variant_values
 from examples.speech_to_text.model import get_whisper_variant_names
 
@@ -172,56 +169,34 @@ def build_reference_whisper_base_en_preset_model(
     )
 
 
-def build_preset_loaded_whisper_base_en_logits_model(
-    dtype="float32", name="whisper_base_en_logits"
-):
-    reference_model = build_reference_whisper_base_en_preset_model(dtype=dtype)
-    clean_model = build_whisper_base_en_logits_model(dtype=dtype, name=name)
-    model_inputs = build_whisper_base_en_parity_inputs()
-    call_reference_model(reference_model, *model_inputs)
-    clean_model(model_inputs)
-    copy_matching_weights(clean_model, reference_model)
-    return clean_model
-
-
-def build_preset_loaded_whisper_base_en_encoder_model(
-    dtype="float32", name="whisper_base_en_encoder"
-):
-    reference_model = build_reference_whisper_base_en_preset_model(dtype=dtype)
-    clean_model = build_whisper_base_en_encoder_model(dtype=dtype, name=name)
-    encoder_features, decoder_token_ids, decoder_padding_mask = (
-        build_whisper_base_en_parity_inputs()
+def load_preset_weights(clean_model, variant_name, model_kind, dtype="float32"):
+    reference_model = build_reference_whisper_preset_model(
+        variant_name, dtype=dtype
     )
-    call_reference_model(
+    encoder_features, decoder_token_ids, decoder_padding_mask = (
+        build_whisper_parity_inputs()
+    )
+    reference_outputs = call_reference_model(
         reference_model,
         encoder_features,
         decoder_token_ids,
         decoder_padding_mask,
     )
-    clean_model(encoder_features)
-    copy_matching_encoder_weights(clean_model, reference_model)
-    return clean_model
-
-
-def build_preset_loaded_whisper_base_en_decoder_model(
-    dtype="float32", name="whisper_base_en_decoder"
-):
-    reference_model = build_reference_whisper_base_en_preset_model(dtype=dtype)
-    clean_model = build_whisper_base_en_decoder_model(dtype=dtype, name=name)
-    encoder_features, decoder_token_ids, decoder_padding_mask = (
-        build_whisper_base_en_parity_inputs()
-    )
-    reference_encoder_output = call_reference_model(
-        reference_model,
-        encoder_features,
-        decoder_token_ids,
-        decoder_padding_mask,
-    )[0]
-    clean_model(
-        [decoder_token_ids, decoder_padding_mask, reference_encoder_output]
-    )
-    copy_matching_decoder_weights(clean_model, reference_model)
-    return clean_model
+    if model_kind == "full":
+        clean_model([encoder_features, decoder_token_ids, decoder_padding_mask])
+        copy_matching_weights(clean_model, reference_model)
+        return clean_model
+    if model_kind == "encoder":
+        clean_model(encoder_features)
+        copy_matching_encoder_weights(clean_model, reference_model)
+        return clean_model
+    if model_kind == "decoder":
+        clean_model(
+            [decoder_token_ids, decoder_padding_mask, reference_outputs[0]]
+        )
+        copy_matching_decoder_weights(clean_model, reference_model)
+        return clean_model
+    raise ValueError("Unknown Whisper model kind: {}".format(model_kind))
 
 
 def build_reference_whisper_preset_model(

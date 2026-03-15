@@ -1,5 +1,4 @@
 import gc
-import inspect
 from pathlib import Path
 
 import keras
@@ -8,17 +7,13 @@ import pytest
 from keras import ops
 
 import examples.speech_to_text.model as whisper_model
+from examples.speech_to_text.model import find_whisper_variant_config
+from examples.speech_to_text.model import Whisper
+from examples.speech_to_text.model import WhisperBaseEn
+from examples.speech_to_text.model import WhisperDecoder
+from examples.speech_to_text.model import WhisperEncoder
+from examples.speech_to_text.model import WhisperFrontend
 from examples.speech_to_text.model import WHISPER_VARIANTS
-from examples.speech_to_text.model import build_whisper_audio_frontend
-from examples.speech_to_text.model import build_whisper_base_en_decoder_model
-from examples.speech_to_text.model import build_whisper_base_en_encoder_model
-from examples.speech_to_text.model import build_whisper_base_en_logits_model
-from examples.speech_to_text.model import build_whisper_base_en_waveform_to_features_model
-from examples.speech_to_text.model import build_whisper_core_logits_model
-from examples.speech_to_text.model import build_whisper_core_model
-from examples.speech_to_text.model import build_whisper_decoder_model
-from examples.speech_to_text.model import build_whisper_encoder_model
-from examples.speech_to_text.model import build_whisper_waveform_to_features_model
 from examples.speech_to_text.model import get_whisper_variant_names
 from examples.speech_to_text.weights import build_missing_whisper_preset_message
 from examples.speech_to_text.weights import build_reference_whisper_base_en_preset_model
@@ -31,12 +26,13 @@ from examples.speech_to_text.weights import collect_logical_weight_path_names
 from examples.speech_to_text.weights import collect_weight_path_names
 from examples.speech_to_text.weights import copy_matching_weights
 from examples.speech_to_text.weights import find_whisper_base_en_preset_dir
+from examples.speech_to_text.weights import find_whisper_preset_dir
 from examples.speech_to_text.weights import load_reference_whisper_preset_names
 
 
 def test_encoder_model_matches_reference():
     reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
-    clean_model = build_whisper_encoder_model(1, 2, 4, 8, 80, 0.0, 6)
+    clean_model = WhisperEncoder(1, 2, 4, 8, 80, 0.0, 6)
     encoder_features = ops.ones((1, 5, 80), dtype="float32")
     reference_model(
         {
@@ -56,7 +52,7 @@ def test_encoder_model_matches_reference():
 
 def test_model_param_count_matches_reference():
     reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
-    clean_model = build_whisper_core_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
+    clean_model = Whisper(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     encoder_features = ops.ones((1, 5, 80), dtype="float32")
     decoder_token_ids = ops.ones((1, 4), dtype="int32")
     decoder_padding_mask = ops.ones((1, 4), dtype="int32")
@@ -69,7 +65,7 @@ def test_model_param_count_matches_reference():
 
 def test_decoder_model_matches_reference():
     reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
-    clean_model = build_whisper_decoder_model(10, 1, 2, 4, 8, 0.0, 6)
+    clean_model = WhisperDecoder(10, 1, 2, 4, 8, 0.0, 6)
     encoder_features = ops.ones((1, 5, 80), dtype="float32")
     decoder_token_ids = ops.convert_to_tensor([[1, 2, 3, 4]], dtype="int32")
     decoder_padding_mask = ops.ones((1, 4), dtype="int32")
@@ -87,7 +83,7 @@ def test_decoder_model_matches_reference():
 
 def test_small_reference_core_outputs_match_reference():
     reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
-    clean_model = build_whisper_core_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
+    clean_model = Whisper(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     encoder_features = ops.convert_to_tensor(
         np.arange(400.0).reshape((1, 5, 80)), dtype="float32"
     )
@@ -115,7 +111,7 @@ def test_small_reference_core_outputs_match_reference():
 
 def test_small_reference_logits_match_reference():
     reference_model = build_reference_whisper_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
-    clean_model = build_whisper_core_logits_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
+    clean_model = Whisper(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     encoder_features = ops.convert_to_tensor(
         np.arange(400.0).reshape((1, 5, 80)), dtype="float32"
     )
@@ -183,18 +179,9 @@ def test_runtime_files_do_not_import_keras_hub():
 
 
 def test_base_en_wrapper_matches_generic_builder():
-    wrapped_model = build_whisper_base_en_logits_model()
-    generic_model = build_whisper_core_logits_model(
-        51864,
-        6,
-        8,
-        512,
-        2048,
-        80,
-        0.0,
-        3000,
-        448,
-    )
+    config = find_whisper_variant_config("whisper_base_en")
+    wrapped_model = Whisper(**config)
+    generic_model = Whisper(51864, 6, 8, 512, 2048, 80, 0.0, 3000, 448)
     encoder_features = ops.ones((1, 12, 80), dtype="float32")
     decoder_token_ids = ops.ones((1, 6), dtype="int32")
     decoder_padding_mask = ops.ones((1, 6), dtype="int32")
@@ -207,11 +194,9 @@ def test_base_en_wrapper_matches_generic_builder():
     assert result
 
 
-def test_base_en_encoder_and_decoder_wrappers_match_generic_builders():
-    wrapped_encoder_model = build_whisper_base_en_encoder_model()
-    generic_encoder_model = build_whisper_encoder_model(6, 8, 512, 2048, 80)
-    wrapped_decoder_model = build_whisper_base_en_decoder_model()
-    generic_decoder_model = build_whisper_decoder_model(51864, 6, 8, 512, 2048)
+def test_encoder_and_decoder_constructors_match_expected_shapes():
+    wrapped_encoder_model = WhisperEncoder(6, 8, 512, 2048, 80, 0.0, 3000)
+    wrapped_decoder_model = WhisperDecoder(51864, 6, 8, 512, 2048, 0.0, 448)
     encoder_features = ops.ones((1, 12, 80), dtype="float32")
     encoder_output = wrapped_encoder_model(encoder_features)
     decoder_token_ids = ops.ones((1, 6), dtype="int32")
@@ -219,55 +204,27 @@ def test_base_en_encoder_and_decoder_wrappers_match_generic_builders():
     wrapped_decoder_model(
         [decoder_token_ids, decoder_padding_mask, encoder_output]
     )
-    generic_decoder_model(
-        [decoder_token_ids, decoder_padding_mask, encoder_output]
-    )
-    result = collect_weight_path_names(
-        wrapped_encoder_model
-    ) == collect_weight_path_names(generic_encoder_model)
-    result = result and wrapped_encoder_model.count_params() == (
-        generic_encoder_model.count_params()
-    )
-    result = result and collect_weight_path_names(
-        wrapped_decoder_model
-    ) == collect_weight_path_names(generic_decoder_model)
-    result = result and wrapped_decoder_model.count_params() == (
-        generic_decoder_model.count_params()
+    result = tuple(wrapped_encoder_model.output_shape) == (None, None, 512)
+    result = result and tuple(wrapped_decoder_model.output_shape) == (
+        None,
+        None,
+        512,
     )
     assert result
 
 
-def test_waveform_to_features_builder_matches_audio_frontend():
-    wrapped_model = build_whisper_waveform_to_features_model(
-        80, 400, 100, 100, 5
-    )
-    generic_model = build_whisper_audio_frontend(80, 400, 100, 100, 5)
+def test_frontend_constructor_has_expected_output_shape():
+    wrapped_model = WhisperFrontend(80, 400, 100, 100, 5)
     waveform = ops.ones((1, 2), dtype="float32")
     wrapped_output = wrapped_model(waveform)
-    generic_output = generic_model(waveform)
-    result = tuple(wrapped_output.shape) == tuple(generic_output.shape)
-    result = result and wrapped_model.count_params() == generic_model.count_params()
-    assert result
-
-
-def test_base_en_waveform_frontend_matches_generic_builder():
-    wrapped_model = build_whisper_base_en_waveform_to_features_model()
-    generic_model = build_whisper_waveform_to_features_model(
-        80, 400, 160, 16000, 30
-    )
-    waveform = ops.expand_dims(build_whisper_frontend_waveform(), axis=0)
-    wrapped_output = wrapped_model(waveform)
-    generic_output = generic_model(waveform)
-    result = tuple(wrapped_output.shape) == tuple(generic_output.shape)
-    result = result and wrapped_model.count_params() == generic_model.count_params()
-    assert result
+    assert tuple(wrapped_output.shape) == (1, 5, 80)
 
 
 def test_base_en_waveform_frontend_output_fits_encoder_interface(
     clear_keras_session,
 ):
-    frontend_model = build_whisper_base_en_waveform_to_features_model()
-    encoder_model = build_whisper_encoder_model(6, 8, 512, 2048, 80, 0.0, 3000)
+    frontend_model = WhisperFrontend()
+    encoder_model = WhisperEncoder(6, 8, 512, 2048, 80, 0.0, 3000)
     waveform = ops.expand_dims(build_whisper_frontend_waveform(), axis=0)
     encoder_features = frontend_model(waveform)
     encoder_output = encoder_model(encoder_features)
@@ -277,7 +234,7 @@ def test_base_en_waveform_frontend_output_fits_encoder_interface(
 
 
 def test_logits_use_tied_decoder_embedding():
-    model = build_whisper_core_logits_model(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
+    model = Whisper(10, 1, 2, 4, 8, 80, 0.0, 6, 6)
     encoder_features = ops.convert_to_tensor(
         np.arange(400.0).reshape((1, 5, 80)), dtype="float32"
     )
@@ -299,13 +256,12 @@ def test_logits_use_tied_decoder_embedding():
     assert result
 
 
-def test_all_whisper_variant_builders_exist():
+def test_all_whisper_variant_constructors_exist():
     preset_names = load_reference_whisper_preset_names()
     result = get_whisper_variant_names() == preset_names
     for variant_name in preset_names:
-        result = result and hasattr(whisper_model, "build_{}_model".format(variant_name))
         result = result and hasattr(
-            whisper_model, "build_{}_logits_model".format(variant_name)
+            whisper_model, build_constructor_name(variant_name)
         )
     assert result
 
@@ -318,44 +274,7 @@ def test_all_whisper_variant_builders_exist():
     ),
     WHISPER_VARIANTS,
 )
-def test_variant_wrapper_uses_shared_variant_helper(
-    variant_name,
-    vocabulary_size,
-    num_layers,
-    num_heads,
-    hidden_dim,
-    intermediate_dim,
-    num_mels,
-    max_encoder_sequence_length,
-    max_decoder_sequence_length,
-    is_multilingual,
-):
-    builder = getattr(whisper_model, "build_{}_model".format(variant_name))
-    logits_builder = getattr(
-        whisper_model, "build_{}_logits_model".format(variant_name)
-    )
-    builder_source = inspect.getsource(builder)
-    logits_source = inspect.getsource(logits_builder)
-    result = "build_whisper_variant_model" in builder_source
-    result = result and "build_whisper_variant_logits_model" in logits_source
-    result = result and variant_name in builder_source
-    result = result and variant_name in logits_source
-    result = result and str(vocabulary_size) not in builder_source
-    result = result and str(vocabulary_size) not in logits_source
-    result = result and str(is_multilingual) not in builder_source
-    result = result and str(is_multilingual) not in logits_source
-    assert result
-
-
-@pytest.mark.parametrize(
-    (
-        "variant_name,vocabulary_size,num_layers,num_heads,hidden_dim,"
-        "intermediate_dim,num_mels,max_encoder_sequence_length,"
-        "max_decoder_sequence_length,is_multilingual"
-    ),
-    WHISPER_VARIANTS,
-)
-def test_variant_models_build_and_match_metadata(
+def test_variant_random_models_build_and_match_metadata(
     clear_keras_session,
     variant_name,
     vocabulary_size,
@@ -368,29 +287,80 @@ def test_variant_models_build_and_match_metadata(
     max_decoder_sequence_length,
     is_multilingual,
 ):
-    core_builder = getattr(whisper_model, "build_{}_model".format(variant_name))
-    logits_builder = getattr(
-        whisper_model, "build_{}_logits_model".format(variant_name)
+    config = find_whisper_variant_config(variant_name)
+    core_builder = lambda: Whisper(**config)
+    encoder_builder = lambda: WhisperEncoder(
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        num_mels,
+        0.0,
+        max_encoder_sequence_length,
+    )
+    decoder_builder = lambda: WhisperDecoder(
+        vocabulary_size,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        0.0,
+        max_decoder_sequence_length,
     )
     core_input_shapes, core_output_shapes = build_core_model_shapes(core_builder)
     clear_model_session()
-    logits_input_shapes, logits_output_shapes, logits_paths, has_embedding = (
-        build_logits_model_shapes(logits_builder)
+    encoder_input_shape, encoder_output_shape = build_encoder_model_shapes(
+        encoder_builder
     )
+    clear_model_session()
+    decoder_input_shapes, decoder_output_shape = build_decoder_model_shapes(
+        decoder_builder, hidden_dim
+    )
+    clear_model_session()
     result = len(core_input_shapes) == 3
-    result = result and len(core_output_shapes) == 2
+    result = result and len(core_output_shapes) == 3
     result = result and core_input_shapes[0][-1] == num_mels
     result = result and core_output_shapes[0][-1] == hidden_dim
     result = result and core_output_shapes[1][-1] == hidden_dim
-    result = result and len(logits_input_shapes) == 3
-    result = result and len(logits_output_shapes) == 3
-    result = result and logits_input_shapes[0][-1] == num_mels
-    result = result and logits_output_shapes[0][-1] == hidden_dim
-    result = result and logits_output_shapes[1][-1] == hidden_dim
-    result = result and logits_output_shapes[2][-1] == vocabulary_size
-    result = result and has_embedding
-    result = result and not any("logits" in path for path in logits_paths)
+    result = result and core_output_shapes[2][-1] == vocabulary_size
+    result = result and encoder_input_shape[-1] == num_mels
+    result = result and encoder_output_shape[-1] == hidden_dim
+    result = result and len(decoder_input_shapes) == 3
+    result = result and decoder_input_shapes[2][-1] == hidden_dim
+    result = result and decoder_output_shape[-1] == hidden_dim
+    result = result and build_constructor_name(variant_name).startswith(
+        "Whisper"
+    )
     assert result
+
+
+@pytest.mark.parametrize("variant_name", get_whisper_variant_names())
+def test_variant_constructors_match_local_preset_availability(
+    clear_keras_session, variant_name
+):
+    constructor_name = build_constructor_name(variant_name)
+    constructor = getattr(whisper_model, constructor_name)
+    preset_dir = find_whisper_preset_dir(variant_name)
+    if preset_dir is None:
+        with pytest.raises(FileNotFoundError):
+            constructor()
+        return
+    assert constructor() is not None
+
+
+def test_base_en_named_constructor_matches_config():
+    config = find_whisper_variant_config("whisper_base_en")
+    assert config == {
+        "vocabulary_size": 51864,
+        "num_layers": 6,
+        "num_heads": 8,
+        "hidden_dim": 512,
+        "intermediate_dim": 2048,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    }
 
 
 def filter_encoder_paths(paths):
@@ -409,14 +379,18 @@ def filter_decoder_paths(paths):
     return filtered
 
 
+def build_constructor_name(variant_name):
+    variant_name = variant_name.replace("whisper_", "")
+    words = variant_name.split("_")
+    words = [word.capitalize() for word in words]
+    return "Whisper{}".format("".join(words))
+
+
 def build_base_en_preset_parity_state():
     skip_if_base_en_preset_missing()
     reference_model = build_reference_whisper_base_en_preset_model()
-    clean_model = build_whisper_base_en_logits_model()
+    clean_model = WhisperBaseEn()
     model_inputs = build_whisper_base_en_parity_inputs()
-    call_reference_model(reference_model, *model_inputs)
-    clean_model(model_inputs)
-    copy_matching_weights(clean_model, reference_model)
     return clean_model, reference_model, model_inputs
 
 
@@ -433,14 +407,26 @@ def build_core_model_shapes(builder):
     return input_shapes, output_shapes
 
 
-def build_logits_model_shapes(builder):
+def build_encoder_model_shapes(builder):
     model = builder()
-    input_shapes = tuple(tuple(shape) for shape in model.input_shape)
-    output_shapes = tuple(tuple(shape) for shape in model.output_shape)
-    paths = collect_weight_path_names(model)
-    has_embedding = model.get_layer("decoder_token_embedding") is not None
+    input_shape = tuple(model.input_shape)
+    output_shape = tuple(model.output_shape)
     del model
-    return input_shapes, output_shapes, paths, has_embedding
+    return input_shape, output_shape
+
+
+def build_decoder_model_shapes(builder, hidden_dim):
+    model = builder()
+    decoder_token_ids = ops.ones((1, 6), dtype="int32")
+    decoder_padding_mask = ops.ones((1, 6), dtype="int32")
+    encoder_output = ops.ones((1, 6, hidden_dim), dtype="float32")
+    decoder_output = model(
+        [decoder_token_ids, decoder_padding_mask, encoder_output]
+    )
+    input_shapes = tuple(tuple(shape) for shape in model.input_shape)
+    output_shape = tuple(decoder_output.shape)
+    del model
+    return input_shapes, output_shape
 
 
 def clear_model_session():

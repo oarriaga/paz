@@ -48,6 +48,14 @@ def compute_argmax_token_id_from_decoder_model(
     return compute_argmax_token_id(logits, len(token_ids))
 
 
+def compute_argmax_token_id_from_model(model, encoder_features, token_ids):
+    decoder_token_ids, padding_mask = build_decoder_token_ids_and_padding_mask(
+        token_ids
+    )
+    logits = model([encoder_features, decoder_token_ids, padding_mask])[2]
+    return compute_argmax_token_id(logits, len(token_ids))
+
+
 def decode_token_ids(
     next_token_id_function,
     initial_token_ids,

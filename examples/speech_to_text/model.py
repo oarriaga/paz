@@ -3,167 +3,224 @@ from keras import Model
 from keras import ops
 from keras.layers import Input
 
+from examples.speech_to_text.layers import build_mel_filters
 from examples.speech_to_text.layers import decoder_block
 from examples.speech_to_text.layers import encoder_block
 from examples.speech_to_text.layers import frontend
-from examples.speech_to_text.layers import build_mel_filters
 from examples.speech_to_text.layers import kernel_initializer
 from examples.speech_to_text.layers import position_embedding
 
 
-# Field order:
-# variant_name, vocabulary_size, num_layers, num_heads, hidden_dim,
-# intermediate_dim, num_mels, max_encoder_sequence_length,
-# max_decoder_sequence_length, is_multilingual
-WHISPER_VARIANTS = (
-    ("whisper_tiny_en", 51864, 4, 6, 384, 1536, 80, 3000, 448, False),
-    ("whisper_base_en", 51864, 6, 8, 512, 2048, 80, 3000, 448, False),
-    ("whisper_small_en", 51864, 12, 12, 768, 3072, 80, 3000, 448, False),
-    ("whisper_medium_en", 51864, 24, 16, 1024, 4096, 80, 3000, 448, False),
-    ("whisper_tiny_multi", 51865, 4, 6, 384, 1536, 80, 3000, 448, True),
-    ("whisper_base_multi", 51865, 6, 8, 512, 2048, 80, 3000, 448, True),
-    ("whisper_small_multi", 51865, 12, 12, 768, 3072, 80, 3000, 448, True),
-    ("whisper_medium_multi", 51865, 24, 16, 1024, 4096, 80, 3000, 448, True),
-    ("whisper_large_multi", 51865, 32, 20, 1280, 5120, 80, 3000, 448, True),
+WHISPER_CONFIGS = {
+    "whisper_tiny_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 4,
+        "num_heads": 6,
+        "hidden_dim": 384,
+        "intermediate_dim": 1536,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_base_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 6,
+        "num_heads": 8,
+        "hidden_dim": 512,
+        "intermediate_dim": 2048,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_small_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 12,
+        "num_heads": 12,
+        "hidden_dim": 768,
+        "intermediate_dim": 3072,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_medium_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 24,
+        "num_heads": 16,
+        "hidden_dim": 1024,
+        "intermediate_dim": 4096,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_tiny_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 4,
+        "num_heads": 6,
+        "hidden_dim": 384,
+        "intermediate_dim": 1536,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_base_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 6,
+        "num_heads": 8,
+        "hidden_dim": 512,
+        "intermediate_dim": 2048,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_small_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 12,
+        "num_heads": 12,
+        "hidden_dim": 768,
+        "intermediate_dim": 3072,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_medium_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 24,
+        "num_heads": 16,
+        "hidden_dim": 1024,
+        "intermediate_dim": 4096,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_large_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 32,
+        "num_heads": 20,
+        "hidden_dim": 1280,
+        "intermediate_dim": 5120,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_large_multi_v2": {
+        "vocabulary_size": 51865,
+        "num_layers": 32,
+        "num_heads": 20,
+        "hidden_dim": 1280,
+        "intermediate_dim": 5120,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+}
+
+WHISPER_VARIANTS = tuple(
     (
-        "whisper_large_multi_v2",
-        51865,
-        32,
-        20,
-        1280,
-        5120,
-        80,
-        3000,
-        448,
-        True,
-    ),
+        variant_name,
+        config["vocabulary_size"],
+        config["num_layers"],
+        config["num_heads"],
+        config["hidden_dim"],
+        config["intermediate_dim"],
+        config["num_mels"],
+        config["max_encoder_sequence_length"],
+        config["max_decoder_sequence_length"],
+        config["vocabulary_size"] == 51865,
+    )
+    for variant_name, config in WHISPER_CONFIGS.items()
 )
 
 
 def get_whisper_variant_names():
-    return tuple(variant_values[0] for variant_values in WHISPER_VARIANTS)
+    return tuple(WHISPER_CONFIGS.keys())
+
+
+def find_whisper_variant_config(variant_name):
+    if variant_name not in WHISPER_CONFIGS:
+        raise ValueError("Unknown Whisper variant: {}".format(variant_name))
+    return dict(WHISPER_CONFIGS[variant_name])
 
 
 def find_whisper_variant_values(variant_name):
-    for variant_values in WHISPER_VARIANTS:
-        if variant_values[0] == variant_name:
-            return variant_values
-    raise ValueError("Unknown Whisper variant: {}".format(variant_name))
-
-
-def build_whisper_variant_model(
-    variant_name, dtype="float32", name=None
-):
-    variant_values = find_whisper_variant_values(variant_name)
-    if name is None:
-        name = variant_name
-    (
-        _,
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        num_mels,
-        max_encoder_sequence_length,
-        max_decoder_sequence_length,
-        _,
-    ) = variant_values
-    return build_whisper_core_model(
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        num_mels,
-        0.0,
-        max_encoder_sequence_length,
-        max_decoder_sequence_length,
-        dtype,
-        name,
+    config = find_whisper_variant_config(variant_name)
+    return (
+        variant_name,
+        config["vocabulary_size"],
+        config["num_layers"],
+        config["num_heads"],
+        config["hidden_dim"],
+        config["intermediate_dim"],
+        config["num_mels"],
+        config["max_encoder_sequence_length"],
+        config["max_decoder_sequence_length"],
+        config["vocabulary_size"] == 51865,
     )
 
 
-def build_whisper_variant_logits_model(
-    variant_name, dtype="float32", name=None
-):
-    variant_values = find_whisper_variant_values(variant_name)
-    if name is None:
-        name = "{}_logits".format(variant_name)
-    (
-        _,
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        num_mels,
-        max_encoder_sequence_length,
-        max_decoder_sequence_length,
-        _,
-    ) = variant_values
-    return build_whisper_core_logits_model(
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        num_mels,
-        0.0,
-        max_encoder_sequence_length,
-        max_decoder_sequence_length,
-        dtype,
-        name,
-    )
-
-
-def build_whisper_audio_frontend(
+def Whisper(
+    vocabulary_size,
+    num_layers,
+    num_heads,
+    hidden_dim,
+    intermediate_dim,
     num_mels=80,
-    num_fft_bins=400,
-    stride=160,
-    sampling_rate=16000,
-    max_audio_length=30,
+    dropout=0.0,
+    max_encoder_sequence_length=3000,
+    max_decoder_sequence_length=448,
     dtype="float32",
-    name="whisper_audio_frontend",
+    name="whisper",
+    preset_name=None,
 ):
-    waveform = Input(
-        shape=(None,),
-        dtype="float32",
-        name="waveform",
+    encoder_features, decoder_token_ids, decoder_padding_mask = build_inputs(
+        num_mels
     )
-    features = apply_whisper_audio_frontend(
-        waveform,
-        num_mels,
-        num_fft_bins,
-        stride,
-        sampling_rate,
-        max_audio_length,
+    encoder_output = apply_encoder(
+        encoder_features,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        dropout,
+        max_encoder_sequence_length,
         dtype,
     )
-    return Model(waveform, features, name=name)
-
-
-def build_whisper_waveform_to_features_model(
-    num_mels=80,
-    num_fft_bins=400,
-    stride=160,
-    sampling_rate=16000,
-    max_audio_length=30,
-    dtype="float32",
-    name="whisper_waveform_to_features",
-):
-    return build_whisper_audio_frontend(
-        num_mels,
-        num_fft_bins,
-        stride,
-        sampling_rate,
-        max_audio_length,
+    decoder_output, decoder_embeddings = apply_decoder(
+        decoder_token_ids,
+        decoder_padding_mask,
+        encoder_output,
+        vocabulary_size,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        dropout,
+        max_decoder_sequence_length,
         dtype,
-        name,
     )
+    logits = decoder_embeddings(decoder_output, reverse=True)
+    model = Model(
+        [encoder_features, decoder_token_ids, decoder_padding_mask],
+        [encoder_output, decoder_output, logits],
+        name=name,
+    )
+    if preset_name is not None:
+        from examples.speech_to_text.weights import load_preset_weights
+
+        load_preset_weights(model, preset_name, "full", dtype=dtype)
+    return model
 
 
-def build_whisper_encoder_model(
+def WhisperEncoder(
     num_layers,
     num_heads,
     hidden_dim,
@@ -179,7 +236,7 @@ def build_whisper_encoder_model(
         dtype="float32",
         name="encoder_features",
     )
-    encoder_output = apply_whisper_encoder(
+    encoder_output = apply_encoder(
         encoder_features,
         num_layers,
         num_heads,
@@ -192,7 +249,7 @@ def build_whisper_encoder_model(
     return Model(encoder_features, encoder_output, name=name)
 
 
-def build_whisper_decoder_model(
+def WhisperDecoder(
     vocabulary_size,
     num_layers,
     num_heads,
@@ -213,55 +270,12 @@ def build_whisper_decoder_model(
         dtype="int32",
         name="decoder_padding_mask",
     )
-    encoder_sequence_output = Input(
+    encoder_output = Input(
         shape=(None, hidden_dim),
         dtype=dtype,
         name="encoder_sequence_output",
     )
-    decoder_output, _ = apply_whisper_decoder(
-        decoder_token_ids,
-        decoder_padding_mask,
-        encoder_sequence_output,
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        dropout,
-        max_decoder_sequence_length,
-        dtype,
-    )
-    inputs = [decoder_token_ids, decoder_padding_mask, encoder_sequence_output]
-    return Model(inputs, decoder_output, name=name)
-
-
-def build_whisper_core_model(
-    vocabulary_size,
-    num_layers,
-    num_heads,
-    hidden_dim,
-    intermediate_dim,
-    num_mels=80,
-    dropout=0.0,
-    max_encoder_sequence_length=3000,
-    max_decoder_sequence_length=448,
-    dtype="float32",
-    name="whisper_core",
-):
-    encoder_features, decoder_token_ids, decoder_padding_mask = build_model_inputs(
-        num_mels
-    )
-    encoder_output = apply_whisper_encoder(
-        encoder_features,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        dropout,
-        max_encoder_sequence_length,
-        dtype,
-    )
-    decoder_output, _ = apply_whisper_decoder(
+    decoder_output, _ = apply_decoder(
         decoder_token_ids,
         decoder_padding_mask,
         encoder_output,
@@ -274,198 +288,93 @@ def build_whisper_core_model(
         max_decoder_sequence_length,
         dtype,
     )
-    inputs = [encoder_features, decoder_token_ids, decoder_padding_mask]
-    outputs = [encoder_output, decoder_output]
-    return Model(inputs, outputs, name=name)
+    return Model(
+        [decoder_token_ids, decoder_padding_mask, encoder_output],
+        decoder_output,
+        name=name,
+    )
 
 
-def build_whisper_core_logits_model(
-    vocabulary_size,
-    num_layers,
-    num_heads,
-    hidden_dim,
-    intermediate_dim,
+def WhisperFrontend(
     num_mels=80,
-    dropout=0.0,
-    max_encoder_sequence_length=3000,
-    max_decoder_sequence_length=448,
+    num_fft_bins=400,
+    stride=160,
+    sampling_rate=16000,
+    max_audio_length=30,
     dtype="float32",
-    name="whisper_core_logits",
+    name="whisper_frontend",
 ):
-    encoder_features, decoder_token_ids, decoder_padding_mask = build_model_inputs(
-        num_mels
-    )
-    encoder_output = apply_whisper_encoder(
-        encoder_features,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        dropout,
-        max_encoder_sequence_length,
+    waveform = Input(shape=(None,), dtype="float32", name="waveform")
+    mel_filters = build_mel_filters(
+        num_mels,
+        num_fft_bins,
+        sampling_rate,
         dtype,
     )
-    decoder_output, decoder_embeddings = apply_whisper_decoder(
-        decoder_token_ids,
-        decoder_padding_mask,
-        encoder_output,
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
-        dropout,
-        max_decoder_sequence_length,
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype=dtype)
+    features = frontend(
+        waveform,
+        mel_filters,
+        num_fft_bins,
+        stride,
+        sampling_rate,
+        max_audio_length,
         dtype,
     )
-    logits = decoder_embeddings(decoder_output, reverse=True)
-    inputs = [encoder_features, decoder_token_ids, decoder_padding_mask]
-    outputs = [encoder_output, decoder_output, logits]
-    return Model(inputs, outputs, name=name)
+    return Model(waveform, features, name=name)
 
 
-def build_whisper_base_en_model(dtype="float32", name="whisper_base_en"):
-    return build_whisper_variant_model("whisper_base_en", dtype, name)
+def WhisperTinyEn(dtype="float32", name="whisper_tiny_en"):
+    return build_variant("whisper_tiny_en", dtype, name)
 
 
-def build_whisper_base_en_encoder_model(
-    dtype="float32", name="whisper_base_en_encoder"
-):
-    return build_whisper_encoder_model(6, 8, 512, 2048, 80, 0.0, 3000, dtype, name)
+def WhisperBaseEn(dtype="float32", name="whisper_base_en"):
+    return build_variant("whisper_base_en", dtype, name)
 
 
-def build_whisper_base_en_decoder_model(
-    dtype="float32", name="whisper_base_en_decoder"
-):
-    return build_whisper_decoder_model(
-        51864, 6, 8, 512, 2048, 0.0, 448, dtype, name
+def WhisperSmallEn(dtype="float32", name="whisper_small_en"):
+    return build_variant("whisper_small_en", dtype, name)
+
+
+def WhisperMediumEn(dtype="float32", name="whisper_medium_en"):
+    return build_variant("whisper_medium_en", dtype, name)
+
+
+def WhisperTinyMulti(dtype="float32", name="whisper_tiny_multi"):
+    return build_variant("whisper_tiny_multi", dtype, name)
+
+
+def WhisperBaseMulti(dtype="float32", name="whisper_base_multi"):
+    return build_variant("whisper_base_multi", dtype, name)
+
+
+def WhisperSmallMulti(dtype="float32", name="whisper_small_multi"):
+    return build_variant("whisper_small_multi", dtype, name)
+
+
+def WhisperMediumMulti(dtype="float32", name="whisper_medium_multi"):
+    return build_variant("whisper_medium_multi", dtype, name)
+
+
+def WhisperLargeMulti(dtype="float32", name="whisper_large_multi"):
+    return build_variant("whisper_large_multi", dtype, name)
+
+
+def WhisperLargeMultiV2(dtype="float32", name="whisper_large_multi_v2"):
+    return build_variant("whisper_large_multi_v2", dtype, name)
+
+
+def build_variant(variant_name, dtype, name):
+    config = find_whisper_variant_config(variant_name)
+    return Whisper(
+        dtype=dtype,
+        name=name,
+        preset_name=variant_name,
+        **config,
     )
 
 
-def build_whisper_tiny_en_model(dtype="float32", name="whisper_tiny_en"):
-    return build_whisper_variant_model("whisper_tiny_en", dtype, name)
-
-
-def build_whisper_small_en_model(dtype="float32", name="whisper_small_en"):
-    return build_whisper_variant_model("whisper_small_en", dtype, name)
-
-
-def build_whisper_medium_en_model(
-    dtype="float32", name="whisper_medium_en"
-):
-    return build_whisper_variant_model("whisper_medium_en", dtype, name)
-
-
-def build_whisper_base_en_logits_model(
-    dtype="float32", name="whisper_base_en_logits"
-):
-    return build_whisper_variant_logits_model("whisper_base_en", dtype, name)
-
-
-def build_whisper_tiny_en_logits_model(
-    dtype="float32", name="whisper_tiny_en_logits"
-):
-    return build_whisper_variant_logits_model("whisper_tiny_en", dtype, name)
-
-
-def build_whisper_small_en_logits_model(
-    dtype="float32", name="whisper_small_en_logits"
-):
-    return build_whisper_variant_logits_model("whisper_small_en", dtype, name)
-
-
-def build_whisper_medium_en_logits_model(
-    dtype="float32", name="whisper_medium_en_logits"
-):
-    return build_whisper_variant_logits_model("whisper_medium_en", dtype, name)
-
-
-def build_whisper_tiny_multi_model(dtype="float32", name="whisper_tiny_multi"):
-    return build_whisper_variant_model("whisper_tiny_multi", dtype, name)
-
-
-def build_whisper_base_multi_model(dtype="float32", name="whisper_base_multi"):
-    return build_whisper_variant_model("whisper_base_multi", dtype, name)
-
-
-def build_whisper_small_multi_model(
-    dtype="float32", name="whisper_small_multi"
-):
-    return build_whisper_variant_model("whisper_small_multi", dtype, name)
-
-
-def build_whisper_medium_multi_model(
-    dtype="float32", name="whisper_medium_multi"
-):
-    return build_whisper_variant_model("whisper_medium_multi", dtype, name)
-
-
-def build_whisper_large_multi_model(
-    dtype="float32", name="whisper_large_multi"
-):
-    return build_whisper_variant_model("whisper_large_multi", dtype, name)
-
-
-def build_whisper_large_multi_v2_model(
-    dtype="float32", name="whisper_large_multi_v2"
-):
-    return build_whisper_variant_model("whisper_large_multi_v2", dtype, name)
-
-
-def build_whisper_tiny_multi_logits_model(
-    dtype="float32", name="whisper_tiny_multi_logits"
-):
-    return build_whisper_variant_logits_model("whisper_tiny_multi", dtype, name)
-
-
-def build_whisper_base_multi_logits_model(
-    dtype="float32", name="whisper_base_multi_logits"
-):
-    return build_whisper_variant_logits_model("whisper_base_multi", dtype, name)
-
-
-def build_whisper_small_multi_logits_model(
-    dtype="float32", name="whisper_small_multi_logits"
-):
-    return build_whisper_variant_logits_model("whisper_small_multi", dtype, name)
-
-
-def build_whisper_medium_multi_logits_model(
-    dtype="float32", name="whisper_medium_multi_logits"
-):
-    return build_whisper_variant_logits_model("whisper_medium_multi", dtype, name)
-
-
-def build_whisper_large_multi_logits_model(
-    dtype="float32", name="whisper_large_multi_logits"
-):
-    return build_whisper_variant_logits_model("whisper_large_multi", dtype, name)
-
-
-def build_whisper_large_multi_v2_logits_model(
-    dtype="float32", name="whisper_large_multi_v2_logits"
-):
-    return build_whisper_variant_logits_model(
-        "whisper_large_multi_v2", dtype, name
-    )
-
-
-def build_whisper_base_en_waveform_to_features_model(
-    dtype="float32",
-    name="whisper_base_en_waveform_to_features",
-):
-    return build_whisper_waveform_to_features_model(
-        80,
-        400,
-        160,
-        16000,
-        30,
-        dtype,
-        name,
-    )
-
-
-def build_model_inputs(num_mels):
+def build_inputs(num_mels):
     encoder_features = Input(
         shape=(None, num_mels),
         dtype="float32",
@@ -484,34 +393,7 @@ def build_model_inputs(num_mels):
     return encoder_features, decoder_token_ids, decoder_padding_mask
 
 
-def apply_whisper_audio_frontend(
-    waveform,
-    num_mels,
-    num_fft_bins,
-    stride,
-    sampling_rate,
-    max_audio_length,
-    dtype,
-):
-    mel_filters = build_mel_filters(
-        num_mels,
-        num_fft_bins,
-        sampling_rate,
-        dtype,
-    )
-    mel_filters = ops.convert_to_tensor(mel_filters, dtype=dtype)
-    return frontend(
-        waveform,
-        mel_filters,
-        num_fft_bins,
-        stride,
-        sampling_rate,
-        max_audio_length,
-        dtype,
-    )
-
-
-def apply_whisper_encoder(
+def apply_encoder(
     encoder_features,
     num_layers,
     num_heads,
@@ -522,7 +404,7 @@ def apply_whisper_encoder(
     dtype,
 ):
     hidden = build_encoder_token_embedding(encoder_features, hidden_dim, dtype)
-    hidden = build_encoder_position_embeddings(
+    hidden = build_encoder_position_embedding(
         hidden, dropout, max_encoder_sequence_length, dtype
     )
     for layer_index in range(num_layers):
@@ -533,18 +415,17 @@ def apply_whisper_encoder(
             dropout,
             1e-5,
             dtype,
-            f"transformer_encoder_layer_{layer_index}",
+            "transformer_encoder_layer_{}".format(layer_index),
         )
-    hidden = keras.layers.LayerNormalization(
+    return keras.layers.LayerNormalization(
         axis=-1,
         epsilon=1e-5,
         dtype=dtype,
         name="encoder_layer_norm",
     )(hidden)
-    return hidden
 
 
-def apply_whisper_decoder(
+def apply_decoder(
     decoder_token_ids,
     decoder_padding_mask,
     encoder_output,
@@ -597,7 +478,7 @@ def apply_whisper_decoder(
             dropout,
             1e-5,
             dtype,
-            f"transformer_decoder_layer_{layer_index}",
+            "transformer_decoder_layer_{}".format(layer_index),
         )
     hidden = keras.layers.LayerNormalization(
         axis=-1,
@@ -634,7 +515,7 @@ def build_encoder_token_embedding(encoder_features, hidden_dim, dtype):
     return keras.activations.gelu(hidden, approximate=False)
 
 
-def build_encoder_position_embeddings(
+def build_encoder_position_embedding(
     hidden, dropout, max_encoder_sequence_length, dtype
 ):
     positions = position_embedding(
