@@ -8,11 +8,53 @@ from pathlib import Path
 import keras
 import numpy as np
 
-from examples.speech_to_text.model import find_whisper_variant_values
-from examples.speech_to_text.model import get_whisper_variant_names
+from examples.speech_to_text.model import CONFIGS
 
 
 WHISPER_BASE_EN_PRESET_ENV = "PAZ_WHISPER_BASE_EN_PRESET_DIR"
+
+VARIANT_NAMES = tuple(CONFIGS.keys())
+VARIANTS = tuple(
+    (
+        variant_name,
+        config["vocabulary_size"],
+        config["num_layers"],
+        config["num_heads"],
+        config["hidden_dim"],
+        config["intermediate_dim"],
+        config["num_mels"],
+        config["max_encoder_sequence_length"],
+        config["max_decoder_sequence_length"],
+        config["vocabulary_size"] == 51865,
+    )
+    for variant_name, config in CONFIGS.items()
+)
+
+
+def get_variant_names():
+    return VARIANT_NAMES
+
+
+def find_variant_config(variant_name):
+    if variant_name not in CONFIGS:
+        raise ValueError("Unknown Whisper variant: {}".format(variant_name))
+    return dict(CONFIGS[variant_name])
+
+
+def build_variant_values(variant_name):
+    config = find_variant_config(variant_name)
+    return (
+        variant_name,
+        config["vocabulary_size"],
+        config["num_layers"],
+        config["num_heads"],
+        config["hidden_dim"],
+        config["intermediate_dim"],
+        config["num_mels"],
+        config["max_encoder_sequence_length"],
+        config["max_decoder_sequence_length"],
+        config["vocabulary_size"] == 51865,
+    )
 
 
 def build_reference_whisper_model(
@@ -47,7 +89,7 @@ def build_reference_whisper_model(
 def build_reference_whisper_variant_model(
     variant_name, dtype="float32", name=None
 ):
-    variant_values = find_whisper_variant_values(variant_name)
+    variant_values = build_variant_values(variant_name)
     if name is None:
         name = "reference_{}".format(variant_name)
     (
@@ -169,34 +211,16 @@ def build_reference_whisper_base_en_preset_model(
     )
 
 
-def load_preset_weights(clean_model, variant_name, model_kind, dtype="float32"):
+def load_preset_weights(clean_model, variant_name, dtype="float32"):
     reference_model = build_reference_whisper_preset_model(
         variant_name, dtype=dtype
     )
     encoder_features, decoder_token_ids, decoder_padding_mask = (
         build_whisper_parity_inputs()
     )
-    reference_outputs = call_reference_model(
-        reference_model,
-        encoder_features,
-        decoder_token_ids,
-        decoder_padding_mask,
-    )
-    if model_kind == "full":
-        clean_model([encoder_features, decoder_token_ids, decoder_padding_mask])
-        copy_matching_weights(clean_model, reference_model)
-        return clean_model
-    if model_kind == "encoder":
-        clean_model(encoder_features)
-        copy_matching_encoder_weights(clean_model, reference_model)
-        return clean_model
-    if model_kind == "decoder":
-        clean_model(
-            [decoder_token_ids, decoder_padding_mask, reference_outputs[0]]
-        )
-        copy_matching_decoder_weights(clean_model, reference_model)
-        return clean_model
-    raise ValueError("Unknown Whisper model kind: {}".format(model_kind))
+    clean_model([encoder_features, decoder_token_ids, decoder_padding_mask])
+    copy_matching_weights(clean_model, reference_model)
+    return clean_model
 
 
 def build_reference_whisper_preset_model(
@@ -300,48 +324,6 @@ def copy_matching_weights(clean_model, reference_model):
     return copied_paths
 
 
-def copy_matching_encoder_weights(clean_model, reference_model):
-    clean_weights = filter_encoder_weight_pairs(
-        collect_logical_weight_paths(clean_model, "clean")
-    )
-    reference_weights = filter_encoder_weight_pairs(
-        collect_logical_weight_paths(reference_model, "reference")
-    )
-    validate_unique_weight_paths(clean_weights, "clean")
-    validate_unique_weight_paths(reference_weights, "reference")
-    validate_weight_count_alignment(clean_weights, reference_weights)
-    validate_weight_path_alignment(clean_weights, reference_weights)
-    copied_paths = []
-    for clean_pair, reference_pair in zip(clean_weights, reference_weights):
-        clean_path, clean_weight = clean_pair
-        _, reference_weight = reference_pair
-        validate_weight_shape_alignment(clean_pair, reference_pair)
-        clean_weight.assign(reference_weight)
-        copied_paths.append(clean_path)
-    return copied_paths
-
-
-def copy_matching_decoder_weights(clean_model, reference_model):
-    clean_weights = filter_decoder_weight_pairs(
-        collect_logical_weight_paths(clean_model, "clean")
-    )
-    reference_weights = filter_decoder_weight_pairs(
-        collect_logical_weight_paths(reference_model, "reference")
-    )
-    validate_unique_weight_paths(clean_weights, "clean")
-    validate_unique_weight_paths(reference_weights, "reference")
-    validate_weight_count_alignment(clean_weights, reference_weights)
-    validate_weight_path_alignment(clean_weights, reference_weights)
-    copied_paths = []
-    for clean_pair, reference_pair in zip(clean_weights, reference_weights):
-        clean_path, clean_weight = clean_pair
-        _, reference_weight = reference_pair
-        validate_weight_shape_alignment(clean_pair, reference_pair)
-        clean_weight.assign(reference_weight)
-        copied_paths.append(clean_path)
-    return copied_paths
-
-
 def count_params_from_weights(model):
     total = 0
     for _, weight in collect_weight_paths(model):
@@ -356,22 +338,6 @@ def collect_logical_weight_paths(model, label):
         logical_weights.append((logical_path, weight))
     logical_weights.sort(key=lambda pair: pair[0])
     return logical_weights
-
-
-def filter_encoder_weight_pairs(weight_pairs):
-    filtered_pairs = []
-    for path, weight in weight_pairs:
-        if path.startswith("encoder_") or path.startswith("transformer_encoder_"):
-            filtered_pairs.append((path, weight))
-    return filtered_pairs
-
-
-def filter_decoder_weight_pairs(weight_pairs):
-    filtered_pairs = []
-    for path, weight in weight_pairs:
-        if path.startswith("decoder_") or path.startswith("transformer_decoder_"):
-            filtered_pairs.append((path, weight))
-    return filtered_pairs
 
 
 def normalize_weight_path(path, label):
@@ -490,7 +456,7 @@ def preset_matches_base_en_arguments(preset_dir):
 
 
 def preset_matches_variant_arguments(variant_name, preset_dir):
-    variant_values = find_whisper_variant_values(variant_name)
+    variant_values = build_variant_values(variant_name)
     return preset_matches_expected_arguments(
         preset_dir,
         variant_values[1],
@@ -547,7 +513,7 @@ def find_whisper_preset_dir(variant_name):
 
 def find_available_whisper_presets():
     available_presets = []
-    for variant_name in get_whisper_variant_names():
+    for variant_name in get_variant_names():
         preset_dir = find_whisper_preset_dir(variant_name)
         if preset_dir is not None:
             available_presets.append((variant_name, preset_dir))

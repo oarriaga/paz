@@ -5,10 +5,10 @@ import pytest
 from keras import ops
 
 import examples.speech_to_text.weights as whisper_weights
-from examples.speech_to_text.model import find_whisper_variant_config
 from examples.speech_to_text.model import Whisper
-from examples.speech_to_text.model import WHISPER_VARIANTS
-from examples.speech_to_text.model import get_whisper_variant_names
+from examples.speech_to_text.weights import find_variant_config
+from examples.speech_to_text.weights import get_variant_names
+from examples.speech_to_text.weights import VARIANTS
 from examples.speech_to_text.weights import build_missing_whisper_preset_message
 from examples.speech_to_text.weights import build_reference_whisper_base_en_model
 from examples.speech_to_text.weights import build_reference_whisper_base_en_preset_model
@@ -72,7 +72,7 @@ def test_reference_param_count_matches_weight_count():
 
 def test_all_reference_whisper_variant_builders_exist():
     preset_names = load_reference_whisper_preset_names()
-    result = get_whisper_variant_names() == preset_names
+    result = get_variant_names() == preset_names
     for variant_name in preset_names:
         builder_name = "build_reference_{}_model".format(variant_name)
         result = result and hasattr(whisper_weights, builder_name)
@@ -85,7 +85,7 @@ def test_all_reference_whisper_variant_builders_exist():
         "intermediate_dim,num_mels,max_encoder_sequence_length,"
         "max_decoder_sequence_length,is_multilingual"
     ),
-    WHISPER_VARIANTS,
+    VARIANTS,
 )
 def test_reference_variant_wrapper_uses_shared_helper(
     variant_name,
@@ -116,7 +116,7 @@ def test_reference_variant_wrapper_uses_shared_helper(
         "intermediate_dim,num_mels,max_encoder_sequence_length,"
         "max_decoder_sequence_length,is_multilingual"
     ),
-    WHISPER_VARIANTS,
+    VARIANTS,
 )
 def test_variant_preset_config_matches_expected_arguments(
     variant_name,
@@ -141,7 +141,7 @@ def test_available_local_presets_are_known_variants():
         variant_name for variant_name, _ in find_available_whisper_presets()
     )
     result = all(
-        variant_name in get_whisper_variant_names()
+        variant_name in get_variant_names()
         for variant_name in available_variants
     )
     assert result
@@ -178,7 +178,7 @@ def test_base_en_preset_weight_paths_align_logically():
         "intermediate_dim,num_mels,max_encoder_sequence_length,"
         "max_decoder_sequence_length,is_multilingual"
     ),
-    WHISPER_VARIANTS,
+    VARIANTS,
 )
 def test_available_non_base_presets_match_reference(
     variant_name,
@@ -198,7 +198,7 @@ def test_available_non_base_presets_match_reference(
     if preset_dir is None:
         pytest.skip(build_missing_whisper_preset_message(variant_name))
     reference_model = build_reference_whisper_preset_model(variant_name)
-    clean_model = Whisper(**find_whisper_variant_config(variant_name))
+    clean_model = Whisper(**find_variant_config(variant_name))
     encoder_features, decoder_token_ids, decoder_padding_mask = (
         build_whisper_parity_inputs()
     )
@@ -292,7 +292,7 @@ def require_base_en_preset_dir():
 def build_base_en_preset_weight_pair():
     require_base_en_preset_dir()
     reference_model = build_reference_whisper_base_en_preset_model()
-    clean_model = Whisper(**find_whisper_variant_config("whisper_base_en"))
+    clean_model = Whisper(**find_variant_config("whisper_base_en"))
     model_inputs = build_whisper_base_en_parity_inputs()
     call_reference_model(reference_model, *model_inputs)
     clean_model(model_inputs)
