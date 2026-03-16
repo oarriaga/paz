@@ -15,10 +15,18 @@ from examples.speech_to_text.decoding import (
 from examples.speech_to_text.decoding import (
     compute_argmax_token_id_from_model,
 )
+from examples.speech_to_text.decoding import (
+    compute_argmax_token_id_from_decoder_model,
+)
+from examples.speech_to_text.decoding import decode_token_ids_with_jax_loop
 from examples.speech_to_text.decoding import decode_token_ids
 from examples.speech_to_text.decoding import extract_text_token_ids
 from examples.speech_to_text.model import Whisper
-from examples.speech_to_text.model import WhisperBaseEn
+from examples.speech_to_text.model import WhisperCrossCache
+from examples.speech_to_text.model import WhisperDecoder
+from examples.speech_to_text.model import WhisperDecoderStep
+from examples.speech_to_text.model import WhisperEncoder
+from examples.speech_to_text.tokenizer import find_special_token_id
 from examples.speech_to_text.weights import build_missing_whisper_preset_message
 from examples.speech_to_text.weights import build_whisper_frontend_waveform
 from examples.speech_to_text.weights import find_variant_config
@@ -81,6 +89,36 @@ def test_argmax_token_id_from_model_uses_last_active_position():
     assert isinstance(next_token_id, int)
 
 
+def test_compiled_greedy_decode_matches_python_loop():
+    config = find_variant_config("whisper_tiny_en")
+    encoder_model = WhisperEncoder(**config)
+    decoder_model = WhisperDecoder(**config)
+    encoder_features = ops.ones((1, 4, 80), dtype="float32")
+    encoder_output = encoder_model(encoder_features)
+    prompt_token_ids = build_whisper_base_en_prompt_token_ids()
+    stop_token_id = find_special_token_id("<|endoftext|>")
+
+    def next_token(token_ids):
+        return compute_argmax_token_id_from_decoder_model(
+            decoder_model, encoder_output, token_ids
+        )
+
+    python_token_ids = decode_token_ids(
+        next_token,
+        prompt_token_ids,
+        stop_token_id,
+        max_generated_tokens=6,
+    )
+    compiled_token_ids = decode_token_ids_with_jax_loop(
+        decoder_model,
+        encoder_output,
+        prompt_token_ids,
+        stop_token_id,
+        max_generated_tokens=6,
+    )
+    assert compiled_token_ids == python_token_ids
+
+
 def test_preprocess_wav_for_whisper_returns_expected_sample_rate(tmp_path):
     wav_path = tmp_path / "resampled.wav"
     waveform = np.array([[0, 32767], [-32768, 0]], dtype=np.int16)
@@ -107,10 +145,25 @@ def test_transcribe_waveform_runs_end_to_end(
     if find_whisper_base_en_preset_dir() is None:
         pytest.skip(build_missing_whisper_preset_message("whisper_base_en"))
     waveform = build_whisper_frontend_waveform()
+    config = find_variant_config("whisper_base_en")
     token_ids, generated_token_ids, decoded_text = (
         demo.transcribe_waveform(
             waveform,
-            model=WhisperBaseEn(),
+            encoder=WhisperEncoder(
+                **config,
+                weights="whisper_base_en",
+                name="whisper_base_en_encoder",
+            ),
+            cross_cache_model=WhisperCrossCache(
+                **config,
+                weights="whisper_base_en",
+                name="whisper_base_en_cross_cache",
+            ),
+            decoder_step_model=WhisperDecoderStep(
+                **config,
+                weights="whisper_base_en",
+                name="whisper_base_en_decoder_step",
+            ),
             max_tokens=8,
         )
     )
@@ -134,10 +187,25 @@ def test_transcribe_wav_runs_end_to_end(
     waveform = build_whisper_frontend_waveform()
     waveform = np.asarray(waveform)
     wavfile.write(wav_path, 16000, waveform.astype("float32"))
+    config = find_variant_config("whisper_base_en")
     sample_rate, token_ids, generated_token_ids, decoded_text = (
         demo.transcribe(
             wav_path,
-            model=WhisperBaseEn(),
+            encoder=WhisperEncoder(
+                **config,
+                weights="whisper_base_en",
+                name="whisper_base_en_encoder",
+            ),
+            cross_cache_model=WhisperCrossCache(
+                **config,
+                weights="whisper_base_en",
+                name="whisper_base_en_cross_cache",
+            ),
+            decoder_step_model=WhisperDecoderStep(
+                **config,
+                weights="whisper_base_en",
+                name="whisper_base_en_decoder_step",
+            ),
             max_tokens=8,
         )
     )
@@ -160,7 +228,25 @@ def test_transcribe_returns_harvard_text(
     if find_whisper_base_en_preset_dir() is None:
         pytest.skip(build_missing_whisper_preset_message("whisper_base_en"))
     audio_path = Path(__file__).with_name("harvard.wav")
-    _, _, _, decoded_text = demo.transcribe(audio_path, model=WhisperBaseEn())
+    config = find_variant_config("whisper_base_en")
+    _, _, _, decoded_text = demo.transcribe(
+        audio_path,
+        encoder=WhisperEncoder(
+            **config,
+            weights="whisper_base_en",
+            name="whisper_base_en_encoder",
+        ),
+        cross_cache_model=WhisperCrossCache(
+            **config,
+            weights="whisper_base_en",
+            name="whisper_base_en_cross_cache",
+        ),
+        decoder_step_model=WhisperDecoderStep(
+            **config,
+            weights="whisper_base_en",
+            name="whisper_base_en_decoder_step",
+        ),
+    )
     assert decoded_text == (
         " The stale smell of old-beer lingers. It takes heat to bring "
         "out the odor. A cold dip restores health and zest. A salt "
