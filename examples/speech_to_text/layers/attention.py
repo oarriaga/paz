@@ -247,3 +247,143 @@ def attention(
         dtype,
         f"{name}_attention_output",
     )
+
+
+def build_attention_cache(
+    value,
+    key=None,
+    num_heads=8,
+    key_dim=64,
+    value_dim=None,
+    use_bias=True,
+    kernel_initializer=None,
+    bias_initializer="zeros",
+    dtype="float32",
+    name="attention",
+):
+    if key is None:
+        key = value
+    if value_dim is None:
+        value_dim = key_dim
+    if kernel_initializer is None:
+        kernel_initializer = keras.initializers.TruncatedNormal(stddev=0.02)
+    value_rank = len(value.shape)
+    key_rank = len(key.shape)
+    key_projection = build_projection(
+        key,
+        key_rank - 1,
+        1,
+        2,
+        [num_heads, key_dim],
+        False,
+        kernel_initializer,
+        bias_initializer,
+        dtype,
+        f"{name}_key",
+    )
+    value_projection = build_projection(
+        value,
+        value_rank - 1,
+        1,
+        2,
+        [num_heads, value_dim],
+        use_bias,
+        kernel_initializer,
+        bias_initializer,
+        dtype,
+        f"{name}_value",
+    )
+    return ops.stack((key_projection, value_projection), axis=1)
+
+
+def cached_attention(
+    query,
+    cache,
+    cache_update_index=None,
+    value=None,
+    key=None,
+    attention_mask=None,
+    num_heads=8,
+    key_dim=64,
+    value_dim=None,
+    dropout=0.0,
+    use_bias=True,
+    kernel_initializer=None,
+    bias_initializer="zeros",
+    dtype="float32",
+    name="attention",
+):
+    if value_dim is None:
+        value_dim = key_dim
+    if kernel_initializer is None:
+        kernel_initializer = keras.initializers.TruncatedNormal(stddev=0.02)
+
+    query_rank = len(query.shape)
+    output_dim = query.shape[-1]
+    query_projection = build_projection(
+        query,
+        query_rank - 1,
+        1,
+        2,
+        [num_heads, key_dim],
+        use_bias,
+        kernel_initializer,
+        bias_initializer,
+        dtype,
+        f"{name}_query",
+    )
+
+    key_projection = cache[:, 0, ...]
+    value_projection = cache[:, 1, ...]
+    if cache_update_index is not None:
+        if value is None:
+            raise ValueError("Cached attention updates require value inputs.")
+        update_cache = build_attention_cache(
+            value,
+            key,
+            num_heads,
+            key_dim,
+            value_dim,
+            use_bias,
+            kernel_initializer,
+            bias_initializer,
+            dtype,
+            name,
+        )
+        start = [0, 0, cache_update_index, 0, 0]
+        cache = ops.slice_update(cache, start, update_cache)
+        key_projection = cache[:, 0, ...]
+        value_projection = cache[:, 1, ...]
+
+    query_heads = ops.transpose(query_projection, (0, 2, 1, 3))
+    key_heads = ops.transpose(key_projection, (0, 2, 1, 3))
+    value_heads = ops.transpose(value_projection, (0, 2, 1, 3))
+    scaling_factor = ops.sqrt(ops.cast(key_dim, query_heads.dtype))
+    query_heads = query_heads / scaling_factor
+    key_heads = ops.transpose(key_heads, (0, 1, 3, 2))
+    attention_scores = ops.matmul(query_heads, key_heads)
+    attention_mask = expand_attention_mask_for_heads(attention_mask)
+    attention_scores = apply_attention_mask_to_scores(
+        attention_scores, attention_mask
+    )
+    attention_probabilities = ops.softmax(attention_scores, axis=-1)
+    attention_probabilities = keras.layers.Dropout(
+        dropout,
+        dtype=dtype,
+        name=f"{name}_attention_scores_dropout",
+    )(attention_probabilities)
+    attention_values = ops.matmul(attention_probabilities, value_heads)
+    attention_values = merge_heads_into_last_dimension(attention_values)
+    attention_output = build_projection(
+        attention_values,
+        query_rank - 1,
+        2,
+        1,
+        [output_dim],
+        use_bias,
+        kernel_initializer,
+        bias_initializer,
+        dtype,
+        f"{name}_attention_output",
+    )
+    return attention_output, cache
