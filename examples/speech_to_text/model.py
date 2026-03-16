@@ -3,7 +3,9 @@ from keras import Model, ops
 from keras.layers import Add, Conv1D, Dropout, Input, Lambda
 from keras.layers import LayerNormalization, ReversibleEmbedding
 
+from examples.speech_to_text.layers import build_attention_cache
 from examples.speech_to_text.layers import build_mel_filters
+from examples.speech_to_text.layers import cached_decoder_block
 from examples.speech_to_text.layers import decoder_block
 from examples.speech_to_text.layers import encoder_block
 from examples.speech_to_text.layers import frontend
@@ -171,6 +173,264 @@ def Whisper(
         from examples.speech_to_text.weights import load_preset_weights
 
         load_preset_weights(model, weights, dtype=dtype)
+    return model
+
+
+def WhisperEncoder(
+    vocabulary_size,
+    num_layers,
+    num_heads,
+    hidden_dim,
+    intermediate_dim,
+    num_mels=80,
+    dropout=0.0,
+    max_encoder_sequence_length=3000,
+    max_decoder_sequence_length=448,
+    dtype="float32",
+    name="whisper_encoder",
+    weights=None,
+):
+    encoder_features = Input(shape=(None, num_mels), dtype="float32", name="encoder_features")
+    encoder_output = _apply_encoder(
+        encoder_features,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        dropout,
+        max_encoder_sequence_length,
+        dtype,
+    )
+    model = Model(encoder_features, encoder_output, name=name)
+    if weights is not None:
+        from examples.speech_to_text.weights import load_preset_weights
+
+        load_preset_weights(model, weights, dtype=dtype, model_kind="encoder")
+    return model
+
+
+def WhisperDecoder(
+    vocabulary_size,
+    num_layers,
+    num_heads,
+    hidden_dim,
+    intermediate_dim,
+    num_mels=80,
+    dropout=0.0,
+    max_encoder_sequence_length=3000,
+    max_decoder_sequence_length=448,
+    dtype="float32",
+    name="whisper_decoder",
+    weights=None,
+):
+    decoder_token_ids = Input(shape=(None,), dtype="int32", name="decoder_token_ids")
+    decoder_padding_mask = Input(shape=(None,), dtype="int32", name="decoder_padding_mask")
+    encoder_output = Input(shape=(None, hidden_dim), dtype="float32", name="encoder_output")
+    decoder_output, _ = _apply_decoder(
+        decoder_token_ids,
+        decoder_padding_mask,
+        encoder_output,
+        vocabulary_size,
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        dropout,
+        max_decoder_sequence_length,
+        dtype,
+    )
+    model = Model([decoder_token_ids, decoder_padding_mask, encoder_output], decoder_output, name=name)
+    if weights is not None:
+        from examples.speech_to_text.weights import load_preset_weights
+
+        load_preset_weights(model, weights, dtype=dtype, model_kind="decoder")
+    return model
+
+
+def WhisperCrossCache(
+    vocabulary_size,
+    num_layers,
+    num_heads,
+    hidden_dim,
+    intermediate_dim,
+    num_mels=80,
+    dropout=0.0,
+    max_encoder_sequence_length=3000,
+    max_decoder_sequence_length=448,
+    dtype="float32",
+    name="whisper_cross_cache",
+    weights=None,
+):
+    del vocabulary_size, intermediate_dim, num_mels, dropout
+    del max_encoder_sequence_length, max_decoder_sequence_length
+    encoder_output = Input(shape=(None, hidden_dim), dtype="float32", name="encoder_output")
+    key_dim = int(hidden_dim // num_heads)
+    caches = []
+    for layer_index in range(num_layers):
+        cache = build_attention_cache(
+            encoder_output,
+            None,
+            num_heads,
+            key_dim,
+            key_dim,
+            True,
+            kernel_initializer(),
+            "zeros",
+            dtype,
+            "transformer_decoder_layer_{}_cross_attention".format(
+                layer_index
+            ),
+        )
+        cache = Lambda(
+            lambda x: ops.expand_dims(x, axis=1),
+            output_shape=(1, 2, None, num_heads, key_dim),
+            name="transformer_decoder_layer_{}_cross_attention_cache_expand".format(
+                layer_index
+            ),
+        )(cache)
+        caches.append(cache)
+    cross_attention_cache = Lambda(
+        lambda tensors: ops.concatenate(tensors, axis=1),
+        output_shape=(num_layers, 2, None, num_heads, key_dim),
+        name="cross_attention_cache",
+    )(caches)
+    model = Model(encoder_output, cross_attention_cache, name=name)
+    if weights is not None:
+        from examples.speech_to_text.weights import load_preset_weights
+
+        load_preset_weights(model, weights, dtype=dtype, model_kind="cross_cache")
+    return model
+
+
+def WhisperDecoderStep(
+    vocabulary_size,
+    num_layers,
+    num_heads,
+    hidden_dim,
+    intermediate_dim,
+    num_mels=80,
+    dropout=0.0,
+    max_encoder_sequence_length=3000,
+    max_decoder_sequence_length=448,
+    dtype="float32",
+    name="whisper_decoder_step",
+    weights=None,
+):
+    del num_mels, max_encoder_sequence_length
+    key_dim = int(hidden_dim // num_heads)
+    decoder_token_ids = Input(shape=(1,), dtype="int32", name="decoder_token_ids")
+    self_attention_cache = Input(
+        shape=(num_layers, 2, None, num_heads, key_dim),
+        dtype="float32",
+        name="self_attention_cache",
+    )
+    cross_attention_cache = Input(
+        shape=(num_layers, 2, None, num_heads, key_dim),
+        dtype="float32",
+        name="cross_attention_cache",
+    )
+    cache_update_index = Input(shape=(), dtype="int32", name="cache_update_index")
+    cache_update_index_scalar = Lambda(
+        lambda x: ops.cast(x[0], "int32"),
+        output_shape=(),
+        name="cache_update_index_scalar",
+    )(cache_update_index)
+    positions = Lambda(
+        lambda x: ops.expand_dims(ops.cast(x, "int32"), axis=-1),
+        output_shape=(1,),
+        name="decoder_position_indices",
+    )(cache_update_index)
+
+    decoder_embeddings = ReversibleEmbedding(
+        vocabulary_size,
+        hidden_dim,
+        tie_weights=True,
+        embeddings_initializer=kernel_initializer(),
+        mask_zero=False,
+        dtype=dtype,
+        name="decoder_token_embedding",
+    )
+    hidden = decoder_embeddings(decoder_token_ids)
+    position_embeddings = position_embedding(
+        hidden,
+        max_decoder_sequence_length,
+        kernel_initializer(),
+        0,
+        positions,
+        True,
+        dtype,
+        "decoder_position_embedding",
+    )
+    hidden = Add(dtype=dtype, name="decoder_embeddings_add")(
+        (hidden, position_embeddings)
+    )
+    hidden = Dropout(
+        dropout, dtype=dtype, name="decoder_embeddings_dropout"
+    )(hidden)
+    updated_self_attention_caches = []
+    for layer_index in range(num_layers):
+        layer_self_attention_cache = Lambda(
+            lambda x, index=layer_index: x[:, index, ...],
+            output_shape=(2, None, num_heads, key_dim),
+            name="transformer_decoder_layer_{}_self_attention_cache_slice".format(
+                layer_index
+            ),
+        )(self_attention_cache)
+        layer_cross_attention_cache = Lambda(
+            lambda x, index=layer_index: x[:, index, ...],
+            output_shape=(2, None, num_heads, key_dim),
+            name="transformer_decoder_layer_{}_cross_attention_cache_slice".format(
+                layer_index
+            ),
+        )(cross_attention_cache)
+        hidden, layer_self_attention_cache = cached_decoder_block(
+            hidden,
+            layer_self_attention_cache,
+            layer_cross_attention_cache,
+            cache_update_index_scalar,
+            num_heads,
+            intermediate_dim,
+            dropout,
+            1e-5,
+            dtype,
+            "transformer_decoder_layer_{}".format(layer_index),
+        )
+        layer_self_attention_cache = Lambda(
+            lambda x: ops.expand_dims(x, axis=1),
+            output_shape=(1, 2, None, num_heads, key_dim),
+            name="transformer_decoder_layer_{}_self_attention_cache_expand".format(
+                layer_index
+            ),
+        )(layer_self_attention_cache)
+        updated_self_attention_caches.append(layer_self_attention_cache)
+    updated_self_attention_cache = Lambda(
+        lambda tensors: ops.concatenate(tensors, axis=1),
+        output_shape=(num_layers, 2, None, num_heads, key_dim),
+        name="updated_self_attention_cache",
+    )(updated_self_attention_caches)
+    hidden = LayerNormalization(
+        axis=-1,
+        epsilon=1e-5,
+        dtype=dtype,
+        name="decoder_layer_norm",
+    )(hidden)
+    logits = decoder_embeddings(hidden, reverse=True)
+    model = Model(
+        [
+            decoder_token_ids,
+            self_attention_cache,
+            cross_attention_cache,
+            cache_update_index,
+        ],
+        [logits, updated_self_attention_cache],
+        name=name,
+    )
+    if weights is not None:
+        from examples.speech_to_text.weights import load_preset_weights
+
+        load_preset_weights(
+            model, weights, dtype=dtype, model_kind="decoder_step"
+        )
     return model
 
 

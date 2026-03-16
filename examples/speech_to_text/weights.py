@@ -211,16 +211,49 @@ def build_reference_whisper_base_en_preset_model(
     )
 
 
-def load_preset_weights(clean_model, variant_name, dtype="float32"):
+def load_preset_weights(
+    clean_model, variant_name, dtype="float32", model_kind="full"
+):
     reference_model = build_reference_whisper_preset_model(
         variant_name, dtype=dtype
     )
     encoder_features, decoder_token_ids, decoder_padding_mask = (
         build_whisper_parity_inputs()
     )
-    clean_model([encoder_features, decoder_token_ids, decoder_padding_mask])
-    copy_matching_weights(clean_model, reference_model)
-    return clean_model
+    reference_encoder_output, _ = call_reference_model(
+        reference_model,
+        encoder_features,
+        decoder_token_ids,
+        decoder_padding_mask,
+    )
+    if model_kind == "full":
+        clean_model([encoder_features, decoder_token_ids, decoder_padding_mask])
+        copy_matching_weights(clean_model, reference_model)
+        return clean_model
+    if model_kind == "encoder":
+        clean_model(encoder_features)
+        copy_available_weights(clean_model, reference_model)
+        return clean_model
+    if model_kind == "decoder":
+        clean_model(
+            [decoder_token_ids, decoder_padding_mask, reference_encoder_output]
+        )
+        copy_available_weights(clean_model, reference_model)
+        return clean_model
+    if model_kind == "cross_cache":
+        clean_model(reference_encoder_output)
+        copy_available_weights(clean_model, reference_model)
+        return clean_model
+    if model_kind == "decoder_step":
+        decoder_step_inputs = build_decoder_step_inputs(
+            variant_name,
+            reference_encoder_output.shape[1],
+            dtype,
+        )
+        clean_model(decoder_step_inputs)
+        copy_available_weights(clean_model, reference_model)
+        return clean_model
+    raise ValueError("Unknown Whisper model kind: {}".format(model_kind))
 
 
 def build_reference_whisper_preset_model(
@@ -268,6 +301,38 @@ def build_whisper_frontend_waveform_batch(num_samples=3200):
 
 def build_whisper_base_en_parity_inputs():
     return build_whisper_parity_inputs()
+
+
+def build_decoder_step_inputs(
+    variant_name, encoder_sequence_length=12, dtype="float32"
+):
+    config = find_variant_config(variant_name)
+    num_layers = config["num_layers"]
+    num_heads = config["num_heads"]
+    hidden_dim = config["hidden_dim"]
+    key_dim = int(hidden_dim // num_heads)
+    decoder_token_ids = keras.ops.convert_to_tensor([[50257]], dtype="int32")
+    self_attention_cache = keras.ops.zeros(
+        (1, num_layers, 2, 8, num_heads, key_dim), dtype=dtype
+    )
+    cross_attention_cache = keras.ops.zeros(
+        (
+            1,
+            num_layers,
+            2,
+            encoder_sequence_length,
+            num_heads,
+            key_dim,
+        ),
+        dtype=dtype,
+    )
+    cache_update_index = keras.ops.convert_to_tensor([0], dtype="int32")
+    return [
+        decoder_token_ids,
+        self_attention_cache,
+        cross_attention_cache,
+        cache_update_index,
+    ]
 
 
 def call_reference_model(
@@ -320,6 +385,28 @@ def copy_matching_weights(clean_model, reference_model):
         _, reference_weight = reference_pair
         validate_weight_shape_alignment(clean_pair, reference_pair)
         clean_weight.assign(reference_weight)
+        copied_paths.append(clean_path)
+    return copied_paths
+
+
+def copy_available_weights(clean_model, reference_model):
+    clean_weights = collect_logical_weight_paths(clean_model, "clean")
+    reference_weights = collect_logical_weight_paths(reference_model, "reference")
+    validate_unique_weight_paths(clean_weights, "clean")
+    validate_unique_weight_paths(reference_weights, "reference")
+    reference_weight_map = dict(reference_weights)
+    copied_paths = []
+    for clean_pair in clean_weights:
+        clean_path, clean_weight = clean_pair
+        if clean_path not in reference_weight_map:
+            raise ValueError(
+                "Missing reference weight for clean path '{}'.".format(
+                    clean_path
+                )
+            )
+        reference_pair = (clean_path, reference_weight_map[clean_path])
+        validate_weight_shape_alignment(clean_pair, reference_pair)
+        clean_weight.assign(reference_weight_map[clean_path])
         copied_paths.append(clean_path)
     return copied_paths
 

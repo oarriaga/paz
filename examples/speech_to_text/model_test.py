@@ -7,6 +7,8 @@ from keras import ops
 import examples.speech_to_text.model as whisper_model
 from examples.speech_to_text.model import Whisper
 from examples.speech_to_text.model import WhisperBaseEn
+from examples.speech_to_text.model import WhisperDecoder
+from examples.speech_to_text.model import WhisperEncoder
 from examples.speech_to_text.model import WhisperFrontend
 from examples.speech_to_text.weights import build_missing_whisper_preset_message
 from examples.speech_to_text.weights import build_reference_logits
@@ -123,6 +125,54 @@ def test_base_en_preset_logits_match_reference():
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+def test_base_en_split_models_match_full_model_outputs():
+    skip_if_base_en_preset_missing()
+    config = find_variant_config("whisper_base_en")
+    full_model = WhisperBaseEn()
+    encoder_model = WhisperEncoder(
+        **config,
+        weights="whisper_base_en",
+        name="whisper_base_en_encoder",
+    )
+    decoder_model = WhisperDecoder(
+        **config,
+        weights="whisper_base_en",
+        name="whisper_base_en_decoder",
+    )
+    encoder_features, decoder_token_ids, decoder_padding_mask = (
+        build_whisper_base_en_parity_inputs()
+    )
+    full_encoder_output, full_decoder_output, full_logits = full_model(
+        [encoder_features, decoder_token_ids, decoder_padding_mask]
+    )
+    split_encoder_output = encoder_model(encoder_features)
+    split_decoder_output = decoder_model(
+        [decoder_token_ids, decoder_padding_mask, split_encoder_output]
+    )
+    split_logits = decoder_model.get_layer("decoder_token_embedding")(
+        split_decoder_output, reverse=True
+    )
+    result = np.allclose(
+        ops.convert_to_numpy(full_encoder_output),
+        ops.convert_to_numpy(split_encoder_output),
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    result = result and np.allclose(
+        ops.convert_to_numpy(full_decoder_output),
+        ops.convert_to_numpy(split_decoder_output),
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    result = result and np.allclose(
+        ops.convert_to_numpy(full_logits),
+        ops.convert_to_numpy(split_logits),
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    assert result
 
 
 def test_runtime_files_do_not_import_keras_hub():
