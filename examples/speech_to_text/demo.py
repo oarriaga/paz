@@ -18,13 +18,14 @@ if str(ROOT) not in sys.path:
 
 from examples.speech_to_text.audio import load, resample, to_float, to_mono
 from examples.speech_to_text.decoding import (
+    KVDecoder,
     build_whisper_base_en_prompt_token_ids,
 )
 from examples.speech_to_text.decoding import (
     decode_token_ids_with_kv_cache,
     extract_text_token_ids,
 )
-from examples.speech_to_text.model import (
+from examples.speech_to_text.model2 import (
     CONFIGS,
     WhisperCrossCache,
     WhisperDecoderStep,
@@ -109,14 +110,15 @@ def transcribe_waveform(
     encoder_output = encoder(encoder_features)
     prompt_token_ids = build_whisper_base_en_prompt_token_ids()
     stop_token_id = find_special_token_id("<|endoftext|>")
+    cache_shape = decoder_step_model.input_shape[1]
+    decoder = KVDecoder(decoder_step_model, prompt_token_ids, max_tokens)
 
     token_ids = decode_token_ids_with_kv_cache(
-        decoder_step_model,
+        decoder,
+        cache_shape,
         cross_cache_model,
         encoder_output,
-        prompt_token_ids,
         stop_token_id,
-        max_generated_tokens=max_tokens,
     )
     generated_token_ids = extract_text_token_ids(
         token_ids, len(prompt_token_ids), stop_token_id

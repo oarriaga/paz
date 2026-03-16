@@ -7,7 +7,119 @@ from keras import Model
 from keras.layers import Input, Conv1D, Dropout, Add, Lambda, LayerNormalization
 from keras.layers import Embedding, Dense, EinsumDense, ReversibleEmbedding
 
-from layers.attention import attention
+
+CONFIGS = {
+    "whisper_tiny_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 4,
+        "num_heads": 6,
+        "hidden_dim": 384,
+        "intermediate_dim": 1536,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_base_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 6,
+        "num_heads": 8,
+        "hidden_dim": 512,
+        "intermediate_dim": 2048,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_small_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 12,
+        "num_heads": 12,
+        "hidden_dim": 768,
+        "intermediate_dim": 3072,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_medium_en": {
+        "vocabulary_size": 51864,
+        "num_layers": 24,
+        "num_heads": 16,
+        "hidden_dim": 1024,
+        "intermediate_dim": 4096,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_tiny_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 4,
+        "num_heads": 6,
+        "hidden_dim": 384,
+        "intermediate_dim": 1536,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_base_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 6,
+        "num_heads": 8,
+        "hidden_dim": 512,
+        "intermediate_dim": 2048,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_small_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 12,
+        "num_heads": 12,
+        "hidden_dim": 768,
+        "intermediate_dim": 3072,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_medium_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 24,
+        "num_heads": 16,
+        "hidden_dim": 1024,
+        "intermediate_dim": 4096,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_large_multi": {
+        "vocabulary_size": 51865,
+        "num_layers": 32,
+        "num_heads": 20,
+        "hidden_dim": 1280,
+        "intermediate_dim": 5120,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+    "whisper_large_multi_v2": {
+        "vocabulary_size": 51865,
+        "num_layers": 32,
+        "num_heads": 20,
+        "hidden_dim": 1280,
+        "intermediate_dim": 5120,
+        "num_mels": 80,
+        "dropout": 0.0,
+        "max_encoder_sequence_length": 3000,
+        "max_decoder_sequence_length": 448,
+    },
+}
 
 
 def batch_tensor(waveform):
@@ -62,7 +174,7 @@ def squeeze_features_batch_axis(features, squeeze_batch_axis):
 
 def frontend(waveform, mel_filters, num_fft_bins=400, stride=160, sampling_rate=16000, max_audio_length=30):  # fmt: skip
     num_samples = sampling_rate * max_audio_length
-    waveform = ops.cast(waveform)
+    waveform = ops.cast(waveform, "float32")
     waveform, squeeze_batch_axis = batch_tensor(waveform)
     waveform = build_fixed_length_waveform(waveform, num_samples)
     waveform = build_stft_waveform(waveform, num_fft_bins)
@@ -143,35 +255,36 @@ def mel_spectrogram(inputs, mel_filters):
     return ops.matmul(inputs, mel_filters)
 
 
-def WhisperFrontend(num_mels=80, num_fft_bins=400, stride=160, sampling_rate=16000, max_audio_length=30, name="whisper_frontend"):  # fmt: skip
-    waveform = Input(shape=(None,), name="waveform")
+def WhisperFrontend(num_mels=80, num_fft_bins=400, stride=160, sampling_rate=16000, max_audio_length=30, dtype="float32", name="whisper_frontend"):  # fmt: skip
+    waveform = Input(shape=(None,), dtype="float32", name="waveform")
     mel_filters = build_mel_filters(num_mels, num_fft_bins, sampling_rate)
-    mel_filters = ops.convert_to_tensor(mel_filters)
+    mel_filters = ops.convert_to_tensor(mel_filters, dtype=dtype)
     features = frontend(waveform, mel_filters, num_fft_bins, stride, sampling_rate, max_audio_length)  # fmt: skip
     return Model(waveform, features, name=name)
 
 
-def WhisperEncoder(num_layers, num_heads, dim_0, dim_1, num_mels, dropout, max_length, name, weights):  # fmt: skip
-    x = Input(shape=(None, num_mels), name="encoder_features")
-    conv_name = "encoder_token_embedding_conv_layer_"
-    x = Conv1D(dim_0, 3, 1, "same", name=f"{conv_name}_1")(x)
+def WhisperEncoder(vocabulary_size, num_layers, num_heads, hidden_dim, intermediate_dim, num_mels=80, dropout=0.0, max_encoder_sequence_length=3000, max_decoder_sequence_length=448, dtype="float32", name="whisper_encoder", weights=None):  # fmt: skip
+    del vocabulary_size, max_decoder_sequence_length
+    encoder_features = Input(shape=(None, num_mels), dtype="float32", name="encoder_features")
+    conv_name = "encoder_token_embedding_conv_layer"
+    x = Conv1D(hidden_dim, 3, 1, "same", dtype=dtype, name=f"{conv_name}_1")(encoder_features)
     x = gelu(x, approximate=False)
     x = Lambda(lambda t: ops.pad(t, [[0, 0], [1, 1], [0, 0]]), output_shape=lambda shape: (shape[0], None, shape[2]), name="encoder_padder")(x)  # fmt: skip
-    x = Conv1D(dim_0, 3, 2, "valid", name=f"{conv_name}_2")(x)
+    x = Conv1D(hidden_dim, 3, 2, "valid", dtype=dtype, name=f"{conv_name}_2")(x)
     x = gelu(x, approximate=False)
-    positions = embed_position(x, max_length // 2, False, None, "encoder_position_embedding")  # fmt: skip
-    x = Add(name="encoder_embeddings_add")((x, positions))
-    x = Dropout(dropout, name="encoder_embeddings_dropout")(x)
-    for layer_arg in range(num_layers):
-        layer_name = "transformer_encoder_layer_{}".format(layer_arg)
-        x = encoder_block(x, num_heads, dim_1, dropout, 1e-5, layer_name)
-    y = LayerNormalization(-1, 1e-5, name="encoder_layer_norm")(x)
-    model = Model(x, y, name=name)
+    positions = embed_position(x, max_encoder_sequence_length // 2, False, None, "encoder_position_embedding")  # fmt: skip
+    x = Add(dtype=dtype, name="encoder_embeddings_add")((x, positions))
+    x = Dropout(dropout, dtype=dtype, name="encoder_embeddings_dropout")(x)
+    for layer_index in range(num_layers):
+        layer_name = "transformer_encoder_layer_{}".format(layer_index)
+        x = encoder_block(x, num_heads, intermediate_dim, layer_name, dropout, 1e-5)
+    y = LayerNormalization(axis=-1, epsilon=1e-5, dtype=dtype, name="encoder_layer_norm")(x)
+    model = Model(encoder_features, y, name=name)
 
     if weights is not None:
         from examples.speech_to_text.weights import load_preset_weights
 
-        load_preset_weights(model, weights, "float32", model_kind="encoder")
+        load_preset_weights(model, weights, dtype, model_kind="encoder")
     return model
 
 
@@ -230,12 +343,15 @@ def encoder_block(x, num_heads, dim, name, dropout, epsilon):
 def embed_position(x, sequence_length, trainable, positions, name):
     if positions is None:
         positions = Lambda(lambda x: build_position_args(ops.shape(x)[-2], 0), output_shape=lambda shape: (shape[-2],), name=f"{name}_indices")(x)  # fmt: skip
-    elif len(positions.shape) == 1:
+        feature_size, kwargs = x.shape[-1], {"trainable": trainable, "name": name}  # fmt: skip
+        embeddings = Embedding(sequence_length, feature_size, Kernel(), **kwargs)(positions)  # fmt: skip
+        embeddings = ops.expand_dims(embeddings, axis=0)
+        return broadcast(embeddings, x)
+    if len(positions.shape) == 1:
         positions = ops.expand_dims(positions, axis=0)
     feature_size, kwargs = x.shape[-1], {"trainable": trainable, "name": name}  # fmt: skip
     embeddings = Embedding(sequence_length, feature_size, Kernel(), **kwargs)(positions)  # fmt: skip
-    embeddings = ops.expand_dims(embeddings, axis=0)
-    return broadcast(embeddings)
+    return broadcast(embeddings, x)
 
 
 def build_cached_self_attention_mask(self_attention_cache, cache_update_index):
@@ -383,18 +499,8 @@ def cached_decoder_block(decoder_sequence, self_attention_cache, cross_attention
     return hidden, self_attention_cache
 
 
-def WhisperDecoderStep(
-    vocabulary_size,
-    num_layers,
-    num_heads,
-    hidden_dim,
-    intermediate_dim,
-    dropout=0.0,
-    max_decoder_sequence_length=448,
-    dtype="float32",
-    name="whisper_decoder_step",
-    weights=None,
-):
+def WhisperDecoderStep(vocabulary_size, num_layers, num_heads, hidden_dim, intermediate_dim, num_mels=80, dropout=0.0, max_encoder_sequence_length=3000, max_decoder_sequence_length=448, dtype="float32", name="whisper_decoder_step", weights=None):
+    del num_mels, max_encoder_sequence_length
     key_dim = int(hidden_dim // num_heads)
     decoder_token_ids = Input((1,), dtype="int32", name="decoder_token_ids")  # fmt: skip
     self_attention_cache = Input((num_layers, 2, None, num_heads, key_dim), dtype="float32", name="self_attention_cache")  # fmt: skip
@@ -414,9 +520,7 @@ def WhisperDecoderStep(
 
     decoder_embeddings = ReversibleEmbedding( vocabulary_size, hidden_dim, tie_weights=True, embeddings_initializer=Kernel(), mask_zero=False, name="decoder_token_embedding")  # fmt: skip
     hidden = decoder_embeddings(decoder_token_ids)
-    position_embeddings = embed_position(
-        hidden, max_decoder_sequence_length, True, positions, name
-    )
+    position_embeddings = embed_position(hidden, max_decoder_sequence_length, True, positions, "decoder_position_embedding")
     hidden = Add(dtype=dtype, name="decoder_embeddings_add")((hidden, position_embeddings))  # fmt: skip
     hidden = Dropout(dropout, dtype=dtype, name="decoder_embeddings_dropout")(hidden)  # fmt: skip
     updated_self_attention_caches = []
@@ -459,7 +563,7 @@ def WhisperDecoderStep(
         output_shape=(num_layers, 2, None, num_heads, key_dim),
         name="updated_self_attention_cache",
     )(updated_self_attention_caches)
-    hidden = LayerNormalization( axis=-1, epsilon=1e-5, name="decoder_layer_norm")(hidden)  # fmt: skip
+    hidden = LayerNormalization(axis=-1, epsilon=1e-5, dtype=dtype, name="decoder_layer_norm")(hidden)  # fmt: skip
     logits = decoder_embeddings(hidden, reverse=True)
     model = Model([decoder_token_ids, self_attention_cache, cross_attention_cache, cache_update_index], [logits, updated_self_attention_cache], name=name)  # fmt: skip
     if weights is not None:
@@ -471,7 +575,9 @@ def WhisperDecoderStep(
     return model
 
 
-def WhisperCrossCache(num_layers, num_heads, hidden_dim, name, weights=None):
+def WhisperCrossCache(vocabulary_size, num_layers, num_heads, hidden_dim, intermediate_dim, num_mels=80, dropout=0.0, max_encoder_sequence_length=3000, max_decoder_sequence_length=448, dtype="float32", name="whisper_cross_cache", weights=None):
+    del vocabulary_size, intermediate_dim, num_mels, dropout
+    del max_encoder_sequence_length, max_decoder_sequence_length
     encoder_output = Input(shape=(None, hidden_dim), dtype="float32", name="encoder_output")  # fmt: skip
     key_dim = int(hidden_dim // num_heads)
     caches = []
@@ -494,5 +600,70 @@ def WhisperCrossCache(num_layers, num_heads, hidden_dim, name, weights=None):
     if weights is not None:
         from examples.speech_to_text.weights import load_preset_weights
 
-        load_preset_weights(model, weights, dtype="float32", model_kind="cross_cache")  # fmt: skip
+        load_preset_weights(model, weights, dtype=dtype, model_kind="cross_cache")  # fmt: skip
     return model
+
+
+def build_padding_attention_mask(padding_mask, attention_mask=None):
+    mask = None
+    if padding_mask is not None:
+        mask = ops.cast(ops.expand_dims(padding_mask, axis=1), "int32")
+    if attention_mask is None:
+        return mask
+    attention_mask = ops.cast(attention_mask, "int32")
+    if mask is None:
+        return attention_mask
+    return ops.minimum(mask, attention_mask)
+
+
+def build_causal_attention_mask(query, value):
+    query_positions = ops.ones_like(query[..., 0], dtype="int32")
+    key_positions = ops.ones_like(value[..., 0], dtype="int32")
+    query_positions = ops.cumsum(query_positions, axis=1)
+    key_positions = ops.cumsum(key_positions, axis=1)
+    return ops.cast(
+        ops.expand_dims(query_positions, axis=2)
+        >= ops.expand_dims(key_positions, axis=1),
+        "int32",
+    )
+
+
+def build_combined_attention_mask(attention_mask, use_causal_mask, query, value):
+    padding_mask = expand_attention_mask_for_heads(attention_mask)
+    if not use_causal_mask:
+        return padding_mask
+    causal_mask = build_causal_attention_mask(query, value)
+    causal_mask = expand_attention_mask_for_heads(causal_mask)
+    if padding_mask is None:
+        return causal_mask
+    return ops.logical_and(padding_mask, causal_mask)
+
+
+def attention(query, value, key=None, attention_mask=None, num_heads=8, key_dim=64, value_dim=None, dropout=0.0, use_bias=True, use_causal_mask=False, kernel_initializer=None, bias_initializer="zeros", dtype="float32", name="attention"):  # fmt: skip
+    if key is None:
+        key = value
+    if value_dim is None:
+        value_dim = key_dim
+    if kernel_initializer is None:
+        kernel_initializer = Kernel()
+    query_rank = len(query.shape)
+    value_rank = len(value.shape)
+    key_rank = len(key.shape)
+    output_dim = query.shape[-1]
+    query_projection = project(query, query_rank - 1, 1, 2, [num_heads, key_dim], use_bias, kernel_initializer, bias_initializer, f"{name}_query")  # fmt: skip
+    key_projection = project(key, key_rank - 1, 1, 2, [num_heads, key_dim], False, kernel_initializer, bias_initializer, f"{name}_key")  # fmt: skip
+    value_projection = project(value, value_rank - 1, 1, 2, [num_heads, value_dim], use_bias, kernel_initializer, bias_initializer, f"{name}_value")  # fmt: skip
+    query_heads = ops.transpose(query_projection, (0, 2, 1, 3))
+    key_heads = ops.transpose(key_projection, (0, 2, 1, 3))
+    value_heads = ops.transpose(value_projection, (0, 2, 1, 3))
+    scaling_factor = ops.sqrt(ops.cast(key_dim, query_heads.dtype))
+    query_heads = query_heads / scaling_factor
+    key_heads = ops.transpose(key_heads, (0, 1, 3, 2))
+    attention_scores = ops.matmul(query_heads, key_heads)
+    attention_mask = build_combined_attention_mask(attention_mask, use_causal_mask, query, value)
+    attention_scores = mask_scores(attention_scores, attention_mask)
+    attention_probabilities = ops.softmax(attention_scores, axis=-1)
+    attention_probabilities = Dropout(dropout, dtype=dtype, name=f"{name}_attention_scores_dropout")(attention_probabilities)  # fmt: skip
+    attention_values = ops.matmul(attention_probabilities, value_heads)
+    attention_values = merge_heads_into_last_dimension(attention_values)
+    return project(attention_values, query_rank - 1, 2, 1, [output_dim], use_bias, kernel_initializer, bias_initializer, f"{name}_attention_output")  # fmt: skip
