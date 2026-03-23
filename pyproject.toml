@@ -1,21 +1,30 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "paz"
-version = "0.1.0"
-description = "Perception for Autonomous Systems (JAX branch)"
+version = "0.3.0"
+description = "Perception for Autonomous Systems"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "Octavio Arriaga"}
+    { name = "Octavio Arriaga" }
 ]
-# JAX requires manual installation (CPU / GPU)
 dependencies = [
-    "numpy",
-    "opencv-python",
+    "numpy>=1.26",
+    "opencv-python>=4.8",
+    "keras>=3",
+    "jax",
+    "tfp-nightly",
+    "matplotlib",
+    "optax"
 ]
+
+[project.urls]
+Homepage = "https://github.com/oarriaga/paz"
+Repository = "https://github.com/oarriaga/paz"
+Issues = "https://github.com/oarriaga/paz/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
