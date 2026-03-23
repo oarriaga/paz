@@ -121,6 +121,8 @@ def decode_token_ids_with_kv_cache(
         int(encoder_output.shape[0]),
     )
     cross_attention_cache = cross_cache_model(encoder_output)
+    self_attention_cache = jp.asarray(self_attention_cache)
+    cross_attention_cache = jp.asarray(cross_attention_cache)
     token_buffer, current_length = decoder(
         self_attention_cache,
         cross_attention_cache,

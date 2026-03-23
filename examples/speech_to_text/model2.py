@@ -1,4 +1,6 @@
 import string
+from pathlib import Path
+
 import numpy as np
 import keras
 from keras.activations import gelu
@@ -6,6 +8,9 @@ from keras import ops
 from keras import Model
 from keras.layers import Input, Conv1D, Dropout, Add, Lambda, LayerNormalization
 from keras.layers import Embedding, Dense, EinsumDense, ReversibleEmbedding
+
+
+WHISPER_MODELS_DIR = Path(__file__).resolve().with_name("whisper_models")
 
 
 CONFIGS = {
@@ -120,6 +125,24 @@ CONFIGS = {
         "max_decoder_sequence_length": 448,
     },
 }
+
+
+def build_whisper_model_dir(variant_name):
+    return WHISPER_MODELS_DIR / variant_name
+
+
+def build_whisper_weights_path(variant_name, model_kind):
+    return build_whisper_model_dir(variant_name) / "{}.weights.h5".format(model_kind)
+
+
+def load_serialized_whisper_weights(model, variant_name, model_kind):
+    weights_path = build_whisper_weights_path(variant_name, model_kind)
+    if not weights_path.exists():
+        message = "No serialized {} weights found for {} at {}.".format(model_kind, variant_name, weights_path)  # fmt: skip
+        message += " Run export_whisper_models.py to port the local preset into standard Keras files."  # fmt: skip
+        raise FileNotFoundError(message)
+    model.load_weights(str(weights_path))
+    return model
 
 
 def batch_tensor(waveform):
@@ -264,7 +287,6 @@ def WhisperFrontend(num_mels=80, num_fft_bins=400, stride=160, sampling_rate=160
 
 
 def WhisperEncoder(vocabulary_size, num_layers, num_heads, hidden_dim, intermediate_dim, num_mels=80, dropout=0.0, max_encoder_sequence_length=3000, max_decoder_sequence_length=448, dtype="float32", name="whisper_encoder", weights=None):  # fmt: skip
-    del vocabulary_size, max_decoder_sequence_length
     encoder_features = Input(shape=(None, num_mels), dtype="float32", name="encoder_features")
     conv_name = "encoder_token_embedding_conv_layer"
     x = Conv1D(hidden_dim, 3, 1, "same", dtype=dtype, name=f"{conv_name}_1")(encoder_features)
@@ -282,9 +304,7 @@ def WhisperEncoder(vocabulary_size, num_layers, num_heads, hidden_dim, intermedi
     model = Model(encoder_features, y, name=name)
 
     if weights is not None:
-        from examples.speech_to_text.weights import load_preset_weights
-
-        load_preset_weights(model, weights, dtype, model_kind="encoder")
+        load_serialized_whisper_weights(model, weights, "encoder")
     return model
 
 
@@ -500,7 +520,6 @@ def cached_decoder_block(decoder_sequence, self_attention_cache, cross_attention
 
 
 def WhisperDecoderStep(vocabulary_size, num_layers, num_heads, hidden_dim, intermediate_dim, num_mels=80, dropout=0.0, max_encoder_sequence_length=3000, max_decoder_sequence_length=448, dtype="float32", name="whisper_decoder_step", weights=None):
-    del num_mels, max_encoder_sequence_length
     key_dim = int(hidden_dim // num_heads)
     decoder_token_ids = Input((1,), dtype="int32", name="decoder_token_ids")  # fmt: skip
     self_attention_cache = Input((num_layers, 2, None, num_heads, key_dim), dtype="float32", name="self_attention_cache")  # fmt: skip
@@ -526,15 +545,17 @@ def WhisperDecoderStep(vocabulary_size, num_layers, num_heads, hidden_dim, inter
     updated_self_attention_caches = []
     for layer_index in range(num_layers):
         layer_self_attention_cache = Lambda(
-            lambda x, index=layer_index: x[:, index, ...],
+            lambda x, index: x[:, index, ...],
             output_shape=(2, None, num_heads, key_dim),
+            arguments={"index": layer_index},
             name="transformer_decoder_layer_{}_self_attention_cache_slice".format(
                 layer_index
             ),
         )(self_attention_cache)
         layer_cross_attention_cache = Lambda(
-            lambda x, index=layer_index: x[:, index, ...],
+            lambda x, index: x[:, index, ...],
             output_shape=(2, None, num_heads, key_dim),
+            arguments={"index": layer_index},
             name="transformer_decoder_layer_{}_cross_attention_cache_slice".format(
                 layer_index
             ),
@@ -567,17 +588,11 @@ def WhisperDecoderStep(vocabulary_size, num_layers, num_heads, hidden_dim, inter
     logits = decoder_embeddings(hidden, reverse=True)
     model = Model([decoder_token_ids, self_attention_cache, cross_attention_cache, cache_update_index], [logits, updated_self_attention_cache], name=name)  # fmt: skip
     if weights is not None:
-        from examples.speech_to_text.weights import load_preset_weights
-
-        load_preset_weights(
-            model, weights, dtype=dtype, model_kind="decoder_step"
-        )
+        load_serialized_whisper_weights(model, weights, "decoder_step")
     return model
 
 
 def WhisperCrossCache(vocabulary_size, num_layers, num_heads, hidden_dim, intermediate_dim, num_mels=80, dropout=0.0, max_encoder_sequence_length=3000, max_decoder_sequence_length=448, dtype="float32", name="whisper_cross_cache", weights=None):
-    del vocabulary_size, intermediate_dim, num_mels, dropout
-    del max_encoder_sequence_length, max_decoder_sequence_length
     encoder_output = Input(shape=(None, hidden_dim), dtype="float32", name="encoder_output")  # fmt: skip
     key_dim = int(hidden_dim // num_heads)
     caches = []
@@ -598,9 +613,7 @@ def WhisperCrossCache(vocabulary_size, num_layers, num_heads, hidden_dim, interm
     )(caches)
     model = Model(encoder_output, cross_attention_cache, name=name)
     if weights is not None:
-        from examples.speech_to_text.weights import load_preset_weights
-
-        load_preset_weights(model, weights, dtype=dtype, model_kind="cross_cache")  # fmt: skip
+        load_serialized_whisper_weights(model, weights, "cross_cache")
     return model
 
 
