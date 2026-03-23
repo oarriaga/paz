@@ -36,6 +36,15 @@ from examples.speech_to_text.tokenizer import decode_whisper_token_ids
 from examples.speech_to_text.tokenizer import find_special_token_id
 
 
+def preprocess_waveform(waveform, sample_rate, expected_sample_rate=16000):
+    waveform = to_float(waveform)
+    waveform = to_mono(waveform)
+    waveform = resample(waveform, sample_rate, expected_sample_rate)
+    waveform = np.clip(waveform, -1.0, 1.0)
+    waveform = ops.convert_to_tensor(waveform, dtype="float32")
+    return expected_sample_rate, waveform
+
+
 def transcribe(
     wav_path,
     frontend=None,
@@ -67,11 +76,11 @@ def transcribe(
     sample_rate, waveform = preprocess(wav_path)
     token_ids, generated_token_ids, decoded_text = transcribe_waveform(
         waveform,
-        frontend,
-        encoder,
-        cross_cache_model,
-        decoder_step_model,
-        max_tokens,
+        frontend=frontend,
+        encoder=encoder,
+        cross_cache_model=cross_cache_model,
+        decoder_step_model=decoder_step_model,
+        max_tokens=max_tokens,
     )
     return sample_rate, token_ids, generated_token_ids, decoded_text
 
@@ -82,6 +91,7 @@ def transcribe_waveform(
     encoder=None,
     cross_cache_model=None,
     decoder_step_model=None,
+    decoder=None,
     max_tokens=64,
 ):
     if frontend is None:
@@ -111,7 +121,8 @@ def transcribe_waveform(
     prompt_token_ids = build_whisper_base_en_prompt_token_ids()
     stop_token_id = find_special_token_id("<|endoftext|>")
     cache_shape = decoder_step_model.input_shape[1]
-    decoder = KVDecoder(decoder_step_model, prompt_token_ids, max_tokens)
+    if decoder is None:
+        decoder = KVDecoder(decoder_step_model, prompt_token_ids, max_tokens)
 
     token_ids = decode_token_ids_with_kv_cache(
         decoder,
@@ -129,12 +140,7 @@ def transcribe_waveform(
 
 def preprocess(wav_path, expected_sample_rate=16000):
     waveform, sample_rate = load(wav_path)
-    waveform = to_float(waveform)
-    waveform = to_mono(waveform)
-    waveform = resample(waveform, sample_rate, expected_sample_rate)
-    waveform = np.clip(waveform, -1.0, 1.0)
-    waveform = ops.convert_to_tensor(waveform, dtype="float32")
-    return expected_sample_rate, waveform
+    return preprocess_waveform(waveform, sample_rate, expected_sample_rate)
 
 
 if __name__ == "__main__":

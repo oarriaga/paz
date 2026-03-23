@@ -55,6 +55,16 @@ def test_preprocess_wav_for_whisper_returns_float32_mono_waveform(tmp_path):
     )
 
 
+def test_preprocess_waveform_matches_wav_semantics():
+    waveform = np.array([[0, 32767], [-32768, 0]], dtype=np.int16)
+    sample_rate, waveform = demo.preprocess_waveform(waveform, 8000)
+    assert (sample_rate, waveform.dtype, len(waveform.shape)) == (
+        16000,
+        "float32",
+        1,
+    )
+
+
 def test_transcribe_waveform_runs_end_to_end(
     clear_keras_session,
 ):
@@ -82,6 +92,50 @@ def test_transcribe_waveform_runs_end_to_end(
             ),
             max_tokens=8,
         )
+    )
+    assert (
+        token_ids,
+        generated_token_ids,
+        decoded_text,
+    ) == (
+        [50257, 50357, 50362, 685, 9148, 15154, 62, 48877, 9399, 60, 50256],
+        [685, 9148, 15154, 62, 48877, 9399, 60],
+        " [BLANK_AUDIO]",
+    )
+
+
+def test_transcribe_waveform_reuses_prebuilt_decoder(
+    clear_keras_session,
+):
+    if find_whisper_base_en_preset_dir() is None:
+        pytest.skip(build_missing_whisper_preset_message("whisper_base_en"))
+    waveform = build_whisper_frontend_waveform()
+    config = find_variant_config("whisper_base_en")
+    decoder_step_model = WhisperDecoderStep(
+        **config,
+        weights="whisper_base_en",
+        name="whisper_base_en_decoder_step",
+    )
+    decoder = KVDecoder(
+        decoder_step_model,
+        build_whisper_base_en_prompt_token_ids(),
+        8,
+    )
+    token_ids, generated_token_ids, decoded_text = demo.transcribe_waveform(
+        waveform,
+        encoder=WhisperEncoder(
+            **config,
+            weights="whisper_base_en",
+            name="whisper_base_en_encoder",
+        ),
+        cross_cache_model=WhisperCrossCache(
+            **config,
+            weights="whisper_base_en",
+            name="whisper_base_en_cross_cache",
+        ),
+        decoder_step_model=decoder_step_model,
+        decoder=decoder,
+        max_tokens=8,
     )
     assert (
         token_ids,
