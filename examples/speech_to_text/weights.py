@@ -7,6 +7,7 @@ from pathlib import Path
 
 import keras
 import numpy as np
+from keras import ops
 
 from examples.speech_to_text.model import CONFIGS
 
@@ -353,7 +354,10 @@ def call_reference_model(
 
 def build_reference_logits(reference_model, decoder_hidden_states):
     token_embedding = reference_model.decoder_embeddings.token_embedding
-    return token_embedding(decoder_hidden_states, reverse=True)
+    logits = ops.matmul(
+        decoder_hidden_states, ops.transpose(token_embedding.embeddings)
+    )
+    return np.asarray(ops.convert_to_numpy(logits))
 
 
 def collect_weight_paths(model):

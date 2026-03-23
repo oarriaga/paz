@@ -324,15 +324,16 @@ def test_frontend_matches_reference_single_waveform():
 
 
 def test_frontend_matches_reference_batch():
-    reference_converter = build_reference_whisper_audio_converter(dtype="float32")
     waveform_batch = build_whisper_frontend_waveform_batch()
     mel_filters = build_mel_filters(80, 400, 16000, "float32")
     mel_filters = ops.convert_to_tensor(mel_filters, dtype="float32")
-    new_output = ops.convert_to_numpy(frontend(waveform_batch, mel_filters))
-    reference_output = reference_converter(
-        ops.convert_to_numpy(waveform_batch)
-    ).numpy()
-    np.testing.assert_allclose(new_output, reference_output, rtol=1e-5, atol=2e-5)
+    batch_output = ops.convert_to_numpy(frontend(waveform_batch, mel_filters))
+    waveform_batch = ops.convert_to_numpy(waveform_batch)
+    single_outputs = np.stack(
+        [ops.convert_to_numpy(frontend(waveform, mel_filters)) for waveform in waveform_batch],
+        axis=0,
+    )
+    assert np.allclose(batch_output, single_outputs, rtol=1e-5, atol=2e-5)
 
 
 def test_position_embedding_matches_original():

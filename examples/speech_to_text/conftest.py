@@ -2,6 +2,8 @@ import gc
 import os
 import sys
 
+os.environ.setdefault("KERAS_BACKEND", "jax")
+
 import keras
 import pytest
 
