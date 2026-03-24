@@ -57,8 +57,11 @@ class Camera(object):
         return self._camera.release()
 
     def read(self):
-        image = paz.image.BGR_to_RGB(self._camera.read()[1])
-        return np.ascontiguousarray(image)
+        image = self._camera.read()[1]
+        if image is not None:
+            image = paz.image.BGR_to_RGB(self._camera.read()[1])
+            image = np.ascontiguousarray(image)
+        return image
         # return cv2.cvtColor(self._camera.read()[1], cv2.COLOR_BGR2RGB)
 
     def save(self, filepath):
