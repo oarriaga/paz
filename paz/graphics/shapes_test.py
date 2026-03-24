@@ -1,5 +1,7 @@
 import pytest
+import jax
 import jax.numpy as jp
+import paz
 
 from paz.graphics.shapes import sphere
 from paz.graphics.shapes import plane
@@ -133,17 +135,78 @@ def test_cylinder_intersection_hit_top_cap():
 def test_cylinder_normal_on_top_cap():
     """Tests the normal on the cylinder's top cap."""
     point = jp.array([[0.5, 1.0, 0.5]])
+    depths = jp.array([[FARAWAY], [FARAWAY], [FARAWAY], [0.0]])
     expected_normal = jp.array([0.0, 1.0, 0.0])
-    actual_normal = cylinder.compute_canonical_normals_cylinder(point)
+    actual_normal = cylinder.compute_canonical_normals_cylinder(point, depths)
     assert jp.allclose(actual_normal, expected_normal)
 
 
 def test_cylinder_normal_on_wall():
     """Tests the normal on the cylinder's side wall."""
     point = jp.array([[1.0, 0.5, 0.0]])
+    depths = jp.array([[0.0], [FARAWAY], [FARAWAY], [FARAWAY]])
     expected_normal = jp.array([1.0, 0.0, 0.0])
-    actual_normal = cylinder.compute_canonical_normals_cylinder(point)
+    actual_normal = cylinder.compute_canonical_normals_cylinder(point, depths)
     assert jp.allclose(actual_normal, expected_normal)
+
+
+def test_rotated_cylinder_intersection_keeps_wall_normal():
+    """Wall hits should keep using the wall normal."""
+    cpu = jax.devices("cpu")[0]
+    with jax.default_device(cpu):
+        transform = (
+            paz.SE3.translation(jp.array([0.0, 0.0, 1.0]))
+            @ paz.SE3.scaling(jp.array([1.3, 1.3, 0.2]))
+            @ paz.SE3.rotation_x(jp.pi / 2)
+        )
+        shape = paz.graphics.Cylinder(transform)
+        seam_point = jp.array([[1.0, 1.0 - 1e-4, 0.0]])
+        world_point = paz.algebra.transform_points(transform, seam_point)
+        ray_origin = world_point + jp.array([[2.0, 0.0, 0.0]])
+        ray_direction = jp.array([[-1.0, 0.0, 0.0]])
+
+        hit_mask, _, hit_point, world_normals, _ = paz.graphics.shapes.intersect(
+            shape, ray_origin, ray_direction
+        )
+
+        assert hit_mask[0]
+        assert jp.allclose(hit_point, world_point, atol=1e-5)
+        assert world_normals[0, 0] > 0.95
+        assert jp.abs(world_normals[0, 2]) < 0.1
+
+
+def test_rotated_cylinder_oblique_cap_hit_keeps_cap_normal():
+    """Oblique cap hits should keep using the cap normal."""
+    cpu = jax.devices("cpu")[0]
+    with jax.default_device(cpu):
+        transform = (
+            paz.SE3.translation(jp.array([0.0, 0.0, 1.05]))
+            @ paz.SE3.scaling(jp.array([1.3, 1.3, 0.2]))
+            @ paz.SE3.rotation_x(jp.pi / 2)
+        )
+        shape = paz.graphics.Cylinder(transform)
+        pose = paz.SE3.view_transform(
+            jp.array([5.656854, 4.0, 5.656854]),
+            jp.array([0.0, 0.0, 1.0]),
+            jp.array([0.0, 1.0, 0.0]),
+        )
+        ray_origins, ray_directions = paz.graphics.camera.build_rays(
+            (128, 128), jp.pi / 3.0, pose
+        )
+        ray_origin = ray_origins[6456:6457]
+        ray_direction = ray_directions[6456:6457]
+
+        hit_mask, _, hit_point, world_normals, _ = paz.graphics.shapes.intersect(
+            shape, ray_origin, ray_direction
+        )
+        expected_normal = paz.algebra.transform_points(
+            jp.linalg.inv(transform).T, jp.array([[0.0, 1.0, 0.0]])
+        )
+        expected_normal = paz.algebra.normalize(expected_normal)
+
+        assert hit_mask[0]
+        assert jp.allclose(hit_point[0, 2], 1.25, atol=1e-5)
+        assert jp.allclose(world_normals, expected_normal, atol=1e-5)
 
 
 def test_cone_intersection_hit_wall():

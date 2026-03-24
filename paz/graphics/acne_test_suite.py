@@ -9,6 +9,19 @@ from paz.graphics.constants import EPSILON, FARAWAY
 
 # --- Helper Function ---
 
+
+def build_cylinder_depths(num_points, feature):
+    depths = jp.full((4, num_points), FARAWAY)
+    return depths.at[feature].set(0.0)
+
+
+def compute_cylinder_wall_normals(points):
+    return compute_canonical_normals_cylinder(points, build_cylinder_depths(len(points), 0))
+
+
+def compute_cylinder_lower_cap_normals(points):
+    return compute_canonical_normals_cylinder(points, build_cylinder_depths(len(points), 2))
+
 def check_no_self_intersection(intersect_fn, name, points, directions):
     hit_mask, depths, depth = intersect_fn(points, directions)
     is_hit = hit_mask[0]
@@ -209,7 +222,7 @@ def test_cylinder_grazing_acne():
     point = jp.array([[1.0 - 1e-5, 0.0, 0.0]])
     incident = jp.array([[-1.0, 0.1, 0.0]])
     incident = incident / jp.linalg.norm(incident)
-    check_reflection_acne(intersect_canonical_cylinder, compute_canonical_normals_cylinder, "CylinderGrazing", point, incident)
+    check_reflection_acne(intersect_canonical_cylinder, compute_cylinder_wall_normals, "CylinderGrazing", point, incident)
 
 def test_cone_grazing_acne():
     point = jp.array([[0.5 - 1e-5, -0.5, 0.0]])
@@ -221,14 +234,14 @@ def test_cylinder_grazing_shallow_acne():
     point = jp.array([[1.0 - 1e-5, 0.0, 0.0]])
     incident = jp.array([[-0.01, 1.0, 0.0]])
     incident = incident / jp.linalg.norm(incident)
-    check_reflection_acne(intersect_canonical_cylinder, compute_canonical_normals_cylinder, "CylinderShallow", point, incident)
+    check_reflection_acne(intersect_canonical_cylinder, compute_cylinder_wall_normals, "CylinderShallow", point, incident)
 
 # --- Corner/Rim Acne Tests ---
 
 def test_cylinder_bottom_corner_acne():
     point = jp.array([[0.9995, -1.0, 0.0]])
     D = jp.array([[0.707, -0.707, 0.0]])
-    check_corner_escape(intersect_canonical_cylinder, compute_canonical_normals_cylinder, "CylinderBottomCorner", point, D)
+    check_corner_escape(intersect_canonical_cylinder, compute_cylinder_lower_cap_normals, "CylinderBottomCorner", point, D)
 
 def test_cone_base_corner_acne():
     point = jp.array([[0.9995, -1.0, 0.0]])
@@ -239,7 +252,7 @@ def test_cone_base_corner_acne():
 
 def test_cylinder_body_near_cap_normal():
     point = jp.array([[1.0, 1.0 - 1e-4, 0.0]])
-    normals = compute_canonical_normals_cylinder(point)
+    normals = compute_canonical_normals_cylinder(point, build_cylinder_depths(len(point), 0))
     N = normals[0]
     print(f"Cyl Normal Near Cap: {N}")
     assert jp.abs(N[0] - 1.0) < 1e-2, f"Normal X should be 1.0, got {N[0]}"
