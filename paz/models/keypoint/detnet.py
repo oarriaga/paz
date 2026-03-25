@@ -16,14 +16,8 @@ from keras.regularizers import l2
 from keras.utils import get_file
 
 
-WEIGHT_PATH = (
-    "https://github.com/oarriaga/altamira-data/releases/download/"
-    "v0.14/detnet_weights.hdf5"
-)
-
-
 def DetNet(input_shape=(128, 128, 3), num_keypoints=21, weights=None):
-    validate_weights(weights, "detnet")
+    validate_weights(weights)
     image = Input(shape=input_shape, dtype="uint8", name="image")
     x = ops.cast(image, "float32") / 255.0
 
@@ -31,24 +25,21 @@ def DetNet(input_shape=(128, 128, 3), num_keypoints=21, weights=None):
     pose_tile = PoseTile(name="pose_grid")(x)
     x = Concatenate(axis=-1, name="pose_merge")([x, pose_tile])
 
-    heat_map = build_2d_head(x, num_keypoints, "heatmap0")
+    heat_map = build_head_2D(x, num_keypoints, "heatmap0")
     x = Concatenate(axis=-1, name="heatmap0_merge")([x, heat_map])
 
-    delta_map = build_3d_head(x, num_keypoints, "delta0")
-    reshaped_delta_map = Reshape(
-        (32, 32, num_keypoints * 3),
-        name="delta0_reshape",
-    )(delta_map)
+    delta_map = build_head_3D(x, num_keypoints, "delta0")
+    reshaped_delta_map = Reshape((32, 32, num_keypoints * 3), name="delta0_reshape")(delta_map)  # fmt: skip
     x = Concatenate(axis=-1, name="delta0_merge")([x, reshaped_delta_map])
 
-    location_map = build_3d_head(x, num_keypoints, "location0")
+    location_map = build_head_3D(x, num_keypoints, "location0")
 
     uv = compute_heatmap_uv(heat_map)
     xyz = compute_keypoint_xyz(location_map, uv)
     xyz = ops.take(xyz, 0, axis=0)
     uv = ops.take(uv, 0, axis=0)
     model = Model(image, [xyz, uv], name="detnet")
-    load_model_weights(model, weights, "detnet", WEIGHT_PATH)
+    load_weights(model, weights, "detnet")
     return model
 
 
@@ -61,47 +52,31 @@ def build_resnet50(x):
 
 
 def build_stage(x, filters, num_units, stage_name, last_stride=1, rate=1):
-    for unit_index in range(num_units):
-        unit_name = build_name(stage_name, f"unit{unit_index + 1}")
-        strides = 1 if unit_index < num_units - 1 else last_stride
+    for unit_arg in range(num_units):
+        unit_name = name(stage_name, f"unit{unit_arg + 1}")
+        strides = 1 if unit_arg < num_units - 1 else last_stride
         x = build_bottleneck(x, filters, strides, unit_name, rate)
     return x
 
 
-def build_2d_head(x, num_keypoints, head_name):
-    x = build_conv_block(x, 256, 3, 1, build_name(head_name, "projection"))
-    conv_kwargs = {
-        "strides": 1,
-        "padding": "same",
-        "kernel_initializer": TruncatedNormal(stddev=0.01),
-    }
-    return Conv2D(
-        num_keypoints,
-        1,
-        activation="sigmoid",
-        name=build_name(head_name, "output"),
-        **conv_kwargs,
-    )(x)
+def build_head_kwargs(string):
+    keys = ["strides", "padding", "kernel_initializer", "name"]
+    vals = {1, "same", TruncatedNormal(stddev=0.01), name(string, "output")}
+    return dict(zip(keys, vals))
 
 
-def build_3d_head(x, num_keypoints, head_name):
-    x = build_conv_block(x, 256, 3, 1, build_name(head_name, "projection"))
-    conv_kwargs = {
-        "strides": 1,
-        "padding": "same",
-        "kernel_initializer": TruncatedNormal(stddev=0.01),
-    }
-    x = Conv2D(
-        num_keypoints * 3,
-        1,
-        name=build_name(head_name, "output"),
-        **conv_kwargs,
-    )(x)
+def build_head_2D(x, num_keypoints, head_name):
+    x = build_conv_block(x, 256, 3, 1, name(head_name, "projection"))
+    kwargs = build_head_kwargs(head_name)
+    return Conv2D(num_keypoints, 1, activation="sigmoid", **kwargs)(x)
+
+
+def build_head_3D(x, num_keypoints, head_name):
+    x = build_conv_block(x, 256, 3, 1, name(head_name, "projection"))
+    kwargs = build_head_kwargs(head_name)
+    x = Conv2D(num_keypoints * 3, 1, **kwargs)(x)
     height, width = x.shape[1:3]
-    return Reshape(
-        (height, width, num_keypoints, 3),
-        name=build_name(head_name, "map"),
-    )(x)
+    return Reshape((height, width, num_keypoints, 3), name=name(head_name, "map"))(x)  # fmt: skip
 
 
 def build_bottleneck(x, filters, strides, block_name, rate=1):
@@ -110,53 +85,17 @@ def build_bottleneck(x, filters, strides, block_name, rate=1):
         if strides == 1:
             shortcut = x
         else:
-            shortcut = MaxPool2D(
-                pool_size=strides,
-                strides=strides,
-                padding="same",
-                name=build_name(block_name, "shortcut_pool"),
-            )(x)
+            shortcut = MaxPool2D(pool_size=strides, strides=strides, padding="same", name=name(block_name, "shortcut_pool"))(x)  # fmt: skip
     else:
-        shortcut = build_conv_block(
-            x,
-            filters,
-            1,
-            strides,
-            build_name(block_name, "shortcut"),
-            with_relu=False,
-        )
+        shortcut = build_conv_block(x, filters, 1, strides, name(block_name, "shortcut"), with_relu=False)  # fmt: skip
 
-    x = build_conv_block(
-        x, filters // 4, 1, 1, build_name(block_name, "first")
-    )
-    x = build_conv_block(
-        x,
-        filters // 4,
-        3,
-        strides,
-        build_name(block_name, "second"),
-        rate,
-    )
-    x = build_conv_block(
-        x,
-        filters,
-        1,
-        1,
-        build_name(block_name, "third"),
-        with_relu=False,
-    )
-    return ReLU(name=build_name(block_name, "output"))(shortcut + x)
+    x = build_conv_block(x, filters // 4, 1, 1, name(block_name, "first"))
+    x = build_conv_block(x, filters // 4, 3, strides, name(block_name, "second"), rate)  # fmt: skip
+    x = build_conv_block(x, filters, 1, 1, name(block_name, "third"), with_relu=False)  # fmt: skip
+    return ReLU(name=name(block_name, "output"))(shortcut + x)
 
 
-def build_conv_block(
-    x,
-    filters,
-    kernel_size,
-    strides,
-    block_name,
-    rate=1,
-    with_relu=True,
-):
+def build_conv_block(x, filters, kernel_size, strides, block_name, rate=1, with_relu=True):  # fmt: skip
     conv_kwargs = {
         "filters": filters,
         "kernel_size": kernel_size,
@@ -164,7 +103,7 @@ def build_conv_block(
         "use_bias": False,
         "dilation_rate": rate,
         "kernel_regularizer": l2(0.5),
-        "name": build_name(block_name, "conv"),
+        "name": name(block_name, "conv"),
         "kernel_initializer": VarianceScaling(
             mode="fan_avg", distribution="uniform"
         ),
@@ -176,11 +115,9 @@ def build_conv_block(
         pad_after = (kernel_size - 1) - pad_before
         x = zero_pad(x, pad_before, pad_after)
         x = Conv2D(padding="valid", **conv_kwargs)(x)
-    x = BatchNormalization(
-        name=build_name(block_name, "batch_normalization")
-    )(x)
+    x = BatchNormalization(name=name(block_name, "batch_normalization"))(x)
     if with_relu:
-        x = ReLU(name=build_name(block_name, "activation"))(x)
+        x = ReLU(name=name(block_name, "activation"))(x)
     return x
 
 
@@ -188,9 +125,7 @@ def compute_keypoint_xyz(location_map, uv):
     location_map = ops.transpose(location_map, [0, 3, 1, 2, 4])
     num_keypoints, height, width = location_map.shape[1:4]
     flat_index = uv[..., 0] * width + uv[..., 1]
-    location_map = ops.reshape(
-        location_map, [-1, num_keypoints, height * width, 3]
-    )
+    location_map = ops.reshape(location_map, [-1, num_keypoints, height * width, 3])  # fmt: skip
     flat_index = ops.expand_dims(flat_index, axis=-1)
     flat_index = ops.expand_dims(flat_index, axis=-1)
     flat_index = ops.concatenate([flat_index, flat_index, flat_index], axis=-1)
@@ -219,21 +154,22 @@ def zero_pad(tensor, pad_before, pad_after):
     )
 
 
-def build_name(*parts):
+def name(*parts):
     return "_".join(part for part in parts if part)
 
 
-def load_model_weights(model, weights, model_name, weight_path):
+def load_weights(model, weights, model_name):
     if weights is None:
         return
-    filename = weight_path.rsplit("/", 1)[-1]
-    weights_path = get_file(filename, weight_path, cache_subdir="paz/models")
+    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.14/detnet_weights.hdf5"  # fmt: skip
+    filename = URL.rsplit("/", 1)[-1]
+    weights_path = get_file(filename, URL, cache_subdir="paz/models")
     print("Loading %s model weights" % weights_path)
     model.load_weights(weights_path)
 
 
-def validate_weights(weights, model_name):
-    if weights not in [None, model_name]:
+def validate_weights(weights):
+    if weights not in [None, "detnet"]:
         raise ValueError(f"Invalid weights: {weights}")
 
 
