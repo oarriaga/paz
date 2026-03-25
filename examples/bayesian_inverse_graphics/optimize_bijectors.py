@@ -12,7 +12,7 @@ import numpy as np
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
-import paz.plot as plot
+import paz.utils.plot as plot
 from paz.backend import directory
 from paz.inference.gmm.model import GMM
 from observation_model import build_observation_model, build_render_function

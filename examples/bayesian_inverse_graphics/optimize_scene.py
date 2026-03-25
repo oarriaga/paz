@@ -33,6 +33,7 @@ import paz
 import optax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
+import paz.utils.pytree as pytree
 
 
 def write_losses(losses, directory, filename):
@@ -51,7 +52,7 @@ def write_losses(losses, directory, filename):
 def write_pytree_files(tree, directory, filename):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    paz.pytree.to_pickle(tree, directory / f"{filename}.pkl")
+    pytree.to_pickle(tree, directory / f"{filename}.pkl")
     paz.graphics.save(directory / f"{filename}", tree)
 
 
