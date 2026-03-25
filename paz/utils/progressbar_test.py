@@ -1,32 +1,34 @@
 import jax
 import jax.numpy as jp
 
-from paz import progressbar
+import paz.utils.progressbar as utils_progressbar
 
 
 def test_start_returns_float():
-    assert isinstance(progressbar.start(), float)
+    assert isinstance(utils_progressbar.start(), float)
 
 
 def test_newline_writes_newline(capsys):
-    progressbar.newline()
+    utils_progressbar.newline()
     jax.effects_barrier()
     captured = capsys.readouterr()
     assert captured.out == "\n"
 
 
 def test_draw_includes_description(capsys):
-    start_time = progressbar.start()
-    progressbar.draw(1, 10, start_time, "test", 10)
+    start_time = utils_progressbar.start()
+    utils_progressbar.draw(1, 10, start_time, "test", 10)
     jax.effects_barrier()
     captured = capsys.readouterr()
     assert "test" in captured.out
 
 
 def test_draw_runs_under_jit(capsys):
-    start_time = progressbar.start()
+    start_time = utils_progressbar.start()
     draw = jax.jit(
-        lambda step: progressbar.draw(step, 4, start_time, "jit", width=4)
+        lambda step: utils_progressbar.draw(
+            step, 4, start_time, "jit", width=4
+        )
     )
     draw(2)
     jax.effects_barrier()
@@ -35,7 +37,7 @@ def test_draw_runs_under_jit(capsys):
 
 
 def test_show_builds_callback_for_scan(capsys):
-    callback = progressbar.show(3, "scan", width=3)
+    callback = utils_progressbar.show(3, "scan", width=3)
 
     def body(carry, step):
         callback(step)
