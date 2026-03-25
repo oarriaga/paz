@@ -4,7 +4,7 @@ import jax
 from jax import flatten_util
 import jax.numpy as jp
 
-from paz import progressbar
+import paz.utils.progressbar as progressbar
 
 Samples = namedtuple("Samples", ["position", "log_density"])
 State = namedtuple("State", ["proposal", "is_accepted", "acceptance_rate"])
