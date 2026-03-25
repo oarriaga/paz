@@ -1,3 +1,4 @@
+import paz
 import jax.numpy as jp
 
 from paz.graphics.shapes.quadratics import intersect_canonical_cone
@@ -12,7 +13,7 @@ def build_shell_normals(points):
     distances = jp.sqrt(x_points**2 + z_points**2)
     y_normals = jp.where(y_points > 0, -distances, distances)
     shape_normals = jp.hstack([x_points, y_normals, z_points])
-    return shape_normals
+    return paz.algebra.normalize(shape_normals)
 
 
 def compute_canonical_normals_cone(points, sorted_depths):

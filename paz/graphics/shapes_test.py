@@ -230,16 +230,18 @@ def test_cone_intersection_hit_cap():
 def test_cone_normal_on_cap():
     """Tests the normal on the cone's cap."""
     point = jp.array([[0.0, 0.0, 0.0]])
+    depths = jp.array([[FARAWAY], [FARAWAY], [FARAWAY], [0.0]])
     expected_normal = jp.array([0.0, 1.0, 0.0])
-    actual_normal = cone.compute_canonical_normals_cone(point)
+    actual_normal = cone.compute_canonical_normals_cone(point, depths)
     assert jp.allclose(actual_normal, expected_normal)
 
 
 def test_cone_normal_on_wall():
     """Tests the normal on the cone's wall."""
     point = jp.array([[0.3, -0.5, 0.4]])
+    depths = jp.array([[0.0], [FARAWAY], [FARAWAY], [FARAWAY]])
     expected_normal = jp.array([0.3, 0.5, 0.4])
-    actual_normal = cone.compute_canonical_normals_cone(point)
+    actual_normal = cone.compute_canonical_normals_cone(point, depths)
     assert jp.allclose(
         actual_normal / jp.linalg.norm(actual_normal),
         expected_normal / jp.linalg.norm(expected_normal),
