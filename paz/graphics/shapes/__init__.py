@@ -33,7 +33,7 @@ normal_cases = [
     lambda points, depths: compute_canonical_normals_sphere(points),
     lambda points, depths: compute_canonical_normals_cube(points),
     compute_canonical_normals_cylinder,
-    lambda points, depths: compute_canonical_normals_cone(points),
+    compute_canonical_normals_cone,
     lambda points, depths: compute_canonical_normals_plane(points),
 ]
 

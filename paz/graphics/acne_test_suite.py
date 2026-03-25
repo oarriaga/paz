@@ -15,12 +15,29 @@ def build_cylinder_depths(num_points, feature):
     return depths.at[feature].set(0.0)
 
 
+def build_cone_depths(num_points, feature):
+    depths = jp.full((4, num_points), FARAWAY)
+    return depths.at[feature].set(0.0)
+
+
 def compute_cylinder_wall_normals(points):
     return compute_canonical_normals_cylinder(points, build_cylinder_depths(len(points), 0))
 
 
 def compute_cylinder_lower_cap_normals(points):
     return compute_canonical_normals_cylinder(points, build_cylinder_depths(len(points), 2))
+
+
+def compute_cone_shell_normals(points):
+    return compute_canonical_normals_cone(points, build_cone_depths(len(points), 0))
+
+
+def compute_cone_lower_cap_normals(points):
+    return compute_canonical_normals_cone(points, build_cone_depths(len(points), 2))
+
+
+def compute_cone_upper_tip_normals(points):
+    return compute_canonical_normals_cone(points, build_cone_depths(len(points), 3))
 
 def check_no_self_intersection(intersect_fn, name, points, directions):
     hit_mask, depths, depth = intersect_fn(points, directions)
@@ -228,7 +245,7 @@ def test_cone_grazing_acne():
     point = jp.array([[0.5 - 1e-5, -0.5, 0.0]])
     incident = jp.array([[-1.0, 0.0, 0.0]])
     incident = incident / jp.linalg.norm(incident)
-    check_reflection_acne(intersect_canonical_cone, compute_canonical_normals_cone, "ConeGrazing", point, incident)
+    check_reflection_acne(intersect_canonical_cone, compute_cone_shell_normals, "ConeGrazing", point, incident)
 
 def test_cylinder_grazing_shallow_acne():
     point = jp.array([[1.0 - 1e-5, 0.0, 0.0]])
@@ -246,7 +263,7 @@ def test_cylinder_bottom_corner_acne():
 def test_cone_base_corner_acne():
     point = jp.array([[0.9995, -1.0, 0.0]])
     D = jp.array([[0.707, -0.707, 0.0]])
-    check_corner_escape(intersect_canonical_cone, compute_canonical_normals_cone, "ConeBaseCorner", point, D)
+    check_corner_escape(intersect_canonical_cone, compute_cone_lower_cap_normals, "ConeBaseCorner", point, D)
 
 # --- Normal Investigation Tests (Correctness of Fixes) ---
 
@@ -260,7 +277,7 @@ def test_cylinder_body_near_cap_normal():
 
 def test_cone_body_near_cap_normal():
     point = jp.array([[0.9999, -0.9999, 0.0]])
-    normals = compute_canonical_normals_cone(point)
+    normals = compute_canonical_normals_cone(point, build_cone_depths(len(point), 0))
     N = normals[0]
     print(f"Cone Normal Near Cap: {N}")
     assert jp.abs(N[0] - 0.7071) < 1e-2, f"Normal X should be 0.7071, got {N[0]}"
@@ -270,7 +287,7 @@ def test_cone_body_near_cap_normal():
 
 def test_cone_tip_normal_singularity():
     point = jp.array([[0.0, 0.0, 0.0]])
-    normals = compute_canonical_normals_cone(point)
+    normals = compute_cone_upper_tip_normals(point)
     N = normals[0]
     norm_val = jp.linalg.norm(N)
     assert norm_val > 0.5, f"Tip normal is zero! {N}"
@@ -278,7 +295,7 @@ def test_cone_tip_normal_singularity():
 
 def test_cone_axis_normal_stability():
     point = jp.array([[0.1, -0.1, 0.0]])
-    normals = compute_canonical_normals_cone(point)
+    normals = compute_cone_shell_normals(point)
     N = normals[0]
     print(f"Shell Normal: {N}")
     assert jp.abs(jp.linalg.norm(N) - 1.0) < 1e-3, f"Normal not normalized! {jp.linalg.norm(N)}"
