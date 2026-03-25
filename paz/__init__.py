@@ -25,8 +25,6 @@ from paz.backend import points2D
 from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
-from paz import pytree
-from paz import environment
 from paz.backend.standard import (
     lock,
     partial,
@@ -40,14 +38,13 @@ from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz import applications
-from paz.utils import time, assert_snapshot, cache, jit_and_cache, clear_cache
+from paz import utils
+from paz.utils import assert_snapshot, cache, jit_and_cache, clear_cache
 from paz.utils import CACHE_PATH
 from paz.abstract import tree
 from paz import callbacks
 from paz import layers
 
-from paz import plot
-from paz import progressbar
 from paz import inference
 from paz.inference import metropolis_hastings
 from paz.inference.prior import Prior
@@ -66,3 +63,9 @@ from paz.inference.metadata import (
     get_nodes,
     get_non_priors,
 )
+
+
+def __getattr__(name):
+    if name == "time":
+        return utils.time
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
