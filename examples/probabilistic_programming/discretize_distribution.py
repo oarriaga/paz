@@ -1,6 +1,6 @@
 from tensorflow_probability.substrates import jax as tfp
 
-import paz.plot as plot
+import paz.utils.plot as plot
 
 
 tfd = tfp.distributions

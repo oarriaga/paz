@@ -7,7 +7,7 @@ import optax.tree_utils as otu
 from optax import scale_by_zoom_linesearch
 from optax import scale_by_backtracking_linesearch
 
-from paz import progressbar
+import paz.utils.progressbar as progressbar
 
 OptimizeResult = namedtuple(
     "OptimizeResult",

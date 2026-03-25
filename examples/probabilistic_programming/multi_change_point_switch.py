@@ -13,7 +13,7 @@ import jax.numpy as jp
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
-import paz.plot as plot
+import paz.utils.plot as plot
 from paz.inference.types import SampleType
 
 tfd = tfp.distributions
@@ -389,4 +389,3 @@ plot_results(
 )
 print(f"plotting: {time.perf_counter() - start_time:.3f}s")
 plot.show()
-

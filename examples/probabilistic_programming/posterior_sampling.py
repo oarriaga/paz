@@ -1,6 +1,7 @@
 import paz
 import jax
 import jax.numpy as jp
+import paz.utils.plot as plot
 
 from tensorflow_probability.substrates import jax as tfp
 
@@ -23,7 +24,7 @@ samples, states = paz.metropolis_hastings.sample(
     key, log_density, positions, sigma, num_samples, num_chains
 )
 
-paz.plot.trace(samples.position[:, 0, 1], y_label="value")
+plot.trace(samples.position[:, 0, 1], y_label="value")
 
 
 def compute_acceptance_rate(infos):
