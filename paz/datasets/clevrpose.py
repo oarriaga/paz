@@ -1,6 +1,5 @@
 import os
 from collections import namedtuple
-from glob import glob
 from pathlib import Path
 import pickle
 
@@ -88,18 +87,14 @@ def load(concept_arg):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    def draw_rectangle(image, corner_A, corner_B, color, thickness):
-        return cv2.rectangle(
-            image, tuple(corner_A), tuple(corner_B), tuple(color), thickness
-        )
-
-    def draw_center_form_box(image, box, color=[0, 255, 0], thick=2):
+    def draw_center_form_box(image, box, color=[0, 255, 0], thick=3):
         image = paz.to_numpy(image)
         x_min, y_min, W_box, H_box = box.tolist()
         x_max = x_min + W_box
         y_max = y_min + H_box
         corner_A, corner_B = (x_min, y_min), (x_max, y_max)
-        draw_rectangle(image, corner_A, corner_B, color, thick)
+        image = paz.draw.rectangle(image, corner_A, corner_B, color, thick)
+        # draw_rectangle(image, corner_A, corner_B, color, thick)
         image = paz.to_jax(image)
         return image
 
