@@ -7,80 +7,73 @@ import jax.numpy as jp
 import optax
 import optax.tree_utils as otu
 
-def minimize(parameters, loss_fn, optimizer, max_steps, tolerance, metrics=None, metrics_every=1, trace=False):  # fmt: skip
+MAX_STEPS_REACHED = 0
+STOP_FN_MET = 1
+
+
+def grad_norm_stop(tolerance):
+    def stop_fn(_step_arg, _params, _loss, gradients):
+        return otu.tree_norm(gradients) < tolerance
+
+    return stop_fn
+
+
+def loss_stop(tolerance):
+    def stop_fn(_step_arg, _params, loss, _gradients):
+        return loss < tolerance
+
+    return stop_fn
+
+
+def minimize(parameters, loss_fn, optimizer, max_steps, stop_fn=None, metrics=None, metrics_every=1, callbacks=None):  # fmt: skip
     _validate_metrics(metrics, metrics_every)
+    callbacks = () if callbacks is None else tuple(callbacks)
+    stop_fn = _never_stop if stop_fn is None else stop_fn
     optimizer = optax.with_extra_args_support(optimizer)
     state = optimizer.init(parameters)
     value_grad_fn = _build_value_grad_fn(loss_fn, state)
-    args = (parameters, state, loss_fn, optimizer, max_steps, tolerance)
-    if trace:
-        results = _minimize_with_trace(*args, value_grad_fn, metrics, metrics_every)  # fmt: skip
-    else:
-        results = _minimize(*args, value_grad_fn, metrics, metrics_every)
-    return results
+    args = (parameters, state, loss_fn, optimizer, max_steps, stop_fn)
+    args += (value_grad_fn, metrics, metrics_every, callbacks)
+    return _minimize(*args)
 
 
-def _minimize(params, state, loss_fn, optimizer, max_steps, tolerance, value_grad_fn, metrics, metrics_every):  # fmt: skip
+def _minimize(params, state, loss_fn, optimizer, max_steps, stop_fn, value_grad_fn, metrics, metrics_every, callbacks):  # fmt: skip
+    losses = jp.zeros((max_steps,))
     size = _num_metric_slots(metrics, max_steps, metrics_every)
     metrics_state = _build_metrics_state(metrics, params, size)
+    metric_defaults = _build_metric_values(metrics, params)
 
     def step(carry):
-        params, state, step_arg, has_met_criteria, metrics_state = carry
-        args = (params, state, loss_fn, optimizer, tolerance, value_grad_fn)
-        _, params, state, has_met_criteria = _gradient_step(*args)
-        args = (metrics_state, metrics, params, step_arg, metrics_every)
-        metrics_state = _update_metrics_trace(*args)
-        carry = (params, state, step_arg + 1, has_met_criteria, metrics_state)
+        params, state, step_arg, has_met_criteria, losses, metrics_state = carry
+        params_before = params
+        args = (params, state, loss_fn, optimizer, value_grad_fn)
+        loss, gradients, next_params, next_state = _gradient_step(*args)
+        args = (metrics_state, metrics, params_before, step_arg, metrics_every, metric_defaults)  # fmt: skip
+        metrics_state, metric_values, has_metrics = _update_metrics_trace(*args)
+        _run_callbacks(callbacks, step_arg + 1, params_before, loss, metric_values, has_metrics)  # fmt: skip
+        losses = losses.at[step_arg].set(loss)
+        args = (step_arg + 1, params_before, loss, gradients)
+        has_met_criteria = stop_fn(*args)
+        args = (has_met_criteria, params_before, state, next_params, next_state)
+        params, state = _select_step_state(*args)
+        carry = (params, state, step_arg + 1, has_met_criteria, losses, metrics_state)  # fmt: skip
         return carry
 
     def cond(carry):
-        _, _, step_arg, has_met_criteria, _ = carry
+        _, _, step_arg, has_met_criteria, _, _ = carry
         has_steps_remaining = step_arg < max_steps
         return has_steps_remaining & jp.logical_not(has_met_criteria)
 
-    carry = (params, state, 0, False, metrics_state)
+    carry = (params, state, 0, False, losses, metrics_state)
     carry = jax.lax.while_loop(cond, step, carry)
-    params, _, step_arg, has_met_criteria, metrics_state = carry
-    history = _build_metrics_history(metrics, metrics_state, step_arg)
-    return has_met_criteria, params, history
-
-
-def _minimize_with_trace(params, state, loss_fn, optimizer, max_steps, tolerance, value_grad_fn, metrics, metrics_every):  # fmt: skip
-    size = _num_metric_slots(metrics, max_steps, metrics_every)
-    metrics_state = _build_metrics_state(metrics, params, size)
-
-    def dummy_step(carry, _):
-        params, _, _, _, _ = carry
-        return carry, (-1.0, params)
-
-    def gradient_step(carry, step_arg):
-        params, state, _, stop_step, metrics_state = carry
-        args = (params, state, loss_fn, optimizer, tolerance, value_grad_fn)
-        loss, params, state, has_met_criteria = _gradient_step(*args)
-        args = (stop_step, max_steps, has_met_criteria, step_arg)
-        stop_step = _update_stop_step(*args)
-        args = (metrics_state, metrics, params, step_arg, metrics_every)
-        metrics_state = _update_metrics_trace(*args)
-        carry = (params, state, has_met_criteria, stop_step, metrics_state)
-        return carry, (loss, params)
-
-    def step(carry, step_arg):
-        _, _, has_met_criteria, _, _ = carry
-        args = (has_met_criteria, dummy_step, gradient_step, carry, step_arg)
-        return jax.lax.cond(*args)
-
-    carry = (params, state, False, max_steps, metrics_state)
-    steps = jp.arange(max_steps)
-    carry, trace = jax.lax.scan(step, carry, steps)
-    params, _, has_met_criteria, stop_step, metrics_state = carry
-    losses, params_trace = trace
-    trace = Trace(losses, params_trace, metrics_state, stop_step)
-    return has_met_criteria, params, trace
+    params, _, step_arg, has_met_criteria, losses, metrics_state = carry
+    status = _build_status(has_met_criteria)
+    history = Trace(losses, metrics_state, step_arg)
+    return status, params, history
 
 
 class Trace(NamedTuple):
     losses: object
-    parameters: object
     metrics: object
     stop_step: object
 
@@ -91,25 +84,31 @@ class Metrics(NamedTuple):
     arg: int
 
 
-def _update_stop_step(stop_step, max_steps, has_met_criteria, step_arg):
-    has_not_stopped_yet = stop_step == max_steps  # stop_step is still default
-    should_record_stop_step = has_not_stopped_yet & has_met_criteria
-    completed_steps = step_arg + 1
-    return jp.where(should_record_stop_step, completed_steps, stop_step)
-
-
-def _gradient_step(params, state, loss_fn, optimizer, tolerance, value_grad_fn):
+def _gradient_step(params, state, loss_fn, optimizer, value_grad_fn):
     loss, gradients = value_grad_fn(params, state)
     kwargs = {"value": loss, "grad": gradients, "value_fn": loss_fn}
     delta, state = optimizer.update(gradients, state, params, **kwargs)
     params = optax.apply_updates(params, delta)
-    has_met_criteria = jp.logical_not(_is_gradient_norm_high(gradients, tolerance))  # fmt: skip
-    return loss, params, state, has_met_criteria
+    return loss, gradients, params, state
 
 
-def _is_gradient_norm_high(gradients, tolerance):
-    gradient_norm = otu.tree_norm(gradients)
-    return gradient_norm >= tolerance
+def _select_step_state(has_met_criteria, params, state, next_params, next_state):  # fmt: skip
+
+    def keep_state():
+        return params, state
+
+    def update_state():
+        return next_params, next_state
+
+    return jax.lax.cond(has_met_criteria, keep_state, update_state)
+
+
+def _never_stop(_step_arg, _params, _loss, _gradients):
+    return jp.array(False)
+
+
+def _build_status(has_met_criteria):
+    return jp.where(has_met_criteria, STOP_FN_MET, MAX_STEPS_REACHED)
 
 
 def _build_value_grad_fn(loss_fn, state):
@@ -149,37 +148,38 @@ def _build_metrics_state(metrics, params, size):
     return Metrics(trace, steps, 0)
 
 
-def _build_metrics_history(metrics, metrics_state, stop_step):
-    if metrics is None:
-        return None
-    return Trace(None, None, metrics_state, stop_step)
-
-
 def _build_metrics_trace(metrics, params, size):
     if metrics is None:
         return {}
-    metric_values = metrics(params)
+    metric_values = _build_metric_values(metrics, params)
     initialize_leaf = partial(_initialize_metric_trace_leaf, size=size)
     return jax.tree.map(initialize_leaf, metric_values)
+
+
+def _build_metric_values(metrics, params):
+    if metrics is None:
+        return {}
+    return metrics(params)
 
 
 def _initialize_metric_trace_leaf(leaf, size):
     return jp.zeros((size, *leaf.shape), dtype=leaf.dtype)
 
 
-def _update_metrics_trace(metrics_state, metrics, params, step_arg, metrics_every):  # fmt: skip
+def _update_metrics_trace(metrics_state, metrics, params, step_arg, metrics_every, metric_defaults):  # fmt: skip
     if metrics is None:
-        return metrics_state
+        return metrics_state, metric_defaults, False
 
     def compute_metrics():
         metric_values = metrics(params)
         update_leaf = partial(_update_metric_trace_leaf, metric_arg=metrics_state.arg)  # fmt: skip
         trace = jax.tree.map(update_leaf, metrics_state.trace, metric_values)
         steps = metrics_state.steps.at[metrics_state.arg].set(step_arg + 1)
-        return Metrics(trace, steps, metrics_state.arg + 1)
+        metrics_state_ = Metrics(trace, steps, metrics_state.arg + 1)
+        return metrics_state_, metric_values, True
 
     def keep_metrics():
-        return metrics_state
+        return metrics_state, metric_defaults, False
 
     do_compute_metrics = _do_compute_metrics(step_arg, metrics_every)
     return jax.lax.cond(do_compute_metrics, compute_metrics, keep_metrics)
@@ -193,16 +193,28 @@ def _do_compute_metrics(step_arg, metrics_every):
     return jp.mod(step_arg, metrics_every) == 0
 
 
+def _run_callbacks(callbacks, step_arg, params, loss, metrics, has_metrics):
+    if len(callbacks) == 0:
+        return
+
+    def observe(step_arg, params, loss, metrics, has_metrics):
+        metrics = metrics if bool(has_metrics) else {}
+        for callback in callbacks:
+            callback(step_arg, params, loss, metrics)
+
+    args = (step_arg, params, loss, metrics, has_metrics)
+    jax.debug.callback(observe, *args, ordered=True)
+
+
 def trim_trace(trace):
     num_steps = int(jax.device_get(trace.stop_step))
     losses = _trim_losses(trace.losses, num_steps)
-    params_trace = _trim_parameters(trace.parameters, num_steps)
     num_metric_steps = int(jax.device_get(_count_metric_steps(trace)))
     trim_sparse = partial(_trim_sparse_trace_leaf, num_steps=num_metric_steps)
     metrics_trace = jax.tree.map(trim_sparse, trace.metrics.trace)
     metric_steps = trace.metrics.steps[:num_metric_steps]
     metrics_state = Metrics(metrics_trace, metric_steps, trace.metrics.arg)
-    return Trace(losses, params_trace, metrics_state, trace.stop_step)
+    return Trace(losses, metrics_state, trace.stop_step)
 
 
 def _count_metric_steps(trace):
@@ -211,21 +223,8 @@ def _count_metric_steps(trace):
     return jp.sum(is_initialized & is_before_stop)
 
 
-def _trim_dense_trace_leaf(leaf, num_steps):
-    return leaf[:num_steps]
-
-
 def _trim_losses(losses, num_steps):
-    if losses is None:
-        return None
     return losses[:num_steps]
-
-
-def _trim_parameters(parameters, num_steps):
-    if parameters is None:
-        return None
-    trim_dense = partial(_trim_dense_trace_leaf, num_steps=num_steps)
-    return jax.tree.map(trim_dense, parameters)
 
 
 def _trim_sparse_trace_leaf(leaf, num_steps):
