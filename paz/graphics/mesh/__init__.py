@@ -4,11 +4,13 @@ from .intersect import (
     compute_f,
     intersect_mesh,
     intersect_canonical_mesh,
+    intersect_chunked,
 )
 from .geometry import (
     build_edges,
     compute_canonical_normals,
     compute_normals,
+    compute_normals_for_hits,
     compute_position,
     extract_points,
     transform_points,
@@ -19,17 +21,19 @@ from .patterns import (
     compute_mesh_pattern_colors_from_uv,
     compute_mesh_vertex_uvs,
     interpolate_triangle_values,
+    interpolate_for_hits,
+    compute_base_colors_for_hits,
 )
 from .shading import (
     compute_ambient,
     compute_base_color,
+    compute_colors_for_hits,
     compute_diffuse,
     compute_mesh_colors,
     compute_specular,
     vertex_colors_to_face_colors,
 )
 from .render import (
-    compute_scene_hit_mask,
     mask_out_mesh,
     postprocess,
     postprocess_depth,
@@ -37,7 +41,7 @@ from .render import (
     render_depth,
     render_mesh,
     render_mesh_depth,
-    select_triangle_color,
+    select_closest_color,
     to_color_image,
     to_depth_image,
 )

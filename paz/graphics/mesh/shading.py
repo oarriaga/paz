@@ -6,7 +6,7 @@ from paz.graphics.geometry import (
 )
 import paz
 
-from .patterns import compute_mesh_base_colors
+from .patterns import compute_mesh_base_colors, compute_base_colors_for_hits
 
 
 def compute_mesh_colors(mesh, lights, points, normals, eyes, barycentric_u, barycentric_v):  # fmt: skip
@@ -46,6 +46,20 @@ def compute_specular(specular, shininess, eyes, light, points, normals):
 
 def compute_base_color(color, intensity, points):
     return color * intensity
+
+
+def compute_colors_for_hits(mesh, lights, points, normals, eyes, face_indices, u, v):  # fmt: skip
+    base = compute_base_colors_for_hits(mesh, points, face_indices, u, v)
+    colors = []
+    material = mesh.material
+    for light in lights:
+        ambient = compute_ambient(material.ambient, base, light, points)
+        diffuse_args = (material.diffuse, base, light, points, normals)
+        diffuse = compute_diffuse(*diffuse_args)
+        specular_args = (material.specular, material.shininess)
+        specular = compute_specular(*specular_args, eyes, light, points, normals)
+        colors.append(ambient + diffuse + specular)
+    return jp.sum(jp.array(colors), axis=0)
 
 
 def vertex_colors_to_face_colors(faces, vertex_colors):

@@ -19,8 +19,7 @@ from paz.graphics.mesh import (
     vertex_colors_to_face_colors,
     compute_base_color,
     compute_ambient,
-    compute_scene_hit_mask,
-    select_triangle_color,
+    select_closest_color,
     to_color_image,
     to_depth_image,
     render_depth,
@@ -163,21 +162,13 @@ def test_compute_ambient():
     assert jp.allclose(result, 0.1, atol=1e-5)
 
 
-def test_select_triangle_color():
+def test_select_closest_color():
     depths = jp.array([[10.0, 20.0], [5.0, 30.0]])
     colors = jp.array([[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
                         [[0.0, 0.0, 1.0], [1.0, 1.0, 0.0]]])
-    result = select_triangle_color(depths, colors)
+    result = select_closest_color(depths, colors)
     assert jp.allclose(result[0], jp.array([0.0, 0.0, 1.0]))
     assert jp.allclose(result[1], jp.array([0.0, 1.0, 0.0]))
-
-
-def test_compute_scene_hit_mask():
-    hit_masks = jp.array([[True, False, True], [False, False, True]])
-    result = compute_scene_hit_mask(hit_masks)
-    assert result[0] == True
-    assert result[1] == False
-    assert result[2] == True
 
 
 def test_to_color_image_shape():

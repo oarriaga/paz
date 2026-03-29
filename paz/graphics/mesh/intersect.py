@@ -1,4 +1,6 @@
+import jax
 import jax.numpy as jp
+from functools import partial
 
 from paz.graphics.constants import FARAWAY
 import paz
@@ -31,8 +33,73 @@ def intersect_canonical_mesh(vertices, faces, ray_origins, ray_directions):
     return hit_mask, depth, u, v
 
 
+def _pad_to_chunks(faces, chunk_size):
+    remainder = faces.shape[0] % chunk_size
+    if remainder == 0:
+        return faces
+    pad_size = chunk_size - remainder
+    last = jp.repeat(faces[-1:], pad_size, axis=0)
+    return jp.concatenate([faces, last], axis=0)
+
+
+def _select_closest(hit_mask, depth, u, v):
+    best = jp.argmin(depth, axis=0)
+    idx = jp.expand_dims(best, 0)
+    take = lambda x: jp.take_along_axis(x, idx, 0)[0]
+    return take(hit_mask), take(depth), take(u), take(v), best
+
+
+def _update_best(carry, closest, offset):
+    mask, depth, u, v, face_idx = carry
+    c_mask, c_depth, c_u, c_v, c_local = closest
+    closer = c_depth < depth
+    global_idx = offset + c_local
+    new_mask = jp.where(closer, c_mask, mask)
+    new_depth = jp.where(closer, c_depth, depth)
+    new_u = jp.where(closer, c_u, u)
+    new_v = jp.where(closer, c_v, v)
+    new_idx = jp.where(closer, global_idx, face_idx)
+    return new_mask, new_depth, new_u, new_v, new_idx
+
+
+@jax.checkpoint
+def _chunk_intersect(vertices, chunk_faces, rays):
+    args = (vertices, chunk_faces, *rays)
+    return intersect_canonical_mesh(*args)
+
+
+def _chunk_step(carry, xs, vertices, rays):
+    chunk_faces, offset = xs
+    hit_mask, depth, u, v = _chunk_intersect(vertices, chunk_faces, rays)
+    closest = _select_closest(hit_mask, depth, u, v)
+    return _update_best(carry, closest, offset), None
+
+
+def _init_carry(num_rays):
+    mask = jp.zeros(num_rays, dtype=bool)
+    depth = jp.full(num_rays, FARAWAY)
+    u = jp.zeros(num_rays)
+    v = jp.zeros(num_rays)
+    idx = jp.zeros(num_rays, dtype=jp.int32)
+    return mask, depth, u, v, idx
+
+
+def intersect_chunked(vertices, faces, rays, chunk_size=1024):
+    num_faces = faces.shape[0]
+    padded = _pad_to_chunks(faces, chunk_size)
+    num_chunks = padded.shape[0] // chunk_size
+    chunks = jp.reshape(padded, (num_chunks, chunk_size, 3))
+    offsets = jp.arange(num_chunks) * chunk_size
+    init = _init_carry(rays[0].shape[0])
+    step = partial(_chunk_step, vertices=vertices, rays=rays)
+    carry, _ = jax.lax.scan(step, init, (chunks, offsets))
+    mask, depth, u, v, idx = carry
+    idx = jp.minimum(idx, num_faces - 1)
+    return mask, depth, u, v, idx
+
+
 def intersect_mesh(mesh, ray_origins, ray_directions):
     world_to_shape = jp.linalg.inv(mesh.transform)
-    rays = (ray_origins, ray_directions)
-    rays = paz.algebra.transform_rays(world_to_shape, *rays)
-    return intersect_canonical_mesh(mesh.vertices, mesh.faces, *rays)
+    rays = paz.algebra.transform_rays(world_to_shape, ray_origins, ray_directions)
+    args = (mesh.vertices, mesh.faces, rays)
+    return intersect_chunked(*args)
