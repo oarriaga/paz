@@ -43,10 +43,16 @@ def _print_bar(now_value, total_value, start_time, description, width):
     sys.stdout.flush()
 
 
+def print_bar(
+    now_value, total_value, start_time, description="progress", width=50
+):
+    _print_bar(now_value, total_value, start_time, description, width)
+
+
 def draw(now_value, total_value, start_time, description="progress", width=50):
-    callback = lambda current, total: _print_bar(
-        current, total, start_time, description, width
-    )
+    def callback(current, total):
+        print_bar(current, total, start_time, description, width)
+
     jax.debug.callback(
         callback, jp.asarray(now_value), jp.asarray(total_value), ordered=True
     )

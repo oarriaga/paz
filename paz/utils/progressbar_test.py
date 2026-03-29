@@ -23,6 +23,13 @@ def test_draw_includes_description(capsys):
     assert "test" in captured.out
 
 
+def test_print_bar_includes_description(capsys):
+    start_time = utils_progressbar.start()
+    utils_progressbar.print_bar(1, 10, start_time, "test", 10)
+    captured = capsys.readouterr()
+    assert "test" in captured.out
+
+
 def test_draw_runs_under_jit(capsys):
     start_time = utils_progressbar.start()
     draw = jax.jit(
