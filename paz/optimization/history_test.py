@@ -16,8 +16,8 @@ def quadratic_loss(parameters):
 
 def test_minimize_returns_loss_history():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     status, fitted, history = minimize(
         parameters,
         quadratic_loss,
@@ -44,8 +44,8 @@ def test_minimize_returns_loss_history():
 
 def test_trim_trace_trims_sparse_metrics_to_optimization_length():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
     status, _, history = minimize(
         parameters,
