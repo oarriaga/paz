@@ -10,101 +10,94 @@ import datetime
 
 
 def clamp_tilt(tilt, limit=None):
-    """Prevents the camera from flipping upside down."""
     if limit is None:
         limit = math.pi / 2 - 0.01
     return jp.clip(tilt, -limit, limit)
 
 
 def get_camera_basis(rotation_matrix):
-    """
-    Extracts the basis vectors from the camera-to-world rotation matrix.
-    Assuming standard OpenGL convention where camera looks down -Z.
-    """
-    # Column 0 is Right (Local X)
     right = rotation_matrix[:3, 0]
-    # Column 1 is Up (Local Y)
     up = rotation_matrix[:3, 1]
-    # Column 2 is Back (Local Z), so Forward is -Z
     forward = -rotation_matrix[:3, 2]
     return right, up, forward
 
 
-def viewer(
-    scene,
-    camera_pose=None,
-    shadows=False,
-    light=None,
-    H=480,
-    W=640,
-    y_FOV=0.78,
-):
-    # --- Setup Scene ---
-    if camera_pose is None:
-        camera_pose = jp.eye(4)
-    if light is None:
-        light = [
-            paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
-        ]
+def _default_lights():
+    position = jp.array([-4.0, 5.0, 6.0])
+    return [paz.graphics.PointLight(jp.ones(3), position)]
 
-    scene, mask, _, light = paz.graphics.scene.compile(scene, light, mask=None)
-    identity_rays = paz.graphics.camera.build_rays((H, W), y_FOV, jp.eye(4))
-    num_bounces = paz.graphics.scene.compute_bounces(scene)
 
-    # --- Setup Renderer ---
-    def render_core(
-        image_shape,
-        camera_pose_matrix,
-        rays,
-        scene_data,
-        lights_data,
-        mask_data,
-    ):
-        args = (
-            H,
-            W,
-            camera_pose_matrix,
-            rays,
-            scene_data,
-            lights_data,
-            mask_data,
-            shadows,
-            None,
-            num_bounces,
-        )
-        return paz.graphics.renderer.render_bounced(*args)
+def _build_identity_rays(H, W, y_FOV):
+    args = ((H, W), y_FOV, jp.eye(4))
+    return paz.graphics.camera.build_rays(*args)
+
+
+def _transform_rays(pose_matrix, identity_rays):
+    cam_to_world = jp.linalg.inv(pose_matrix)
+    transform = paz.graphics.geometry.transform_rays
+    return transform(cam_to_world, *identity_rays)
+
+
+def _to_uint8(image):
+    return (jp.clip(image, 0, 1) * 255.0).astype(jp.uint8)
+
+
+def shape_renderer(scene, H, W, y_FOV=0.78, lights=None, shadows=False):
+    if lights is None:
+        lights = _default_lights()
+    compiled = paz.graphics.scene.compile(scene, lights, mask=None)
+    scene, mask, _, lights = compiled
+    identity_rays = _build_identity_rays(H, W, y_FOV)
+    bounces = paz.graphics.scene.compute_bounces(scene)
 
     @jax.jit
     def render_frame(pose_matrix):
-        world_to_cam = jp.linalg.inv(pose_matrix)
-        rays = paz.graphics.geometry.transform_rays(
-            world_to_cam, *identity_rays
-        )
-        image, depth = render_core(
-            (H, W), pose_matrix, rays, scene, light, mask
-        )
-        return (jp.clip(image, 0, 1) * 255.0).astype(jp.uint8)
+        rays = _transform_rays(pose_matrix, identity_rays)
+        render_bounced = paz.graphics.renderer.render_bounced
+        args = (H, W, pose_matrix, rays, scene, lights, mask)
+        image, _ = render_bounced(*args, shadows, None, bounces)
+        return _to_uint8(image)
 
-    # --- Setup Viewer State ---
-    print("------------------------------------------------")
-    print("FPS VIEWER (INVERTED CONTROLS):")
-    print(" [W, S]       : Move Backward / Forward")
-    print(" [A, D]       : Move Right / Left")
-    print(" [Q, E]       : Move Up / Down")
-    print(" [Shift]      : Move Faster")
-    print(" [C]          : Save Camera Pose")
-    print(" [P]          : Take Screenshot")
-    print(" [Mouse]      : Look around")
-    print(" [Esc]        : Quit")
-    print("------------------------------------------------")
+    return render_frame
 
-    window_name = "PAZ Raytracer Viewer"
+
+def mesh_renderer(meshes, mask, H, W, y_FOV=0.78, lights=None, chunk_size=1024):
+    if lights is None:
+        lights = _default_lights()
+    identity_rays = _build_identity_rays(H, W, y_FOV)
+
+    @jax.jit
+    def render_frame(pose_matrix):
+        rays = _transform_rays(pose_matrix, identity_rays)
+        args = ((H, W), pose_matrix, rays, meshes, mask, lights, chunk_size)
+        image, _ = paz.graphics.mesh.render(*args)
+        return _to_uint8(image)
+
+    return render_frame
+
+
+def viewer(render_fn_or_scene, camera_pose=None, shadows=False, light=None, H=480, W=640, y_FOV=0.78):
+    if callable(render_fn_or_scene):
+        render_fn = render_fn_or_scene
+    else:
+        if light is None:
+            light = _default_lights()
+        args = (render_fn_or_scene, H, W, y_FOV, light, shadows)
+        render_fn = shape_renderer(*args)
+    _run_viewer(render_fn, camera_pose, H, W)
+
+
+def _run_viewer(render_fn, camera_pose, H, W):
+    if camera_pose is None:
+        camera_pose = jp.eye(4)
+
+    _print_controls()
+    window_name = "PAZ Viewer"
     cv2.namedWindow(window_name, cv2.WINDOW_GUI_NORMAL)
     cv2.resizeWindow(window_name, W, H)
 
-    current_pos = np.array(paz.SE3.get_position_vector(camera_pose))
-
-    # SPEEDS
+    current_pos = np.array(
+        paz.SE3.get_position_vector(camera_pose))
     cam_state = {
         "yaw": 0.0,
         "pitch": 0.0,
@@ -112,34 +105,11 @@ def viewer(
         "speed_base": 1.0,
         "sensitivity": 0.01,
     }
-
-    # Mouse Callback
-    def mouse_callback(event, x, y, flags, param):
-        if event == cv2.EVENT_MOUSEMOVE:
-            if cam_state["last_mouse"] is None:
-                cam_state["last_mouse"] = (x, y)
-                return
-
-            dx = x - cam_state["last_mouse"][0]
-            dy = y - cam_state["last_mouse"][1]
-            cam_state["last_mouse"] = (x, y)
-
-            # Update orientation
-            # FLIPPED BACK: Used '-' for standard Mouse Look (Right = Turn Right)
-            cam_state["yaw"] -= dx * cam_state["sensitivity"]
-
-            # Pitch
-            cam_state["pitch"] -= dy * cam_state["sensitivity"]
-            cam_state["pitch"] = clamp_tilt(cam_state["pitch"])
-
-    cv2.setMouseCallback(window_name, mouse_callback)
-
-    # FPS Calculation Init
+    callback = _make_mouse_callback(cam_state)
+    cv2.setMouseCallback(window_name, callback)
     prev_time = time.time()
 
-    # --- Main Loop ---
     while True:
-        # FPS Logic
         curr_time = time.time()
         dt = curr_time - prev_time
         prev_time = curr_time
@@ -147,81 +117,119 @@ def viewer(
 
         rot_y = paz.SE3.rotation_y(cam_state["yaw"])
         rot_x = paz.SE3.rotation_x(cam_state["pitch"])
-        rotation_matrix = rot_y @ rot_x
+        rotation = rot_y @ rot_x
 
         key = cv2.waitKey(1) & 0xFF
-
-        if key == 27:  # ESC
+        if key == 27:
             break
-        if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+        prop = cv2.getWindowProperty(
+            window_name, cv2.WND_PROP_VISIBLE)
+        if prop < 1:
             break
 
-        right, up, forward = get_camera_basis(rotation_matrix)
+        move = _compute_movement(key, rotation, cam_state)
+        current_pos += move
+        pose = rotation.at[:3, 3].set(jp.array(current_pos))
 
-        fwd_np = np.array(forward)
-        rgt_np = np.array(right)
-
-        current_speed = cam_state["speed_base"]
-        move_vec = np.zeros(3)
-
-        # INVERTED KEYBOARD CONTROLS (Maintained per previous request)
-        if key == ord("w"):
-            move_vec -= fwd_np
-        if key == ord("s"):
-            move_vec += fwd_np
-        if key == ord("d"):
-            move_vec -= rgt_np
-        if key == ord("a"):
-            move_vec += rgt_np
-        if key == ord("q"):
-            move_vec += np.array([0, 1.0, 0])
-        if key == ord("e"):
-            move_vec -= np.array([0, 1.0, 0])
-
-        if key == ord("+") or key == ord("="):
-            cam_state["speed_base"] *= 1.5
-        if key == ord("-") or key == ord("_"):
-            cam_state["speed_base"] *= 0.75
-
-        current_pos += move_vec * current_speed
-        final_pose = rotation_matrix.at[:3, 3].set(jp.array(current_pos))
-
-        image_jax = render_frame(final_pose)
-        image_bgr = cv2.cvtColor(np.array(image_jax), cv2.COLOR_RGB2BGR)
+        image_jax = render_fn(pose)
+        image_bgr = cv2.cvtColor(
+            np.array(image_jax), cv2.COLOR_RGB2BGR)
 
         if key == ord("c"):
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            pose_np = np.array(final_pose)
-            print(f"Camera Pose at {timestamp}:")
-            print(pose_np)
-            filename = f"camera_pose_{timestamp}.json"
-            with open(filename, "w") as f:
-                json.dump(pose_np.tolist(), f, indent=4)
-            print(f"Saved camera pose to {filename}")
-
+            _save_camera_pose(pose)
         if key == ord("p"):
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            filename = f"capture_{timestamp}.png"
-            paz.image.write(filename, image_jax)
-            print(f"Saved screenshot to {filename}")
+            _save_screenshot(image_jax)
 
-        # Draw Crosshair
-        ch_x, ch_y = W // 2, H // 2
-        cv2.line(image_bgr, (ch_x - 5, ch_y), (ch_x + 5, ch_y), (0, 255, 0), 1)
-        cv2.line(image_bgr, (ch_x, ch_y - 5), (ch_x, ch_y + 5), (0, 255, 0), 1)
-
-        # Draw FPS (Top Right)
-        fps_text = f"FPS: {fps:.1f}"
-        cv2.putText(
-            image_bgr,
-            fps_text,
-            (W - 140, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),
-            2,
-        )
-
+        _draw_overlay(image_bgr, fps, W, H)
         cv2.imshow(window_name, image_bgr)
 
     cv2.destroyAllWindows()
+
+
+def _print_controls():
+    print("------------------------------------------------")
+    print("PAZ VIEWER (FPS CONTROLS):")
+    print(" [W, S]       : Move Backward / Forward")
+    print(" [A, D]       : Move Right / Left")
+    print(" [Q, E]       : Move Up / Down")
+    print(" [+, -]       : Speed Up / Slow Down")
+    print(" [C]          : Save Camera Pose")
+    print(" [P]          : Take Screenshot")
+    print(" [Mouse]      : Look around")
+    print(" [Esc]        : Quit")
+    print("------------------------------------------------")
+
+
+def _make_mouse_callback(cam_state):
+    def callback(event, x, y, flags, param):
+        if event != cv2.EVENT_MOUSEMOVE:
+            return
+        if cam_state["last_mouse"] is None:
+            cam_state["last_mouse"] = (x, y)
+            return
+        dx = x - cam_state["last_mouse"][0]
+        dy = y - cam_state["last_mouse"][1]
+        cam_state["last_mouse"] = (x, y)
+        sens = cam_state["sensitivity"]
+        cam_state["yaw"] -= dx * sens
+        cam_state["pitch"] -= dy * sens
+        cam_state["pitch"] = clamp_tilt(cam_state["pitch"])
+    return callback
+
+
+def _compute_movement(key, rotation, cam_state):
+    right, up, forward = get_camera_basis(rotation)
+    fwd = np.array(forward)
+    rgt = np.array(right)
+    move = np.zeros(3)
+    if key == ord("w"):
+        move -= fwd
+    if key == ord("s"):
+        move += fwd
+    if key == ord("d"):
+        move -= rgt
+    if key == ord("a"):
+        move += rgt
+    if key == ord("q"):
+        move += np.array([0, 1.0, 0])
+    if key == ord("e"):
+        move -= np.array([0, 1.0, 0])
+    if key == ord("+") or key == ord("="):
+        cam_state["speed_base"] *= 1.5
+    if key == ord("-") or key == ord("_"):
+        cam_state["speed_base"] *= 0.75
+    return move * cam_state["speed_base"]
+
+
+def _save_camera_pose(pose):
+    stamp = _timestamp()
+    pose_np = np.array(pose)
+    print(f"Camera Pose at {stamp}:")
+    print(pose_np)
+    filename = f"camera_pose_{stamp}.json"
+    with open(filename, "w") as f:
+        json.dump(pose_np.tolist(), f, indent=4)
+    print(f"Saved camera pose to {filename}")
+
+
+def _save_screenshot(image):
+    stamp = _timestamp()
+    filename = f"capture_{stamp}.png"
+    paz.image.write(filename, image)
+    print(f"Saved screenshot to {filename}")
+
+
+def _timestamp():
+    fmt = "%Y-%m-%d-%H-%M-%S"
+    return datetime.datetime.now().strftime(fmt)
+
+
+def _draw_overlay(image_bgr, fps, W, H):
+    cx, cy = W // 2, H // 2
+    color = (0, 255, 0)
+    cv2.line(image_bgr, (cx - 5, cy), (cx + 5, cy), color, 1)
+    cv2.line(image_bgr, (cx, cy - 5), (cx, cy + 5), color, 1)
+    fps_text = f"FPS: {fps:.1f}"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    pos = (W - 140, 30)
+    cv2.putText(image_bgr, fps_text, pos, font, 0.7, color, 2)
