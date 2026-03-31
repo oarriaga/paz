@@ -20,8 +20,8 @@ def quadratic_loss(parameters):
 
 def test_minimize_reduces_loss_with_LBFGS():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     status, fitted, history = minimize(
         parameters,
         quadratic_loss,
@@ -89,8 +89,8 @@ def test_minimize_can_stop_on_loss():
 
 def test_minimize_keeps_history_when_stop_fn_is_not_met():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     status, _, history = minimize(
         parameters,
         quadratic_loss,
@@ -121,8 +121,8 @@ def test_minimize_without_stop_fn_reaches_max_steps():
 
 def test_minimize_is_jittable():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
 
     @jax.jit
     def minimize_jit(parameters):
@@ -162,8 +162,8 @@ def test_minimize_with_adam_is_jittable():
 
 def test_minimize_with_metric_cadence_is_jittable():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
 
     @jax.jit
@@ -186,8 +186,8 @@ def test_minimize_with_metric_cadence_is_jittable():
 
 def test_minimize_returns_metrics_without_trace():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
     status, fitted, history = minimize(
         parameters,
@@ -211,8 +211,8 @@ def test_minimize_returns_metrics_without_trace():
 
 def test_minimize_with_metrics_without_trace_is_jittable():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
 
     @jax.jit
@@ -248,13 +248,18 @@ def test_minimize_with_verbose_prints_loss(capsys):
     minimize(parameters, quadratic_loss, optimizer, max_steps=2, verbose=True)
     jax.effects_barrier()
     captured = capsys.readouterr()
-    assert "minimize loss=" in captured.out
+    assert "loss=" in captured.out
+    assert "minimize " not in captured.out
+    assert " | " not in captured.out
 
 
 def test_minimize_with_verbose_repeats_metrics(capsys):
     parameters = jp.array([8.0, -2.0])
     optimizer = optax.adam(1e-1)
-    metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
+    metrics = lambda value: {
+        "distance": jp.linalg.norm(value - 3.0),
+        "spread": jp.max(value) - jp.min(value),
+    }
     minimize(
         parameters,
         quadratic_loss,
@@ -267,6 +272,9 @@ def test_minimize_with_verbose_repeats_metrics(capsys):
     jax.effects_barrier()
     captured = capsys.readouterr()
     assert captured.out.count("distance=") == 3
+    assert captured.out.count("spread=") == 3
+    assert " | distance=" in captured.out
+    assert " | spread=" in captured.out
 
 
 def test_minimize_with_verbose_is_jittable(capsys):
@@ -280,7 +288,46 @@ def test_minimize_with_verbose_is_jittable(capsys):
     minimize_with_verbose(parameters)
     jax.effects_barrier()
     captured = capsys.readouterr()
-    assert "minimize loss=" in captured.out
+    assert "loss=" in captured.out
+    assert "minimize " not in captured.out
+
+
+def test_minimize_with_verbose_LBFGS_has_no_extra_info(capsys):
+    parameters = jp.array([8.0, -2.0])
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
+    minimize(
+        parameters,
+        quadratic_loss,
+        optimizer,
+        max_steps=2,
+        stop_fn=grad_norm_stop(1e-4),
+        verbose=True,
+    )
+    jax.effects_barrier()
+    captured = capsys.readouterr()
+    assert "loss=" in captured.out
+    assert "Iteration:" not in captured.out
+    assert "Value:" not in captured.out
+    assert "Gradient norm:" not in captured.out
+    assert "optax.scale_by_backtracking_linesearch" not in captured.out
+    assert "Backtracking linesearch failed" not in captured.out
+
+
+def test_minimize_with_verbose_prints_stop_message(capsys):
+    parameters = jp.array([8.0, -2.0])
+    optimizer = optax.adam(1e-1)
+    minimize(
+        parameters,
+        quadratic_loss,
+        optimizer,
+        max_steps=2,
+        stop_fn=loss_stop(100.0),
+        verbose=True,
+    )
+    jax.effects_barrier()
+    captured = capsys.readouterr()
+    assert "] | stop=loss" in captured.out
 
 
 def test_minimize_runs_callbacks():
@@ -364,8 +411,8 @@ def test_minimize_with_callbacks_is_jittable():
 
 def test_minimize_rejects_invalid_metrics_every():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
     with pytest.raises(ValueError, match=">= 1"):
         minimize(
@@ -381,8 +428,8 @@ def test_minimize_rejects_invalid_metrics_every():
 
 def test_minimize_rejects_metrics_every_without_metrics():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe", False)
-    optimizer = LBFGS(1.0, 5, False, linesearch)
+    linesearch = LineSearch(10, "wolfe")
+    optimizer = LBFGS(1.0, 5, linesearch)
     with pytest.raises(ValueError, match="requires `metrics`"):
         minimize(
             parameters,
