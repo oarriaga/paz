@@ -16,15 +16,15 @@ def test_linesearch_package_exports_symbols():
 
 
 def test_LineSearch_returns_wolfe_linesearch():
-    transform = LineSearch(5, "wolfe", False)
+    transform = LineSearch(5, "wolfe")
     assert isinstance(transform, optax.GradientTransformationExtraArgs)
 
 
 def test_LineSearch_returns_armijo_linesearch():
-    transform = LineSearch(5, "armijo", False)
+    transform = LineSearch(5, "armijo")
     assert isinstance(transform, optax.GradientTransformationExtraArgs)
 
 
 def test_LineSearch_rejects_invalid_criterion():
     with pytest.raises(ValueError, match="armijo"):
-        LineSearch(5, "invalid", False)
+        LineSearch(5, "invalid")
