@@ -39,6 +39,7 @@ from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz import applications
 from paz import utils
+from paz.utils import pytree
 from paz.utils import assert_snapshot, cache, jit_and_cache, clear_cache
 from paz.utils import CACHE_PATH
 from paz.abstract import tree
