@@ -30,6 +30,23 @@ def test_print_bar_includes_description(capsys):
     assert "test" in captured.out
 
 
+def test_print_bar_appends_suffix(capsys):
+    start_time = utils_progressbar.start()
+    utils_progressbar.print_bar(
+        1, 10, start_time, "test", 10, suffix="stop=loss"
+    )
+    captured = capsys.readouterr()
+    assert captured.out.endswith(" | stop=loss")
+
+
+def test_print_bar_clears_previous_tail():
+    message = "\rshort"
+    padded = utils_progressbar._pad_message(message)
+    padded = utils_progressbar._pad_message("\rlonger message")
+    padded = utils_progressbar._pad_message(message)
+    assert padded.endswith(" " * (len("\rlonger message") - len(message)))
+
+
 def test_draw_runs_under_jit(capsys):
     start_time = utils_progressbar.start()
     draw = jax.jit(
