@@ -98,8 +98,7 @@ def intersect_chunked(vertices, faces, rays, chunk_size=1024):
     return mask, depth, u, v, idx
 
 
-def intersect_mesh(mesh, ray_origins, ray_directions):
+def intersect_mesh(mesh, ray_origins, ray_directions, chunk_size=1024):
     world_to_shape = jp.linalg.inv(mesh.transform)
     rays = paz.algebra.transform_rays(world_to_shape, ray_origins, ray_directions)
-    args = (mesh.vertices, mesh.faces, rays)
-    return intersect_chunked(*args)
+    return intersect_chunked(mesh.vertices, mesh.faces, rays, chunk_size)

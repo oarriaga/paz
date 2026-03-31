@@ -11,30 +11,44 @@ from .geometry import compute_normals_for_hits
 from .shading import compute_colors_for_hits
 
 
-def render(image_shape, world_to_camera, rays, meshes, mask, lights):
+def render(image_shape, world_to_camera, rays, meshes, mask, lights, chunk_size=1024):
     meshes = normalize_mesh_batch(meshes)
-    _render_mesh = partial(render_mesh, lights, *rays)
-    hit_masks, depths, colors = jax.vmap(_render_mesh)(meshes)
+    _render = _checkpointed_render(lights, rays, chunk_size)
+    hit_masks, depths, colors = jax.vmap(_render)(meshes)
     hit_masks, depths = mask_out_mesh(mask, hit_masks, depths)
     depths = jp.expand_dims(depths, -1)
     args = (hit_masks, depths, colors, world_to_camera, rays, image_shape)
     return postprocess(*args)
 
 
-def render_depth(image_shape, world_to_camera, rays, meshes, mask, lights):
+def render_depth(image_shape, world_to_camera, rays, meshes, mask, lights, chunk_size=1024):
     meshes = normalize_mesh_batch(meshes)
-    _render_depth = partial(render_mesh_depth, lights, *rays)
-    hit_masks, depths = jax.vmap(_render_depth)(meshes)
+    _render = _checkpointed_depth(rays, chunk_size)
+    hit_masks, depths = jax.vmap(_render)(meshes)
     hit_masks, depths = mask_out_mesh(mask, hit_masks, depths)
     depths = jp.expand_dims(depths, -1)
     args = (hit_masks, depths, world_to_camera, rays, image_shape)
     return postprocess_depth(*args)
 
 
-@jax.checkpoint
-def render_mesh(lights, ray_origins, ray_directions, mesh):
+def _checkpointed_render(lights, rays, chunk_size):
+    @jax.checkpoint
+    def fn(mesh):
+        return render_mesh(lights, *rays, mesh, chunk_size)
+    return fn
+
+
+def _checkpointed_depth(rays, chunk_size):
+    @jax.checkpoint
+    def fn(mesh):
+        return render_mesh_depth(*rays, mesh, chunk_size)
+    return fn
+
+
+def render_mesh(lights, ray_origins, ray_directions, mesh, chunk_size=1024):
     rays = (ray_origins, ray_directions)
-    hit_mask, depth, u, v, face_idx = intersect_mesh(mesh, *rays)
+    result = intersect_mesh(mesh, *rays, chunk_size=chunk_size)
+    hit_mask, depth, u, v, face_idx = result
     depth_3d = jp.expand_dims(depth, -1)
     points = ray_origins + depth_3d * ray_directions
     args = (mesh.vertices, mesh.faces, mesh.transform, face_idx)
@@ -45,9 +59,10 @@ def render_mesh(lights, ray_origins, ray_directions, mesh):
     return hit_mask, depth, colors
 
 
-def render_mesh_depth(_, ray_origins, ray_directions, mesh):
+def render_mesh_depth(ray_origins, ray_directions, mesh, chunk_size=1024):
     rays = (ray_origins, ray_directions)
-    hit_mask, depth, _, _, _ = intersect_mesh(mesh, *rays)
+    result = intersect_mesh(mesh, *rays, chunk_size=chunk_size)
+    hit_mask, depth, _, _, _ = result
     return hit_mask, depth
 
 
