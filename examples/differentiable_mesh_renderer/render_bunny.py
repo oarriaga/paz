@@ -1,23 +1,12 @@
 from pathlib import Path
-import os
 
-# Keep the example runnable on machines where JAX GPU memory is already tight.
-# os.environ.setdefault("JAX_PLATFORM_NAME", "cpu")
-# os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
-
-import jax
 import jax.numpy as jp
 import paz
-from paz.graphics.mesh import (
-    Mesh,
-    load_mesh,
-    merge_meshes,
-    tile_render,
-)
+from paz.graphics.mesh import Mesh, load_mesh, merge_meshes
 from paz.graphics.types import Material, PointLight
+from paz.graphics.viewer import mesh_renderer, viewer
 
 H, W = 256, 256
-TILE_SHAPE = (4, 4)
 Y_FOV = jp.pi / 4.0
 
 
@@ -30,12 +19,8 @@ def normalize_vertices(vertices):
 
 
 def build_face_edges(faces):
-    edge_pairs = [
-        faces[:, [0, 1]],
-        faces[:, [1, 2]],
-        faces[:, [2, 0]],
-    ]
-    return jp.concatenate(edge_pairs, axis=0)
+    pairs = [faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]
+    return jp.concatenate(pairs, axis=0)
 
 
 def make_bunny_mesh(path):
@@ -43,40 +28,30 @@ def make_bunny_mesh(path):
     vertices = normalize_vertices(vertices)
     edges = build_face_edges(faces)
     material = Material(jp.zeros(3), 0.15, 0.75, 0.25, 64.0)
-    transform = paz.SE3.translation(
-        jp.array([0.0, -0.12, 0.0])
-    ) @ paz.SE3.rotation_y(jp.pi)
-    return Mesh(vertices, vertex_colors, transform, material, faces, edges)
+    shift = paz.SE3.translation(jp.array([0.0, -0.12, 0.0]))
+    # rotate = paz.SE3.rotation_y(jp.pi)
+    # transform = shift @ rotate
+    transform = shift
+    args = (vertices, vertex_colors, transform, material, faces, edges)
+    return Mesh(*args)
 
 
-def main():
-    example_dir = Path(__file__).resolve().parent
-    mesh_path = example_dir / "bunny.obj"
-    output_path = example_dir / "bunny_render.png"
+example_dir = Path(__file__).resolve().parent
+mesh_path = example_dir / "dragon.obj"
+mesh_path = example_dir / "bunny.obj"
 
-    camera_origin = jp.array([1.3, 0.55, -2.2])
-    camera_target = jp.array([0.0, -0.05, 0.0])
-    camera_pose = paz.SE3.view_transform(
-        camera_origin, camera_target, jp.array([0.0, 1.0, 0.0])
-    )
-    lights = [
-        PointLight(jp.ones(3) * 1.4, camera_origin),
-        PointLight(jp.array([0.6, 0.6, 0.7]), jp.array([-2.0, 2.0, -1.0])),
-    ]
+camera_origin = jp.array([1.3, 0.55, -2.2])
+camera_target = jp.array([0.0, -0.05, 0.0])
+camera_up = jp.array([0.0, 1.0, 0.0])
+camera_pose = paz.SE3.view_transform(camera_origin, camera_target, camera_up)
 
-    bunny = make_bunny_mesh(mesh_path)
-    meshes, mask = merge_meshes(bunny)
+lights = [
+    PointLight(jp.ones(3) * 1.4, camera_origin),
+    PointLight(jp.array([0.6, 0.6, 0.7]), jp.array([-2.0, 3.0, 2.0])),
+]
 
-    render_fn = jax.jit(tile_render, static_argnums=(0, 2, 3))
-    image, _ = render_fn(
-        TILE_SHAPE, Y_FOV, H, W, camera_pose, meshes, mask, lights
-    )
-    image = paz.image.denormalize(image)
-    paz.image.write(output_path, image)
+bunny = make_bunny_mesh(mesh_path)
+meshes, mask = merge_meshes(bunny)
 
-    print(f"Loaded {mesh_path.name}")
-    print(f"Saved render to {output_path}")
-
-
-if __name__ == "__main__":
-    main()
+render_fn = mesh_renderer(meshes, mask, H, W, Y_FOV, lights)
+viewer(render_fn, camera_pose, H=H, W=W)
