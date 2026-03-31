@@ -1,5 +1,8 @@
 import colorsys
 import math
+from functools import lru_cache
+
+import jax
 import numpy as np
 import cv2
 import paz
@@ -8,6 +11,13 @@ GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 WHITE = (255, 255, 255)
 ORANGE = (255, 165, 0)
+
+
+@lru_cache(maxsize=None)
+def _lincolors(num_colors):
+    if num_colors == 0:
+        return ()
+    return tuple(lincolor(num_colors))
 
 
 def square(image, point, size, color):
@@ -326,4 +336,27 @@ def cube(image, points, color=GREEN, thickness=2, radius=5):
 
     # draw dots
     [dot(image, np.squeeze(point), color, radius) for point in points]
+    return image
+
+
+def poses(image, transforms, camera_matrix, thickness=2, radius=4, colors=None):
+    def project(camera_matrix, points3D):
+        project = jax.vmap(paz.pinhole.project_to_2D, (None, 0))
+        return project(camera_matrix, points3D)
+
+    cpu = jax.local_devices(backend="cpu")[0]
+    project = jax.jit(project)
+    image = np.ascontiguousarray(paz.to_numpy(image))
+    transforms = paz.to_numpy(transforms)
+    camera_matrix = jax.device_put(camera_matrix, cpu)
+    bounds = np.ones(3)
+    cube_points3D = paz.pinhole.build_cube_corners(-bounds, bounds)
+    cube_points3D = paz.to_numpy(cube_points3D)
+    if colors is None:
+        colors = _lincolors(len(transforms))
+    for color, transform in zip(colors, transforms):
+        points3D = paz.algebra.transform_points(transform, cube_points3D)
+        points3D = jax.device_put(points3D, cpu)
+        points2D = paz.to_numpy(project(camera_matrix, points3D)).astype(int)
+        image = paz.draw.cube(image, points2D, color, thickness, radius)
     return image
