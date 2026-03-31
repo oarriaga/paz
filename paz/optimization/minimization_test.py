@@ -3,7 +3,6 @@ import pytest
 import jax.numpy as jp
 import optax
 
-from paz.optimization import LBFGS
 from paz.optimization import LineSearch
 from paz.optimization import MAX_STEPS_REACHED
 from paz.optimization import STOP_FN_MET
@@ -18,10 +17,14 @@ def quadratic_loss(parameters):
     return jp.sum((parameters - 3.0) ** 2)
 
 
+def build_lbfgs():
+    linesearch = LineSearch(10, "wolfe")
+    return optax.lbfgs(1.0, 5, True, linesearch)
+
+
 def test_minimize_reduces_loss_with_LBFGS():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     status, fitted, history = minimize(
         parameters,
         quadratic_loss,
@@ -89,8 +92,7 @@ def test_minimize_can_stop_on_loss():
 
 def test_minimize_keeps_history_when_stop_fn_is_not_met():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     status, _, history = minimize(
         parameters,
         quadratic_loss,
@@ -121,8 +123,7 @@ def test_minimize_without_stop_fn_reaches_max_steps():
 
 def test_minimize_is_jittable():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
 
     @jax.jit
     def minimize_jit(parameters):
@@ -162,8 +163,7 @@ def test_minimize_with_adam_is_jittable():
 
 def test_minimize_with_metric_cadence_is_jittable():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
 
     @jax.jit
@@ -186,8 +186,7 @@ def test_minimize_with_metric_cadence_is_jittable():
 
 def test_minimize_returns_metrics_without_trace():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
     status, fitted, history = minimize(
         parameters,
@@ -211,8 +210,7 @@ def test_minimize_returns_metrics_without_trace():
 
 def test_minimize_with_metrics_without_trace_is_jittable():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
 
     @jax.jit
@@ -294,8 +292,7 @@ def test_minimize_with_verbose_is_jittable(capsys):
 
 def test_minimize_with_verbose_LBFGS_has_no_extra_info(capsys):
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     minimize(
         parameters,
         quadratic_loss,
@@ -411,8 +408,7 @@ def test_minimize_with_callbacks_is_jittable():
 
 def test_minimize_rejects_invalid_metrics_every():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
     with pytest.raises(ValueError, match=">= 1"):
         minimize(
@@ -428,8 +424,7 @@ def test_minimize_rejects_invalid_metrics_every():
 
 def test_minimize_rejects_metrics_every_without_metrics():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     with pytest.raises(ValueError, match="requires `metrics`"):
         minimize(
             parameters,

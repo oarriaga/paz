@@ -1,21 +1,38 @@
+import jax.numpy as jp
 import paz
 
-from paz.optimization import LBFGS
-from paz.optimization import LineSearch
-from paz.optimization import grad_norm_stop
-from paz.optimization import loss_stop
-from paz.optimization import minimize
-from paz.optimization import optimizers
+
+def quadratic_loss(parameters):
+    return jp.sum((parameters - 3.0) ** 2)
 
 
-def test_optimizers_package_exports_symbols():
-    assert callable(LBFGS)
-    assert hasattr(optimizers, "LBFGS")
+def test_LBFGS_returns_trimmed_history():
+    parameters = jp.array([8.0, -2.0])
+    linesearch = paz.optimizers.LineSearch(10, "wolfe")
+    fitted, history = paz.optimizers.LBFGS(
+        parameters, quadratic_loss, 1.0, 20, 1e-4, 5, linesearch
+    )
+    assert jp.allclose(fitted, jp.array([3.0, 3.0]), atol=1e-3)
+    assert len(history.losses) == int(history.stop_step)
 
 
-def test_root_package_exports_optimization_symbols():
-    assert paz.optimizers.LBFGS is LBFGS
-    assert paz.optimizers.LineSearch is LineSearch
-    assert paz.minimize is minimize
-    assert paz.optimization.loss_stop is loss_stop
-    assert paz.optimization.grad_norm_stop is grad_norm_stop
+def test_LBFGS_runs_callbacks():
+    parameters = jp.array([8.0, -2.0])
+    calls = []
+
+    def callback(step_arg, parameters, loss, metrics):
+        del parameters, loss, metrics
+        calls.append(step_arg)
+
+    linesearch = paz.optimizers.LineSearch(10, "wolfe")
+    _, history = paz.optimizers.LBFGS(
+        parameters,
+        quadratic_loss,
+        1.0,
+        20,
+        1e-4,
+        5,
+        linesearch,
+        callbacks=[callback],
+    )
+    assert calls[-1] == history.stop_step

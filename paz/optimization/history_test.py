@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jp
+import optax
 
-from paz.optimization import LBFGS
 from paz.optimization import LineSearch
 from paz.optimization import STOP_FN_MET
 from paz.optimization import Trace
@@ -14,10 +14,14 @@ def quadratic_loss(parameters):
     return jp.sum((parameters - 3.0) ** 2)
 
 
+def build_lbfgs():
+    linesearch = LineSearch(10, "wolfe")
+    return optax.lbfgs(1.0, 5, True, linesearch)
+
+
 def test_minimize_returns_loss_history():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     status, fitted, history = minimize(
         parameters,
         quadratic_loss,
@@ -44,8 +48,7 @@ def test_minimize_returns_loss_history():
 
 def test_trim_trace_trims_sparse_metrics_to_optimization_length():
     parameters = jp.array([8.0, -2.0])
-    linesearch = LineSearch(10, "wolfe")
-    optimizer = LBFGS(1.0, 5, linesearch)
+    optimizer = build_lbfgs()
     metrics = lambda value: {"distance": jp.linalg.norm(value - 3.0)}
     status, _, history = minimize(
         parameters,
