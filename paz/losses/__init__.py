@@ -2,4 +2,8 @@ from paz.losses import multibox
 from paz.losses.standard import bce
 from paz.losses.standard import mae
 from paz.losses.standard import mse
+from paz.losses.standard import masked_bce
+from paz.losses.standard import masked_mae
+from paz.losses.standard import masked_mse
+from paz.losses.standard import soft_box_barrier
 from paz.losses.standard import weight
