@@ -3,6 +3,13 @@ import jax
 import paz.utils.progressbar as progressbar
 
 
+def TraceParameters(parameters_trace):
+    def callback(_step_arg, parameters, _loss, _metrics):
+        parameters_trace.append(parameters)
+
+    return callback
+
+
 def _build_callbacks(callbacks, max_steps, verbose):
     callbacks = () if callbacks is None else tuple(callbacks)
     if verbose:

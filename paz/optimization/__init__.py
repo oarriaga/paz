@@ -7,6 +7,7 @@ from paz.optimization import optimizers
 from paz.optimization import stopping
 from paz.optimization.history import Trace
 from paz.optimization.history import trim_trace
+from paz.optimization.callbacks import TraceParameters
 from paz.optimization.linesearch import LineSearch
 from paz.optimization.linesearch import armijo_linesearch
 from paz.optimization.linesearch import wolfe_linesearch
@@ -23,6 +24,7 @@ __all__ = [
     "MAX_STEPS_REACHED",
     "STOP_FN_MET",
     "Trace",
+    "TraceParameters",
     "armijo_linesearch",
     "callbacks",
     "core",
