@@ -4,6 +4,7 @@ from paz.optimization import MAX_STEPS_REACHED
 from paz.optimization import STOP_FN_MET
 from paz.optimization import grad_norm_stop
 from paz.optimization import loss_stop
+from paz.optimization.stopping import _get_stop_message
 
 
 def test_stopping_exports_symbols():
@@ -22,3 +23,11 @@ def test_grad_norm_stop_uses_gradient_norm():
 def test_loss_stop_uses_loss_value():
     stop_fn = loss_stop(1e-3)
     assert stop_fn(1, jp.array([0.0]), 1e-4, jp.array([1.0]))
+
+
+def test_grad_norm_stop_has_message():
+    assert _get_stop_message(grad_norm_stop(1e-3)) == "stop=grad_norm"
+
+
+def test_loss_stop_has_message():
+    assert _get_stop_message(loss_stop(1e-3)) == "stop=loss"
