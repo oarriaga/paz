@@ -37,7 +37,7 @@ from paz.graphics import shapes
 from paz.graphics import camera
 from paz.graphics import phong
 from paz.graphics import mesh
-from paz.graphics.renderer import render
+from paz.graphics.renderer import render, render_masks
 
 from paz.graphics import patterns
 from paz.graphics import scene

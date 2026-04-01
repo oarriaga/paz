@@ -5,6 +5,18 @@ import paz
 import jax
 
 
+def render_masks(image_shape, camera_pose, rays, scene, lights, num_objects, min_depth, max_depth, shadows):  # fmt: skip
+    num_nodes = len(scene.nodes)
+    masks = []
+    for object_arg in range(num_objects):
+        mask = jp.zeros((num_nodes,), dtype=bool).at[object_arg].set(True)
+        args = (image_shape, camera_pose, rays, scene, lights, mask, shadows)
+        _, depth = render(*args)
+        soft = paz.depth.to_soft_mask(depth, min_depth, max_depth)
+        masks.append(jp.expand_dims(soft, axis=-1))
+    return jp.stack(masks)
+
+
 def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None, num_bounces=1):  # fmt: skip
     shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(scene, lights, mask, shadow_mask)  # fmt:skip
     args = (world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, num_bounces)  # fmt: skip
