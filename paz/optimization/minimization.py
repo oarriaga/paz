@@ -12,6 +12,7 @@ from paz.optimization.callbacks import _run_callbacks
 from paz.optimization.callbacks import _run_progress
 from paz.optimization.history import MetricsState
 from paz.optimization.history import Trace
+from paz.optimization.history import trim_trace
 from paz.optimization.history import _update_metrics
 from paz.optimization.history import _validate_metrics
 from paz.optimization.stopping import _build_status

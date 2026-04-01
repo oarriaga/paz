@@ -45,10 +45,12 @@ from paz.utils import CACHE_PATH
 from paz.abstract import tree
 from paz import callbacks
 from paz import layers
-from paz import minimization
+import sys
 from paz import optimization
 from paz import optimizers
-from paz.minimization import minimize
+from paz.optimization import minimization
+from paz.optimization import minimize
+sys.modules["paz.minimization"] = minimization
 
 from paz import inference
 from paz.inference import metropolis_hastings
