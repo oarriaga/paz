@@ -31,6 +31,19 @@ def render_depth(image_shape, world_to_camera, rays, meshes, mask, lights, chunk
     return postprocess_depth(*args)
 
 
+def render_masks(image_shape, world_to_camera, rays, meshes, lights, min_depth, max_depth, chunk_size=1024):
+    meshes = normalize_mesh_batch(meshes)
+    num_meshes = len(meshes.vertices)
+    masks = []
+    for arg in range(num_meshes):
+        mask = jp.zeros(num_meshes, dtype=bool).at[arg].set(True)
+        args = image_shape, world_to_camera, rays, meshes, mask, lights
+        depth = render_depth(*args, chunk_size)
+        soft = paz.depth.to_soft_mask(depth, min_depth, max_depth)
+        masks.append(jp.expand_dims(soft, axis=-1))
+    return jp.stack(masks)
+
+
 def _checkpointed_render(lights, rays, chunk_size):
     @jax.checkpoint
     def fn(mesh):
