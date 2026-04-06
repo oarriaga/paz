@@ -39,6 +39,7 @@ from .render import (
     postprocess_depth,
     render,
     render_depth,
+    render_masks,
     render_mesh,
     render_mesh_depth,
     select_closest_color,
@@ -56,6 +57,7 @@ from .tile import (
     render_tile,
     tile_render,
     tile_render_depth,
+    tile_render_masks,
     transform_tile_rays,
 )
 from .builders import (
