@@ -161,6 +161,28 @@ def compute_sobel_edges(rgb_image):
     return compute_channel_norm(gradients)
 
 
+def forward_differences(image):
+    """Shapes: image is (H, W, C) or (B, H, W, C)."""
+    image = jp.array(image)
+    if image.ndim == 3:
+        H, W, C = image.shape
+        dy = image[1:, :, :] - image[:-1, :, :]
+        dx = image[:, 1:, :] - image[:, :-1, :]
+        dy_pad = jp.zeros((1, W, C), dtype=image.dtype)
+        dx_pad = jp.zeros((H, 1, C), dtype=image.dtype)
+        dy = jp.concatenate((dy, dy_pad), axis=0)
+        dx = jp.concatenate((dx, dx_pad), axis=1)
+        return dy, dx
+    B, H, W, C = image.shape
+    dy = image[:, 1:, :, :] - image[:, :-1, :, :]
+    dx = image[:, :, 1:, :] - image[:, :, :-1, :]
+    dy_pad = jp.zeros((B, 1, W, C), dtype=image.dtype)
+    dx_pad = jp.zeros((B, H, 1, C), dtype=image.dtype)
+    dy = jp.concatenate((dy, dy_pad), axis=1)
+    dx = jp.concatenate((dx, dx_pad), axis=2)
+    return dy, dx
+
+
 def apply_sobel(image):
     """Compute Sobel x/y gradients for a 2D or single-channel image."""
     if image.ndim == 2:
