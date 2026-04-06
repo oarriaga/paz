@@ -32,6 +32,18 @@ def tile_render_depth(tile_shape, y_FOV, H, W, world_to_camera, meshes, mask, li
     return assemble(H, W, H_tiles, W_tiles, depths)[..., 0]
 
 
+def tile_render_masks(tile_shape, y_FOV, H, W, world_to_camera, meshes, lights, min_depth, max_depth, chunk_size=1024):
+    num_meshes = len(meshes.vertices)
+    masks = []
+    for arg in range(num_meshes):
+        mask = jp.zeros(num_meshes, dtype=bool).at[arg].set(True)
+        args = tile_shape, y_FOV, H, W, world_to_camera, meshes, mask, lights
+        depth = tile_render_depth(*args, chunk_size)
+        soft = paz.depth.to_soft_mask(depth, min_depth, max_depth)
+        masks.append(jp.expand_dims(soft, axis=-1))
+    return jp.stack(masks)
+
+
 def assert_exact_tile_side(image_size, tile_size):
     if (image_size / tile_size) % 1 != 0:
         raise ValueError("tile size must divide image size without a residual")
