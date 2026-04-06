@@ -10,6 +10,7 @@ from paz.optimization import Trace
 from paz.optimization import grad_norm_stop
 from paz.optimization import loss_stop
 from paz.optimization import minimize
+from paz.optimization import patience_stop
 from paz.optimization import trim_trace
 
 
@@ -88,6 +89,22 @@ def test_minimize_can_stop_on_loss():
     assert status == STOP_FN_MET
     assert len(trimmed.losses) >= 1
     assert quadratic_loss(fitted) < 1e-2
+
+
+def test_minimize_can_stop_on_patience():
+    parameters = jp.array([8.0, -2.0])
+    optimizer = optax.adam(1e-1)
+    stop_fn = patience_stop(1.0, 2)
+    status, _, history = minimize(
+        parameters,
+        quadratic_loss,
+        optimizer,
+        max_steps=200,
+        stop_fn=stop_fn,
+    )
+    trimmed = trim_trace(history)
+    assert status == STOP_FN_MET
+    assert len(trimmed.losses) < 200
 
 
 def test_minimize_keeps_history_when_stop_fn_is_not_met():
