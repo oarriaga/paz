@@ -10,6 +10,18 @@ NUM_SAMPLES = SAMPLE_RATE * MAX_AUDIO_SECONDS
 MAX_MEL = 45.245640471924965
 
 
+def frontend(waveform, mel_filters):
+    waveform = ops.cast(waveform, "float32")
+    waveform, do_squeeze = batch_tensor(waveform)
+    waveform = build_fixed_length_waveform(waveform)
+    waveform = build_stft_waveform(waveform)
+    real, imag = compute_stft(waveform)
+    power = compute_power_spectrogram(real, imag)
+    mel = mel_spectrogram(power, mel_filters)
+    features = compute_log_mel_features(mel)
+    return squeeze_batch(features, do_squeeze)
+
+
 def batch_tensor(waveform):
     rank = len(waveform.shape)
     if rank == 1:
@@ -44,6 +56,10 @@ def compute_power_spectrogram(real_part, imaginary_part):
     return ops.square(real_part) + ops.square(imaginary_part)
 
 
+def mel_spectrogram(inputs, mel_filters):
+    return ops.matmul(inputs, mel_filters)
+
+
 def compute_log_mel_features(mel_features):
     minimum = ops.cast(1e-10, mel_features.dtype)
     mel_features = ops.maximum(mel_features, minimum)
@@ -62,20 +78,19 @@ def squeeze_batch(features, do_squeeze):
     return features
 
 
-def mel_spectrogram(inputs, mel_filters):
-    return ops.matmul(inputs, mel_filters)
-
-
-def frontend(waveform, mel_filters):
-    waveform = ops.cast(waveform, "float32")
-    waveform, do_squeeze = batch_tensor(waveform)
-    waveform = build_fixed_length_waveform(waveform)
-    waveform = build_stft_waveform(waveform)
-    real, imag = compute_stft(waveform)
-    power = compute_power_spectrogram(real, imag)
-    mel = mel_spectrogram(power, mel_filters)
-    features = compute_log_mel_features(mel)
-    return squeeze_batch(features, do_squeeze)
+def build_mel_filters(num_mels, num_fft_bins, sampling_rate):
+    filters = allocate_mel_filters(num_mels, num_fft_bins)
+    fft_freqs = compute_fft_frequencies(num_fft_bins, sampling_rate)
+    mel_grid = build_mel_grid(num_mels, 0.0, MAX_MEL)
+    mel_freqs = mel_to_hz(mel_grid)
+    mel_gaps = np.diff(mel_freqs)
+    mel_fft = np.subtract.outer(mel_freqs, fft_freqs)
+    for mel_index in range(num_mels):
+        args = (mel_index, mel_fft, mel_gaps)
+        filters[mel_index] = build_single_mel_filter(*args)
+    norm = compute_filter_normalization(mel_freqs, num_mels)
+    filters = filters * norm[:, np.newaxis]
+    return np.asarray(filters.T)
 
 
 def allocate_mel_filters(num_mels, num_fft_bins):
@@ -113,17 +128,3 @@ def compute_filter_normalization(mel_freqs, num_mels):
     left = mel_freqs[:num_mels]
     right = mel_freqs[2:num_mels + 2]
     return 2.0 / (right - left)
-
-
-def build_mel_filters(num_mels, num_fft_bins, sampling_rate):
-    filters = allocate_mel_filters(num_mels, num_fft_bins)
-    fft_freqs = compute_fft_frequencies(num_fft_bins, sampling_rate)
-    mel_grid = build_mel_grid(num_mels, 0.0, MAX_MEL)
-    mel_freqs = mel_to_hz(mel_grid)
-    mel_gaps = np.diff(mel_freqs)
-    mel_fft = np.subtract.outer(mel_freqs, fft_freqs)
-    for i in range(num_mels):
-        filters[i] = build_single_mel_filter(i, mel_fft, mel_gaps)
-    norm = compute_filter_normalization(mel_freqs, num_mels)
-    filters = filters * norm[:, np.newaxis]
-    return np.asarray(filters.T)

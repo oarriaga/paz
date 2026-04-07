@@ -20,7 +20,8 @@ from examples.speech_to_text.decoding import KVDecoder
 from examples.speech_to_text.decoding import build_whisper_prompt_token_ids
 from examples.speech_to_text.decoding import kv_decode
 from examples.speech_to_text.decoding import extract_text_token_ids
-from examples.speech_to_text.model import CONFIGS
+from examples.speech_to_text.configs import CONFIGS
+from examples.speech_to_text.model import WHISPER_MODELS_DIR
 from examples.speech_to_text.model import WhisperCrossCache
 from examples.speech_to_text.model import WhisperDecoderStep
 from examples.speech_to_text.model import WhisperEncoder
@@ -42,7 +43,7 @@ def preprocess(wav_path, target=16000):
     return preprocess_waveform(waveform, sample_rate, target)
 
 
-def build_models(model_name):
+def build_models(model_name, models_dir=WHISPER_MODELS_DIR):
     config = CONFIGS[model_name]
     layers = config["num_layers"]
     heads = config["num_heads"]
@@ -54,15 +55,16 @@ def build_models(model_name):
     enc_seq = config["max_encoder_sequence_length"]
     ename = f"{model_name}_encoder"
     enc_args = (mels, layers, heads, hidden_dim, ffn_dim, enc_seq, dropout)
-    encoder = WhisperEncoder(*enc_args, weights=model_name, name=ename)
+    wargs = {"weights": model_name, "models_dir": models_dir}
+    encoder = WhisperEncoder(*enc_args, name=ename, **wargs)
     cname = f"{model_name}_cross_cache"
     cc_args = (layers, heads, hidden_dim)
-    cross_cache = WhisperCrossCache(*cc_args, weights=model_name, name=cname)
+    cross_cache = WhisperCrossCache(*cc_args, name=cname, **wargs)
     sname = f"{model_name}_decoder_step"
     vocab_size = config["vocabulary_size"]
     dec_seq = config["max_decoder_sequence_length"]
     args = (vocab_size, layers, heads, hidden_dim, ffn_dim, dec_seq, dropout)
-    decoder_step = WhisperDecoderStep(*args, weights=model_name, name=sname)
+    decoder_step = WhisperDecoderStep(*args, name=sname, **wargs)
     return frontend_model, encoder, cross_cache, decoder_step
 
 
