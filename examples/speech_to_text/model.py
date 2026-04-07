@@ -17,30 +17,26 @@ from examples.speech_to_text.layers.decoder import decoder_block
 
 WHISPER_MODELS_DIR = Path(__file__).resolve().with_name("whisper_models")
 DECODER_LAYER = "transformer_decoder_layer_{}"
-NORM_KWARGS = {"axis": -1, "epsilon": 1e-5, "dtype": "float32"}
+NORM_KWARGS = {"axis": -1, "epsilon": 1e-5}
 
 
 def WhisperFrontend(name="whisper_frontend"):
-    waveform = Input((None,), dtype="float32", name="waveform")
+    waveform = Input((None,), name="waveform")
     mel_filters = build_mel_filters(80, 400, 16000)
-    mel_filters = ops.convert_to_tensor(mel_filters, dtype="float32")
+    mel_filters = ops.convert_to_tensor(mel_filters)
     features = frontend(waveform, mel_filters)
     return Model(waveform, features, name=name)
 
 
-def WhisperEncoder(
-    num_mels, num_layers, num_heads,
-    hidden_dim, ffn_dim, max_seq, dropout,
-    weights=None, models_dir=None, name=None,
-):
-    features = Input((None, num_mels), dtype="float32", name="encoder_features")
+def WhisperEncoder(num_mels, num_layers, num_heads, hidden_dim, ffn_dim, max_seq, dropout, weights=None, models_path=None, name=None):  # fmt: skip
+    features = Input((None, num_mels), name="encoder_features")
     x = build_encoder_stem(features, hidden_dim)
     x = build_encoder_embeddings(x, max_seq, dropout)
     args = (x, num_layers, num_heads, ffn_dim, dropout)
     y = build_encoder_blocks(*args)
     model = Model(features, y, name=name)
     if weights is not None:
-        load_whisper_weights(model, weights, "encoder", models_dir)
+        load_whisper_weights(model, weights, "encoder", models_path)
     return model
 
 
@@ -54,8 +50,7 @@ def build_encoder_stem(features, hidden_dim):
 
 
 def build_conv1d(filters, kernel, stride, padding, name):
-    kwargs = {"dtype": "float32", "name": name}
-    return Conv1D(filters, kernel, stride, padding, **kwargs)
+    return Conv1D(filters, kernel, stride, padding, name=name)
 
 
 def pad_encoder(t):
@@ -81,18 +76,14 @@ def build_encoder_blocks(x, num_layers, num_heads, ffn_dim, dropout):
     return LayerNormalization(**NORM_KWARGS, name="encoder_layer_norm")(x)
 
 
-def WhisperDecoderStep(
-    vocab_size, num_layers, num_heads,
-    hidden_dim, ffn_dim, max_seq, dropout,
-    weights=None, models_dir=None, name=None,
-):
+def WhisperDecoderStep(vocab_size, num_layers, num_heads, hidden_dim, ffn_dim, max_seq, dropout, weights=None, models_path=None, name=None):  # fmt: skip
     key_dim = int(hidden_dim // num_heads)
     tokens = Input((1,), dtype="int32", name="decoder_token_ids")
     cache_shape = (num_layers, 2, None, num_heads, key_dim)
     self_name = "self_attention_cache"
-    self_cache = Input(cache_shape, dtype="float32", name=self_name)
+    self_cache = Input(cache_shape, name=self_name)
     cross_name = "cross_attention_cache"
-    cross_cache = Input(cache_shape, dtype="float32", name=cross_name)
+    cross_cache = Input(cache_shape, name=cross_name)
     cache_index = Input((), dtype="int32", name="cache_update_index")
     scalar_name = "cache_update_index_scalar"
     scalar = Lambda(cast_index_scalar, output_shape=(), name=scalar_name)
@@ -114,7 +105,7 @@ def WhisperDecoderStep(
     outputs = [logits, updated_cache]
     model = Model(inputs, outputs, name=name)
     if weights is not None:
-        load_whisper_weights(model, weights, "decoder_step", models_dir)
+        load_whisper_weights(model, weights, "decoder_step", models_path)
     return model
 
 
@@ -140,10 +131,7 @@ def build_decoder_embeddings(hidden, positions, max_seq, dropout):
     return Dropout(dropout, name="decoder_embeddings_dropout")(hidden)
 
 
-def build_decoder_blocks(
-    hidden, self_cache, cross_cache, index,
-    num_layers, num_heads, hidden_dim, ffn_dim, dropout,
-):
+def build_decoder_blocks(hidden, self_cache, cross_cache, index, num_layers, num_heads, hidden_dim, ffn_dim, dropout):  # fmt: skip
     key_dim = int(hidden_dim // num_heads)
     keys = ("num_heads", "hidden_dim", "ffn_dim", "dropout")
     values = (num_heads, hidden_dim, ffn_dim, dropout)
@@ -201,17 +189,14 @@ def build_concatenate_lambda(shape, name):
     return Lambda(fn, output_shape=shape, name=name)
 
 
-def WhisperCrossCache(
-    num_layers, num_heads, hidden_dim,
-    weights=None, models_dir=None, name=None,
-):
+def WhisperCrossCache(num_layers, num_heads, hidden_dim, weights=None, models_path=None, name=None):  # fmt: skip
     input_name = "encoder_output"
-    encoder_output = Input((None, hidden_dim), dtype="float32", name=input_name)
+    encoder_output = Input((None, hidden_dim), name=input_name)
     args = (encoder_output, num_layers, num_heads, hidden_dim)
     cross_cache = build_cross_caches(*args)
     model = Model(encoder_output, cross_cache, name=name)
     if weights is not None:
-        load_whisper_weights(model, weights, "cross_cache", models_dir)
+        load_whisper_weights(model, weights, "cross_cache", models_path)
     return model
 
 
@@ -230,9 +215,9 @@ def build_cross_caches(output, num_layers, num_heads, hidden_dim):
     return build_concatenate_lambda(concat_shape, name)(caches)
 
 
-def load_whisper_weights(model, variant_name, model_kind, models_dir=None):
-    models_dir = models_dir or WHISPER_MODELS_DIR
-    path = build_whisper_weights_path(variant_name, model_kind, models_dir)
+def load_whisper_weights(model, variant_name, model_kind, models_path=None):
+    models_path = models_path or WHISPER_MODELS_DIR
+    path = build_whisper_weights_path(variant_name, model_kind, models_path)
     if not path.exists():
         template = "No {} weights for {} at {}."
         msg = template.format(model_kind, variant_name, path)
@@ -241,10 +226,10 @@ def load_whisper_weights(model, variant_name, model_kind, models_dir=None):
     return model
 
 
-def build_whisper_weights_path(variant_name, model_kind, models_dir):
+def build_whisper_weights_path(variant_name, model_kind, models_path):
     filename = "{}.weights.h5".format(model_kind)
-    return build_whisper_model_dir(variant_name, models_dir) / filename
+    return build_whisper_model_dir(variant_name, models_path) / filename
 
 
-def build_whisper_model_dir(variant_name, models_dir):
-    return Path(models_dir) / variant_name
+def build_whisper_model_dir(variant_name, models_path):
+    return Path(models_path) / variant_name

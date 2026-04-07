@@ -43,7 +43,7 @@ def preprocess(wav_path, target=16000):
     return preprocess_waveform(waveform, sample_rate, target)
 
 
-def build_models(model_name, models_dir=WHISPER_MODELS_DIR):
+def build_models(model_name, models_path=WHISPER_MODELS_DIR):
     config = CONFIGS[model_name]
     layers = config["num_layers"]
     heads = config["num_heads"]
@@ -55,7 +55,7 @@ def build_models(model_name, models_dir=WHISPER_MODELS_DIR):
     enc_seq = config["max_encoder_sequence_length"]
     ename = f"{model_name}_encoder"
     enc_args = (mels, layers, heads, hidden_dim, ffn_dim, enc_seq, dropout)
-    wargs = {"weights": model_name, "models_dir": models_dir}
+    wargs = {"weights": model_name, "models_path": models_path}
     encoder = WhisperEncoder(*enc_args, name=ename, **wargs)
     cname = f"{model_name}_cross_cache"
     cc_args = (layers, heads, hidden_dim)

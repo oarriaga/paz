@@ -24,7 +24,7 @@ def build_self_cache(cache_shape, max_len, batch_size=1):
     num_heads = int(cache_shape[4])
     key_dim = int(cache_shape[5])
     shape = (batch_size, num_layers, 2, max_len, num_heads, key_dim)
-    return ops.zeros(shape, dtype="float32")
+    return ops.zeros(shape)
 
 
 def KVDecoder(decoder_step, prompt_ids, max_tokens, max_seq=448):

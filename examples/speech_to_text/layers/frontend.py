@@ -11,7 +11,6 @@ MAX_MEL = 45.245640471924965
 
 
 def frontend(waveform, mel_filters):
-    waveform = ops.cast(waveform, "float32")
     waveform, do_squeeze = batch_tensor(waveform)
     waveform = build_fixed_length_waveform(waveform)
     waveform = build_stft_waveform(waveform)
