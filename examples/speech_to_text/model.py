@@ -6,7 +6,6 @@ from keras.activations import gelu
 from keras.layers import Input, Conv1D, Dropout, Add, Lambda
 from keras.layers import LayerNormalization, ReversibleEmbedding
 
-from examples.speech_to_text.configs import CONFIGS
 from examples.speech_to_text.layers.frontend import frontend
 from examples.speech_to_text.layers.frontend import build_mel_filters
 from examples.speech_to_text.layers.embedding import embed_position

@@ -20,7 +20,8 @@ from examples.speech_to_text.decoding import KVDecoder
 from examples.speech_to_text.decoding import build_whisper_prompt_token_ids
 from examples.speech_to_text.decoding import kv_decode
 from examples.speech_to_text.decoding import extract_text_token_ids
-from examples.speech_to_text.configs import CONFIGS
+from examples.speech_to_text.configuration import CONFIGS
+from examples.speech_to_text.configuration import to_model_args
 from examples.speech_to_text.model import WHISPER_MODELS_DIR
 from examples.speech_to_text.model import WhisperCrossCache
 from examples.speech_to_text.model import WhisperDecoderStep
@@ -30,42 +31,18 @@ from examples.speech_to_text.tokenizer import decode_whisper_tokens
 from examples.speech_to_text.tokenizer import find_special_token_id
 
 
-def preprocess_waveform(waveform, sample_rate, target=16000):
+def transcribe(wav_path, models, max_tokens=64):
+    waveform, sample_rate = load(wav_path)
+    waveform = preprocess(waveform, sample_rate)
+    return transcribe_waveform(waveform, models, max_tokens)
+
+
+def preprocess(waveform, sample_rate, target=16000):
     waveform = to_float(waveform)
     waveform = to_mono(waveform)
     waveform = resample(waveform, sample_rate, target)
     waveform = np.clip(waveform, -1.0, 1.0)
     return ops.convert_to_tensor(waveform, dtype="float32")
-
-
-def preprocess(wav_path, target=16000):
-    waveform, sample_rate = load(wav_path)
-    return preprocess_waveform(waveform, sample_rate, target)
-
-
-def build_models(model_name, models_path=WHISPER_MODELS_DIR):
-    config = CONFIGS[model_name]
-    layers = config["num_layers"]
-    heads = config["num_heads"]
-    hidden_dim = config["hidden_dim"]
-    ffn_dim = config["ffn_dim"]
-    dropout = config["dropout"]
-    frontend_model = WhisperFrontend()
-    mels = config["num_mels"]
-    enc_seq = config["max_encoder_sequence_length"]
-    ename = f"{model_name}_encoder"
-    enc_args = (mels, layers, heads, hidden_dim, ffn_dim, enc_seq, dropout)
-    wargs = {"weights": model_name, "models_path": models_path}
-    encoder = WhisperEncoder(*enc_args, name=ename, **wargs)
-    cname = f"{model_name}_cross_cache"
-    cc_args = (layers, heads, hidden_dim)
-    cross_cache = WhisperCrossCache(*cc_args, name=cname, **wargs)
-    sname = f"{model_name}_decoder_step"
-    vocab_size = config["vocabulary_size"]
-    dec_seq = config["max_decoder_sequence_length"]
-    args = (vocab_size, layers, heads, hidden_dim, ffn_dim, dec_seq, dropout)
-    decoder_step = WhisperDecoderStep(*args, name=sname, **wargs)
-    return frontend_model, encoder, cross_cache, decoder_step
 
 
 def transcribe_waveform(waveform, models, max_tokens=64):
@@ -85,9 +62,17 @@ def transcribe_waveform(waveform, models, max_tokens=64):
     return token_ids, text_ids, text
 
 
-def transcribe(wav_path, models, max_tokens=64):
-    waveform = preprocess(wav_path)
-    return transcribe_waveform(waveform, models, max_tokens)
+def build_models(model_name, models_path=WHISPER_MODELS_DIR):
+    model_args = to_model_args(model_name, models_path)
+    encoder_args, cross_cache_args, decoder_args, kwargs = model_args
+    encoder_name = f"{model_name}_encoder"
+    cross_name = f"{model_name}_cross_cache"
+    decoder_name = f"{model_name}_decoder_step"
+    frontend_model = WhisperFrontend()
+    encoder = WhisperEncoder(*encoder_args, name=encoder_name, **kwargs)
+    cross_cache = WhisperCrossCache(*cross_cache_args, name=cross_name, **kwargs)
+    decoder_step = WhisperDecoderStep(*decoder_args, name=decoder_name, **kwargs)
+    return frontend_model, encoder, cross_cache, decoder_step
 
 
 if __name__ == "__main__":
