@@ -55,3 +55,15 @@ def compute_normals(vertices, faces, transform, world_points):
     normals = transform_points(inverse.T, normals)
     normals = paz.algebra.normalize(normals)
     return normals
+
+
+def compute_normals_for_hits(vertices, faces, transform, face_indices):
+    hit_faces = faces[face_indices]
+    A = vertices[hit_faces[:, 0]]
+    B = vertices[hit_faces[:, 1]]
+    C = vertices[hit_faces[:, 2]]
+    normals = jp.cross(B - A, C - A)
+    normals = paz.algebra.normalize(normals)
+    inverse = jp.linalg.inv(transform)
+    normals = normals @ inverse[:3, :3]
+    return paz.algebra.normalize(normals)

@@ -1,83 +1,49 @@
 import keras
 from keras import ops
+from keras.layers import Embedding, Lambda
 
 
-def build_position_indices(sequence_length, start_index):
-    return ops.arange(start_index, start_index + sequence_length, dtype="int32")
+def Kernel(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-def broadcast_position_embeddings(position_embeddings, inputs):
-    return ops.ones_like(inputs) * position_embeddings
+def build_position_args(sequence_length, start):
+    end = start + sequence_length
+    return ops.arange(start, end, dtype="int32")
 
 
-def position_embedding(
-    inputs,
-    sequence_length,
-    initializer="glorot_uniform",
-    start_index=0,
-    positions=None,
-    trainable=True,
-    dtype="float32",
-    name="position_embedding",
-):
-    feature_size = inputs.shape[-1]
-    if feature_size is None:
-        raise ValueError("Position embedding inputs must have known feature size.")
+def broadcast(embeddings, inputs):
+    return ops.ones_like(inputs) * embeddings
 
-    embedding = keras.layers.Embedding(
-        sequence_length,
-        feature_size,
-        embeddings_initializer=keras.initializers.get(initializer),
-        trainable=trainable,
-        dtype=dtype,
-        name=name,
-    )
+
+def build_position_indices(x):
+    return build_position_args(ops.shape(x)[-2], 0)
+
+
+def position_indices_shape(shape):
+    return (shape[-2],)
+
+
+def build_embedding(seq_length, dim, trainable, name):
+    kwargs = {"trainable": trainable, "name": name}
+    return Embedding(seq_length, dim, Kernel(), **kwargs)
+
+
+def build_index_lambda(name):
+    fn = build_position_indices
+    shape_fn = position_indices_shape
+    return Lambda(fn, output_shape=shape_fn, name=name)
+
+
+def embed_position(x, seq_length, trainable, positions, name):
+    dim = x.shape[-1]
+    embedding = build_embedding(seq_length, dim, trainable, name)
     if positions is None:
-        positions = keras.layers.Lambda(
-            lambda x: build_position_indices(ops.shape(x)[-2], start_index),
-            output_shape=lambda shape: (shape[-2],),
-            name=f"{name}_indices",
-        )(inputs)
-        position_embeddings = embedding(positions)
-        position_embeddings = ops.expand_dims(position_embeddings, axis=0)
-        return broadcast_position_embeddings(position_embeddings, inputs)
-
+        index_name = f"{name}_indices"
+        positions = build_index_lambda(index_name)(x)
+        embeddings = embedding(positions)
+        embeddings = ops.expand_dims(embeddings, axis=0)
+        return broadcast(embeddings, x)
     if len(positions.shape) == 1:
         positions = ops.expand_dims(positions, axis=0)
-    position_embeddings = embedding(positions)
-    return broadcast_position_embeddings(position_embeddings, inputs)
-
-
-def token_and_position_embedding(
-    token_ids,
-    vocabulary_size,
-    sequence_length,
-    embedding_dim,
-    embeddings_initializer,
-    start_index=0,
-    positions=None,
-    dtype="float32",
-    token_embedding_name="token_embedding",
-    position_embedding_name="position_embedding",
-):
-    token_embedding = keras.layers.ReversibleEmbedding(
-        vocabulary_size,
-        embedding_dim,
-        tie_weights=True,
-        embeddings_initializer=keras.initializers.get(embeddings_initializer),
-        mask_zero=False,
-        dtype=dtype,
-        name=token_embedding_name,
-    )
-    embedded_tokens = token_embedding(token_ids)
-    embedded_positions = position_embedding(
-        embedded_tokens,
-        sequence_length,
-        embeddings_initializer,
-        start_index,
-        positions,
-        True,
-        dtype,
-        position_embedding_name,
-    )
-    return embedded_tokens + embedded_positions
+    return broadcast(embedding(positions), x)

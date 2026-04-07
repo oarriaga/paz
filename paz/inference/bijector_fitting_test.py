@@ -21,7 +21,7 @@ def test_fit_bijector_reduces_loss():
         key,
         num_samples=256,
         num_steps=40,
-        print=False,
+        verbose=False,
     )
     assert losses[-1] <= losses[0]
 
@@ -38,6 +38,6 @@ def test_fit_bijector_returns_bijector():
         key,
         num_samples=128,
         num_steps=5,
-        print=False,
+        verbose=False,
     )
     assert isinstance(fitted, tfb.Bijector)

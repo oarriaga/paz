@@ -17,6 +17,7 @@ import jax.numpy as jp
 import numpy as np
 import jax
 import paz
+import paz.utils.plot as plot
 
 image_filename = "color_scene.png"
 H, W = 128, 128
@@ -101,11 +102,11 @@ def build_renderer(SE3_transform, render_arg=0):
 def plot_jacobian(function, args, filename=None):
     compute_jacobian = jax.jit(jax.jacfwd(function))
     jacobian = compute_jacobian(args)
-    config = paz.plot.build_configuration(figsize=(1080, 1080))
+    config = plot.build_configuration(figsize=(1080, 1080))
     figure, axis = plt.subplots(figsize=config.figsize)
     image = function(args)
     axis.imshow(image)
-    paz.plot.hide_all_axes(axis)
+    plot.hide_all_axes(axis)
     axis.set_xticks([])
     axis.set_yticks([])
     plt.savefig(image_filename, bbox_inches="tight", pad_inches=0.0)
@@ -148,13 +149,13 @@ def visualize_gradients(
         figure = visualize_gradient_magnitude(gradients, cmap_magnitude)
     elif mode == "channels":
         figure = visualize_gradient_channels(gradients, cmap_channels)
-    paz.plot.write_or_show(figure, filename)
+    plot.write_or_show(figure, filename)
 
 
 def visualize_gradient_magnitude(gradients, cmap):
-    config = paz.plot.build_configuration(figsize=(1080, 1080))
+    config = plot.build_configuration(figsize=(1080, 1080))
     figure, axis = plt.subplots(figsize=config.figsize)
-    paz.plot.hide_all_axes(axis)
+    plot.hide_all_axes(axis)
     magnitude = jp.linalg.norm(gradients, axis=-1)
     image = plt.imshow(
         magnitude,
@@ -174,9 +175,9 @@ def visualize_gradient_magnitude(gradients, cmap):
 
 
 def visualize_gradient_channels(gradients, cmap):
-    config = paz.plot.build_configuration(figsize=(1080, 1080))
+    config = plot.build_configuration(figsize=(1080, 1080))
     figure, axis = plt.subplots(figsize=config.figsize)
-    paz.plot.hide_all_axes(axis)
+    plot.hide_all_axes(axis)
     magnitude = gradients
     # magnitude = jp.abs(gradients)
     print(magnitude.max(), magnitude.min())

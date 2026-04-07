@@ -1,5 +1,8 @@
 import colorsys
 import math
+from functools import lru_cache
+
+import jax
 import numpy as np
 import cv2
 import paz
@@ -8,6 +11,13 @@ GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 WHITE = (255, 255, 255)
 ORANGE = (255, 165, 0)
+
+
+@lru_cache(maxsize=None)
+def _lincolors(num_colors):
+    if num_colors == 0:
+        return ()
+    return tuple(lincolor(num_colors))
 
 
 def square(image, point, size, color):
@@ -42,9 +52,11 @@ def box(image, box, color=GREEN, thickness=2):
     return rectangle(image, (x_min, y_min), (x_max, y_max), color, thickness)
 
 
-def boxes(image, boxes, color=GREEN, thickness=2):
+def boxes(image, boxes, colors=GREEN, thickness=2):
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
-    for box in boxes:
+    if np.ndim(colors) == 1:
+        colors = [colors] * len(boxes)
+    for box, color in zip(boxes, colors):
         image = paz.draw.box(image, box.tolist(), color, thickness)
     return image
 
@@ -326,4 +338,67 @@ def cube(image, points, color=GREEN, thickness=2, radius=5):
 
     # draw dots
     [dot(image, np.squeeze(point), color, radius) for point in points]
+    return image
+
+
+def mesh2D(
+    image, vertices2D, edges, color, thickness=2, radius=4, edge_scale=0.6
+):
+    image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
+    vertices2D = np.array(vertices2D)
+    edge_color = tuple(edge_scale * np.array(color))
+    for edge in edges:
+        point_A = np.squeeze(vertices2D[edge[0]]).astype(int)
+        point_B = np.squeeze(vertices2D[edge[1]]).astype(int)
+        image = paz.draw.line(image, point_A, point_B, edge_color, thickness)
+    for point in vertices2D:
+        point = np.squeeze(point).astype(int)
+        image = paz.draw.circle(image, point, radius, color)
+    return image
+
+
+def mesh_poses(
+    image,
+    meshes,
+    camera_matrix,
+    thickness=2,
+    radius=4,
+    colors=None,
+    edge_scale=0.6,
+):
+    def project_points(camera_matrix, points3D):
+        project = jax.vmap(paz.pinhole.project_to_2D, (None, 0))
+        points2D = project(camera_matrix, points3D)
+        return paz.to_numpy(points2D).astype(int)
+
+    image = np.ascontiguousarray(paz.to_numpy(image))
+    if colors is None:
+        colors = _lincolors(len(meshes.vertices))
+    for color, vertices, edges, transform in zip(
+        colors, meshes.vertices, meshes.edges, meshes.transform
+    ):
+        world_vertices = paz.algebra.transform_points(transform, vertices)
+        vertices2D = project_points(camera_matrix, world_vertices)
+        draw_args = image, vertices2D, edges, color, thickness, radius
+        image = paz.draw.mesh2D(*draw_args, edge_scale=edge_scale)
+    return image
+
+
+def poses(image, transforms, camera_matrix, thickness=2, radius=4, colors=None):
+    def project_points(camera_matrix, points3D):
+        project = jax.vmap(paz.pinhole.project_to_2D, (None, 0))
+        points2D = project(camera_matrix, points3D)
+        return paz.to_numpy(points2D).astype(int)
+
+    image = np.ascontiguousarray(paz.to_numpy(image))
+    transforms = paz.to_numpy(transforms)
+    bounds = np.ones(3)
+    cube_points3D = paz.pinhole.build_cube_corners(-bounds, bounds)
+    cube_points3D = paz.to_numpy(cube_points3D)
+    if colors is None:
+        colors = _lincolors(len(transforms))
+    for color, transform in zip(colors, transforms):
+        points3D = paz.algebra.transform_points(transform, cube_points3D)
+        points2D = project_points(camera_matrix, points3D)
+        image = paz.draw.cube(image, points2D, color, thickness, radius)
     return image

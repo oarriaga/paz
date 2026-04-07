@@ -1,5 +1,6 @@
 from functools import wraps, partial
 from collections import namedtuple
+import argparse
 
 import numpy as np
 import jax.numpy as jp
@@ -56,3 +57,17 @@ def as_numpy_array(function):
         return np.array(result)
 
     return wrapper
+
+
+def str_to_bool(value):
+    if isinstance(value, bool):
+        result = value
+    else:
+        value = value.lower()
+        if value in {"true", "1", "yes", "y"}:
+            result = True
+        elif value in {"false", "0", "no", "n"}:
+            result = False
+        else:
+            raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+    return result

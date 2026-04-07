@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 from tensorflow_probability.substrates import jax as tfp
 
 import paz
-import paz.plot as plot
+import paz.utils.plot as plot
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -578,5 +578,4 @@ pooled_slope = samples.mu_slope.mean()
 pooled_intercept = samples.mu_intercept.mean()
 print(f"  Pooled slope mean: {pooled_slope:.3f}")
 print(f"  Pooled intercept mean: {pooled_intercept:.3f}")
-
 

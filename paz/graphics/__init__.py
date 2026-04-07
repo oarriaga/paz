@@ -37,9 +37,10 @@ from paz.graphics import shapes
 from paz.graphics import camera
 from paz.graphics import phong
 from paz.graphics import mesh
-from paz.graphics.renderer import render
+from paz.graphics.renderer import render, render_masks
 
 from paz.graphics import patterns
 from paz.graphics import scene
 from paz.graphics.serialization import save, load
-from paz.graphics.viewer import viewer
+from paz.graphics.viewer import viewer, shape_renderer, mesh_renderer
+from paz.graphics.orbit import orbit_pose, render_orbit

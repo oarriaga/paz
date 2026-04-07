@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 import paz
+import paz.utils.plot as plot
 from paz import SE3
 import numpy as np
 from paz.graphics import SPHERE
@@ -42,9 +43,9 @@ rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_transform)
 
 
 def visualize_gradient_magnitude(gradients, cmap):
-    config = paz.plot.build_configuration(figsize=(1080, 1080))
+    config = plot.build_configuration(figsize=(1080, 1080))
     figure, axis = plt.subplots(figsize=config.figsize)
-    paz.plot.hide_all_axes(axis)
+    plot.hide_all_axes(axis)
     magnitude = jp.linalg.norm(gradients, axis=-1)
     print(magnitude.min(), magnitude.max())
     image = plt.imshow(
@@ -63,7 +64,7 @@ def visualize_gradient_magnitude(gradients, cmap):
 
 
 def visualize_gradient_channels(gradients, cmap):
-    config = paz.plot.build_configuration(figsize=(1080, 1080))
+    config = plot.build_configuration(figsize=(1080, 1080))
     num_channels = gradients.shape[-1]
     # figsize = (6 * num_channels, 5) if num_channels > 1 else (7, 6)
     figure, axes = plt.subplots(
@@ -103,21 +104,21 @@ def visualize_gradients(
         figure = visualize_gradient_magnitude(gradients, cmap_magnitude)
     elif mode == "channels":
         figure = visualize_gradient_channels(gradients, cmap_channels)
-    paz.plot.write_or_show(figure, filename)
+    plot.write_or_show(figure, filename)
     plt.show()
 
 
 def plot_jacobian(function, args, filename=None):
     compute_jacobian = jax.jit(jax.jacfwd(function))
     jacobian = compute_jacobian(args)
-    config = paz.plot.build_configuration(figsize=(1080, 1080))
+    config = plot.build_configuration(figsize=(1080, 1080))
     figure, axis = plt.subplots(figsize=config.figsize)
     image = function(args)
     axis.imshow(image)
-    paz.plot.hide_all_axes(axis)
+    plot.hide_all_axes(axis)
     axis.set_xticks([])
     axis.set_yticks([])
-    paz.plot.write_or_show(figure, filename)
+    plot.write_or_show(figure, filename)
     num_channels = jacobian.shape[-1]
     for channel_arg in range(num_channels):
         gradients = jacobian[..., channel_arg]

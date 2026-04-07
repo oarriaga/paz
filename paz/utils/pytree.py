@@ -98,6 +98,21 @@ def to_pickle(tree, filepath):
         pickle.dump(tree, filedata)
 
 
+def count_elements(tree):
+    if hasattr(tree, "_asdict"):
+        return sum(count_elements(value) for value in tree._asdict().values())
+    if isinstance(tree, dict):
+        return sum(count_elements(value) for value in tree.values())
+    if isinstance(tree, (list, tuple)):
+        return sum(count_elements(value) for value in tree)
+    if hasattr(tree, "shape"):
+        total = 1
+        for dimension in tree.shape:
+            total *= dimension
+        return total
+    return 1
+
+
 def to_json(tree, filepath, indent=4):
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)

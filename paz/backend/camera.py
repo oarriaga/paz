@@ -160,8 +160,11 @@ class VideoPlayer(object):
         """
         # just call it once to warm-start any jit compilation
         self.camera.start()
+        self.camera._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.image_size[0])
+        self.camera._camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.image_size[1])
+
         output = self.step()
-        output = self.step()
+        # output = self.step()
         while True:
             output = self.step()
             if output is None:

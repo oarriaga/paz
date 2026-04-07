@@ -30,11 +30,11 @@ intersection_cases = [
 ]
 
 normal_cases = [
-    compute_canonical_normals_sphere,
-    compute_canonical_normals_cube,
+    lambda points, depths: compute_canonical_normals_sphere(points),
+    lambda points, depths: compute_canonical_normals_cube(points),
     compute_canonical_normals_cylinder,
     compute_canonical_normals_cone,
-    compute_canonical_normals_plane,
+    lambda points, depths: compute_canonical_normals_plane(points),
 ]
 
 
@@ -106,7 +106,7 @@ def intersect(shape, ray_origins, ray_directions):
     # world_to_shape = paz.SE3.invert(shape.transform)
     shape_points = transform_points(world_to_shape, world_points)
     # transform world normals
-    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points)
+    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points, sorted_depths)
     world_normals = transform_points(world_to_shape.T, shape_normals)
     world_normals = paz.algebra.normalize(world_normals)
     # postprocess normals
@@ -122,7 +122,7 @@ def intersect_all(shape, ray_origins, ray_directions):
     hit_mask, depths, depth = intersections
     world_points = compute_points3D(ray_origins, ray_directions, depth)
     shape_points = transform_points(world_to_shape, world_points)
-    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points)
+    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points, depths)
     world_normals = transform_points(world_to_shape.T, shape_normals)
     world_normals = paz.algebra.normalize(world_normals)
     eyes = compute_eyes(ray_directions)

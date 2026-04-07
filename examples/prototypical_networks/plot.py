@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
 import paz
+import paz.utils.plot as plot
 
 
 def collect_results(results_dir, max_seeds_per_way):
@@ -67,7 +68,7 @@ def collect_results(results_dir, max_seeds_per_way):
 
 
 def plot_results(results, num_seeds, filepath=None):
-    config = paz.plot.build_configuration(
+    config = plot.build_configuration(
         "max", fontsize=25, label_pads=(10, 10)
     )
     plt.rcParams.update(
@@ -123,13 +124,13 @@ def plot_results(results, num_seeds, filepath=None):
         edgecolor="white",
     )
 
-    paz.plot.hide_axes(axis)
-    paz.plot.set_label_pads(axis, config)
+    plot.hide_axes(axis)
+    plot.set_label_pads(axis, config)
     axis.set_ylim(45, 100)
     axis.set_xlabel("Number of Training Classes")
     axis.set_ylabel("Test Accuracy (\\%)")
     plt.tight_layout()
-    paz.plot.write_or_show(figure, filepath)
+    plot.write_or_show(figure, filepath)
 
 
 parser = argparse.ArgumentParser(description="Plot accuracies across classes.")

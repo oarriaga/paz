@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jp
 import numpy as np
 import paz
@@ -48,3 +49,11 @@ def compute_gradient_norm(depth):
     gradient_x = jp.abs(jp.diff(depth, axis=1, prepend=depth[:, :1]))
     gradient_y = jp.abs(jp.diff(depth, axis=0, prepend=depth[:1, :]))
     return jp.sqrt(gradient_x**2 + gradient_y**2)
+
+
+def to_soft_mask(depth, min_depth, max_depth):
+    inner = ((-depth) + max_depth) / (max_depth - min_depth + 1e-8)
+    inner = inner - 0.5
+    moved = jp.where(depth > 1e-5, inner, -1000.0)
+    scale = jp.log((1 - 1e-3) / 1e-3)
+    return jax.nn.sigmoid(scale * moved)

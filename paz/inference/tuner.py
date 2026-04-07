@@ -4,7 +4,7 @@ from functools import partial
 import jax
 import jax.numpy as jp
 
-from paz import progressbar
+import paz.utils.progressbar as progressbar
 from .metropolis_hastings import (
     Samples,
     build_new_proposal,

@@ -1,10 +1,8 @@
 import os
 
-# This guide can only be run with the jax backend.
 os.environ["KERAS_BACKEND"] = "jax"
 
 import argparse
-
 import sys
 from pathlib import Path
 
@@ -16,165 +14,90 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from examples.speech_to_text.audio import load, resample, to_float, to_mono
-from examples.speech_to_text.decoding import (
-    KVDecoder,
-    build_whisper_base_en_prompt_token_ids,
-)
-from examples.speech_to_text.decoding import (
-    decode_token_ids_with_kv_cache,
-    extract_text_token_ids,
-)
-from examples.speech_to_text.model2 import (
-    CONFIGS,
-    WhisperCrossCache,
-    WhisperDecoderStep,
-    WhisperEncoder,
-    WhisperFrontend,
-)
-from examples.speech_to_text.tokenizer import decode_whisper_token_ids
+from examples.speech_to_text.audio import load, resample
+from examples.speech_to_text.audio import to_float, to_mono
+from examples.speech_to_text.decoding import KVDecoder
+from examples.speech_to_text.decoding import build_whisper_prompt_token_ids
+from examples.speech_to_text.decoding import kv_decode
+from examples.speech_to_text.decoding import extract_text_token_ids
+from examples.speech_to_text.model import CONFIGS
+from examples.speech_to_text.model import WhisperCrossCache
+from examples.speech_to_text.model import WhisperDecoderStep
+from examples.speech_to_text.model import WhisperEncoder
+from examples.speech_to_text.model import WhisperFrontend
+from examples.speech_to_text.tokenizer import decode_whisper_tokens
 from examples.speech_to_text.tokenizer import find_special_token_id
 
 
-def preprocess_waveform(waveform, sample_rate, expected_sample_rate=16000):
+def preprocess_waveform(waveform, sample_rate, target=16000):
     waveform = to_float(waveform)
     waveform = to_mono(waveform)
-    waveform = resample(waveform, sample_rate, expected_sample_rate)
+    waveform = resample(waveform, sample_rate, target)
     waveform = np.clip(waveform, -1.0, 1.0)
-    waveform = ops.convert_to_tensor(waveform, dtype="float32")
-    return expected_sample_rate, waveform
+    return ops.convert_to_tensor(waveform, dtype="float32")
 
 
-def transcribe(
-    wav_path,
-    frontend=None,
-    encoder=None,
-    cross_cache_model=None,
-    decoder_step_model=None,
-    max_tokens=64,
-):
-    if frontend is None:
-        frontend = WhisperFrontend()
-    if encoder is None:
-        encoder = WhisperEncoder(
-            **CONFIGS["whisper_base_en"],
-            weights="whisper_base_en",
-            name="whisper_base_en_encoder",
-        )
-    if cross_cache_model is None:
-        cross_cache_model = WhisperCrossCache(
-            **CONFIGS["whisper_base_en"],
-            weights="whisper_base_en",
-            name="whisper_base_en_cross_cache",
-        )
-    if decoder_step_model is None:
-        decoder_step_model = WhisperDecoderStep(
-            **CONFIGS["whisper_base_en"],
-            weights="whisper_base_en",
-            name="whisper_base_en_decoder_step",
-        )
-    sample_rate, waveform = preprocess(wav_path)
-    token_ids, generated_token_ids, decoded_text = transcribe_waveform(
-        waveform,
-        frontend=frontend,
-        encoder=encoder,
-        cross_cache_model=cross_cache_model,
-        decoder_step_model=decoder_step_model,
-        max_tokens=max_tokens,
-    )
-    return sample_rate, token_ids, generated_token_ids, decoded_text
+def preprocess(wav_path, target=16000):
+    waveform, sample_rate = load(wav_path)
+    return preprocess_waveform(waveform, sample_rate, target)
 
 
-def transcribe_waveform(
-    waveform,
-    frontend=None,
-    encoder=None,
-    cross_cache_model=None,
-    decoder_step_model=None,
-    decoder=None,
-    max_tokens=64,
-):
-    if frontend is None:
-        frontend = WhisperFrontend()
-    if encoder is None:
-        encoder = WhisperEncoder(
-            **CONFIGS["whisper_base_en"],
-            weights="whisper_base_en",
-            name="whisper_base_en_encoder",
-        )
-    if cross_cache_model is None:
-        cross_cache_model = WhisperCrossCache(
-            **CONFIGS["whisper_base_en"],
-            weights="whisper_base_en",
-            name="whisper_base_en_cross_cache",
-        )
-    if decoder_step_model is None:
-        decoder_step_model = WhisperDecoderStep(
-            **CONFIGS["whisper_base_en"],
-            weights="whisper_base_en",
-            name="whisper_base_en_decoder_step",
-        )
+def build_models(model_name):
+    config = CONFIGS[model_name]
+    layers = config["num_layers"]
+    heads = config["num_heads"]
+    hidden_dim = config["hidden_dim"]
+    ffn_dim = config["ffn_dim"]
+    dropout = config["dropout"]
+    frontend_model = WhisperFrontend()
+    mels = config["num_mels"]
+    enc_seq = config["max_encoder_sequence_length"]
+    ename = f"{model_name}_encoder"
+    enc_args = (mels, layers, heads, hidden_dim, ffn_dim, enc_seq, dropout)
+    encoder = WhisperEncoder(*enc_args, weights=model_name, name=ename)
+    cname = f"{model_name}_cross_cache"
+    cc_args = (layers, heads, hidden_dim)
+    cross_cache = WhisperCrossCache(*cc_args, weights=model_name, name=cname)
+    sname = f"{model_name}_decoder_step"
+    vocab_size = config["vocabulary_size"]
+    dec_seq = config["max_decoder_sequence_length"]
+    args = (vocab_size, layers, heads, hidden_dim, ffn_dim, dec_seq, dropout)
+    decoder_step = WhisperDecoderStep(*args, weights=model_name, name=sname)
+    return frontend_model, encoder, cross_cache, decoder_step
+
+
+def transcribe_waveform(waveform, models, max_tokens=64):
+    frontend_model, encoder, cross_model, decoder_step = models
     if len(waveform.shape) == 1:
         waveform = ops.expand_dims(waveform, axis=0)
-    encoder_features = frontend(waveform)
-    encoder_output = encoder(encoder_features)
-    prompt_token_ids = build_whisper_base_en_prompt_token_ids()
-    stop_token_id = find_special_token_id("<|endoftext|>")
-    cache_shape = decoder_step_model.input_shape[1]
-    if decoder is None:
-        decoder = KVDecoder(decoder_step_model, prompt_token_ids, max_tokens)
-
-    token_ids = decode_token_ids_with_kv_cache(
-        decoder,
-        cache_shape,
-        cross_cache_model,
-        encoder_output,
-        stop_token_id,
-    )
-    generated_token_ids = extract_text_token_ids(
-        token_ids, len(prompt_token_ids), stop_token_id
-    )
-    decoded_text = decode_whisper_token_ids(generated_token_ids)
-    return token_ids, generated_token_ids, decoded_text
+    features = frontend_model(waveform)
+    encoder_output = encoder(features)
+    prompt_ids = build_whisper_prompt_token_ids()
+    stop_id = find_special_token_id("<|endoftext|>")
+    cache_shape = decoder_step.input_shape[1]
+    decoder = KVDecoder(decoder_step, prompt_ids, max_tokens)
+    args = (decoder, cache_shape, cross_model, encoder_output, stop_id)
+    token_ids = kv_decode(*args)
+    text_ids = extract_text_token_ids(token_ids, len(prompt_ids), stop_id)
+    text = decode_whisper_tokens(text_ids)
+    return token_ids, text_ids, text
 
 
-def preprocess(wav_path, expected_sample_rate=16000):
-    waveform, sample_rate = load(wav_path)
-    return preprocess_waveform(waveform, sample_rate, expected_sample_rate)
+def transcribe(wav_path, models, max_tokens=64):
+    waveform = preprocess(wav_path)
+    return transcribe_waveform(waveform, models, max_tokens)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Whisper speech-to-text demo")
-    parser.add_argument(
-        "--audio_path", default=str(Path(__file__).with_name("harvard.wav"))
-    )
-    parser.add_argument(
-        "--model_name", default="whisper_base_en", choices=["whisper_base_en"]
-    )
-    parser.add_argument("--max_tokens", default=64, type=int)
+    description = "Whisper speech-to-text demo"
+    parser = argparse.ArgumentParser(description=description)
+    default_audio = str(Path(__file__).with_name("harvard.wav"))
+    model_names = list(CONFIGS.keys())
+    add = parser.add_argument
+    add("--audio_path", default=default_audio)
+    add("--model_name", default="whisper_base_en", choices=model_names)
+    add("--max_tokens", default=64, type=int)
     args = parser.parse_args()
-    frontend = WhisperFrontend()
-    encoder = WhisperEncoder(
-        **CONFIGS["whisper_base_en"],
-        weights="whisper_base_en",
-        name="whisper_base_en_encoder",
-    )
-    cross_cache_model = WhisperCrossCache(
-        **CONFIGS["whisper_base_en"],
-        weights="whisper_base_en",
-        name="whisper_base_en_cross_cache",
-    )
-    decoder_step_model = WhisperDecoderStep(
-        **CONFIGS["whisper_base_en"],
-        weights="whisper_base_en",
-        name="whisper_base_en_decoder_step",
-    )
-    _, _, _, decoded_text = transcribe(
-        Path(args.audio_path),
-        frontend,
-        encoder,
-        cross_cache_model,
-        decoder_step_model,
-        args.max_tokens,
-    )
-    print(decoded_text)
+    models = build_models(args.model_name)
+    _, _, text = transcribe(Path(args.audio_path), models, args.max_tokens)
+    print(text)

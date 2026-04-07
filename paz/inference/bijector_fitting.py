@@ -3,7 +3,7 @@ import jax.numpy as jp
 import optax
 from tensorflow_probability.substrates import jax as tfp
 
-from paz import progressbar
+import paz.utils.progressbar as progressbar
 
 tfd = tfp.distributions
 

@@ -53,9 +53,6 @@ def build_cube(size=1.0):
     mesh = trimesh.creation.box(extents=[size, size, size])
     vertices = jp.array(mesh.vertices.view(onp.ndarray))
     faces = jp.array(mesh.faces.view(onp.ndarray))
-    faces = jp.concatenate(
-        [faces[:, 0:1], faces[:, 2:3], faces[:, 1:2]], axis=1
-    )
     edges = jp.array(mesh.edges.view(onp.ndarray))
     return vertices, faces, edges
 
@@ -67,9 +64,6 @@ def build_sphere(radius=1.0, subdivisions=3):
     mesh = trimesh.creation.icosphere(subdivisions, radius)
     vertices = jp.array(mesh.vertices.view(onp.ndarray))
     faces = jp.array(mesh.faces.view(onp.ndarray))
-    faces = jp.concatenate(
-        [faces[:, 0:1], faces[:, 2:3], faces[:, 1:2]], axis=1
-    )
     edges = jp.array(mesh.edges.view(onp.ndarray))
     return vertices, faces, edges
 
