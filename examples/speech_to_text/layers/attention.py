@@ -3,7 +3,7 @@ import string
 from keras import ops
 from keras.layers import Dropout, EinsumDense
 
-from examples.speech_to_text.layers.embedding import Kernel
+from examples.speech_to_text.layers.utils import Kernel
 
 
 def attend(query, value, num_heads, key_dim, dropout, name):

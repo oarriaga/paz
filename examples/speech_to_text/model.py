@@ -9,8 +9,8 @@ from keras.layers import LayerNormalization, ReversibleEmbedding
 from examples.speech_to_text.configs import CONFIGS
 from examples.speech_to_text.layers.frontend import frontend
 from examples.speech_to_text.layers.frontend import build_mel_filters
-from examples.speech_to_text.layers.embedding import Kernel
 from examples.speech_to_text.layers.embedding import embed_position
+from examples.speech_to_text.layers.utils import Kernel
 from examples.speech_to_text.layers.attention import build_cache
 from examples.speech_to_text.layers.encoder import encoder_block
 from examples.speech_to_text.layers.decoder import decoder_block
@@ -22,9 +22,12 @@ NORM_KWARGS = {"axis": -1, "epsilon": 1e-5}
 
 def WhisperFrontend(name="whisper_frontend"):
     waveform = Input((None,), name="waveform")
-    mel_filters = build_mel_filters(80, 400, 16000)
+    num_mels, fft_bins, sample_rate = 80, 400, 16000
+    stride, max_mel = 160, 45.245640471924965
+    num_samples = sample_rate * 30
+    mel_filters = build_mel_filters(num_mels, fft_bins, sample_rate, max_mel)
     mel_filters = ops.convert_to_tensor(mel_filters)
-    features = frontend(waveform, mel_filters)
+    features = frontend(waveform, mel_filters, num_samples, fft_bins, stride)
     return Model(waveform, features, name=name)
 
 

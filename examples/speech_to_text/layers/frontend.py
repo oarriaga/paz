@@ -2,19 +2,11 @@ import numpy as np
 from keras import ops
 
 
-FFT_BINS = 400
-STRIDE = 160
-SAMPLE_RATE = 16000
-MAX_AUDIO_SECONDS = 30
-NUM_SAMPLES = SAMPLE_RATE * MAX_AUDIO_SECONDS
-MAX_MEL = 45.245640471924965
-
-
-def frontend(waveform, mel_filters):
+def frontend(waveform, mel_filters, num_samples, fft_bins, stride):
     waveform, do_squeeze = batch_tensor(waveform)
-    waveform = build_fixed_length_waveform(waveform)
-    waveform = build_stft_waveform(waveform)
-    real, imag = compute_stft(waveform)
+    waveform = build_fixed_length_waveform(waveform, num_samples)
+    waveform = build_stft_waveform(waveform, fft_bins)
+    real, imag = compute_stft(waveform, fft_bins, stride)
     power = compute_power_spectrogram(real, imag)
     mel = mel_spectrogram(power, mel_filters)
     features = compute_log_mel_features(mel)
@@ -30,21 +22,21 @@ def batch_tensor(waveform):
     raise ValueError("Audio expects rank 1 or 2 input.")
 
 
-def build_fixed_length_waveform(waveform):
-    waveform = ops.pad(waveform, [[0, 0], [0, NUM_SAMPLES]])
-    return waveform[:, :NUM_SAMPLES]
+def build_fixed_length_waveform(waveform, num_samples):
+    waveform = ops.pad(waveform, [[0, 0], [0, num_samples]])
+    return waveform[:, :num_samples]
 
 
-def build_stft_waveform(waveform):
-    pad_width = FFT_BINS // 2
+def build_stft_waveform(waveform, fft_bins):
+    pad_width = fft_bins // 2
     padding = [[0, 0], [pad_width, pad_width]]
     return ops.pad(waveform, padding, mode="reflect")
 
 
-def compute_stft(waveform):
-    kwargs = {"sequence_length": FFT_BINS,
-              "sequence_stride": STRIDE,
-              "fft_length": FFT_BINS,
+def compute_stft(waveform, fft_bins, stride):
+    kwargs = {"sequence_length": fft_bins,
+              "sequence_stride": stride,
+              "fft_length": fft_bins,
               "window": "hann", "center": False}
     return ops.stft(waveform, **kwargs)
 
@@ -77,10 +69,10 @@ def squeeze_batch(features, do_squeeze):
     return features
 
 
-def build_mel_filters(num_mels, num_fft_bins, sampling_rate):
+def build_mel_filters(num_mels, num_fft_bins, sampling_rate, max_mel):
     filters = allocate_mel_filters(num_mels, num_fft_bins)
     fft_freqs = compute_fft_frequencies(num_fft_bins, sampling_rate)
-    mel_grid = build_mel_grid(num_mels, 0.0, MAX_MEL)
+    mel_grid = build_mel_grid(num_mels, 0.0, max_mel)
     mel_freqs = mel_to_hz(mel_grid)
     mel_gaps = np.diff(mel_freqs)
     mel_fft = np.subtract.outer(mel_freqs, fft_freqs)

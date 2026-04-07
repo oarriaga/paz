@@ -1,6 +1,7 @@
-import keras
 from keras import ops
 from keras.layers import Embedding, Lambda
+
+from examples.speech_to_text.layers.utils import Kernel
 
 
 def embed_position(x, seq_length, trainable, positions, name):
@@ -45,5 +46,3 @@ def build_position_args(sequence_length, start):
     return ops.arange(start, end, dtype="int32")
 
 
-def Kernel(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
