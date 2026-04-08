@@ -4,16 +4,15 @@ from pathlib import Path
 import jax
 import jax.numpy as jp
 import numpy as np
-import paz
 
 from . import kaggle_utils
 
 
-def load(split="train", image_shape=(48, 48)):
+def load(split="train"):
     split = normalize_split(split)
     csv_path = get_ready_csv_path()
-    rows = load_rows(csv_path, split)
-    dataset = build_dataset(rows, image_shape)
+    pixel_strings, class_args = load_split_data(csv_path, split)
+    dataset = build_dataset(pixel_strings, class_args)
     return dataset
 
 
@@ -73,52 +72,42 @@ def get_ready_csv_path():
     return csv_path
 
 
-def load_rows(csv_path, split):
+def load_split_data(csv_path, split):
     usage = split_to_usage(split)
-    rows = []
+    pixel_strings, class_args = [], []
     with csv_path.open(newline="") as filedata:
         reader = csv.DictReader(filedata)
         for row in reader:
             if row["Usage"] == usage:
-                rows.append(row)
-    return rows
+                pixel_strings.append(row["pixels"])
+                class_args.append(int(row["emotion"]))
+    return pixel_strings, class_args
 
 
-def build_dataset(rows, image_shape):
-    pixel_strings, class_args = unpack_rows(rows)
-    images = build_images(pixel_strings, image_shape)
+def build_dataset(pixel_strings, class_args):
+    images = build_images(pixel_strings)
     labels = build_labels(class_args)
     dataset = images, labels
     return dataset
 
 
-def unpack_rows(rows):
-    pixel_strings, class_args = [], []
-    for row in rows:
-        pixel_strings.append(row["pixels"])
-        class_args.append(int(row["emotion"]))
-    return pixel_strings, class_args
-
-
-def build_images(pixel_strings, image_shape):
-    images = [parse_pixels(pixel_string) for pixel_string in pixel_strings]
-    images = jp.stack(images)
-    images = resize_images(images, image_shape)
+def build_images(pixel_strings):
+    images = parse_pixel_strings(pixel_strings)
     return images
 
 
-def resize_images(images, image_shape):
-    resize_batch = jax.vmap(resize_image, in_axes=(0, None))
-    resize_batch = jax.jit(resize_batch, static_argnums=1)
-    resized_images = resize_batch(images, image_shape)
-    return resized_images
-
-
-@jax.jit
 def build_labels(class_args):
     class_args = jp.array(class_args, dtype=jp.int32)
     labels = jax.nn.one_hot(class_args, 7, dtype=jp.float32)
     return labels
+
+
+def parse_pixel_strings(pixel_strings):
+    num_images = len(pixel_strings)
+    pixel_values = np.fromstring(" ".join(pixel_strings), dtype=np.uint8, sep=" ")
+    images = jp.array(pixel_values)
+    images = jp.reshape(images, (num_images, 48, 48, 1))
+    return images
 
 
 def parse_pixels(pixel_string):
@@ -126,9 +115,3 @@ def parse_pixels(pixel_string):
     image = jp.array(pixel_values)
     image = jp.reshape(image, (48, 48, 1))
     return image
-
-
-def resize_image(image, image_shape):
-    resized_image = paz.image.resize(image, image_shape)
-    resized_image = paz.cast(resized_image, jp.uint8)
-    return resized_image

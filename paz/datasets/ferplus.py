@@ -7,11 +7,11 @@ import jax.numpy as jp
 from . import fer
 
 
-def load(split="train", image_shape=(48, 48)):
+def load(split="train"):
     split = fer.normalize_split(split)
     csv_path, labels_path = get_ready_paths()
     label_by_index = load_probability_labels(labels_path, split)
-    dataset = build_dataset(csv_path, label_by_index, split, image_shape)
+    dataset = build_dataset(csv_path, label_by_index, split)
     return dataset
 
 
@@ -82,20 +82,18 @@ def load_probability_labels(filepath, split):
     return label_by_index
 
 
-def build_dataset(csv_path, label_by_index, split, image_shape):
+def build_dataset(csv_path, label_by_index, split):
     usage = fer.split_to_usage(split)
-    images, labels = [], []
+    pixel_strings, labels = [], []
     with csv_path.open(newline="") as filedata:
         reader = csv.DictReader(filedata)
         for row_index, row in enumerate(reader):
             is_valid_usage = row["Usage"] == usage
             has_label = row_index in label_by_index
             if is_valid_usage and has_label:
-                image = fer.parse_pixels(row["pixels"])
-                image = fer.resize_image(image, image_shape)
-                images.append(image)
+                pixel_strings.append(row["pixels"])
                 labels.append(label_by_index[row_index])
-    images = jp.stack(images)
+    images = fer.build_images(pixel_strings)
     labels = jp.stack(labels)
     dataset = images, labels
     return dataset
