@@ -2,6 +2,7 @@ from paz.datasets import (
     voc,
     shapes,
     fer,
+    ferplus,
     coco,
     fewsol,
     deepfish,
@@ -15,8 +16,12 @@ def load(name, *args, **kwargs):
         dataset = voc.load(name, *args, **kwargs)
     elif name == "SHAPES":
         dataset = shapes.load(*args, **kwargs)
+    elif name == "FER":
+        dataset = fer.load(*args, **kwargs)
+    elif name == "FERPlus":
+        dataset = ferplus.load(*args, **kwargs)
     else:
-        raise ValueError
+        raise ValueError(f"Invalid dataset name: {name}")
     return dataset
 
 
@@ -35,10 +40,12 @@ def labels(name):
         class_names = shapes.get_class_names()
     elif name == "FER":
         class_names = fer.get_class_names()
+    elif name == "FERPlus":
+        class_names = ferplus.get_class_names()
     elif name == "COCO":
         class_names = coco.get_class_names()
     else:
-        raise ValueError
+        raise ValueError(f"Invalid dataset name: {name}")
     return class_names
 
 
@@ -49,8 +56,10 @@ def class_map(name):
         class_names = shapes.get_class_names()
     elif name == "FER":
         class_names = fer.get_class_names()
+    elif name == "FERPlus":
+        class_names = ferplus.get_class_names()
     else:
-        raise ValueError
+        raise ValueError(f"Invalid dataset name: {name}")
     return build_arg_to_name(class_names)
 
 
