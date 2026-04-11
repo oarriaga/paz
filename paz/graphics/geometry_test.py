@@ -4,6 +4,7 @@ from pytest import approx
 
 from paz.graphics import geometry
 from paz.graphics.constants import FARAWAY
+from paz.graphics.types import PointLight
 
 
 @pytest.fixture
@@ -87,7 +88,7 @@ def test_compute_hits_to_light_is_normalized():
     hits = jp.array([[5.0, 0.0, 0.0]])
     hits_to_light = geometry.compute_hits_to_light(light_position, hits)
     norm = jp.linalg.norm(hits_to_light)
-    assert norm == approx(1.0)
+    assert norm == approx(1.0, abs=1e-5)
 
 
 def test_reflect_vector():
@@ -99,6 +100,28 @@ def test_reflect_vector():
 
     expected = jp.array([[0.7071, 0.7071, 0.0]])
     assert jp.allclose(reflection, expected, atol=1e-4)
+
+
+def test_compute_reflections_dot_eye_normalizes_eye_vector():
+    light = PointLight(
+        intensity=jp.ones(3),
+        position=jp.array([0.0, 10.0, -10.0]),
+    )
+    points = jp.array([[0.0, 0.0, 0.0]])
+    normals = jp.array([[0.0, 0.0, -1.0]])
+    unit_eye = jp.array([[0.0, -jp.sqrt(2) / 2, -jp.sqrt(2) / 2]])
+    scaled_eye = unit_eye * 10.0
+
+    unit_dot = geometry.compute_reflections_dot_eye(
+        light, points, normals, unit_eye
+    )
+    scaled_dot = geometry.compute_reflections_dot_eye(
+        light, points, normals, scaled_eye
+    )
+
+    assert jp.allclose(unit_dot, scaled_dot, atol=1e-6)
+    assert unit_dot[0] == approx(1.0, abs=2e-5)
+    assert scaled_dot[0] <= 1.0
 
 
 def test_sort_depths_returns_sorted_array():

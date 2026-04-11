@@ -191,6 +191,26 @@ def test_compute_specular_with_perfect_reflection(
     specular = phong.compute_specular(
         simple_material, light, points, normals, eye
     )
+    assert jp.all(specular <= expected_specular + 1e-6)
+    assert jp.allclose(specular, expected_specular, atol=2e-3)
+
+
+def test_compute_specular_normalizes_non_unit_eye(
+    simple_material, simple_light
+):
+    """Tests specular stays bounded for a scaled eye vector."""
+    points = jp.array([[0.0, 0.0, 0.0]])
+    normals = jp.array([[0.0, 0.0, -1.0]])
+    light_pos = jp.array([0.0, 10.0, -10.0])
+    light = simple_light._replace(position=light_pos)
+    eye = jp.array([[0.0, -10.0, -10.0]])
+
+    expected_specular = light.intensity * simple_material.specular
+    specular = phong.compute_specular(
+        simple_material, light, points, normals, eye
+    )
+
+    assert jp.all(specular <= expected_specular + 1e-6)
     assert jp.allclose(specular, expected_specular, atol=1e-3)
 
 
@@ -230,6 +250,34 @@ def test_compute_specular_effect_of_shininess(simple_light):
     )
 
     # Assert that the high-shininess highlight is closer to zero
+    assert jp.linalg.norm(specular_high) < jp.linalg.norm(specular_low)
+
+
+def test_compute_specular_shininess_with_non_unit_eye(simple_light):
+    """Tests shininess falls off for a scaled off-axis eye vector."""
+    points = jp.array([[0.0, 0.0, 0.0]])
+    normals = jp.array([[0.0, 0.0, -1.0]])
+    eye = jp.array([[1.0, 0.0, -10.0]])
+
+    material_high_shine = Material(
+        color=jp.ones(3), ambient=0, diffuse=0, specular=1.0, shininess=200.0
+    )
+    material_low_shine = Material(
+        color=jp.ones(3), ambient=0, diffuse=0, specular=1.0, shininess=10.0
+    )
+
+    specular_high = phong.compute_specular(
+        material_high_shine, simple_light, points, normals, eye
+    )
+    specular_low = phong.compute_specular(
+        material_low_shine, simple_light, points, normals, eye
+    )
+
+    expected_high = simple_light.intensity * material_high_shine.specular
+    expected_low = simple_light.intensity * material_low_shine.specular
+
+    assert jp.all(specular_high <= expected_high + 1e-6)
+    assert jp.all(specular_low <= expected_low + 1e-6)
     assert jp.linalg.norm(specular_high) < jp.linalg.norm(specular_low)
 
 

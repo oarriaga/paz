@@ -121,8 +121,9 @@ def refract(incident, normals, n1, n2):
 def compute_reflections_dot_eye(light, points, normals, eye):
     hits_to_light = compute_hits_to_light(light.position, points)
     reflections = reflect(-hits_to_light, normals)
+    eye = paz.algebra.normalize(eye)
     reflections_dot_eye = paz.algebra.dot(reflections, eye)
-    reflections_dot_eye = jp.maximum(reflections_dot_eye, 0.0)
+    reflections_dot_eye = jp.clip(reflections_dot_eye, 0.0, 1.0)
     return reflections_dot_eye
 
 
