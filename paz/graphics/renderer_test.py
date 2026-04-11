@@ -4,6 +4,7 @@ import jax.numpy as jp
 import paz
 from paz import SE3
 from paz.graphics import renderer
+from paz.graphics.shapes.sphere import intersect_canonical_sphere
 from paz.graphics.types import (
     Shape,
     Material,
@@ -20,6 +21,80 @@ from paz.graphics.types import (
 )
 from paz.graphics import constants
 
+
+OLD_CAMERA_POSE = jp.array(
+    [
+        [0.060758888721466064, 0.9969050884246826, 0.04988674074411392, 0.0],
+        [0.0, 0.0499790757894516, -0.9987502694129944, 0.0],
+        [-0.998152494430542, 0.060682956129312515, 0.003036673180758953, -4.242640495300293],  # fmt: skip
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+
+NEW_CAMERA_POSE = jp.array(
+    [
+        [0.9902160167694092, 0.11968734860420227, 0.07174412161111832, 0.0],
+        [0.0, 0.5141358971595764, -0.857708752155304, 0.0],
+        [-0.13954311609268188, 0.8493169546127319, 0.5091056227684021, -4.242640495300293],  # fmt: skip
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+
+def build_shadow_scene():
+    material = Material(
+        color=jp.array([1.0, 0.0, 0.0]),
+        ambient=0.1,
+        diffuse=0.9,
+        specular=0.3,
+        shininess=200.0,
+    )
+    sphere = Sphere(SE3.translation(jp.array([0.0, 1.0, 0.0])), material)
+    plane = Plane()
+    scene = Scene([sphere, plane])
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 3.0, -3.0]))]
+    return scene, lights
+
+
+def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
+    scene, lights = build_shadow_scene()
+    rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
+    shapes, mask, _, lights = paz.graphics.scene.compile(scene, lights, None)
+    intersections = renderer.intersect(shapes, rays, mask)
+    closest = renderer.gather_closest(*intersections)
+    vector = lights[0].position - closest["point"]
+    distance = jp.squeeze(paz.algebra.compute_norms(vector, 1), axis=1)
+    light_directions = vector / jp.expand_dims(distance, 1)
+    shadow_ray_origins = renderer.compute_shadow_ray_origins(
+        closest["point"], closest["normal"]
+    )
+    intersections = renderer.intersect_shadow_groups(
+        shapes, shadow_ray_origins, light_directions
+    )
+    hit_masks, depths, _, _, _, shape_indices, _shape_types = intersections
+    transparencies = jp.array([shape.material.transparency for shape in shapes])
+    shadow_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)
+    shadow_masks = jp.where(
+        jp.expand_dims(transparencies > 0.0, 1), False, shadow_masks
+    )
+    shadow_masks, depths = renderer.select_shadow_depths(
+        shadow_masks,
+        depths,
+        shape_indices,
+        closest["shape_idx"],
+        closest["normal"],
+        light_directions,
+    )
+    return shadow_masks, depths, shape_indices, closest["shape_idx"]
+
+
+def take_shape_depths(depths, shape_indices, receiver_indices, shape_index):
+    shape_row = int(jp.argwhere(shape_indices == shape_index)[0, 0])
+    receiver_mask = receiver_indices == shape_index
+    return depths[shape_row][receiver_mask]
+
+
 # --- Helper Functions Unit Tests ---
 
 
@@ -33,15 +108,82 @@ def test_take_closest():
     assert jp.array_equal(result, expected)
 
 
-# def test_compute_soft_occlusion():
-#     slope = 10.0
-#     norms = jp.array([10.0, 10.0, 10.0])
-#     depths = jp.array([10.0, 5.0, 10.0])
-#     hit_mask = jp.array([False, True, True])
-#     res = renderer.compute_soft_occlusion(norms, depths, hit_mask, slope=slope)
-#     assert res[0] == 0.0
-#     assert res[1] > 0.9
-#     assert res[2] == 0.5
+def test_compute_soft_occlusion():
+    light_lengths = jp.array([10.0, 10.0, 10.0, 10.0])
+    depths = jp.array(
+        [[paz.graphics.FARAWAY, 5.0, 10.0, 15.0], [11.0, 11.0, 10.0, 11.0]]
+    )
+    hit_masks = jp.array([[True, True, True, True], [False, False, True, False]])
+    result = renderer.compute_soft_occlusion(
+        hit_masks, depths, light_lengths, slope=10.0
+    )
+    assert float(result[1]) > 0.9
+    assert float(result[2]) == pytest.approx(0.5)
+    assert float(result[3]) == 0.0
+    assert float(result[0]) == 0.0
+
+
+def test_compute_surface_points_offset_hit():
+    point = jp.array([[0.0, 0.0, 0.0]])
+    normal = jp.array([[0.0, 0.0, -1.0]])
+    over_point, under_point = renderer.compute_surface_points(point, normal)
+    assert over_point[0, 2] < -(renderer.SHADOW_ORIGIN_EPSILON / 2.0)
+    assert point[0, 2] > over_point[0, 2]
+    assert under_point[0, 2] > 0.0
+
+
+def test_select_shadow_depths_discard_front_side_same_shape_hits():
+    depths = jp.array(
+        [
+            [[0.2], [0.4]],
+            [[5e-4], [1000.0]],
+        ]
+    )
+    hit_masks = jp.array([[True], [True]])
+    shape_indices = jp.array([0, 1])
+    receiver_indices = jp.array([0])
+    receiver_normals = jp.array([[0.0, 1.0, 0.0]])
+    light_directions = jp.array([[0.0, 1.0, 0.0]])
+    hit_masks, depths = renderer.select_shadow_depths(
+        hit_masks,
+        depths,
+        shape_indices,
+        receiver_indices,
+        receiver_normals,
+        light_directions,
+    )
+    assert not bool(hit_masks[0, 0])
+    assert float(depths[0, 0]) == pytest.approx(paz.graphics.FARAWAY)
+    assert bool(hit_masks[1, 0])
+    assert float(depths[1, 0]) == pytest.approx(5e-4)
+
+
+def test_select_shadow_depths_keep_back_side_second_root():
+    depths = jp.array(
+        [
+            [[1e-4], [0.2]],
+            [[5e-4], [1000.0]],
+        ]
+    )
+    hit_masks = jp.array([[True], [True]])
+    shape_indices = jp.array([0, 1])
+    receiver_indices = jp.array([0])
+    receiver_normals = jp.array([[0.0, 1.0, 0.0]])
+    light_directions = jp.array([[0.0, -1.0, 0.0]])
+    hit_masks, depths = renderer.select_shadow_depths(
+        hit_masks,
+        depths,
+        shape_indices,
+        receiver_indices,
+        receiver_normals,
+        light_directions,
+    )
+    result = renderer.compute_soft_occlusion(hit_masks, depths, jp.array([0.01]))
+    assert bool(hit_masks[0, 0])
+    assert float(depths[0, 0]) == pytest.approx(0.2)
+    assert bool(hit_masks[1, 0])
+    assert float(depths[1, 0]) == pytest.approx(5e-4)
+    assert float(result[0]) > 0.5
 
 
 def test_compute_scene_hit_mask():
@@ -95,30 +237,42 @@ def test_get_material_properties():
     shape2 = Sphere(material=mat2)
     shapes = [shape1, shape2]
     indices = jp.array([0, 1])
-    props = renderer.get_material_properties(shapes, indices)
-    assert props["reflective"][0] == 0.5
-    assert props["transparency"][1] == 0.8
+    reflectivities, transparencies, refractivities = (
+        renderer.get_material_properties(shapes, indices)
+    )
+    assert reflectivities[0] == 0.5
+    assert transparencies[1] == 0.8
+    assert refractivities[0] == 1.0
 
 
-def test_accumulate_local_color():
+def test_accumulate_color():
     num_rays = 2
-    state = {
-        "color": jp.zeros((num_rays, 3)),
-        "throughput": jp.ones((num_rays, 3)),
-        "active_mask": jp.array([True, False]),
-    }
-    local_color = jp.ones((num_rays, 3))
-    materials = {
-        "reflective": jp.array([0.0, 0.0]),
-        "transparency": jp.array([0.0, 0.0]),
-    }
+    colors = jp.zeros((num_rays, 3))
+    throughput = jp.ones((num_rays, 3))
+    active_mask = jp.array([True, False])
+    intersected_colors = jp.ones((num_rays, 3))
+    reflectivities = jp.zeros((num_rays,))
+    transparencies = jp.zeros((num_rays,))
+    result = renderer.accumulate_color(
+        colors,
+        throughput,
+        active_mask,
+        intersected_colors,
+        reflectivities,
+        transparencies,
+    )
+    assert jp.array_equal(result[0], jp.array([1.0, 1.0, 1.0]))
+    assert jp.array_equal(result[1], jp.array([0.0, 0.0, 0.0]))
 
-    # Corrected call: _accumulate_local_color updates state in place, returns None
-    renderer.accumulate_local_color(state, local_color, materials)
 
-    # Ray 0: active, color added (1.0). Ray 1: inactive, no change (0.0).
-    assert jp.array_equal(state["color"][0], jp.array([1.0, 1.0, 1.0]))
-    assert jp.array_equal(state["color"][1], jp.array([0.0, 0.0, 0.0]))
+def test_compute_shadow_ray_origins_avoid_lit_side_self_hit():
+    points = jp.array([[0.0, 1.0, 0.0]])
+    normals = jp.array([[0.0, 1.0, 0.0]])
+    light_position = jp.array([[0.0, 3.0, -3.0]])
+    directions = paz.algebra.normalize(light_position - points)
+    origins = renderer.compute_shadow_ray_origins(points, normals)
+    hit_mask, _, _ = intersect_canonical_sphere(origins, directions)
+    assert not bool(hit_mask[0])
 
 
 # def test_compute_light_vectors():
@@ -238,6 +392,70 @@ def test_render_shadows_logic(small_image_shape, camera_pose, rays):
         shadows=False,
     )
     assert not jp.array_equal(img_shadows_on, img_shadows_off)
+
+
+def test_render_single_sphere_shadows_stay_local():
+    image_shape = (60, 80)
+    material = Material(
+        color=jp.array([1.0, 0.0, 0.0]),
+        ambient=0.1,
+        diffuse=0.9,
+        specular=0.3,
+        shininess=200.0,
+    )
+    sphere = Sphere(SE3.translation(jp.array([0.0, 1.0, 0.0])), material)
+    scene = Scene([sphere])
+    camera_pose = SE3.view_transform(
+        jp.array([3.0, 3.0, 0.0]),
+        jp.array([0.0, 0.0, 0.0]),
+        jp.array([0.0, 1.0, 0.0]),
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 3.0, -3.0]))]
+    rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
+    image_no_shadows, depth_no_shadows = renderer.render(
+        image_shape, camera_pose, rays, scene, lights, None, False
+    )
+    image_shadows, depth_shadows = renderer.render(
+        image_shape, camera_pose, rays, scene, lights, None, True
+    )
+    sphere_mask = depth_no_shadows > 0.0
+    diff_mask = jp.any(
+        jp.abs(image_no_shadows - image_shadows) > 1e-4, axis=-1
+    )
+    background_mask = ~sphere_mask
+    assert jp.allclose(depth_no_shadows, depth_shadows)
+    assert not jp.isnan(image_shadows).any()
+    assert diff_mask.any()
+    assert jp.all(jp.logical_or(~diff_mask, sphere_mask))
+    assert jp.allclose(
+        image_no_shadows[background_mask], image_shadows[background_mask]
+    )
+
+
+def test_saved_pose_sphere_self_shadow_keeps_later_roots():
+    _, depths, shape_indices, receiver_indices = compute_selected_shadow_depths(
+        OLD_CAMERA_POSE
+    )
+    sphere_depths = take_shape_depths(depths, shape_indices, receiver_indices, 0)
+    assert int(jp.sum(sphere_depths < 1e-2)) > 0
+    assert float(jp.min(sphere_depths)) > renderer.SHADOW_SELF_HIT_EPSILON
+
+
+def test_saved_pose_floor_self_hits_stay_filtered():
+    _, depths, shape_indices, receiver_indices = compute_selected_shadow_depths(
+        NEW_CAMERA_POSE
+    )
+    plane_depths = take_shape_depths(depths, shape_indices, receiver_indices, 1)
+    assert int(jp.sum(plane_depths < 1e-2)) == 0
+
+
+@pytest.mark.skipif(jax.default_backend() != "gpu", reason="GPU only")
+def test_gpu_saved_pose_floor_has_no_near_zero_self_hits():
+    _, depths, shape_indices, receiver_indices = compute_selected_shadow_depths(
+        NEW_CAMERA_POSE, image_shape=(240, 320)
+    )
+    plane_depths = take_shape_depths(depths, shape_indices, receiver_indices, 1)
+    assert int(jp.sum(plane_depths < 1e-2)) == 0
 
 
 def test_render_shadow_mask(small_image_shape, camera_pose, rays):

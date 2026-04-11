@@ -5,6 +5,10 @@ import paz
 import jax
 
 
+SHADOW_ORIGIN_EPSILON = 1e-3
+SHADOW_SELF_HIT_EPSILON = 1e-3
+
+
 def render_masks(image_shape, camera_pose, rays, scene, lights, num_objects, min_depth, max_depth, shadows):  # fmt: skip
     num_nodes = len(scene.nodes)
     masks = []
@@ -122,14 +126,14 @@ def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
     return take_closest(jp.concatenate(colors, axis=0), hit_shape_args)
 
 
-def intersect_groups(shapes, origins, directions):
+def intersect_shape_groups(shapes, origins, directions, intersect_shape):
 
     def process_group(group, rays, start_arg):
         indices = jp.arange(start_arg, start_arg + len(group))
         merged_group = paz.graphics.shapes.merge(*group)
-        intersect = paz.lock(paz.graphics.shapes.intersect, *rays)
+        intersect = paz.lock(intersect_shape, *rays)
         intersections = jax.vmap(intersect)(merged_group)
-        return (*intersections, indices)
+        return (*intersections, indices, merged_group.type)
 
     def concatenate(x):
         return tuple(jp.concatenate(items, axis=0) for items in zip(*x))
@@ -141,18 +145,98 @@ def intersect_groups(shapes, origins, directions):
     return concatenate(intersections)
 
 
+def intersect_groups(shapes, origins, directions):
+    args = (shapes, origins, directions, paz.graphics.shapes.intersect)
+    return intersect_shape_groups(*args)
+
+
+def intersect_shadow_groups(shapes, origins, directions):
+    args = (shapes, origins, directions, paz.graphics.shapes.intersect_all)
+    return intersect_shape_groups(*args)
+
+
+def compute_surface_points(point, normal, epsilon=SHADOW_ORIGIN_EPSILON):
+    over_point = point + normal * epsilon
+    under_point = point - normal * epsilon
+    return over_point, under_point
+
+
+def compute_shadow_ray_origins(points, normals):
+    over_point, _ = compute_surface_points(points, normals)
+    return over_point
+
+
+def compute_shadow_depth_thresholds(shape_indices, receiver_indices):
+    same_shape = shape_indices[:, None] == receiver_indices[None, :]
+    return jp.where(
+        same_shape, SHADOW_SELF_HIT_EPSILON, paz.graphics.EPSILON
+    )
+
+
+def compute_front_side_shadow_mask(
+    shape_indices, receiver_indices, receiver_normals, light_directions
+):
+    same_shape = shape_indices[:, None] == receiver_indices[None, :]
+    front_side = paz.algebra.dot(receiver_normals, light_directions) >= 0.0
+    return jp.logical_and(same_shape, front_side[None, :])
+
+
+def select_shadow_depths(
+    hit_masks,
+    depths,
+    shape_indices,
+    receiver_indices,
+    receiver_normals,
+    light_directions,
+):
+    thresholds = compute_shadow_depth_thresholds(shape_indices, receiver_indices)
+    front_side_hits = compute_front_side_shadow_mask(
+        shape_indices, receiver_indices, receiver_normals, light_directions
+    )
+    valid_roots = depths > thresholds[:, None, :]
+    valid_roots = jp.logical_and(valid_roots, depths < paz.graphics.FARAWAY)
+    valid_roots = jp.logical_and(jp.expand_dims(hit_masks, 1), valid_roots)
+    valid_roots = jp.logical_and(valid_roots, ~front_side_hits[:, None, :])
+    depths = jp.where(valid_roots, depths, paz.graphics.FARAWAY)
+    hit_masks = jp.any(valid_roots, axis=1)
+    depths = jp.min(depths, axis=1)
+    return hit_masks, depths
+
+
+def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=10.0):
+    closest_depths = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
+    closest_depths = jp.min(closest_depths, axis=0)
+    scene_hit_mask = compute_scene_hit_mask(hit_masks)
+    blocker_mask = jp.logical_and(
+        scene_hit_mask, closest_depths <= light_lengths
+    )
+    difference = light_lengths - closest_depths
+    occlusion = jax.nn.sigmoid(slope * difference)
+    return jp.where(blocker_mask, occlusion, 0.0)
+
+
 def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest_point, closest_normal, points, normals, eyes):  # fmt: skip
     transparencies = jp.array([shape.material.transparency for shape in shapes])
 
     def compute_light_colors(light):
         # avoid casting shadow rays directly from surface so object doesn't shadow itself (self-intersection) due to floating-point rounding errors.
         light_directions, distance = compute_light_directions(light, closest_point)  # fmt: skip
-        offset = closest_normal * paz.graphics.EPSILON
-        shadow_ray_origins = closest_point + offset
-        intersections = intersect_groups(shapes, shadow_ray_origins, light_directions)  # fmt:skip
-        hit_masks, depths, _, _, _, _indices = intersections
+        shadow_ray_origins = compute_shadow_ray_origins(
+            closest_point, closest_normal
+        )
+        intersections = intersect_shadow_groups(
+            shapes, shadow_ray_origins, light_directions
+        )
+        hit_masks, depths, _, _, _, shape_indices, _shape_types = intersections
         shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies)  # fmt: skip
-        # is_shadow = calculate_occlusion(shadow_masks, depths, distance)
+        shadow_masks, depths = select_shadow_depths(
+            shadow_masks,
+            depths,
+            shape_indices,
+            indices,
+            closest_normal,
+            light_directions,
+        )
         is_shadow = compute_soft_occlusion(shadow_masks, depths, distance)
         colors = compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow)  # fmt: skip
         return take_closest(colors, indices)
@@ -164,29 +248,12 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
 
     def resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies): # fmt: skip
         shadow_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)  # fmt: skip
-        is_transparent = transparencies > 0.0  # ignore if transparent
+        is_transparent = transparencies > 0.0
         shadow_masks = jp.where(jp.expand_dims(is_transparent, 1), False, shadow_masks) # fmt: skip
         if shadow_mask is not None:
             cast_mask = jp.expand_dims(shadow_mask, 1)
             shadow_masks = jp.where(cast_mask, shadow_masks, False)
         return shadow_masks
-
-    def compute_soft_occlusion(hit_masks, depths, light_length, slope=0.01):
-        # depths: (num_shapes, num_rays, 1)
-        # hit_masks: (num_shapes, num_rays)
-        # light_length: (num_rays,)
-        # larger difference means the intersection was closer (more occlusion)
-        difference = light_length - depths[..., 0]
-        occlusion_factor = jax.nn.sigmoid(slope * difference)
-        occlusion_factor = jp.where(hit_masks, occlusion_factor, 0.0)
-        return jp.max(occlusion_factor, axis=0)
-
-    def calculate_occlusion(masks, depths, light_length):
-        scene_hit_mask = compute_scene_hit_mask(masks)
-        depths = jp.where(masks, depths[..., 0], paz.graphics.FARAWAY)
-        closest_depth = jp.min(depths, axis=0)
-        is_shadow = jp.logical_and(scene_hit_mask, light_length > closest_depth)
-        return is_shadow
 
     def compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow):  # fmt: skip
 
@@ -277,9 +344,24 @@ def reshape_depth_image(depths, height, width):
 def update_state(state, shapes, closest, intersected_colors):
     reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
     state["color"] = accumulate_color(state["color"], state["throughput"], state["active_mask"], intersected_colors, reflectivities, transparencies)  # fmt:skip
-    normal, eye, n1, n2, n_ratio, = _prepare_computations(state["rays"][1], state["current_refractive_index"], closest["point"], closest["normal"], refractivities)  # fmt: skip
+    computations = _prepare_computations(
+        state["rays"][1],
+        state["current_refractive_index"],
+        closest["point"],
+        closest["normal"],
+        refractivities,
+    )
+    normal, eye, n1, n2, n_ratio, over_point, under_point = computations
     reflectance = schlick(normal, eye, n1, n2)
-    new_rays = compute_new_rays(normal, eye, n_ratio, closest["point"], transparencies, reflectance)  # fmt: skip
+    new_rays = compute_new_rays(
+        normal,
+        eye,
+        n_ratio,
+        over_point,
+        under_point,
+        transparencies,
+        reflectance,
+    )
     return _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, reflectance)  # fmt: skip
 
 
@@ -309,21 +391,14 @@ def flip_normal_if_inside(eye, normal):
     return jp.where(jp.expand_dims(is_inside, -1), -normal, normal), is_inside
 
 
-def displace_by_normal(point, normal):
-    # upper_point = point + normal * (paz.graphics.EPSILON * 1e-1)
-    # lower_point = point - normal * (paz.graphics.EPSILON * 1e-1)
-    upper_point = point + normal * (paz.graphics.EPSILON / 2.0)
-    lower_point = point - normal * (paz.graphics.EPSILON / 2.0)
-    return lower_point, upper_point
-
-
 def _prepare_computations(current_directions, now_refractive_index, point, normal, refractive_indices):   # fmt: skip
     eye = -current_directions
     normal, is_inside = flip_normal_if_inside(eye, normal)
+    over_point, under_point = compute_surface_points(point, normal)
     n1 = now_refractive_index
     n2 = jp.where(is_inside, 1.0, refractive_indices)  # TODO why 1.0 hardcoded
     n_ratio = n1 / (n2)
-    return normal, eye, n1, n2, n_ratio
+    return normal, eye, n1, n2, n_ratio, over_point, under_point
 
 
 def schlick(normal, eye, n1, n2):
@@ -361,13 +436,14 @@ def compute_reflection_direction(eye, normal):
     return paz.graphics.geometry.reflect(-eye, normal)
 
 
-def compute_new_rays(normal, eye, n_ratio, point, transparancies, reflectance):
+def compute_new_rays(
+    normal, eye, n_ratio, over_point, under_point, transparancies, reflectance
+):
     do_reflect = reflect_or_refract(transparancies, reflectance)
     reflection_direction = compute_reflection_direction(eye, normal)
     refractive_direction = compute_refractive_direction(eye, normal, n_ratio)
     direction = jp.where(do_reflect, reflection_direction, refractive_direction)
-    lower_point, upper_point = displace_by_normal(point, normal)
-    origin = jp.where(do_reflect, upper_point, lower_point)
+    origin = jp.where(do_reflect, over_point, under_point)
     return origin, direction
 
 
