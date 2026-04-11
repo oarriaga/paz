@@ -1,6 +1,3 @@
-# import jax
-
-# jax.config.update("jax_platform_name", "cpu")
 import jax.numpy as jp
 import paz
 
@@ -61,12 +58,11 @@ camera = paz.graphics.Group(
 # paz.graphics.save("camera.json", camera)
 
 
-# scene = paz.graphics.Scene(nodes=[camera, axes])
-scene = paz.graphics.Scene(nodes=[camera])
+scene = paz.graphics.Scene(nodes=[camera, axes])
 
 world_to_camera = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 8.0, 8.0]),
     target_origin=jp.array([0.0, 0.5, 0.0]),
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
-paz.graphics.viewer(scene, world_to_camera, True)
+paz.graphics.viewer(scene, world_to_camera)
