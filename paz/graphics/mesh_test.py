@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jp
 import pytest
+import paz
 from paz.graphics.constants import FARAWAY
 from paz.graphics.types import PointLight, Material
 from paz.backend.lie import SE3
@@ -46,6 +47,22 @@ def make_triangle():
     ])
     faces = jp.array([[0, 2, 1]])
     return vertices, faces
+
+
+def build_legacy_rays(image_shape, y_fov, world_to_camera):
+    H, W = image_shape[:2]
+    aspect_ratio = paz.graphics.camera.compute_aspect_ratio(H, W)
+    H_world, W_world = paz.graphics.camera.compute_image_sizes(
+        y_fov, aspect_ratio
+    )
+    directions = paz.graphics.camera.build_ray_directions(H, W, H_world, W_world)
+    origins = paz.graphics.camera.build_ray_origins(H, W)
+    camera_to_world = jp.linalg.inv(world_to_camera)
+    return paz.algebra.transform_rays(camera_to_world, origins, directions)
+
+
+def compute_max_abs_difference(array_A, array_B):
+    return float(jp.max(jp.abs(array_A - array_B)))
 
 
 def test_extract_points():
@@ -305,6 +322,28 @@ def test_render_depth_matches_render_depth():
     depth = render_depth(*args)
     assert depth.shape == expected_depth.shape
     assert jp.allclose(depth, expected_depth, atol=1e-5)
+
+
+def test_render_matches_legacy_rays():
+    image_shape, camera_pose, rays, meshes, mask, lights = make_scene()
+    legacy_rays = build_legacy_rays(image_shape, jp.pi / 4.0, camera_pose)
+    image, depth = render(image_shape, camera_pose, rays, meshes, mask, lights)
+    legacy_image, legacy_depth = render(
+        image_shape, camera_pose, legacy_rays, meshes, mask, lights
+    )
+    assert compute_max_abs_difference(image, legacy_image) <= 1e-4
+    assert compute_max_abs_difference(depth, legacy_depth) <= 1e-4
+
+
+def test_render_depth_matches_legacy_rays():
+    image_shape, camera_pose, _, meshes, mask, lights = make_scene()
+    rays = build_rays(image_shape, jp.pi / 4.0, camera_pose)
+    legacy_rays = build_legacy_rays(image_shape, jp.pi / 4.0, camera_pose)
+    depth = render_depth(image_shape, camera_pose, rays, meshes, mask, lights)
+    legacy_depth = render_depth(
+        image_shape, camera_pose, legacy_rays, meshes, mask, lights
+    )
+    assert compute_max_abs_difference(depth, legacy_depth) <= 1e-4
 
 
 def test_render_depth_respects_mask():

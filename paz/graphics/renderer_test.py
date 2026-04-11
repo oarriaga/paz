@@ -57,6 +57,58 @@ def build_shadow_scene():
     return scene, lights
 
 
+def build_shaded_sphere_scene():
+    material = Material(
+        color=jp.array([0.8, 0.2, 0.1]),
+        ambient=0.1,
+        diffuse=0.9,
+        specular=0.3,
+        shininess=200.0,
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -5.0]))]
+    return Scene([Sphere(jp.eye(4), material)]), lights
+
+
+def build_material_scene():
+    mirror_material = Material(color=jp.array([1.0, 1.0, 1.0]), reflective=0.8)
+    glass_material = Material(
+        color=jp.array([0.9, 0.9, 1.0]),
+        transparency=0.9,
+        refractive_index=1.5,
+    )
+    floor_material = Material(color=jp.array([0.5, 0.5, 0.5]))
+    floor = Plane(jp.eye(4), floor_material)
+    sphere = Sphere(
+        SE3.translation(jp.array([-1.5, 0.0, 0.0])), mirror_material
+    )
+    cube = Cube(SE3.translation(jp.array([1.5, 0.0, 0.0])), glass_material)
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 10.0, 5.0]))]
+    return Scene([floor, sphere, cube]), lights
+
+
+def build_legacy_rays(image_shape, y_fov, world_to_camera):
+    H, W = image_shape[:2]
+    aspect_ratio = paz.graphics.camera.compute_aspect_ratio(H, W)
+    H_world, W_world = paz.graphics.camera.compute_image_sizes(
+        y_fov, aspect_ratio
+    )
+    directions = paz.graphics.camera.build_ray_directions(H, W, H_world, W_world)
+    origins = paz.graphics.camera.build_ray_origins(H, W)
+    camera_to_world = jp.linalg.inv(world_to_camera)
+    return paz.algebra.transform_rays(camera_to_world, origins, directions)
+
+
+def compute_max_abs_difference(array_A, array_B):
+    return float(jp.max(jp.abs(array_A - array_B)))
+
+
+def assert_render_matches(actual, expected, atol=1e-4):
+    actual_image, actual_depth = actual
+    expected_image, expected_depth = expected
+    assert compute_max_abs_difference(actual_image, expected_image) <= atol
+    assert compute_max_abs_difference(actual_depth, expected_depth) <= atol
+
+
 def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
     scene, lights = build_shadow_scene()
     rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
@@ -121,6 +173,42 @@ def test_compute_soft_occlusion():
     assert float(result[2]) == pytest.approx(0.5)
     assert float(result[3]) == 0.0
     assert float(result[0]) == 0.0
+
+
+def test_compute_new_rays_reflection_is_normalized():
+    normal = jp.array([[0.0, 1.0, 0.0]])
+    eye = jp.array([[0.0, 1.0, -1.0]])
+    point = jp.array([[0.0, 0.0, 0.0]])
+    transparancies = jp.array([0.0])
+    reflectance = jp.array([1.0])
+    _, direction = renderer.compute_new_rays(
+        normal,
+        eye,
+        jp.array([1.0]),
+        point,
+        transparancies,
+        reflectance,
+    )
+    norm = jp.linalg.norm(direction, axis=-1)
+    assert jp.allclose(norm, 1.0, atol=1e-5)
+
+
+def test_compute_new_rays_refraction_is_normalized():
+    normal = jp.array([[0.0, 0.0, -1.0]])
+    eye = jp.array([[0.0, 0.0, -1.0]])
+    point = jp.array([[0.0, 0.0, 0.0]])
+    transparancies = jp.array([1.0])
+    reflectance = jp.array([0.0])
+    _, direction = renderer.compute_new_rays(
+        normal,
+        eye,
+        jp.array([1.0 / 1.5]),
+        point,
+        transparancies,
+        reflectance,
+    )
+    norm = jp.linalg.norm(direction, axis=-1)
+    assert jp.allclose(norm, 1.0, atol=1e-5)
 
 
 def test_compute_surface_points_offset_hit():
@@ -327,20 +415,7 @@ def rays(small_image_shape, camera_pose):
 
 
 def test_render_reflection_scene(small_image_shape, camera_pose, rays):
-    mirror_material = Material(color=jp.array([1.0, 1.0, 1.0]), reflective=0.8)
-    glass_material = Material(
-        color=jp.array([0.9, 0.9, 1.0]),
-        transparency=0.9,
-        refractive_index=1.5,
-    )
-    floor_material = Material(color=jp.array([0.5, 0.5, 0.5]))
-    floor = Plane(jp.eye(4), floor_material)
-    sphere = Sphere(
-        SE3.translation(jp.array([-1.5, 0.0, 0.0])), mirror_material
-    )
-    cube = Cube(SE3.translation(jp.array([1.5, 0.0, 0.0])), glass_material)
-    lights = [PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([0.0, 10.0, 5.0]))]
-    scene = Scene([floor, sphere, cube])
+    scene, lights = build_material_scene()
     image, depth = renderer.render(
         small_image_shape,
         camera_pose,
@@ -353,6 +428,40 @@ def test_render_reflection_scene(small_image_shape, camera_pose, rays):
     assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
     assert not jp.isnan(image).any()
     assert jp.std(image) > 0.0
+
+
+def test_render_matches_legacy_rays_for_shaded_sphere(
+    small_image_shape, camera_pose
+):
+    scene, lights = build_shaded_sphere_scene()
+    rays = paz.graphics.camera.build_rays(
+        small_image_shape, jp.pi / 3.0, camera_pose
+    )
+    legacy_rays = build_legacy_rays(small_image_shape, jp.pi / 3.0, camera_pose)
+    actual = renderer.render(
+        small_image_shape, camera_pose, rays, scene, lights, None, False
+    )
+    expected = renderer.render(
+        small_image_shape, camera_pose, legacy_rays, scene, lights, None, False
+    )
+    assert_render_matches(actual, expected)
+
+
+def test_render_matches_legacy_rays_for_material_scene(
+    small_image_shape, camera_pose
+):
+    scene, lights = build_material_scene()
+    rays = paz.graphics.camera.build_rays(
+        small_image_shape, jp.pi / 3.0, camera_pose
+    )
+    legacy_rays = build_legacy_rays(small_image_shape, jp.pi / 3.0, camera_pose)
+    actual = renderer.render(
+        small_image_shape, camera_pose, rays, scene, lights, None, False
+    )
+    expected = renderer.render(
+        small_image_shape, camera_pose, legacy_rays, scene, lights, None, False
+    )
+    assert_render_matches(actual, expected)
 
 
 def test_render_shadows_logic(small_image_shape, camera_pose, rays):
@@ -579,6 +688,59 @@ def test_max_bounces_effect(small_image_shape, camera_pose, rays):
     )
     assert not jp.array_equal(img_1b, img_2b)
     assert not jp.all(img_1b == 1.0)
+
+
+def test_render_bounced_matches_legacy_rays(small_image_shape):
+    camera_pose_back = SE3.view_transform(
+        jp.array([0.0, 0.0, 5.0]),
+        jp.array([0.0, 0.0, 0.0]),
+        jp.array([0.0, 1.0, 0.0]),
+    )
+    rays = paz.graphics.camera.build_rays(
+        small_image_shape, jp.pi / 3.0, camera_pose_back
+    )
+    legacy_rays = build_legacy_rays(
+        small_image_shape, jp.pi / 3.0, camera_pose_back
+    )
+    mirror_mat = Material(
+        color=jp.array([0.0, 0.0, 0.0]),
+        reflective=1.0,
+        diffuse=0.0,
+        ambient=0.0,
+    )
+    red_mat = Material(color=jp.array([1.0, 0.0, 0.0]), ambient=1.0)
+    mirror = Sphere(SE3.scaling(jp.full(3, 2.0)), mirror_mat)
+    red_obj = Sphere(
+        SE3.translation(jp.array([0.0, 0.0, 10.0]))
+        @ SE3.scaling(jp.full(3, 2.0)),
+        red_mat,
+    )
+    scene = Scene([mirror, red_obj])
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, 5.0]))]
+    shapes, mask, _, lights = paz.graphics.scene.compile(scene, lights, None)
+    actual = renderer.render_bounced(
+        *small_image_shape,
+        camera_pose_back,
+        rays,
+        shapes,
+        lights,
+        mask,
+        False,
+        None,
+        num_bounces=2,
+    )
+    expected = renderer.render_bounced(
+        *small_image_shape,
+        camera_pose_back,
+        legacy_rays,
+        shapes,
+        lights,
+        mask,
+        False,
+        None,
+        num_bounces=2,
+    )
+    assert_render_matches(actual, expected)
 
 
 def test_jit_compilation_full(small_image_shape, camera_pose, rays):

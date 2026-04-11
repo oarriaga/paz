@@ -446,6 +446,7 @@ def compute_new_rays(
     reflection_direction = compute_reflection_direction(eye, normal)
     refractive_direction = compute_refractive_direction(eye, normal, n_ratio)
     direction = jp.where(do_reflect, reflection_direction, refractive_direction)
+    direction = paz.algebra.normalize(direction)
     lower_point, upper_point = displace_by_normal(point, normal)
     origin = jp.where(do_reflect, upper_point, lower_point)
     return origin, direction

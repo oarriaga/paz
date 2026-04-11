@@ -117,12 +117,17 @@ def test_build_rays_identity():
     assert origins.shape == (100, 3)
     assert directions.shape == (100, 3)
     assert jp.all(origins == 0.0)
-    # Directions should have z = -1 (normalized? no, build_ray_directions doesn't normalize, but transform_vectors might?)
-    # Wait, camera.build_rays calls algebra.transform_rays
-    # algebra.transform_rays calls transform_vectors for directions.
-    # transform_vectors does matmul. It does NOT normalize.
-    # So directions should be roughly [x, y, -1].
-    assert jp.all(directions[:, 2] == -1.0)
+    norms = jp.linalg.norm(directions, axis=-1)
+    assert jp.allclose(norms, 1.0, atol=1e-5)
+    assert jp.all(directions[:, 2] < 0.0)
+
+
+def test_build_rays_center_ray_points_forward():
+    origins, directions = camera.build_rays((1, 1), jp.pi / 2.0, jp.eye(4))
+    expected = jp.array([[0.0, 0.0, -1.0]])
+
+    assert jp.all(origins == 0.0)
+    assert jp.allclose(directions, expected, atol=1e-5)
 
 
 def test_compute_intrinsics():

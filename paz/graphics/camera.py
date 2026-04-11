@@ -44,7 +44,11 @@ def build_rays(size, y_FOV, world_to_camera=None):
     directions = build_ray_directions(H_pixel, W_pixel, H_world, W_world)
     origins = build_ray_origins(H_pixel, W_pixel)
     camera_to_world = jp.linalg.inv(world_to_camera)
-    return paz.algebra.transform_rays(camera_to_world, origins, directions)
+    origins, directions = paz.algebra.transform_rays(
+        camera_to_world, origins, directions
+    )
+    directions = paz.algebra.normalize(directions)
+    return origins, directions
 
 
 def compute_intrinsics(y_FOV, H_pixels, W_pixels):
