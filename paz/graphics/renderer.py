@@ -133,7 +133,7 @@ def intersect_shape_groups(shapes, origins, directions, intersect_shape):
         merged_group = paz.graphics.shapes.merge(*group)
         intersect = paz.lock(intersect_shape, *rays)
         intersections = jax.vmap(intersect)(merged_group)
-        return (*intersections, indices, merged_group.type)
+        return (*intersections, indices)
 
     def concatenate(x):
         return tuple(jp.concatenate(items, axis=0) for items in zip(*x))
@@ -227,7 +227,7 @@ def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest
         intersections = intersect_shadow_groups(
             shapes, shadow_ray_origins, light_directions
         )
-        hit_masks, depths, _, _, _, shape_indices, _shape_types = intersections
+        hit_masks, depths, _, _, _, shape_indices = intersections
         shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies)  # fmt: skip
         shadow_masks, depths = select_shadow_depths(
             shadow_masks,
@@ -347,18 +347,16 @@ def update_state(state, shapes, closest, intersected_colors):
     computations = _prepare_computations(
         state["rays"][1],
         state["current_refractive_index"],
-        closest["point"],
         closest["normal"],
         refractivities,
     )
-    normal, eye, n1, n2, n_ratio, over_point, under_point = computations
+    normal, eye, n1, n2, n_ratio = computations
     reflectance = schlick(normal, eye, n1, n2)
     new_rays = compute_new_rays(
         normal,
         eye,
         n_ratio,
-        over_point,
-        under_point,
+        closest["point"],
         transparencies,
         reflectance,
     )
@@ -391,14 +389,19 @@ def flip_normal_if_inside(eye, normal):
     return jp.where(jp.expand_dims(is_inside, -1), -normal, normal), is_inside
 
 
-def _prepare_computations(current_directions, now_refractive_index, point, normal, refractive_indices):   # fmt: skip
+def displace_by_normal(point, normal):
+    upper_point = point + normal * (paz.graphics.EPSILON / 2.0)
+    lower_point = point - normal * (paz.graphics.EPSILON / 2.0)
+    return lower_point, upper_point
+
+
+def _prepare_computations(current_directions, now_refractive_index, normal, refractive_indices):   # fmt: skip
     eye = -current_directions
     normal, is_inside = flip_normal_if_inside(eye, normal)
-    over_point, under_point = compute_surface_points(point, normal)
     n1 = now_refractive_index
     n2 = jp.where(is_inside, 1.0, refractive_indices)  # TODO why 1.0 hardcoded
     n_ratio = n1 / (n2)
-    return normal, eye, n1, n2, n_ratio, over_point, under_point
+    return normal, eye, n1, n2, n_ratio
 
 
 def schlick(normal, eye, n1, n2):
@@ -437,13 +440,14 @@ def compute_reflection_direction(eye, normal):
 
 
 def compute_new_rays(
-    normal, eye, n_ratio, over_point, under_point, transparancies, reflectance
+    normal, eye, n_ratio, point, transparancies, reflectance
 ):
     do_reflect = reflect_or_refract(transparancies, reflectance)
     reflection_direction = compute_reflection_direction(eye, normal)
     refractive_direction = compute_refractive_direction(eye, normal, n_ratio)
     direction = jp.where(do_reflect, reflection_direction, refractive_direction)
-    origin = jp.where(do_reflect, over_point, under_point)
+    lower_point, upper_point = displace_by_normal(point, normal)
+    origin = jp.where(do_reflect, upper_point, lower_point)
     return origin, direction
 
 

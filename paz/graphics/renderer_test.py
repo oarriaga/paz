@@ -72,7 +72,7 @@ def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
     intersections = renderer.intersect_shadow_groups(
         shapes, shadow_ray_origins, light_directions
     )
-    hit_masks, depths, _, _, _, shape_indices, _shape_types = intersections
+    hit_masks, depths, _, _, _, shape_indices = intersections
     transparencies = jp.array([shape.material.transparency for shape in shapes])
     shadow_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)
     shadow_masks = jp.where(
