@@ -1,5 +1,10 @@
+import os
+import argparse
 from pathlib import Path
 
+import database
+import eigenfaces
+import paz
 import numpy as np
 
 
@@ -34,3 +39,45 @@ class FaceDatabase:
         return cls(labels, weights)
 
 
+def load_state(experiments_path):
+    filepath = Path(experiments_path) / "eigenfaces_state.npz"
+    if not filepath.exists():
+        raise FileNotFoundError("Run build_eigenfaces.py before this script")
+    return eigenfaces.load(filepath)
+
+
+def load_image_entries(database_path):
+    image_root = Path(database_path) / "images"
+    entries = []
+    for image_path in sorted(image_root.glob("*/*")):
+        if image_path.is_file():
+            entries.append((image_path.parent.name, image_path))
+    return entries
+
+
+def build_face_database(entries, eigenface_state, crop_faces):
+    labels, weights = [], []
+    detect_face = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
+    detect_face = detect_face if crop_faces else None
+    for label, image_path in entries:
+        image = paz.image.load(image_path)
+        labels.append(label)
+        args = (image, eigenface_state, detect_face)
+        weights.append(eigenfaces.project_single(*args))
+    return database.FaceDatabase(labels, weights)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Build eigenfaces database")
+    parser.add_argument("--experiments_path", default="experiments")
+    parser.add_argument("--database_path", default="database")
+    parser.add_argument("--crop_faces", default=True)
+    args = parser.parse_args()
+
+    eigenface_state = load_state(args.experiments_path)
+    entries = load_image_entries(args.database_path)
+    if len(entries) == 0:
+        raise FileNotFoundError("Add images to database/images/<label>/ first")
+    database = build_face_database(entries, eigenface_state, args.crop_faces)
+    filepath = Path(args.database_path) / "database_state.npz"
+    database.save(filepath)

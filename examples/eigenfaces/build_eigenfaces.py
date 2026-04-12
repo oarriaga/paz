@@ -1,7 +1,5 @@
 import os
 
-os.environ["KERAS_BACKEND"] = "jax"
-
 import argparse
 from pathlib import Path
 
@@ -12,22 +10,6 @@ from matplotlib import offsetbox
 
 import eigenfaces
 import paz
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Eigenfaces with JAX PAZ")
-    parser.add_argument("--dataset", default="FERPlus")
-    parser.add_argument("--split", default="train")
-    parser.add_argument("--total_variance", default=0.95, type=float)
-    parser.add_argument("--experiments_path", default="experiments")
-    parser.add_argument("--num_mosaic_faces", default=80, type=int)
-    parser.add_argument("--num_embedding_faces", default=100, type=int)
-    return parser.parse_args()
-
-
-def load_images(dataset, split):
-    images, _ = paz.datasets.load(dataset, split=split)
-    return jp.array(images, dtype=jp.float32)
 
 
 def load_or_build_state(images, total_variance, experiments_path):
@@ -44,10 +26,6 @@ def show_image(image, title):
     plt.imshow(np.squeeze(paz.to_numpy(image), axis=-1), cmap="gray")
     plt.title(title)
     plt.axis("off")
-
-
-def show_mean_face(eigenface_state):
-    show_image(eigenfaces.mean_face(eigenface_state), "Mean face")
 
 
 def show_eigenvalues(eigenface_state):
@@ -85,18 +63,6 @@ def show_embeddings(images, eigenface_state, num_faces):
     coordinates = build_embedding_coordinates(weights)
     kwargs = dict(title="Embedding projections", epsilon=0.0)
     plot_embeddings(coordinates, thumbnails, **kwargs)
-
-
-def main():
-    args = parse_args()
-    images = load_images(args.dataset, args.split)
-    build_args = (images, args.total_variance, args.experiments_path)
-    eigenface_state = load_or_build_state(*build_args)
-    show_mean_face(eigenface_state)
-    show_eigenvalues(eigenface_state)
-    show_eigenfaces(eigenface_state, args.num_mosaic_faces)
-    show_embeddings(images, eigenface_state, args.num_embedding_faces)
-    plt.show()
 
 
 def display_faces(vectors, face_shape, scale=255.0):
@@ -137,4 +103,21 @@ def _draw_embedding_images(axis, x, images, epsilon, cmap):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Eigenfaces with JAX PAZ")
+    parser.add_argument("--dataset", default="FERPlus")
+    parser.add_argument("--split", default="train")
+    parser.add_argument("--total_variance", default=0.95, type=float)
+    parser.add_argument("--experiments_path", default="experiments")
+    parser.add_argument("--num_mosaic_faces", default=80, type=int)
+    parser.add_argument("--num_embedding_faces", default=100, type=int)
+    args = parser.parse_args()
+
+    images, _ = paz.datasets.load(args.dataset, split=args.split)
+    images = jp.array(images, dtype=jp.float32)
+    build_args = (images, args.total_variance, args.experiments_path)
+    eigenface_state = load_or_build_state(*build_args)
+    show_image(eigenfaces.mean_face(eigenface_state), "Mean face")
+    show_eigenvalues(eigenface_state)
+    show_eigenfaces(eigenface_state, args.num_mosaic_faces)
+    show_embeddings(images, eigenface_state, args.num_embedding_faces)
+    plt.show()
