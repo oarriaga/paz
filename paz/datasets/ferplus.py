@@ -74,11 +74,12 @@ def load_probability_labels(filepath, split):
     with Path(filepath).open(newline="") as filedata:
         reader = csv.DictReader(filedata)
         for row in reader:
-            if row["Usage"] == usage:
-                image_index = parse_image_index(row["Image name"])
-                votes = parse_votes(row)
-                if float(jp.sum(votes)) != 0.0:
-                    label_by_index[image_index] = normalize_votes(votes)
+            if not is_valid_label_row(row, usage):
+                continue
+            image_index = parse_image_index(row["Image name"])
+            votes = parse_votes(row)
+            if float(jp.sum(votes)) != 0.0:
+                label_by_index[image_index] = normalize_votes(votes)
     return label_by_index
 
 
@@ -117,6 +118,11 @@ def parse_image_index(image_name):
         raise ValueError(f"Invalid FERPlus image name: {image_name}")
     image_index = int(stem.removeprefix("fer"))
     return image_index
+
+
+def is_valid_label_row(row, usage):
+    image_name = row["Image name"].strip()
+    return row["Usage"] == usage and image_name != ""
 
 
 def build_download_message():
