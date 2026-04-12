@@ -4,7 +4,6 @@ import jax.numpy as jp
 import paz
 import jax
 
-
 SHADOW_ORIGIN_EPSILON = 1e-3
 SHADOW_SELF_HIT_EPSILON = 1e-3
 
@@ -168,9 +167,7 @@ def compute_shadow_ray_origins(points, normals):
 
 def compute_shadow_depth_thresholds(shape_indices, receiver_indices):
     same_shape = shape_indices[:, None] == receiver_indices[None, :]
-    return jp.where(
-        same_shape, SHADOW_SELF_HIT_EPSILON, paz.graphics.EPSILON
-    )
+    return jp.where(same_shape, SHADOW_SELF_HIT_EPSILON, paz.graphics.EPSILON)
 
 
 def compute_front_side_shadow_mask(
@@ -189,7 +186,9 @@ def select_shadow_depths(
     receiver_normals,
     light_directions,
 ):
-    thresholds = compute_shadow_depth_thresholds(shape_indices, receiver_indices)
+    thresholds = compute_shadow_depth_thresholds(
+        shape_indices, receiver_indices
+    )
     front_side_hits = compute_front_side_shadow_mask(
         shape_indices, receiver_indices, receiver_normals, light_directions
     )
@@ -203,7 +202,7 @@ def select_shadow_depths(
     return hit_masks, depths
 
 
-def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=10.0):
+def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=0.01):
     closest_depths = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
     closest_depths = jp.min(closest_depths, axis=0)
     scene_hit_mask = compute_scene_hit_mask(hit_masks)
@@ -439,9 +438,7 @@ def compute_reflection_direction(eye, normal):
     return paz.graphics.geometry.reflect(-eye, normal)
 
 
-def compute_new_rays(
-    normal, eye, n_ratio, point, transparancies, reflectance
-):
+def compute_new_rays(normal, eye, n_ratio, point, transparancies, reflectance):
     do_reflect = reflect_or_refract(transparancies, reflectance)
     reflection_direction = compute_reflection_direction(eye, normal)
     refractive_direction = compute_refractive_direction(eye, normal, n_ratio)
