@@ -16,7 +16,6 @@ body = paz.graphics.Cube(body_scale, blue_material)
 lens_shift = paz.SE3.translation(jp.array([0.0, 0.0, 1.0]))
 lens_scale = paz.SE3.scaling(jp.array([1.3, 1.3, 0.2]))
 lens_angle = paz.SE3.rotation_x(jp.pi / 2)
-# lens_base = paz.graphics.Cube(lens_shift @ lens_scale, grey_material)
 lens_base = paz.graphics.Cylinder(
     lens_shift @ lens_scale @ lens_angle, grey_material
 )
@@ -56,17 +55,11 @@ camera = paz.graphics.Group(
     ]
 )
 
-# axes = paz.graphics.load("axes.json")
-
-# paz.graphics.save("camera.json", camera)
-
-
-# scene = paz.graphics.Scene(nodes=[camera, axes])
 scene = paz.graphics.Scene(nodes=[camera])
-
 world_to_camera = paz.SE3.view_transform(
     camera_origin=jp.array([0.0, 8.0, 8.0]),
     target_origin=jp.array([0.0, 0.5, 0.0]),
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
+paz.graphics.scene.show(scene)
 paz.graphics.viewer(scene, world_to_camera, True)
