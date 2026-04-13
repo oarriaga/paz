@@ -1,6 +1,3 @@
-# TODO make paz cache function
-# TODO we should do a visualization in which we show multiple materials params
-# TODO explain why shape transformations change the frame of reference
 import jax
 
 jax.config.update("jax_debug_nans", True)
@@ -77,14 +74,9 @@ def build_renderer(SE3_transform, render_arg=0):
         #     image_shape, y_FOV, new_camera_pose
         # )
 
+        render_args = (image_shape, camera_pose, rays, new_scene, lights)
         values = paz.graphics.render(
-            image_shape,
-            camera_pose,
-            rays,
-            new_scene,
-            lights,
-            mask=None,
-            shadows=True,
+            *render_args, mask=None, shadows=True
         )
 
         x = values[render_arg]
@@ -154,9 +146,8 @@ def visualize_gradient_channels(gradients, cmap):
     config = plot.configure()
     num_channels = gradients.shape[-1]
     # figsize = (6 * num_channels, 5) if num_channels > 1 else (7, 6)
-    figure, axes = plt.subplots(
-        1, num_channels, figsize=config.figsize, squeeze=False
-    )
+    subplot_args = dict(figsize=config.figsize, squeeze=False)
+    figure, axes = plt.subplots(1, num_channels, **subplot_args)
     axes = axes.flatten()
     for channel_arg, axis in enumerate(axes):
         channel_data = gradients[..., channel_arg]

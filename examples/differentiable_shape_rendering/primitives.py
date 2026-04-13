@@ -3,7 +3,6 @@ import jax.numpy as jp
 import jax
 import paz
 
-
 set_cache_dir(paz.logger.make_directory("cache"))
 
 GREEN = (85 / 255, 181 / 255, 103 / 255)  # YlGnL
@@ -38,57 +37,41 @@ lights = [
 H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-render = jax.jit(
-    paz.partial(
-        paz.graphics.render,
-        image_shape=(H, W),
-        world_to_camera=camera_pose,
-        rays=rays,
-        lights=lights,
-        shadows=True,
-    )
-)
-
-# render = paz.partial(
-#     paz.graphics.render,
-#     image_shape=(H, W),
-#     world_to_camera=camera_pose,
-#     rays=rays,
-#     lights=lights,
-#     shadows=False,
-# )
+render_args = ((H, W), camera_pose, rays)
+render = paz.partial(paz.graphics.render, *render_args, lights=lights)
+render = jax.jit(paz.partial(render, shadows=True))
 
 
 checkered_image = CheckeredImage()
 spherical_pattern = paz.graphics.SphericalPattern(checkered_image)
 planar_pattern = paz.graphics.PlanarPattern(checkered_image)
+pattern_scale = paz.SE3.scaling(jp.full(3, 3.0))
 cylindrical_pattern = paz.graphics.CylindricalPattern(
-    checkered_image, paz.SE3.scaling(jp.full(3, 3.0))
+    checkered_image, pattern_scale
 )
 zero_material = paz.graphics.Material(jp.zeros(3), 0.3, 0.1, 0.0, 100)
 
-shape_01 = paz.graphics.Sphere(
-    paz.SE3.translation(jp.array([0.0, 1.0, -3.0])),
-    zero_material,
-    spherical_pattern,
-)
-shape_02 = paz.graphics.Cylinder(
-    paz.SE3.translation(jp.array([0.0, 1.0, -1.0]))
-    @ paz.SE3.scaling(jp.full(3, 1.0)),
-    zero_material,
-    cylindrical_pattern,
-)
-shape_03 = paz.graphics.Cone(
-    paz.SE3.translation(jp.array([0.0, 1.0, 1.0])),
-    zero_material,
-    planar_pattern._replace(transform=paz.SE3.scaling(jp.full(3, 3.0))),
-)
-shape_04 = paz.graphics.Cube(
-    paz.SE3.translation(jp.array([0.0, 1.0, 3.0]))
-    @ paz.SE3.scaling(jp.full(3, 1.0)),
-    zero_material,
-    cylindrical_pattern._replace(transform=paz.SE3.scaling(jp.full(3, 4.0))),
-)
+shape_01_pose = paz.SE3.translation(jp.array([0.0, 1.0, -3.0]))
+shape_01 = paz.graphics.Sphere(shape_01_pose, zero_material, spherical_pattern)
+
+shape_02_shift = paz.SE3.translation(jp.array([0.0, 1.0, -1.0]))
+shape_02_scale = paz.SE3.scaling(jp.full(3, 1.0))
+shape_02_pose = shape_02_shift @ shape_02_scale
+shape_02_args = (shape_02_pose, zero_material, cylindrical_pattern)
+shape_02 = paz.graphics.Cylinder(*shape_02_args)
+
+shape_03_pose = paz.SE3.translation(jp.array([0.0, 1.0, 1.0]))
+shape_03_scale = paz.SE3.scaling(jp.full(3, 3.0))
+shape_03_pattern = planar_pattern._replace(transform=shape_03_scale)
+shape_03 = paz.graphics.Cone(shape_03_pose, zero_material, shape_03_pattern)
+
+shape_04_shift = paz.SE3.translation(jp.array([0.0, 1.0, 3.0]))
+shape_04_scale = paz.SE3.scaling(jp.full(3, 1.0))
+shape_04_pose = shape_04_shift @ shape_04_scale
+shape_04_pattern_scale = paz.SE3.scaling(jp.full(3, 4.0))
+shape_04_pattern_args = dict(transform=shape_04_pattern_scale)
+shape_04_pattern = cylindrical_pattern._replace(**shape_04_pattern_args)
+shape_04 = paz.graphics.Cube(shape_04_pose, zero_material, shape_04_pattern)
 floor = paz.graphics.Plane()
 
 scene = paz.graphics.Scene([shape_01, shape_02, shape_03, shape_04, floor])
@@ -109,11 +92,3 @@ for key in jax.random.split(key, 3):
     paz.image.show(paz.image.denormalize(image))
 
 paz.graphics.viewer(scene, camera_pose, False)
-
-# _scene, _lights, _mask = paz.graphics.scene.compile(scene, lights, None)
-
-# image, depth = paz.graphics.render(
-#     (H, W), camera_pose, rays, scene, lights, mask=None, shadows=True
-# )
-# paz.image.show(paz.image.denormalize(image))
-# paz.graphics.viewer(scene, camera_pose)

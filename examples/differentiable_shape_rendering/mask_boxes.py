@@ -55,16 +55,9 @@ num_shapes = jp.prod(shape)
 mask = jp.ones((num_shapes,), dtype=bool)
 shapes = build_shapes(key, num_shapes, transforms)
 scene = paz.graphics.Scene(shapes)
-render = jax.jit(
-    paz.partial(
-        paz.graphics.render,
-        image_shape=(H, W),
-        world_to_camera=world_to_camera,
-        rays=rays,
-        lights=lights,
-        shadows=False,
-    )
-)
+render_args = ((H, W), world_to_camera, rays)
+render = paz.partial(paz.graphics.render, *render_args, lights=lights)
+render = jax.jit(paz.partial(render, shadows=False))
 
 for subkey in jax.random.split(key, 20):
     mask = jax.random.randint(subkey, (num_shapes,), 0, 2)

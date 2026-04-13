@@ -16,23 +16,20 @@ body = paz.graphics.Cube(body_scale, blue_material)
 lens_shift = paz.SE3.translation(jp.array([0.0, 0.0, 1.0]))
 lens_scale = paz.SE3.scaling(jp.array([1.3, 1.3, 0.2]))
 lens_angle = paz.SE3.rotation_x(jp.pi / 2)
-lens_base = paz.graphics.Cylinder(
-    lens_shift @ lens_scale @ lens_angle, grey_material
-)
+lens_transform = lens_shift @ lens_scale @ lens_angle
+lens_base = paz.graphics.Cylinder(lens_transform, grey_material)
 
-lens_barrel_transform = (
-    paz.SE3.translation(jp.array([0.0, 0.0, 1.2]))
-    @ paz.SE3.scaling(jp.array([1.1, 1.1, 0.1]))
-    @ paz.SE3.rotation_x(jp.pi / 2)
-)
+lens_barrel_shift = paz.SE3.translation(jp.array([0.0, 0.0, 1.2]))
+lens_barrel_scale = paz.SE3.scaling(jp.array([1.1, 1.1, 0.1]))
+lens_barrel_angle = paz.SE3.rotation_x(jp.pi / 2)
+lens_barrel_transform = lens_barrel_shift @ lens_barrel_scale
+lens_barrel_transform = lens_barrel_transform @ lens_barrel_angle
 lens_barrel = paz.graphics.Cylinder(lens_barrel_transform, black_material)
 
-lens_element_transform = paz.SE3.translation(
-    jp.array([0.0, 0.0, 1.3])
-) @ paz.SE3.scaling(jp.array([0.9, 0.9, 0.05]))
-lens_element = paz.graphics.Sphere(
-    transform=lens_element_transform, material=white_material
-)
+lens_element_shift = paz.SE3.translation(jp.array([0.0, 0.0, 1.3]))
+lens_element_scale = paz.SE3.scaling(jp.array([0.9, 0.9, 0.05]))
+lens_element_transform = lens_element_shift @ lens_element_scale
+lens_element = paz.graphics.Sphere(lens_element_transform, white_material)
 
 button_shift = paz.SE3.translation(jp.array([2.0, 1.5, 0.0]))
 button_scale = paz.SE3.scaling(jp.array([0.2, 0.2, 0.2]))
@@ -40,20 +37,11 @@ button = paz.graphics.Cylinder(button_shift @ button_scale, red_material)
 
 viewfinder_shift = paz.SE3.translation(jp.array([1.9, 1.1, 1.0]))
 viewfinder_scale = paz.SE3.scaling(jp.array([0.4, 0.2, 0.1]))
-viewfinder = paz.graphics.Cube(
-    viewfinder_shift @ viewfinder_scale, white_material
-)
+viewfinder_transform = viewfinder_shift @ viewfinder_scale
+viewfinder = paz.graphics.Cube(viewfinder_transform, white_material)
 
-camera = paz.graphics.Group(
-    [
-        body,
-        lens_base,
-        lens_barrel,
-        lens_element,
-        button,
-        viewfinder,
-    ]
-)
+camera_shapes = [body, lens_base, lens_barrel, lens_element, button, viewfinder]
+camera = paz.graphics.Group(camera_shapes)
 
 scene = paz.graphics.Scene(nodes=[camera])
 world_to_camera = paz.SE3.view_transform(
