@@ -1,12 +1,6 @@
-# should be an inherit property of the shapes?
-# and transform by pose? an element of SE3
-# we should be able to do groups of groups (hierarchical models)
-from jax.experimental.compilation_cache.compilation_cache import set_cache_dir
 import jax
 import jax.numpy as jp
 import paz
-
-set_cache_dir(paz.logger.make_directory("cache"))
 
 material = [0.2, 0.9, 0.3, 200.0]
 R_material = paz.graphics.Material(paz.graphics.RED, *material)
@@ -37,25 +31,17 @@ head_z = paz.graphics.Cone(rotate_in_x @ head_transform, B_material)
 
 sphere = paz.graphics.Sphere(paz.SE3.translation(jp.array([0.0, 2.0, 0.0])))
 
-scene = paz.graphics.Scene(
-    [origin, line_x, head_x, line_y, head_y, line_z, head_z]
-)
-
-paz.graphics.save("axes.json", scene)
-
-# scene = paz.graphics.Scene([axes])
-
+scene = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
+scene = paz.graphics.Scene(scene)
 camera_pose = paz.SE3.view_transform(
-    camera_origin=jp.array([0.0, 0.0, 10.0]),
+    camera_origin=jp.array([10.0, 10.0, 10.0]),
     target_origin=jp.array([0.0, 0.0, 0.0]),
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
 
-H, W = 480, 640
-y_FOV = jp.pi / 4.0
 light = paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
+H, W, y_FOV = 480, 640, jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-image, depth = paz.graphics.render(
-    (H, W), camera_pose, rays, scene, light, None, False
-)
+render_args = ((H, W), camera_pose, rays, scene, light, None, False)
+image, depth = paz.graphics.render(*render_args)
 paz.image.show(paz.image.denormalize(image))
