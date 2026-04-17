@@ -8,6 +8,7 @@ from keras.layers import Embedding, EinsumDense, Input, ReversibleEmbedding
 from .layers.decoder import decoder_block
 from .layers.normalization import build_rms_norm
 
+BACKBONE_NAME = "gemma4_text_backbone"
 TEXT_BACKBONE_FIELDS = (
     "vocabulary_size image_size num_layers num_query_heads "
     "num_key_value_heads hidden_dim intermediate_dim head_dim "
@@ -96,7 +97,7 @@ class Gemma4TextBackbone(Model):
         self._final_output = final_output
 
 
-def build_text_backbone(config, weights_path=None, name="gemma4_text_backbone"):  # fmt: skip
+def build_text_backbone(config, weights_path=None, name=BACKBONE_NAME):
     model = Gemma4TextBackbone(config, name=name)
     if weights_path is not None:
         model.load_weights(str(Path(weights_path)))
@@ -160,7 +161,8 @@ def build_per_layer_model_projection(hidden, num_layers, per_layer_dim, dtype):
     """
     n = num_layers * per_layer_dim
     eq = "btd,dn->btn"
-    proj = EinsumDense(eq, (None, n), dtype=dtype, name="per_layer_model_projection")
+    name = "per_layer_model_projection"
+    proj = EinsumDense(eq, (None, n), dtype=dtype, name=name)
     return proj(hidden)
 
 
@@ -228,7 +230,8 @@ def build_kv_source_map(config):
     ]
     kv_source = {}
     for j in range(first_shared, config.num_layers):
-        layer_type = "global" if is_global_attention_layer(config, j) else "local"
+        is_global = is_global_attention_layer(config, j)
+        layer_type = "global" if is_global else "local"
         for k in range(len(non_shared_types) - 1, -1, -1):
             if non_shared_types[k] == layer_type:
                 kv_source[j] = k

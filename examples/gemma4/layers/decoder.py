@@ -2,7 +2,7 @@ import keras
 from keras import ops
 from keras.layers import Dropout, EinsumDense
 
-from .attention import attend, cached_attend
+from .attention import AttendArgs, CachedAttendArgs, attend, cached_attend
 from .core import add_residual, build_attention_mask, clip_float16
 from .normalization import build_rms_norm, build_scalar_multiply
 
@@ -43,7 +43,7 @@ def attention_path(x, padding_mask, config, layer_index, name):
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     mask = build_block_attention_mask(padding_mask, config, layer_index)
     attn_args = build_attend_args(hidden, mask, config, layer_index, name)
-    hidden = attend(*attn_args)
+    hidden = attend(attn_args)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     if config.dropout:
@@ -67,7 +67,8 @@ def feedforward_path(x, config, name, layer_index=None):
     hidden = keras.activations.gelu(gate, approximate=True) * value
     down_eq = "btf,fd->btd"
     linear_name = "{}_ffw_linear".format(name)
-    hidden = build_einsum_dense(down_eq, config.hidden_dim, dtype, linear_name)(hidden)
+    layer = build_einsum_dense(down_eq, config.hidden_dim, dtype, linear_name)
+    hidden = layer(hidden)
     post_name = "{}_post_ffw_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     if config.dropout:
@@ -92,14 +93,21 @@ def build_attend_args(hidden, mask, config, layer_index, name):
                          build_partial_rotary_factor)
     is_global = is_global_attention_layer(config, layer_index)
     attn_name = "{}_attention".format(name)
-    args = (hidden, mask, build_head_dim(config, is_global),
-            config.num_query_heads, config.num_key_value_heads,
-            config.layer_norm_epsilon, build_rope_wavelength(is_global),
-            build_rope_scaling_factor(config, is_global),
-            build_partial_rotary_factor(config, is_global),
-            config.attention_logit_soft_cap, config.dropout,
-            config.dtype, attn_name)
-    return args
+    return AttendArgs(
+        hidden,
+        mask,
+        build_head_dim(config, is_global),
+        config.num_query_heads,
+        config.num_key_value_heads,
+        config.layer_norm_epsilon,
+        build_rope_wavelength(is_global),
+        build_rope_scaling_factor(config, is_global),
+        build_partial_rotary_factor(config, is_global),
+        config.attention_logit_soft_cap,
+        config.dropout,
+        config.dtype,
+        attn_name,
+    )
 
 
 def cached_decoder_block(x, cache, cache_index, config,
@@ -130,28 +138,34 @@ def cached_attention_path(x, cache, cache_index, config, layer_index, name,
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     attn_args = build_cached_attend_args(
         hidden, cache, cache_index, config, layer_index, name)
-    hidden, cache = cached_attend(*attn_args, shared_kv_cache=shared_kv_cache)
+    hidden, cache = cached_attend(attn_args, shared_kv_cache=shared_kv_cache)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     return add_residual(x, hidden), cache
 
 
-def build_cached_attend_args(hidden, cache, cache_index, config, layer_index, name):  # fmt: skip
+def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
     from ..model import (is_global_attention_layer, build_head_dim,
                          build_rope_wavelength, build_rope_scaling_factor,
                          build_partial_rotary_factor, build_cache_head_dim)
     is_global = is_global_attention_layer(config, layer_index)
     attn_name = "{}_attention".format(name)
-    args = (hidden, cache, cache_index,
-            build_head_dim(config, is_global),
-            config.num_query_heads, config.num_key_value_heads,
-            config.layer_norm_epsilon,
-            build_rope_wavelength(is_global),
-            build_rope_scaling_factor(config, is_global),
-            build_partial_rotary_factor(config, is_global),
-            config.attention_logit_soft_cap, config.dtype, attn_name,
-            build_cache_head_dim(config))
-    return args
+    return CachedAttendArgs(
+        hidden,
+        cache,
+        index,
+        build_head_dim(config, is_global),
+        config.num_query_heads,
+        config.num_key_value_heads,
+        config.layer_norm_epsilon,
+        build_rope_wavelength(is_global),
+        build_rope_scaling_factor(config, is_global),
+        build_partial_rotary_factor(config, is_global),
+        config.attention_logit_soft_cap,
+        config.dtype,
+        attn_name,
+        build_cache_head_dim(config),
+    )
 
 
 def build_einsum_dense(equation, output_dim, dtype, name):

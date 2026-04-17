@@ -1,6 +1,6 @@
-from .model import TextBackboneArgs
+import json
 
-GEMMA4_FIELDS = TextBackboneArgs._fields
+from .model import TextBackboneArgs
 
 CONFIGS = {
     "gemma4_2b": {
@@ -86,3 +86,22 @@ CONFIGS = {
 
 def to_backbone_args(model_name):
     return TextBackboneArgs(**CONFIGS[model_name])
+
+
+def save_config(config, path):
+    with open(str(path), "w", encoding="utf-8") as file:
+        json.dump(config._asdict(), file, indent=2)
+
+
+def load_config(path):
+    with open(str(path), encoding="utf-8") as file:
+        values = json.load(file)
+    values["global_layer_indices"] = build_global_indices(values)
+    return TextBackboneArgs(**values)
+
+
+def build_global_indices(values):
+    indices = values.get("global_layer_indices")
+    if indices is None:
+        return None
+    return tuple(indices)

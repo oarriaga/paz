@@ -1,22 +1,19 @@
 import jax.numpy as jp
 
-from .decoding import KVDecoder, build_step_inputs, extract_generated_ids
+from .decoding import KVDecoder, extract_generated_ids
 from .inference import Gemma4DecoderStep, build_empty_cache
 from .model import build_text_backbone_args
 
 
 def build_test_config():
-    return build_text_backbone_args(
-        use_sliding_window_attention=False)
+    return build_text_backbone_args(use_sliding_window_attention=False)
 
 
 def test_kv_decoder_generates_tokens():
     config = build_test_config()
     step_model = Gemma4DecoderStep(config)
     prompt = [1, 2, 3]
-    max_tokens = 5
-    max_seq = 16
-    decoder = KVDecoder(step_model, prompt, max_tokens, max_seq)
+    decoder = KVDecoder(step_model, prompt, 5, 16)
     cache = build_empty_cache(config, decoder.max_decode_length)
     cache = jp.asarray(cache)
     stop_id = jp.array(config.vocabulary_size - 1, dtype=jp.int32)

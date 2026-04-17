@@ -5,7 +5,9 @@ from keras import ops
 from .inference import build_empty_cache
 
 
-def kv_decode(step_model, config, prompt_ids, stop_id, max_tokens, max_seq=4096):  # fmt: skip
+def kv_decode(
+    step_model, config, prompt_ids, stop_id, max_tokens, max_seq=4096
+):
     decoder = KVDecoder(step_model, prompt_ids, max_tokens, max_seq)
     cache = build_empty_cache(config, decoder.max_decode_length)
     cache = jp.asarray(cache)
@@ -26,14 +28,12 @@ def KVDecoder(step_model, prompt_ids, max_tokens, max_seq=4096):
         step = warmup_step(prompt, step_model)
         cache = self_cache
         if prompt_len > 1:
-            cache = jax.lax.fori_loop(
-                0, prompt_len - 1, step, cache)
+            cache = jax.lax.fori_loop(0, prompt_len - 1, step, cache)
         args = (buffer, prompt, prompt_len, cache, stop_id)
-        initial = build_initial_state(*args)
+        state = build_initial_state(*args)
         cont = should_continue(max_tokens, max_len)
-        advance = build_next_state(step_model, stop_id)
-        result = jax.lax.while_loop(cont, advance, initial)
-        buffer, _, index, _, _, _ = result
+        step_fn = build_next_state(step_model, stop_id)
+        buffer, _, index, _, _, _ = jax.lax.while_loop(cont, step_fn, state)
         return buffer, index + 1
 
     decode.max_decode_length = max_len
@@ -54,8 +54,7 @@ def build_initial_state(buffer, prompt, prompt_len, cache, stop_id):
     index = jp.array(prompt_len - 1, dtype=jp.int32)
     num_generated = jp.array(0, dtype=jp.int32)
     finished = jp.array(False)
-    return (buffer, last_token, index, cache,
-            num_generated, finished)
+    return (buffer, last_token, index, cache, num_generated, finished)
 
 
 def should_continue(max_gen, max_len):
@@ -80,9 +79,7 @@ def build_next_state(step_model, stop_id):
         token = jp.expand_dims(next_id, axis=-1)
         finished = next_id[0] == stop_id
         num_generated = num_generated + 1
-        args = (buffer, token, next_index, cache,
-                num_generated, finished)
-        return args
+        return (buffer, token, next_index, cache, num_generated, finished)
     return step
 
 
