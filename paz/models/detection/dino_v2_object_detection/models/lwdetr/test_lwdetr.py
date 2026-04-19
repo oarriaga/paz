@@ -98,9 +98,14 @@ def test_mlp():
 def test_loss_functions():
     """Verifies loss functions produce scalar positive values."""
     B, Q, C = 2, 10, 4
-    inputs = keras.random.normal((B, Q, C))
-    targets = keras.random.uniform((B, Q, C), minval=0, maxval=2)
-    targets = ops.cast(targets, "float32")
+    np.random.seed(42)
+    inputs = ops.convert_to_tensor(
+        np.random.randn(B, Q, C).astype("float32")
+    )
+    # Targets must be in [0, 1] for sigmoid-based losses (BCE)
+    targets = ops.convert_to_tensor(
+        np.random.uniform(0, 1, (B, Q, C)).astype("float32")
+    )
     
     loss = sigmoid_focal_loss(inputs, targets, num_boxes=Q)
     assert ops.ndim(loss) == 0
