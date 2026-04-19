@@ -395,6 +395,45 @@ class LWDETR(keras.Model):
         self.built_flag = True
         super().build(input_shape)
 
+    def update_drop_path(self, drop_path_rate, vit_encoder_num_layers):
+        """Set stochastic depth rate with per-layer linear scaling.
+
+        Linearly scales the rate from 0 (first layer) to
+        ``drop_path_rate`` (last layer).
+
+        Args:
+            drop_path_rate (float): Target drop path rate for the last layer.
+            vit_encoder_num_layers (int): Number of ViT encoder layers.
+        """
+        from paz.models.foundation.dinov2.layers.drop_path import DropPath
+
+        encoder = self.backbone.backbone.encoder.encoder.encoder
+        num_layers = vit_encoder_num_layers or len(encoder.encoder_layers)
+        for i in range(num_layers):
+            block_rate = (
+                drop_path_rate * i / max(1, num_layers - 1)
+                if num_layers > 1
+                else 0.0
+            )
+            layer = encoder.encoder_layers[i]
+            if isinstance(layer.drop_path1, DropPath):
+                layer.drop_path1.drop_probability = block_rate
+            if isinstance(layer.drop_path2, DropPath):
+                layer.drop_path2.drop_probability = block_rate
+
+    def update_dropout(self, dropout_rate):
+        """Update all Dropout layers in the transformer to *dropout_rate*.
+
+        Walks the transformer encoder/decoder and sets the ``rate``
+        attribute on every ``keras.layers.Dropout`` instance found.
+
+        Args:
+            dropout_rate (float): New dropout probability in [0, 1].
+        """
+        for layer in self._flatten_layers():
+            if isinstance(layer, keras.layers.Dropout):
+                layer.rate = dropout_rate
+
     def call(self, samples, training=False):
         """Forward pass of the LWDETR detection model.
 
@@ -577,6 +616,58 @@ class LWDETR(keras.Model):
 
         return out
 
+    def call_export(self, samples):
+        """Forward pass for export/inference (no auxiliary outputs).
+
+        Runs the model without auxiliary or encoder outputs, producing
+        only the final-layer ``pred_logits`` and ``pred_boxes``.  This
+        is the lightweight path used when exporting the model or running
+        inference without training overhead.
+
+        Args:
+            samples: Input images ``(B, H, W, 3)`` or ``(tensor, mask)``.
+
+        Returns:
+            dict: ``{"pred_logits": ..., "pred_boxes": ...}`` and
+                optionally ``"pred_masks"`` if segmentation is enabled.
+        """
+        out = self.call(samples, training=False)
+        # Strip aux_outputs and enc_outputs for clean export
+        return {
+            k: v for k, v in out.items()
+            if k not in ("aux_outputs", "enc_outputs")
+        }
+
+    def export(self, export_path, input_shape=None):
+        """Export the model to a SavedModel or ONNX-compatible format.
+
+        Traces ``call_export`` with a concrete input spec and saves.
+
+        Args:
+            export_path (str): Target directory for the exported model.
+            input_shape (tuple or None): ``(H, W, C)`` shape. Uses the
+                model's configured resolution if ``None``.
+        """
+        import keras
+
+        if input_shape is None:
+            # Try to infer from the model's configuration
+            res = getattr(self, "_resolution", None)
+            if res is None:
+                raise ValueError(
+                    "input_shape must be provided or the model must have "
+                    "a _resolution attribute."
+                )
+            input_shape = (res, res, 3)
+
+        # Build a concrete input spec for tracing
+        input_spec = keras.Input(shape=input_shape, dtype="float32")
+        export_model = keras.Model(
+            inputs=input_spec,
+            outputs=self.call_export(input_spec),
+        )
+        export_model.export(export_path)
+
     def _set_aux_loss(self, outputs_class, outputs_coord, outputs_masks):
         """Collects intermediate decoder layer outputs for auxiliary loss.
 
@@ -651,14 +742,18 @@ class SetCriterion(layers.Layer):
         self.mask_point_sample_ratio = mask_point_sample_ratio
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
-        """Computes classification loss using sigmoid focal loss.
+        """Computes classification loss.
 
-        Constructs one-hot target tensors via scatter update of matched
-        indices, then applies focal loss against predicted logits.
+        When ``ia_bce_loss`` is enabled, uses
+        an IoU-aware instance-adaptive BCE loss that blends predicted
+        confidence with localization IoU as soft targets.  Otherwise
+        falls back to standard sigmoid focal loss.
 
         Args:
-            outputs (dict): Contains "pred_logits" of shape (B, Q, C).
-            targets (list[dict]): Per-image targets with "labels".
+            outputs (dict): Contains "pred_logits" of shape (B, Q, C)
+                and "pred_boxes" of shape (B, Q, 4).
+            targets (list[dict]): Per-image targets with "labels" and
+                "boxes".
             indices (list[tuple]): Matched (src, tgt) index pairs.
             num_boxes (int): Total matched boxes for normalization.
             log (bool): Reserved for logging metrics.
@@ -671,33 +766,109 @@ class SetCriterion(layers.Layer):
 
         # Gather target class labels at the matched positions
         target_classes_o = ops.concatenate(
-            [ops.take(t["labels"], J, axis=0) for t, (_, J) in zip(targets, indices)]
+            [ops.take(t["labels"], J, axis=0)
+             for t, (_, J) in zip(targets, indices)]
         )
 
-        # Initialize target tensor with num_classes (background class
-        # index) and scatter matched class labels into their positions
-        target_classes = ops.full(src_logits.shape[:2], self.num_classes, dtype="int64")
+        if self.ia_bce_loss:
+            alpha = self.focal_alpha
+            gamma = 2
 
-        # Build N-dimensional index array for scatter update: each row
-        # is (batch_idx, query_idx) identifying where to place a target
-        indices_nd = ops.stack(idx, axis=-1)
-        target_classes = ops.scatter_update(
-            target_classes, indices_nd, target_classes_o
-        )
+            # Gather matched predicted boxes (flat indexing)
+            B, Q, C = ops.shape(src_logits)
+            box_dim = ops.shape(outputs["pred_boxes"])[2]
+            pred_boxes_flat = ops.reshape(
+                outputs["pred_boxes"], (-1, box_dim)
+            )
+            flat_idx_2d = idx[0] * Q + idx[1]
+            src_boxes = ops.take(pred_boxes_flat, flat_idx_2d, axis=0)
 
-        # Convert to one-hot with an extra background column, then
-        # remove the background column to get (B, Q, num_classes)
-        num_classes_logits = ops.shape(src_logits)[2]
-        target_classes_onehot = ops.one_hot(target_classes, num_classes_logits + 1)
-        target_classes_onehot = target_classes_onehot[..., :-1]
+            target_boxes = ops.concatenate(
+                [ops.take(t["boxes"], i, axis=0)
+                 for t, (_, i) in zip(targets, indices)],
+                axis=0,
+            )
 
-        loss_ce = sigmoid_focal_loss(
-            src_logits,
-            target_classes_onehot,
-            num_boxes,
-            alpha=self.focal_alpha,
-            gamma=2,
-        ) * ops.cast(ops.shape(src_logits)[1], "float32")
+            # IoU between each matched pair (detached from gradients)
+            iou_matrix, _ = box_ops.box_iou(
+                box_ops.box_cxcywh_to_xyxy(ops.stop_gradient(src_boxes)),
+                box_ops.box_cxcywh_to_xyxy(target_boxes),
+            )
+            pos_ious = ops.stop_gradient(ops.diag(iou_matrix))
+
+            prob = ops.sigmoid(src_logits)
+
+            # Positive and negative weights — full (B, Q, C) tensors
+            pos_weights = ops.zeros_like(src_logits)
+            neg_weights = prob ** gamma
+
+            # Gather probabilities at matched (batch, query, class) positions
+            num_classes_logits = C
+            flat_idx_3d = (
+                idx[0] * Q * num_classes_logits
+                + idx[1] * num_classes_logits
+                + ops.cast(target_classes_o, idx[0].dtype)
+            )
+            prob_flat = ops.reshape(prob, (-1,))
+            matched_probs = ops.take(prob_flat, flat_idx_3d)
+
+            # Soft target: prob^alpha * iou^(1-alpha), clamped at 0.01
+            t = ops.stop_gradient(
+                ops.maximum(
+                    matched_probs ** alpha * pos_ious ** (1 - alpha),
+                    0.01,
+                )
+            )
+
+            # Scatter t into pos_weights and (1-t) into neg_weights at
+            # matched positions using flat 3D indexing
+            pos_weights_flat = ops.reshape(pos_weights, (-1,))
+            neg_weights_flat = ops.reshape(neg_weights, (-1,))
+
+            # Build scatter indices (N_matched, 1)
+            scatter_idx = ops.expand_dims(flat_idx_3d, axis=-1)
+            pos_weights_flat = ops.scatter_update(
+                pos_weights_flat, scatter_idx, ops.cast(t, pos_weights.dtype)
+            )
+            neg_weights_flat = ops.scatter_update(
+                neg_weights_flat, scatter_idx,
+                1.0 - ops.cast(t, neg_weights.dtype),
+            )
+            pos_weights = ops.reshape(pos_weights_flat, ops.shape(src_logits))
+            neg_weights = ops.reshape(neg_weights_flat, ops.shape(src_logits))
+
+            # Numerically stable reformulation:
+            # loss = neg_w * logits - log_sigmoid(logits) * (pos_w + neg_w)
+            log_sigmoid = -ops.softplus(-src_logits)  # == log(sigmoid(x))
+            loss_ce = (
+                neg_weights * src_logits
+                - log_sigmoid * (pos_weights + neg_weights)
+            )
+            loss_ce = ops.sum(loss_ce) / num_boxes
+
+        else:
+            # Standard sigmoid focal loss (fallback)
+            target_classes = ops.full(
+                src_logits.shape[:2], self.num_classes, dtype="int64"
+            )
+            indices_nd = ops.stack(idx, axis=-1)
+            target_classes = ops.scatter_update(
+                target_classes, indices_nd, target_classes_o
+            )
+
+            num_classes_logits = ops.shape(src_logits)[2]
+            target_classes_onehot = ops.one_hot(
+                target_classes, num_classes_logits + 1
+            )
+            target_classes_onehot = target_classes_onehot[..., :-1]
+
+            loss_ce = sigmoid_focal_loss(
+                src_logits,
+                target_classes_onehot,
+                num_boxes,
+                alpha=self.focal_alpha,
+                gamma=2,
+            ) * ops.cast(ops.shape(src_logits)[1], "float32")
 
         return {"loss_ce": loss_ce}
 
@@ -748,6 +919,127 @@ class SetCriterion(layers.Layer):
 
         return {"loss_bbox": loss_bbox, "loss_giou": loss_giou}
 
+    def loss_cardinality(self, outputs, targets, indices, num_boxes, **kwargs):
+        """Compute cardinality error (for logging only, not backpropagated).
+
+        Counts how many predictions are classified as non-background
+        and compares against the actual number of objects per image.
+
+        Args:
+            outputs (dict): Contains "pred_logits" (B, Q, C).
+            targets (list[dict]): Per-image targets with "labels".
+            indices: Unused (kept for dispatcher signature consistency).
+            num_boxes: Unused.
+
+        Returns:
+            dict: {"cardinality_error": scalar} — wrapped in
+                stop_gradient so it does not affect training.
+        """
+        pred_logits = outputs["pred_logits"]
+        tgt_lengths = ops.convert_to_tensor(
+            [len(t["labels"]) for t in targets], dtype="float32",
+        )
+        # Count predictions whose argmax is not the last (background) class
+        card_pred = ops.cast(
+            ops.sum(
+                ops.cast(
+                    ops.argmax(pred_logits, axis=-1)
+                    != ops.shape(pred_logits)[-1] - 1,
+                    "int32",
+                ),
+                axis=1,
+            ),
+            "float32",
+        )
+        card_err = ops.mean(ops.abs(card_pred - tgt_lengths))
+        return {"cardinality_error": ops.stop_gradient(card_err)}
+
+    def loss_masks(self, outputs, targets, indices, num_boxes, **kwargs):
+        """Compute BCE and Dice losses for segmentation masks.
+
+        Gathers matched predicted and target masks, then computes
+        binary cross-entropy and dice losses over spatially sampled
+        points for efficiency.
+
+        Args:
+            outputs (dict): Contains "pred_masks" (B, Q, H, W).
+            targets (list[dict]): Per-image targets with "masks".
+            indices (list[tuple]): Matched (src, tgt) index pairs.
+            num_boxes (int): Normalization factor.
+
+        Returns:
+            dict: {"loss_mask_ce": ..., "loss_mask_dice": ...}.
+        """
+        if "pred_masks" not in outputs:
+            zero = ops.convert_to_tensor(0.0, dtype="float32")
+            return {"loss_mask_ce": zero, "loss_mask_dice": zero}
+
+        idx = self._get_src_permutation_idx(indices)
+        pred_masks = outputs["pred_masks"]  # (B, Q, H, W)
+
+        # Gather matched prediction masks using flat indexing
+        B = ops.shape(pred_masks)[0]
+        Q = ops.shape(pred_masks)[1]
+        H = ops.shape(pred_masks)[2]
+        W = ops.shape(pred_masks)[3]
+        pred_flat = ops.reshape(pred_masks, (B * Q, H, W))
+        flat_idx = idx[0] * Q + idx[1]
+        src_masks = ops.take(pred_flat, flat_idx, axis=0)  # (N, H, W)
+
+        # Handle empty matches
+        if ops.shape(src_masks)[0] == 0:
+            zero = ops.convert_to_tensor(0.0, dtype="float32")
+            return {"loss_mask_ce": zero, "loss_mask_dice": zero}
+
+        # Gather matched target masks
+        target_masks_list = []
+        for t, (_, j) in zip(targets, indices):
+            if "masks" in t:
+                target_masks_list.append(ops.take(t["masks"], j, axis=0))
+        if not target_masks_list:
+            zero = ops.convert_to_tensor(0.0, dtype="float32")
+            return {"loss_mask_ce": zero, "loss_mask_dice": zero}
+        target_masks = ops.concatenate(target_masks_list, axis=0)  # (N, Ht, Wt)
+
+        # Interpolate target masks to prediction resolution if needed
+        tgt_h = ops.shape(target_masks)[1]
+        tgt_w = ops.shape(target_masks)[2]
+        if tgt_h != H or tgt_w != W:
+            target_masks = ops.cast(target_masks, "float32")
+            target_masks = ops.expand_dims(target_masks, axis=-1)
+            target_masks = ops.image.resize(
+                target_masks, (int(H), int(W)), interpolation="nearest",
+            )
+            target_masks = target_masks[..., 0]
+
+        # Downsample by mask_point_sample_ratio for efficiency
+        ratio = self.mask_point_sample_ratio
+        if ratio > 1:
+            ds_h = max(1, int(H) // ratio)
+            ds_w = max(1, int(W) // ratio)
+            src_ds = ops.expand_dims(src_masks, axis=-1)
+            src_ds = ops.image.resize(
+                src_ds, (ds_h, ds_w), interpolation="bilinear",
+            )[..., 0]
+            tgt_ds = ops.expand_dims(
+                ops.cast(target_masks, "float32"), axis=-1,
+            )
+            tgt_ds = ops.image.resize(
+                tgt_ds, (ds_h, ds_w), interpolation="nearest",
+            )[..., 0]
+        else:
+            src_ds = src_masks
+            tgt_ds = ops.cast(target_masks, "float32")
+
+        # Flatten spatial dims and compute losses
+        src_flat = ops.reshape(src_ds, (ops.shape(src_ds)[0], -1))
+        tgt_flat = ops.reshape(tgt_ds, (ops.shape(tgt_ds)[0], -1))
+
+        loss_ce = sigmoid_ce_loss(src_flat, tgt_flat, num_boxes)
+        loss_dice = dice_loss(src_flat, tgt_flat, num_boxes)
+
+        return {"loss_mask_ce": loss_ce, "loss_mask_dice": loss_dice}
+
     def _get_src_permutation_idx(self, indices):
         """Builds batch and source index arrays from matching results.
 
@@ -767,7 +1059,8 @@ class SetCriterion(layers.Layer):
         """Dispatches to the appropriate loss computation method.
 
         Args:
-            loss (str): Loss type name ('labels' or 'boxes').
+            loss (str): Loss type name (``'labels'``, ``'boxes'``,
+                ``'cardinality'``, or ``'masks'``).
             outputs (dict): Model predictions.
             targets (list[dict]): Ground-truth targets.
             indices (list[tuple]): Matched index pairs.
@@ -779,29 +1072,36 @@ class SetCriterion(layers.Layer):
         loss_map = {
             "labels": self.loss_labels,
             "boxes": self.loss_boxes,
+            "cardinality": self.loss_cardinality,
+            "masks": self.loss_masks,
         }
         if loss not in loss_map:
             return {}
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
-    def call(self, outputs, targets):
+    def call(self, outputs, targets, training=True):
         """Computes all training losses for the model outputs.
 
         Runs Hungarian matching, computes per-type losses on the main
-        output, and optionally on auxiliary intermediate outputs.
+        output, and optionally on auxiliary and encoder outputs.
 
         Args:
             outputs (dict): Model predictions including "pred_logits",
-                "pred_boxes", and optionally "aux_outputs".
+                "pred_boxes", and optionally "aux_outputs" / "enc_outputs".
             targets (list[dict]): Per-image ground-truth targets.
+            training (bool): When False, ``group_detr`` is forced to 1
+                (evaluation mode uses a single query group).
 
         Returns:
             dict: All computed losses keyed by name (e.g. "loss_ce",
                 "loss_bbox", "loss_giou", with "_i" suffixes for
-                auxiliary layers).
+                auxiliary layers and "_enc" for encoder outputs).
         """
-        group_detr = self.group_detr
-        outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
+        group_detr = self.group_detr if training else 1
+        outputs_without_aux = {
+            k: v for k, v in outputs.items()
+            if k not in ("aux_outputs", "enc_outputs")
+        }
 
         # Bipartite matching between predictions and targets
         indices = self.matcher(outputs_without_aux, targets, group_detr=group_detr)
@@ -810,7 +1110,7 @@ class SetCriterion(layers.Layer):
         num_boxes = sum(len(t["labels"]) for t in targets)
         if not self.sum_group_losses:
             num_boxes = num_boxes * group_detr
-        num_boxes = ops.cast(num_boxes, "float32")
+        num_boxes = ops.cast(ops.maximum(num_boxes, 1), "float32")
 
         # Compute losses for each loss type on the main output
         losses = {}
@@ -827,6 +1127,23 @@ class SetCriterion(layers.Layer):
                     )
                     l_dict = {k + f"_{i}": v for k, v in l_dict.items()}
                     losses.update(l_dict)
+
+        # Compute losses on two-stage encoder output proposals
+        if "enc_outputs" in outputs:
+            enc_outputs = outputs["enc_outputs"]
+            enc_indices = self.matcher(
+                enc_outputs, targets, group_detr=group_detr,
+            )
+            for loss in self.loss_types:
+                kwargs = {}
+                if loss == "labels":
+                    kwargs["log"] = False
+                l_dict = self.get_loss(
+                    loss, enc_outputs, targets, enc_indices, num_boxes,
+                    **kwargs,
+                )
+                l_dict = {k + "_enc": v for k, v in l_dict.items()}
+                losses.update(l_dict)
 
         return losses
 
@@ -858,16 +1175,20 @@ class PostProcess(layers.Layer):
         Args:
             outputs (dict): Contains "pred_logits" (B, Q, C) and
                 "pred_boxes" (B, Q, 4) in normalized coordinates.
+                Optionally "pred_masks" (B, Q, Hm, Wm).
             target_sizes (Tensor): Original image sizes (B, 2) as
                 (height, width) for coordinate scaling.
 
         Returns:
-            tuple: (scores, labels, boxes) where:
+            tuple: (scores, labels, boxes) or (scores, labels, boxes, masks)
                 - scores: (B, K) confidence scores.
                 - labels: (B, K) class label indices.
                 - boxes: (B, K, 4) in absolute (x1, y1, x2, y2) coords.
+                - masks: list of (K, 1, H, W) boolean arrays per image
+                    (only when pred_masks is present).
         """
         out_logits, out_bbox = outputs["pred_logits"], outputs["pred_boxes"]
+        out_masks = outputs.get("pred_masks", None)
 
         # Flatten class probabilities and select top-k across all classes
         prob = ops.sigmoid(out_logits)
@@ -899,5 +1220,24 @@ class PostProcess(layers.Layer):
         scale_fct = ops.stack([img_w, img_h, img_w, img_h], axis=1)
         scale_fct = ops.cast(scale_fct, "float32")
         boxes = boxes * scale_fct[:, None, :]
+
+        if out_masks is not None:
+            # Gather masks for top-K queries, resize, and threshold
+            masks_list = []
+            for i in range(int(ops.convert_to_numpy(ops.shape(out_masks)[0]))):
+                k_idx = topk_boxes[i]  # (K,)
+                masks_i = ops.take(out_masks[i], k_idx, axis=0)  # (K, Hm, Wm)
+                h = int(ops.convert_to_numpy(target_sizes[i, 0]))
+                w = int(ops.convert_to_numpy(target_sizes[i, 1]))
+                # Add channel dim for resize: (K, Hm, Wm) -> (K, Hm, Wm, 1)
+                masks_i = ops.expand_dims(masks_i, axis=-1)
+                masks_i = ops.image.resize(
+                    masks_i, (h, w), interpolation="bilinear"
+                )
+                # (K, H, W, 1) -> (K, 1, H, W) to match expected format
+                masks_i = ops.transpose(masks_i, (0, 3, 1, 2))
+                masks_i = masks_i > 0.0
+                masks_list.append(masks_i)
+            return scores, labels, boxes, masks_list
 
         return scores, labels, boxes
