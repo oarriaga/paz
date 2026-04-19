@@ -361,3 +361,66 @@ def accuracy(output, target, topk=(1,)):
         correct_k = k.sum(k.cast(correct[:k_val], "float32"))
         res.append(correct_k * (100.0 / batch_size))
     return res
+
+
+# ---------------------------------------------------------------------------
+# Distributed training utilities
+# ---------------------------------------------------------------------------
+
+
+def is_dist_avail_and_initialized():
+    """Check whether JAX multi-host distributed mode is active.
+
+    Returns True when ``jax.process_count() > 1``, meaning the
+    program was launched via ``jax.distributed.initialize()``.
+    """
+    try:
+        import jax
+        return jax.process_count() > 1
+    except Exception:
+        return False
+
+
+def get_world_size():
+    """Return the number of JAX processes (1 if single-device)."""
+    if not is_dist_avail_and_initialized():
+        return 1
+    import jax
+    return jax.process_count()
+
+
+def get_rank():
+    """Return the current process index (0 if single-device)."""
+    if not is_dist_avail_and_initialized():
+        return 0
+    import jax
+    return jax.process_index()
+
+
+def is_main_process():
+    """Return True if this is rank 0 (or single-device)."""
+    return get_rank() == 0
+
+
+def save_on_master(*args, **kwargs):
+    """Call ``keras.saving.save_model`` only on the master process."""
+    if is_main_process():
+        import keras
+        keras.saving.save_model(*args, **kwargs)
+
+
+def setup_for_distributed(is_master):
+    """Suppress print output on non-master processes.
+
+    After calling this, ``print()`` becomes a no-op on workers
+    with ``is_master=False`` unless ``force=True`` is passed.
+    """
+    import builtins as __builtin__
+    builtin_print = __builtin__.print
+
+    def print(*args, **kwargs):
+        force = kwargs.pop("force", False)
+        if is_master or force:
+            builtin_print(*args, **kwargs)
+
+    __builtin__.print = print
