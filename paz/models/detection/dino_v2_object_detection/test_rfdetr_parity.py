@@ -732,15 +732,15 @@ class TestForwardPassParity:
         print(f"Logits - max: {diff_logits.max():.6e}, mean: {diff_logits.mean():.6e}")
         print(f"Boxes  - max: {diff_boxes.max():.6e}, mean: {diff_boxes.mean():.6e}")
 
-        logits_ok = diff_logits.mean() < 1e-4
-        boxes_ok = diff_boxes.mean() < 1e-4
+        logits_ok = diff_logits.mean() < 1e-5
+        boxes_ok = diff_boxes.mean() < 1e-5
         if not (logits_ok and boxes_ok):
             if _check_backbone_parity_fallback(
                 pt_nano, facade, k_input, "test_raw_logits_parity"
             ):
                 return  # top-k instability — not a weight-transfer issue
-        assert logits_ok, f"Logits mean diff {diff_logits.mean():.6e} exceeds 1e-4"
-        assert boxes_ok, f"Boxes mean diff {diff_boxes.mean():.6e} exceeds 1e-4"
+        assert logits_ok, f"Logits mean diff {diff_logits.mean():.6e} exceeds 1e-5"
+        assert boxes_ok, f"Boxes mean diff {diff_boxes.mean():.6e} exceeds 1e-5"
 
     def test_raw_boxes_parity(
         self, coco_image_float, pt_nano, keras_nano_with_pt_weights
@@ -771,14 +771,14 @@ class TestForwardPassParity:
         diff = np.abs(pt_boxes - k_boxes)
 
         max_ok = diff.max() < 1e-2
-        mean_ok = diff.mean() < 1e-4
+        mean_ok = diff.mean() < 1e-5
         if not (max_ok and mean_ok):
             if _check_backbone_parity_fallback(
                 pt_nano, facade, k_input, "test_raw_boxes_parity"
             ):
                 return  # top-k instability — not a weight-transfer issue
         assert max_ok, f"Boxes max diff {diff.max():.6e} exceeds 1e-2"
-        assert mean_ok, f"Boxes mean diff {diff.mean():.6e} exceeds 1e-4"
+        assert mean_ok, f"Boxes mean diff {diff.mean():.6e} exceeds 1e-5"
 
 
 # =====================================================================
@@ -1068,8 +1068,8 @@ class TestBackboneParity:
             diff = np.abs(k_feat - pt_feat_np)
             print(f"Backbone level {lvl}: max={diff.max():.6e}, mean={diff.mean():.6e}")
             assert (
-                diff.mean() < 1e-4
-            ), f"Backbone level {lvl} mean diff {diff.mean():.6e} > 1e-4"
+                diff.mean() < 1e-5
+            ), f"Backbone level {lvl} mean diff {diff.mean():.6e} > 1e-5"
 
 
 # =====================================================================
@@ -1766,15 +1766,15 @@ class TestMultiImageForwardParity:
         )
 
         assert (
-            diff_logits.mean() < 1e-4
+            diff_logits.mean() < 1e-5
         ) or _check_backbone_parity_fallback(
             pt_nano, facade, k_input, f"parity/{image_name}"
-        ), f"[{image_name}] Logits mean diff {diff_logits.mean():.6e} > 1e-4"
+        ), f"[{image_name}] Logits mean diff {diff_logits.mean():.6e} > 1e-5"
         assert (
-            diff_boxes.mean() < 1e-4
+            diff_boxes.mean() < 1e-5
         ) or _check_backbone_parity_fallback(
             pt_nano, facade, k_input, f"parity/{image_name}"
-        ), f"[{image_name}] Boxes mean diff {diff_boxes.mean():.6e} > 1e-4"
+        ), f"[{image_name}] Boxes mean diff {diff_boxes.mean():.6e} > 1e-5"
 
 
 # =====================================================================
@@ -1924,7 +1924,7 @@ class TestAllVariantsParity:
             f"max: {diff_boxes.max():.6e}, mean: {diff_boxes.mean():.6e}"
         )
 
-        strict_tol = 1e-4
+        strict_tol = 1e-5
         logits_ok = diff_logits.mean() < strict_tol
         boxes_ok = diff_boxes.mean() < strict_tol
 
@@ -1960,7 +1960,13 @@ class TestAllVariantsParity:
 
         print(f"[{variant_name}] Backbone max diff: {backbone_max_diff:.6e}")
 
-        if backbone_max_diff < strict_tol:
+        # Use a relaxed threshold for the backbone MAX diff check.
+        # Backbone max diffs of 1e-5 to 7e-5 are normal float32 noise
+        # between JAX and PyTorch — this does NOT indicate a
+        # weight-transfer issue.  The strict mean-based tolerance
+        # (strict_tol) is for the final output mean diff only.
+        backbone_tol = 1e-4
+        if backbone_max_diff < backbone_tol:
             # Backbone features match — divergence is caused by two-stage
             # top-k proposal instability between numerical backends.
             import warnings
@@ -1979,12 +1985,12 @@ class TestAllVariantsParity:
         assert logits_ok, (
             f"[{variant_name}] Logits mean diff {diff_logits.mean():.6e} > "
             f"{strict_tol} AND backbone max diff {backbone_max_diff:.6e} > "
-            f"{strict_tol}"
+            f"{backbone_tol}"
         )
         assert boxes_ok, (
             f"[{variant_name}] Boxes mean diff {diff_boxes.mean():.6e} > "
             f"{strict_tol} AND backbone max diff {backbone_max_diff:.6e} > "
-            f"{strict_tol}"
+            f"{backbone_tol}"
         )
 
     def test_detects_objects(self, variant_models, coco_image_float):
